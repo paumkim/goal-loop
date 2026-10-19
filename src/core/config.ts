@@ -1,4 +1,4 @@
-import type { ModelRef } from "./types.ts"
+import type { CommitRequest, ModelRef } from "./types.ts"
 
 export type EvaluatorMode = "auto" | "session" | "independent"
 
@@ -24,6 +24,8 @@ export interface GoalConfig {
   readonly systemReminder: boolean
   /** Records verdicts in the transcript as synthetic notes. */
   readonly transcriptNotes: boolean
+  /** Finished work has to be committed before the goal counts as met. */
+  readonly commit: CommitRequest
 }
 
 export const DEFAULTS = {
@@ -36,6 +38,7 @@ export const DEFAULTS = {
   maxIdleCheckins: 3,
   maxRetries: 3,
   maxConditionChars: 4_000,
+  commitBranch: "dev",
 } as const
 
 /** Parses `provider/model` or `provider/model#variant`. Model IDs may contain further slashes. */
@@ -63,9 +66,17 @@ const int = (value: unknown, fallback: number, min: number, max = Number.MAX_SAF
 
 const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback)
 
+/** A branch name: a non-empty string with no whitespace. */
+const branch = (value: unknown, fallback: string) => {
+  if (typeof value !== "string") return fallback
+  const trimmed = value.trim()
+  return trimmed && !/\s/.test(trimmed) ? trimmed : fallback
+}
+
 /**
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
- * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS.
+ * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
+ * OPENCODE_GOAL_REQUIRE_COMMIT.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -91,5 +102,18 @@ export function resolveConfig(
     maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 100),
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),
+    commit: {
+      enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),
+      branch: branch(env.OPENCODE_GOAL_COMMIT_BRANCH ?? options.commitBranch, DEFAULTS.commitBranch),
+    },
   }
+}
+
+/** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */
+function envBool(value: string | undefined, fallback: boolean) {
+  if (value === undefined) return fallback
+  const normalized = value.trim().toLowerCase()
+  if (["1", "true", "yes", "on"].includes(normalized)) return true
+  if (["0", "false", "no", "off"].includes(normalized)) return false
+  return fallback
 }

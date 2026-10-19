@@ -1,0 +1,119 @@
+/**
+ * Repository inspection for the commit rule.
+ *
+ * The goal loop tells the agent to commit finished work before the goal counts as met, so the work survives
+ * outside the working tree. The rule only means something inside a git repository, and the plugin cannot run git
+ * commands, so it reads the repository's own files: `.git` for the repository, `HEAD` for the checked out branch,
+ * `refs/heads` and `packed-refs` for the branches that exist.
+ *
+ * Everything here is best effort. A file that cannot be read is treated as absent, because a repository the
+ * plugin cannot inspect is a repository it must not make promises about.
+ */
+import { existsSync, readFileSync, statSync } from "node:fs"
+import { dirname, isAbsolute, join, resolve } from "node:path"
+import type { CommitPolicy, CommitRequest } from "./types.ts"
+
+export interface Repository {
+  /** The directory that holds the repository. */
+  readonly root: string
+  /** The directory that holds the git metadata. */
+  readonly gitDir: string
+}
+
+/** Walks up from `start` until it finds the directory that owns a repository. */
+export function findRepository(start: string): Repository | undefined {
+  let dir = resolve(start)
+  for (;;) {
+    const found = repositoryAt(dir)
+    if (found) return found
+    const parent = dirname(dir)
+    if (parent === dir) return undefined
+    dir = parent
+  }
+}
+
+function repositoryAt(dir: string): Repository | undefined {
+  const marker = join(dir, ".git")
+  if (!existsSync(marker)) return undefined
+  try {
+    if (statSync(marker).isDirectory()) return { root: dir, gitDir: marker }
+    // A worktree or a submodule: `.git` is a file that points at the real git directory.
+    const pointer = readFileSync(marker, "utf8")
+    const match = /^gitdir:\s*(.+)$/m.exec(pointer)
+    const target = match?.[1]?.trim()
+    if (!target) return undefined
+    const gitDir = isAbsolute(target) ? target : resolve(dir, target)
+    return existsSync(gitDir) ? { root: dir, gitDir } : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The branch HEAD points at, or undefined when HEAD is detached or unreadable. */
+export function currentBranch(gitDir: string): string | undefined {
+  const head = read(join(gitDir, "HEAD"))
+  if (!head) return undefined
+  const match = /^ref:\s*refs\/heads\/(.+)$/m.exec(head.trim())
+  return match?.[1]?.trim()
+}
+
+/** Whether the branch exists, either as a loose ref or inside `packed-refs`. */
+export function branchExists(gitDir: string, branch: string): boolean {
+  const ref = `refs/heads/${branch}`
+  for (const dir of refDirs(gitDir)) {
+    if (existsSync(join(dir, "refs", "heads", branch))) return true
+    const packed = read(join(dir, "packed-refs"))
+    if (!packed) continue
+    for (const line of packed.split("\n")) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("^")) continue
+      const parts = trimmed.split(/\s+/)
+      if (parts[1] === ref) return true
+    }
+  }
+  return false
+}
+
+/**
+ * The directories that hold `refs/heads`.
+ *
+ * A worktree keeps its own `HEAD` but shares the branches with the main repository, so a worktree's git
+ * directory points at a `commondir` that holds the real refs. Both are checked.
+ */
+function refDirs(gitDir: string): string[] {
+  const dirs = [gitDir]
+  const common = read(join(gitDir, "commondir"))
+  if (common) {
+    const target = common.trim()
+    if (target) dirs.push(isAbsolute(target) ? target : resolve(gitDir, target))
+  }
+  return dirs
+}
+
+/**
+ * Turns the user's request into the rule that applies to one session.
+ *
+ * The rule needs a repository to be meaningful, so it is switched off outside one. Inside a repository the
+ * requested branch is used when it exists, and the checked out branch is used when it does not: telling the agent
+ * to commit to a branch the repository has never had would make it create one, which is a change to the
+ * repository the goal never asked for.
+ */
+export function resolveCommitPolicy(request: CommitRequest, directory: string): CommitPolicy {
+  if (!request.enabled) return { required: false, branch: request.branch, reason: "disabled by configuration" }
+  const repository = findRepository(directory)
+  if (!repository) return { required: false, branch: request.branch, reason: "not a git repository" }
+  if (branchExists(repository.gitDir, request.branch))
+    return { required: true, branch: request.branch, reason: "repository found" }
+  const head = currentBranch(repository.gitDir)
+  if (head)
+    return { required: true, branch: head, reason: `branch ${request.branch} does not exist; using ${head}` }
+  return { required: true, branch: request.branch, reason: "repository found" }
+}
+
+function read(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8")
+  } catch {
+    return undefined
+  }
+}

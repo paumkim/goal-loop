@@ -6,6 +6,7 @@ import * as Prompt from "../core/prompts.ts"
 import {
   EMPTY_USAGE,
   isLive,
+  type CommitPolicy,
   type FailureInfo,
   type GoalRecord,
   type GoalSnapshot,
@@ -21,6 +22,8 @@ import type { GoalStore } from "./store.ts"
 export interface ControllerDeps {
   readonly config: GoalConfig
   readonly directory: string
+  /** The commit rule that applies to this session's directory. */
+  readonly commit: CommitPolicy
   readonly session: SessionPort
   readonly evaluator: EvaluatorPort
   readonly background: BackgroundPort
@@ -164,7 +167,7 @@ export class GoalController {
     try {
       await this.deps.session.prompt({
         sessionID,
-        text: Prompt.directive(condition),
+        text: Prompt.directive(condition, this.deps.commit),
         delivery: input.delivery,
         ...(input.files?.length ? { files: input.files } : {}),
         ...(input.agents?.length ? { agents: input.agents } : {}),
@@ -370,7 +373,7 @@ export class GoalController {
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return
     await this.continueWith(record, {
-      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason }),
+      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason }, this.deps.commit),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
     })
@@ -408,7 +411,7 @@ export class GoalController {
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
       void this.continueWith(record, {
-        text: Prompt.retry({ condition: record.condition, label: failure.label }),
+        text: Prompt.retry({ condition: record.condition, label: failure.label }, this.deps.commit),
         description: `goal \u00B7 retry ${record.retries}/${config.maxRetries}`,
         turn: record.turns + 1,
       })
@@ -447,7 +450,7 @@ export class GoalController {
       `Background work has kept the goal waiting ${formatDuration(waitedMs)}.${last ? " Idle check-ins are paused until you send another prompt." : ""}`,
     )
     await this.continueWith(record, {
-      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work }),
+      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work }, this.deps.commit),
       description: `goal \u00B7 check-in ${record.checkins}`,
       turn: record.turns + 1,
     })

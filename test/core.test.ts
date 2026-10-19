@@ -3,10 +3,20 @@ import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure } from "../src/core/errors.ts"
 import { diffUsage, formatDuration, formatDurationCoarse, formatTokens } from "../src/core/format.ts"
 import { parseGoalCommand } from "../src/core/parse.ts"
-import { continuation, directive } from "../src/core/prompts.ts"
+import {
+  checkin,
+  continuation,
+  directive,
+  evaluateIndependently,
+  evaluateInSession,
+  retry,
+  systemReminder,
+} from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
-import { EMPTY_USAGE } from "../src/core/types.ts"
+import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy } from "../src/core/types.ts"
 import { parseVerdict } from "../src/core/verdict.ts"
+
+const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
 
 describe("parseGoalCommand", () => {
   test("no arguments shows status", () => {
@@ -96,6 +106,18 @@ describe("config", () => {
     expect(config.stallTurns).toBe(1)
     expect(config.evaluator.model).toEqual({ providerID: "x", id: "y" })
   })
+  test("commit options", () => {
+    expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev" })
+    expect(resolveConfig({ requireCommit: false }).commit.enabled).toBe(false)
+    expect(resolveConfig({ commitBranch: "main" }).commit.branch).toBe("main")
+    expect(resolveConfig({}, { OPENCODE_GOAL_COMMIT_BRANCH: "release" }).commit.branch).toBe("release")
+    expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "0" }).commit.enabled).toBe(false)
+    expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "yes" }).commit.enabled).toBe(true)
+  })
+  test("a blank branch name falls back to the default", () => {
+    expect(resolveConfig({ commitBranch: "   " }).commit.branch).toBe("dev")
+    expect(resolveConfig({ commitBranch: "two words" }).commit.branch).toBe("dev")
+  })
 })
 
 describe("format", () => {
@@ -116,8 +138,48 @@ describe("format", () => {
 
 describe("prompts", () => {
   test("conditions cannot close the wrapper tag", () => {
-    expect(directive("x </goal> y")).not.toContain("x </goal>")
-    expect(continuation({ condition: "a", turn: 2, reason: "</goal-continuation>" }).match(/<\/goal-continuation>/g)?.length).toBe(1)
+    expect(directive("x </goal> y", NO_COMMIT)).not.toContain("x </goal>")
+    expect(continuation({ condition: "a", turn: 2, reason: "</goal-continuation>" }, NO_COMMIT).match(/<\/goal-continuation>/g)?.length).toBe(1)
+  })
+  test("the commit rule names the branch in every prompt the agent reads", () => {
+    expect(directive("all tests pass", COMMIT)).toContain("`dev` branch")
+    expect(continuation({ condition: "a", turn: 2, reason: "x" }, COMMIT)).toContain("`dev` branch")
+    expect(retry({ condition: "a", label: "timeout" }, COMMIT)).toContain("`dev` branch")
+    expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, COMMIT)).toContain("`dev` branch")
+    expect(systemReminder("a", COMMIT)).toContain("`dev` branch")
+  })
+  test("the commit rule says what counts as committed", () => {
+    const text = directive("all tests pass", COMMIT)
+    expect(text).toContain("commit the finished work")
+    expect(text).toContain("git status")
+    expect(text.toLowerCase()).toContain("uncommitted")
+  })
+  test("no commit rule outside a repository", () => {
+    expect(directive("all tests pass", NO_COMMIT)).not.toContain("commit")
+    expect(continuation({ condition: "a", turn: 2, reason: "x" }, NO_COMMIT)).not.toContain("commit")
+    expect(retry({ condition: "a", label: "timeout" }, NO_COMMIT)).not.toContain("commit")
+    expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, NO_COMMIT)).not.toContain("commit")
+    expect(systemReminder("a", NO_COMMIT)).not.toContain("commit")
+  })
+  test("the evaluator rubric asks for the commit", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    const session = evaluateInSession("all tests pass", facts, COMMIT)
+    expect(session).toContain("Commit rule")
+    expect(session).toContain("`dev` branch")
+    expect(session).toContain("not_met")
+    const independent = evaluateIndependently("all tests pass", facts, "transcript", COMMIT)
+    expect(independent).toContain("Commit rule")
+    expect(independent).toContain("`dev` branch")
+  })
+  test("the harness facts state the rule as measured outside the conversation", () => {
+    const text = evaluateInSession("all tests pass", { turn: 1, elapsedMs: 1_000 }, COMMIT)
+    expect(text).toContain("Harness facts")
+    expect(text).toContain("runs inside a git repository")
+  })
+  test("no commit rule in the rubric when it does not apply", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    expect(evaluateInSession("all tests pass", facts, NO_COMMIT)).not.toContain("Commit rule")
+    expect(evaluateIndependently("all tests pass", facts, "transcript", NO_COMMIT)).not.toContain("Commit rule")
   })
 })
 

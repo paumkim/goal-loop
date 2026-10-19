@@ -7,6 +7,7 @@
  */
 import { Plugin } from "@opencode/plugin"
 import { resolveConfig } from "./core/config.ts"
+import { resolveCommitPolicy } from "./core/git.ts"
 import { systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -62,6 +63,11 @@ export default Plugin.define({
     const log = createLogger()
     const lifetime = new AbortController()
 
+    // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
+    // inside one the finished work has to land on a branch before the goal counts as met.
+    const commit = resolveCommitPolicy(config.commit, ctx.location.directory)
+    log.info("commit rule", { required: commit.required, branch: commit.branch, reason: commit.reason })
+
     // ---- ports onto the OpenCode context
     const session: SessionPort = {
       prompt: async ({ sessionID, text, delivery, files, agents, skills }) => {
@@ -80,6 +86,7 @@ export default Plugin.define({
         context: (sessionID, signal) => ctx.session.context({ sessionID }, { signal }),
       },
       config.evaluator,
+      commit,
       log,
     )
 
@@ -98,6 +105,7 @@ export default Plugin.define({
     const controller = new GoalController({
       config,
       directory: ctx.location.directory,
+      commit,
       session,
       evaluator,
       background,
@@ -154,7 +162,7 @@ export default Plugin.define({
     if (config.systemReminder) {
       await ctx.session.hook("context", (event) => {
         const condition = controller.activeCondition(event.sessionID)
-        if (condition) event.system.push({ type: "text", text: systemReminder(condition) })
+        if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
       })
     }
 

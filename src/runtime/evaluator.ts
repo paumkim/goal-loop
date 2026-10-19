@@ -1,7 +1,7 @@
 import type { GoalConfig } from "../core/config.ts"
 import { evaluateIndependently, evaluateInSession, REPAIR } from "../core/prompts.ts"
 import { renderTranscript } from "../core/transcript.ts"
-import type { ModelRef } from "../core/types.ts"
+import type { CommitPolicy, ModelRef } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger } from "./ports.ts"
 
@@ -33,6 +33,7 @@ export class Evaluator implements EvaluatorPort {
   constructor(
     private readonly deps: EvaluatorDeps,
     private readonly config: GoalConfig["evaluator"],
+    private readonly commit: CommitPolicy,
     private readonly log: Logger,
   ) {}
 
@@ -49,14 +50,14 @@ export class Evaluator implements EvaluatorPort {
       try {
         const messages = await this.deps.context(request.sessionID, signal)
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const prompt = evaluateIndependently(request.condition, facts, transcript)
+        const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
         return await this.ask((text) => this.deps.modelGenerate(model, text, signal), prompt)
       } catch (error) {
         if (signal.aborted) throw error
         this.log.warn("independent evaluator failed; falling back to session evaluator", { error: String(error) })
       }
     }
-    const prompt = evaluateInSession(request.condition, facts)
+    const prompt = evaluateInSession(request.condition, facts, this.commit)
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {
       return await this.ask((text) => this.deps.sessionGenerate(request.sessionID, text, signal), prompt)

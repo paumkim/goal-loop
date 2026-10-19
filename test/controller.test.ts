@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test"
 import { resolveConfig } from "../src/core/config.ts"
-import type { GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
+import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
@@ -50,7 +50,11 @@ class MemoryStorage implements StoragePort {
   })
 }
 
-function harness(options: Record<string, unknown> = {}, storage = new MemoryStorage()) {
+function harness(
+  options: Record<string, unknown> = {},
+  storage = new MemoryStorage(),
+  commit: CommitPolicy = { required: false, branch: "dev", reason: "test" },
+) {
   const clock = new FakeClock()
   const calls = { prompts: [] as any[], synthetic: [] as any[] }
   const verdicts: Array<EvaluationResult | Error | (() => Promise<EvaluationResult>)> = []
@@ -66,6 +70,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const controller = new GoalController({
     config: resolveConfig(options),
     directory: DIR,
+    commit,
     clock,
     store,
     log: silent,
@@ -129,6 +134,20 @@ describe("GoalController", () => {
     expect(h.calls.prompts[0].text).toContain("lint is clean")
     expect(h.controller.get(SID)?.status).toBe("active")
     expect(h.notices.at(-1)?.kind).toBe("set")
+  })
+
+  test("the commit rule reaches the agent on the first turn and on every continuation", async () => {
+    h = harness({}, new MemoryStorage(), { required: true, branch: "dev", reason: "test" })
+    await h.set("lint is clean")
+    expect(h.calls.prompts[0].text).toContain("`dev` branch")
+    h.verdicts.push(notMet("lint still fails"))
+    await h.turn()
+    expect(h.calls.synthetic[0].text).toContain("`dev` branch")
+  })
+
+  test("no commit rule when the session is not in a repository", async () => {
+    await h.set("lint is clean")
+    expect(h.calls.prompts[0].text).not.toContain("commit")
   })
 
   test("not met -> continuation turn carrying the evaluator reason; met -> achieved", async () => {

@@ -43,6 +43,7 @@ While a goal runs, the footer shows its state:
 - **Met / impossible:** the goal ends and a note is added to the transcript.
 - The evaluator only sees what's in the conversation, so the agent is told to show proof (test output, command results).
 - By default the evaluator reuses the session's cached context, so each check costs little more than a short answer.
+- Finished work has to be committed before the goal counts as met. See [the commit rule](#the-commit-rule).
 
 Safety rails:
 
@@ -51,6 +52,19 @@ Safety rails:
 - **Clears** on errors you must fix: auth, credit, context overflow, missing model.
 - **Waits** while subagents or background shells run, with check-ins at 30 min, then 60, then 120.
 - **Restores** active goals after a restart or plugin reload.
+
+## The commit rule
+
+A goal that ends with its work uncommitted leaves the job half done, because nothing about it is in the
+repository's history. Inside a git repository the plugin tells the agent to commit the finished work and to show
+the commit output, and the evaluator treats uncommitted work as **not met**. The reason it names is the commit
+itself, so the next turn has something to do.
+
+The rule follows the repository:
+
+- The branch is `dev` by default. If the repository has no `dev` branch, the checked out branch is used instead.
+- Outside a git repository there is nothing to commit, so the rule switches itself off.
+- `requireCommit: false` turns it off everywhere.
 
 ## Options
 
@@ -68,7 +82,9 @@ All optional, set in `opencode.json`:
         "checkinMinutes": 30,
         "maxRetries": 3,
         "systemReminder": false,
-        "transcriptNotes": true
+        "transcriptNotes": true,
+        "requireCommit": true,
+        "commitBranch": "dev"
       }
     }
   ]
@@ -85,8 +101,11 @@ All optional, set in `opencode.json`:
 | `maxRetries` | `3` | Automatic retries after transient errors |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
+| `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
+| `commitBranch` | `dev` | Branch the finished work has to land on |
 
-Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`.
+Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
+`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`.
 
 ## Develop
 

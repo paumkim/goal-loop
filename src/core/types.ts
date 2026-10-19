@@ -3,6 +3,27 @@ export type GoalStatus = "active" | "paused" | "achieved" | "impossible" | "clea
 
 export type Verdict = "met" | "not_met" | "impossible"
 
+/** What the user asked for: finished work has to be committed before the goal counts as met. */
+export interface CommitRequest {
+  /** The user wants the commit rule. */
+  readonly enabled: boolean
+  /** Branch the finished work has to land on. */
+  readonly branch: string
+}
+
+/** The commit rule as it applies to one session, after the repository was inspected. */
+export interface CommitPolicy {
+  /** Finished work has to be committed before the goal counts as met. */
+  readonly required: boolean
+  /** Branch the finished work has to land on. */
+  readonly branch: string
+  /** Why the rule is on or off. Shown in the plugin log. */
+  readonly reason: string
+}
+
+/** The commit rule is off: nothing in the session's directory is a git repository. */
+export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", reason: "not a git repository" }
+
 export const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
 
 export const isLive = (status: GoalStatus) => LIVE_STATUSES.has(status)

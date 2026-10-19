@@ -1,0 +1,94 @@
+import { describe, expect, test } from "bun:test"
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { branchExists, currentBranch, findRepository, resolveCommitPolicy } from "../src/core/git.ts"
+
+/** A throwaway directory that is removed when the test ends. */
+function scratch(): string {
+  const dir = mkdtempSync(join(tmpdir(), "goal-git-"))
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }))
+  return dir
+}
+
+/** A repository with the given branches and a HEAD pointing at `head`. */
+function repo(branches: string[], head: string): string {
+  const dir = scratch()
+  const git = join(dir, ".git")
+  mkdirSync(join(git, "refs", "heads"), { recursive: true })
+  for (const branch of branches) writeFileSync(join(git, "refs", "heads", branch), "0".repeat(40))
+  writeFileSync(join(git, "HEAD"), `ref: refs/heads/${head}\n`)
+  return dir
+}
+
+describe("findRepository", () => {
+  test("finds the repository from a nested directory", () => {
+    const root = repo(["dev"], "dev")
+    const nested = join(root, "packages", "app")
+    mkdirSync(nested, { recursive: true })
+    expect(findRepository(nested)?.root).toBe(root)
+  })
+  test("no repository outside one", () => {
+    expect(findRepository(scratch())).toBeUndefined()
+  })
+  test("a worktree pointer file resolves to the real git directory", () => {
+    const root = scratch()
+    const real = join(root, "real-git")
+    mkdirSync(join(real, "refs", "heads"), { recursive: true })
+    writeFileSync(join(real, "refs", "heads", "dev"), "0".repeat(40))
+    writeFileSync(join(real, "HEAD"), "ref: refs/heads/dev\n")
+    const worktree = join(root, "worktree")
+    mkdirSync(worktree, { recursive: true })
+    writeFileSync(join(worktree, ".git"), `gitdir: ${real}\n`)
+    expect(findRepository(worktree)?.gitDir).toBe(real)
+  })
+})
+
+describe("currentBranch", () => {
+  test("reads the branch HEAD points at", () => {
+    expect(currentBranch(join(repo(["main"], "main"), ".git"))).toBe("main")
+  })
+  test("undefined when HEAD is detached", () => {
+    const root = repo(["main"], "main")
+    writeFileSync(join(root, ".git", "HEAD"), "0".repeat(40) + "\n")
+    expect(currentBranch(join(root, ".git"))).toBeUndefined()
+  })
+})
+
+describe("branchExists", () => {
+  test("finds a loose branch", () => {
+    expect(branchExists(join(repo(["dev"], "dev"), ".git"), "dev")).toBe(true)
+    expect(branchExists(join(repo(["dev"], "dev"), ".git"), "main")).toBe(false)
+  })
+  test("finds a packed branch", () => {
+    const root = repo([], "main")
+    writeFileSync(join(root, ".git", "packed-refs"), `${"0".repeat(40)} refs/heads/dev\n`)
+    expect(branchExists(join(root, ".git"), "dev")).toBe(true)
+  })
+})
+
+describe("resolveCommitPolicy", () => {
+  test("the rule applies inside a repository that has the branch", () => {
+    const root = repo(["dev", "main"], "main")
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev" }, root)
+    expect(policy.required).toBe(true)
+    expect(policy.branch).toBe("dev")
+  })
+  test("the rule is off outside a repository", () => {
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev" }, scratch())
+    expect(policy.required).toBe(false)
+    expect(policy.reason).toBe("not a git repository")
+  })
+  test("the rule is off when it is turned off", () => {
+    const root = repo(["dev"], "dev")
+    const policy = resolveCommitPolicy({ enabled: false, branch: "dev" }, root)
+    expect(policy.required).toBe(false)
+    expect(policy.reason).toBe("disabled by configuration")
+  })
+  test("a branch the repository does not have falls back to the checked out one", () => {
+    const root = repo(["main"], "main")
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev" }, root)
+    expect(policy.required).toBe(true)
+    expect(policy.branch).toBe("main")
+  })
+})
