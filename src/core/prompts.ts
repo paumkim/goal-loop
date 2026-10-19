@@ -14,7 +14,7 @@ const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
  * "commit your work" on its own leaves the branch choice to the agent, and the branch is the whole point.
  */
 function commitRule(policy: CommitPolicy) {
-  return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash, or a \`git status\` that reports no uncommitted changes. Work that is done but uncommitted is not done work, and the evaluator will not mark the goal met without a visible commit.`
+  return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on, or a \`git status\` on that branch with no uncommitted changes. Work that is done but uncommitted is not done work, and the evaluator will not mark the goal met without a visible commit on \`${policy.branch}\`.`
 }
 
 /** First turn: the condition itself is the directive. */
@@ -42,7 +42,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `Evaluator: ${escape(input.reason || "No reason given.")}`,
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
-    policy.required ? `Before you call the goal done, commit the finished work to the \`${policy.branch}\` branch and show the commit output.` : ``,
+    policy.required ? `Before you call the goal done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on.` : ``,
     `</goal-continuation>`,
   ].join("\n")
 }
@@ -74,7 +74,7 @@ export function checkin(
       ? `Background work (${work}) has kept the goal waiting for ${formatDuration(input.waitedMs)}. Read their output: keep waiting if they are progressing, and fix or stop any that are stuck.`
       : `Background work stopped without reporting a result. Continue toward the goal.`,
     `Goal: ${escape(input.condition)}`,
-    policy.required ? `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done.` : ``,
+    policy.required ? `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done, and show the commit output.` : ``,
     `</goal-checkin>`,
   ].join("\n")
 }
@@ -120,18 +120,20 @@ const RULES = [
  * The rubric, with the commit rule folded in.
  *
  * The evaluator judges from the conversation alone, so the commit rule has to be spelled out here as evidence it
- * can look for. A commit hash, or a `git status` with nothing uncommitted, is what "committed" looks like from
- * the outside; without this the evaluator would accept a finished, verified, uncommitted job as met, which is the
- * exact case the rule exists to catch.
+ * can look for. A commit hash on the named branch, or a `git status` on that branch with nothing uncommitted, is
+ * what "committed" looks like from the outside. Without this the evaluator would accept a finished, verified,
+ * uncommitted job as met, which is the exact case the rule exists to catch.
  */
 function rubric(policy: CommitPolicy) {
   const lines = [...VERDICTS]
   if (policy.required) {
     lines.push(
       ``,
-      `Commit rule: the finished work has to be committed on the \`${policy.branch}\` branch. A commit hash in the`,
-      `transcript, or a \`git status\` that reports no uncommitted changes, counts as committed. Uncommitted`,
-      `changes to the goal's files mean "not_met", and the reason names the commit as the missing step.`,
+      `Commit rule: the finished work has to be committed on the \`${policy.branch}\` branch. Evidence is a commit`,
+      `hash shown together with the branch it landed on, a \`git status\` on that branch with no uncommitted`,
+      `changes, or a \`git log\` that shows the commit on \`${policy.branch}\`. Uncommitted changes to the goal's`,
+      `files, or a commit that is not on \`${policy.branch}\`, mean "not_met", and the reason names the commit as`,
+      `the missing step.`,
     )
   }
   lines.push(``, ...RULES)

@@ -154,6 +154,12 @@ describe("prompts", () => {
     expect(text).toContain("git status")
     expect(text.toLowerCase()).toContain("uncommitted")
   })
+  test("the rubric holds the commit to the named branch", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    const text = evaluateInSession("all tests pass", facts, COMMIT)
+    expect(text).toContain("committed on the `dev` branch")
+    expect(text).toContain("not on `dev`")
+  })
   test("no commit rule outside a repository", () => {
     expect(directive("all tests pass", NO_COMMIT)).not.toContain("commit")
     expect(continuation({ condition: "a", turn: 2, reason: "x" }, NO_COMMIT)).not.toContain("commit")
