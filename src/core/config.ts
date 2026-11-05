@@ -37,7 +37,8 @@ export const DEFAULTS = {
   checkinMinutes: 30,
   maxIdleCheckins: 3,
   maxRetries: 3,
-  maxConditionChars: 4_000,
+  // Effectively unlimited: goals are pasted from the clipboard and can run to whole files, so the default never rejects.
+  maxConditionChars: Number.MAX_SAFE_INTEGER,
   commitBranch: "dev",
 } as const
 

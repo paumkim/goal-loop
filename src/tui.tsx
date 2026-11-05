@@ -3,6 +3,7 @@
  * dialog, and palette actions. Purely presentational; all state lives in the server plugin and arrives over RPC.
  */
 import { Plugin } from "@opencode/plugin/tui"
+import type { ScrollBoxRenderable } from "@opentui/core"
 import { createMemo, createSignal, Show } from "solid-js"
 import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
 import type { GoalSnapshot, Notice } from "./core/types.ts"
@@ -23,7 +24,31 @@ export default Plugin.define({
     const rpc = context.client.rpc(GoalRpc)
     const [entries, setEntries] = createSignal<Readonly<Record<string, Entry>>>({})
     const [now, setNow] = createSignal(Date.now())
+    const [statusDialogOpen, setStatusDialogOpen] = createSignal(false)
+    const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
+
+    /** Long status text gets a large, scrollable dialog instead of the truncating alert. */
+    const showStatusDialog = (title: string, message: string) => {
+      setStatusDialogOpen(true)
+      setScrollRef(undefined)
+      context.ui.dialog.show(
+        () => (
+          <box flexDirection="column" height="100%" padding={1}>
+            <text attributes={1}>{title}</text>
+            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false}>
+              <text wrapMode="word">{message}</text>
+            </scrollbox>
+            <text fg={context.theme.text.muted}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+          </box>
+        ),
+        () => {
+          setStatusDialogOpen(false)
+          setScrollRef(undefined)
+        },
+      )
+      context.ui.dialog.set({ size: "xlarge", centered: true })
+    }
 
     /** RPC calls are routed to the plugin instance of the session's location. */
     const at = (sessionID: string) => {
@@ -59,7 +84,7 @@ export default Plugin.define({
     const onNotice = (notice: Notice) => {
       const here = currentSession() === notice.sessionID
       if (notice.kind === "status") {
-        if (here) void context.ui.dialog.alert({ title: `${GOAL_GLYPH} /goal`, message: `${notice.title}\n\n${notice.message}` })
+        if (here) showStatusDialog(`${GOAL_GLYPH} /goal`, `${notice.title}\n\n${notice.message}`)
         return
       }
       const important = ATTENTION_KINDS.has(notice.kind)
@@ -117,6 +142,89 @@ export default Plugin.define({
       },
     })
 
+    // Scrolling keys for the status dialog. Plain arrow keys are safe here: the commands are only
+    // enabled while the dialog is open, so they never intercept prompt editing.
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 100,
+      enabled: () => statusDialogOpen(),
+      commands: [
+        {
+          id: "goal.status.scroll-up",
+          title: "Goal status: scroll up",
+          group: "Goal",
+          bind: "up",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollBy(-3),
+        },
+        {
+          id: "goal.status.scroll-down",
+          title: "Goal status: scroll down",
+          group: "Goal",
+          bind: "down",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollBy(3),
+        },
+        {
+          id: "goal.status.page-up",
+          title: "Goal status: page up",
+          group: "Goal",
+          bind: "pageup",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollBy(-15),
+        },
+        {
+          id: "goal.status.page-down",
+          title: "Goal status: page down",
+          group: "Goal",
+          bind: "pagedown",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollBy(15),
+        },
+        {
+          id: "goal.status.home",
+          title: "Goal status: scroll to start",
+          group: "Goal",
+          bind: "home",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollTo(0),
+        },
+        {
+          id: "goal.status.end",
+          title: "Goal status: scroll to end",
+          group: "Goal",
+          bind: "end",
+          enabled: () => statusDialogOpen(),
+          run: () => scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER),
+        },
+        {
+          id: "goal.status.close",
+          title: "Goal status: close",
+          group: "Goal",
+          bind: "escape",
+          enabled: () => statusDialogOpen(),
+          run: () => {
+            setStatusDialogOpen(false)
+            setScrollRef(undefined)
+            context.ui.dialog.clear()
+          },
+        },
+        {
+          id: "goal.status.close-enter",
+          title: "Goal status: close",
+          group: "Goal",
+          palette: true,
+          bind: "enter",
+          enabled: () => statusDialogOpen(),
+          run: () => {
+            setStatusDialogOpen(false)
+            setScrollRef(undefined)
+            context.ui.dialog.clear()
+          },
+        },
+      ],
+    }))
+
     context.keymap.layer(() => ({
       mode: "global",
       commands: [
@@ -149,6 +257,8 @@ export default Plugin.define({
       clearInterval(timer)
       offChanged()
       offNotice()
+      setStatusDialogOpen(false)
+      setScrollRef(undefined)
     }
   },
 })
