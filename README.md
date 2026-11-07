@@ -115,6 +115,18 @@ bun run check                         # typecheck + unit tests
 bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server
 ```
 
+## Documentation
+
+Full docs live in `docs/` as a single-folder, dependency-free HTML/CSS site — no build step, no internet, no frameworks.
+
+```sh
+xdg-open docs/index.html   # Linux (or just double-click the file)
+```
+
+Pages: `index.html` (landing + search + FAQ) · `architecture.html` (diagram, state machine, data flow) · `runtime.html` (controller, events, evaluator, retry) · `config.html` (every option, default, env var) · `core.html` (per-file reference) · `install.html` (install, `/goal` commands, troubleshooting).
+
+All files are plain `.html` + `styles.css` + vanilla `app.js` and work by opening `docs/index.html` directly from the filesystem. Keep the `docs/` folder together — pages link to each other with relative paths.
+
 ## License
 
 MIT
