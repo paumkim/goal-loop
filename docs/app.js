@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded",()=>{
+const tb=document.getElementById("themebtn");
+const cur=()=>document.documentElement.dataset.theme==="light"?"light":"dark";
+if(tb){const sync=()=>tb.textContent="Theme: "+cur();sync();tb.addEventListener("click",()=>{const n=cur()==="dark"?"light":"dark";document.documentElement.dataset.theme=n;try{localStorage.setItem("theme",n)}catch(e){}sync()})}
 const p=location.pathname.split("/").pop()||"index.html";
 document.querySelectorAll("aside.side a").forEach(a=>{if(a.getAttribute("href")===p)a.setAttribute("aria-current","page")});
 document.querySelectorAll("pre").forEach(pre=>{
