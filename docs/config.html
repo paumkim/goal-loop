@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Config · opencode-goalv2</title><link rel="stylesheet" href="styles.css"></head>
+<body><a class="skip" href="#main">Skip to content</a>
+<header><span class="t">opencode-goalv2</span><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a></header>
+<div class="layout"><aside class="side" aria-label="Primary">
+<a href="index.html">Home</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="install.html">Install</a></aside>
+<main id="main"><h1>Configuration</h1>
+<p>Options live in <code>opencode.json</code> under <code>plugins[].options</code>. Precedence: env var &gt; option &gt; default (<code>src/core/config.ts:82</code>, <code>README.md:107</code>).</p>
+<table><thead><tr><th>Name</th><th>Type</th><th>Default</th><th>Env var</th><th>Description</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>evaluator.model</code></td><td>string</td><td>session model</td><td><code>OPENCODE_GOAL_MODEL</code></td><td>Separate judging model</td><td><pre><code>"evaluator": {"model": "opencode-go/deepseek-v4.1-flash"}</code></pre></td></tr>
+<tr><td><code>evaluator.mode</code></td><td>string</td><td><code>auto</code></td><td>—</td><td><code>session</code> / <code>independent</code> / <code>auto</code></td><td><pre><code>"evaluator": {"mode": "independent"}</code></pre></td></tr>
+<tr><td><code>evaluator.maxTranscriptChars</code></td><td>int ≥4000</td><td>60000</td><td>—</td><td>Digest budget</td><td><pre><code>"evaluator": {"maxTranscriptChars": 60000}</code></pre></td></tr>
+<tr><td><code>evaluator.maxOutputTokens</code></td><td>int ≥256</td><td>4096</td><td>—</td><td>Verdict answer budget</td><td><pre><code>"evaluator": {"maxOutputTokens": 4096}</code></pre></td></tr>
+<tr><td><code>evaluator.timeoutMs</code></td><td>int ≥5000</td><td>120000</td><td>—</td><td>Evaluation timeout</td><td><pre><code>"evaluator": {"timeoutMs": 120000}</code></pre></td></tr>
+<tr><td><code>maxTurns</code></td><td>int ≥0</td><td>200</td><td><code>OPENCODE_GOAL_MAX_TURNS</code></td><td>Hard turn cap, <code>0</code>=none</td><td><pre><code>"maxTurns": 200</code></pre></td></tr>
+<tr><td><code>stallTurns</code></td><td>int ≥1</td><td>3</td><td>—</td><td>Turns w/o tool use before pause</td><td><pre><code>"stallTurns": 3</code></pre></td></tr>
+<tr><td><code>checkinMinutes</code></td><td>int ≥0</td><td>30</td><td><code>OPENCODE_GOAL_CHECKIN_MINUTES</code></td><td>First background check-in; <code>0</code> disables</td><td><pre><code>"checkinMinutes": 30</code></pre></td></tr>
+<tr><td><code>maxIdleCheckins</code></td><td>int ≥0</td><td>3</td><td>—</td><td>Max idle check-ins</td><td><pre><code>"maxIdleCheckins": 3</code></pre></td></tr>
+<tr><td><code>maxRetries</code></td><td>int ≥0</td><td>3</td><td>—</td><td>Automatic retries</td><td><pre><code>"maxRetries": 3</code></pre></td></tr>
+<tr><td><code>maxConditionChars</code></td><td>int ≥100</td><td>unlimited</td><td>—</td><td>Condition length cap</td><td><pre><code>"maxConditionChars": 10000</code></pre></td></tr>
+<tr><td><code>systemReminder</code></td><td>bool</td><td><code>false</code></td><td>—</td><td>Goal in system prompt</td><td><pre><code>"systemReminder": false</code></pre></td></tr>
+<tr><td><code>transcriptNotes</code></td><td>bool</td><td><code>true</code></td><td>—</td><td>Record verdicts in transcript</td><td><pre><code>"transcriptNotes": true</code></pre></td></tr>
+<tr><td><code>requireCommit</code></td><td>bool</td><td><code>true</code></td><td><code>OPENCODE_GOAL_REQUIRE_COMMIT</code></td><td>Work must land committed</td><td><pre><code>"requireCommit": true</code></pre></td></tr>
+<tr><td><code>commitBranch</code></td><td>string</td><td><code>dev</code></td><td><code>OPENCODE_GOAL_COMMIT_BRANCH</code></td><td>Required branch</td><td><pre><code>"commitBranch": "dev"</code></pre></td></tr></tbody></table>
+<p>Defaults table: <code>src/core/config.ts:31</code>. Resolution: <code>src/core/config.ts:82</code>. Env <code>OPENCODE_GOAL_REQUIRE_COMMIT</code> accepts <code>1/true/yes/on</code> and <code>0/false/no/off</code> (<code>src/core/config.ts:113</code>).</p>
+</main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">All keys</a></li></ul></aside>
+</div><script src="app.js"></script></body></html>
