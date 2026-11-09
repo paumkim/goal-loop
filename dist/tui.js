@@ -218,7 +218,7 @@ ${notice.message}`);
             _$insertNode(_el$7, _el$8);
             _$setProp(_el$7, "width", "100%");
             _$setProp(_el$7, "flexDirection", "row");
-            _$setProp(_el$7, "justifyContent", "flex-end");
+            _$setProp(_el$7, "justifyContent", "flex-start");
             _$insertNode(_el$8, _el$9);
             _$setProp(_el$8, "flexShrink", 0);
             _$setProp(_el$8, "onMouseUp", () => props.sessionID && void rpc.status({
