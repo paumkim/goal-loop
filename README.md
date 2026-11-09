@@ -47,9 +47,9 @@ While a goal runs, the footer shows its state:
 
 Safety rails:
 
-- **Pauses** after 3 turns in a row without tool use, on rate limits, on interrupt (Esc), or at the 200-turn cap. Send any message to resume.
+- **Pauses** after 3 turns in a row without tool use, on rate limits, or on interrupt (Esc). Send any message to resume. At the 200-turn cap it pauses and stays paused until you `/goal clear` or set a new goal (raising `maxTurns`); a message alone will not extend the cap.
 - **Retries** dropped connections and overloads with backoff (up to 3 times).
-- **Clears** on errors you must fix: auth, credit, context overflow, missing model.
+- **Fails** (distinct from `cleared`) on errors you must fix: auth, credit, context overflow, missing model. A failed goal is terminal and is not resumable by sending a message; fix the cause and run `/goal` again. `cleared` only means you (or a replacement goal) ended it.
 - **Waits** while subagents or background shells run, with check-ins at 30 min, then 60, then 120.
 - **Restores** active goals after a restart or plugin reload.
 
@@ -121,7 +121,8 @@ Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCO
 ```sh
 bun install
 bun run check                         # typecheck + unit tests
-bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server
+bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server (model also via E2E_MODEL, default opencode/deepseek-v4.1-flash-free)
+E2E_MODEL=opencode/deepseek-v4.1-flash-free bun run e2e <empty-dir>
 ```
 
 ## Documentation

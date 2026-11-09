@@ -14,8 +14,8 @@
 <tr><td>Evaluator retry backoff</td><td><code>10s × 3^n</code>, cap 5m</td><td><code>src/runtime/controller.ts:54</code>, <code>src/runtime/controller.ts:388</code></td></tr>
 <tr><td>Max retries</td><td><code>3</code> (<code>maxRetries</code>)</td><td><code>src/core/config.ts:39</code></td></tr>
 <tr><td>Stall pause</td><td>3 turns without tool use</td><td><code>src/core/config.ts:36</code>, <code>src/runtime/controller.ts:371</code></td></tr>
-<tr><td>Turn cap</td><td>200, <code>0</code> = none</td><td><code>src/core/config.ts:35</code>, <code>src/runtime/controller.ts:370</code></td></tr>
+<tr><td>Turn cap</td><td>200, <code>0</code> = none; cap pause stays paused until clear/new goal</td><td><code>src/core/config.ts:35</code>, <code>src/runtime/controller.ts:370</code></td></tr>
 <tr><td>History kept</td><td>last 20 verdicts</td><td><code>src/runtime/controller.ts:51</code></td></tr></tbody></table>
-<p>Failure classes: <code>fatal</code> (clears), <code>transient</code> (retries), <code>pause</code> (waits) (<code>src/core/errors.ts:8</code>, <code>src/core/errors.ts:32</code>).</p></section>
+<p>Failure classes: <code>fatal</code> (fails the goal), <code>transient</code> (retries), <code>pause</code> (waits) (<code>src/core/errors.ts:8</code>, <code>src/core/errors.ts:32</code>).</p></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#loop">Turn loop</a></li><li><a href="#epoch">Epoch</a></li><li><a href="#background">Background</a></li><li><a href="#retry">Retry</a></li></ul></aside>
 </div><script src="app.js"></script></body></html>

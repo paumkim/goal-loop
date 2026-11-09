@@ -1,5 +1,5 @@
 import type { GoalConfig } from "../core/config.ts"
-import { classifyFailure } from "../core/errors.ts"
+import { classifyFailure, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, formatDuration, formatStatus, statusLabel, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
@@ -226,11 +226,22 @@ export class GoalController {
     record.checkins = 0
     runtime.lastCheckinAt = undefined
     if (record.status === "paused") {
+      // Turn-cap freeze: a message does not extend the cap, so resume would re-pause after one turn.
+      // Stay paused; the user must clear or set a new goal (a restart resets the turn counter).
+      if (this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
+        this.clearDeferred(runtime)
+        this.notify(sessionID, "paused", "warning", "Goal paused at turn cap", `${record.reason ?? "Reached the turn limit."} A message will not extend the cap; run /goal clear or set a new goal.`)
+        this.commit(record)
+        return
+      }
+      this.clearDeferred(runtime)
       record.status = "active"
       record.reason = undefined
       record.stall = 0
       record.retries = 0
       this.notify(sessionID, "resumed", "info", "Goal resumed", record.condition)
+    } else {
+      this.clearDeferred(runtime)
     }
     this.commit(record)
   }
@@ -258,7 +269,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
-    runtime.carriedToolCalls += runtime.toolCalls
+    this.clearDeferred(runtime)
     runtime.toolCalls = 0
     this.handleFailure(record, runtime, classifyFailure(error))
   }
@@ -269,6 +280,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
+    this.clearDeferred(runtime)
     if (reason === "user") return this.pause(record, "Interrupted.")
     if (reason === "inactivity") return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
     // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn.
@@ -293,13 +305,22 @@ export class GoalController {
     await Promise.all(
       records.map(async (record) => {
         if (this.goals.has(record.sessionID)) return
-        const usage = await this.deps.session.usage(record.sessionID).catch(() => undefined)
-        if (!usage) {
-          // The session no longer exists (or is unreachable): drop the stale goal.
+        let usage: UsageSnapshot | undefined
+        let notFound = false
+        try {
+          usage = await this.deps.session.usage(record.sessionID)
+        } catch (error) {
+          if (isNotFoundError(error)) notFound = true
+          else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: message(error) })
+        }
+        if (notFound) {
+          // Definitive not-found only: the session no longer exists, drop the stale goal.
           void this.deps.store.remove(record.sessionID)
           return
         }
-        Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage })
+        // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
+        // with its previous baseline rather than deleting it.
+        Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
         this.goals.set(record.sessionID, record)
         this.commit(record)
       }),
@@ -365,7 +386,7 @@ export class GoalController {
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", result.reason || record.condition)
-      return this.note(record, "Goal cleared: the evaluator judged it impossible.", result.reason)
+      return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns) return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
     if (stall >= config.stallTurns) return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
@@ -397,9 +418,9 @@ export class GoalController {
   private handleFailure(record: GoalRecord, runtime: Runtime, failure: ReturnType<typeof classifyFailure>) {
     const { config } = this.deps
     if (failure.kind === "fatal") {
-      const reason = `Goal cleared after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
+      const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
       this.finish(record, "failed", reason)
-      this.notify(record.sessionID, "failed", "error", "Goal cleared", reason)
+      this.notify(record.sessionID, "failed", "error", "Goal failed", reason)
       return
     }
     if (failure.kind === "pause" || config.checkinMinutes === 0) return this.pause(record, `Turn failed: ${failure.label}.`)
@@ -475,17 +496,27 @@ export class GoalController {
   private pause(record: GoalRecord, reason: string) {
     const runtime = this.runtime(record.sessionID)
     this.invalidate(runtime)
+    this.clearDeferred(runtime)
     record.status = "paused"
     record.reason = reason
     this.commit(record)
-    this.notify(record.sessionID, "paused", "warning", "Goal paused", `${reason} Send a message to resume, or /goal clear.`)
+    const atCap = this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns
+    this.notify(
+      record.sessionID,
+      "paused",
+      "warning",
+      "Goal paused",
+      atCap
+        ? `${reason} It stays paused at the turn cap until you /goal clear or set a new goal; a message will not extend the cap.`
+        : `${reason} Send a message to resume, or /goal clear.`,
+    )
   }
 
   private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string) {
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
-      runtime.deferredSince = undefined
+      this.clearDeferred(runtime)
     }
     record.status = status
     if (reason) record.reason = reason
@@ -494,11 +525,15 @@ export class GoalController {
     void this.deps.session
       .usage(record.sessionID)
       .then((usage) => {
-        if (!usage || this.goals.get(record.sessionID) !== record) return
+        if (this.goals.get(record.sessionID) !== record) return
+        if (!usage) {
+          this.deps.log.warn("final spend snapshot unavailable", { sessionID: record.sessionID })
+          return
+        }
         record.final = usage
         void this.deps.store.save(record)
       })
-      .catch(() => {})
+      .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: message(error) }))
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
@@ -537,6 +572,13 @@ export class GoalController {
       carriedToolCalls: 0,
       evaluating: false,
     })
+  }
+
+  /** Deferred background-wait state must not survive resume, failure, interrupt, pause or finish. */
+  private clearDeferred(runtime: Runtime) {
+    runtime.deferredSince = undefined
+    runtime.carriedToolCalls = 0
+    runtime.lastCheckinAt = undefined
   }
 
   private invalidate(runtime: Runtime) {

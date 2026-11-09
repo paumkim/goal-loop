@@ -63,6 +63,7 @@ function harness(
   const changes: Array<GoalSnapshot | null> = []
   let work: BackgroundWork = { subagents: 0, shells: 0 }
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+  let usageFn: (() => Promise<UsageSnapshot | undefined>) | undefined
   const store = new GoalStore(storage, (e) => {
     throw e
   })
@@ -81,7 +82,7 @@ function harness(
     session: {
       prompt: async (input) => void calls.prompts.push(input),
       synthetic: async (input) => void calls.synthetic.push(input),
-      usage: async () => usage,
+      usage: async () => (usageFn ? usageFn() : usage),
     },
     evaluator: {
       evaluate: async (request) => {
@@ -115,6 +116,7 @@ function harness(
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
+    setUsageFn: (fn: (() => Promise<UsageSnapshot | undefined>) | undefined) => void (usageFn = fn),
     set: (condition = "all tests pass") => controller.command({ sessionID: SID, text: condition, delivery: "steer" }),
   }
 }
@@ -373,8 +375,78 @@ describe("GoalController", () => {
     await first.set()
     await first.store.flush()
     const second = harness({}, storage)
-    second.setUsage(undefined)
+    second.setUsageFn(async () => {
+      throw Object.assign(new Error("session not found"), { status: 404 })
+    })
     expect(await second.controller.restore()).toBe(0)
+    // Storage entry was removed, so a third restore also finds nothing.
+    expect(await harness({}, storage).controller.restore()).toBe(0)
+  })
+
+  test("restore keeps goals on transient usage failure or unavailable usage", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("keep me")
+    await first.store.flush()
+    const second = harness({}, storage)
+    second.setUsageFn(async () => {
+      throw new Error("ECONNRESET socket hang up")
+    })
+    expect(await second.controller.restore()).toBe(1)
+    expect(second.controller.get(SID)?.condition).toBe("keep me")
+    expect(second.controller.get(SID)?.status).toBe("active")
+
+    const third = harness({}, storage)
+    third.setUsage(undefined)
+    expect(await third.controller.restore()).toBe(1)
+  })
+
+  test("resume at turn cap stays paused (message does not extend cap)", async () => {
+    h = harness({ maxTurns: 2 })
+    await h.set()
+    h.verdicts.push(notMet(), notMet())
+    await h.turn()
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.notices.at(-1)?.message).toContain("will not extend the cap")
+  })
+
+  test("deferred state is cleared on failure, interrupt and resume", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    // Failure clears deferred/carried.
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    // Deferred again, then interrupt clears it.
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionInterrupted(SID, "user")
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    // Resume clears any deferred state as well.
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+
+  test("terminal spend snapshot failure is handled, goal still finishes", async () => {
+    await h.set()
+    h.verdicts.push(met("done"))
+    h.setUsageFn(async () => {
+      throw new Error("usage unavailable")
+    })
+    await h.turn()
+    await flush()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    expect(h.controller.get(SID)?.final).toBeUndefined()
   })
 
   test("session deletion forgets the goal", async () => {
@@ -404,6 +476,55 @@ describe("event router", () => {
     route({ id: "e2", type: "session.execution.succeeded", data: { sessionID: SID } })
     await flush()
     expect(h.requests).toHaveLength(1)
+  })
+
+  test("shell.updated and shell.exited (even without running status) update the tracker", async () => {
+    const h = harness()
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} } })
+    await h.set()
+    route({ type: "shell.created", data: { info: { id: "sh1", status: "running", metadata: { sessionID: SID } } } })
+    expect((await background.busy(SID)).shells).toBe(1)
+    // Updated to a non-running status ends it.
+    route({ type: "shell.updated", data: { info: { id: "sh1", status: "exited", metadata: { sessionID: SID } } } })
+    expect((await background.busy(SID)).shells).toBe(0)
+    // Updated to running with an owner tracks it again.
+    route({ type: "shell.updated", data: { info: { id: "sh1", status: "running", metadata: { sessionID: SID } } } })
+    expect((await background.busy(SID)).shells).toBe(1)
+    // shell.exited without any status field still ends it.
+    route({ type: "shell.exited", data: { id: "sh1" } })
+    expect((await background.busy(SID)).shells).toBe(0)
+  })
+
+  test("settled handlers throwing do not crash the router", () => {
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const throwing = {
+      onExecutionStarted: () => {
+        throw new Error("boom started")
+      },
+      onToolCalled: () => {
+        throw new Error("boom tool")
+      },
+      onExecutionSucceeded: async () => {
+        throw new Error("boom succeeded")
+      },
+      onExecutionFailed: () => {
+        throw new Error("boom failed")
+      },
+      onExecutionInterrupted: () => {
+        throw new Error("boom interrupted")
+      },
+      onSessionDeleted: () => {
+        throw new Error("boom deleted")
+      },
+    } as any
+    const errors: unknown[] = []
+    const route = createRouter({ controller: throwing, background, log: { info() {}, warn() {}, error: (_m: string, e?: any) => void errors.push(e) } })
+    expect(() => route({ type: "session.execution.started", data: { sessionID: SID } })).not.toThrow()
+    expect(() => route({ type: "session.execution.failed", data: { sessionID: SID, error: { message: "x" } } })).not.toThrow()
+    expect(() => route({ type: "session.execution.interrupted", data: { sessionID: SID, reason: "user" } })).not.toThrow()
+    expect(() => route({ type: "session.tool.called", data: { sessionID: SID } })).not.toThrow()
+    expect(errors.length).toBeGreaterThanOrEqual(3)
   })
 
   test("grandchildren count as background work", async () => {

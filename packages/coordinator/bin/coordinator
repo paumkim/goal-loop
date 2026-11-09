@@ -56,8 +56,23 @@ need_jq() {
 ensure_state() {
   mkdir -p "$DATA_DIR"
   if [ ! -f "$STATE_FILE" ]; then
-    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$STATE_FILE"
+    local tmp
+    tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
+    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$tmp" && chmod 644 "$tmp" 2>/dev/null; mv "$tmp" "$STATE_FILE"
   fi
+}
+
+# Atomic state write: jq args + filter, STATE_FILE is appended here. Uses mktemp + mv in DATA_DIR.
+state_jq() {
+  local tmp
+  tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
+  if ! jq "$@" "$STATE_FILE" > "$tmp"; then
+    rm -f "$tmp"
+    printf 'error: failed to update coordinator state\n' >&2
+    exit 1
+  fi
+  chmod 644 "$tmp" 2>/dev/null || true
+  mv "$tmp" "$STATE_FILE"
 }
 
 slugify() {
@@ -121,9 +136,14 @@ do_claim() {
   need_jq
   ensure_state
   read_config
-  local task="" agent="" paths=""
+  local task="" agent="" paths="" force=0
   while [ $# -gt 0 ]; do
     case "$1" in
+      --help|-h)
+        printf 'usage: coordinator claim <task> --agent <you> --paths <scope> [--force]\n'
+        return 0 ;;
+      --force)
+        force=1; shift ;;
       --agent)
         agent="${2:-}"; shift 2 ;;
       --agent=*)
@@ -141,37 +161,69 @@ do_claim() {
     esac
   done
   if [ -z "$task" ]; then
-    printf 'usage: coordinator claim <task> --agent <you> --paths <scope>\n' >&2
+    printf 'usage: coordinator claim <task> --agent <you> --paths <scope> [--force]\n' >&2
+    exit 1
+  fi
+  # empty-slug guard: task must contain at least one alphanumeric character
+  if ! printf '%s' "$task" | grep -q '[A-Za-z0-9]'; then
+    printf 'error: task must contain at least one alphanumeric character (empty slug)\n' >&2
     exit 1
   fi
   local slug branch worktree
   slug=$(slugify "$task")
+  if [ -z "$slug" ]; then
+    printf 'error: empty slug for task\n' >&2
+    exit 1
+  fi
   branch="wt/$slug"
   worktree="$WORKTREE_DIR/wt-$slug"
+
+  # guard overwrite: an existing lease is never silently overwritten
+  if [ "$force" -eq 0 ]; then
+    local exists
+    exists=$(jq -r --arg s "$slug" 'if .leases[$s] then "yes" else "no" end' "$STATE_FILE" 2>/dev/null || printf 'no')
+    if [ "$exists" = "yes" ]; then
+      printf 'error: lease for %s already exists; use --force to overwrite\n' "$slug" >&2
+      exit 1
+    fi
+  fi
 
   # warn-only overlap check
   check_overlap "$paths" "$slug" || true
 
-  # create branch wt/<slug> from dev (or HEAD); idempotent
+  # create branch wt/<slug> from dev (or HEAD); idempotent but fail hard on error
   if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
     local base="$DEV_BRANCH"
     if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$base"; then
       base="HEAD"
     fi
-    git -C "$MAIN_ROOT" branch "$branch" "$base" >/dev/null 2>&1 || true
+    if ! git -C "$MAIN_ROOT" branch "$branch" "$base" >/dev/null 2>&1; then
+      printf 'error: failed to create branch %s from %s\n' "$branch" "$base" >&2
+      exit 1
+    fi
+  fi
+  if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    printf 'error: branch %s was not created\n' "$branch" >&2
+    exit 1
   fi
 
-  # create worktree worktrees/wt-<slug>; idempotent
+  # create worktree worktrees/wt-<slug>; idempotent but fail hard on error
   mkdir -p "$MAIN_ROOT/$WORKTREE_DIR"
   local wt_path="$MAIN_ROOT/$worktree"
   if [ ! -d "$wt_path" ]; then
-    git -C "$MAIN_ROOT" worktree add "$wt_path" "$branch" >/dev/null 2>&1 || true
+    if ! git -C "$MAIN_ROOT" worktree add "$wt_path" "$branch" >/dev/null 2>&1; then
+      printf 'error: failed to create worktree %s for branch %s\n' "$wt_path" "$branch" >&2
+      exit 1
+    fi
+  fi
+  if [ ! -d "$wt_path" ]; then
+    printf 'error: worktree %s was not created\n' "$wt_path" >&2
+    exit 1
   fi
 
-  local ts tmp
+  local ts
   ts=$(now_iso)
-  tmp=$(mktemp)
-  jq --arg slug "$slug" --arg agent "$agent" --arg paths "$paths" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug] = {agent: $agent, paths: $paths, branch: $branch, worktree: $worktree, status: "claimed", createdAt: $ts}' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+  state_jq --arg slug "$slug" --arg agent "$agent" --arg paths "$paths" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug] = {agent: $agent, paths: $paths, branch: $branch, worktree: $worktree, status: "claimed", createdAt: $ts}'
   # keep empty agent/paths as empty strings (no special handling needed)
   printf 'claimed %s worktree %s\n' "$branch" "$worktree"
 }
@@ -191,24 +243,26 @@ do_submit() {
       wt/*) slug="${cur#wt/}" ;;
     esac
   fi
+  # strict: no wt/<slug> branch, no submit. No fallback lease, no fake lease.
   if [ -z "$slug" ]; then
-    slug=$(jq -r '.leases | to_entries[] | select(.value.status=="claimed") | .key' "$STATE_FILE" 2>/dev/null | head -1)
+    printf 'error: submit requires current branch wt/<slug> (claim first, then work in its worktree)\n' >&2
+    exit 1
   fi
-  if [ -z "$slug" ]; then
-    # Nothing claimed: still print a stable output but fail gracefully
-    # Try any known lease
-    slug=$(jq -r '.leases | keys[0] // empty' "$STATE_FILE" 2>/dev/null || true)
+  local status
+  status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ -z "$status" ]; then
+    printf 'error: no claimed lease for %s (run claim first)\n' "$slug" >&2
+    exit 1
   fi
-  if [ -z "$slug" ]; then
-    printf 'submitted wt/task\n'
-    return 0
+  if [ "$status" != "claimed" ]; then
+    printf 'error: lease for %s is %s, expected claimed\n' "$slug" "$status" >&2
+    exit 1
   fi
-  local branch worktree ts tmp
+  local branch worktree ts
   branch="wt/$slug"
   worktree="$WORKTREE_DIR/wt-$slug"
   ts=$(now_iso)
-  tmp=$(mktemp)
-  jq --arg slug "$slug" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" 'if .leases[$slug] then .leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts else .leases[$slug] = {agent: "", paths: "", branch: $branch, worktree: $worktree, status: "submitted", createdAt: $ts, submittedAt: $ts} end' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+  state_jq --arg slug "$slug" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts'
   printf 'submitted %s\n' "$branch"
 }
 
@@ -222,23 +276,70 @@ do_merge_next() {
     printf 'no submitted tasks\n'
     return 0
   fi
-  branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
-  # acquire serial lock (mkdir dir; also honour merge.lock file if present)
-  local lock_dir="$DATA_DIR/.merge-lock"
-  mkdir -p "$DATA_DIR"
-  if ! mkdir "$lock_dir" 2>/dev/null; then
-    printf 'warning: merge lock held\n' >&2
+  if [ -z "$slug" ]; then
+    printf 'error: empty slug for merge\n' >&2
     exit 1
   fi
-  # release on exit
-  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
-  # record lock owner in state (best effort)
-  (jq --arg s "$slug" '.mergeLock = $s' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE") 2>/dev/null || true
+  branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
+  # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
+  local lock_dir="$DATA_DIR/.merge-lock"
+  local lock_file="$DATA_DIR/.merge-lock-file"
+  mkdir -p "$DATA_DIR"
+  # flock the merge lock file if flock is available; hold fd 9 until release
+  exec 9>"$lock_file" || { printf 'error: cannot open merge lock file\n' >&2; exit 1; }
+  if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then
+      printf 'error: merge lock held\n' >&2
+      exec 9>&- 2>/dev/null || true
+      exit 1
+    fi
+  fi
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    # stale lock handling: a lock dir older than 60 minutes is removed and retried once
+    if [ -d "$lock_dir" ] && [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
+      printf 'warning: removing stale merge lock\n' >&2
+      rmdir "$lock_dir" 2>/dev/null || rm -rf "$lock_dir"
+      if ! mkdir "$lock_dir" 2>/dev/null; then
+        printf 'error: merge lock held\n' >&2
+        exec 9>&- 2>/dev/null || true
+        exit 1
+      fi
+    else
+      printf 'error: merge lock held\n' >&2
+      exec 9>&- 2>/dev/null || true
+      exit 1
+    fi
+  fi
+  release_merge_lock() {
+    if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+      local _tmp
+      _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null || mktemp) || true
+      if [ -n "${_tmp:-}" ]; then
+        if jq '.mergeLock = null' "$STATE_FILE" > "$_tmp" 2>/dev/null; then
+          chmod 644 "$_tmp" 2>/dev/null || true
+          mv "$_tmp" "$STATE_FILE"
+        else
+          rm -f "$_tmp"
+        fi
+      fi
+    fi
+    rmdir "$lock_dir" 2>/dev/null || true
+    # unlock flock and close fd 9 if open
+    if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
+    exec 9>&- 2>/dev/null || true
+    trap - EXIT
+  }
+  # release on exit: clears mergeLock in state, removes lock dir, unlocks flock on all paths
+  trap 'release_merge_lock' EXIT
+  # record lock owner in state (atomic)
+  state_jq --arg s "$slug" '.mergeLock = $s'
 
-  # run tests gracefully; warning but continue
+  # tests block the merge: a failing check aborts instead of warning and continuing
   if command -v bun >/dev/null 2>&1; then
     if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
-      printf 'warning: tests failed, continuing merge\n' >&2
+      printf 'error: tests failed, aborting merge\n' >&2
+      release_merge_lock
+      exit 1
     fi
   fi
 
@@ -247,17 +348,15 @@ do_merge_next() {
   cur_main=$(git -C "$MAIN_ROOT" branch --show-current 2>/dev/null || printf '')
   if [ "$cur_main" != "$DEV_BRANCH" ]; then
     if ! git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1; then
-      printf 'warning: cannot checkout %s\n' "$DEV_BRANCH" >&2
-      rmdir "$lock_dir" 2>/dev/null || true
-      trap - EXIT
+      printf 'error: cannot checkout %s\n' "$DEV_BRANCH" >&2
+      release_merge_lock
       exit 1
     fi
   fi
 
   if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
-    printf 'warning: branch %s not found\n' "$branch" >&2
-    rmdir "$lock_dir" 2>/dev/null || true
-    trap - EXIT
+    printf 'error: branch %s not found\n' "$branch" >&2
+    release_merge_lock
     exit 1
   fi
 
@@ -265,20 +364,16 @@ do_merge_next() {
   git -C "$MAIN_ROOT" fetch >/dev/null 2>&1 || true
   if ! git -C "$MAIN_ROOT" merge --no-ff --no-edit -m "merge $branch into $DEV_BRANCH" "$branch" >/dev/null 2>&1; then
     git -C "$MAIN_ROOT" merge --abort >/dev/null 2>&1 || true
-    printf 'warning: merge failed\n' >&2
-    (jq '.mergeLock = null' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE") 2>/dev/null || true
-    rmdir "$lock_dir" 2>/dev/null || true
-    trap - EXIT
+    printf 'error: merge failed\n' >&2
+    release_merge_lock
     exit 1
   fi
 
-  local ts tmp
+  local ts
   ts=$(now_iso)
-  tmp=$(mktemp)
-  jq --arg s "$slug" --arg ts "$ts" --arg dev "$DEV_BRANCH" '.leases[$s].status = "done" | .leases[$s].mergedAt = $ts | .leases[$s].mergedInto = $dev | .mergeLock = null' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
-  rmdir "$lock_dir" 2>/dev/null || true
-  trap - EXIT
-  printf 'merged into dev\n'
+  state_jq --arg s "$slug" --arg ts "$ts" --arg dev "$DEV_BRANCH" '.leases[$s].status = "done" | .leases[$s].mergedAt = $ts | .leases[$s].mergedInto = $dev | .mergeLock = null'
+  release_merge_lock
+  printf 'merged into %s\n' "$DEV_BRANCH"
 }
 
 do_status() {
@@ -292,6 +387,11 @@ do_status() {
 
 show_help() {
   printf 'usage: coordinator <claim|heartbeat|submit|merge-next|status|queue> [--help]\n'
+  printf '  claim <task> --agent <you> --paths <scope> [--force]   claim a wt/<slug> lease (existing lease needs --force)\n'
+  printf '  heartbeat                                           liveness check\n'
+  printf '  submit                                              submit the current wt/<slug> claimed lease (strict: exits 1 without one)\n'
+  printf '  merge-next                                          merge the oldest submitted lease into $DEV_BRANCH (blocks on test failure)\n'
+  printf '  status|queue                                        show submitted/done counts\n'
 }
 
 main() {
