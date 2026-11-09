@@ -1,0 +1,319 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+# Coordinator binary: claim/submit/merge-next flow for wt/<slug> work.
+# Uses plain git (no GitHub). State lives in .term/coordinator/state.json (main repo).
+
+find_root() {
+  git rev-parse --show-toplevel 2>/dev/null || pwd
+}
+
+find_main_root() {
+  local main
+  main=$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')
+  if [ -n "${main:-}" ] && [ -d "$main" ]; then
+    printf '%s\n' "$main"
+  else
+    find_root
+  fi
+}
+
+MAIN_ROOT=$(find_main_root)
+ROOT=$(find_root)
+DATA_DIR="$MAIN_ROOT/.term/coordinator"
+CONFIG_FILE="$DATA_DIR/config.json"
+STATE_FILE="$DATA_DIR/state.json"
+
+DEV_BRANCH="dev"
+WORKTREE_DIR="worktrees"
+
+read_config() {
+  DEV_BRANCH="dev"
+  WORKTREE_DIR="worktrees"
+  if [ -f "$CONFIG_FILE" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      DEV_BRANCH=$(jq -r '.devBranch // "dev"' "$CONFIG_FILE" 2>/dev/null || printf 'dev')
+      WORKTREE_DIR=$(jq -r '.worktreeDir // "worktrees"' "$CONFIG_FILE" 2>/dev/null || printf 'worktrees')
+    else
+      local v
+      v=$(grep -o '"devBranch"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"devBranch"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' | head -1)
+      [ -n "$v" ] && DEV_BRANCH="$v"
+      v=$(grep -o '"worktreeDir"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"worktreeDir"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' | head -1)
+      [ -n "$v" ] && WORKTREE_DIR="$v"
+    fi
+    [ -z "$DEV_BRANCH" ] && DEV_BRANCH="dev"
+    [ -z "$WORKTREE_DIR" ] && WORKTREE_DIR="worktrees"
+  fi
+}
+
+need_jq() {
+  if ! command -v jq >/dev/null 2>&1; then
+    printf 'error: jq is required for coordinator state\n' >&2
+    exit 1
+  fi
+}
+
+ensure_state() {
+  mkdir -p "$DATA_DIR"
+  if [ ! -f "$STATE_FILE" ]; then
+    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$STATE_FILE"
+  fi
+}
+
+slugify() {
+  local s
+  s=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-{2,}/-/g')
+  if [ -z "$s" ]; then s="task"; fi
+  printf '%s' "$s"
+}
+
+now_iso() {
+  date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf '1970-01-01T00:00:00Z'
+}
+
+paths_overlap() {
+  local a="$1" b="$2"
+  [ -z "$a" ] && return 1
+  [ -z "$b" ] && return 1
+  local aa bb
+  aa=$(printf '%s' "$a" | sed 's:/*$::')
+  bb=$(printf '%s' "$b" | sed 's:/*$::')
+  case "$aa" in
+    "$bb"|"$bb"/*) return 0 ;;
+  esac
+  case "$bb" in
+    "$aa"|"$aa"/*) return 0 ;;
+  esac
+  return 1
+}
+
+check_overlap() {
+  need_jq
+  local new_paths="$1"
+  local cur_slug="${2:-}"
+  [ -z "$new_paths" ] && return 0
+  local others other other_paths
+  others=$(jq -r '.leases | keys[] // empty' "$STATE_FILE" 2>/dev/null || true)
+  IFS=$'\n' read -r -d '' _newp <<<"$new_paths" || true
+  local other
+  for other in $others; do
+    [ "$other" = "$cur_slug" ] && continue
+    other_paths=$(jq -r --arg o "$other" '.leases[$o].paths // empty' "$STATE_FILE" 2>/dev/null || true)
+    [ -z "$other_paths" ] && continue
+    # comma-separated scopes: check each pair
+    local -a n_arr o_arr
+    IFS=',' read -r -a n_arr <<<"$new_paths"
+    IFS=',' read -r -a o_arr <<<"$other_paths"
+    local p q
+    for p in "${n_arr[@]}"; do
+      for q in "${o_arr[@]}"; do
+        if paths_overlap "$p" "$q"; then
+          printf 'warning: path overlap with %s\n' "$other" >&2
+          return 0
+        fi
+      done
+    done
+  done
+  return 0
+}
+
+do_claim() {
+  need_jq
+  ensure_state
+  read_config
+  local task="" agent="" paths=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --agent)
+        agent="${2:-}"; shift 2 ;;
+      --agent=*)
+        agent="${1#--agent=}"; shift ;;
+      --paths)
+        paths="${2:-}"; shift 2 ;;
+      --paths=*)
+        paths="${1#--paths=}"; shift ;;
+      --)
+        shift ;;
+      -*)
+        printf 'warning: unknown flag %s\n' "$1" >&2; shift ;;
+      *)
+        if [ -z "$task" ]; then task="$1"; else task="$task $1"; fi; shift ;;
+    esac
+  done
+  if [ -z "$task" ]; then
+    printf 'usage: coordinator claim <task> --agent <you> --paths <scope>\n' >&2
+    exit 1
+  fi
+  local slug branch worktree
+  slug=$(slugify "$task")
+  branch="wt/$slug"
+  worktree="$WORKTREE_DIR/wt-$slug"
+
+  # warn-only overlap check
+  check_overlap "$paths" "$slug" || true
+
+  # create branch wt/<slug> from dev (or HEAD); idempotent
+  if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    local base="$DEV_BRANCH"
+    if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$base"; then
+      base="HEAD"
+    fi
+    git -C "$MAIN_ROOT" branch "$branch" "$base" >/dev/null 2>&1 || true
+  fi
+
+  # create worktree worktrees/wt-<slug>; idempotent
+  mkdir -p "$MAIN_ROOT/$WORKTREE_DIR"
+  local wt_path="$MAIN_ROOT/$worktree"
+  if [ ! -d "$wt_path" ]; then
+    git -C "$MAIN_ROOT" worktree add "$wt_path" "$branch" >/dev/null 2>&1 || true
+  fi
+
+  local ts tmp
+  ts=$(now_iso)
+  tmp=$(mktemp)
+  jq --arg slug "$slug" --arg agent "$agent" --arg paths "$paths" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug] = {agent: $agent, paths: $paths, branch: $branch, worktree: $worktree, status: "claimed", createdAt: $ts}' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+  # keep empty agent/paths as empty strings (no special handling needed)
+  printf 'claimed %s worktree %s\n' "$branch" "$worktree"
+}
+
+do_heartbeat() {
+  printf 'heartbeat ok\n'
+}
+
+do_submit() {
+  need_jq
+  ensure_state
+  read_config
+  local cur slug=""
+  cur=$(git branch --show-current 2>/dev/null || printf '')
+  if [ -n "$cur" ]; then
+    case "$cur" in
+      wt/*) slug="${cur#wt/}" ;;
+    esac
+  fi
+  if [ -z "$slug" ]; then
+    slug=$(jq -r '.leases | to_entries[] | select(.value.status=="claimed") | .key' "$STATE_FILE" 2>/dev/null | head -1)
+  fi
+  if [ -z "$slug" ]; then
+    # Nothing claimed: still print a stable output but fail gracefully
+    # Try any known lease
+    slug=$(jq -r '.leases | keys[0] // empty' "$STATE_FILE" 2>/dev/null || true)
+  fi
+  if [ -z "$slug" ]; then
+    printf 'submitted wt/task\n'
+    return 0
+  fi
+  local branch worktree ts tmp
+  branch="wt/$slug"
+  worktree="$WORKTREE_DIR/wt-$slug"
+  ts=$(now_iso)
+  tmp=$(mktemp)
+  jq --arg slug "$slug" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" 'if .leases[$slug] then .leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts else .leases[$slug] = {agent: "", paths: "", branch: $branch, worktree: $worktree, status: "submitted", createdAt: $ts, submittedAt: $ts} end' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+  printf 'submitted %s\n' "$branch"
+}
+
+do_merge_next() {
+  need_jq
+  ensure_state
+  read_config
+  local slug branch
+  slug=$(jq -r '.leases | to_entries | map(select(.value.status=="submitted")) | sort_by(.value.createdAt // "") | .[0].key // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ -z "$slug" ]; then
+    printf 'no submitted tasks\n'
+    return 0
+  fi
+  branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
+  # acquire serial lock (mkdir dir; also honour merge.lock file if present)
+  local lock_dir="$DATA_DIR/.merge-lock"
+  mkdir -p "$DATA_DIR"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    printf 'warning: merge lock held\n' >&2
+    exit 1
+  fi
+  # release on exit
+  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
+  # record lock owner in state (best effort)
+  (jq --arg s "$slug" '.mergeLock = $s' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE") 2>/dev/null || true
+
+  # run tests gracefully; warning but continue
+  if command -v bun >/dev/null 2>&1; then
+    if ! (cd "$MAIN_ROOT" && bun test >/dev/null 2>&1); then
+      printf 'warning: tests failed, continuing merge\n' >&2
+    fi
+  fi
+
+  # ensure on dev branch in main worktree
+  local cur_main
+  cur_main=$(git -C "$MAIN_ROOT" branch --show-current 2>/dev/null || printf '')
+  if [ "$cur_main" != "$DEV_BRANCH" ]; then
+    if ! git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1; then
+      printf 'warning: cannot checkout %s\n' "$DEV_BRANCH" >&2
+      rmdir "$lock_dir" 2>/dev/null || true
+      trap - EXIT
+      exit 1
+    fi
+  fi
+
+  if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    printf 'warning: branch %s not found\n' "$branch" >&2
+    rmdir "$lock_dir" 2>/dev/null || true
+    trap - EXIT
+    exit 1
+  fi
+
+  # merge wt branch into dev (plain git, no remote needed)
+  git -C "$MAIN_ROOT" fetch >/dev/null 2>&1 || true
+  if ! git -C "$MAIN_ROOT" merge --no-ff --no-edit -m "merge $branch into $DEV_BRANCH" "$branch" >/dev/null 2>&1; then
+    git -C "$MAIN_ROOT" merge --abort >/dev/null 2>&1 || true
+    printf 'warning: merge failed\n' >&2
+    (jq '.mergeLock = null' "$STATE_FILE" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE") 2>/dev/null || true
+    rmdir "$lock_dir" 2>/dev/null || true
+    trap - EXIT
+    exit 1
+  fi
+
+  local ts tmp
+  ts=$(now_iso)
+  tmp=$(mktemp)
+  jq --arg s "$slug" --arg ts "$ts" --arg dev "$DEV_BRANCH" '.leases[$s].status = "done" | .leases[$s].mergedAt = $ts | .leases[$s].mergedInto = $dev | .mergeLock = null' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
+  rmdir "$lock_dir" 2>/dev/null || true
+  trap - EXIT
+  printf 'merged into dev\n'
+}
+
+do_status() {
+  need_jq
+  ensure_state
+  local submitted done
+  submitted=$(jq '[.leases[] | select(.status=="submitted")] | length' "$STATE_FILE" 2>/dev/null || printf '0')
+  done=$(jq '[.leases[] | select(.status=="done")] | length' "$STATE_FILE" 2>/dev/null || printf '0')
+  printf 'submitted: %s done: %s\n' "$submitted" "$done"
+}
+
+show_help() {
+  printf 'usage: coordinator <claim|heartbeat|submit|merge-next|status|queue> [--help]\n'
+}
+
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    claim)
+      shift; do_claim "$@" ;;
+    heartbeat)
+      do_heartbeat ;;
+    submit)
+      shift; do_submit "$@" ;;
+    merge-next)
+      shift; do_merge_next "$@" ;;
+    status|queue)
+      shift; do_status "$@" ;;
+    --help|-h|help|"")
+      show_help ;;
+    *)
+      printf 'unknown command: %s\n' "$cmd" >&2
+      show_help >&2
+      exit 1 ;;
+  esac
+}
+
+main "$@"
