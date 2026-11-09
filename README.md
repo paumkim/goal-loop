@@ -66,12 +66,17 @@ The rule follows the repository:
 - Outside a git repository there is nothing to commit, so the rule switches itself off.
 - `requireCommit: false` turns it off everywhere.
 
-### Coordinator repositories (term)
+### Coordinator mode and first-run bootstrap
 
-If at least 2 coordinator markers are detected, coordinator mode is on: the agent works on `wt/<slug>` and runs `submit`, the coordinator merges to `dev`, and `main` stays read-only for agents.
+On the first `/goal` run inside a git repository the plugin creates `.term/coordinator/` and `worktrees/` for you. No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
 With `coordinator: true` the agent always goes `claim -> wt/<slug> -> submit`.
 The evaluator is read-only and gates `not_met` until wt commit + submit evidence appears.
-Without the coordinator binary step 1 fails, so the goal cannot be met in this repo (impossible until term repo provides the binary).
+
+Prerequisites: a git repository with at least one commit (so `dev`/HEAD exists), and `jq` for coordinator state.
+
+Parallel sessions: each session claims its own slug/worktree. Overlapping paths are a hard error without `--force`. Run `status --json` to see the other leases.
+
+Fuzzy requests: a vague goal like "make it look like a rabbit" is turned into a `SPEC.md` loop. The agent writes `SPEC.md` first (interpretation, acceptance criteria, verification including screenshot/render for visual), then builds, verifies against the spec, and commits.
 
 ## Options
 

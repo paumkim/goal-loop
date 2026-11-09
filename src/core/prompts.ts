@@ -25,11 +25,13 @@ function commitRule(policy: CommitPolicy) {
 
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
 export function coordinatorFlow(policy: CommitPolicy): string {
-  const bin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
+  const rawBin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
+  const bin = /\s/.test(rawBin) ? `"${rawBin}"` : rawBin
   const target = policy.branch
   return [
-    `Coordinator repo. Before editing: run \`${bin} claim <task> --agent <you> --paths <scope>\`.`,
-    `Work only in its worktree, commit on your wt/<slug> branch. When done, run \`submit\`. Never commit to ${target}/main directly.`,
+    `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
+    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,
+    `Never commit to ${target}/main directly.`,
   ].join("\n")
 }
 
@@ -39,6 +41,15 @@ export function commitStatusSuffix(policy: CommitPolicy): string {
     return `Commit on your wt/<slug> branch and submit before the goal counts as done.`
   }
   return `commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on`
+}
+
+/** True when the goal has no hard evidence token or reads as vague. */
+export function isFuzzyCondition(condition: string): boolean {
+  const text = condition.toLowerCase()
+  const vague = ["look like", "like a rabbit", "pretty", "nice", "better", "improve", "redesign", "rework", "rabbit"]
+  if (vague.some((word) => text.includes(word))) return true
+  const hard = /\b(test|tests|build|lint|file|exists|passes|pass|exits|exit|commit|committed)\b/.test(text) || /\d/.test(text)
+  return !hard
 }
 
 /** First turn: the condition itself is the directive. */
@@ -53,6 +64,12 @@ export function directive(condition: string, policy: CommitPolicy): string {
     ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
+  if (isFuzzyCondition(condition)) {
+    lines.push(
+      ``,
+      `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
+    )
+  }
   if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")
 }

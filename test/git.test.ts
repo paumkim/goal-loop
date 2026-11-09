@@ -102,7 +102,8 @@ describe("resolveCommitPolicy", () => {
     expect(policy.required).toBe(true)
     expect(policy.mode).toBe("coordinator")
     expect(policy.branch).toBe("dev")
-    expect(policy.coordinatorBin).toBe("packages/coordinator/bin/coordinator")
+    expect(policy.coordinatorBin?.endsWith("packages/coordinator/bin/coordinator")).toBe(true)
+    expect(policy.coordinatorBin).toBe(join(root, "packages/coordinator/bin/coordinator"))
     expect(policy.worktreeDir).toBe("worktrees")
   })
   test("detectCoordinator needs two markers", () => {

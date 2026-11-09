@@ -6,8 +6,10 @@
  * met / not met / impossible verdicts, stall guard, retries, background-work check-ins, restore on restart).
  */
 import { Plugin } from "@opencode/plugin"
+import { spawnSync } from "node:child_process"
+import { ensureCoordinatorLayout, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { resolveCommitPolicy } from "./core/git.ts"
+import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -66,7 +68,27 @@ export default Plugin.define({
     // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
     // inside one the finished work has to land on a branch before the goal counts as met. In coordinator
     // repositories (term) normal agents land on wt/<slug> and submit; the coordinator merges to the target.
-    const commit = resolveCommitPolicy(config.commit, ctx.location.directory)
+    let coordinatorBin: string | undefined
+    try {
+      const pluginRoot = pluginRootFromMeta(import.meta.dir)
+      if (config.commit.enabled && config.commit.coordinator !== false) {
+        const repository = findRepository(ctx.location.directory)
+        if (repository) {
+          const bootstrap = ensureCoordinatorLayout(repository.root, pluginRoot)
+          if (bootstrap.created.length > 0) log.info("coordinator bootstrap", { created: bootstrap.created })
+          coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
+          try {
+            const jq = spawnSync("sh", ["-c", "command -v jq"], { stdio: "ignore" })
+            if (jq.status !== 0) log.warn("jq not found; coordinator state requires jq")
+          } catch {
+            // Best effort: the warn above is enough; never crash setup.
+          }
+        }
+      }
+    } catch (error) {
+      log.warn("coordinator bootstrap failed", { error: String(error) })
+    }
+    const commit = resolveCommitPolicy(config.commit, ctx.location.directory, coordinatorBin)
     log.info("commit rule", { required: commit.required, branch: commit.branch, mode: commit.mode ?? "direct", reason: commit.reason })
 
     // ---- ports onto the OpenCode context

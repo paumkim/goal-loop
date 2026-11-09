@@ -98,13 +98,13 @@ function refDirs(gitDir: string): string[] {
  * to commit to a branch the repository has never had would make it create one, which is a change to the
  * repository the goal never asked for.
  */
-export function resolveCommitPolicy(request: CommitRequest, directory: string): CommitPolicy {
+export function resolveCommitPolicy(request: CommitRequest, directory: string, coordinatorBin?: string): CommitPolicy {
   if (!request.enabled) return { required: false, branch: request.branch, mode: "direct", reason: "disabled by configuration" }
   const repository = findRepository(directory)
   if (!repository) return { required: false, branch: request.branch, mode: "direct", reason: "not a git repository" }
   const coordinatorOn = request.coordinator === undefined || request.coordinator === "auto" || request.coordinator === true
   if (coordinatorOn) {
-    const detected = detectCoordinator(repository.root)
+    const detected = detectCoordinator(repository.root, coordinatorBin)
     if (detected) {
       const target = detected.devBranch ?? (branchExists(repository.gitDir, request.branch) ? request.branch : undefined) ?? currentBranch(repository.gitDir) ?? request.branch
       return {
@@ -123,7 +123,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string): 
         branch: target,
         mode: "coordinator",
         reason: "coordinator mode forced by configuration",
-        coordinatorBin: "packages/coordinator/bin/coordinator",
+        coordinatorBin: coordinatorBin ?? "packages/coordinator/bin/coordinator",
         worktreeDir: "worktrees",
       }
     }
@@ -142,27 +142,31 @@ export interface CoordinatorDetection {
   readonly devBranch?: string
 }
 
-export function detectCoordinator(root: string): CoordinatorDetection | undefined {
-  const markers = [
-    join(root, ".term", "coordinator", "config.json"),
-    join(root, ".term", "coordinator", "state.json"),
-    join(root, "packages", "coordinator", "bin", "coordinator"),
-    join(root, ".opencode", "rules", "project-safety.md"),
-    join(root, "script", "land.ts"),
-  ]
-  const hits = markers.filter((path) => existsSync(path)).length
-  if (hits < 2) return undefined
+export function detectCoordinator(root: string, pluginBin?: string): CoordinatorDetection | undefined {
+  const configPath = join(root, ".term", "coordinator", "config.json")
+  const statePath = join(root, ".term", "coordinator", "state.json")
+  const projectBin = join(root, "packages", "coordinator", "bin", "coordinator")
+  const hasConfig = existsSync(configPath)
+  const hasState = existsSync(statePath)
+  const hasProjectBin = existsSync(projectBin)
+  const binExists = hasProjectBin || (pluginBin ? existsSync(pluginBin) : false)
+  const detected = (hasConfig && hasState) || (binExists && (hasConfig || hasState))
+  if (!detected) return undefined
   let devBranch: string | undefined
   let worktreeDir = "worktrees"
   try {
-    const raw = readFileSync(join(root, ".term", "coordinator", "config.json"), "utf8")
+    const raw = readFileSync(configPath, "utf8")
     const parsed = JSON.parse(raw) as Record<string, unknown>
     if (typeof parsed.devBranch === "string" && parsed.devBranch.trim() !== "") devBranch = parsed.devBranch.trim()
     if (typeof parsed.worktreeDir === "string" && parsed.worktreeDir.trim() !== "") worktreeDir = parsed.worktreeDir.trim()
   } catch {
     // Config unreadable: detection still holds on markers alone.
   }
-  return { coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir, ...(devBranch ? { devBranch } : {}) }
+  let coordinatorBin: string
+  if (hasProjectBin) coordinatorBin = projectBin
+  else if (pluginBin) coordinatorBin = pluginBin
+  else coordinatorBin = "packages/coordinator/bin/coordinator"
+  return { coordinatorBin, worktreeDir, ...(devBranch ? { devBranch } : {}) }
 }
 
 export function isCoordinatorPolicy(policy: CommitPolicy): boolean {

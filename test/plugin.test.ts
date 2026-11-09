@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
@@ -56,18 +56,23 @@ function context(directory: string) {
 }
 
 describe("plugin setup", () => {
-  test("the /goal command tells the agent to commit to the dev branch", async () => {
+  test("a fresh git repository resolves to the coordinator flow on first /goal", async () => {
+    // First-run bootstrap creates .term/coordinator, so a fresh repo is coordinator-detected.
     const directory = repository()
     const { ctx, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
       expect(calls.commands.map((command) => command.name)).toContain("goal")
+      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(true)
+      expect(existsSync(join(directory, ".term/coordinator/state.json"))).toBe(true)
       const goal = calls.commands.find((command) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
-      expect(directive.text).toContain("`dev` branch")
-      expect(directive.text).toContain("commit the finished work")
+      expect(directive.text).toContain("Coordinator repo")
+      expect(directive.text).toContain("wt/<slug>")
+      expect(directive.text).toContain("submit")
+      expect(directive.text).toContain("dev")
     } finally {
       await dispose?.()
     }
