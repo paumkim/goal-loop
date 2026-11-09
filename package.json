@@ -31,7 +31,11 @@
     "tui.ts",
     "rpc.ts",
     "src",
-    "dist"
+    "dist",
+    "packages/coordinator/bin/coordinator",
+    "packages/coordinator/README.md",
+    ".term/coordinator/config.json",
+    ".term/coordinator/state.json"
   ],
   "engines": {
     "opencode": ">=2.0.29"
