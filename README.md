@@ -69,6 +69,9 @@ The rule follows the repository:
 ### Coordinator repositories (term)
 
 If at least 2 coordinator markers are detected, coordinator mode is on: the agent works on `wt/<slug>` and runs `submit`, the coordinator merges to `dev`, and `main` stays read-only for agents.
+With `coordinator: true` the agent always goes `claim -> wt/<slug> -> submit`.
+The evaluator is read-only and gates `not_met` until wt commit + submit evidence appears.
+Without the coordinator binary step 1 fails, so the goal cannot be met in this repo (impossible until term repo provides the binary).
 
 ## Options
 
