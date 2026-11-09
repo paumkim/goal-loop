@@ -19,7 +19,7 @@
 <tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:360</code></td></tr>
 <tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:365</code></td></tr>
 <tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:182</code></td></tr>
-<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first</td><td><code>src/runtime/controller.ts:399</code></td></tr></tbody></table>
+<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:399</code></td></tr></tbody></table>
 <p>Live states: <code>active</code>, <code>paused</code> (<code>src/core/types.ts:27</code>).</p></section>
 <section id="ports"><h2>Ports</h2><p>Controller depends only on narrow ports, so core stays host-agnostic (<code>src/runtime/ports.ts:1</code>). <code>SessionPort</code>, <code>EvaluatorPort</code>, <code>BackgroundPort</code>, <code>StoragePort</code>, <code>EmitterPort</code>, <code>Clock</code>, <code>Logger</code> (<code>src/runtime/ports.ts:15</code>).</p></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#diagram">Data flow</a></li><li><a href="#state">State machine</a></li><li><a href="#ports">Ports</a></li></ul></aside>

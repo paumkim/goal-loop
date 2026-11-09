@@ -56,7 +56,7 @@ const STATUS_LABEL: Record<GoalStatus, string> = {
   achieved: "achieved",
   impossible: "judged impossible",
   cleared: "cleared",
-  failed: "cleared after an unrecoverable error",
+  failed: "failed after an unrecoverable error",
 }
 
 export const statusLabel = (status: GoalStatus) => STATUS_LABEL[status]

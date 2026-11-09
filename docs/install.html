@@ -31,8 +31,8 @@
   }]
 }</code></pre><p>Full table: <a href="config.html">Config</a>. In coordinator repos (term) <code>coordinator: "auto"</code> (default) switches normal agents to <code>wt/&lt;slug&gt;</code> + <code>submit</code> / <code>merge-next</code> instead of a direct <code>dev</code> commit; <code>true</code> forces it, <code>false</code> disables it. Only the <code>coordinator</code> agent promotes <code>dev -&gt; main</code> via <code>script/land.ts</code>.</p></section>
 <section id="troubleshoot"><h2>Troubleshooting</h2>
-<h3>Pause reasons</h3><p>Interrupt, stall (3 turns w/o tool use), turn cap (200), rate limit, non-retryable error. Send any message to resume (<code>src/runtime/controller.ts:475</code>, <code>README.md:50</code>).</p>
-<h3>Failed recovery</h3><p>Fatal errors (auth <code>401/403</code>, credit <code>402</code>, context <code>413</code>, model <code>404</code>) clear the goal. Fix the cause, run <code>/goal</code> again (<code>src/core/errors.ts:37</code>, <code>src/runtime/controller.ts:399</code>).</p>
+<h3>Pause reasons</h3><p>Interrupt, stall (3 turns w/o tool use), rate limit, non-retryable error. Send any message to resume. Turn cap (200) pauses and stays paused until <code>/goal clear</code> or a new goal; a message will not extend the cap (<code>src/runtime/controller.ts:475</code>, <code>README.md:50</code>).</p>
+<h3>Failed recovery</h3><p>Fatal errors (auth <code>401/403</code>, credit <code>402</code>, context <code>413</code>, model <code>404</code>) fail the goal (status <code>failed</code>, distinct from <code>cleared</code>). Fix the cause, run <code>/goal</code> again; sending a message does not resume a failed goal (<code>src/core/errors.ts:37</code>, <code>src/runtime/controller.ts:399</code>).</p>
 <h3>Env vars</h3><pre><code>OPENCODE_GOAL_MODEL
 OPENCODE_GOAL_MAX_TURNS
 OPENCODE_GOAL_CHECKIN_MINUTES

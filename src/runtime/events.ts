@@ -33,6 +33,14 @@ export function createRouter(input: { controller: GoalController; background: Ba
   const recent = new RecentIds()
   const fail = (error: unknown) => log.error("goal event handler failed", { error: String(error) })
 
+  const safe = (fn: () => void) => {
+    try {
+      fn()
+    } catch (error) {
+      fail(error)
+    }
+  }
+
   return (event: ServerEvent) => {
     if (!recent.add(event.id)) return
     const data = (event.data ?? {}) as Data
@@ -40,39 +48,56 @@ export function createRouter(input: { controller: GoalController; background: Ba
     switch (event.type) {
       case "session.execution.started":
         if (!sessionID) return
-        background.executionStarted(sessionID)
-        return controller.onExecutionStarted(sessionID)
+        return safe(() => {
+          background.executionStarted(sessionID)
+          controller.onExecutionStarted(sessionID)
+        })
       case "session.tool.called":
-        if (sessionID) controller.onToolCalled(sessionID)
+        if (sessionID) safe(() => controller.onToolCalled(sessionID))
         return
       case "session.execution.succeeded":
         if (!sessionID) return
-        background.executionEnded(sessionID)
+        safe(() => background.executionEnded(sessionID))
         return void controller.onExecutionSucceeded(sessionID).catch(fail)
       case "session.execution.failed":
         if (!sessionID) return
-        background.executionEnded(sessionID)
-        return controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
+        return safe(() => {
+          background.executionEnded(sessionID)
+          controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
+        })
       case "session.execution.interrupted":
         if (!sessionID) return
-        background.executionEnded(sessionID)
-        return controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
+        return safe(() => {
+          background.executionEnded(sessionID)
+          controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
+        })
       case "session.created":
-        if (sessionID) background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined)
+        if (sessionID) safe(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
         return
       case "session.deleted":
         if (!sessionID) return
-        background.sessionDeleted(sessionID)
-        return controller.onSessionDeleted(sessionID)
+        return safe(() => {
+          background.sessionDeleted(sessionID)
+          controller.onSessionDeleted(sessionID)
+        })
       case "shell.created": {
         const info = (data.info ?? {}) as Data
-        if (typeof info.id === "string") background.shellCreated(info.id, String(info.status), info.metadata?.sessionID)
+        if (typeof info.id === "string") safe(() => background.shellCreated(info.id, String(info.status), info.metadata?.sessionID))
+        return
+      }
+      case "shell.updated": {
+        const info = (data.info ?? data) as Data
+        const id = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
+        if (id) safe(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), info.metadata?.sessionID ?? data.metadata?.sessionID))
         return
       }
       case "shell.exited":
-      case "shell.deleted":
-        if (typeof data.id === "string" && (event.type === "shell.deleted" || data.status !== "running")) background.shellEnded(data.id)
+      case "shell.deleted": {
+        // Exited/deleted always ends the shell, regardless of any status field on the event.
+        const id = typeof data.id === "string" ? data.id : typeof (data.info as Data | undefined)?.id === "string" ? String((data.info as Data).id) : undefined
+        if (id) safe(() => background.shellEnded(id))
         return
+      }
     }
   }
 }
