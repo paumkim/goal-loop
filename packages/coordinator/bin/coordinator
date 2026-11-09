@@ -237,7 +237,7 @@ do_merge_next() {
 
   # run tests gracefully; warning but continue
   if command -v bun >/dev/null 2>&1; then
-    if ! (cd "$MAIN_ROOT" && bun test >/dev/null 2>&1); then
+    if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
       printf 'warning: tests failed, continuing merge\n' >&2
     fi
   fi
