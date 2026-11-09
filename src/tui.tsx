@@ -132,12 +132,11 @@ export default Plugin.define({
           goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted
         return (
           <Show when={goal()}>
-            <box width="100%" flexDirection="row" justifyContent="flex-start">
-              <box flexShrink={0} onMouseUp={() => props.sessionID && void rpc.status({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})}>
-                <text fg={color()} wrapMode="none">
-                  {label()}
-                </text>
-              </box>
+            {/* HUD must stay backdrop-transparent and overlay the existing backdrop. Do not wrap in a full-width box or set backgroundColor/border/padding, which would paint its own background and create a separate visual strip above the composer. */}
+            <box flexShrink={0} onMouseUp={() => props.sessionID && void rpc.status({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})}>
+              <text fg={color()} wrapMode="none">
+                {label()}
+              </text>
             </box>
           </Show>
         )
