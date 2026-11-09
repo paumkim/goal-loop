@@ -195,7 +195,7 @@ ${notice.message}`);
         setNow(Date.now());
     }, TICK_MS);
     context.ui.slot({
-      append: "prompt.footer.status",
+      append: "session.composer.top",
       render: (props) => {
         const goal = createMemo(() => live(props.sessionID));
         const label = createMemo(() => {
@@ -214,15 +214,19 @@ ${notice.message}`);
             return goal();
           },
           get children() {
-            var _el$7 = _$createElement("box"), _el$8 = _$createElement("text");
+            var _el$7 = _$createElement("box"), _el$8 = _$createElement("box"), _el$9 = _$createElement("text");
             _$insertNode(_el$7, _el$8);
-            _$setProp(_el$7, "flexShrink", 0);
-            _$setProp(_el$7, "onMouseUp", () => props.sessionID && void rpc.status({
+            _$setProp(_el$7, "width", "100%");
+            _$setProp(_el$7, "flexDirection", "row");
+            _$setProp(_el$7, "justifyContent", "flex-end");
+            _$insertNode(_el$8, _el$9);
+            _$setProp(_el$8, "flexShrink", 0);
+            _$setProp(_el$8, "onMouseUp", () => props.sessionID && void rpc.status({
               sessionID: props.sessionID
             }, at(props.sessionID)).catch(() => {}));
-            _$setProp(_el$8, "wrapMode", "none");
-            _$insert(_el$8, label);
-            _$effect((_$p) => _$setProp(_el$8, "fg", color(), _$p));
+            _$setProp(_el$9, "wrapMode", "none");
+            _$insert(_el$9, label);
+            _$effect((_$p) => _$setProp(_el$9, "fg", color(), _$p));
             return _el$7;
           }
         });
