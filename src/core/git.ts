@@ -99,15 +99,74 @@ function refDirs(gitDir: string): string[] {
  * repository the goal never asked for.
  */
 export function resolveCommitPolicy(request: CommitRequest, directory: string): CommitPolicy {
-  if (!request.enabled) return { required: false, branch: request.branch, reason: "disabled by configuration" }
+  if (!request.enabled) return { required: false, branch: request.branch, mode: "direct", reason: "disabled by configuration" }
   const repository = findRepository(directory)
-  if (!repository) return { required: false, branch: request.branch, reason: "not a git repository" }
+  if (!repository) return { required: false, branch: request.branch, mode: "direct", reason: "not a git repository" }
+  const coordinatorOn = request.coordinator === undefined || request.coordinator === "auto" || request.coordinator === true
+  if (coordinatorOn) {
+    const detected = detectCoordinator(repository.root)
+    if (detected) {
+      const target = detected.devBranch ?? (branchExists(repository.gitDir, request.branch) ? request.branch : undefined) ?? currentBranch(repository.gitDir) ?? request.branch
+      return {
+        required: true,
+        branch: target,
+        mode: "coordinator",
+        reason: "coordinator repository detected; wt/<slug> + submit flow",
+        coordinatorBin: detected.coordinatorBin,
+        worktreeDir: detected.worktreeDir,
+      }
+    }
+    if (request.coordinator === true) {
+      const target = branchExists(repository.gitDir, request.branch) ? request.branch : currentBranch(repository.gitDir) ?? request.branch
+      return {
+        required: true,
+        branch: target,
+        mode: "coordinator",
+        reason: "coordinator mode forced by configuration",
+        coordinatorBin: "packages/coordinator/bin/coordinator",
+        worktreeDir: "worktrees",
+      }
+    }
+  }
   if (branchExists(repository.gitDir, request.branch))
-    return { required: true, branch: request.branch, reason: "repository found" }
+    return { required: true, branch: request.branch, mode: "direct", reason: "repository found" }
   const head = currentBranch(repository.gitDir)
   if (head)
-    return { required: true, branch: head, reason: `branch ${request.branch} does not exist; using ${head}` }
-  return { required: true, branch: request.branch, reason: "repository found" }
+    return { required: true, branch: head, mode: "direct", reason: `branch ${request.branch} does not exist; using ${head}` }
+  return { required: true, branch: request.branch, mode: "direct", reason: "repository found" }
+}
+
+export interface CoordinatorDetection {
+  readonly coordinatorBin: string
+  readonly worktreeDir: string
+  readonly devBranch?: string
+}
+
+export function detectCoordinator(root: string): CoordinatorDetection | undefined {
+  const markers = [
+    join(root, ".term", "coordinator", "config.json"),
+    join(root, ".term", "coordinator", "state.json"),
+    join(root, "packages", "coordinator", "bin", "coordinator"),
+    join(root, ".opencode", "rules", "project-safety.md"),
+    join(root, "script", "land.ts"),
+  ]
+  const hits = markers.filter((path) => existsSync(path)).length
+  if (hits < 2) return undefined
+  let devBranch: string | undefined
+  let worktreeDir = "worktrees"
+  try {
+    const raw = readFileSync(join(root, ".term", "coordinator", "config.json"), "utf8")
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (typeof parsed.devBranch === "string" && parsed.devBranch.trim() !== "") devBranch = parsed.devBranch.trim()
+    if (typeof parsed.worktreeDir === "string" && parsed.worktreeDir.trim() !== "") worktreeDir = parsed.worktreeDir.trim()
+  } catch {
+    // Config unreadable: detection still holds on markers alone.
+  }
+  return { coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir, ...(devBranch ? { devBranch } : {}) }
+}
+
+export function isCoordinatorPolicy(policy: CommitPolicy): boolean {
+  return policy.required && policy.mode === "coordinator"
 }
 
 function read(path: string): string | undefined {

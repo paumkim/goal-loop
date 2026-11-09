@@ -107,12 +107,16 @@ describe("config", () => {
     expect(config.evaluator.model).toEqual({ providerID: "x", id: "y" })
   })
   test("commit options", () => {
-    expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev" })
+    expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev", coordinator: "auto" })
     expect(resolveConfig({ requireCommit: false }).commit.enabled).toBe(false)
     expect(resolveConfig({ commitBranch: "main" }).commit.branch).toBe("main")
     expect(resolveConfig({}, { OPENCODE_GOAL_COMMIT_BRANCH: "release" }).commit.branch).toBe("release")
     expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "0" }).commit.enabled).toBe(false)
     expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "yes" }).commit.enabled).toBe(true)
+    expect(resolveConfig({ coordinator: false }).commit.coordinator).toBe(false)
+    expect(resolveConfig({ coordinator: true }).commit.coordinator).toBe(true)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COORDINATOR: "off" }).commit.coordinator).toBe(false)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COORDINATOR: "on" }).commit.coordinator).toBe(true)
   })
   test("a blank branch name falls back to the default", () => {
     expect(resolveConfig({ commitBranch: "   " }).commit.branch).toBe("dev")
@@ -176,6 +180,25 @@ describe("prompts", () => {
     const independent = evaluateIndependently("all tests pass", facts, "transcript", COMMIT)
     expect(independent).toContain("Commit rule")
     expect(independent).toContain("`dev` branch")
+  })
+  test("coordinator mode injects the wt/<slug> flow everywhere and the rubric accepts submit evidence", () => {
+    const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktrees" }
+    const text = directive("add feature", coord)
+    expect(text).toContain("Work only on your own wt/<slug> branch")
+    expect(text).toContain("claim <task> --agent <you> --paths <scope>")
+    expect(text).toContain("worktrees/wt-<slug>")
+    expect(text).toContain("guard-edit / guard-commit")
+    expect(text).toContain("script/land.ts")
+    expect(text).toContain("submit")
+    expect(text).toContain("merge-next")
+    expect(continuation({ condition: "a", turn: 2, reason: "x" }, coord)).toContain("wt/<slug>")
+    expect(retry({ condition: "a", label: "timeout" }, coord)).toContain("wt/<slug>")
+    expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, coord)).toContain("wt/<slug>")
+    expect(systemReminder("a", coord)).toContain("wt/<slug>")
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    expect(evaluateInSession("add feature", facts, coord)).toContain("wt/<slug>")
+    expect(evaluateIndependently("add feature", facts, "transcript", coord)).toContain("submit")
+    expect(evaluateInSession("add feature", facts, coord)).toContain("merge-next")
   })
   test("the harness facts state the rule as measured outside the conversation", () => {
     const text = evaluateInSession("all tests pass", { turn: 1, elapsedMs: 1_000 }, COMMIT)

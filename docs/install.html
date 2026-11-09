@@ -26,10 +26,10 @@
     "options": {
       "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
       "maxTurns": 200, "stallTurns": 3, "checkinMinutes": 30,
-      "maxRetries": 3, "requireCommit": true, "commitBranch": "dev"
+      "maxRetries": 3, "requireCommit": true, "commitBranch": "dev", "coordinator": "auto"
     }
   }]
-}</code></pre><p>Full table: <a href="config.html">Config</a>.</p></section>
+}</code></pre><p>Full table: <a href="config.html">Config</a>. In coordinator repos (term) <code>coordinator: "auto"</code> (default) switches normal agents to <code>wt/&lt;slug&gt;</code> + <code>submit</code> / <code>merge-next</code> instead of a direct <code>dev</code> commit; <code>true</code> forces it, <code>false</code> disables it. Only the <code>coordinator</code> agent promotes <code>dev -&gt; main</code> via <code>script/land.ts</code>.</p></section>
 <section id="troubleshoot"><h2>Troubleshooting</h2>
 <h3>Pause reasons</h3><p>Interrupt, stall (3 turns w/o tool use), turn cap (200), rate limit, non-retryable error. Send any message to resume (<code>src/runtime/controller.ts:475</code>, <code>README.md:50</code>).</p>
 <h3>Failed recovery</h3><p>Fatal errors (auth <code>401/403</code>, credit <code>402</code>, context <code>413</code>, model <code>404</code>) clear the goal. Fix the cause, run <code>/goal</code> again (<code>src/core/errors.ts:37</code>, <code>src/runtime/controller.ts:399</code>).</p>
@@ -37,6 +37,7 @@
 OPENCODE_GOAL_MAX_TURNS
 OPENCODE_GOAL_CHECKIN_MINUTES
 OPENCODE_GOAL_COMMIT_BRANCH
-OPENCODE_GOAL_REQUIRE_COMMIT</code></pre></section>
+OPENCODE_GOAL_REQUIRE_COMMIT
+OPENCODE_GOAL_COORDINATOR</code></pre></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#install">Install</a></li><li><a href="#commands">Commands</a></li><li><a href="#options">Options</a></li><li><a href="#troubleshoot">Troubleshooting</a></li></ul></aside>
 </div><script src="app.js"></script></body></html>

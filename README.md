@@ -66,6 +66,30 @@ The rule follows the repository:
 - Outside a git repository there is nothing to commit, so the rule switches itself off.
 - `requireCommit: false` turns it off everywhere.
 
+### Coordinator repositories (term)
+
+Some repositories manage agents through a filesystem coordinator (`packages/coordinator/` and
+`.term/coordinator/`): normal agents own only `wt/<slug>` in `worktrees/wt-<slug>`, never `dev` or `main`;
+the coordinator merges to `dev` and alone releases `main` via `script/land.ts`. When the plugin detects those
+markers (at least two of `.term/coordinator/config.json`, `.term/coordinator/state.json`,
+`packages/coordinator/bin/coordinator`, `.opencode/rules/project-safety.md`, `script/land.ts`) it switches the
+commit rule to coordinator mode instead of telling the agent to commit to `dev` directly:
+
+> You are an agent on this repo. Work only on your own wt/<slug> branch — never write or commit on dev or main.
+>
+> 1. Claim first: `packages/coordinator/bin/coordinator claim <task> --agent <you> --paths <scope>` creates
+>    `wt/<slug>` + `worktrees/wt-<slug>` and checks path overlap.
+> 2. Work only in the worktree, `heartbeat` to hold the lease, commit on `wt/<slug>`. `guard-edit` / `guard-commit`
+>    block direct writes on `dev` for normal agents.
+> 3. Submit when done; the coordinator runs `merge-next` (serial lock, lint, touched-package typecheck +
+>    scoped tests) and merges to `dev`. You never merge yourself.
+> 4. `main` is read-only. Only the coordinator promotes `dev -> main` via `bun run script/land.ts`.
+
+The evaluator then accepts a `wt/<slug>` commit plus `submit` / `merge-next` evidence (or a merge commit showing
+on `dev`), and treats a direct `dev` commit by a normal agent as **not met**. Force it with
+`coordinator: true` or disable it with `coordinator: false`. This is the term story: a fresh session types
+`/goal <objective>` and the session already knows the flow, with no operator paste-in.
+
 ## Options
 
 All optional, set in `opencode.json`:
@@ -84,7 +108,8 @@ All optional, set in `opencode.json`:
         "systemReminder": false,
         "transcriptNotes": true,
         "requireCommit": true,
-        "commitBranch": "dev"
+        "commitBranch": "dev",
+        "coordinator": "auto"
       }
     }
   ]
@@ -102,10 +127,11 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
-| `commitBranch` | `dev` | Branch the finished work has to land on |
+| `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
+| `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
-`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`.
+`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`.
 
 ## Develop
 

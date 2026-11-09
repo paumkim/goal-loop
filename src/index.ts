@@ -64,9 +64,10 @@ export default Plugin.define({
     const lifetime = new AbortController()
 
     // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
-    // inside one the finished work has to land on a branch before the goal counts as met.
+    // inside one the finished work has to land on a branch before the goal counts as met. In coordinator
+    // repositories (term) normal agents land on wt/<slug> and submit; the coordinator merges to the target.
     const commit = resolveCommitPolicy(config.commit, ctx.location.directory)
-    log.info("commit rule", { required: commit.required, branch: commit.branch, reason: commit.reason })
+    log.info("commit rule", { required: commit.required, branch: commit.branch, mode: commit.mode ?? "direct", reason: commit.reason })
 
     // ---- ports onto the OpenCode context
     const session: SessionPort = {

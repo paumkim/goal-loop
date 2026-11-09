@@ -9,20 +9,36 @@ export interface CommitRequest {
   readonly enabled: boolean
   /** Branch the finished work has to land on. */
   readonly branch: string
+  /**
+   * Coordinator mode: when `"auto"` (default) detect coordinator repositories from the working tree
+   * (`.term/coordinator/`, `packages/coordinator/bin/coordinator`, `.opencode/rules/project-safety.md`)
+   * and switch normal agents to `wt/<slug>` + submit. When `true` force coordinator mode, when `false`
+   * disable it. See `resolveCommitPolicy`.
+   */
+  readonly coordinator?: "auto" | boolean
 }
+
+/** Commit routing mode. `direct` commits to the target branch; `coordinator` uses `wt/<slug>` + submit/merge. */
+export type CommitMode = "direct" | "coordinator"
 
 /** The commit rule as it applies to one session, after the repository was inspected. */
 export interface CommitPolicy {
   /** Finished work has to be committed before the goal counts as met. */
   readonly required: boolean
-  /** Branch the finished work has to land on. */
+  /** Branch the finished work has to land on (target branch in coordinator mode). */
   readonly branch: string
   /** Why the rule is on or off. Shown in the plugin log. */
   readonly reason: string
+  /** Commit routing mode; omitted means `direct`. */
+  readonly mode?: CommitMode
+  /** Coordinator wrapper path, e.g. `packages/coordinator/bin/coordinator`. */
+  readonly coordinatorBin?: string
+  /** Worktree directory, e.g. `worktrees`. */
+  readonly worktreeDir?: string
 }
 
 /** The commit rule is off: nothing in the session's directory is a git repository. */
-export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", reason: "not a git repository" }
+export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "not a git repository" }
 
 export const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
 

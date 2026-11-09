@@ -77,7 +77,7 @@ const branch = (value: unknown, fallback: string) => {
 /**
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
- * OPENCODE_GOAL_REQUIRE_COMMIT.
+ * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -106,8 +106,21 @@ export function resolveConfig(
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),
       branch: branch(env.OPENCODE_GOAL_COMMIT_BRANCH ?? options.commitBranch, DEFAULTS.commitBranch),
+      coordinator: parseCoordinator(env.OPENCODE_GOAL_COORDINATOR ?? options.coordinator),
     },
   }
+}
+
+/** Coordinator option: `"auto"` (default, detect from repo), `true` (force), `false` (off). */
+function parseCoordinator(value: unknown): "auto" | boolean {
+  if (value === undefined || value === "auto" || value === "") return "auto"
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    if (["1", "true", "yes", "on"].includes(normalized)) return true
+    if (["0", "false", "no", "off"].includes(normalized)) return false
+  }
+  return "auto"
 }
 
 /** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */
