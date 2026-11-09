@@ -26,23 +26,17 @@ function commitRule(policy: CommitPolicy) {
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
 export function coordinatorFlow(policy: CommitPolicy): string {
   const bin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
-  const worktreeDir = policy.worktreeDir ?? "worktrees"
   const target = policy.branch
   return [
-    `You are an agent on this repo. Work only on your own wt/<slug> branch — never write or commit on ${target} or main.`,
-    `The coordination flow:`,
-    `1. Claim first: run \`${bin} claim <task> --agent <you> --paths <scope>\` — it creates branch wt/<slug> + worktree ${worktreeDir}/wt-<slug> and checks path overlap with other agents.`,
-    `2. Work only in the worktree. Run \`heartbeat\` to hold the lease. Commit on your wt/ branch. Direct writes/commits on ${target} are blocked for normal agents by guard-edit / guard-commit.`,
-    `3. Submit when done: \`submit\` enqueues the task. The coordinator runs merge-next (serial lock, lint, then touched-package typecheck + scoped tests) and merges your branch into ${target}. You never merge yourself.`,
-    `4. Main is read-only for agents. Only the coordinator agent promotes ${target} -> main via \`bun run script/land.ts\` (snapshot tag -> git merge --no-ff ${target} -> verify trees match -> rebuild packages/term with bun run build --single -> verify ~/.local/bin/term -> back to ${target}).`,
-    `Commit rule: before the goal counts as done, commit the finished work on your wt/<slug> branch, then submit it and show the evidence: the commit hash on wt/<slug> plus the \`submit\` output (submitted) or the coordinator \`merge-next\` output (merged into ${target}). Work that is done but uncommitted or unsubmitted is not done work. Only the coordinator agent may commit or merge onto ${target} directly; a direct commit on ${target} by a normal agent is not accepted.`,
+    `Coordinator repo. Before editing: run \`${bin} claim <task> --agent <you> --paths <scope>\`.`,
+    `Work only in its worktree, commit on your wt/<slug> branch. When done, run \`submit\`. Never commit to ${target}/main directly.`,
   ].join("\n")
 }
 
 export function commitStatusSuffix(policy: CommitPolicy): string {
   if (!policy.required) return ""
   if (policy.mode === "coordinator") {
-    return `commit on your wt/<slug> branch, then \`submit\` and show the commit hash plus submit/merge output (target ${policy.branch})`
+    return `Commit on your wt/<slug> branch and submit before the goal counts as done.`
   }
   return `commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on`
 }
@@ -106,7 +100,7 @@ export function checkin(
     `Goal: ${escape(input.condition)}`,
     policy.required
       ? policy.mode === "coordinator"
-        ? `Commit on your wt/<slug> branch and submit before the goal counts as done, and show the commit hash plus submit/merge output.`
+        ? `Commit on your wt/<slug> branch and submit before the goal counts as done.`
         : `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done, and show the commit output.`
       : ``,
     `</goal-checkin>`,
@@ -172,14 +166,7 @@ function rubric(policy: CommitPolicy) {
     if (policy.mode === "coordinator") {
       lines.push(
         ``,
-        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch`,
-        `inside its worktree and then submitted for merge into \`${policy.branch}\`. Evidence is a commit hash shown`,
-        `with \`wt/<slug>\` plus a \`submit\` output (submitted) or a coordinator \`merge-next\` output (merged into`,
-        `\`${policy.branch}\`), or a coordinator status/queue snapshot showing the lease submitted/done, or a`,
-        `\`git log\` showing the merge commit on \`${policy.branch}\`. Uncommitted changes, or a commit only on`,
-        `\`${policy.branch}\` / \`main\` with no \`wt/<slug>\` history by a normal agent, or a \`wt/<slug>\` commit that was`,
-        `never submitted, mean "not_met", and the reason names the missing commit or submit step. A commit directly`,
-        `on \`${policy.branch}\` counts only when the transcript shows the \`coordinator\` agent performed it.`,
+        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` or \`merge-next\` output showing it merged into \`${policy.branch}\`. Uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
       )
     } else {
       lines.push(
