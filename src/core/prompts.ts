@@ -1,5 +1,5 @@
 import { formatDuration, formatSpend } from "./format.ts"
-import type { CommitPolicy, UsageSnapshot } from "./types.ts"
+import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
 export const MARKER = "goal"
@@ -52,10 +52,41 @@ export function isFuzzyCondition(condition: string): boolean {
   return !hard
 }
 
-/** First turn: the condition itself is the directive. */
-export function directive(condition: string, policy: CommitPolicy): string {
+export interface LoopPreamble {
+  /** 1-based iteration; 1 is the goal set by `/goal-loop` itself. */
+  readonly iteration: number
+  readonly maxLoops: number
+  readonly objective: string
+  /** Completed iterations, oldest first. */
+  readonly history: ReadonlyArray<LoopEntry>
+}
+
+/** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
+export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
+  if (history.length === 0) return "(none — this is the first iteration)"
+  return history.map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
+}
+
+const truncateLine = (text: string, max: number) => {
+  const flat = text.replace(/\s+/g, " ").trim()
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
+}
+
+/** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
+export function loopPreamble(loop: LoopPreamble): string[] {
+  return [
+    `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
+    `Objective (constant): ${escape(loop.objective)}`,
+    `Prior iterations:\n${historyBlock(loop.history)}`,
+    `When this iteration is met, the loop summarizes it and arms the next one; you do not need to decide that. Keep the objective in mind, not just this condition.`,
+  ]
+}
+
+/** First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals. */
+export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble): string {
   const lines = [
     `<goal>`,
+    ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
     escape(condition),
     `</goal>`,
     ``,
@@ -72,6 +103,25 @@ export function directive(condition: string, policy: CommitPolicy): string {
   }
   if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")
+}
+
+/** Synthetic prompt arming iteration N+1 after iteration N was met. */
+export function loopContinuation(
+  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string },
+  policy: CommitPolicy,
+): string {
+  return [
+    `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
+    `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
+    escape(input.condition),
+    ``,
+    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo):`,
+    escape(input.previousSummary),
+    ``,
+    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
+    policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
+    `</goal-loop>`,
+  ].join("\n")
 }
 
 export function continuation(input: { condition: string; turn: number; reason: string }, policy: CommitPolicy): string {
@@ -265,6 +315,131 @@ export function evaluateIndependently(
     ``,
     OUTPUT,
   ].join("\n")
+}
+
+export interface LoopSummaryInput {
+  readonly objective: string
+  readonly condition: string
+  readonly reason: string
+  readonly turn: number
+  readonly elapsedMs: number
+  readonly toolCalls: number
+  readonly history: ReadonlyArray<LoopEntry>
+  /** Hard output budget; callers also truncate to `maxSummaryTokens * 4` characters. */
+  readonly maxSummaryTokens: number
+}
+
+export interface NextGoalInput {
+  readonly objective: string
+  /** Completed iterations, oldest first (including the one that just ended). */
+  readonly history: ReadonlyArray<LoopEntry>
+  readonly latestSummary: string
+}
+
+const summarizeFacts = (input: LoopSummaryInput) => [
+  `Objective (constant): ${escape(input.objective)}`,
+  `Condition just achieved: ${escape(input.condition)}`,
+  `Evaluator verdict: met — ${escape(input.reason || "no reason given")}`,
+  `Harness facts (authoritative): end of turn ${input.turn} since this iteration started; elapsed ${formatDuration(input.elapsedMs)}; ${input.toolCalls} tool calls this iteration.`,
+]
+
+const SUMMARY_ASK = (input: LoopSummaryInput) => [
+  `Write a compact, machine-consumable summary of this loop iteration for the next-goal generator.`,
+  `At most ~${input.maxSummaryTokens} tokens. Plain text only: no markdown headings, no greetings, no advice to the user.`,
+  `Cover exactly three things: what was achieved (with evidence pointers), key constraints the next iteration must keep, and what remains improvable or unfinished.`,
+  `Prior iterations (oldest first):`,
+  historyBlock(input.history),
+]
+
+/** Appended to the live session transcript by `session.generate` (session summarizer). */
+export function summarizeInSession(input: LoopSummaryInput): string {
+  return [
+    `<goal-loop-summary>`,
+    `Step out of the agent role. You are now a compactor: summarize one completed iteration of an autonomous improvement loop. Do not call tools and do not address the user.`,
+    ``,
+    ...summarizeFacts(input),
+    ``,
+    ...SUMMARY_ASK(input),
+    `</goal-loop-summary>`,
+  ].join("\n")
+}
+
+/** Standalone prompt for an independent summarizer model reading a transcript digest. */
+export function summarizeIndependently(input: LoopSummaryInput, transcript: string): string {
+  return [
+    `You are a compactor for an autonomous improvement loop. Summarize one completed iteration from the transcript below; you cannot run commands or read files.`,
+    ``,
+    ...summarizeFacts(input),
+    ``,
+    ...SUMMARY_ASK(input),
+    ``,
+    `<transcript>`,
+    transcript,
+    `</transcript>`,
+  ].join("\n")
+}
+
+const NEXT_GOAL_ASK = [
+  `Reply with EXACTLY ONE of these, and nothing else:`,
+  `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
+  `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+]
+
+/** Appended to the live session transcript by `session.generate` (session generator). */
+export function nextGoalInSession(input: NextGoalInput): string {
+  return [
+    `<goal-loop-next>`,
+    `Step out of the agent role. You are the planner of this improvement loop. Do not call tools and do not address the user.`,
+    ``,
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(input.latestSummary),
+    ``,
+    ...NEXT_GOAL_ASK,
+    `</goal-loop-next>`,
+  ].join("\n")
+}
+
+/** Standalone prompt for an independent planner model; the summary replaces the transcript. */
+export function nextGoalIndependently(input: NextGoalInput): string {
+  return [
+    `You are the planner of an autonomous improvement loop. Choose the next goal from the summaries below; you cannot run commands or read files.`,
+    ``,
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(input.latestSummary),
+    ``,
+    ...NEXT_GOAL_ASK,
+  ].join("\n")
+}
+
+/** The only output that ends a loop early: nothing worth improving remains. */
+export const LOOP_COMPLETE = "LOOP_COMPLETE"
+
+/** True when the generator's reply means "nothing worth improving" (tolerates quotes/case). */
+export function isLoopComplete(reply: string): boolean {
+  const cleaned = reply.trim().replace(/^["'`]+|["'`]+$/g, "").trim()
+  return cleaned.toUpperCase() === LOOP_COMPLETE
+}
+
+/**
+ * Normalize a generator reply into a usable condition, or return undefined when it is unusable.
+ * Collapses newlines (the contract is one line), strips surrounding quotes/backticks, and enforces `maxChars`.
+ */
+export function parseNextCondition(reply: string, maxChars = 2_000): string | undefined {
+  if (isLoopComplete(reply)) return undefined
+  const cleaned = reply
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned || cleaned.length > maxChars) return undefined
+  return cleaned
 }
 
 export const REPAIR = `Your previous reply was not valid. ${OUTPUT}`

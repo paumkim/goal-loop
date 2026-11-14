@@ -25,6 +25,9 @@ Requires OpenCode 2.0.29 or newer.
 | `/goal <condition>` | Sets the goal and starts working on it right away |
 | `/goal` | Shows status: condition, time, turns, spend, last evaluator reason |
 | `/goal clear` | Removes the goal (`stop`, `off`, `reset`, `none`, `cancel` also work) |
+| `/goal-loop <objective>` | Like `/goal`, but when a goal is met the loop summarizes it and arms the next, harder goal automatically |
+| `/goal-loop` | Shows the loop status: objective, iteration, per-iteration history |
+| `/goal-loop clear` | Ends the loop (same aliases as `/goal clear`) |
 
 ```text
 /goal bun test passes with 0 failures and no test file is modified
@@ -78,6 +81,33 @@ Parallel sessions: each session claims its own slug/worktree. Overlapping paths 
 
 Fuzzy requests: a vague goal like "make it look like a rabbit" is turned into a `SPEC.md` loop. The agent writes `SPEC.md` first (interpretation, acceptance criteria, verification including screenshot/render for visual), then builds, verifies against the spec, and commits.
 
+## `/goal-loop`: keep improving after the finish line
+
+`/goal <objective>` stops the moment the evaluator says **met**. `/goal-loop <objective>` does not: each met
+verdict triggers a compact summary of what was achieved (a short machine-consumable block, not a transcript
+dump), then the evaluator generates the next, harder goal from that summary, and the agent arms it immediately
+under the same `/goal` rules — turn cap, stall guard, retries, commit rule, restore on restart.
+
+```text
+/goal-loop make the docs site faster and more complete
+```
+
+The footer shows the iteration (`◎ loop · v2 · active · 14m · 2 turns`); the status dialog shows the objective
+and one line per completed iteration.
+
+The loop only advances on a **met** verdict — never on not-met, stall, pause, interrupt or retry paths. It
+ends when any of these happens:
+
+- You run `/goal-loop clear` (or `stop`, `off`, `reset`, `none`, `cancel`), or set a new goal.
+- The evaluator judges an iteration **impossible** (terminal, like `/goal`).
+- The loop reaches `maxLoops` completed iterations (default 5) — ends cleanly as achieved.
+- The evaluator finds nothing meaningful left to improve and replies `LOOP_COMPLETE` — ends cleanly as achieved.
+- The evaluator machine fails repeatedly (pause, like `/goal`), or two consecutive iterations complete with zero
+  tool use (pause, with a notice).
+
+Each achieved iteration fires one info toast (`◎ Loop 1 achieved · → v2: …`); the end of the loop fires the
+normal achieved toast once.
+
 ## Options
 
 All optional, set in `opencode.json`:
@@ -96,6 +126,8 @@ All optional, set in `opencode.json`:
         "systemReminder": false,
         "transcriptNotes": true,
         "compactAtTokens": 0,
+        "maxLoops": 5,
+        "maxLoopSummaryTokens": 400,
         "requireCommit": true,
         "commitBranch": "dev",
         "coordinator": "auto"
@@ -121,12 +153,15 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
+| `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
+| `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as tokens × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
 | `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
 | `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
-`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`.
+`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
+`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`.
 
 ### Auto-compaction
 

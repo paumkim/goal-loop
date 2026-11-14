@@ -4,9 +4,9 @@ Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion
 
 ## Entrypoints
 
-- `index.ts` → `src/index.ts` `Plugin.define setup()` — the server plugin. Only place wiring lives (config, commit policy, bootstrap, RPC, `/goal` command, hooks, event pump).
+- `index.ts` → `src/index.ts` `Plugin.define setup()` — the server plugin. Only place wiring lives (config, commit policy, bootstrap, RPC, `/goal` + `/goal-loop` commands, hooks, event pump). `/goal-loop <objective>` is a `/goal` whose `met` verdicts arm a summarized next iteration until `maxLoops`, `LOOP_COMPLETE`, impossible, clear, or two zero-tool-call iterations; loop state rides the persisted `GoalRecord` (`loopEnabled`, `loopIteration`, `loopObjective`, `loopMaxLoops`, `loopHistory`, `loopNotProgress`; additive, `version` stays 1).
 - `src/core/*` — pure, no I/O beyond fs reads: `config.ts` (options + env), `git.ts` (commit policy), `prompts.ts` (directive + evaluator rubric), `bootstrap.ts` (first-run layout), `parse/verdict/transcript/errors/format`.
-- `src/runtime/*` — stateful: `controller.ts` (goal state machine), `evaluator.ts`, `store.ts`, `events.ts`, `background.ts`, `ports.ts`.
+- `src/runtime/*` — stateful: `controller.ts` (goal state machine, `/goal-loop` advance: met → summarize → arm next iteration, `maxLoops`/`LOOP_COMPLETE`/not-progress guards), `evaluator.ts`, `store.ts`, `events.ts`, `background.ts`, `ports.ts`.
 - `tui.ts` → `dist/tui.js` (precompiled). Edit TUI in `src/tui.tsx`, never `tui.ts`/`dist/`. `rpc.ts` → `src/rpc.ts` (shared client contract).
 
 ## Commands
@@ -39,6 +39,6 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 
 ## Config
 
-Options in `opencode.json` `plugins[].options`, parsed by `resolveConfig`: `evaluator.model/mode/maxTranscriptChars/maxOutputTokens/timeoutMs`, `maxTurns`, `stallTurns`, `checkinMinutes`, `maxIdleCheckins`, `maxRetries`, `maxConditionChars` (unlimited by default), `systemReminder`, `transcriptNotes`, `requireCommit`, `commitBranch` (default `dev`), `coordinator` (`auto`/`true`/`false`). Env overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`, `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR` (see `src/core/config.ts`).
+Options in `opencode.json` `plugins[].options`, parsed by `resolveConfig`: `evaluator.model/mode/maxTranscriptChars/maxOutputTokens/timeoutMs`, `maxTurns`, `stallTurns`, `checkinMinutes`, `maxIdleCheckins`, `maxRetries`, `maxConditionChars` (unlimited by default), `systemReminder`, `transcriptNotes`, `requireCommit`, `commitBranch` (default `dev`), `coordinator` (`auto`/`true`/`false`), `compactAtTokens`, `maxLoops` (default 5), `maxLoopSummaryTokens` (default 400). Env overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`, `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS` (see `src/core/config.ts`).
 
 `docs/` is a static, build-free site (open `docs/index.html`); update `install.html`/`config.html` when install or options change.

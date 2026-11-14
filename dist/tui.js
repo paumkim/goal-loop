@@ -11,7 +11,7 @@ import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 
 // src/core/format.ts
 var GOAL_GLYPH = "\u25CE";
@@ -185,6 +185,30 @@ var tui_default = Plugin.define({
             },
             children: (spend) => field("spend", formatSpend(spend()))
           }), null);
+          _$insert(_el$5, _$createComponent(Show, {
+            get when() {
+              return g().loopEnabled;
+            },
+            get children() {
+              var _el$1 = _$createElement("box"), _el$10 = _$createElement("text"), _el$11 = _$createTextNode(`loop \xB7 v`), _el$12 = _$createTextNode(` of at most `);
+              _$insertNode(_el$1, _el$10);
+              _$setProp(_el$1, "flexDirection", "column");
+              _$setProp(_el$1, "gap", 1);
+              _$insertNode(_el$10, _el$11);
+              _$insertNode(_el$10, _el$12);
+              _$insert(_el$10, () => g().loopIteration ?? 1, _el$12);
+              _$insert(_el$10, () => g().loopMaxLoops ?? "?", null);
+              _$insert(_el$1, () => field("objective", g().loopObjective ?? "?", true), null);
+              _$insert(_el$1, _$createComponent(For, {
+                get each() {
+                  return g().loopHistory ?? [];
+                },
+                children: (entry) => field(`v${entry.version}`, `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.summary}`, true)
+              }), null);
+              _$effect((_$p) => _$setProp(_el$10, "fg", context.theme.text.faint, _$p));
+              return _el$1;
+            }
+          }), null);
           _$effect((_p$) => {
             var _v$ = stateColor(), _v$2 = TextAttributes.BOLD, _v$3 = context.theme.text.muted;
             _v$ !== _p$.e && (_p$.e = _$setProp(_el$7, "fg", _v$, _p$.e));
@@ -205,40 +229,42 @@ var tui_default = Plugin.define({
       rpc.get({
         sessionID
       }, at(sessionID)).then((result) => put(sessionID, result.goal)).catch(() => {});
+      const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       context.ui.dialog.show(() => (() => {
-        var _el$1 = _$createElement("box"), _el$10 = _$createElement("box"), _el$11 = _$createElement("text"), _el$12 = _$createTextNode(` /goal`), _el$13 = _$createElement("text"), _el$15 = _$createElement("scrollbox"), _el$16 = _$createElement("text");
-        _$insertNode(_el$1, _el$10);
-        _$insertNode(_el$1, _el$15);
-        _$insertNode(_el$1, _el$16);
-        _$setProp(_el$1, "flexDirection", "column");
-        _$setProp(_el$1, "height", "100%");
-        _$setProp(_el$1, "paddingLeft", 3);
-        _$setProp(_el$1, "paddingRight", 3);
-        _$setProp(_el$1, "paddingBottom", 1);
-        _$setProp(_el$1, "gap", 1);
-        _$insertNode(_el$10, _el$11);
-        _$insertNode(_el$10, _el$13);
-        _$setProp(_el$10, "flexDirection", "row");
-        _$setProp(_el$10, "justifyContent", "space-between");
-        _$setProp(_el$10, "gap", 2);
-        _$insertNode(_el$11, _el$12);
-        _$insert(_el$11, GOAL_GLYPH, _el$12);
-        _$insertNode(_el$13, _$createTextNode(`esc`));
-        _$setProp(_el$13, "flexShrink", 0);
-        _$use((el) => setScrollRef(el), _el$15);
-        _$setProp(_el$15, "scrollbarOptions", {
+        var _el$13 = _$createElement("box"), _el$14 = _$createElement("box"), _el$15 = _$createElement("text"), _el$16 = _$createTextNode(` /goal`), _el$17 = _$createElement("text"), _el$19 = _$createElement("scrollbox"), _el$20 = _$createElement("text");
+        _$insertNode(_el$13, _el$14);
+        _$insertNode(_el$13, _el$19);
+        _$insertNode(_el$13, _el$20);
+        _$setProp(_el$13, "flexDirection", "column");
+        _$setProp(_el$13, "height", "100%");
+        _$setProp(_el$13, "paddingLeft", 3);
+        _$setProp(_el$13, "paddingRight", 3);
+        _$setProp(_el$13, "paddingBottom", 1);
+        _$setProp(_el$13, "gap", 1);
+        _$insertNode(_el$14, _el$15);
+        _$insertNode(_el$14, _el$17);
+        _$setProp(_el$14, "flexDirection", "row");
+        _$setProp(_el$14, "justifyContent", "space-between");
+        _$setProp(_el$14, "gap", 2);
+        _$insertNode(_el$15, _el$16);
+        _$insert(_el$15, GOAL_GLYPH, _el$16);
+        _$insert(_el$15, () => looped() ? " \xB7 loop" : "", null);
+        _$insertNode(_el$17, _$createTextNode(`esc`));
+        _$setProp(_el$17, "flexShrink", 0);
+        _$use((el) => setScrollRef(el), _el$19);
+        _$setProp(_el$19, "scrollbarOptions", {
           visible: true
         });
-        _$setProp(_el$15, "flexGrow", 1);
-        _$setProp(_el$15, "stickyScroll", false);
-        _$insert(_el$15, () => statusBody(sessionID, fallback));
-        _$insertNode(_el$16, _$createTextNode(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
+        _$setProp(_el$19, "flexGrow", 1);
+        _$setProp(_el$19, "stickyScroll", false);
+        _$insert(_el$19, () => statusBody(sessionID, fallback));
+        _$insertNode(_el$20, _$createTextNode(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
         _$effect((_p$) => {
           var _v$4 = TextAttributes.BOLD, _v$5 = context.theme.text.base, _v$6 = context.theme.text.muted, _v$7 = context.theme.text.faint;
-          _v$4 !== _p$.e && (_p$.e = _$setProp(_el$11, "attributes", _v$4, _p$.e));
-          _v$5 !== _p$.t && (_p$.t = _$setProp(_el$11, "fg", _v$5, _p$.t));
-          _v$6 !== _p$.a && (_p$.a = _$setProp(_el$13, "fg", _v$6, _p$.a));
-          _v$7 !== _p$.o && (_p$.o = _$setProp(_el$16, "fg", _v$7, _p$.o));
+          _v$4 !== _p$.e && (_p$.e = _$setProp(_el$15, "attributes", _v$4, _p$.e));
+          _v$5 !== _p$.t && (_p$.t = _$setProp(_el$15, "fg", _v$5, _p$.t));
+          _v$6 !== _p$.a && (_p$.a = _$setProp(_el$17, "fg", _v$6, _p$.a));
+          _v$7 !== _p$.o && (_p$.o = _$setProp(_el$20, "fg", _v$7, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -246,7 +272,7 @@ var tui_default = Plugin.define({
           a: undefined,
           o: undefined
         });
-        return _el$1;
+        return _el$13;
       })(), () => {
         setStatusDialogOpen(false);
         setScrollRef(undefined);
@@ -341,6 +367,8 @@ var tui_default = Plugin.define({
           const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs;
           const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active";
           const turns = g.turns > 0 ? ` \xB7 ${g.turns} turn${g.turns === 1 ? "" : "s"}` : "";
+          if (g.loopEnabled)
+            return `${GOAL_GLYPH} loop \xB7 v${g.loopIteration ?? 1} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
           return `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
         });
         const color = () => goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted;
@@ -349,14 +377,14 @@ var tui_default = Plugin.define({
             return goal();
           },
           get children() {
-            var _el$18 = _$createElement("box"), _el$19 = _$createElement("text");
-            _$insertNode(_el$18, _el$19);
-            _$setProp(_el$18, "flexShrink", 0);
-            _$setProp(_el$18, "onMouseUp", () => props.sessionID && context.keymap.dispatch("goal.status"));
-            _$setProp(_el$19, "wrapMode", "none");
-            _$insert(_el$19, label);
-            _$effect((_$p) => _$setProp(_el$19, "fg", color(), _$p));
-            return _el$18;
+            var _el$22 = _$createElement("box"), _el$23 = _$createElement("text");
+            _$insertNode(_el$22, _el$23);
+            _$setProp(_el$22, "flexShrink", 0);
+            _$setProp(_el$22, "onMouseUp", () => props.sessionID && context.keymap.dispatch("goal.status"));
+            _$setProp(_el$23, "wrapMode", "none");
+            _$insert(_el$23, label);
+            _$effect((_$p) => _$setProp(_el$23, "fg", color(), _$p));
+            return _el$22;
           }
         });
       }
@@ -430,6 +458,32 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession())),
+        run: () => {
+          const sessionID = currentSession();
+          if (sessionID)
+            rpc.clear({
+              sessionID
+            }, at(sessionID)).catch(() => {});
+        }
+      }, {
+        id: "goal.loop.status",
+        title: "Goal loop: show status",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled ?? entries()[currentSession() ?? ""]?.goal?.loopEnabled),
+        run: () => {
+          const sessionID = currentSession();
+          if (sessionID)
+            rpc.status({
+              sessionID
+            }, at(sessionID)).catch(() => {});
+        }
+      }, {
+        id: "goal.loop.clear",
+        title: "Goal loop: clear",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
         run: () => {
           const sessionID = currentSession();
           if (sessionID)

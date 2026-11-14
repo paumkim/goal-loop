@@ -9,7 +9,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { createMemo, createSignal, Show } from "solid-js"
+import { createMemo, createSignal, For, Show } from "solid-js"
 import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
 import type { GoalSnapshot, Notice } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -88,6 +88,17 @@ export default Plugin.define({
               {field("goal", g().condition, true)}
               <Show when={g().reason}>{(reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
               <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
+              <Show when={g().loopEnabled}>
+                <box flexDirection="column" gap={1}>
+                  <text fg={context.theme.text.faint}>
+                    loop · v{g().loopIteration ?? 1} of at most {g().loopMaxLoops ?? "?"}
+                  </text>
+                  {field("objective", g().loopObjective ?? "?", true)}
+                  <For each={g().loopHistory ?? []}>
+                    {(entry) => field(`v${entry.version}`, `met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.summary}`, true)}
+                  </For>
+                </box>
+              </Show>
             </box>
           )}
         </Show>
@@ -101,12 +112,14 @@ export default Plugin.define({
         .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
         .catch(() => {})
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
+      const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
+      // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
           <box flexDirection="column" height="100%" paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
-                {GOAL_GLYPH} /goal
+                {GOAL_GLYPH} /goal{looped() ? " · loop" : ""}
               </text>
               <text fg={context.theme.text.muted} flexShrink={0}>
                 esc
@@ -211,6 +224,7 @@ export default Plugin.define({
           const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs
           const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
           const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
+          if (g.loopEnabled) return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`
           return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
         })
         const color = () =>
@@ -307,6 +321,28 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession())),
+          run: () => {
+            const sessionID = currentSession()
+            if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
+          },
+        },
+        {
+          id: "goal.loop.status",
+          title: "Goal loop: show status",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession())?.loopEnabled ?? entries()[currentSession() ?? ""]?.goal?.loopEnabled),
+          run: () => {
+            const sessionID = currentSession()
+            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
+          },
+        },
+        {
+          id: "goal.loop.clear",
+          title: "Goal loop: clear",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession())?.loopEnabled),
           run: () => {
             const sessionID = currentSession()
             if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})

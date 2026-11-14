@@ -1,9 +1,17 @@
 import type { GoalConfig } from "../core/config.ts"
-import { evaluateIndependently, evaluateInSession, REPAIR } from "../core/prompts.ts"
+import {
+  evaluateIndependently,
+  evaluateInSession,
+  nextGoalIndependently,
+  nextGoalInSession,
+  REPAIR,
+  summarizeIndependently,
+  summarizeInSession,
+} from "../core/prompts.ts"
 import { renderTranscript } from "../core/transcript.ts"
 import type { CommitPolicy, ModelRef } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
-import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger } from "./ports.ts"
+import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
 
 export interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
@@ -66,6 +74,63 @@ export class Evaluator implements EvaluatorPort {
       if (left > 0) this.inflight.set(request.sessionID, left)
       else this.inflight.delete(request.sessionID)
     }
+  }
+
+  /** Loop step: compact one achieved iteration into a machine-consumable block. */
+  async summarize(request: LoopSummaryRequest): Promise<string> {
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
+    const model = this.config.model
+    if (this.config.mode === "independent" && model) {
+      try {
+        const messages = await this.deps.context(request.sessionID, signal)
+        const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
+        const text = await this.deps.modelGenerate(model, summarizeIndependently(request, transcript), signal)
+        return this.cap(text, request.maxSummaryTokens)
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.log.warn("independent summarizer failed; falling back to session summarizer", { error: String(error) })
+      }
+    }
+    this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
+    try {
+      const text = await this.deps.sessionGenerate(request.sessionID, summarizeInSession(request), signal)
+      return this.cap(text, request.maxSummaryTokens)
+    } finally {
+      const left = (this.inflight.get(request.sessionID) ?? 1) - 1
+      if (left > 0) this.inflight.set(request.sessionID, left)
+      else this.inflight.delete(request.sessionID)
+    }
+  }
+
+  /** Loop step: generate the next condition (or LOOP_COMPLETE). Returns the raw reply, trimmed. */
+  async nextGoal(request: NextGoalRequest): Promise<string> {
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
+    const model = this.config.model
+    if (this.config.mode === "independent" && model) {
+      try {
+        const text = await this.deps.modelGenerate(model, nextGoalIndependently(request), signal)
+        return text.trim().slice(0, 4_000)
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.log.warn("independent next-goal generator failed; falling back to session generator", { error: String(error) })
+      }
+    }
+    this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
+    try {
+      const text = await this.deps.sessionGenerate(request.sessionID, nextGoalInSession(request), signal)
+      return text.trim().slice(0, 4_000)
+    } finally {
+      const left = (this.inflight.get(request.sessionID) ?? 1) - 1
+      if (left > 0) this.inflight.set(request.sessionID, left)
+      else this.inflight.delete(request.sessionID)
+    }
+  }
+
+  /** Hard token budget: at most `tokens * 4` characters, single trailing ellipsis when cut. */
+  private cap(text: string, tokens: number): string {
+    const limit = Math.max(200, tokens * 4)
+    const flat = text.trim()
+    return flat.length <= limit ? flat : `${flat.slice(0, limit - 1)}…`
   }
 
   private async ask(generate: (prompt: string) => Promise<string>, prompt: string): Promise<EvaluationResult> {
