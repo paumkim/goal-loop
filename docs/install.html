@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Install · opencode-goalv2</title><link rel="stylesheet" href="styles.css"><script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script></head>
 <body><a class="skip" href="#main">Skip to content</a>
-<header><span class="t">opencode-goalv2</span><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="changelog.html">Changelog</a><button class="themebtn" id="themebtn" type="button" aria-label="Toggle color theme">Theme: dark</button></header>
+<header><span class="t">opencode-goalv2</span><nav aria-label="Site"><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="changelog.html">Changelog</a></nav><button class="themebtn" id="themebtn" type="button" aria-label="Toggle color theme">Theme: dark</button></header>
 <div class="layout"><aside class="side" aria-label="Primary">
 <a href="index.html">Home</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="install.html">Install</a><a href="changelog.html">Changelog</a></aside>
 <main id="main"><h1>Install and use</h1>
@@ -12,10 +12,10 @@
 <p>Requires OpenCode ≥2.0.29 (<code>package.json:40</code>). From GitHub: <code>opencode plugin add github:EL4CTEO/opencode-goal</code>. Local clone in <code>opencode.json</code>:</p>
 <pre><code>{ "plugins": ["/path/to/opencode-goal"] }</code></pre></section>
 <section id="commands"><h2>Commands</h2>
-<table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
+<div class="tablewrap"><table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
 <tr><td><code>/goal &lt;condition&gt;</code></td><td>Set goal and start immediately</td></tr>
 <tr><td><code>/goal</code></td><td>Show status</td></tr>
-<tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr></tbody></table>
+<tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr></tbody></table></div>
 <pre><code>/goal bun test passes with 0 failures and no test file is modified</code></pre>
 <p>Parsing: <code>src/core/parse.ts:13</code>.</p></section>
 <section id="options"><h2>opencode.json options</h2>

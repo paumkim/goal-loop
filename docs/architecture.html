@@ -2,24 +2,24 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Architecture · opencode-goalv2</title><link rel="stylesheet" href="styles.css"><script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script></head>
 <body><a class="skip" href="#main">Skip to content</a>
-<header><span class="t">opencode-goalv2</span><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="changelog.html">Changelog</a><button class="themebtn" id="themebtn" type="button" aria-label="Toggle color theme">Theme: dark</button></header>
+<header><span class="t">opencode-goalv2</span><nav aria-label="Site"><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="changelog.html">Changelog</a></nav><button class="themebtn" id="themebtn" type="button" aria-label="Toggle color theme">Theme: dark</button></header>
 <div class="layout"><aside class="side" aria-label="Primary">
 <a href="index.html">Home</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="install.html">Install</a><a href="changelog.html">Changelog</a></aside>
 <main id="main"><h1>Architecture</h1>
 <section id="diagram"><h2>Data flow</h2>
-<div class="card">
+<div class="card flow">
 <span class="box">User</span><span class="arrow">→</span><span class="box">Event Router</span><span class="arrow">→</span><span class="box">Controller</span><span class="arrow">→</span><span class="box">Evaluator</span><span class="arrow">→</span><span class="box">Session</span>
 <div><span class="box">Controller</span><span class="arrow">→</span><span class="box">Store</span><span class="box">Emitter</span><span class="box">Background</span></div>
 <p>Router fans server events to controller and background tracker (<code>src/runtime/events.ts:31</code>). Controller is the state machine (<code>src/runtime/controller.ts:69</code>). Evaluator judges each turn (<code>src/runtime/evaluator.ts:30</code>). Store persists one record per session (<code>src/runtime/store.ts:26</code>).</p></div></section>
 <section id="state"><h2>State machine</h2>
 <p><code>set → active → evaluate → continue / met / impossible; paused / failed / cleared</code> (<code>src/runtime/controller.ts:61</code>).</p>
-<table><thead><tr><th>State</th><th>Meaning</th><th>Source</th></tr></thead><tbody>
+<div class="tablewrap"><table><thead><tr><th>State</th><th>Meaning</th><th>Source</th></tr></thead><tbody>
 <tr><td><span class="chip a">active</span></td><td>Goal live, turns run and evaluate</td><td><code>src/core/types.ts:2</code></td></tr>
 <tr><td><span class="chip w">paused</span></td><td>Waiting for user prompt</td><td><code>src/runtime/controller.ts:496</code></td></tr>
 <tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:381</code></td></tr>
 <tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:386</code></td></tr>
 <tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:182</code></td></tr>
-<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:418</code></td></tr></tbody></table>
+<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:418</code></td></tr></tbody></table></div>
 <p>Live states: <code>active</code>, <code>paused</code> (<code>src/core/types.ts:44</code>).</p></section>
 <section id="ports"><h2>Ports</h2><p>Controller depends only on narrow ports, so core stays host-agnostic (<code>src/runtime/ports.ts:1</code>). <code>SessionPort</code>, <code>EvaluatorPort</code>, <code>BackgroundPort</code>, <code>StoragePort</code>, <code>EmitterPort</code>, <code>Clock</code>, <code>Logger</code> (<code>src/runtime/ports.ts:15</code>).</p></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#diagram">Data flow</a></li><li><a href="#state">State machine</a></li><li><a href="#ports">Ports</a></li></ul></aside>
