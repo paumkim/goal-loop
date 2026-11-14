@@ -1,9 +1,13 @@
 /**
- * Terminal UI for opencode-goal: a live footer indicator, verdict toasts and notifications, the `/goal` status
- * dialog, and palette actions. Purely presentational; all state lives in the server plugin and arrives over RPC.
+ * Terminal UI for opencode-goal: a compact goal indicator in the prompt footer, verdict toasts and notifications,
+ * the `/goal` status dialog, and palette actions. Purely presentational; all state lives in the server plugin and
+ * arrives over RPC. Everything renders through the host's own UI primitives: the `prompt.footer` slot for the
+ * indicator, `ui.toast.show` for transitions, and `ui.dialog.show` (host backdrop, Esc handling, sizing) for the
+ * detail view. No overlays, no absolutely positioned boxes, no custom colors — theme tokens only.
  */
 import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
+import { TextAttributes } from "@opentui/core"
 import { createMemo, createSignal, Show } from "solid-js"
 import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
 import type { GoalSnapshot, Notice } from "./core/types.ts"
@@ -28,16 +32,32 @@ export default Plugin.define({
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
 
-    /** Long status text gets a large, scrollable dialog instead of the truncating alert. */
+    /**
+     * Long status text gets a large, scrollable dialog instead of the truncating alert. The host owns the
+     * chrome: backdrop, z-index, focus, Esc/ctrl+c dismissal (see `ui/dialog.tsx` in the host sources,
+     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout`/`DialogHeader`
+     * conventions (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right);
+     * those internals are not exported to plugins, so the layout is re-created with the same constants and
+     * theme tokens instead of being imported.
+     */
     const showStatusDialog = (title: string, message: string) => {
-      setStatusDialogOpen(true)
       setScrollRef(undefined)
+      // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
-          <box flexDirection="column" height="100%" padding={1}>
-            <text attributes={1}>{title}</text>
+          <box flexDirection="column" height="100%" paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
+            <box flexDirection="row" justifyContent="space-between" gap={2}>
+              <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
+                {title}
+              </text>
+              <text fg={context.theme.text.muted} flexShrink={0}>
+                esc
+              </text>
+            </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false}>
-              <text wrapMode="word">{message}</text>
+              <text wrapMode="word" fg={context.theme.text.base}>
+                {message}
+              </text>
             </scrollbox>
             <text fg={context.theme.text.muted}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
           </box>
@@ -48,6 +68,7 @@ export default Plugin.define({
         },
       )
       context.ui.dialog.set({ size: "xlarge", centered: true })
+      setStatusDialogOpen(true)
     }
 
     /** RPC calls are routed to the plugin instance of the session's location. */
@@ -84,15 +105,20 @@ export default Plugin.define({
     const onNotice = (notice: Notice) => {
       const here = currentSession() === notice.sessionID
       if (notice.kind === "status") {
-        if (here) showStatusDialog(`${GOAL_GLYPH} /goal`, `${notice.title}\n\n${notice.message}`)
+        // formatStatus() repeats the title in its first line ("Goal active: ..."); don't print it twice.
+        const body = notice.message.startsWith(notice.title) ? notice.message : `${notice.title}\n\n${notice.message}`
+        if (here) showStatusDialog(`${GOAL_GLYPH} /goal`, body)
         return
       }
       const important = ATTENTION_KINDS.has(notice.kind)
       if (!here && !important) return
+      // Passing sessionID lets the host offer an "Open" action when the notice belongs to a session family
+      // that is not currently open (see the plugin toast adapter in the host sources, plugin/api.tsx).
       context.ui.toast.show({
         title: `${GOAL_GLYPH} ${notice.title}`,
         message: notice.message,
         variant: notice.level,
+        sessionID: notice.sessionID,
         duration: notice.level === "error" || notice.level === "warning" ? 8_000 : 4_000,
       })
       if (important)
@@ -115,25 +141,28 @@ export default Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
     }, TICK_MS)
 
+    // Compact indicator in the native prompt-footer row, same slot the built-in session status uses
+    // (`prompt.footer`, claimed with `append` by the host's own PromptFooter plugin). The host row owns
+    // layout, spacing and baseline alignment; this only contributes a themed, non-wrapping text segment.
+    // Hidden in shell mode to match the built-in footer, which swaps to its shell hint and drops usage/cost.
     context.ui.slot({
-      append: "session.composer.top",
+      append: "prompt.footer",
       render: (props) => {
-        const goal = createMemo(() => live(props.sessionID))
+        const goal = createMemo(() => (props.mode === "normal" ? live(props.sessionID) : undefined))
         const label = createMemo(() => {
           const g = goal()
           if (!g || !props.sessionID) return ""
           const entry = entries()[props.sessionID]
           const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs
           const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
-          const turns = g.turns > 0 ? ` \u00B7 ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
-          return `${GOAL_GLYPH} goal ${state} \u00B7 ${formatDurationCoarse(elapsed)}${turns}`
+          const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
+          return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
         })
         const color = () =>
           goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted
         return (
           <Show when={goal()}>
-            {/* HUD must stay backdrop-transparent and overlay the existing backdrop. Do not wrap in a full-width box or set backgroundColor/border/padding, which would paint its own background and create a separate visual strip above the composer. */}
-            <box flexShrink={0} onMouseUp={() => props.sessionID && void rpc.status({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})}>
+            <box flexShrink={0} onMouseUp={() => props.sessionID && context.keymap.dispatch("goal.status")}>
               <text fg={color()} wrapMode="none">
                 {label()}
               </text>
@@ -144,7 +173,9 @@ export default Plugin.define({
     })
 
     // Scrolling keys for the status dialog. Plain arrow keys are safe here: the commands are only
-    // enabled while the dialog is open, so they never intercept prompt editing.
+    // enabled while the dialog is open, so they never intercept prompt editing. Closing the dialog is
+    // the host's job — `ui.dialog.show` puts the host in modal mode, whose built-in layer binds
+    // escape and ctrl+c to dismiss the top dialog and run its onClose.
     context.keymap.layer(() => ({
       mode: "global",
       priority: 100,
@@ -197,31 +228,6 @@ export default Plugin.define({
           bind: "end",
           enabled: () => statusDialogOpen(),
           run: () => scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER),
-        },
-        {
-          id: "goal.status.close",
-          title: "Goal status: close",
-          group: "Goal",
-          bind: "escape",
-          enabled: () => statusDialogOpen(),
-          run: () => {
-            setStatusDialogOpen(false)
-            setScrollRef(undefined)
-            context.ui.dialog.clear()
-          },
-        },
-        {
-          id: "goal.status.close-enter",
-          title: "Goal status: close",
-          group: "Goal",
-          palette: true,
-          bind: "enter",
-          enabled: () => statusDialogOpen(),
-          run: () => {
-            setStatusDialogOpen(false)
-            setScrollRef(undefined)
-            context.ui.dialog.clear()
-          },
         },
       ],
     }))
