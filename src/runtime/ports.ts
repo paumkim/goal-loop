@@ -24,6 +24,8 @@ export interface SessionPort {
   }): Promise<void>
   /** Cumulative session spend, or undefined when unavailable. */
   usage(sessionID: string): Promise<UsageSnapshot | undefined>
+  /** Ask the host to compact the session's context. */
+  compact(sessionID: string): Promise<void>
 }
 
 export interface EvaluationRequest {

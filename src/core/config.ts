@@ -24,6 +24,8 @@ export interface GoalConfig {
   readonly systemReminder: boolean
   /** Records verdicts in the transcript as synthetic notes. */
   readonly transcriptNotes: boolean
+  /** Auto-compact when the estimated model-visible context (last assistant token usage) is at or above this many tokens. 0 disables. Env OPENCODE_GOAL_COMPACT_AT_TOKENS. */
+  readonly compactAtTokens: number
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
 }
@@ -37,6 +39,7 @@ export const DEFAULTS = {
   checkinMinutes: 30,
   maxIdleCheckins: 3,
   maxRetries: 3,
+  compactAtTokens: 0,
   // Effectively unlimited: goals are pasted from the clipboard and can run to whole files, so the default never rejects.
   maxConditionChars: Number.MAX_SAFE_INTEGER,
   commitBranch: "dev",
@@ -77,7 +80,7 @@ const branch = (value: unknown, fallback: string) => {
 /**
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
- * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR.
+ * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -103,6 +106,7 @@ export function resolveConfig(
     maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 100),
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),
+    compactAtTokens: int(env.OPENCODE_GOAL_COMPACT_AT_TOKENS ?? options.compactAtTokens, DEFAULTS.compactAtTokens, 0),
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),
       branch: branch(env.OPENCODE_GOAL_COMMIT_BRANCH ?? options.commitBranch, DEFAULTS.commitBranch),

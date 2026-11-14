@@ -95,6 +95,7 @@ All optional, set in `opencode.json`:
         "maxRetries": 3,
         "systemReminder": false,
         "transcriptNotes": true,
+        "compactAtTokens": 0,
         "requireCommit": true,
         "commitBranch": "dev",
         "coordinator": "auto"
@@ -114,12 +115,25 @@ All optional, set in `opencode.json`:
 | `maxRetries` | `3` | Automatic retries after transient errors |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
+| `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
 | `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
 | `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
-`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`.
+`OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`.
+
+### Auto-compaction
+
+`compactAtTokens` makes the plugin itself ask the host to compact the session once the estimated model-visible
+context reaches an absolute token count — a window-independent complement to opencode's `compaction.buffer`,
+which is relative to the model's context window.
+
+The estimate is the last assistant message's `input + cache.read + cache.write` token usage, measured right
+after each turn ends (`session.execution.succeeded`). Reasoning and output tokens are not counted: output has
+already become input for the next step. Set e.g. `"compactAtTokens": 260000` in `opencode.json` or
+`OPENCODE_GOAL_COMPACT_AT_TOKENS=260000`. `0` (the default) disables the check entirely. A compaction in flight
+or requested within the last 2 minutes is not re-requested; a lost in-flight marker is swept after 10 minutes.
 
 ## Develop
 
