@@ -163,6 +163,10 @@ Every page carries a "Last updated" stamp in the footer, derived from `git log` 
 
 All files are plain `.html` + `styles.css` + vanilla `app.js` and work by opening `docs/index.html` directly from the filesystem. Keep the `docs/` folder together — pages link to each other with relative paths.
 
-## License
+## License & credits
 
-MIT
+MIT — see [LICENSE](LICENSE).
+
+This project is based on the original `/goal` plugin by EL4CTEO, at https://github.com/EL4CTEO/opencode-goal. This fork is maintained by paumkim at https://github.com/paumkim/opencode-goalv2.
+
+The original copyright notice is preserved verbatim in [LICENSE](LICENSE); the modifications and maintenance in this fork are copyright 2026 paumkim. The MIT license covers both.

@@ -5,13 +5,13 @@
   "author": "EL4CTEO",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/EL4CTEO/opencode-goal#readme",
+  "homepage": "https://github.com/paumkim/opencode-goalv2#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EL4CTEO/opencode-goal.git"
+    "url": "git+https://github.com/paumkim/opencode-goalv2.git"
   },
   "bugs": {
-    "url": "https://github.com/EL4CTEO/opencode-goal/issues"
+    "url": "https://github.com/paumkim/opencode-goalv2/issues"
   },
   "keywords": [
     "opencode",
@@ -80,5 +80,8 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "maintainers": [
+    "paumkim"
+  ]
 }
