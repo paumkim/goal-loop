@@ -1,10 +1,11 @@
 // @bun
 // src/tui.tsx
-import { createComponent as _$createComponent } from "@opentui/solid";
-import { effect as _$effect } from "@opentui/solid";
 import { use as _$use } from "@opentui/solid";
 import { createTextNode as _$createTextNode } from "@opentui/solid";
+import { memo as _$memo } from "@opentui/solid";
+import { createComponent as _$createComponent } from "@opentui/solid";
 import { insertNode as _$insertNode } from "@opentui/solid";
+import { effect as _$effect } from "@opentui/solid";
 import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
@@ -21,6 +22,26 @@ function formatDurationCoarse(ms) {
   if (minutes < 60)
     return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
+}
+function formatTokens(n) {
+  if (n < 1000)
+    return String(Math.round(n));
+  if (n < 1e6)
+    return `${(n / 1000).toFixed(n < 1e4 ? 1 : 0)}k`;
+  return `${(n / 1e6).toFixed(2)}M`;
+}
+function formatCost(usd) {
+  if (usd <= 0)
+    return "$0";
+  return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
+}
+function formatSpend(spend) {
+  const parts = [`${formatTokens(spend.input + spend.cacheRead + spend.cacheWrite)} in`, `${formatTokens(spend.output + spend.reasoning)} out`];
+  if (spend.cacheRead > 0)
+    parts.push(`${formatTokens(spend.cacheRead)} cached`);
+  if (spend.cost > 0)
+    parts.push(formatCost(spend.cost));
+  return parts.join(" \xB7 ");
 }
 
 // src/rpc.ts
@@ -88,53 +109,144 @@ var tui_default = Plugin.define({
     const [statusDialogOpen, setStatusDialogOpen] = createSignal(false);
     const [scrollRef, setScrollRef] = createSignal(undefined);
     const requested = new Set;
-    const showStatusDialog = (title, message) => {
+    const LABEL = 10;
+    const label = (text) => (() => {
+      var _el$ = _$createElement("text");
+      _$setProp(_el$, "flexShrink", 0);
+      _$setProp(_el$, "width", 10);
+      _$insert(_el$, text);
+      _$effect((_$p) => _$setProp(_el$, "fg", context.theme.text.faint, _$p));
+      return _el$;
+    })();
+    const field = (name, children, wide = false) => (() => {
+      var _el$2 = _$createElement("box"), _el$3 = _$createElement("text");
+      _$insertNode(_el$2, _el$3);
+      _$setProp(_el$2, "flexDirection", "row");
+      _$setProp(_el$2, "gap", 2);
+      _$insert(_el$2, () => label(name), _el$3);
+      _$setProp(_el$3, "wrapMode", "word");
+      _$setProp(_el$3, "flexGrow", wide ? 1 : 0);
+      _$insert(_el$3, children);
+      _$effect((_$p) => _$setProp(_el$3, "fg", context.theme.text.base, _$p));
+      return _el$2;
+    })();
+    const statusBody = (sessionID, fallback) => {
+      const entry = () => entries()[sessionID];
+      const goal = () => entry()?.goal ?? undefined;
+      const elapsed = () => {
+        const g = goal();
+        if (!g)
+          return 0;
+        return g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry()?.receivedAt ?? now())) : g.elapsedMs;
+      };
+      const stateColor = () => goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.status === "active" ? context.theme.text.feedback.info.base : context.theme.text.muted;
+      return _$createComponent(Show, {
+        get when() {
+          return goal();
+        },
+        get fallback() {
+          return (() => {
+            var _el$4 = _$createElement("text");
+            _$setProp(_el$4, "wrapMode", "word");
+            _$insert(_el$4, fallback);
+            _$effect((_$p) => _$setProp(_el$4, "fg", context.theme.text.base, _$p));
+            return _el$4;
+          })();
+        },
+        children: (g) => (() => {
+          var _el$5 = _$createElement("box"), _el$6 = _$createElement("box"), _el$7 = _$createElement("text"), _el$8 = _$createElement("text"), _el$9 = _$createTextNode(` \xB7 `), _el$0 = _$createTextNode(` turn`);
+          _$insertNode(_el$5, _el$6);
+          _$setProp(_el$5, "flexDirection", "column");
+          _$setProp(_el$5, "gap", 1);
+          _$insertNode(_el$6, _el$7);
+          _$insertNode(_el$6, _el$8);
+          _$setProp(_el$6, "flexDirection", "row");
+          _$setProp(_el$6, "gap", 2);
+          _$insert(_el$7, () => g().status);
+          _$insertNode(_el$8, _el$9);
+          _$insertNode(_el$8, _el$0);
+          _$insert(_el$8, () => formatDurationCoarse(elapsed()), _el$9);
+          _$insert(_el$8, () => g().turns, _el$0);
+          _$insert(_el$8, () => g().turns === 1 ? "" : "s", null);
+          _$insert(_el$8, (() => {
+            var _c$ = _$memo(() => !!g().evaluating);
+            return () => _c$() ? " \xB7 checking" : g().waiting ? " \xB7 waiting" : "";
+          })(), null);
+          _$insert(_el$5, () => field("goal", g().condition, true), null);
+          _$insert(_el$5, _$createComponent(Show, {
+            get when() {
+              return g().reason;
+            },
+            children: (reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)
+          }), null);
+          _$insert(_el$5, _$createComponent(Show, {
+            get when() {
+              return g().spend;
+            },
+            children: (spend) => field("spend", formatSpend(spend()))
+          }), null);
+          _$effect((_p$) => {
+            var _v$ = stateColor(), _v$2 = TextAttributes.BOLD, _v$3 = context.theme.text.muted;
+            _v$ !== _p$.e && (_p$.e = _$setProp(_el$7, "fg", _v$, _p$.e));
+            _v$2 !== _p$.t && (_p$.t = _$setProp(_el$7, "attributes", _v$2, _p$.t));
+            _v$3 !== _p$.a && (_p$.a = _$setProp(_el$8, "fg", _v$3, _p$.a));
+            return _p$;
+          }, {
+            e: undefined,
+            t: undefined,
+            a: undefined
+          });
+          return _el$5;
+        })()
+      });
+    };
+    const showStatusDialog = (sessionID, fallback) => {
       setScrollRef(undefined);
+      rpc.get({
+        sessionID
+      }, at(sessionID)).then((result) => put(sessionID, result.goal)).catch(() => {});
       context.ui.dialog.show(() => (() => {
-        var _el$ = _$createElement("box"), _el$2 = _$createElement("box"), _el$3 = _$createElement("text"), _el$4 = _$createElement("text"), _el$6 = _$createElement("scrollbox"), _el$7 = _$createElement("text"), _el$8 = _$createElement("text");
-        _$insertNode(_el$, _el$2);
-        _$insertNode(_el$, _el$6);
-        _$insertNode(_el$, _el$8);
-        _$setProp(_el$, "flexDirection", "column");
-        _$setProp(_el$, "height", "100%");
-        _$setProp(_el$, "paddingLeft", 3);
-        _$setProp(_el$, "paddingRight", 3);
-        _$setProp(_el$, "paddingBottom", 1);
-        _$setProp(_el$, "gap", 1);
-        _$insertNode(_el$2, _el$3);
-        _$insertNode(_el$2, _el$4);
-        _$setProp(_el$2, "flexDirection", "row");
-        _$setProp(_el$2, "justifyContent", "space-between");
-        _$setProp(_el$2, "gap", 2);
-        _$insert(_el$3, title);
-        _$insertNode(_el$4, _$createTextNode(`esc`));
-        _$setProp(_el$4, "flexShrink", 0);
-        _$insertNode(_el$6, _el$7);
-        _$use((el) => setScrollRef(el), _el$6);
-        _$setProp(_el$6, "scrollbarOptions", {
+        var _el$1 = _$createElement("box"), _el$10 = _$createElement("box"), _el$11 = _$createElement("text"), _el$12 = _$createTextNode(` /goal`), _el$13 = _$createElement("text"), _el$15 = _$createElement("scrollbox"), _el$16 = _$createElement("text");
+        _$insertNode(_el$1, _el$10);
+        _$insertNode(_el$1, _el$15);
+        _$insertNode(_el$1, _el$16);
+        _$setProp(_el$1, "flexDirection", "column");
+        _$setProp(_el$1, "height", "100%");
+        _$setProp(_el$1, "paddingLeft", 3);
+        _$setProp(_el$1, "paddingRight", 3);
+        _$setProp(_el$1, "paddingBottom", 1);
+        _$setProp(_el$1, "gap", 1);
+        _$insertNode(_el$10, _el$11);
+        _$insertNode(_el$10, _el$13);
+        _$setProp(_el$10, "flexDirection", "row");
+        _$setProp(_el$10, "justifyContent", "space-between");
+        _$setProp(_el$10, "gap", 2);
+        _$insertNode(_el$11, _el$12);
+        _$insert(_el$11, GOAL_GLYPH, _el$12);
+        _$insertNode(_el$13, _$createTextNode(`esc`));
+        _$setProp(_el$13, "flexShrink", 0);
+        _$use((el) => setScrollRef(el), _el$15);
+        _$setProp(_el$15, "scrollbarOptions", {
           visible: true
         });
-        _$setProp(_el$6, "flexGrow", 1);
-        _$setProp(_el$6, "stickyScroll", false);
-        _$setProp(_el$7, "wrapMode", "word");
-        _$insert(_el$7, message);
-        _$insertNode(_el$8, _$createTextNode(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
+        _$setProp(_el$15, "flexGrow", 1);
+        _$setProp(_el$15, "stickyScroll", false);
+        _$insert(_el$15, () => statusBody(sessionID, fallback));
+        _$insertNode(_el$16, _$createTextNode(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
         _$effect((_p$) => {
-          var _v$ = TextAttributes.BOLD, _v$2 = context.theme.text.base, _v$3 = context.theme.text.muted, _v$4 = context.theme.text.base, _v$5 = context.theme.text.muted;
-          _v$ !== _p$.e && (_p$.e = _$setProp(_el$3, "attributes", _v$, _p$.e));
-          _v$2 !== _p$.t && (_p$.t = _$setProp(_el$3, "fg", _v$2, _p$.t));
-          _v$3 !== _p$.a && (_p$.a = _$setProp(_el$4, "fg", _v$3, _p$.a));
-          _v$4 !== _p$.o && (_p$.o = _$setProp(_el$7, "fg", _v$4, _p$.o));
-          _v$5 !== _p$.i && (_p$.i = _$setProp(_el$8, "fg", _v$5, _p$.i));
+          var _v$4 = TextAttributes.BOLD, _v$5 = context.theme.text.base, _v$6 = context.theme.text.muted, _v$7 = context.theme.text.faint;
+          _v$4 !== _p$.e && (_p$.e = _$setProp(_el$11, "attributes", _v$4, _p$.e));
+          _v$5 !== _p$.t && (_p$.t = _$setProp(_el$11, "fg", _v$5, _p$.t));
+          _v$6 !== _p$.a && (_p$.a = _$setProp(_el$13, "fg", _v$6, _p$.a));
+          _v$7 !== _p$.o && (_p$.o = _$setProp(_el$16, "fg", _v$7, _p$.o));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined,
-          o: undefined,
-          i: undefined
+          o: undefined
         });
-        return _el$;
+        return _el$1;
       })(), () => {
         setStatusDialogOpen(false);
         setScrollRef(undefined);
@@ -180,11 +292,8 @@ var tui_default = Plugin.define({
     const onNotice = (notice) => {
       const here = currentSession() === notice.sessionID;
       if (notice.kind === "status") {
-        const body = notice.message.startsWith(notice.title) ? notice.message : `${notice.title}
-
-${notice.message}`;
         if (here)
-          showStatusDialog(`${GOAL_GLYPH} /goal`, body);
+          showStatusDialog(notice.sessionID, notice.message);
         return;
       }
       const important = ATTENTION_KINDS.has(notice.kind);
@@ -240,14 +349,14 @@ ${notice.message}`;
             return goal();
           },
           get children() {
-            var _el$0 = _$createElement("box"), _el$1 = _$createElement("text");
-            _$insertNode(_el$0, _el$1);
-            _$setProp(_el$0, "flexShrink", 0);
-            _$setProp(_el$0, "onMouseUp", () => props.sessionID && context.keymap.dispatch("goal.status"));
-            _$setProp(_el$1, "wrapMode", "none");
-            _$insert(_el$1, label);
-            _$effect((_$p) => _$setProp(_el$1, "fg", color(), _$p));
-            return _el$0;
+            var _el$18 = _$createElement("box"), _el$19 = _$createElement("text");
+            _$insertNode(_el$18, _el$19);
+            _$setProp(_el$18, "flexShrink", 0);
+            _$setProp(_el$18, "onMouseUp", () => props.sessionID && context.keymap.dispatch("goal.status"));
+            _$setProp(_el$19, "wrapMode", "none");
+            _$insert(_el$19, label);
+            _$effect((_$p) => _$setProp(_el$19, "fg", color(), _$p));
+            return _el$18;
           }
         });
       }

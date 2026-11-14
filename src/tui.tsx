@@ -8,8 +8,9 @@
 import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes } from "@opentui/core"
+import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
-import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
 import type { GoalSnapshot, Notice } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
 
@@ -35,31 +36,86 @@ export default Plugin.define({
     /**
      * Long status text gets a large, scrollable dialog instead of the truncating alert. The host owns the
      * chrome: backdrop, z-index, focus, Esc/ctrl+c dismissal (see `ui/dialog.tsx` in the host sources,
-     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout`/`DialogHeader`
-     * conventions (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right);
-     * those internals are not exported to plugins, so the layout is re-created with the same constants and
+     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout` conventions
+     * (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right); those
+     * internals are not exported to plugins, so the layout is re-created with the same constants and
      * theme tokens instead of being imported.
+     *
+     * The body renders from the live `entries()` snapshot, so it stays current while the dialog is open;
+     * when no snapshot is cached (RPC miss) it falls back to the status notice text.
      */
-    const showStatusDialog = (title: string, message: string) => {
+    const LABEL = 10
+    const label = (text: string) => (
+      <text fg={context.theme.text.faint} flexShrink={0} width={LABEL}>
+        {text}
+      </text>
+    )
+    const field = (name: string, children: JSX.Element, wide = false) => (
+      <box flexDirection="row" gap={2}>
+        {label(name)}
+        <text wrapMode="word" fg={context.theme.text.base} flexGrow={wide ? 1 : 0}>
+          {children}
+        </text>
+      </box>
+    )
+    const statusBody = (sessionID: string, fallback: string) => {
+      const entry = () => entries()[sessionID]
+      const goal = () => entry()?.goal ?? undefined
+      const elapsed = () => {
+        const g = goal()
+        if (!g) return 0
+        return g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry()?.receivedAt ?? now())) : g.elapsedMs
+      }
+      const stateColor = () =>
+        goal()?.status === "paused"
+          ? context.theme.text.feedback.warning.base
+          : goal()?.status === "active"
+            ? context.theme.text.feedback.info.base
+            : context.theme.text.muted
+      return (
+        <Show when={goal()} fallback={<text wrapMode="word" fg={context.theme.text.base}>{fallback}</text>}>
+          {(g) => (
+            <box flexDirection="column" gap={1}>
+              <box flexDirection="row" gap={2}>
+                <text fg={stateColor()} attributes={TextAttributes.BOLD}>
+                  {g().status}
+                </text>
+                <text fg={context.theme.text.muted}>
+                  {formatDurationCoarse(elapsed())} · {g().turns} turn{g().turns === 1 ? "" : "s"}
+                  {g().evaluating ? " · checking" : g().waiting ? " · waiting" : ""}
+                </text>
+              </box>
+              {field("goal", g().condition, true)}
+              <Show when={g().reason}>{(reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
+              <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
+            </box>
+          )}
+        </Show>
+      )
+    }
+    const showStatusDialog = (sessionID: string, fallback: string) => {
       setScrollRef(undefined)
+      // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
+      void rpc
+        .get({ sessionID }, at(sessionID))
+        .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
+        .catch(() => {})
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
           <box flexDirection="column" height="100%" paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
-                {title}
+                {GOAL_GLYPH} /goal
               </text>
               <text fg={context.theme.text.muted} flexShrink={0}>
                 esc
               </text>
             </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false}>
-              <text wrapMode="word" fg={context.theme.text.base}>
-                {message}
-              </text>
+              {statusBody(sessionID, fallback)}
             </scrollbox>
-            <text fg={context.theme.text.muted}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+            <text fg={context.theme.text.faint}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
           </box>
         ),
         () => {
@@ -105,9 +161,8 @@ export default Plugin.define({
     const onNotice = (notice: Notice) => {
       const here = currentSession() === notice.sessionID
       if (notice.kind === "status") {
-        // formatStatus() repeats the title in its first line ("Goal active: ..."); don't print it twice.
-        const body = notice.message.startsWith(notice.title) ? notice.message : `${notice.title}\n\n${notice.message}`
-        if (here) showStatusDialog(`${GOAL_GLYPH} /goal`, body)
+        // formatStatus() repeats the title in its first line ("Goal active: ..."); the dialog renders from the live snapshot itself.
+        if (here) showStatusDialog(notice.sessionID, notice.message)
         return
       }
       const important = ATTENTION_KINDS.has(notice.kind)
