@@ -1,8 +1,10 @@
 # SPEC — current behavior of opencode-goal
 
-Status: current as of v1.0.1. The previous spec (Goal HUD relocation + plugin load fix) is implemented
-and merged: the TUI indicator renders in `session.composer.top` (see `src/tui.tsx`), the footer is clean,
-and the project `opencode.json` points at the local checkout.
+Status: current as of v1.0.1. The TUI indicator renders natively: a compact segment in the `prompt.footer`
+row (the slot the host's built-in PromptFooter plugin claims with `append`), state transitions surface as
+host toasts, and the `/goal` detail view is a host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal,
+xlarge centered sizing) built from theme tokens only (see `src/tui.tsx`). There is no custom-painted overlay.
+The project `opencode.json` points at the local checkout.
 
 This file is the acceptance spec for the plugin as it ships today. The how and why live in README.md and
 `docs/`; this file only states what must hold, so regressions are visible.
@@ -26,12 +28,17 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 6. Docs in `README.md`, `docs/*.html`, `AGENTS.md` and this file match the code. Every option, default, env
    var, NoticeKind and status value named there exists in `src/core/config.ts`, `src/core/types.ts` or
    `src/core/parse.ts`. `bun run check` passes.
+7. The TUI has no hand-painted overlay: the active/paused indicator renders inside the host's
+   `prompt.footer` slot (append), the detail view renders through `ui.dialog.show` host chrome (Esc and
+   ctrl+c dismiss it, backdrop and focus owned by the host), transitions use `ui.toast.show` with the host's
+   variants, and every color/border/font comes from `context.theme` tokens (no hardcoded RGBA, no custom
+   borders). Layout, z-index, focus and dismissal stay with the host (`src/tui.tsx`).
 
 ## Verification
 
 - `bun run check` — tsc, unit tests, compile (order: tsc first).
 - Manual: `opencode plugin add @el4cteo/opencode-goal`, then `/goal bun test passes` in a scratch repo and
-  watch the footer/HUD and `/goal` status output.
+  watch the prompt footer indicator and `/goal` status output.
 
 ## Out of scope
 
