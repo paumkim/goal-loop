@@ -1,38 +1,40 @@
-# SPEC — current behavior of opencode-goal
+# SPEC — docs/ site redesign (opencode-goalv2)
 
-Status: current as of v1.0.1. The previous spec (Goal HUD relocation + plugin load fix) is implemented
-and merged: the TUI indicator renders in `session.composer.top` (see `src/tui.tsx`), the footer is clean,
-and the project `opencode.json` points at the local checkout.
+Status: in progress. Goal: polished, modern docs site, ultra-wide desktop → tablet.
 
-This file is the acceptance spec for the plugin as it ships today. The how and why live in README.md and
-`docs/`; this file only states what must hold, so regressions are visible.
+## Interpretation
+Static, build-free docs site. Keep the 7 pages, their relative links, SEARCH_INDEX,
+.foot credit block, stamp spans, skip link, sticky header, sidebar nav, "On this page"
+TOC, dark/light theming, visible focus outlines, and the [data-theme="dark"] toggle.
+Reuse and EXTEND styles.css variables (--ink, --bg, --panel, --acc, --line, --mono, ...);
+do not fork the system. No frameworks, no build step, no images, no external assets.
+
+## Design
+- Extended variable set: fluid type scale via clamp() (h1 ~32px → body 16px → small 13px),
+  spacing scale, radii, hairline borders + subtle glow, gradient accents for hero/headings only.
+- Dark-first premium GitHub-adjacent look: deep navy ink background, one restrained accent (--acc),
+  high-contrast text, 1px hairlines, minimal glow. Light theme equally polished.
+- Layout: .layout grid caps measure (~72ch content) and centers on ≥1600px; three-column
+  sidebar/content/TOC at ≥1200px; TOC drops below/hides at 900–1200px; sidebar narrows;
+  single column at 600–900px with horizontally scrollable pill nav (tap targets ≥44px);
+  tables and pre scroll inside containers; footer stacks cleanly.
+- Micro-interactions: hover states, focus-visible rings, prefers-reduced-motion respected.
+- Code blocks: polished chrome (header bar via pre::before label + copy button already in JS).
+- Tables: zebra + hover. Cards: refined borders. Chips: consistent accent usage.
+- architecture.html (state machine / diagram) is the visual centerpiece: styled .box/.arrow flow.
 
 ## Acceptance criteria
-
-1. `/goal <condition>` sets the goal and starts work immediately; `/goal` with no arguments shows status;
-   `/goal clear` (aliases `stop`, `off`, `reset`, `none`, `cancel`) ends it. Any other text is the condition
-   (`src/core/parse.ts`, `src/core/types.ts` `CLEAR_ALIASES`).
-2. After every turn an evaluator answers `met` / `not_met` / `impossible`. `not_met` starts the next turn
-   with a synthetic steer prompt; `met` / `impossible` end the goal. The turn cap (default 200), the stall
-   guard (default 3 turns without tool use), and fatal errors can also end or pause the goal
-   (`src/runtime/controller.ts`).
-3. Finished work must be committed before the goal counts as met, inside a git repository, on branch `dev`
-   by default; coordinator repositories use the `wt/<slug>` + submit flow. Outside a git repository the rule
-   is off; `requireCommit: false` turns it off everywhere (`src/core/git.ts`, `src/core/prompts.ts`).
-4. The plugin never runs git itself. It reads `.git`, `HEAD`, `refs/heads/*` and `packed-refs`, and directs
-   the agent; the evaluator judges only what is visible in the conversation.
-5. Live goals survive a restart: on setup the plugin restores `active`/`paused` records for its directory
-   and resets turn count, stall, retries and the spend baseline (`src/runtime/controller.ts` `restore`).
-6. Docs in `README.md`, `docs/*.html`, `AGENTS.md` and this file match the code. Every option, default, env
-   var, NoticeKind and status value named there exists in `src/core/config.ts`, `src/core/types.ts` or
-   `src/core/parse.ts`. `bun run check` passes.
+1. All 7 pages render from filesystem (file://) with no console errors, no horizontal scroll
+   at 1600/1280/1024/834/768 widths.
+2. Footer credits byte-identical; stamp spans untouched; SEARCH_INDEX untouched;
+   relative links untouched; skip link, header, sidebar, TOC, theme toggle all present.
+3. styles.css extended (not replaced): original variable names kept, new ones added.
+4. Dark + light themes both verified via toggle; focus-visible outlines visible.
+5. bun run check passes.
+6. Screenshots at each breakpoint for every page (or representative pages + all pages at 1280).
 
 ## Verification
-
-- `bun run check` — tsc, unit tests, compile (order: tsc first).
-- Manual: `opencode plugin add @el4cteo/opencode-goal`, then `/goal bun test passes` in a scratch repo and
-  watch the footer/HUD and `/goal` status output.
-
-## Out of scope
-
-- New features. Any behavior change updates this file in the same commit.
+- Playwright headless chromium: screenshot each page at 1600/1280/1024/834/768, dark and light,
+  assert document.scrollingElement.scrollWidth <= innerWidth, footer text present, toggle flips theme.
+- bun run check.
+- Per-file diff summary reported.
