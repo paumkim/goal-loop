@@ -125,7 +125,7 @@ export default Plugin.define({
                 esc
               </text>
             </box>
-            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false}>
+            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
             <text fg={context.theme.text.faint}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>

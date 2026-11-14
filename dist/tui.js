@@ -257,6 +257,9 @@ var tui_default = Plugin.define({
         });
         _$setProp(_el$19, "flexGrow", 1);
         _$setProp(_el$19, "stickyScroll", false);
+        _$setProp(_el$19, "contentOptions", {
+          minHeight: 0
+        });
         _$insert(_el$19, () => statusBody(sessionID, fallback));
         _$insertNode(_el$20, _$createTextNode(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
         _$effect((_p$) => {
