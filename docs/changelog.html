@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Changelog — opencode-goalv2 docs</title><link rel="stylesheet" href="styles.css"><script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script></head>
+<body><a class="skip" href="#main">Skip to content</a>
+<header><span class="t">opencode-goalv2</span><a href="index.html">Home</a><a href="install.html">Install</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="changelog.html">Changelog</a><button class="themebtn" id="themebtn" type="button" aria-label="Toggle color theme">Theme: dark</button></header>
+<div class="layout"><aside class="side" aria-label="Primary">
+<a href="index.html">Home</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="install.html">Install</a><a href="changelog.html">Changelog</a>
+</aside>
+<main id="main"><h1>Changelog</h1>
+<p>Recent changes to this repository, newest first. Rows are read from <code>git log</code> (<code>git log -- docs/ README.md src/ script/</code>), so the committed page can never drift from history. Uncommitted working-tree edits detected by the watcher are kept in a local, gitignored log (<code>.docs-watch.log</code>); view them with <code>bun script/docs-watch.ts log</code>.</p>
+<p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun script/docs-watch.ts once</code>. Run it after committing, or keep <code>bun script/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
+<section><h2>Recent changes</h2><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
+<!-- changes:start -->
+<tr><td><code>2026-11-14 03:23 UTC</code></td><td>docs: git-derived Last updated stamps, watcher, changelog page</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:07 UTC</code></td><td>feat: plugin-managed auto-compaction at an absolute token threshold</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 15:52 UTC</code></td><td>feat: coordinator bootstrap, strict detection, locks, fuzzy SPEC</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 15:41 UTC</code></td><td>fix(tui): HUD overlays existing backdrop, no own background</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 15:25 UTC</code></td><td>Left-align goal HUD in session.composer.top (avoid Jump to latest)</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 15:20 UTC</code></td><td>Move goal HUD from footer to composer-top, right-aligned</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 13:43 UTC</code></td><td>fix: full audit — coordinator locks, controller restore/deferred, error taxonomy + tests</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 12:52 UTC</code></td><td>enable coordinator:true (always-on mode for /goal)</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 12:10 UTC</code></td><td>trim coordinator prompt to thin adapter (3-line agent flow, strict evaluator)</td><td>commit</td></tr>
+<tr><td><code>2026-11-09 11:01 UTC</code></td><td>feat(goal): add coordinator mode for wt/&lt;slug&gt; + submit flow</td><td>commit</td></tr>
+<tr><td><code>2026-11-07 07:34 UTC</code></td><td>Add dark mode theme for docs site (midnight palette + toggle)</td><td>commit</td></tr>
+<tr><td><code>2026-11-07 07:27 UTC</code></td><td>Add how-to-view docs guide to README and install page</td><td>commit</td></tr>
+<tr><td><code>2026-11-07 07:20 UTC</code></td><td>Add flat HTML docs site for opencode-goalv2</td><td>commit</td></tr>
+<tr><td><code>2026-11-05 10:01 UTC</code></td><td>fix(goal): scrollable status dialog and unlimited condition length</td><td>commit</td></tr>
+<tr><td><code>2026-10-19 12:09 UTC</code></td><td>fix(goal): hold the commit to the named branch, not to any branch</td><td>commit</td></tr>
+<tr><td><code>2026-10-19 12:05 UTC</code></td><td>feat(goal): require finished work to be committed before the goal counts as met</td><td>commit</td></tr>
+<tr><td><code>2026-10-15 22:13 UTC</code></td><td>Publish to npm as @el4cteo/opencode-goal</td><td>commit</td></tr>
+<tr><td><code>2026-10-15 22:05 UTC</code></td><td>Add /goal plugin for OpenCode v2</td><td>commit</td></tr>
+<!-- changes:end -->
+</tbody></table></section>
+</main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
+</div><footer class="foot">Last updated: <span class="stamp">2026-11-14 03:23 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+<script src="app.js"></script></body></html>
