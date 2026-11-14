@@ -9,13 +9,12 @@
 <section id="viewing"><h2>Viewing these docs</h2><p>This site is static HTML/CSS with no build step and no internet. Double-click <code>docs/index.html</code> in your file manager, or run <code>xdg-open docs/index.html</code> from the repo root. Keep the whole <code>docs/</code> folder together — pages use relative links.</p></section>
 <section id="install"><h2>Install</h2>
 <pre><code>opencode plugin add @el4cteo/opencode-goal</code></pre>
-<p>Requires OpenCode ≥2.0.29 (<code>package.json:37</code>). From GitHub: <code>opencode plugin add github:EL4CTEO/opencode-goal</code>. Local clone in <code>opencode.json</code>:</p>
+<p>Requires OpenCode ≥2.0.29 (<code>package.json:40</code>). From GitHub: <code>opencode plugin add github:EL4CTEO/opencode-goal</code>. Local clone in <code>opencode.json</code>:</p>
 <pre><code>{ "plugins": ["/path/to/opencode-goal"] }</code></pre></section>
 <section id="commands"><h2>Commands</h2>
 <table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
 <tr><td><code>/goal &lt;condition&gt;</code></td><td>Set goal and start immediately</td></tr>
 <tr><td><code>/goal</code></td><td>Show status</td></tr>
-<tr><td><code>/goal status</code></td><td>Show status</td></tr>
 <tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr></tbody></table>
 <pre><code>/goal bun test passes with 0 failures and no test file is modified</code></pre>
 <p>Parsing: <code>src/core/parse.ts:13</code>.</p></section>
@@ -29,10 +28,10 @@
       "maxRetries": 3, "requireCommit": true, "commitBranch": "dev", "coordinator": "auto"
     }
   }]
-}</code></pre><p>Full table: <a href="config.html">Config</a>. In coordinator repos (term) <code>coordinator: "auto"</code> (default) switches normal agents to <code>wt/&lt;slug&gt;</code> + <code>submit</code> / <code>merge-next</code> instead of a direct <code>dev</code> commit; <code>true</code> forces it, <code>false</code> disables it. Only the <code>coordinator</code> agent promotes <code>dev -&gt; main</code> via <code>script/land.ts</code>.</p></section>
+}</code></pre><p>Full table: <a href="config.html">Config</a>. In coordinator repos (term) <code>coordinator: "auto"</code> (default) switches normal agents to <code>wt/&lt;slug&gt;</code> + <code>submit</code> / <code>merge-next</code> instead of a direct <code>dev</code> commit; <code>true</code> forces it, <code>false</code> disables it. <code>merge-next</code> lands the oldest submitted lease on <code>dev</code> and blocks on <code>bun run check</code> (<code>packages/coordinator/bin/coordinator:390</code>).</p></section>
 <section id="troubleshoot"><h2>Troubleshooting</h2>
-<h3>Pause reasons</h3><p>Interrupt, stall (3 turns w/o tool use), rate limit, non-retryable error. Send any message to resume. Turn cap (200) pauses and stays paused until <code>/goal clear</code> or a new goal; a message will not extend the cap (<code>src/runtime/controller.ts:475</code>, <code>README.md:50</code>).</p>
-<h3>Failed recovery</h3><p>Fatal errors (auth <code>401/403</code>, credit <code>402</code>, context <code>413</code>, model <code>404</code>) fail the goal (status <code>failed</code>, distinct from <code>cleared</code>). Fix the cause, run <code>/goal</code> again; sending a message does not resume a failed goal (<code>src/core/errors.ts:37</code>, <code>src/runtime/controller.ts:399</code>).</p>
+<h3>Pause reasons</h3><p>Interrupt, stall (3 turns w/o tool use), rate or usage limit, transient failures retried up to <code>maxRetries</code>. Send any message to resume. Turn cap (200) pauses and stays paused until <code>/goal clear</code> or a new goal; a message will not extend the cap (<code>src/runtime/controller.ts:496</code>, <code>src/runtime/controller.ts:221</code>, <code>README.md:50</code>).</p>
+<h3>Failed recovery</h3><p>Fatal errors (auth <code>401/403</code>, credit <code>402</code>, context <code>413</code>, model <code>404</code>) fail the goal (status <code>failed</code>, distinct from <code>cleared</code>). Fix the cause, run <code>/goal</code> again; sending a message does not resume a failed goal (<code>src/core/errors.ts:42</code>, <code>src/runtime/controller.ts:418</code>).</p>
 <h3>Env vars</h3><pre><code>OPENCODE_GOAL_MODEL
 OPENCODE_GOAL_MAX_TURNS
 OPENCODE_GOAL_CHECKIN_MINUTES

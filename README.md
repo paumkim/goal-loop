@@ -68,11 +68,11 @@ The rule follows the repository:
 
 ### Coordinator mode and first-run bootstrap
 
-On the first `/goal` run inside a git repository the plugin creates `.term/coordinator/` and `worktrees/` for you. No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
+When the plugin loads inside a git repository, it creates `.term/coordinator/` and `worktrees/` for you (plus stub `config.json`/`state.json`, never overwriting existing files). No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
 With `coordinator: true` the agent always goes `claim -> wt/<slug> -> submit`.
 The evaluator is read-only and gates `not_met` until wt commit + submit evidence appears.
 
-Prerequisites: a git repository with at least one commit (so `dev`/HEAD exists), and `jq` for coordinator state.
+Prerequisites: a git repository where the coordinator's target branch exists (`dev` by default; `merge-next` checks it out), and `jq` for coordinator state.
 
 Parallel sessions: each session claims its own slug/worktree. Overlapping paths are a hard error without `--force`. Run `status --json` to see the other leases.
 
@@ -109,10 +109,15 @@ All optional, set in `opencode.json`:
 | --- | --- | --- |
 | `evaluator.model` | session model | Separate model that judges the goal (fresh eyes, uses a transcript digest) |
 | `evaluator.mode` | `auto` | `session`, `independent`, or `auto` (independent when a model is set) |
+| `evaluator.maxTranscriptChars` | `60000` | Transcript digest budget for the independent evaluator (min 4000) |
+| `evaluator.maxOutputTokens` | `4096` | Verdict answer budget (min 256) |
+| `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
 | `maxTurns` | `200` | Hard turn cap, `0` = none |
 | `stallTurns` | `3` | Turns without tool use before pausing |
 | `checkinMinutes` | `30` | First background check-in; `0` disables check-ins and retries |
+| `maxIdleCheckins` | `3` | Max idle check-ins while background work runs |
 | `maxRetries` | `3` | Automatic retries after transient errors |
+| `maxConditionChars` | unlimited | Condition length cap (min 100); default never rejects |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
