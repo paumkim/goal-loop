@@ -4,3 +4,4 @@ node_modules/
 worktrees/
 .term/coordinator/*.lock
 worktrees/wt-*
+.docs-watch-state.json

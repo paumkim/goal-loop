@@ -46,7 +46,9 @@
     "e2e": "bun scripts/e2e.ts",
     "check": "tsc --noEmit && bun test && bun run compile",
     "prepublishOnly": "bun run compile && bun test",
-    "compile": "bun scripts/build.ts"
+    "compile": "bun scripts/build.ts",
+    "docs:watch": "bun script/docs-watch.ts watch",
+    "docs:once": "bun script/docs-watch.ts once"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.29",
