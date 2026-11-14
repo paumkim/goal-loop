@@ -11,9 +11,9 @@ export interface CommitRequest {
   readonly branch: string
   /**
    * Coordinator mode: when `"auto"` (default) detect coordinator repositories from the working tree
-   * (`.term/coordinator/`, `packages/coordinator/bin/coordinator`, `.opencode/rules/project-safety.md`)
+   * (`.term/coordinator/config.json` + `state.json`, or the coordinator bin plus one of them)
    * and switch normal agents to `wt/<slug>` + submit. When `true` force coordinator mode, when `false`
-   * disable it. See `resolveCommitPolicy`.
+   * disable it. See `resolveCommitPolicy` and `detectCoordinator`.
    */
   readonly coordinator?: "auto" | boolean
 }
