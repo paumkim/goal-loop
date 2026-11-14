@@ -15,12 +15,12 @@
 <p><code>set → active → evaluate → continue / met / impossible; paused / failed / cleared</code> (<code>src/runtime/controller.ts:61</code>).</p>
 <table><thead><tr><th>State</th><th>Meaning</th><th>Source</th></tr></thead><tbody>
 <tr><td><span class="chip a">active</span></td><td>Goal live, turns run and evaluate</td><td><code>src/core/types.ts:2</code></td></tr>
-<tr><td><span class="chip w">paused</span></td><td>Waiting for user prompt</td><td><code>src/runtime/controller.ts:475</code></td></tr>
-<tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:360</code></td></tr>
-<tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:365</code></td></tr>
+<tr><td><span class="chip w">paused</span></td><td>Waiting for user prompt</td><td><code>src/runtime/controller.ts:496</code></td></tr>
+<tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:381</code></td></tr>
+<tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:386</code></td></tr>
 <tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:182</code></td></tr>
-<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:399</code></td></tr></tbody></table>
-<p>Live states: <code>active</code>, <code>paused</code> (<code>src/core/types.ts:27</code>).</p></section>
+<tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:418</code></td></tr></tbody></table>
+<p>Live states: <code>active</code>, <code>paused</code> (<code>src/core/types.ts:44</code>).</p></section>
 <section id="ports"><h2>Ports</h2><p>Controller depends only on narrow ports, so core stays host-agnostic (<code>src/runtime/ports.ts:1</code>). <code>SessionPort</code>, <code>EvaluatorPort</code>, <code>BackgroundPort</code>, <code>StoragePort</code>, <code>EmitterPort</code>, <code>Clock</code>, <code>Logger</code> (<code>src/runtime/ports.ts:15</code>).</p></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#diagram">Data flow</a></li><li><a href="#state">State machine</a></li><li><a href="#ports">Ports</a></li></ul></aside>
 </div><script src="app.js"></script></body></html>

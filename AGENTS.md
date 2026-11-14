@@ -28,7 +28,7 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 - **Cold-start:** on `setup()` in a git repo, `ensureCoordinatorLayout()` creates `.term/coordinator/{config,state}.json` + `worktrees/` if missing (never overwrites) and the commit policy becomes coordinator mode. Detection needs `.term/coordinator/config.json` + `state.json`, or the coordinator bin + one json.
 - **Commit rule:** coordinator repos → agent works on `wt/<slug>` and `submit`s; `merge-next` merges into `dev` and gates on `bun run check`. Outside a git repo the rule is off. `resolveCommitPolicy` takes an optional absolute plugin coordinator bin — never emit a repo-relative bin path.
 - **Vague goals** (`isFuzzyCondition` in `prompts.ts`): first turn writes `SPEC.md` (acceptance + verification incl. screenshot for visual requests), then builds, verifies, commits. Precise conditions skip this.
-- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work, 3-turn stall pause, 200-turn cap (pauses and *stays* paused until `/goal clear`).
+- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work, 3-turn stall pause, 200-turn cap (pauses and *stays* paused until `/goal clear` or a new goal; a message alone will not extend the cap).
 
 ## Coordinator (`packages/coordinator/bin/coordinator`)
 
@@ -39,6 +39,6 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 
 ## Config
 
-Options in `opencode.json` `plugins[].options`, parsed by `resolveConfig`: `evaluator.model/mode`, `maxTurns`, `stallTurns`, `checkinMinutes`, `maxRetries`, `systemReminder`, `transcriptNotes`, `requireCommit`, `commitBranch` (default `dev`), `coordinator` (`auto`/`true`/`false`). Env overrides: `OPENCODE_GOAL_*` (see `src/core/config.ts`).
+Options in `opencode.json` `plugins[].options`, parsed by `resolveConfig`: `evaluator.model/mode/maxTranscriptChars/maxOutputTokens/timeoutMs`, `maxTurns`, `stallTurns`, `checkinMinutes`, `maxIdleCheckins`, `maxRetries`, `maxConditionChars` (unlimited by default), `systemReminder`, `transcriptNotes`, `requireCommit`, `commitBranch` (default `dev`), `coordinator` (`auto`/`true`/`false`). Env overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`, `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR` (see `src/core/config.ts`).
 
 `docs/` is a static, build-free site (open `docs/index.html`); update `install.html`/`config.html` when install or options change.

@@ -16,7 +16,7 @@ const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
  * Coordinator repositories need a different branch story: normal agents own only `wt/<slug>` in its own
  * worktree, never the target or `main`. `coordinatorFlow` is the exact operator flow the plugin injects so a
  * fresh `/goal <objective>` session knows how to work with no operator help; `packages/coordinator/README.md`
- * and `.opencode/rules/project-safety.md` in the repo say the same.
+ * in the repo says the same.
  */
 function commitRule(policy: CommitPolicy) {
   if (policy.required && policy.mode === "coordinator") return coordinatorFlow(policy)
