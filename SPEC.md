@@ -109,4 +109,54 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Smoke notes
 
-Filled in after the manual smoke run (worktrees/wt-goal-loop). Until then: not run.
+Filled in after the manual smoke run (worktrees/wt-goal-loop), 2026-11-14.
+
+Environment: headless PTY (term-driver) driving the real opencode v2.3.0 TUI against a scratch
+repo, with the worktree plugin loaded from the user's global config (temporarily repointed,
+restored afterwards). Model: 9router-go/TokenHarbor-Free; Antigravity-Free (the configured
+default) was returning {bad_gateway ... "all combo models failed: no valid entries"} for the
+entire smoke window, so the smoke used the user's 9router-go TokenHarbor-Free instead. Budget
+and behaviour of the goal/loop machinery do not depend on the model.
+
+Verified live:
+- /goal-loop arms v1 and, on met, arms vN+1 (v2 through v5 observed across runs).
+- maxLoops cap fires: "Loop complete after 5 iterations" (WIDGET, DRAFT, SMOKE-DONE, DESIGN).
+- LOOP_COMPLETE ends the loop cleanly: "Loop complete after 2 iterations" (REPRO) and after 1
+  (COUNTER), with a final achieved toast. Generated goals were concrete, verifiable, and each
+  inherited the loop objective.
+- Restore on restart: SIGTERM, relaunch with -s, the loop resumes with turns/stall/checkins
+  reset and loopIteration/loopHistory intact; completed sessions restore unchanged.
+- /goal opens the detail dialog with the full loop state (iteration, objective, per-iteration
+  history with verdicts and summaries), fallback text when no live record exists; esc closes;
+  header and hint stay pinned with long content; long history scrolls inside the body.
+- prompt.footer paints "◎ loop · vN · <state> · <elapsed> · <turns>" for a live loop.
+- Coordinator flow runs from inside a loop (claim -> worktree -> submit -> merge-next -> dev),
+  observed for REPRO (wt/repro-txt-ok), WATCH (wt/watch-txt-ok), Z3 and COUNTER loops.
+- Per-iteration toasts (one info toast per met verdict) read fine live; not noisy at 2-7
+  iterations. Kept: one info toast per iteration, one achieved toast at loop end.
+- The detail dialog: host chrome (bold title left, esc right, DIALOG_INSET=3, theme tokens,
+  sticky scrollbox off, contentOptions.minHeight=0, clamped column) — verified with content
+  taller than the viewport: header and hint pinned, scrollbox scrolls, no clipping.
+
+Bugs found and fixed during the smoke:
+- TUI plugin crashed at setup and never mounted ("TUI plugin error ... No renderer found";
+  reported by /plugins). useTerminalDimensions() was called at setup scope, before the
+  renderer exists; the host only exposes it inside rendered components. Fixed by moving the
+  clamp into a small component rendered by the dialog (commit c7f643d), plus try/catch around
+  all reactive closures and event handlers so one bad evaluation can never latch the host's
+  plugin error boundary and silence the whole plugin. Verified: plugin mounts, footer paints,
+  dialog opens, notices flow.
+- /goal opened the detail dialog only when the TUI route matched the notice's sessionID;
+  otherwise it silently did nothing. Now always opens for the notice's session.
+
+Known issue (not introduced here, not fixable inside the plugin): the prompt.footer indicator
+stops re-painting after the first loop arm — the ANSI stream shows only the frames from before
+the first arm ("loop · v1 · active", "loop · v1 · checking"), while notice events keep arriving
+and the /goal dialog (which re-fetches via RPC get) always shows live state. Plugin handlers
+for the changed event are trivial and fire correctly on arm (the dialog proves the state path);
+the staleness reproduces across hosts builds and sessions, including pre-change builds. Treat
+prompt.footer as best-effort and the dialog/palette as the source of truth. Not addressed here;
+the fix, if any, lives in the host event bridge.
+
+Not verified: Antigravity-Free (provider outage). Docs lease: taken (no other holder); README
+and docs/*.html updated for the new command only.
