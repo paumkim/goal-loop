@@ -1,6 +1,6 @@
 # SPEC — current behavior of opencode-goal
 
-Status: current as of v1.0.1. The TUI indicator renders natively: a compact segment in the `prompt.footer`
+Status: current as of v1.0.1 (plus the two workstreams specified below). The TUI indicator renders natively: a compact segment in the `prompt.footer`
 row (the slot the host's built-in PromptFooter plugin claims with `append`), state transitions surface as
 host toasts, and the `/goal` detail view is a host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal,
 xlarge centered sizing) built from theme tokens only (see `src/tui.tsx`). There is no custom-painted overlay.
@@ -34,12 +34,79 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
    variants, and every color/border/font comes from `context.theme` tokens (no hardcoded RGBA, no custom
    borders). Layout, z-index, focus and dismissal stay with the host (`src/tui.tsx`).
 
+## Workstream A — detail dialog acceptance criteria
+
+8. The `/goal` detail dialog keeps the host chrome (`ui.dialog.show`, xlarge, centered, Esc/ctrl+c
+   dismissal owned by the host) and the header convention: bold title left, `esc` right, `DIALOG_INSET=3`
+   side padding, gap 1, bottom pad 1. The body is composed from theme tokens only (`text.base`,
+   `text.muted`, `text.faint`, `text.feedback.*`); no hardcoded RGBA, no custom borders, no absolute
+   positioning (`src/tui.tsx`).
+9. The body renders from the live `GoalSnapshot` (not only the status notice text): status line
+   (state · elapsed · turns), the condition wrapped, the evaluator/reason line when present, spend,
+   and — for looped goals — the loop section (objective, iteration, per-iteration history). A scrollable
+   `scrollbox` (word wrap, visible scrollbar, `stickyScroll={false}`) handles long content; page keys,
+   home/end and the scrollbar all work; the dialog never forks host behavior.
+10. Footer indicator shows loop state when a loop is active (`◎ loop · vN · …`), deriving from the same
+    snapshot fields as the normal indicator.
+
+## Workstream B — `/goal-loop` acceptance criteria
+
+11. `/goal-loop <objective>` sets the initial goal (v1) exactly like `/goal` (directive, evaluator,
+    commit rule, turn cap, stall guard, retries, restore-on-restart, `/goal-loop clear` and the
+    `stop`/`off`/`reset`/`none`/`cancel` aliases). With no arguments it shows status. It activates the
+    loop only after the evaluator returns `met` — never on `not_met`, stall, pause, interrupt, retry or
+    failure paths. `/goal` behavior for non-looped goals is unchanged.
+12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
+    achieved iteration into a compact machine-consumable block via the evaluator
+    (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
+    `tokens * 4` characters), (b) asks the evaluator to generate the next goal (v2…) from the summary,
+    the loop objective and the prior history, under a strict output contract (a single verifiable
+    condition, or exactly `LOOP_COMPLETE`), (c) arms the next goal immediately under the same `/goal`
+    rules. Goal v1 and each later iteration are kept as `loopHistory` in the persisted record — never
+    re-injected in full.
+13. Loop guards (all mandatory): `maxLoops` (default 5, env `OPENCODE_GOAL_MAX_LOOPS`; counts completed
+    iterations) ends the loop cleanly as *achieved-complete*; the per-iteration turn cap reuses
+    `maxTurns` (reset per iteration); evaluator failures exhaust `maxRetries` and pause as today; a hard
+    `impossible` verdict ends the loop as today; two consecutive iterations with zero tool calls pause
+    the loop with a clear notice; the summary/generation token budget is capped by
+    `maxLoopSummaryTokens` (a generation that yields an unusable or >2000-char condition ends the loop
+    cleanly, with a notice). Never an infinite silent loop.
+14. `LOOP_COMPLETE` ends the loop cleanly as *achieved-complete* (not an error, not infinite refinement).
+    The final toast uses kind `achieved` so it fires the normal attention flow once; each achieved
+    iteration fires a plain `loop` info toast (kind `loop`, no attention), e.g. `Loop 1 achieved ·
+    moving to v2`.
+15. State persists and restores across restart: `GoalRecord` gains optional `loopEnabled`,
+    `loopIteration`, `loopObjective`, `loopMaxLoops`, `loopHistory` (array of `{version, condition,
+    summary, reason, turns, toolCalls, endedAt}`) and `loopNotProgress`. `version` stays `1`; old
+    records without loop fields load unchanged (loop disabled). Schema is additive — no migration, no
+    corruption of existing saved goals.
+16. Loop history is in the RPC snapshot (`GoalSnapshot extends GoalRecord`), so the detail dialog shows
+    objective, current iteration and per-iteration verdicts/summaries; the prompt footer shows the loop
+    iteration; `/goal-loop` palette actions mirror `/goal` (status, clear).
+17. Directive and prompts for looped goals mention the iteration number and inject prior-iteration
+    summaries as a compact block (`src/core/prompts.ts`: loop preamble in `directive`, the summarizer
+    rubric, the next-goal generator rubric with the `LOOP_COMPLETE` contract). Non-looped prompts are
+    byte-identical to before.
+18. `bun run check` (tsc, tests, compile) passes. New tests cover: met → summary → v2 armed;
+    `maxLoops` cap ends the loop; `LOOP_COMPLETE` ends the loop; impossible ends the loop; two
+    consecutive zero-tool-call iterations pause; restore keeps loop state; store round-trips loop
+    fields; prompt builders carry the contract.
+
+## Out of scope
+
+- New features beyond the two workstreams. Any behavior change updates this file in the same commit.
+- Per-iteration met toasts are info-level by default; if they prove noisy in the smoke run, suppress
+  after N iterations in a follow-up (not silently changed).
+
 ## Verification
 
 - `bun run check` — tsc, unit tests, compile (order: tsc first).
 - Manual: `opencode plugin add @el4cteo/opencode-goal`, then `/goal bun test passes` in a scratch repo and
   watch the prompt footer indicator and `/goal` status output.
+- Workstream A/B manual: tmux TUI smoke — `/goal-loop <trivial objective>`, watch v1 achieve, the info
+  toast, summary generation, v2 armed and worked, dialog shows iteration history, `/goal-loop clear`
+  stops it, restart restores loop state, caps pause correctly. Screenshot notes: see "Smoke notes" below.
 
-## Out of scope
+## Smoke notes
 
-- New features. Any behavior change updates this file in the same commit.
+Filled in after the manual smoke run (worktrees/wt-goal-loop). Until then: not run.
