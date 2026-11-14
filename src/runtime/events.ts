@@ -2,6 +2,7 @@ import type { FailureInfo } from "../core/types.ts"
 import type { BackgroundTracker } from "./background.ts"
 import type { GoalController } from "./controller.ts"
 import type { Logger } from "./ports.ts"
+import type { AutoCompactor } from "./compactor.ts"
 
 /** Minimal structural view of a server event; payloads are read defensively. */
 export interface ServerEvent {
@@ -28,8 +29,8 @@ export class RecentIds {
 }
 
 /** Fans one server event out to the background tracker and the goal controller. */
-export function createRouter(input: { controller: GoalController; background: BackgroundTracker; log: Logger }) {
-  const { controller, background, log } = input
+export function createRouter(input: { controller: GoalController; background: BackgroundTracker; log: Logger; compactor: AutoCompactor }) {
+  const { controller, background, log, compactor } = input
   const recent = new RecentIds()
   const fail = (error: unknown) => log.error("goal event handler failed", { error: String(error) })
 
@@ -58,6 +59,7 @@ export function createRouter(input: { controller: GoalController; background: Ba
       case "session.execution.succeeded":
         if (!sessionID) return
         safe(() => background.executionEnded(sessionID))
+        void compactor.maybeCompact(sessionID).catch(fail)
         return void controller.onExecutionSucceeded(sessionID).catch(fail)
       case "session.execution.failed":
         if (!sessionID) return
@@ -79,7 +81,27 @@ export function createRouter(input: { controller: GoalController; background: Ba
         return safe(() => {
           background.sessionDeleted(sessionID)
           controller.onSessionDeleted(sessionID)
+          compactor.onSessionDeleted(sessionID)
         })
+      case "session.compaction.started":
+        if (sessionID) safe(() => compactor.noteCompactionStarted(sessionID))
+        return
+      case "session.compaction.ended":
+        if (sessionID) safe(() => compactor.noteCompactionEnded(sessionID, true))
+        return
+      case "session.compaction.failed":
+        if (sessionID)
+          safe(() => {
+            const raw = data.error
+            const message =
+              typeof raw === "string"
+                ? raw
+                : typeof raw === "object" && raw !== null && typeof (raw as Record<string, unknown>).message === "string"
+                  ? String((raw as Record<string, unknown>).message)
+                  : undefined
+            compactor.noteCompactionEnded(sessionID, false, message)
+          })
+        return
       case "shell.created": {
         const info = (data.info ?? {}) as Data
         if (typeof info.id === "string") safe(() => background.shellCreated(info.id, String(info.status), info.metadata?.sessionID))

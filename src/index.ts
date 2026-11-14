@@ -14,6 +14,7 @@ import { systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
 import { BackgroundTracker } from "./runtime/background.ts"
+import { AutoCompactor } from "./runtime/compactor.ts"
 import { GoalController } from "./runtime/controller.ts"
 import { Evaluator } from "./runtime/evaluator.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
@@ -100,6 +101,9 @@ export default Plugin.define({
         await ctx.session.synthetic(input as Parameters<typeof ctx.session.synthetic>[0])
       },
       usage: async (sessionID) => toUsage(await ctx.session.get({ sessionID })),
+      compact: async (sessionID) => {
+        await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+      },
     }
 
     const evaluator = new Evaluator(
@@ -133,6 +137,15 @@ export default Plugin.define({
       evaluator,
       background,
       store,
+      emitter,
+      clock: systemClock,
+      log,
+    })
+
+    const compactor = new AutoCompactor({
+      config,
+      compact: (sessionID) => session.compact(sessionID),
+      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
       emitter,
       clock: systemClock,
       log,
@@ -190,7 +203,7 @@ export default Plugin.define({
     }
 
     // ---- event pump with reconnect
-    const route = createRouter({ controller, background, log })
+    const route = createRouter({ controller, background, log, compactor })
     void (async () => {
       let backoff = 500
       while (!lifetime.signal.aborted) {
