@@ -4,6 +4,7 @@ import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/c
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
+import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 
@@ -50,6 +51,17 @@ class MemoryStorage implements StoragePort {
   })
 }
 
+const silentLog = { info() {}, warn() {}, error() {} }
+const testCompactor = (notices: Notice[]) =>
+  new AutoCompactor({
+    config: resolveConfig({}),
+    compact: async () => {},
+    context: async () => [],
+    emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+    clock: new FakeClock() as Clock,
+    log: silentLog,
+  })
+
 function harness(
   options: Record<string, unknown> = {},
   storage = new MemoryStorage(),
@@ -83,6 +95,7 @@ function harness(
       prompt: async (input) => void calls.prompts.push(input),
       synthetic: async (input) => void calls.synthetic.push(input),
       usage: async () => (usageFn ? usageFn() : usage),
+      compact: async () => {},
     },
     evaluator: {
       evaluate: async (request) => {
@@ -461,7 +474,7 @@ describe("event router", () => {
   test("dedupes replayed events and routes shells/subagents to the tracker", async () => {
     const h = harness()
     const background = new BackgroundTracker({ parentOf: async () => undefined })
-    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} } })
+    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} }, compactor: testCompactor([]) })
     await h.set()
     route({ type: "session.created", data: { sessionID: "child", parentID: SID } })
     route({ type: "session.execution.started", data: { sessionID: "child" } })
@@ -481,7 +494,7 @@ describe("event router", () => {
   test("shell.updated and shell.exited (even without running status) update the tracker", async () => {
     const h = harness()
     const background = new BackgroundTracker({ parentOf: async () => undefined })
-    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} } })
+    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} }, compactor: testCompactor([]) })
     await h.set()
     route({ type: "shell.created", data: { info: { id: "sh1", status: "running", metadata: { sessionID: SID } } } })
     expect((await background.busy(SID)).shells).toBe(1)
@@ -519,7 +532,7 @@ describe("event router", () => {
       },
     } as any
     const errors: unknown[] = []
-    const route = createRouter({ controller: throwing, background, log: { info() {}, warn() {}, error: (_m: string, e?: any) => void errors.push(e) } })
+    const route = createRouter({ controller: throwing, background, log: { info() {}, warn() {}, error: (_m: string, e?: any) => void errors.push(e) }, compactor: testCompactor([]) })
     expect(() => route({ type: "session.execution.started", data: { sessionID: SID } })).not.toThrow()
     expect(() => route({ type: "session.execution.failed", data: { sessionID: SID, error: { message: "x" } } })).not.toThrow()
     expect(() => route({ type: "session.execution.interrupted", data: { sessionID: SID, reason: "user" } })).not.toThrow()

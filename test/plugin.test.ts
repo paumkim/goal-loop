@@ -31,6 +31,8 @@ function context(directory: string) {
       prompt: async (input: any) => void calls.prompts.push(input),
       synthetic: async (input: any) => void calls.prompts.push(input),
       get: async () => ({ id: "ses_1", parentID: undefined, tokens: {} }),
+      compact: async () => ({}),
+      context: async () => [],
       hook: async () => {},
     },
     generate: { text: async () => ({ text: "{}" }) },

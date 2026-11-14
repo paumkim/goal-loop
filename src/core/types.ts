@@ -115,7 +115,7 @@ export interface FailureInfo {
 
 export type NoticeLevel = "info" | "success" | "warning" | "error"
 
-export type NoticeKind = "set" | "status" | "cleared" | "achieved" | "impossible" | "paused" | "resumed" | "retry" | "failed" | "checkin" | "error"
+export type NoticeKind = "set" | "status" | "cleared" | "achieved" | "impossible" | "paused" | "resumed" | "retry" | "failed" | "checkin" | "error" | "compact"
 
 export interface Notice {
   readonly sessionID: string
