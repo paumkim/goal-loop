@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=34 tests=270 -->
+<!-- spec-check files=34 tests=279 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -514,3 +514,34 @@ non-looped goals and adds iteration pips to the loop footer.
 
 Verification: `bun test` (history suite 26 tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames printed and eyeballed), `bun run check` green, coordinator submit + merge-next.
+
+## Workstream M — pace, per-iteration verdict mix, verdict streaks
+
+Interpretation of iteration 3 of the armed objective ("keep improving the terminal tui display of
+this current plugin how it shows the goal histories be creative"): the history views showed what
+happened but not the rhythm of it. This workstream adds temporal texture from data the snapshot
+already carries — verdict timestamps (`VerdictEntry.at`) and per-iteration `endedAt` windows — without
+touching RPC, storage, schema or the controller.
+
+64. The loop section gains a `pace` row (faint) under the block bar, rendered only when at least one
+    iteration completed and `loopMaxLoops` is set: `~<avg>/iteration · ~<remaining> left at this pace`,
+    where avg is the mean of `iterationDurations` and remaining = avg × (loopMaxLoops − completed).
+    Omitted otherwise (never rendered for a fresh loop or a loop with an unknown cap).
+65. Each rail row gains the iteration's verdict mix, derived by matching `VerdictEntry.at` into the
+    iteration's `(previous endedAt | setAt, endedAt]` window: `<met>✓ <not_met>✗[ <impossible>⊘]`
+    appended to the row's timing segment (faint). Iterations with zero verdicts in their window render
+    no mix segment.
+66. The non-looped history block gains a streak suffix when the trail ends with ≥ 2 consecutive
+    identical verdicts: `· <N>× <verdict> in a row` (verdict shown with underscores replaced by
+    spaces), colored with the last-verdict color. Absent otherwise.
+67. New pure helpers in `src/core/history.ts`: `paceEstimate`, `iterationVerdictMix`,
+    `verdictStreak` — unit-tested (`test/history.test.ts`): windows (first iteration anchored at
+    setAt, mixed boundary verdicts), zero-verdict iterations, pace rounding and omission rules,
+    streak counting and kind detection.
+68. `scripts/render-history.tsx` prints the same three frames; the looped frame now shows the `pace`
+    row and the per-iteration mix, and the non-looped frame shows the streak suffix. Verified
+    headlessly before submit.
+
+Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames show pace row, mix segments and streak suffix), `bun run check` green, coordinator submit +
+merge-next.

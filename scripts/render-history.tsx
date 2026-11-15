@@ -73,8 +73,12 @@ const nonLoopedGoal: GoalSnapshot = {
   id: "goal_plain",
   condition: "the release notes describe the new verifier gate",
   reason: "Evaluator: docs build still fails on the config page",
-  turns: verdicts.length,
-  history: verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "still not", at: now - 1000 * 60 * (42 - index) })),
+  turns: verdicts.length + 4,
+  history: (() => {
+    const base = verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "still not", at: now - 1000 * 60 * (42 - index) }))
+    const tail = ["not_met", "not_met", "not_met", "not_met"].map((verdict, index) => ({ turn: verdicts.length + index + 1, verdict: verdict as Verdict, reason: "still not", at: now - 1000 * 60 * (4 - index) }))
+    return [...base, ...tail]
+  })(),
   loopEnabled: undefined,
   loopIteration: undefined,
   loopObjective: undefined,
@@ -96,7 +100,7 @@ const frames: Array<[string, () => JSX.Element]> = empty
   ? [["loop · empty history", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />]]
   : [
       ["looped · 2 completed iterations, 30 verdicts", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />],
-      ["non-looped · 30 verdicts", () => <HistoryBlock goal={nonLoopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 41} />],
+      ["non-looped · 34 verdicts, trailing streak", () => <HistoryBlock goal={nonLoopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 41} />],
       ["non-looped · fresh, no verdicts yet", () => <HistoryBlock goal={freshGoal} theme={theme} elapsedMs={() => 1000 * 60 * 2} />],
     ]
 

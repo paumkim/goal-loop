@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, iterationDurations, lastVerdict, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -157,5 +157,60 @@ describe("renderPips", () => {
 
   test("zero done renders all empty", () => {
     expect(renderPips(0, 3)).toBe("○○○")
+  })
+})
+
+describe("paceEstimate", () => {
+  test("mean duration and remaining extrapolation", () => {
+    expect(paceEstimate([10_000, 20_000], 4)).toEqual({ perIteration: 15_000, remaining: 30_000 })
+  })
+
+  test("no completed iterations yields undefined", () => {
+    expect(paceEstimate([], 4)).toBeUndefined()
+  })
+
+  test("unknown or exhausted cap yields undefined", () => {
+    expect(paceEstimate([10_000], undefined)).toBeUndefined()
+    expect(paceEstimate([10_000], 0)).toBeUndefined()
+    expect(paceEstimate([10_000], 1)).toBeUndefined()
+  })
+})
+
+describe("iterationVerdictMix", () => {
+  const setAt = 1_000
+  const entries = [entry(1, 11_000), entry(2, 21_000)]
+
+  test("assigns verdicts to their (from, to] windows, first anchored at setAt", () => {
+    const history = [{ ...verdict(1, "not_met"), at: 5_000 }, { ...verdict(2, "met"), at: 9_000 }, { ...verdict(3, "not_met"), at: 10_000 }, { ...verdict(4, "met"), at: 20_000 }]
+    const mixes = iterationVerdictMix(history, entries, setAt)
+    expect(mixes[0]).toEqual({ met: 1, not_met: 2, impossible: 0, total: 3 })
+    expect(mixes[1]).toEqual({ met: 1, not_met: 0, impossible: 0, total: 1 })
+  })
+
+  test("boundary verdict at exactly endedAt belongs to that iteration", () => {
+    const history = [{ ...verdict(1, "met"), at: 11_000 }]
+    expect(iterationVerdictMix(history, entries, setAt)[0]?.met).toBe(1)
+  })
+
+  test("iterations with no verdicts yield undefined", () => {
+    const history = [{ ...verdict(1, "met"), at: 9_000 }]
+    const mixes = iterationVerdictMix(history, entries, setAt)
+    expect(mixes[0]?.total).toBe(1)
+    expect(mixes[1]).toBeUndefined()
+  })
+})
+
+describe("verdictStreak", () => {
+  test("counts the trailing run of identical verdicts", () => {
+    const history = [verdict(1, "met"), verdict(2, "not_met"), verdict(3, "not_met"), verdict(4, "not_met")]
+    expect(verdictStreak(history)).toEqual({ verdict: "not_met", count: 3 })
+  })
+
+  test("a single trailing verdict has count 1", () => {
+    expect(verdictStreak([verdict(1, "met")])).toEqual({ verdict: "met", count: 1 })
+  })
+
+  test("empty history yields verdict undefined and count 0", () => {
+    expect(verdictStreak([])).toEqual({ verdict: undefined, count: 0 })
   })
 })
