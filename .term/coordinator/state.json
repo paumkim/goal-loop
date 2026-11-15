@@ -275,6 +275,17 @@
       "submittedAt": "2026-11-15T17:22:08Z",
       "mergedAt": "2026-11-15T17:22:16Z",
       "mergedInto": "dev"
+    },
+    "goal-history-tui": {
+      "agent": "inkling-goal-loop-1",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/goal-history-tui",
+      "worktree": "worktrees/wt-goal-history-tui",
+      "status": "done",
+      "createdAt": "2026-11-15T17:25:42Z",
+      "submittedAt": "2026-11-15T17:35:38Z",
+      "mergedAt": "2026-11-15T17:37:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
