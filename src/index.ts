@@ -14,6 +14,7 @@ import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
+import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
 import { BackgroundTracker } from "./runtime/background.ts"
 import { AutoCompactor } from "./runtime/compactor.ts"
@@ -55,12 +56,6 @@ const sleep = (ms: number, signal: AbortSignal) =>
     const timer = setTimeout(resolve, ms)
     signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true })
   })
-
-const sessionIDOf = (input: unknown) => {
-  const id = (input as { sessionID?: unknown } | undefined)?.sessionID
-  if (typeof id !== "string" || id === "") throw new Error("sessionID is required")
-  return id
-}
 
 export default Plugin.define({
   id: PLUGIN_ID,
@@ -150,28 +145,7 @@ export default Plugin.define({
     })
 
     // ---- RPC for clients (status line, dialogs, palette actions)
-    const rpc = await ctx.rpc.register(GoalRpc, {
-      get: async (input) => {
-        const sessionID = sessionIDOf(input)
-        // Read-through: after a plugin reload the in-memory map can miss a live goal that storage still holds.
-        await controller.restoreOne(sessionID).catch((error) => log.warn("goal restore-one failed", { error: String(error) }))
-        return { goal: controller.snapshot(sessionID, await controller.spend(sessionID)) }
-      },
-      list: async () => {
-        let goals = controller.list()
-        // Empty list can mean in-memory records only (post-reload): restore from storage once before answering.
-        if (goals.length === 0) {
-          await controller.restore().catch((error) => log.warn("goal restore failed", { error: String(error) }))
-          goals = controller.list()
-        }
-        return { goals }
-      },
-      status: async (input) => {
-        await controller.status(sessionIDOf(input))
-        return {}
-      },
-      clear: async (input) => ({ cleared: controller.clear(sessionIDOf(input)) }),
-    })
+    const rpc = await ctx.rpc.register(GoalRpc, createRpcHandlers({ controller, log }))
     const quiet = (error: unknown) => log.warn("goal event emit failed", { error: String(error) })
     emit = {
       changed: (sessionID, goal) => void rpc.events.emit("changed", { sessionID, goal }).catch(quiet),

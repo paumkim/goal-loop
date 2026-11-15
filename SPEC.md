@@ -322,3 +322,25 @@ instance served the RPC from an empty in-memory map.
 
 Verification: `bun run check` green (214 pass, `docs freshness check passed`), coordinator submit +
 merge-next, then commit state.json to dev.
+
+## Workstream I — `/api/rpc/goal/get` never returns a 500 acceptance criteria
+
+Interpretation of the armed condition: the TUI received an HTTP 500 from `POST /api/rpc/goal/get`
+(2026-11-15T06:29:51) for a session whose record existed but had just been resumed. The RPC handlers
+assemble `snapshot(sessionID, spend)` from inputs that could transiently disagree (missing sessionID,
+storage failures, mid-restore state); any throw escaped the plugin as an unhandled error.
+
+41. The RPC handlers are built by `createRpcHandlers` (`src/rpc-handlers.ts`) and are total: every
+    handler catches any failure and returns a benign fallback matching the `GoalRpc` contract —
+    `get` → `{ goal: null }`, `list` → `{ goals: [] }`, `status` → `{}`, `clear` → `{ cleared: false }`.
+    `get` performs the storage read-through (`restoreOne`) inside its own guarded path, and a failure
+    there or inside `snapshot`/`spend` still yields `goal: null`, never an exception.
+42. Malformed or missing inputs never throw: `undefined`, `null`, `{}`, empty/non-string `sessionID`
+    all return `{ goal: null }`. `test/rpc-handlers.test.ts` proves this plus double-failure paths
+    (spend throws AND snapshot throws; restoreOne throws; list explodes; status explodes; clear explodes)
+    and the `GoalRpc` output shape. `src/index.ts` registers exactly these handlers.
+43. `bun run check` stays green (223 tests) and dev is green after merge.
+
+Verification: `bun test test/rpc-handlers.test.ts` (9 tests), `bun run check`, coordinator submit +
+merge-next, then commit state.json to dev; `opencode api POST /api/rpc/goal/get -d '{"input":{"sessionID":"x"}}'`
+after the merge shows the benign fallback instead of a 500.
