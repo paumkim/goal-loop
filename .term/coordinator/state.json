@@ -319,6 +319,17 @@
       "submittedAt": "2026-11-15T17:50:59Z",
       "mergedAt": "2026-11-15T17:51:06Z",
       "mergedInto": "dev"
+    },
+    "loop-final-tally": {
+      "agent": "inkling-goal-loop-5",
+      "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
+      "branch": "wt/loop-final-tally",
+      "worktree": "worktrees/wt-loop-final-tally",
+      "status": "done",
+      "createdAt": "2026-11-15T17:51:48Z",
+      "submittedAt": "2026-11-15T17:53:44Z",
+      "mergedAt": "2026-11-15T17:53:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
