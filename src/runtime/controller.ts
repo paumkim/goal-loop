@@ -18,7 +18,7 @@ import {
   type UsageSnapshot,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
-import type { GoalStore } from "./store.ts"
+import { sameDirectory, type GoalStore } from "./store.ts"
 
 export interface ControllerDeps {
   readonly config: GoalConfig
@@ -384,7 +384,10 @@ export class GoalController {
   async restoreOne(sessionID: string): Promise<boolean> {
     if (this.goals.has(sessionID)) return true
     const record = await this.deps.store.load(sessionID).catch(() => undefined)
+    // Like the bulk restore, only adopt records owned by this instance's directory; a foreign-directory
+    // record belongs to another plugin instance and must not be driven twice.
     if (!record || !isLive(record.status)) return false
+    if (!sameDirectory(record.directory, this.deps.directory)) return false
     return this.adoptRestored(record)
   }
 
