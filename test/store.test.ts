@@ -76,3 +76,16 @@ describe("GoalStore.loadLive", () => {
     expect(await store.loadLive("/nowhere")).toEqual([])
   })
 })
+
+describe("GoalStore.load", () => {
+  test("returns the stored record, undefined for missing or malformed values", async () => {
+    const storage = new MemoryStorage()
+    const store = new GoalStore(storage, () => {})
+    expect(await store.load("ses_none")).toBeUndefined()
+    storage.data.set(keyFor("ses_broken"), { nope: true })
+    expect(await store.load("ses_broken")).toBeUndefined()
+    await store.save(record({ sessionID: "ses_ok", status: "paused" }))
+    await store.flush()
+    expect((await store.load("ses_ok"))?.sessionID).toBe("ses_ok")
+  })
+})

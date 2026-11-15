@@ -300,3 +300,25 @@ was blocked by the state it repairs — a deadlock that forced a manual unblock 
 
 Verification: `bun test test/coordinator.test.ts` (5 tests), `bun run check` green, coordinator
 submit + merge-next (this branch merges through the new gate), then commit state.json to dev.
+
+## Workstream H — RPC read-through for restored goals acceptance criteria
+
+Interpretation of the armed condition: after a plugin reload the goal RPC answered with `goal: null`
+(and `list` with `goals: []`) even though an active record existed in plugin storage. `restore()` only
+runs at plugin setup and only for the instance's own directory, so a reloaded or differently-scoped
+instance served the RPC from an empty in-memory map.
+
+38. `GoalStore.load(sessionID)` reads one record (undefined when missing/malformed). `GoalController`
+    factors its restore body into `adoptRestored` (shared by the bulk `restore()` and a new
+    `restoreOne(sessionID)`), which adopts one live record from storage with the same reset semantics
+    (fresh `startedAt`/`turns`/`stall`/`retries`/`checkins`, fresh baseline, in-memory record created,
+    durable write). `restoreOne` returns `false` for missing or non-live records.
+39. The RPC handlers read through: `goal.get` calls `restoreOne` before answering (early-out when the
+    record is in memory), and `goal.list` restores from storage when the in-memory list is empty.
+    A live goal is never reported as missing while a live record exists in plugin storage.
+40. Tests prove it: `test/store.test.ts` "GoalStore.load" (missing/malformed/valid),
+    `test/loop.test.ts` "RPC read-through after a reload" (restoreOne adopts a live record with an
+    empty map; finished records stay un-restored; list falls back to a storage restore). All 214 tests pass.
+
+Verification: `bun run check` green (214 pass, `docs freshness check passed`), coordinator submit +
+merge-next, then commit state.json to dev.

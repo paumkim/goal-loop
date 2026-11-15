@@ -153,9 +153,19 @@ export default Plugin.define({
     const rpc = await ctx.rpc.register(GoalRpc, {
       get: async (input) => {
         const sessionID = sessionIDOf(input)
+        // Read-through: after a plugin reload the in-memory map can miss a live goal that storage still holds.
+        await controller.restoreOne(sessionID).catch((error) => log.warn("goal restore-one failed", { error: String(error) }))
         return { goal: controller.snapshot(sessionID, await controller.spend(sessionID)) }
       },
-      list: async () => ({ goals: controller.list() }),
+      list: async () => {
+        let goals = controller.list()
+        // Empty list can mean in-memory records only (post-reload): restore from storage once before answering.
+        if (goals.length === 0) {
+          await controller.restore().catch((error) => log.warn("goal restore failed", { error: String(error) }))
+          goals = controller.list()
+        }
+        return { goals }
+      },
       status: async (input) => {
         await controller.status(sessionIDOf(input))
         return {}

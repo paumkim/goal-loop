@@ -338,37 +338,54 @@ export class GoalController {
 
   // ---------------------------------------------------------------- lifecycle
 
+  /**
+   * Adopts one live record from storage into memory, resetting turn count, timer and spend baseline.
+   * Returns true when the record was adopted. Used by the bulk restore and by the RPC read-through.
+   */
+  private async adoptRestored(record: GoalRecord): Promise<boolean> {
+    if (this.goals.has(record.sessionID)) return true
+    let usage: UsageSnapshot | undefined
+    let notFound = false
+    try {
+      usage = await this.deps.session.usage(record.sessionID)
+    } catch (error) {
+      if (isNotFoundError(error)) notFound = true
+      else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: errorMessage(error) })
+    }
+    if (notFound) {
+      // Definitive not-found only: the session no longer exists, drop the stale goal.
+      void this.deps.store.remove(record.sessionID)
+      return false
+    }
+    // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
+    // with its previous baseline rather than deleting it.
+    const now = this.deps.clock.now()
+    Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
+    this.goals.set(record.sessionID, record)
+    // Create the runtime up front so tool events that arrive before the first execution-end are counted.
+    this.runtime(record.sessionID)
+    this.commit(record)
+    return true
+  }
+
   /** Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity). */
   async restore(): Promise<number> {
     const records = await this.deps.store.loadLive(this.deps.directory)
-    const now = this.deps.clock.now()
-    await Promise.all(
-      records.map(async (record) => {
-        if (this.goals.has(record.sessionID)) return
-        let usage: UsageSnapshot | undefined
-        let notFound = false
-        try {
-          usage = await this.deps.session.usage(record.sessionID)
-        } catch (error) {
-          if (isNotFoundError(error)) notFound = true
-          else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: errorMessage(error) })
-        }
-        if (notFound) {
-          // Definitive not-found only: the session no longer exists, drop the stale goal.
-          void this.deps.store.remove(record.sessionID)
-          return
-        }
-        // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
-        // with its previous baseline rather than deleting it.
-        Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
-        this.goals.set(record.sessionID, record)
-        // Create the runtime up front so tool events that arrive before the first execution-end are counted.
-        this.runtime(record.sessionID)
-        this.commit(record)
-      }),
-    )
+    await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
     return this.goals.size
+  }
+
+  /**
+   * RPC read-through: adopt one live record from storage when it is not in memory.
+   * After a plugin reload the in-memory map can be empty for a directory while an active record
+   * exists in plugin storage; the goal RPC uses this so `get`/`list` never report a live goal as missing.
+   */
+  async restoreOne(sessionID: string): Promise<boolean> {
+    if (this.goals.has(sessionID)) return true
+    const record = await this.deps.store.load(sessionID).catch(() => undefined)
+    if (!record || !isLive(record.status)) return false
+    return this.adoptRestored(record)
   }
 
   async dispose(): Promise<void> {
