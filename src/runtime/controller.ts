@@ -603,6 +603,8 @@ export class GoalController {
     if (this.stale(record, runtime, epoch)) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
     await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    // The note round-trips through synthetic; the world may have moved on while it landed.
+    if (this.stale(record, runtime, epoch)) return
     await this.continueWith(record, {
       text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
       description: `goal-loop · arming v${nextIteration}`,
