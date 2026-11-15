@@ -33,9 +33,7 @@
     "src",
     "dist",
     "packages/coordinator/bin/coordinator",
-    "packages/coordinator/README.md",
-    ".term/coordinator/config.json",
-    ".term/coordinator/state.json"
+    "packages/coordinator/README.md"
   ],
   "engines": {
     "opencode": ">=2.0.29"
@@ -44,11 +42,14 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "e2e": "bun scripts/e2e.ts",
-    "check": "tsc --noEmit && bun test && bun run compile",
+    "check": "tsc --noEmit && (cd test && bun test) && bun run compile && bun run check:tui && bun run docs:check && bun run check:spec",
+    "check:tui": "bun scripts/tui-load-check.ts ./tui.ts",
+    "docs:check": "bun scripts/docs-watch.ts check",
+    "check:spec": "bun scripts/spec-check.ts",
     "prepublishOnly": "bun run compile && bun test",
     "compile": "bun scripts/build.ts",
-    "docs:watch": "bun script/docs-watch.ts watch",
-    "docs:once": "bun script/docs-watch.ts once"
+    "docs:watch": "bun scripts/docs-watch.ts watch",
+    "docs:once": "bun scripts/docs-watch.ts once"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.29",
@@ -71,6 +72,7 @@
     }
   },
   "devDependencies": {
+    "@opencode/client": "2.0.29",
     "@opencode/plugin": "2.0.29",
     "@opentui/core": "0.5.17",
     "@opentui/solid": "0.5.17",

@@ -10,6 +10,16 @@
  *          file, directory, or .git/index changes. Event-driven (inotify via fs.watch),
  *          no polling loop. Designed to be idle-quiet and cheap.
  *   log    Print the last 50 lines of .docs-watch.log.
+ *   check  Read-only freshness gate: exits 1 listing every docs page whose
+ *          "Last updated" stamp trails the last commit touching it, or a changelog
+ *          table that does not match git history. Exits 0 when everything is fresh.
+ *          Never writes anything. Wired into `bun run check` and CI.
+ *
+ * Freshness anchor: the newest non-merge commit touching the path, excluding
+ * mechanical "docs: refresh" commits (stamps/changelog regenerated from history).
+ * Commit your content first, then `bun scripts/docs-watch.ts once`, then commit the
+ * result as `docs: refresh stamps and changelog`. The anchor excludes merges and
+ * refresh commits, so the gate is stable across branches, merge-next and CI.
  *
  * What it does not do
  *   - No network, no dependencies, no build step. docs/ stays static HTML/CSS/JS.
@@ -37,7 +47,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
-const WATCH_PATHS = ["docs", "src", "script", "README.md"];
+const WATCH_PATHS = ["docs", "src", "scripts", "README.md"];
 const LOG = ".docs-watch.log";
 const STATE = ".docs-watch-state.json";
 const CHANGE_START = "<!-- changes:start -->";
@@ -56,8 +66,15 @@ const repoRoot = (): string => git(["rev-parse", "--show-toplevel"]);
 const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// Non-merge commits, with mechanical stamp-refresh commits excluded, keep the
+// freshness anchor stable across merges and across the restamp commit itself.
+const ANCHOR_ARGS = ["--no-merges", "--grep=^docs: refresh", "--invert-grep", "-i"];
+const STAMP_FORMAT = "--date=format:%Y-%m-%d %H:%M UTC";
+
 const stampFor = (pageRel: string): string =>
-  git(["log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M UTC", "--", pageRel]) || "unknown";
+  git(["log", "-1", "--format=%cd", STAMP_FORMAT, ...ANCHOR_ARGS, "--", pageRel]) ||
+  git(["log", "-1", "--format=%cd", STAMP_FORMAT, "--", pageRel]) ||
+  "unknown";
 
 const walk = (dir: string): string[] => {
   const out: string[] = [];
@@ -141,13 +158,14 @@ const changelogRows = (root: string): string => {
     const out = git([
       "log",
       "--format=%cd\t%s",
-      "--date=format:%Y-%m-%d %H:%M UTC",
+      STAMP_FORMAT,
       "-30",
+      ...ANCHOR_ARGS,
       "--",
       "docs/",
       "README.md",
       "src/",
-      "script/",
+      "scripts/",
     ]);
     for (const line of out.split("\n").filter(Boolean)) {
       const [when, ...rest] = line.split("\t");
@@ -158,7 +176,7 @@ const changelogRows = (root: string): string => {
   }
   // The HTML table is a pure function of git history so the committed page never
   // drifts. Working-tree (uncommitted) changes live in LOG and are shown by
-  // `bun script/docs-watch.ts log`; they stay out of the committed HTML.
+  // `bun scripts/docs-watch.ts log`; they stay out of the committed HTML.
   rows.sort((a, b) => (a.when < b.when ? 1 : a.when > b.when ? -1 : 0));
   return rows
     .map(
@@ -166,6 +184,56 @@ const changelogRows = (root: string): string => {
         `<tr><td><code>${esc(r.when)}</code></td><td>${esc(r.what)}</td><td>${esc(r.source)}</td></tr>`,
     )
     .join("\n");
+};
+
+const stampOf = (html: string): string | undefined =>
+  /(<span class="stamp">)([^<]*)(<\/span>)/.exec(html)?.[2];
+
+/** Read-only: pages whose stamp trails the last commit touching them (or has no stamp). */
+const stalePages = (root: string): string[] => {
+  const stale: string[] = [];
+  const docsDir = join(root, "docs");
+  for (const name of readdirSync(docsDir)) {
+    if (!name.endsWith(".html")) continue;
+    const pageRel = `docs/${name}`;
+    const html = readFileSync(join(docsDir, name), "utf8");
+    const expected = stampFor(pageRel);
+    const actual = stampOf(html);
+    if (actual === undefined) stale.push(`${pageRel}: no <span class="stamp"> found`);
+    else if (actual !== expected)
+      stale.push(`${pageRel}: stamp "${actual}" trails last commit "${expected}"`);
+  }
+  return stale;
+};
+
+/** Read-only: changelog rows that do not match git history. Undefined when fresh. */
+const staleChangelog = (root: string): string | undefined => {
+  const page = join(root, "docs", "changelog.html");
+  if (!existsSync(page)) return "docs/changelog.html is missing";
+  const html = readFileSync(page, "utf8");
+  const start = html.indexOf(CHANGE_START);
+  const end = html.indexOf(CHANGE_END);
+  if (start === -1 || end === -1 || end < start)
+    return "docs/changelog.html is missing the <!-- changes:start/end --> markers";
+  const actual = html.slice(start + CHANGE_START.length, end).replace(/^\n+/, "").replace(/\n+$/, "");
+  const expected = changelogRows(root);
+  return actual === expected
+    ? undefined
+    : "docs/changelog.html: changelog rows are stale (run `bun scripts/docs-watch.ts once`)";
+};
+
+const check = (root: string): number => {
+  const stale = stalePages(root);
+  const changelog = staleChangelog(root);
+  if (changelog) stale.push(changelog);
+  if (stale.length) {
+    console.error("docs freshness check failed:");
+    for (const line of stale) console.error(`  - ${line}`);
+    console.error("fix: bun scripts/docs-watch.ts once   (then commit the result)");
+    return 1;
+  }
+  console.log("docs freshness check passed");
+  return 0;
 };
 
 const renderChangelog = (root: string): boolean => {
@@ -246,6 +314,8 @@ const main = (): void => {
 
   if (cmd === "once") return scan(root);
 
+  if (cmd === "check") process.exit(check(root));
+
   if (cmd === "watch") {
     scan(root, { quiet: true });
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -262,7 +332,7 @@ const main = (): void => {
     return; // never resolves; the watchers keep the process alive
   }
 
-  console.error("usage: bun script/docs-watch.ts once|watch|log");
+  console.error("usage: bun scripts/docs-watch.ts once|watch|log|check");
   process.exit(2);
 };
 

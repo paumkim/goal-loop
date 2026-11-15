@@ -76,6 +76,30 @@ export interface BackgroundWork {
   readonly shells: number
 }
 
+export interface VerifyRequest {
+  readonly command: string
+  readonly cwd: string
+  readonly timeoutMs: number
+  readonly signal: AbortSignal
+}
+
+export interface VerifyResult {
+  /** Process exit code; null when the process could not be spawned or was killed. */
+  readonly code: number | null
+  readonly output: string
+  /** True when the run hit `timeoutMs` and was killed. */
+  readonly timedOut: boolean
+}
+
+/**
+ * Runs the configured verification command (`evaluator.verifyCommand`) for real, on the machine the
+ * plugin runs on, against the current checkout in `cwd`. Read-only with respect to plugin storage:
+ * implementations must not touch goal records. Used to gate a `met` verdict.
+ */
+export interface VerifierPort {
+  verify(request: VerifyRequest): Promise<VerifyResult>
+}
+
 export interface BackgroundPort {
   busy(sessionID: string): Promise<BackgroundWork>
 }
@@ -107,7 +131,6 @@ export interface Logger {
   error(message: string, extra?: Record<string, unknown>): void
 }
 
-export type { FailureInfo }
 
 export const systemClock: Clock = {
   now: () => Date.now(),

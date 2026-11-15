@@ -45,6 +45,10 @@ function formatSpend(spend) {
   return parts.join(" \xB7 ");
 }
 
+// src/core/types.ts
+var LIVE_STATUSES = new Set(["active", "paused"]);
+var isLive = (status) => LIVE_STATUSES.has(status);
+
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
 var sessionInput = {
@@ -101,6 +105,14 @@ var GoalRpc = Rpc.define({
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
+var elapsedOf = (g, receivedAt, nowMs) => g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs;
+var goalsEqual = (a, b) => {
+  if (a === b)
+    return true;
+  if (!a || !b)
+    return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+};
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions();
   return (() => {
@@ -151,9 +163,7 @@ var tui_default = Plugin.define({
       const goal = () => entry()?.goal ?? undefined;
       const elapsed = () => {
         const g = goal();
-        if (!g)
-          return 0;
-        return g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry()?.receivedAt ?? now())) : g.elapsedMs;
+        return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0;
       };
       const stateColor = () => goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.status === "active" ? context.theme.text.feedback.info.base : context.theme.text.muted;
       return _$createComponent(Show, {
@@ -256,9 +266,7 @@ var tui_default = Plugin.define({
     };
     const showStatusDialogInner = (sessionID, fallback) => {
       setScrollRef(undefined);
-      rpc.get({
-        sessionID
-      }, at(sessionID)).then((result) => put(sessionID, result.goal)).catch(() => {});
+      refresh(sessionID).catch(() => {});
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       context.ui.dialog.show(() => _$createComponent(ClampedColumn, {
         get children() {
@@ -322,20 +330,26 @@ var tui_default = Plugin.define({
         location
       } : undefined;
     };
-    const put = (sessionID, goal) => setEntries((previous) => ({
-      ...previous,
-      [sessionID]: {
-        goal,
-        receivedAt: Date.now()
-      }
-    }));
+    const refresh = (sessionID) => rpc.get({
+      sessionID
+    }, at(sessionID)).then((result) => put(sessionID, result.goal));
+    const put = (sessionID, goal) => setEntries((previous) => {
+      const existing = previous[sessionID];
+      if (existing && goalsEqual(existing.goal, goal))
+        return previous;
+      return {
+        ...previous,
+        [sessionID]: {
+          goal,
+          receivedAt: Date.now()
+        }
+      };
+    });
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
         return;
       requested.add(sessionID);
-      rpc.get({
-        sessionID
-      }, at(sessionID)).then((result) => put(sessionID, result.goal)).catch(() => requested.delete(sessionID));
+      refresh(sessionID).catch(() => requested.delete(sessionID));
     };
     const live = (sessionID) => {
       try {
@@ -343,7 +357,7 @@ var tui_default = Plugin.define({
           return;
         ensure(sessionID);
         const goal = entries()[sessionID]?.goal;
-        return goal && (goal.status === "active" || goal.status === "paused") ? goal : undefined;
+        return goal && isLive(goal.status) ? goal : undefined;
       } catch {
         return;
       }
@@ -439,7 +453,7 @@ var tui_default = Plugin.define({
             if (!g || !props.sessionID)
               return "";
             const entry = entries()[props.sessionID];
-            const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs;
+            const elapsed = elapsedOf(g, entry?.receivedAt, now());
             const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active";
             const turns = g.turns > 0 ? ` \xB7 ${g.turns} turn${g.turns === 1 ? "" : "s"}` : "";
             if (g.loopEnabled)

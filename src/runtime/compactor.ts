@@ -7,6 +7,7 @@
  */
 import { estimateContextTokens } from "../core/context-size.ts"
 import type { GoalConfig } from "../core/config.ts"
+import { errorMessage } from "../core/errors.ts"
 import { truncate } from "../core/format.ts"
 import type { Clock, EmitterPort, Logger } from "./ports.ts"
 
@@ -61,7 +62,7 @@ export class AutoCompactor {
     } catch (error) {
       // Keep requestedAt for the cooldown; clear in-flight so a retry is possible later.
       this.inFlight.delete(sessionID)
-      const message = truncate(messageOf(error), 160)
+      const message = truncate(errorMessage(error), 160)
       log.warn("auto-compact: compaction failed to start", { sessionID, error: message })
       emitter.notice({
         sessionID,
@@ -105,10 +106,4 @@ export class AutoCompactor {
     this.inFlight.delete(sessionID)
     this.requestedAt.delete(sessionID)
   }
-}
-
-function messageOf(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === "object" && error !== null && "message" in error) return String((error as { message: unknown }).message)
-  return String(error)
 }

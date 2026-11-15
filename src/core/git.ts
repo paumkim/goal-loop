@@ -112,7 +112,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
         branch: target,
         mode: "coordinator",
         reason: "coordinator repository detected; wt/<slug> + submit flow",
-        coordinatorBin: detected.coordinatorBin,
+        ...(detected.coordinatorBin ? { coordinatorBin: detected.coordinatorBin } : {}),
         worktreeDir: detected.worktreeDir,
       }
     }
@@ -123,7 +123,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
         branch: target,
         mode: "coordinator",
         reason: "coordinator mode forced by configuration",
-        coordinatorBin: coordinatorBin ?? "packages/coordinator/bin/coordinator",
+        ...(coordinatorBin ? { coordinatorBin } : {}),
         worktreeDir: "worktrees",
       }
     }
@@ -137,7 +137,8 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
 }
 
 export interface CoordinatorDetection {
-  readonly coordinatorBin: string
+  /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
+  readonly coordinatorBin?: string
   readonly worktreeDir: string
   readonly devBranch?: string
 }
@@ -162,16 +163,13 @@ export function detectCoordinator(root: string, pluginBin?: string): Coordinator
   } catch {
     // Config unreadable: detection still holds on markers alone.
   }
-  let coordinatorBin: string
+  let coordinatorBin: string | undefined
   if (hasProjectBin) coordinatorBin = projectBin
-  else if (pluginBin) coordinatorBin = pluginBin
-  else coordinatorBin = "packages/coordinator/bin/coordinator"
-  return { coordinatorBin, worktreeDir, ...(devBranch ? { devBranch } : {}) }
+  else if (pluginBin && existsSync(pluginBin)) coordinatorBin = pluginBin
+  // No absolute bin anywhere: detection still holds on the json markers, but the policy carries no bin path.
+  return { ...(coordinatorBin ? { coordinatorBin } : {}), worktreeDir, ...(devBranch ? { devBranch } : {}) }
 }
 
-export function isCoordinatorPolicy(policy: CommitPolicy): boolean {
-  return policy.required && policy.mode === "coordinator"
-}
 
 function read(path: string): string | undefined {
   try {

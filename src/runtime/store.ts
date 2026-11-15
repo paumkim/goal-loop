@@ -22,6 +22,11 @@ function isRecord(value: unknown): value is GoalRecord {
 /**
  * Durable goal persistence on plugin storage, one key per session. Writes per session are chained so they
  * land in order without blocking callers; the in-memory record stays the source of truth.
+ *
+ * Probe mode (`readOnly`): saves and removes are dropped (and logged via `onError` is NOT called; the caller
+ * gets `true` so callers behave as if the write landed). A probe instance (e.g. a headless opencode server
+ * booted to exercise the plugin) therefore cannot mutate the live goal records, even by accident. Reads are
+ * unaffected.
  */
 export class GoalStore {
   private readonly chains = new Map<string, Promise<void>>()
@@ -29,15 +34,24 @@ export class GoalStore {
   constructor(
     private readonly storage: StoragePort,
     private readonly onError: (error: unknown) => void,
+    private readonly options: { readonly readOnly?: boolean } = {},
   ) {}
 
-  save(record: GoalRecord): Promise<void> {
+  save(record: GoalRecord): Promise<boolean> {
+    if (this.options.readOnly) return Promise.resolve(true)
     const snapshot = structuredClone(record)
     return this.enqueue(record.sessionID, () => this.storage.set(keyFor(record.sessionID), snapshot))
   }
 
-  remove(sessionID: string): Promise<void> {
+  remove(sessionID: string): Promise<boolean> {
+    if (this.options.readOnly) return Promise.resolve(true)
     return this.enqueue(sessionID, () => this.storage.remove(keyFor(sessionID)))
+  }
+
+  /** Reads one record; undefined when missing or malformed. */
+  async load(sessionID: string): Promise<GoalRecord | undefined> {
+    const value = await this.storage.get(keyFor(sessionID)).catch(() => undefined)
+    return isRecord(value) ? value : undefined
   }
 
   /** Live goals owned by `directory`, for restore after a restart or plugin reload. */
@@ -58,13 +72,30 @@ export class GoalStore {
     await Promise.all(this.chains.values())
   }
 
-  private enqueue(sessionID: string, write: () => Promise<void>): Promise<void> {
+  /**
+   * Every queued write resolves with whether it landed. The onError hook observes failures for logging; a throwing
+   * hook must not wedge the chain or surface as an unhandled rejection, so both are fenced off here.
+   */
+  private enqueue(sessionID: string, write: () => Promise<void>): Promise<boolean> {
     const previous = this.chains.get(sessionID) ?? Promise.resolve()
-    const next = previous.then(write).catch(this.onError)
-    this.chains.set(sessionID, next)
-    void next.then(() => {
-      if (this.chains.get(sessionID) === next) this.chains.delete(sessionID)
+    const run = previous.then(async () => {
+      try {
+        await write()
+        return true
+      } catch (error) {
+        try {
+          this.onError(error)
+        } catch {
+          // A throwing error hook is not allowed to break write ordering.
+        }
+        return false
+      }
     })
-    return next
+    const chain = run.then(() => {})
+    this.chains.set(sessionID, chain)
+    void chain.then(() => {
+      if (this.chains.get(sessionID) === chain) this.chains.delete(sessionID)
+    })
+    return run
   }
 }

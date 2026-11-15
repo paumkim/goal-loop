@@ -59,11 +59,18 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
     achieved iteration into a compact machine-consumable block via the evaluator
     (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
-    `tokens * 4` characters), (b) asks the evaluator to generate the next goal (v2…) from the summary,
+    `max(200, tokens) * 4` characters (an 800-char floor applies below 200 tokens)), (b) asks the evaluator to generate the next goal (v2…) from the summary,
     the loop objective and the prior history, under a strict output contract (a single verifiable
     condition, or exactly `LOOP_COMPLETE`), (c) arms the next goal immediately under the same `/goal`
     rules. Goal v1 and each later iteration are kept as `loopHistory` in the persisted record — never
-    re-injected in full.
+    re-injected in full. Invariant: a met verdict advances the loop exactly once, and an armed
+    objective is never re-armed verbatim — the arm is persisted to storage before it is announced
+    (note, toast, arming steer), the achieved history and the armed iteration land in a single durable
+    write (recovering either the pre-arm or the armed state, never a half-advanced one), a loop step
+    whose iteration already advanced drops itself instead of re-firing the arm, a next-goal reply that
+    normalizes to an already-completed condition pauses the loop rather than re-arming it, a stale
+    loop step drops before the arming steer is dispatched, and a completion event delivered after a
+    plugin-dispatched steer or a failed turn is ignored until the next execution starts.
 13. Loop guards (all mandatory): `maxLoops` (default 5, env `OPENCODE_GOAL_MAX_LOOPS`; counts completed
     iterations) ends the loop cleanly as *achieved-complete*; the per-iteration turn cap reuses
     `maxTurns` (reset per iteration); evaluator failures exhaust `maxRetries` and pause as today; a hard
@@ -160,3 +167,275 @@ the fix, if any, lives in the host event bridge.
 
 Not verified: Antigravity-Free (provider outage). Docs lease: taken (no other holder); README
 and docs/*.html updated for the new command only.
+## Workstream C — dev rebuild and cleanup acceptance criteria
+
+Interpretation of "next merged to dev rebuild the binary and clean up": after wt/goal-loop-failure-modes
+landed on dev (d86c03b), rebuild the shipped TUI bundle, verify the package layout, and consolidate the
+repo state left by the merge.
+
+16. `dist/tui.js` and `dist/tui.d.ts` are rebuilt from the current `src/tui.tsx` via `bun run compile`;
+    after the rebuild and this commit, `git status --short` on this branch reports only tracked files that
+    are meant to ship. If the rebuild is byte-identical, nothing is committed for dist/.
+17. `npm pack --dry-run` (or `bun pm pack` equivalent) lists exactly the files `package.json` declares in
+    `files` (index.ts, tui.ts, rpc.ts, src/, dist/, packages/coordinator/) and reports a reasonable tarball
+    size; no build debris (e.g. logs, caches, .term/) leaks in.
+18. The coordinator lease bookkeeping (`.term/coordinator/state.json`) carries the merge-next entry for
+    goal-loop-failure-modes and is committed to dev, so the coordination bus on dev is not left dirty.
+19. No stale state remains in the repo: `git worktree list` shows only the dev checkout, `git branch` shows
+    only `dev` and `main`, and `worktrees/` contains no `wt-*` directories.
+20. `bun run check` passes on dev (tsc, tests, compile) with this branch merged.
+
+Verification: `bun run compile` (byte-diff of dist/), `npm pack --dry-run`, `git worktree list`,
+`git branch -a`, `git status --short`, `bun run check`, then coordinator submit + merge-next.
+
+## Workstream D — CI and release hygiene acceptance criteria
+
+Interpretation of "keep improving the current directory functionalities" for this iteration: the repo had no
+continuous integration and its docs changelog/stamps had drifted behind `dev`. This workstream adds a CI gate,
+folds the TUI load check into `bun run check`, and regenerates the docs metadata.
+
+21. `.github/workflows/check.yml` exists and runs on push to `dev`/`main` and on pull requests:
+    `bun install --frozen-lockfile`, `bun run check`, and an `npm pack --dry-run` smoke test. The workflow
+    uses `oven-sh/setup-bun@v2` and has no secrets or network dependencies beyond package registries.
+22. `bun run check` includes `check:tui` (`bun scripts/tui-load-check.ts ./tui.ts`, loads `tui.ts` the way
+    the OpenCode host does; fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and
+    this file state the composition; superseded by Workstream E, which appends `docs:check`.
+23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (32 files, ~65 kB as of 2026-11-15,
+    i.e. including `src/rpc-handlers.ts`) with no `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
+
+Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: loaded TUI plugin "opencode-goal.tui"`),
+`npm pack --dry-run`, `git status --short`, then coordinator submit.
+
+24. The commit policy never hands the agent a repo-relative coordinator bin: when
+    `resolveCoordinatorBin` finds no absolute binary, `coordinatorFlow` injects an explicit
+    "binary missing" instruction (work on `wt/<slug>`, report, manual merge) instead of the old
+    `packages/coordinator/bin/coordinator` fallback, in both the auto-detected (json markers,
+    no bin anywhere) and the forced `coordinator: true` paths (`src/core/git.ts`,
+    `src/core/prompts.ts`, `src/core/types.ts`).
+25. The loop summary cap uses the documented formula in both places:
+    `max(200, tokens) * 4` (`src/runtime/evaluator.ts` `cap()` now matches
+    `src/runtime/controller.ts` and README/config docs; was `max(200, tokens * 4)`).
+26. `packages/coordinator/bin/coordinator`: comma-separated `--paths` are whitespace-trimmed
+    before overlap checks (`"src, docs"` now overlaps `docs`), the dead `_newp` read and the
+    unreachable second empty-slug guard are gone, and an overlap failure prints one error naming
+    the conflicting lease (not two).
+27. `bun run check` passes and includes 15 new unit tests: `test/evaluator.test.ts`
+    (session/independent evaluation, independent→session fallback, REPAIR retry, unreadable-verdict
+    EvaluationError, pre-aborted signal unwinds `isEvaluating`, summary cap formula, nextGoal
+    trim/cap) and `test/store.test.ts` (`sameDirectory` normalization, `loadLive` directory
+    filtering, malformed records skipped, empty restore). 200 tests total, all green.
+28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
+    `coordinatorFlow` `:64`, `commitStatusSuffix` `:82`, `rubric` `:263`, `facts` `:288`,
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:461`, `prompts.ts:164`). References were
+    re-synced against HEAD on 2026-11-15 after the restoreOne/sameDirectory and merge-next merges
+    shifted `controller.ts`. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
+    points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
+    source moves. The README coordinator section documents the `.gitignore` auto-append and the
+    missing-binary behavior, and `docs/changelog.html` + page stamps are regenerated.
+
+Verification (all run in the worktree): `bun install --frozen-lockfile`, `bun run check`
+(expect 200 pass, `ok: loaded TUI plugin`), `npm pack --dry-run`, `bash -n
+packages/coordinator/bin/coordinator`, overlap trim exercised end-to-end against a throwaway repo
+(`claim --paths docs` against a lease with `"src, docs"` fails with a single error; a
+non-overlapping claim succeeds), then coordinator submit.
+
+
+## Workstream E — docs freshness gate acceptance criteria
+
+Interpretation of the armed condition: docs stamps and the changelog had no automated guard, so they
+drifted silently (iteration 1 committed stamps that already trailed the commit containing them). This
+workstream adds a read-only gate.
+
+29. `bun scripts/docs-watch.ts check` (`bun run docs:check`) exits 0 when every `docs/*.html` page's
+    `<span class="stamp">` equals the date of the newest non-merge commit touching that page, excluding
+    mechanical `docs: refresh` commits, and `docs/changelog.html`'s table equals the regenerated rows
+    (same exclusions). Otherwise it exits 1 and lists every stale page/table with the expected date.
+    The check is read-only (never writes) and never requires network or repos beyond git itself.
+30. `bun run check` is `tsc --noEmit && bun test && bun run compile && bun run check:tui && bun run docs:check`;
+    CI (`.github/workflows/check.yml`) enforces it unchanged. `AGENTS.md`, `README.md` document the
+    gate and the restamp workflow (`once`, then commit as `docs: refresh stamps and changelog`).
+31. `test/docs-watch.test.ts` proves the gate end-to-end against a throwaway git repository: fresh state
+    passes, a docs commit without a restamp fails with the stale page listed, `docs-watch.ts once` +
+    refresh commit makes it pass again; `bash -n`-equivalent guarantees keep the script typed (it is TS run by bun).
+
+Verification: `bun run docs:check` (pass on dev after the refresh commit), `bun test test/docs-watch.test.ts`,
+`bun run check` green, docs regenerated, coordinator submit.
+
+## Workstream F — tool-call counting regression acceptance criteria
+
+Interpretation of "the loop is pausing": two loop iterations completed real work (hundreds of tool calls),
+yet both loop history entries recorded `toolCalls: 0`, so the two-strike not-progress guard paused the
+loop with "two consecutive iterations without tool use" after iteration 2 was met. Root cause: after a
+plugin reload (e.g. triggered by a merge changing the plugin's watched files), `restore()` rebuilt the
+goals map but never the per-session runtime, so `onToolCalled`/`onExecutionStarted` silently dropped every
+tool event until the first `session.execution.succeeded` lazily created one.
+
+32. `onToolCalled` and `onExecutionStarted` lazy-create the per-session runtime whenever a goal exists for
+    the session (`this.runtime(sessionID)`), so tool events before the first execution-end are always
+    counted; `restore()` creates one up front for every restored live record. Tool events for sessions
+    with no goal still no-op.
+33. Regression test `test/loop.test.ts` "a restored loop counts tool calls before the first execution-end":
+    arms a loop, disposes, restores from the same storage, runs an execution with 5 tool calls, and asserts
+    the loop history entry records `toolCalls: 5`. All 205 tests pass.
+
+Verification: `bun test` (205 pass), `bun run check`, coordinator submit + merge-next.
+
+## Workstream G — merge-next gates on the merged result
+
+Interpretation of the armed condition: `merge-next` ran `bun run check` on dev's pre-merge HEAD, so a
+branch whose merge is the fix for the very staleness the gate detects (e.g. a docs freshness refresh)
+was blocked by the state it repairs — a deadlock that forced a manual unblock (2026-11-15).
+
+34. `packages/coordinator/bin/coordinator merge-next` trial-merges the candidate `wt/<slug>` branch into
+    `dev` on a throwaway `merge-check-<slug>-<pid>` branch (created from `dev` and checked out), runs
+    `bun run check` on that merged result, and only then moves `dev` onto it via `merge --ff-only`.
+    A failing merged result aborts with `dev` untouched (no merge commit, no lease marked done).
+    Scratch branches from interrupted runs are pruned best-effort on every run.
+35. The main checkout must be clean for the merge, with the coordinator's own
+    `.term/coordinator/state.json` exempt (claim/submit leave it dirty by design).
+    A tracked, non-exempt modification aborts the merge before any branch is created. The exempt dirt
+    is stashed to `.term/coordinator/.state-stash.*` for the duration of the trial merge and restored
+    afterwards (or by the exit trap on failure), so a wt branch that records only `.term/coordinator/state.json`
+    lease bookkeeping merges cleanly through the gate, and the submitted lease record survives any
+    outcome of the merge (restored before the lease is flipped `done`, or by the trap on failure).
+36. `test/coordinator.test.ts` proves the paths in a throwaway git repo: a merge that is the fix
+    for the gate succeeds and lands (lease `done`); a merged result that fails the check aborts with
+    `dev` and the lease untouched; a normal green merge lands; a dirty (non-exempt) main checkout is
+    refused; a branch recording only `.term/coordinator/state.json` bookkeeping merges cleanly and the
+    submitted lease record survives (success path flips it `done`; the failing path keeps it
+    `submitted`), with no `.state-stash.*` files left behind. Scratch branches are cleaned up on failure.
+37. `AGENTS.md`, `docs/install.html` and this file document the merged-result gate and the cleanliness
+    exemption; `bun run check` stays green (205+ tests, docs freshness passes).
+
+Verification: `bun test test/coordinator.test.ts` (5 tests), `bun run check` green, coordinator
+submit + merge-next (this branch merges through the new gate), then commit state.json to dev.
+
+## Workstream H — RPC read-through for restored goals acceptance criteria
+
+Interpretation of the armed condition: after a plugin reload the goal RPC answered with `goal: null`
+(and `list` with `goals: []`) even though an active record existed in plugin storage. `restore()` only
+runs at plugin setup and only for the instance's own directory, so a reloaded or differently-scoped
+instance served the RPC from an empty in-memory map.
+
+38. `GoalStore.load(sessionID)` reads one record (undefined when missing/malformed). `GoalController`
+    factors its restore body into `adoptRestored` (shared by the bulk `restore()` and a new
+    `restoreOne(sessionID)`), which adopts one live record from storage with the same reset semantics
+    (fresh `startedAt`/`turns`/`stall`/`retries`/`checkins`, fresh baseline, in-memory record created,
+    durable write). `restoreOne` returns `false` for missing or non-live records.
+39. The RPC handlers read through: `goal.get` calls `restoreOne` before answering (early-out when the
+    record is in memory), and `goal.list` restores from storage when the in-memory list is empty.
+    A live goal is never reported as missing while a live record exists in plugin storage.
+40. Tests prove it: `test/store.test.ts` "GoalStore.load" (missing/malformed/valid),
+    `test/loop.test.ts` "RPC read-through after a reload" (restoreOne adopts a live record with an
+    empty map; finished records stay un-restored; list falls back to a storage restore). All 214 tests pass.
+
+Verification: `bun run check` green (214 pass, `docs freshness check passed`), coordinator submit +
+merge-next, then commit state.json to dev.
+
+## Workstream I — `/api/rpc/goal/get` never returns a 500 acceptance criteria
+
+Interpretation of the armed condition: the TUI received an HTTP 500 from `POST /api/rpc/goal/get`
+(2026-11-15T06:29:51) for a session whose record existed but had just been resumed. The RPC handlers
+assemble `snapshot(sessionID, spend)` from inputs that could transiently disagree (missing sessionID,
+storage failures, mid-restore state); any throw escaped the plugin as an unhandled error.
+
+41. The RPC handlers are built by `createRpcHandlers` (`src/rpc-handlers.ts`) and are total: every
+    handler catches any failure and returns a benign fallback matching the `GoalRpc` contract —
+    `get` → `{ goal: null }`, `list` → `{ goals: [] }`, `status` → `{}`, `clear` → `{ cleared: false }`.
+    `get` performs the storage read-through (`restoreOne`) inside its own guarded path, and a failure
+    there or inside `snapshot`/`spend` still yields `goal: null`, never an exception.
+42. Malformed or missing inputs never throw: `undefined`, `null`, `{}`, empty/non-string `sessionID`
+    all return `{ goal: null }` at the handler layer. Two layers reject before the handler ever runs,
+    both verified live on 2026-11-15: the RPC schema (`sessionInput`, `additionalProperties: false`)
+    answers `rpc.invalid_input` (`Missing key at ["sessionID"]`, `Expected string`, `Expected object`,
+    `Expected never` for extra props) and a non-JSON body answers `InvalidRequestError` — all
+    structured 400s, never a 500. `test/rpc-handlers.test.ts` proves the handler layer plus
+    double-failure paths (spend throws AND snapshot throws; restoreOne throws; list explodes;
+    status explodes; clear explodes) and the `GoalRpc` output shape. `src/index.ts` registers
+    exactly these handlers.
+43. `bun run check` stays green (228 tests) and dev is green after merge.
+
+Verification: `bun test test/rpc-handlers.test.ts` (9 tests), `bun run check`, coordinator submit +
+merge-next, then commit state.json to dev. Note: plugin RPC calls are directory-scoped — the
+`/api/rpc/<rpcID>/<method>` endpoint requires the `location[directory]=<abs path>` query parameter
+(deepObject style), e.g.
+
+    curl -g -u opencode:$OPENCODE_PASSWORD -H 'Content-Type: application/json' \
+      -X POST 'http://127.0.0.1:<port>/api/rpc/goal/get?location[directory]=/home/pauk/Projects/opencode-v2-goal/opencode-goalv2' \
+      -d '{"input":{"sessionID":"x"}}'
+
+or `opencode api --server http://127.0.0.1:<port> POST /api/rpc/goal/get
+--param 'location[directory]=/home/pauk/Projects/opencode-v2-goal/opencode-goalv2'
+-d '{"input":{"sessionID":"x"}}'`. Without the parameter the server answers a structured
+`rpc.unavailable` (HTTP 400, not a 500), which is not a handler failure. With it, the benign
+fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live on 2026-11-15,
+`goal/list` likewise returns `{"output":{"goals":[...]}}`).
+
+## Workstream J — loop hardening: verifier, bookkeeping, probe isolation, spec honesty, re-arm hygiene
+
+Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
+guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
+
+<!-- spec-check files=32 tests=244 -->
+
+44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
+    disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
+    600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
+    (`verifyMet`, `src/runtime/controller.ts`): the plugin itself runs the command
+    (`VerifierPort`, `src/runtime/ports.ts`; implemented in `src/index.ts` `createVerifier` as `bash -c`,
+    `cwd` = the goal's directory, combined output tail-capped at 16 kB, deadline `verifyTimeoutMs`) and accepts
+    `met` only on exit 0. Non-zero exit, spawn error, or timeout downgrades the verdict to `not_met` with the
+    last ~12 lines of output in the reason; a warning notice fires; the normal not_met path dispatches a
+    continuation carrying that tail. A missing verifier port is fail-closed (downgraded, never met). The gate
+    runs on `met` only — not_met/impossible paths are untouched — and a looped goal cannot advance on a
+    failed verification. With the default empty command, behavior is byte-compatible with before.
+45. Evidence the evaluator accepts is defined and documented: fresh command output at the current HEAD after
+    the last change — never prior summaries, the agent's narration, or a previous verdict. The rubric
+    (`src/core/prompts.ts` `RULES`) states this; README, `docs/config.html`, `docs/runtime.html` and AGENTS.md
+    document it. The prompt-level evaluator still cannot run commands; the harness gate is what makes
+    `met` verifiable end-to-end.
+46. Bookkeeping policy, one, documented: `packages/coordinator/bin/coordinator merge-next` unions the live
+    `.term/coordinator/state.json` with the committed copy (lease keys from both, live bus wins per key,
+    `mergeLock` reset to null) and auto-commits the result on `dev` as
+    `chore(coordinator): record <slug> lease done after merge`. The union guarantees an entry landed on `dev`
+    by a wt bookkeeping branch is never reverted by the merge's own lease flip. The chore commit is part of
+    the merge flow (the only sanctioned path to `dev`), not a direct dev commit by an agent; a failed commit
+    leaves the dirt exempt and the next merge-next retries. AGENTS.md documents the policy; `test/coordinator.test.ts`
+    proves: the lease flip is committed on `dev`, the main worktree is clean for `state.json`, and the union
+    keeps `old-record` while adding the merge's lease (regression test added for the clobbering case).
+47. Probe isolation: `OPENCODE_GOAL_PROBE=1` puts plugin storage in read-only mode (`GoalStore` drops
+    saves/removes, reads pass through), so a probe opencode server or a second `restore()` cannot mutate the
+    live goal records. Probe mode is logged at setup. Documented in AGENTS.md, README.md, `docs/config.html`,
+    `docs/install.html` and `docs/runtime.html`; `test/store.test.ts` proves dropped writes, unchanged reads.
+    Verify commands still execute in the probe's cwd — probes must target a throwaway checkout.
+48. Spec honesty gate: `scripts/spec-check.ts` (`bun run check:spec`, wired into `bun run check` after
+    `docs:check`) reads the `<!-- spec-check files=N tests=N -->` marker in this file and exits 1 listing
+    mismatches when the `npm pack --dry-run --json` file count or the `bun test` pass count trails it.
+    Read-only; counts only (sizes excluded as npm-version noise). The marker above is part of the definition
+    of green; it must be updated in the same commit that changes shipped files or tests. CI inherits the gate.
+49. Re-arm hygiene: the armed `/goal-loop` iteration's directive (`loopContinuation`,
+    `src/core/prompts.ts`) requires re-reading `git log --oneline -5`, `git status --short`,
+    `git branch --show-current` (plus `coordinator status --json` / `git worktree list` in coordinator repos)
+    and the current check output *before* any work — the armed summary is labeled stale until then.
+    Zero-progress is harness-verified: `iterationToolCalls` comes from the plugin's own tool events
+    (`onToolCalled`), never from model self-report; two consecutive zero-tool iterations pause the loop
+    (`loopNotProgress`). Regression test: a loop whose evaluator claims heavy work with zero harness tool
+    calls still pauses after two iterations, and both loop-history entries record `toolCalls: 0`.
+50. Audit trail: SPEC (this workstream), AGENTS.md (evidence requirements, probe isolation, bookkeeping
+    policy, spec gate, re-arm hygiene), README.md ("Running the loop safely" checklist + options table),
+    `docs/runtime.html` (verification gate and fresh-session promotion checklist), `docs/config.html`,
+    `docs/install.html`, `docs/core.html`. `bun run docs:check` stays green.
+51. `bun run check` passes: tsc, `bun test` (244 tests at the time of writing), compile, `check:tui`,
+    `docs:check`, `check:spec`.
+
+Verification (all run in the worktree): `bun test` (verify/loop/store/coordinator/loop-prompt suites),
+`bun run check` end-to-end green including `spec-check`, `bash -n packages/coordinator/bin/coordinator`,
+coordinator submit + merge-next (this branch's own merge exercises the new auto-commit path on dev),
+then commit the state.json bookkeeping via the merge itself.
+
+Out of scope / follow-ups (bigger than one iteration; not this loop's job):
+- An argv-based verifier (skip `bash -c`) for hosts without a shell; quoting bugs in complex verifyCommands.
+- spec-check enforcing tarball size bands, and SPEC counts beyond the marker (per-workstream historical claims).
+- A host-side fix for prompt.footer staleness after the first loop arm (already a known host issue).
+- Wiring verifyCommand into the live dev repo's own `opencode.json` (policy choice, not a code change).

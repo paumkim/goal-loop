@@ -19,7 +19,7 @@ export interface CommitRequest {
 }
 
 /** Commit routing mode. `direct` commits to the target branch; `coordinator` uses `wt/<slug>` + submit/merge. */
-export type CommitMode = "direct" | "coordinator"
+type CommitMode = "direct" | "coordinator"
 
 /** The commit rule as it applies to one session, after the repository was inspected. */
 export interface CommitPolicy {
@@ -31,7 +31,7 @@ export interface CommitPolicy {
   readonly reason: string
   /** Commit routing mode; omitted means `direct`. */
   readonly mode?: CommitMode
-  /** Coordinator wrapper path, e.g. `packages/coordinator/bin/coordinator`. */
+  /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
   /** Worktree directory, e.g. `worktrees`. */
   readonly worktreeDir?: string
@@ -41,7 +41,7 @@ export interface CommitPolicy {
 export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "not a git repository" }
 
 /** Live (resumable) statuses. `failed` and `cleared` are both terminal but distinct: `failed` means an unrecoverable error ended the goal, `cleared` means the user ended it. Neither is resumable. */
-export const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
+const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
 
 export const isLive = (status: GoalStatus) => LIVE_STATUSES.has(status)
 
@@ -56,7 +56,7 @@ export interface UsageSnapshot {
 
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
-export interface VerdictEntry {
+interface VerdictEntry {
   readonly turn: number
   readonly verdict: Verdict
   readonly reason: string

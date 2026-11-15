@@ -44,7 +44,8 @@ While a goal runs, the footer shows its state:
 - After every turn, an evaluator reads the conversation and answers **met**, **not met** or **impossible**.
 - **Not met:** the agent gets the reason and starts the next turn on its own.
 - **Met / impossible:** the goal ends and a note is added to the transcript.
-- The evaluator only sees what's in the conversation, so the agent is told to show proof (test output, command results).
+- The evaluator only accepts **fresh evidence**: command output produced at the current HEAD, after the last change — not earlier turns' claims or the agent's own summary. If the agent says tests pass with no test output in front of you, that is **not met**.
+- When `evaluator.verifyCommand` is set, a met verdict is not accepted until the plugin itself runs that command (e.g. `bun run check`) and it exits 0. The evaluator proposes; the verifier disposes. A failing command downgrades the verdict to not-met with the output tail in the reason, so the next turn knows exactly what broke.
 - By default the evaluator reuses the session's cached context, so each check costs little more than a short answer.
 - Finished work has to be committed before the goal counts as met. See [the commit rule](#the-commit-rule).
 
@@ -71,9 +72,10 @@ The rule follows the repository:
 
 ### Coordinator mode and first-run bootstrap
 
-When the plugin loads inside a git repository, it creates `.term/coordinator/` and `worktrees/` for you (plus stub `config.json`/`state.json`, never overwriting existing files). No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
+When the plugin loads inside a git repository, it creates `.term/coordinator/` and `worktrees/` for you (plus stub `config.json`/`state.json`, never overwriting existing files). If a `.gitignore` is present it also appends `worktrees/` and `.term/coordinator/*.lock` to it (idempotent; missing entries only). No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents. `merge-next` gates on `bun run check` of the merged result (trial merge on a scratch branch): a branch whose merge fixes a failing gate is merged, not rejected, and `dev` is left untouched when the merged result fails. The main checkout must be clean apart from the coordinator's own `state.json`; that exempt dirt is stashed for the duration of the trial merge and restored afterwards, so a branch that records only `state.json` lease bookkeeping merges cleanly through the gate.
 With `coordinator: true` the agent always goes `claim -> wt/<slug> -> submit`.
 The evaluator is read-only and gates `not_met` until wt commit + submit evidence appears.
+If no coordinator binary can be located (neither the project's `packages/coordinator/bin/coordinator` nor one bundled with the plugin), the prompt says so instead of naming a path; the agent works on a `wt/<slug>` branch and the merge to the target branch is left to you.
 
 Prerequisites: a git repository where the coordinator's target branch exists (`dev` by default; `merge-next` checks it out), and `jq` for coordinator state.
 
@@ -108,6 +110,30 @@ ends when any of these happens:
 Each achieved iteration fires one info toast (`◎ Loop 1 achieved · → v2: …`); the end of the loop fires the
 normal achieved toast once.
 
+## Running the loop safely (fresh session checklist)
+
+A fresh session that picks up or continues a `/goal-loop` should not trust anything carried over by the
+arming steer. The failure modes this avoids: stale summaries describing work that was reverted, zero-progress
+iterations waved through because the model said so, met verdicts accepted from narrated evidence, and probe
+servers overwriting the live goal records.
+
+1. **Re-read HEAD before working.** Every armed iteration is told to re-read `git log --oneline -5`,
+   `git status --short`, `git branch --show-current` (plus `coordinator status --json` / `git worktree list`
+   in a coordinator repo) and the current check output *before* touching anything. The loop summary is a hint,
+   not ground truth; the tree is.
+2. **Zero-progress is measured by the harness.** An iteration with zero tool calls (as counted by the plugin's
+   own `onToolCalled` events) increments `loopNotProgress`; two in a row pause the loop. The model's account of
+   how much work it did is irrelevant to this count.
+3. **Met means verified, not narrated.** The evaluator requires fresh command output at the current HEAD, and
+   with `evaluator.verifyCommand` set the plugin itself reruns the check before accepting met. Without the gate,
+   a persuasive transcript that never shows the check passing is still not met.
+4. **Probes are read-only.** Launch probe/scratch instances with `OPENCODE_GOAL_PROBE=1` so the plugin never
+   writes goal storage; point them at a throwaway checkout. Live sessions are then unaffected by probe accidents.
+5. **Bookkeeping is the merge's job.** Lease records in `.term/coordinator/state.json` are committed by
+   `merge-next` itself (see above); never hand-commit them and never commit to `dev` directly.
+
+For the operational version of this checklist see `docs/runtime.html`.
+
 ## Options
 
 All optional, set in `opencode.json`:
@@ -139,11 +165,14 @@ All optional, set in `opencode.json`:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `model` | — | Top-level fallback for `evaluator.model` (used only when it is unset; the env var wins over both) |
 | `evaluator.model` | session model | Separate model that judges the goal (fresh eyes, uses a transcript digest) |
 | `evaluator.mode` | `auto` | `session`, `independent`, or `auto` (independent when a model is set) |
 | `evaluator.maxTranscriptChars` | `60000` | Transcript digest budget for the independent evaluator (min 4000) |
 | `evaluator.maxOutputTokens` | `4096` | Verdict answer budget (min 256) |
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
+| `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND` |
+| `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
 | `maxTurns` | `200` | Hard turn cap, `0` = none |
 | `stallTurns` | `3` | Turns without tool use before pausing |
 | `checkinMinutes` | `30` | First background check-in; `0` disables check-ins and retries |
@@ -154,14 +183,16 @@ All optional, set in `opencode.json`:
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
-| `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as tokens × 4 characters |
+| `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
 | `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
 | `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`.
+`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`.
+
+`OPENCODE_GOAL_PROBE=1` puts the plugin in probe mode: plugin storage becomes read-only (goal records are never written or deleted, so `restore()` has no side effects). Use it for any probe opencode server or scratch instance that loads the plugin — otherwise a probe can mutate the live goal records shared with your real sessions. Verification commands still execute in the probe's working directory, so point probes at a throwaway checkout.
 
 ### Auto-compaction
 
@@ -179,10 +210,12 @@ or requested within the last 2 minutes is not re-requested; a lost in-flight mar
 
 ```sh
 bun install
-bun run check                         # typecheck + unit tests
+bun run check                         # typecheck + unit tests + compile + TUI load check + docs freshness check (also runs in CI, see .github/workflows/check.yml)
 bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server (model also via E2E_MODEL, default opencode/deepseek-v4.1-flash-free)
 E2E_MODEL=opencode/deepseek-v4.1-flash-free bun run e2e <empty-dir>
 ```
+
+Every push to `dev`/`main` and every pull request runs `bun install --frozen-lockfile`, `bun run check` and an `npm pack --dry-run` smoke test on GitHub Actions (`.github/workflows/check.yml`).
 
 ## Documentation
 
@@ -194,7 +227,9 @@ xdg-open docs/index.html   # Linux (or just double-click the file)
 
 Pages: `index.html` (landing + search + FAQ) · `architecture.html` (diagram, state machine, data flow) · `runtime.html` (controller, events, evaluator, retry) · `config.html` (every option, default, env var) · `core.html` (per-file reference) · `install.html` (install, `/goal` commands, troubleshooting) · `changelog.html` (recent changes from `git log`).
 
-Every page carries a "Last updated" stamp in the footer, derived from `git log` for that page (`git log -1 --format=%cd -- docs/<page>.html`). The stamp reflects the last commit that touched the page, not necessarily the latest code change. The stamps and the changelog table are regenerated by `bun script/docs-watch.ts once`; `bun script/docs-watch.ts watch` keeps them fresh automatically (event-driven, debounced, no polling, no server) and logs working-tree changes to a local `.docs-watch.log` (view with `bun script/docs-watch.ts log`). Both logs and state files are gitignored; the docs folder itself stays static HTML/CSS/JS with no build step.
+Every page carries a "Last updated" stamp in the footer, derived from `git log` for that page (newest non-merge commit touching it, excluding mechanical `docs: refresh` commits). The stamp reflects the last content commit that touched the page, not necessarily the latest code change. The stamps and the changelog table are regenerated by `bun scripts/docs-watch.ts once`;
+
+Freshness is enforced by `bun scripts/docs-watch.ts check` (`bun run docs:check`), which exits non-zero when a page's stamp trails the last content commit touching it or the changelog table diverges from git history. It runs as part of `bun run check` and CI. Workflow after committing docs-content changes: `bun scripts/docs-watch.ts once && git add -A && git commit -m "docs: refresh stamps and changelog"` — the refresh commit is excluded from the freshness anchor, so the gate stays green across merges and CI. The check is read-only. `bun scripts/docs-watch.ts watch` keeps them fresh automatically (event-driven, debounced, no polling, no server) and logs working-tree changes to a local `.docs-watch.log` (view with `bun scripts/docs-watch.ts log`). Both logs and state files are gitignored; the docs folder itself stays static HTML/CSS/JS with no build step.
 
 All files are plain `.html` + `styles.css` + vanilla `app.js` and work by opening `docs/index.html` directly from the filesystem. Keep the `docs/` folder together — pages link to each other with relative paths.
 

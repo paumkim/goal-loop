@@ -1,4 +1,4 @@
-import { formatDuration, formatSpend } from "./format.ts"
+import { formatDuration, formatSpend, truncate } from "./format.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
@@ -23,11 +23,55 @@ function commitRule(policy: CommitPolicy) {
   return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on, or a \`git status\` on that branch with no uncommitted changes. Work that is done but uncommitted is not done work, and the evaluator will not mark the goal met without a visible commit on \`${policy.branch}\`.`
 }
 
+const DONE = "before the goal counts as done"
+const MET = "before the goal counts as met"
+const SLUG_BRANCH = "your wt/<slug> branch"
+/** The coordinator one-line rule for agent-facing prompts: byte-identical for suffix/prompt/checkin. */
+const coordinatorAgentRule = `Commit on ${SLUG_BRANCH} and submit ${DONE}.`
+/** The direct-git rule body, without its trailing punctuation (callers append their own). */
+const directRuleBody = (branch: string) => `Commit the finished work to the \`${branch}\` branch ${DONE}`
+
+/**
+ * The commit rule as one line, shared by every audience that needs it: agent instructions (`suffix`, used by
+ * continuation/retry/check-in), the system reminder (`system`) and the evaluator facts (`facts`). Coordinator
+ * repositories speak in `wt/<slug>` + submit terms; direct repositories name the target branch. Kept
+ * byte-identical with the pre-refactor prompt text; `test/commit-rule.test.ts` pins every variant.
+ */
+const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "checkin" | "system" | "facts"): string => {
+  const branch = policy.branch
+  const coordinator = policy.mode === "coordinator"
+  switch (kind) {
+    case "suffix":
+      return coordinator
+        ? coordinatorAgentRule
+        : `commit the finished work to the \`${branch}\` branch and show the commit output: the commit hash and the branch it landed on`
+    case "prompt":
+      return coordinator ? coordinatorAgentRule : `${directRuleBody(branch)}.`
+    case "checkin":
+      return coordinator ? coordinatorAgentRule : `${directRuleBody(branch)}, and show the commit output.`
+    case "system":
+      return coordinator
+        ? `Finished work has to be committed on ${SLUG_BRANCH} and submitted ${MET}.`
+        : `Finished work has to be committed to the \`${branch}\` branch ${MET}.`
+    case "facts":
+      return coordinator
+        ? `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted (merge into \`${branch}\` by the coordinator) ${MET}.`
+        : `- This session runs inside a git repository. Finished work has to be committed to the \`${branch}\` branch ${MET}.`
+  }
+}
+
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
 export function coordinatorFlow(policy: CommitPolicy): string {
-  const rawBin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
-  const bin = /\s/.test(rawBin) ? `"${rawBin}"` : rawBin
   const target = policy.branch
+  if (!policy.coordinatorBin) {
+    // Detection held on the json markers but no absolute binary could be located: never invent or
+    // relativize a path the agent cannot run. Say exactly what is missing.
+    return [
+      `Coordinator repository detected on this machine, but no coordinator binary was found in the project or the plugin.`,
+      `Do NOT guess or construct a path to one. Create and work on a \`wt/<slug>\` branch, commit there, and in your final report state that the coordinator binary is missing so the merge into \`${target}\` has to be run manually.`,
+    ].join("\n")
+  }
+  const bin = /\s/.test(policy.coordinatorBin) ? `"${policy.coordinatorBin}"` : policy.coordinatorBin
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
     `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,
@@ -37,10 +81,7 @@ export function coordinatorFlow(policy: CommitPolicy): string {
 
 export function commitStatusSuffix(policy: CommitPolicy): string {
   if (!policy.required) return ""
-  if (policy.mode === "coordinator") {
-    return `Commit on your wt/<slug> branch and submit before the goal counts as done.`
-  }
-  return `commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on`
+  return commitRuleSentence(policy, "suffix")
 }
 
 /** True when the goal has no hard evidence token or reads as vague. */
@@ -65,12 +106,7 @@ export interface LoopPreamble {
 export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
-  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
-}
-
-const truncateLine = (text: string, max: number) => {
-  const flat = text.replace(/\s+/g, " ").trim()
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
+  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
 }
 
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
@@ -116,8 +152,12 @@ export function loopContinuation(
     `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
     escape(input.condition),
     ``,
-    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo):`,
+    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
+    ``,
+    `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
+    `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
+    `equivalent). What these show is the ground truth; the summary is only a hint.`,
     ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
@@ -144,7 +184,7 @@ export function retry(input: { condition: string; label: string }, policy: Commi
     `<goal-retry>`,
     `The previous turn failed (${input.label}). The goal is still active; continue from where you left off.`,
     `Goal: ${escape(input.condition)}`,
-    policy.required ? `${policy.mode === "coordinator" ? `Commit on your wt/<slug> branch and submit before the goal counts as done.` : `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done.`}` : ``,
+    policy.required ? commitRuleSentence(policy, "prompt") : ``,
     `</goal-retry>`,
   ].join("\n")
 }
@@ -166,11 +206,7 @@ export function checkin(
       ? `Background work (${work}) has kept the goal waiting for ${formatDuration(input.waitedMs)}. Read their output: keep waiting if they are progressing, and fix or stop any that are stuck.`
       : `Background work stopped without reporting a result. Continue toward the goal.`,
     `Goal: ${escape(input.condition)}`,
-    policy.required
-      ? policy.mode === "coordinator"
-        ? `Commit on your wt/<slug> branch and submit before the goal counts as done.`
-        : `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done, and show the commit output.`
-      : ``,
+    policy.required ? commitRuleSentence(policy, "checkin") : ``,
     `</goal-checkin>`,
   ].join("\n")
 }
@@ -185,8 +221,8 @@ export function systemReminder(condition: string, policy: CommitPolicy): string 
     `An independent evaluator checks it after every turn from visible evidence only. Keep working until it holds and surface proof (command output, test results) in the conversation.`,
   ]
   if (policy.required) {
-    if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy), `Finished work has to be committed on your wt/<slug> branch and submitted before the goal counts as met.`)
-    else lines.push(`Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`)
+    if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy))
+    lines.push(commitRuleSentence(policy, "system"))
   }
   return lines.join("\n")
 }
@@ -210,8 +246,9 @@ const VERDICTS = [
 
 const RULES = [
   `Rules: claims without evidence do not count; if the agent says tests pass but no test output is visible, the`,
-  `condition is not met. Judge the current state, not intentions. Constraints in the condition (things that must`,
-  `not change) are part of it.`,
+  `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
+  `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
+  `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
 ]
 
 /**
@@ -261,14 +298,7 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
   ]
   if (input.spend) lines.push(`- Spend since the goal was set: ${formatSpend(input.spend)}.`)
   if (policy.required) {
-    if (policy.mode === "coordinator")
-      lines.push(
-        `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted (merge into \`${policy.branch}\` by the coordinator) before the goal counts as met.`,
-      )
-    else
-      lines.push(
-        `- This session runs inside a git repository. Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`,
-      )
+    lines.push(commitRuleSentence(policy, "facts"))
   }
   return lines.join("\n")
 }
@@ -393,27 +423,27 @@ export function nextGoalInSession(input: NextGoalInput): string {
     `<goal-loop-next>`,
     `Step out of the agent role. You are the planner of this improvement loop. Do not call tools and do not address the user.`,
     ``,
-    `Objective (constant): ${escape(input.objective)}`,
-    `Completed iterations (oldest first):`,
-    historyBlock(input.history),
-    `Latest iteration summary:`,
-    escape(input.latestSummary),
+    ...nextGoalFacts(input),
     ``,
     ...NEXT_GOAL_ASK,
     `</goal-loop-next>`,
   ].join("\n")
 }
 
+const nextGoalFacts = (input: NextGoalInput) => [
+  `Objective (constant): ${escape(input.objective)}`,
+  `Completed iterations (oldest first):`,
+  historyBlock(input.history),
+  `Latest iteration summary:`,
+  escape(input.latestSummary),
+]
+
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */
 export function nextGoalIndependently(input: NextGoalInput): string {
   return [
     `You are the planner of an autonomous improvement loop. Choose the next goal from the summaries below; you cannot run commands or read files.`,
     ``,
-    `Objective (constant): ${escape(input.objective)}`,
-    `Completed iterations (oldest first):`,
-    historyBlock(input.history),
-    `Latest iteration summary:`,
-    escape(input.latestSummary),
+    ...nextGoalFacts(input),
     ``,
     ...NEXT_GOAL_ASK,
   ].join("\n")

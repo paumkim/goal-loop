@@ -110,17 +110,20 @@ check_overlap() {
   [ -z "$new_paths" ] && return 0
   local others other other_paths
   others=$(jq -r '.leases | keys[] // empty' "$STATE_FILE" 2>/dev/null || true)
-  IFS=$'\n' read -r -d '' _newp <<<"$new_paths" || true
   local other
   for other in $others; do
     [ "$other" = "$cur_slug" ] && continue
     other_paths=$(jq -r --arg o "$other" '.leases[$o].paths // empty' "$STATE_FILE" 2>/dev/null || true)
     [ -z "$other_paths" ] && continue
     # comma-separated scopes: check each pair
-    local -a n_arr o_arr
-    IFS=',' read -r -a n_arr <<<"$new_paths"
-    IFS=',' read -r -a o_arr <<<"$other_paths"
-    local p q
+    local -a n_arr o_arr raw
+    local p q tok
+    n_arr=()
+    IFS=',' read -r -a raw <<<"$new_paths"
+    for tok in "${raw[@]}"; do tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"; [ -n "$tok" ] && n_arr+=("$tok"); done
+    o_arr=()
+    IFS=',' read -r -a raw <<<"$other_paths"
+    for tok in "${raw[@]}"; do tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"; [ -n "$tok" ] && o_arr+=("$tok"); done
     for p in "${n_arr[@]}"; do
       for q in "${o_arr[@]}"; do
         if paths_overlap "$p" "$q"; then
@@ -234,7 +237,6 @@ do_claim() {
 
   # overlap is a hard error unless --force is given
   if ! check_overlap "$paths" "$slug" "$force"; then
-    printf 'error: path overlap with existing lease; use --force to claim anyway\n' >&2
     release_claim_lock
     exit 1
   fi
@@ -329,10 +331,6 @@ do_merge_next() {
     printf 'no submitted tasks\n'
     return 0
   fi
-  if [ -z "$slug" ]; then
-    printf 'error: empty slug for merge\n' >&2
-    exit 1
-  fi
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
   # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
   local lock_dir="$DATA_DIR/.merge-lock"
@@ -363,7 +361,21 @@ do_merge_next() {
       exit 1
     fi
   fi
+  # A wt branch that records only .term/coordinator/state.json lease bookkeeping must merge cleanly
+  # through the gate. The state file is exempt from the cleanliness check below (claim/submit leave it
+  # dirty by design), but the trial merge and the final --ff-only refuse path-level when the worktree
+  # copy differs from HEAD. Stash the dirt for the duration of the merge and restore it before the
+  # lease is recorded done (or on any failure), so the submitted record is never lost.
+  local state_stash=""
+  restore_state_stash() {
+    if [ -n "$state_stash" ] && [ -f "$state_stash" ]; then
+      cp "$state_stash" "$STATE_FILE" 2>/dev/null || true
+      rm -f "$state_stash"
+    fi
+    state_stash=""
+  }
   release_merge_lock() {
+    restore_state_stash
     if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
       local _tmp
       _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null || mktemp) || true
@@ -387,14 +399,17 @@ do_merge_next() {
   # record lock owner in state (atomic)
   state_jq --arg s "$slug" '.mergeLock = $s'
 
-  # tests block the merge: a failing check aborts instead of warning and continuing
-  if command -v bun >/dev/null 2>&1; then
-    if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
-      printf 'error: tests failed, aborting merge\n' >&2
-      release_merge_lock
-      exit 1
+  # Prune scratch branches from interrupted merges only once they are definitively stale (last commit
+  # older than the 60-minute stale-lock window). A fresher scratch may hold a verified-green merged
+  # result whose merge was interrupted; deleting it would discard that state, so keep it for recovery.
+  local _scratch _ts_now _ts_branch
+  _ts_now=$(date +%s)
+  for _scratch in $(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list 'merge-check-*'); do
+    _ts_branch=$(git -C "$MAIN_ROOT" log -1 --format=%ct "$_scratch" 2>/dev/null || printf '0')
+    if [ $((_ts_now - _ts_branch)) -gt 3600 ]; then
+      git -C "$MAIN_ROOT" branch -D "$_scratch" >/dev/null 2>&1 || true
     fi
-  fi
+  done
 
   # ensure on dev branch in main worktree
   local cur_main
@@ -413,14 +428,94 @@ do_merge_next() {
     exit 1
   fi
 
-  # merge wt branch into dev (plain git, no remote needed)
+  # the main worktree must be clean for a safe merge; refuse otherwise.
+  # The coordinator's own state file is exempt: claim/submit leave it dirty by design.
+  if ! git -C "$MAIN_ROOT" diff --quiet -- . ':(exclude).term/coordinator/state.json' ||
+     ! git -C "$MAIN_ROOT" diff --cached --quiet -- . ':(exclude).term/coordinator/state.json'; then
+    printf 'error: uncommitted changes outside .term/coordinator/state.json in %s; commit or stash them first\n' "$MAIN_ROOT" >&2
+    release_merge_lock
+    exit 1
+  fi
+
+  # Stash the exempt dirt for the trial merge (see above): the worktree copy must equal HEAD for the
+  # merge to touch the file, and the submitted lease record it carries must survive the merge.
+  if ! git -C "$MAIN_ROOT" diff --quiet -- .term/coordinator/state.json ||
+     ! git -C "$MAIN_ROOT" diff --cached --quiet -- .term/coordinator/state.json; then
+    state_stash="$(mktemp "$DATA_DIR/.state-stash.XXXXXX")" || {
+      printf 'error: cannot create state stash in %s\n' "$DATA_DIR" >&2
+      release_merge_lock
+      exit 1
+    }
+    cp "$STATE_FILE" "$state_stash" || {
+      rm -f "$state_stash"
+      state_stash=""
+      printf 'error: cannot read %s\n' "$STATE_FILE" >&2
+      release_merge_lock
+      exit 1
+    }
+    if ! git -C "$MAIN_ROOT" restore --staged --worktree -- .term/coordinator/state.json; then
+      rm -f "$state_stash"
+      state_stash=""
+      printf 'error: cannot reset .term/coordinator/state.json for the merge\n' >&2
+      release_merge_lock
+      exit 1
+    fi
+  fi
+
   git -C "$MAIN_ROOT" fetch >/dev/null 2>&1 || true
+
+  # Gate on the merged result, not on dev's pre-merge HEAD. A branch whose merge is the fix
+  # for the very staleness the gate detects (e.g. a docs freshness refresh) must not be blocked
+  # by the state it repairs. The trial merge happens on a throwaway branch; dev is moved only
+  # after the merged result passes the check, and is left untouched on failure.
+  local tmp_branch="merge-check-${slug}-$$"
+  if ! git -C "$MAIN_ROOT" branch "$tmp_branch" "$DEV_BRANCH" >/dev/null 2>&1; then
+    printf 'error: cannot create scratch branch %s\n' "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
+  if ! git -C "$MAIN_ROOT" checkout "$tmp_branch" >/dev/null 2>&1; then
+    git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+    printf 'error: cannot checkout scratch branch %s\n' "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
   if ! git -C "$MAIN_ROOT" merge --no-ff --no-edit -m "merge $branch into $DEV_BRANCH" "$branch" >/dev/null 2>&1; then
     git -C "$MAIN_ROOT" merge --abort >/dev/null 2>&1 || true
+    git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1 || true
+    git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
     printf 'error: merge failed\n' >&2
     release_merge_lock
     exit 1
   fi
+  if command -v bun >/dev/null 2>&1; then
+    if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
+      git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1 || true
+      git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+      printf 'error: merged result fails the check; aborting merge (dev untouched)\n' >&2
+      release_merge_lock
+      exit 1
+    fi
+  fi
+  # merged result is green: move dev onto it
+  if ! git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1; then
+    # Do not detach HEAD or delete the scratch branch: it holds the verified-green merged result.
+    # Stay on it and tell the operator how to finish the merge by hand.
+    printf 'error: cannot checkout %s after the merged result passed; staying on %s\n' "$DEV_BRANCH" "$tmp_branch" >&2
+    printf 'recovery: discard the uncommitted changes blocking the checkout, then run: git -C %s checkout %s && git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$DEV_BRANCH" "$MAIN_ROOT" "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
+  if ! git -C "$MAIN_ROOT" merge --ff-only "$tmp_branch" >/dev/null 2>&1; then
+    printf 'error: cannot fast-forward %s onto the verified merge; merged result kept on %s\n' "$DEV_BRANCH" "$tmp_branch" >&2
+    printf 'recovery: git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
+  git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+
+  # Bring back the exempt dirt (it carries this lease's submitted record) before flipping it done.
+  restore_state_stash
 
   local ts
   ts=$(now_iso)
@@ -432,6 +527,29 @@ do_merge_next() {
     git -C "$MAIN_ROOT" worktree remove --force "$MAIN_ROOT/$wt_rel" >/dev/null 2>&1 || true
   fi
   git -C "$MAIN_ROOT" branch -d "$branch" >/dev/null 2>&1 || true
+  # Bookkeeping policy: merge-next auto-commits the coordinator state file on dev, so the exempt residue
+  # never accumulates. The worktree copy and dev's committed copy can diverge (a wt branch may record
+  # bookkeeping of its own), so union them: lease keys from both, live copy wins per key — never let the
+  # auto-commit revert an entry the merge just landed. mergeLock is forced to null (the merge is closing).
+  # This chore commit is part of the merge flow (the only path to dev), not a direct dev commit by an agent.
+  if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+    _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
+    _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
+    if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null \
+      && jq -n --slurpfile head "$_head_tmp" --slurpfile live "$STATE_FILE" \
+        '$head[0] + { version: ($live[0].version // 1), leases: (($head[0].leases // {}) * ($live[0].leases // {})), mergeLock: null }' \
+        > "$_union_tmp" 2>/dev/null; then
+      cp "$_union_tmp" "$STATE_FILE"
+    fi
+    rm -f "$_head_tmp" "$_union_tmp"
+  fi
+  if git -C "$MAIN_ROOT" add -- .term/coordinator/state.json >/dev/null 2>&1; then
+    if ! git -C "$MAIN_ROOT" diff --cached --quiet -- .term/coordinator/state.json; then
+      if ! git -C "$MAIN_ROOT" commit -q -m "chore(coordinator): record ${slug} lease done after merge" >/dev/null 2>&1; then
+        printf 'warning: could not commit .term/coordinator/state.json bookkeeping; it remains as exempt dirt\n' >&2
+      fi
+    fi
+  fi
   release_merge_lock
   printf 'merged into %s\n' "$DEV_BRANCH"
 }
