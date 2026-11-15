@@ -220,6 +220,28 @@
       "submittedAt": "2026-11-15T16:51:15Z",
       "mergedAt": "2026-11-15T16:51:28Z",
       "mergedInto": "dev"
+    },
+    "record-stash-leases": {
+      "agent": "orchestrator",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/record-stash-leases",
+      "worktree": "worktrees/wt-record-stash-leases",
+      "status": "done",
+      "createdAt": "2026-11-15T16:51:45Z",
+      "submittedAt": "2026-11-15T16:51:54Z",
+      "mergedAt": "2026-11-15T16:52:00Z",
+      "mergedInto": "dev"
+    },
+    "fix-spec-rpc-scoping": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,README.md,docs",
+      "branch": "wt/fix-spec-rpc-scoping",
+      "worktree": "worktrees/wt-fix-spec-rpc-scoping",
+      "status": "done",
+      "createdAt": "2026-11-15T16:53:31Z",
+      "submittedAt": "2026-11-15T16:54:33Z",
+      "mergedAt": "2026-11-15T16:54:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
