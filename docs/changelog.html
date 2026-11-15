@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-15 11:50 UTC</code></td><td>feat(tui): relative ended-ago rail timestamps and paused stall diagnostics</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 11:47 UTC</code></td><td>feat(tui): pace estimate, per-iteration verdict mix, verdict streaks</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 11:42 UTC</code></td><td>feat(tui): non-looped history block and iteration pips in the footer</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 11:35 UTC</code></td><td>feat(tui): re-imagine the goal history in the /goal detail dialog</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(tui): skip setEntries when an incoming snapshot is identical, so renders happen only on real change</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(controller): skip store writes and change emissions when the record is unchanged since the last commit</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 21:45 UTC</code></td><td>refactor(config): unify string/boolean flag parsing behind one flag() helper</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:45 UTC</code></td><td>chore: prune bloat — drop e2e-marker.txt, unship coordinator bus files, unify script/ into scripts/, remove dead preflight()/PreflightResult, dedupe jq check via hasJq()</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>

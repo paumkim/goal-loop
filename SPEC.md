@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=34 tests=279 -->
+<!-- spec-check files=34 tests=286 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -544,4 +544,29 @@ touching RPC, storage, schema or the controller.
 
 Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames show pace row, mix segments and streak suffix), `bun run check` green, coordinator submit +
+merge-next.
+
+## Workstream N — relative ended-ago timestamps, paused diagnostics
+
+Interpretation of this iteration's condition: the rail shows how long each iteration took but not
+when it finished, and a paused loop's now row says `paused` without the diagnostics that explain
+why. Both come from data the snapshot already carries (`LoopEntry.endedAt`; `stall`, `retries`).
+
+69. Each iteration rail row gains a relative `ended <ago>` suffix (faint, appended after the verdict
+    mix): `just now` under a minute, `<N>m ago` under an hour, `<H>h <M>m ago` under a day,
+    `<D>d <H>h ago` beyond; future timestamps clamp to `just now`; non-finite inputs yield `just now`.
+    The reference clock is a reactive `nowMs()` getter prop (the dialog's minute-resolution signal),
+    falling back to Date.now().
+70. The now row, when the goal is paused, appends stall/retries diagnostics from the snapshot:
+    `· stall <N> · retries <N>` (values floor-clamped to >= 0, NaN degrades to 0). Non-paused rows
+    are unchanged. The `paused` word keeps its warning color.
+71. New pure helpers `relativeTime` and `pauseDiagnostics` in `src/core/history.ts`, unit-tested
+    (`test/history.test.ts`): minute/hour/day formatting, clamping, NaN handling, diagnostic
+    clamping.
+72. `scripts/render-history.tsx` prints four frames by default — looped, looped-paused (the now row
+    must show `stall <N> · retries <N>`), non-looped, non-looped-fresh; `--empty` keeps the empty-loop
+    frame. The looped frame's rail rows show `ended <ago>` suffixes.
+
+Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames show ended-ago suffixes and the paused diagnostics), `bun run check` green, coordinator submit +
 merge-next.

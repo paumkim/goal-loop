@@ -175,6 +175,25 @@ function verdictStreak(history) {
   }
   return { verdict: last.verdict, count };
 }
+function relativeTime(endedAt, nowMs) {
+  const delta = Math.max(0, nowMs - endedAt);
+  if (!Number.isFinite(delta))
+    return "just now";
+  const minutes = Math.floor(delta / 60000);
+  if (minutes < 1)
+    return "just now";
+  if (minutes < 60)
+    return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)
+    return `${hours}h ${minutes % 60}m ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ${hours % 24}h ago`;
+}
+function pauseDiagnostics(stall, retries) {
+  const clean = (value) => Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  return `stall ${clean(stall)} \xB7 retries ${clean(retries)}`;
+}
 
 // src/tui-history.tsx
 var SUMMARY_MAX = 400;
@@ -201,8 +220,10 @@ var LoopSection = (props) => {
     const mix = mixes()[index];
     return mix ? ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}` : "";
   };
+  const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())}`;
   const paused = () => props.goal.status === "paused";
   const stateWord = () => paused() ? "paused" : props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active";
+  const nowMs = () => props.nowMs?.() ?? Date.now();
   const nowColor = () => paused() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
   return (() => {
     var _el$2 = _$createElement("box"), _el$3 = _$createElement("box"), _el$4 = _$createElement("text"), _el$5 = _$createElement("box"), _el$6 = _$createElement("box"), _el$7 = _$createElement("box"), _el$0 = _$createElement("box"), _el$1 = _$createElement("text"), _el$10 = _$createElement("box"), _el$11 = _$createElement("text"), _el$13 = _$createElement("text");
@@ -290,7 +311,7 @@ var LoopSection = (props) => {
         _$setProp(_el$18, "wrapMode", "none");
         _$setProp(_el$18, "flexShrink", 0);
         _$setProp(_el$20, "wrapMode", "none");
-        _$insert(_el$20, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}`);
+        _$insert(_el$20, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}`);
         _$insert(_el$16, _$createComponent(Show, {
           get when() {
             return entry.summary.trim().length > 0;
@@ -340,7 +361,7 @@ var LoopSection = (props) => {
     _$setProp(_el$11, "wrapMode", "none");
     _$setProp(_el$11, "flexShrink", 0);
     _$setProp(_el$13, "wrapMode", "none");
-    _$insert(_el$13, () => `v${current()} \xB7 ${stateWord()} \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${formatDurationCoarse(props.elapsedMs())} elapsed`);
+    _$insert(_el$13, () => `v${current()} \xB7 ${stateWord()} \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` \xB7 ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} \xB7 ${formatDurationCoarse(props.elapsedMs())} elapsed`);
     _$insert(_el$2, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
@@ -663,7 +684,8 @@ var tui_default = Plugin.define({
                 get theme() {
                   return context.theme;
                 },
-                elapsedMs: elapsed
+                elapsedMs: elapsed,
+                nowMs: () => now()
               });
             }
           }), null);

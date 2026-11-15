@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -212,5 +212,41 @@ describe("verdictStreak", () => {
 
   test("empty history yields verdict undefined and count 0", () => {
     expect(verdictStreak([])).toEqual({ verdict: undefined, count: 0 })
+  })
+})
+
+describe("relativeTime", () => {
+  const now = 100_000_000_000
+
+  test("under a minute reads just now", () => {
+    expect(relativeTime(now - 30_000, now)).toBe("just now")
+  })
+
+  test("minutes under an hour", () => {
+    expect(relativeTime(now - 5 * 60_000, now)).toBe("5m ago")
+  })
+
+  test("hours and remaining minutes under a day", () => {
+    expect(relativeTime(now - (3 * 60 + 20) * 60_000, now)).toBe("3h 20m ago")
+  })
+
+  test("days and remaining hours beyond a day", () => {
+    expect(relativeTime(now - (2 * 24 * 60 + 3 * 60) * 60_000, now)).toBe("2d 3h ago")
+  })
+
+  test("future timestamps clamp to just now", () => {
+    expect(relativeTime(now + 60_000, now)).toBe("just now")
+  })
+
+  test("non-finite input yields just now", () => {
+    expect(relativeTime(Number.NaN, now)).toBe("just now")
+  })
+})
+
+describe("pauseDiagnostics", () => {
+  test("renders floor-clamped stall and retries", () => {
+    expect(pauseDiagnostics(3, 2)).toBe("stall 3 · retries 2")
+    expect(pauseDiagnostics(2.9, -1)).toBe("stall 2 · retries 0")
+    expect(pauseDiagnostics(Number.NaN, Number.NaN)).toBe("stall 0 · retries 0")
   })
 })

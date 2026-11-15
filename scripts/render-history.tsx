@@ -87,6 +87,15 @@ const nonLoopedGoal: GoalSnapshot = {
   loopNotProgress: undefined,
 }
 
+const pausedGoal: GoalSnapshot = {
+  ...loopedGoal,
+  id: "goal_paused",
+  status: "paused",
+  reason: "Paused after 3 consecutive turns without tool use; resume with /goal to continue.",
+  stall: 3,
+  retries: 2,
+}
+
 const freshGoal: GoalSnapshot = {
   ...nonLoopedGoal,
   id: "goal_fresh",
@@ -100,6 +109,7 @@ const frames: Array<[string, () => JSX.Element]> = empty
   ? [["loop · empty history", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />]]
   : [
       ["looped · 2 completed iterations, 30 verdicts", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />],
+      ["looped · paused (stall/retries diagnostics)", () => <LoopSection goal={pausedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12} />],
       ["non-looped · 34 verdicts, trailing streak", () => <HistoryBlock goal={nonLoopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 41} />],
       ["non-looped · fresh, no verdicts yet", () => <HistoryBlock goal={freshGoal} theme={theme} elapsedMs={() => 1000 * 60 * 2} />],
     ]
