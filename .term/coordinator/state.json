@@ -468,8 +468,11 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/changelog.html,docs/index.html",
       "branch": "wt/compact-cap",
       "worktree": "worktrees/wt-compact-cap",
-      "status": "claimed",
-      "createdAt": "2026-11-15T20:06:56Z"
+      "status": "done",
+      "createdAt": "2026-11-15T20:06:56Z",
+      "submittedAt": "2026-11-15T20:14:17Z",
+      "mergedAt": "2026-11-15T20:14:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
