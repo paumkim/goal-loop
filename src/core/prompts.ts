@@ -109,6 +109,13 @@ export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
 }
 
+/** Repository ground-truth lines, shared by every "don't trust the summary" prompt. Kept byte-identical. */
+const TREE_TRUTH: ReadonlyArray<string> = [
+  `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
+  `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
+  `equivalent). What these show is the ground truth; the summary is only a hint.`,
+]
+
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
 export function loopPreamble(loop: LoopPreamble): string[] {
   return [
@@ -155,13 +162,35 @@ export function loopContinuation(
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
     ``,
-    `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
-    `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
-    `equivalent). What these show is the ground truth; the summary is only a hint.`,
+    ...TREE_TRUTH,
     ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
+  ].join("\n")
+}
+
+/**
+ * Re-anchor queued after a compaction lands on a live (`/goal-loop`) session. Compaction replaces history with a
+ * lossy summary; this restores the objective, the armed condition and the completed iterations from the plugin's
+ * own record so the loop survives the cut. Queued (`resume: false`): it never wakes the session and never
+ * interrupts an in-flight turn; the next steer the loop already dispatches carries it into the model's view.
+ */
+export function loopReanchor(input: { iteration: number; maxLoops: number; objective: string; condition: string; history: ReadonlyArray<LoopEntry> }): string {
+  return [
+    `<goal-loop-reanchor iteration="${input.iteration}" max="${input.maxLoops}">`,
+    `The session context was just compacted; earlier history was replaced by a lossy summary. Ground truth for this loop:`,
+    `Objective (constant): ${escape(input.objective)}`,
+    `This iteration: v${input.iteration} of at most ${input.maxLoops} — armed condition:`,
+    escape(input.condition),
+    ``,
+    `Completed iterations:`,
+    historyBlock(input.history),
+    ``,
+    ...TREE_TRUTH,
+    ``,
+    `The compaction cut the thread, not the loop: keep working toward the armed condition. After each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Do not wait for a user message.`,
+    `</goal-loop-reanchor>`,
   ].join("\n")
 }
 

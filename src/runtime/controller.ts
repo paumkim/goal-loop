@@ -150,14 +150,40 @@ export class GoalController {
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
     const pending = record?.loopCompact
-    if (!record || !pending || pending.landedAt) return
-    record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
-    try {
-      await this.commit(record)
-    } catch (error) {
-      this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
+    if (record && pending && !pending.landedAt) {
+      record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
+      try {
+        await this.commit(record)
+      } catch (error) {
+        this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
+      }
+      this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session at the loop boundary.")
     }
-    this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session at the loop boundary.")
+    // A landed compaction replaces history with a lossy summary; a live loop re-states its ground truth
+    // so the armed condition, the objective and the completed iterations survive the cut. Queued
+    // (resume: false): never wakes the session, never interrupts an in-flight turn — the arm/continuation
+    // steers that keep the loop moving carry it into the model's view.
+    if (record && record.loopEnabled && record.status === "active") this.reanchor(record)
+  }
+
+  /** Queue the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. */
+  private reanchor(record: GoalRecord) {
+    void this.deps.session
+      .synthetic({
+        sessionID: record.sessionID,
+        text: Prompt.loopReanchor({
+          iteration: record.loopIteration ?? 1,
+          maxLoops: record.loopMaxLoops ?? this.deps.config.maxLoops,
+          objective: record.loopObjective ?? record.condition,
+          condition: record.condition,
+          history: record.loopHistory ?? [],
+        }),
+        description: "goal-loop \u00b7 re-anchor after compaction",
+        metadata: { source: Prompt.MARKER, goal: record.id, anchor: true },
+        delivery: "queue",
+        resume: false,
+      })
+      .catch((error) => this.deps.log.warn("loop re-anchor after compaction failed", { error: errorMessage(error) }))
   }
 
   async spend(sessionID: string): Promise<UsageSnapshot | undefined> {
