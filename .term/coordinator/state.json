@@ -715,6 +715,50 @@
       "submittedAt": "2026-11-15T21:24:11Z",
       "mergedAt": "2026-11-15T21:24:25Z",
       "mergedInto": "dev"
+    },
+    "reland-gjr": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/changelog.html,docs/core.html,docs/runtime.html",
+      "branch": "wt/reland-gjr",
+      "worktree": "worktrees/wt-reland-gjr",
+      "status": "done",
+      "createdAt": "2026-11-15T21:35:57Z",
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:38:04Z",
+      "mergedInto": "dev"
+    },
+    "reland-a11": {
+      "agent": "orchestrator",
+      "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md,docs/changelog.html",
+      "branch": "wt/reland-a11",
+      "worktree": "worktrees/wt-reland-a11",
+      "status": "done",
+      "createdAt": "2026-11-15T21:36:24Z",
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:38:56Z",
+      "mergedInto": "dev"
+    },
+    "reland-specnote": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/reland-specnote",
+      "worktree": "worktrees/wt-reland-specnote",
+      "status": "done",
+      "createdAt": "2026-11-15T21:36:35Z",
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:44:57Z",
+      "mergedInto": "dev"
+    },
+    "reland-processnote": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/reland-processnote",
+      "worktree": "worktrees/wt-reland-processnote",
+      "status": "done",
+      "createdAt": "2026-11-15T21:36:42Z",
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:45:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
