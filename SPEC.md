@@ -207,3 +207,33 @@ folds the TUI load check into `bun run check`, and regenerates the docs metadata
 
 Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: loaded TUI plugin "opencode-goal.tui"`),
 `npm pack --dry-run`, `git status --short`, then coordinator submit.
+
+24. The commit policy never hands the agent a repo-relative coordinator bin: when
+    `resolveCoordinatorBin` finds no absolute binary, `coordinatorFlow` injects an explicit
+    "binary missing" instruction (work on `wt/<slug>`, report, manual merge) instead of the old
+    `packages/coordinator/bin/coordinator` fallback, in both the auto-detected (json markers,
+    no bin anywhere) and the forced `coordinator: true` paths (`src/core/git.ts`,
+    `src/core/prompts.ts`, `src/core/types.ts`).
+25. The loop summary cap uses the documented formula in both places:
+    `max(200, tokens) * 4` (`src/runtime/evaluator.ts` `cap()` now matches
+    `src/runtime/controller.ts` and README/config docs; was `max(200, tokens * 4)`).
+26. `packages/coordinator/bin/coordinator`: comma-separated `--paths` are whitespace-trimmed
+    before overlap checks (`"src, docs"` now overlaps `docs`), the dead `_newp` read and the
+    unreachable second empty-slug guard are gone, and an overlap failure prints one error naming
+    the conflicting lease (not two).
+27. `bun run check` passes and includes 15 new unit tests: `test/evaluator.test.ts`
+    (session/independent evaluation, independent→session fallback, REPAIR retry, unreadable-verdict
+    EvaluationError, pre-aborted signal unwinds `isEvaluating`, summary cap formula, nextGoal
+    trim/cap) and `test/store.test.ts` (`sameDirectory` normalization, `loadLive` directory
+    filtering, malformed records skipped, empty restore). 200 tests total, all green.
+28. Docs line references point at the real definitions (`docs/config.html`: `prompts.ts`
+    `coordinatorFlow` `:64`, `commitStatusSuffix` `:82`, `rubric` `:263`, `facts` `:288`,
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:702`, `prompts.ts:164`), the README
+    coordinator section documents the `.gitignore` auto-append and the missing-binary behavior,
+    and `docs/changelog.html` + page stamps are regenerated.
+
+Verification (all run in the worktree): `bun install --frozen-lockfile`, `bun run check`
+(expect 200 pass, `ok: loaded TUI plugin`), `npm pack --dry-run`, `bash -n
+packages/coordinator/bin/coordinator`, overlap trim exercised end-to-end against a throwaway repo
+(`claim --paths docs` against a lease with `"src, docs"` fails with a single error; a
+non-overlapping claim succeeds), then coordinator submit.
