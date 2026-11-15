@@ -385,6 +385,17 @@
       "submittedAt": "2026-11-15T18:54:33Z",
       "mergedAt": "2026-11-15T18:55:21Z",
       "mergedInto": "dev"
+    },
+    "loop-compact-landing": {
+      "agent": "inkling-goal-loop-8",
+      "paths": "src,test,SPEC.md,README.md,docs,dist",
+      "branch": "wt/loop-compact-landing",
+      "worktree": "worktrees/wt-loop-compact-landing",
+      "status": "done",
+      "createdAt": "2026-11-15T19:01:47Z",
+      "submittedAt": "2026-11-15T19:12:21Z",
+      "mergedAt": "2026-11-15T19:13:02Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
