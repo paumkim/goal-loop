@@ -37,9 +37,14 @@ export function createRouter(input: { controller: GoalController; background: Ba
   const recent = new RecentIds()
   const fail = (error: unknown) => log.error("goal event handler failed", { error: String(error) })
 
-  const safe = (fn: () => void) => {
+  /**
+   * One safety rule for every handler, sync or async: a throwing handler is reported via `fail` and never
+   * propagates into the event stream. Sync throws are caught at call time; async rejections are chained.
+   */
+  const guard = (fn: () => void | Promise<unknown>) => {
     try {
-      fn()
+      const out = fn()
+      if (out) void Promise.resolve(out).catch(fail)
     } catch (error) {
       fail(error)
     }
@@ -52,51 +57,51 @@ export function createRouter(input: { controller: GoalController; background: Ba
     switch (event.type) {
       case "session.execution.started":
         if (!sessionID) return
-        return safe(() => {
+        return guard(() => {
           background.executionStarted(sessionID)
           controller.onExecutionStarted(sessionID)
         })
       case "session.tool.called":
-        if (sessionID) safe(() => controller.onToolCalled(sessionID))
+        if (sessionID) guard(() => controller.onToolCalled(sessionID))
         return
       case "session.execution.succeeded":
         if (!sessionID) return
-        safe(() => background.executionEnded(sessionID))
-        void compactor.maybeCompact(sessionID).catch(fail)
-        return void controller.onExecutionSucceeded(sessionID).catch(fail)
+        guard(() => background.executionEnded(sessionID))
+        guard(() => compactor.maybeCompact(sessionID))
+        return guard(() => controller.onExecutionSucceeded(sessionID))
       case "session.execution.failed":
         if (!sessionID) return
-        return safe(() => {
+        return guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
         })
       case "session.execution.interrupted":
         if (!sessionID) return
-        return safe(() => {
+        return guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
         })
       case "session.created":
-        if (sessionID) safe(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
+        if (sessionID) guard(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
         return
       case "session.deleted":
         if (!sessionID) return
-        return safe(() => {
+        return guard(() => {
           background.sessionDeleted(sessionID)
           controller.onSessionDeleted(sessionID)
           compactor.onSessionDeleted(sessionID)
         })
       case "session.compaction.started":
-        if (sessionID) safe(() => compactor.noteCompactionStarted(sessionID))
+        if (sessionID) guard(() => compactor.noteCompactionStarted(sessionID))
         return
       case "session.compaction.ended":
         if (!sessionID) return
-        safe(() => compactor.noteCompactionEnded(sessionID, true))
+        guard(() => compactor.noteCompactionEnded(sessionID, true))
         // A landed compaction also settles any pending loop-boundary request.
-        return void controller.onCompactionLanded(sessionID).catch(fail)
+        return guard(() => controller.onCompactionLanded(sessionID))
       case "session.compaction.failed":
         if (sessionID)
-          safe(() => {
+          guard(() => {
             const raw = data.error
             const message =
               typeof raw === "string"
@@ -110,14 +115,14 @@ export function createRouter(input: { controller: GoalController; background: Ba
       case "shell.created": {
         const info = asRecord(data.info)
         const createdId = typeof info.id === "string" ? info.id : undefined
-        if (createdId) safe(() => background.shellCreated(createdId, String(info.status), asRecord(info.metadata).sessionID))
+        if (createdId) guard(() => background.shellCreated(createdId, String(info.status), asRecord(info.metadata).sessionID))
         return
       }
       case "shell.updated": {
         const info = asRecord(data.info ?? data)
         const id = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
         const owner = asRecord(info.metadata).sessionID ?? asRecord(data.metadata).sessionID
-        if (id) safe(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), owner))
+        if (id) guard(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), owner))
         return
       }
       case "shell.exited":
@@ -125,7 +130,7 @@ export function createRouter(input: { controller: GoalController; background: Ba
         // Exited/deleted always ends the shell, regardless of any status field on the event.
         const info = asRecord(data.info)
         const id = typeof data.id === "string" ? data.id : typeof info.id === "string" ? info.id : undefined
-        if (id) safe(() => background.shellEnded(id))
+        if (id) guard(() => background.shellEnded(id))
         return
       }
     }

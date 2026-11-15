@@ -576,6 +576,36 @@ describe("event router", () => {
     expect(errors.length).toBeGreaterThanOrEqual(3)
   })
 
+  test("async handlers that reject are reported, never escaping the router", async () => {
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const rejecting = {
+      onExecutionSucceeded: async () => {
+        throw new Error("boom succeeded")
+      },
+      onCompactionLanded: async () => {
+        throw new Error("boom landing")
+      },
+    } as any
+    const failingCompactor = (() => {
+      const inner = testCompactor([]) as any
+      inner.maybeCompact = async () => {
+        throw new Error("boom compact")
+      }
+      return inner
+    })()
+    const errors: unknown[] = []
+    const route = createRouter({
+      controller: rejecting,
+      background,
+      log: { info() {}, warn() {}, error: (_m: string, e?: any) => void errors.push(e) },
+      compactor: failingCompactor,
+    })
+    route({ id: "a1", type: "session.execution.succeeded", data: { sessionID: SID } })
+    route({ id: "a2", type: "session.compaction.ended", data: { sessionID: SID } })
+    await flush()
+    expect(errors.length).toBe(3)
+  })
+
   test("grandchildren count as background work", async () => {
     const parents: Record<string, string> = { grandchild: "child", child: SID }
     const background = new BackgroundTracker({ parentOf: async (id) => parents[id] })

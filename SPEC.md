@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=355 -->
+<!-- spec-check files=35 tests=356 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1110,6 +1110,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `background.executionEnded` in `safe()` but relies on `.catch(fail)` for the async controllers; `session.compaction.ended` likewise.
   Ordering is correct (noteCompactionEnded before onCompactionLanded) and every async arm has a `.catch`, so no unhandled rejection — but
   the style split invites drift. Proposed fix: one `guard`/`awaitSafe` helper used uniformly; keep `.catch(fail)` and drop `safe()` or vice versa.
+  Resolution: Workstream AP — single `guard`; `safe()` removed; drift pin added.
 - **A-16 (low) — `src/index.ts` — events emitted during the reconnect gap are lost.** A dropped stream is re-established with backoff but
   events between drop and reconnect are never replayed, so a missed `execution.succeeded` silently parks the goal (no evaluation runs)
   until the next event for that session. Proposed fix: document the limitation (best possible without host replay support); waive code change.
@@ -1386,3 +1387,19 @@ behavioral fix.
 Files touched: `src/runtime/events.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
+
+## Workstream AP — one guard for every event handler (A-15)
+
+`session.execution.succeeded` wrapped `background.executionEnded` in `safe()` but routed the async controllers
+through inline `.catch(fail)`; `session.compaction.ended` split the same way. The router now has a single
+`guard` rule for every handler, sync or async: a throwing handler is reported via `fail` and never propagates
+into the event stream (sync throws caught at call time; async rejections chained). `safe()` is gone.
+
+134. Pin test (`test/controller.test.ts`, 1 new): a rejecting `onExecutionSucceeded`, `onCompactionLanded` and
+     `maybeCompact` are all reported via `log.error` and none escapes the router (3 errors, no throw). Passes
+     both before and after the change — a drift pin against future split-style edits, stated as such (this is a
+     unification refactor with byte-identical behavior, not a bug fix). Test count 355 → 356.
+
+Files touched: `src/runtime/events.ts`, `test/controller.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (356 tests, spec-check ok); coordinator submit.
