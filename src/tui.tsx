@@ -15,13 +15,10 @@ import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
 import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { renderPips } from "./core/history.ts"
+import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 
-interface Entry {
-  readonly goal: GoalSnapshot | null
-  /** Client clock when the snapshot arrived; elapsed time is extrapolated from it to avoid clock skew. */
-  readonly receivedAt: number
-}
+type Entry = GoalSnapshotCacheEntry
 
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
@@ -59,6 +56,7 @@ export default Plugin.define({
     const [entries, setEntries] = createSignal<Readonly<Record<string, Entry>>>({})
     const [now, setNow] = createSignal(Date.now())
     const [statusDialogOpen, setStatusDialogOpen] = createSignal(false)
+    const [statusDialogSession, setStatusDialogSession] = createSignal<string | undefined>(undefined)
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
 
@@ -85,6 +83,7 @@ export default Plugin.define({
         // Best-effort; the flags reset regardless so the keymap layer disarms.
       }
       setStatusDialogOpen(false)
+      setStatusDialogSession(undefined)
       setScrollRef(undefined)
     }
     const showStatusDialog = (sessionID: string, fallback: string) => {
@@ -130,11 +129,13 @@ export default Plugin.define({
         ),
         () => {
           setStatusDialogOpen(false)
+          setStatusDialogSession(undefined)
           setScrollRef(undefined)
         },
       )
       context.ui.dialog.set({ size: "xlarge", centered: true })
       setStatusDialogOpen(true)
+      setStatusDialogSession(sessionID)
     }
 
     /** RPC calls are routed to the plugin instance of the session's location. */
@@ -152,7 +153,9 @@ export default Plugin.define({
         const existing = previous[sessionID]
         // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.
         if (existing && goalsEqual(existing.goal, goal)) return previous
-        return { ...previous, [sessionID]: { goal, receivedAt: Date.now() } }
+        const next = { ...previous, [sessionID]: { goal, receivedAt: Date.now() } }
+        // Drop null entries (unless a dialog is rendering that session) and cap the map.
+        return pruneSnapshotEntries(next, statusDialogSession())
       })
 
     /** Lazily fetches a session's goal the first time a view asks for it; events keep it fresh afterwards. */
@@ -419,6 +422,7 @@ export default Plugin.define({
       offChanged()
       offNotice()
       setStatusDialogOpen(false)
+      setStatusDialogSession(undefined)
       setScrollRef(undefined)
     }
   },

@@ -817,6 +817,39 @@ var StatusDialogBody = (props) => {
   });
 };
 
+// src/core/entries.ts
+var ENTRY_CAP = 64;
+function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
+  let changed = false;
+  const out = {};
+  for (const [sessionID, entry] of Object.entries(entries)) {
+    if (entry.goal === null && sessionID !== keep) {
+      changed = true;
+      continue;
+    }
+    out[sessionID] = entry;
+  }
+  const keys = Object.keys(out);
+  if (keys.length > cap) {
+    const rank = (k) => {
+      const g = out[k].goal;
+      return g !== null && isLive(g.status) ? 1 : 0;
+    };
+    const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a].receivedAt - out[b].receivedAt);
+    let overflow = keys.length - cap;
+    for (const k of sorted) {
+      if (overflow <= 0)
+        break;
+      if (k === keep || rank(k) === 1)
+        continue;
+      delete out[k];
+      overflow--;
+      changed = true;
+    }
+  }
+  return changed ? out : entries;
+}
+
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
 var sessionInput = {
@@ -903,6 +936,7 @@ var tui_default = Plugin.define({
     const [entries, setEntries] = createSignal({});
     const [now, setNow] = createSignal(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal(false);
+    const [statusDialogSession, setStatusDialogSession] = createSignal(undefined);
     const [scrollRef, setScrollRef] = createSignal(undefined);
     const requested = new Set;
     const statusBody = (sessionID, fallback) => {
@@ -929,6 +963,7 @@ var tui_default = Plugin.define({
         context.ui.dialog.clear();
       } catch {}
       setStatusDialogOpen(false);
+      setStatusDialogSession(undefined);
       setScrollRef(undefined);
     };
     const showStatusDialog = (sessionID, fallback) => {
@@ -1010,6 +1045,7 @@ var tui_default = Plugin.define({
         }
       }), () => {
         setStatusDialogOpen(false);
+        setStatusDialogSession(undefined);
         setScrollRef(undefined);
       });
       context.ui.dialog.set({
@@ -1017,6 +1053,7 @@ var tui_default = Plugin.define({
         centered: true
       });
       setStatusDialogOpen(true);
+      setStatusDialogSession(sessionID);
     };
     const at = (sessionID) => {
       const location = context.data.session.get(sessionID)?.location ?? context.location;
@@ -1031,13 +1068,14 @@ var tui_default = Plugin.define({
       const existing = previous[sessionID];
       if (existing && goalsEqual(existing.goal, goal))
         return previous;
-      return {
+      const next = {
         ...previous,
         [sessionID]: {
           goal,
           receivedAt: Date.now()
         }
       };
+      return pruneSnapshotEntries(next, statusDialogSession());
     });
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
@@ -1324,6 +1362,7 @@ var tui_default = Plugin.define({
       offChanged();
       offNotice();
       setStatusDialogOpen(false);
+      setStatusDialogSession(undefined);
       setScrollRef(undefined);
     };
   }
