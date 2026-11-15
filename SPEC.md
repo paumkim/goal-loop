@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=440 -->
+<!-- spec-check files=41 tests=447 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1888,5 +1888,24 @@ Verification: `bun run check` green in the worktree before commit (413 tests / 2
 spec-check ok 41/413 after the marker bump in this commit); live scratch proof (fresh `XDG_CONFIG_HOME`,
 `opencode plugin list --standalone` before/after) recorded in the loop report; one read-only
 `opencode-goal status` against the real global config permitted and run.
+
+174. **Evaluator-flagged gap (fixed in the follow-up commit on `wt/cli-uninstall-restore`): uninstall with a
+     missing entry and an install-time backup now restores the pre-install config instead of printing a note.**
+     The goal requirement named two backup-restore triggers — the explicit `--restore` flag and a missing
+     plugin entry. The shipped behavior only honored the flag; the missing-entry case got a pointer to
+     `--restore`. Fixed: when uninstall finds nothing to remove (config file missing or entry missing), it
+     looks for the newest backup whose parsed content provably lacks the plugin (the install-time original;
+     a backup that fails to parse, or whose array contains the entry, is never considered, and a backup
+     containing the plugin is never auto-restored). If found, the pre-install config is copied back
+     byte-for-byte after taking a fresh safety backup of the current state (nothing is lost); if the config
+     file is missing it is recreated from the backup. If the config already equals the pre-install backup,
+     uninstall is a clean no-op (`not installed`, exit 0), so repeated runs converge in at most two steps.
+     If no plugin-free backup exists, the old `not installed` note remains. Failing-before evidence: the new
+     describe block was written first and 4 tests failed (restore/bytes/safety-backup/deleted-file/dry-run);
+     the implementation landed and all pass (32 in the file, 442 total). The common double-uninstall flow for
+     an install-created file is unchanged (no plugin-free backup exists → `not installed`, exit 0).
+175. Docs: `docs/install.html` and the README uninstall paragraph now state the restore rule; the
+     `--dry-run` path prints what it would restore and writes nothing.
+176. Marker bumped `files=41 tests=435` → `files=41 tests=442` (no new shipped files, +7 tests).
 
 Merge note (this file): dev gained Workstream AY (goal-loop command syntax) after this branch was cut. The sections were renumbered on merge — AY (159–163) stands as landed on dev; this workstream is AZ (164–173), marker reconciled to the merged tree (files=41, tests=435). The test/check figures in AZ's verification paragraph are the pre-merge worktree record (413 tests); the merged tree was re-verified by the coordinator's merged-result gate before dev advanced.

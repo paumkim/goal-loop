@@ -319,3 +319,98 @@ describe("runCli (exit codes and messages)", () => {
     expect(r.stdout).toMatch(/1\.1\.0/);
   });
 });
+
+describe("uninstall with a missing entry and a pre-install backup", () => {
+  test("restores the pre-install config unchanged and exits 0", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    // user (or anything) later rewrites the config: entry gone, unrelated key edited
+    const drifted = STRICT.replace("test/model", "test/other");
+    writeGlobalConfig(home, "opencode.jsonc", drifted);
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(STRICT); // pre-install bytes restored
+    expect(r.stdout).toContain("restored");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a fresh safety backup of the drifted state is taken before restoring", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    const drifted = STRICT.replace("test/model", "test/other");
+    writeGlobalConfig(home, "opencode.jsonc", drifted);
+    uninstall([], { env: envFor(home), cwd: home });
+    const dir = join(home, ".config", "opencode");
+    const baks = readdirSync(dir).filter((f) => f.endsWith(".bak"));
+    // one from install (pre-install) plus one from this uninstall (safety copy of drifted state)
+    expect(baks.length).toBeGreaterThanOrEqual(2);
+    const safety = baks.map((f) => readFileSync(join(dir, f), "utf8"));
+    expect(safety).toContain(drifted); // drifted state preserved in a backup
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("uninstall converges: second run is a clean 'not installed' no-op", () => {
+    const home = fakeHome();
+    writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    writeGlobalConfig(home, "opencode.jsonc", STRICT.replace("test/model", "test/other"));
+    uninstall([], { env: envFor(home), cwd: home });
+    const file = join(home, ".config", "opencode", "opencode.jsonc");
+    const before = readFileSync(file, "utf8");
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout.toLowerCase()).toContain("not installed");
+    expect(readFileSync(file, "utf8")).toBe(before); // untouched on the second run
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("entry missing and only plugin-containing backups exist: no restore, exit 0", () => {
+    const home = fakeHome();
+    // install created the config from scratch: no pre-install backup is taken
+    install([], { env: envFor(home), cwd: home });
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const r2 = uninstall([], { env: envFor(home), cwd: home });
+    expect(r2.code).toBe(0);
+    expect(r2.stdout.toLowerCase()).toContain("not installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("config file deleted after install, pre-install backup exists: file restored", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    rmSync(file);
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(STRICT);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("--dry-run with missing entry and candidate backup writes nothing", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    const drifted = STRICT.replace("test/model", "test/other");
+    writeGlobalConfig(home, "opencode.jsonc", drifted);
+    const r = uninstall(["--dry-run"], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("dry-run");
+    expect(readFileSync(file, "utf8")).toBe(drifted); // untouched
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("entry missing and config already matches pre-install backup: clean no-op", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    // simulate the user having manually emptied the plugins array (entry missing, installed-state backup remains)
+    writeGlobalConfig(home, "opencode.jsonc", STRICT); // exactly the pre-install content
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(STRICT);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
