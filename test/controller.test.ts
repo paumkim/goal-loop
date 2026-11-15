@@ -215,6 +215,29 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
+  test("a no-op commit is not saved or emitted twice", async () => {
+    const storage = new MemoryStorage()
+    let sets = 0
+    const originalSet = storage.set
+    storage.set = async (key: string, value: unknown) => {
+      sets += 1
+      return originalSet(key, value)
+    }
+    h = harness({}, storage)
+    await h.set()
+    expect(sets).toBe(1)
+    expect(h.changes).toHaveLength(1)
+    // User prompt on an already-active goal changes nothing in the record: no write, no re-render.
+    h.controller.onUserPrompt(SID)
+    expect(sets).toBe(1)
+    expect(h.changes).toHaveLength(1)
+    // A real change (a turn evaluated) still persists and emits.
+    h.verdicts.push(notMet())
+    await h.turn()
+    expect(sets).toBeGreaterThan(1)
+    expect(h.changes.length).toBeGreaterThan(1)
+  })
+
   test("hard turn limit pauses", async () => {
     h = harness({ maxTurns: 2 })
     await h.set()
