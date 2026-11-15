@@ -138,7 +138,6 @@ export default Plugin.define({
         .get({ sessionID }, at(sessionID))
         .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
         .catch(() => {})
-      // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(

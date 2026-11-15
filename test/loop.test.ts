@@ -58,6 +58,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const nextGoals: string[] = []
   const summaryRequests: LoopSummaryRequest[] = []
   const nextGoalRequests: NextGoalRequest[] = []
+  // Test hook: when set, the next-goal generator awaits this gate before replying (simulates an in-flight planner).
+  const gate: { nextGoal?: Promise<void> } = {}
   const notices: Notice[] = []
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
@@ -94,6 +96,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
       },
       nextGoal: async (request: NextGoalRequest) => {
         nextGoalRequests.push(request)
+        if (gate.nextGoal) await gate.nextGoal
         const next = nextGoals.shift()
         if (next === undefined) throw new Error("no next goal queued")
         return next
@@ -116,6 +119,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     nextGoals,
     summaryRequests,
     nextGoalRequests,
+    gate,
     notices,
     controller,
     storage,
@@ -231,6 +235,68 @@ describe("/goal-loop", () => {
     expect(record.status).toBe("paused")
     expect(record.reason).toMatch(/zero tool use|without tool use/i)
     expect(h.notices.some((n) => n.kind === "paused")).toBe(true)
+  })
+
+  test("user prompt during next-goal generation drops the half-advanced state", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    let release!: () => void
+    h.gate.nextGoal = new Promise<void>((resolve) => (release = resolve))
+    const turnPromise = h.turn(1)
+    await flush() // evaluation finished; the loop is now awaiting the gated next-goal generation
+    h.controller.onUserPrompt(SID) // user keystroke supersedes the in-flight loop step
+    release()
+    await turnPromise
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.condition).toBe("objective")
+    expect(record.loopIteration ?? 1).toBe(1)
+    expect(record.loopHistory ?? []).toHaveLength(0)
+    expect(record.status).toBe("active")
+  })
+
+  test("summary failure pauses the loop and records the achieved iteration", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    // No summary queued: the evaluator throws, and the loop must pause rather than lose the achieved iteration.
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("paused")
+    expect(record.reason).toMatch(/summary failed/i)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]!.summary).toMatch(/summary failed/i)
+  })
+
+  test("next-goal failure pauses the loop and keeps the achieved iteration", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    // No next goal queued: the planner throws, and the achieved iteration must survive in history.
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("paused")
+    expect(record.reason).toMatch(/next-goal generator failed/i)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]!.summary).toBe("s1")
+  })
+
+  test("resumed loop resets the zero-tool not-progress count", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(0)
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(0)
+    expect(h.controller.get(SID)!.status).toBe("paused")
+    h.controller.onUserPrompt(SID)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopNotProgress).toBe(0)
   })
 
   test("not_met never advances the loop", async () => {

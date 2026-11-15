@@ -252,6 +252,8 @@ export class GoalController {
       record.reason = undefined
       record.stall = 0
       record.retries = 0
+      // A resumed /goal-loop starts the not-progress count fresh, so a benign zero-tool iteration cannot instantly re-pause it.
+      if (record.loopEnabled) record.loopNotProgress = 0
       this.notify(sessionID, "resumed", "info", "Goal resumed", record.condition)
     } else {
       this.clearDeferred(runtime)
@@ -436,12 +438,28 @@ export class GoalController {
     const iteration = record.loopIteration ?? 1
     const maxLoops = record.loopMaxLoops ?? config.maxLoops
     const objective = record.loopObjective ?? record.condition
-    const history: LoopEntry[] = [...(record.loopHistory ?? [])]
+    // A resumed loop can re-enter advance for the same iteration; never record it twice.
+    const history: LoopEntry[] = (record.loopHistory ?? []).filter((e) => e.version !== iteration)
     const now = clock.now()
     const iterationTools = runtime.iterationToolCalls
+    const notProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
+    const makeEntry = (summary: string): LoopEntry => ({
+      version: iteration,
+      condition: record.condition,
+      summary,
+      reason: result.reason,
+      turns: turn,
+      toolCalls: iterationTools,
+      endedAt: clock.now(),
+    })
+    // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
+    const saveLoopState = () => {
+      record.loopHistory = history
+      record.loopNotProgress = notProgress
+    }
 
     const endClean = (reason: string) => {
-      record.loopHistory = history
+      saveLoopState()
       this.finish(record, "achieved", reason)
       this.notify(sessionID, "achieved", "success", "Loop complete", reason)
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
@@ -450,11 +468,13 @@ export class GoalController {
     if (!this.deps.evaluator.summarize || !this.deps.evaluator.nextGoal) {
       const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
       log.error("loop step unavailable", { sessionID })
-      record.loopHistory = history
+      history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
+      saveLoopState()
       return this.pause(record, reason)
     }
 
     const summarize = new AbortController()
+    runtime.abort = summarize
     let summary: string
     try {
       summary = (
@@ -472,27 +492,23 @@ export class GoalController {
         })
       ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
     } catch (error) {
+      if (runtime.abort === summarize) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
       log.error("loop summary failed", { sessionID, error: message(error) })
+      history.push(makeEntry(`(summary failed: ${truncate(message(error), 80)})`))
+      saveLoopState()
       return this.pause(record, `The loop summary failed: ${truncate(message(error), 160)}`)
+    } finally {
+      if (runtime.abort === summarize) runtime.abort = undefined
     }
     if (this.stale(record, runtime, epoch)) return
 
-    const entry: LoopEntry = {
-      version: iteration,
-      condition: record.condition,
-      summary: summary.trim(),
-      reason: result.reason,
-      turns: turn,
-      toolCalls: iterationTools,
-      endedAt: clock.now(),
-    }
+    const entry = makeEntry(summary.trim())
     history.push(entry)
-    record.loopHistory = history
-    record.loopNotProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
     log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
 
-    if ((record.loopNotProgress ?? 0) >= 2) {
+    if (notProgress >= 2) {
+      saveLoopState()
       return this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
     }
     if (history.length >= maxLoops) {
@@ -500,13 +516,18 @@ export class GoalController {
     }
 
     const generate = new AbortController()
+    runtime.abort = generate
     let reply: string
     try {
       reply = await this.deps.evaluator.nextGoal({ sessionID, objective, history, latestSummary: entry.summary, signal: generate.signal })
     } catch (error) {
+      if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: message(error) })
+      saveLoopState()
       return this.pause(record, `The loop next-goal generator failed: ${truncate(message(error), 160)}`)
+    } finally {
+      if (runtime.abort === generate) runtime.abort = undefined
     }
     if (this.stale(record, runtime, epoch)) return
 
@@ -519,6 +540,7 @@ export class GoalController {
     }
 
     const nextIteration = iteration + 1
+    saveLoopState()
     record.condition = condition
     record.loopIteration = nextIteration
     record.turns = 0
