@@ -1,5 +1,12 @@
 import type { FailureInfo } from "./types.ts"
 
+/** Extracts a readable message from an unknown thrown value. */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === "object" && error !== null && "message" in error) return String((error as { message: unknown }).message)
+  return String(error)
+}
+
 /**
  * - `fatal`: will not clear until the user fixes something; the goal fails (auth, credit, context, model).
  * - `transient`: tends to clear on its own; retried with backoff (overload, network, timeouts).

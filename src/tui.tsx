@@ -12,7 +12,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, For, Show } from "solid-js"
 import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
-import type { GoalSnapshot, Notice } from "./core/types.ts"
+import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
 
 interface Entry {
@@ -25,6 +25,10 @@ const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
 
 /** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
+/** Elapsed wall time for display: the record's elapsed plus the idle time since the snapshot arrived (live goals only). */
+const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: number) =>
+  g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs
+
 const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
   if (a === b) return true
   if (!a || !b) return false
@@ -86,8 +90,7 @@ export default Plugin.define({
       const goal = () => entry()?.goal ?? undefined
       const elapsed = () => {
         const g = goal()
-        if (!g) return 0
-        return g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry()?.receivedAt ?? now())) : g.elapsedMs
+        return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
       const stateColor = () =>
         goal()?.status === "paused"
@@ -141,10 +144,7 @@ export default Plugin.define({
     const showStatusDialogInner = (sessionID: string, fallback: string) => {
       setScrollRef(undefined)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
-      void rpc
-        .get({ sessionID }, at(sessionID))
-        .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
-        .catch(() => {})
+      void refresh(sessionID).catch(() => {})
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
@@ -179,6 +179,10 @@ export default Plugin.define({
       return location ? { location } : undefined
     }
 
+    /** Pull a fresh snapshot from the server and cache it. */
+    const refresh = (sessionID: string) =>
+      rpc.get({ sessionID }, at(sessionID)).then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
+
     const put = (sessionID: string, goal: GoalSnapshot | null) =>
       setEntries((previous) => {
         const existing = previous[sessionID]
@@ -191,10 +195,7 @@ export default Plugin.define({
     const ensure = (sessionID: string) => {
       if (requested.has(sessionID)) return
       requested.add(sessionID)
-      rpc
-        .get({ sessionID }, at(sessionID))
-        .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
-        .catch(() => requested.delete(sessionID))
+      refresh(sessionID).catch(() => requested.delete(sessionID))
     }
 
     const live = (sessionID: string | undefined) => {
@@ -202,7 +203,7 @@ export default Plugin.define({
         if (!sessionID) return undefined
         ensure(sessionID)
         const goal = entries()[sessionID]?.goal
-        return goal && (goal.status === "active" || goal.status === "paused") ? goal : undefined
+        return goal && isLive(goal.status) ? goal : undefined
       } catch {
         return undefined
       }
@@ -305,7 +306,7 @@ export default Plugin.define({
             const g = goal()
             if (!g || !props.sessionID) return ""
             const entry = entries()[props.sessionID]
-            const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs
+            const elapsed = elapsedOf(g, entry?.receivedAt, now())
             const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
             const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
             if (g.loopEnabled) return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`

@@ -1,4 +1,4 @@
-import { formatDuration, formatSpend } from "./format.ts"
+import { formatDuration, formatSpend, truncate } from "./format.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
@@ -65,12 +65,7 @@ export interface LoopPreamble {
 export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
-  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
-}
-
-const truncateLine = (text: string, max: number) => {
-  const flat = text.replace(/\s+/g, " ").trim()
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
+  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
 }
 
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
@@ -393,27 +388,27 @@ export function nextGoalInSession(input: NextGoalInput): string {
     `<goal-loop-next>`,
     `Step out of the agent role. You are the planner of this improvement loop. Do not call tools and do not address the user.`,
     ``,
-    `Objective (constant): ${escape(input.objective)}`,
-    `Completed iterations (oldest first):`,
-    historyBlock(input.history),
-    `Latest iteration summary:`,
-    escape(input.latestSummary),
+    ...nextGoalFacts(input),
     ``,
     ...NEXT_GOAL_ASK,
     `</goal-loop-next>`,
   ].join("\n")
 }
 
+const nextGoalFacts = (input: NextGoalInput) => [
+  `Objective (constant): ${escape(input.objective)}`,
+  `Completed iterations (oldest first):`,
+  historyBlock(input.history),
+  `Latest iteration summary:`,
+  escape(input.latestSummary),
+]
+
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */
 export function nextGoalIndependently(input: NextGoalInput): string {
   return [
     `You are the planner of an autonomous improvement loop. Choose the next goal from the summaries below; you cannot run commands or read files.`,
     ``,
-    `Objective (constant): ${escape(input.objective)}`,
-    `Completed iterations (oldest first):`,
-    historyBlock(input.history),
-    `Latest iteration summary:`,
-    escape(input.latestSummary),
+    ...nextGoalFacts(input),
     ``,
     ...NEXT_GOAL_ASK,
   ].join("\n")

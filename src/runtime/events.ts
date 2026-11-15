@@ -14,7 +14,7 @@ export interface ServerEvent {
 type Data = Record<string, any>
 
 /** Remembers recently seen event IDs so a stream reconnect that replays events cannot double-fire a turn. */
-export class RecentIds {
+class RecentIds {
   private readonly seen = new Set<string>()
   constructor(private readonly capacity = 1024) {}
 
