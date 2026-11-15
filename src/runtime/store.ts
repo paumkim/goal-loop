@@ -22,6 +22,11 @@ function isRecord(value: unknown): value is GoalRecord {
 /**
  * Durable goal persistence on plugin storage, one key per session. Writes per session are chained so they
  * land in order without blocking callers; the in-memory record stays the source of truth.
+ *
+ * Probe mode (`readOnly`): saves and removes are dropped (and logged via `onError` is NOT called; the caller
+ * gets `true` so callers behave as if the write landed). A probe instance (e.g. a headless opencode server
+ * booted to exercise the plugin) therefore cannot mutate the live goal records, even by accident. Reads are
+ * unaffected.
  */
 export class GoalStore {
   private readonly chains = new Map<string, Promise<void>>()
@@ -29,14 +34,17 @@ export class GoalStore {
   constructor(
     private readonly storage: StoragePort,
     private readonly onError: (error: unknown) => void,
+    private readonly options: { readonly readOnly?: boolean } = {},
   ) {}
 
   save(record: GoalRecord): Promise<boolean> {
+    if (this.options.readOnly) return Promise.resolve(true)
     const snapshot = structuredClone(record)
     return this.enqueue(record.sessionID, () => this.storage.set(keyFor(record.sessionID), snapshot))
   }
 
   remove(sessionID: string): Promise<boolean> {
+    if (this.options.readOnly) return Promise.resolve(true)
     return this.enqueue(sessionID, () => this.storage.remove(keyFor(sessionID)))
   }
 

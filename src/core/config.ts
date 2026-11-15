@@ -10,6 +10,10 @@ export interface GoalConfig {
     readonly maxTranscriptChars: number
     readonly maxOutputTokens: number
     readonly timeoutMs: number
+    /** When set, a `met` verdict is not accepted until this command exits 0 (the verifier, not the transcriber). Empty disables. Env OPENCODE_GOAL_VERIFY_COMMAND. */
+    readonly verifyCommand: string
+    /** Wall-clock budget for one verification run. */
+    readonly verifyTimeoutMs: number
   }
   /** Hard turn cap; 0 disables. Conditions can still carry their own natural-language limit. */
   readonly maxTurns: number
@@ -38,6 +42,7 @@ export const DEFAULTS = {
   maxTranscriptChars: 60_000,
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
+  verifyTimeoutMs: 600_000,
   maxTurns: 200,
   stallTurns: 3,
   checkinMinutes: 30,
@@ -76,6 +81,9 @@ const int = (value: unknown, fallback: number, min: number, max = Number.MAX_SAF
 
 const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback)
 
+/** A free-form string option: trimmed; anything else falls back. */
+const str = (value: unknown, fallback: string) => (typeof value === "string" && value.trim() ? value.trim() : fallback)
+
 /** A branch name: a non-empty string with no whitespace. */
 const branch = (value: unknown, fallback: string) => {
   if (typeof value !== "string") return fallback
@@ -87,7 +95,8 @@ const branch = (value: unknown, fallback: string) => {
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
- * OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS.
+ * OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS, OPENCODE_GOAL_VERIFY_COMMAND,
+ * OPENCODE_GOAL_VERIFY_TIMEOUT_MS.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -104,6 +113,8 @@ export function resolveConfig(
       maxTranscriptChars: int(evaluator.maxTranscriptChars, DEFAULTS.maxTranscriptChars, 4_000),
       maxOutputTokens: int(evaluator.maxOutputTokens, DEFAULTS.maxOutputTokens, 256),
       timeoutMs: int(evaluator.timeoutMs, DEFAULTS.timeoutMs, 5_000),
+      verifyCommand: str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, ""),
+      verifyTimeoutMs: int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000),
     },
     maxTurns: int(env.OPENCODE_GOAL_MAX_TURNS ?? options.maxTurns, DEFAULTS.maxTurns, 0),
     stallTurns: int(options.stallTurns, DEFAULTS.stallTurns, 1),

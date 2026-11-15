@@ -158,6 +158,20 @@ describe("coordinator merge-next", () => {
     expect(readdirSync(join(dir, ".term", "coordinator")).filter((f: string) => f.startsWith(".state-stash."))).toEqual([])
   })
 
+  test("merge-next auto-commits the state.json bookkeeping on dev", () => {
+    setup("true")
+    claimCommitSubmit("bookkeep", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    // The lease-flip commit lands on dev itself; the main worktree carries no state.json dirt anymore.
+    const log = git(dir, ["log", "--oneline", "-3", "dev"])
+    expect(log).toContain("chore(coordinator): record bookkeep lease done after merge")
+    expect(fileOnDev(".term/coordinator/state.json").stdout).toContain('"bookkeep"')
+    expect(fileOnDev(".term/coordinator/state.json").stdout).toContain('"done"')
+    const status = spawnSync("git", ["-C", dir, "status", "--porcelain", "--", ".term/coordinator/state.json"], { encoding: "utf8", env: GIT_ENV }).stdout
+    expect(status).toBe("")
+  })
+
   test("a failing merged result restores the exempt state.json dirt and keeps the lease submitted", () => {
     setup("false")
     const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))

@@ -249,6 +249,24 @@ describe("/goal-loop", () => {
     expect(h.notices.some((n) => n.kind === "paused")).toBe(true)
   })
 
+  test("zero-progress is counted by the harness, not by the model's report", async () => {
+    // The evaluator claims lots of work happened; the harness counted zero tool calls.
+    // The not-progress guard must follow the harness count, so two such iterations pause the loop.
+    await h.setLoop("objective")
+    h.verdicts.push(met("did tons of work, verified thoroughly"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(0)
+    h.verdicts.push(met("did even more work"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(0)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("paused")
+    expect(record.reason).toMatch(/zero tool use|without tool use/i)
+    expect(record.loopHistory?.map((e) => e.toolCalls)).toEqual([0, 0])
+  })
+
   test("user prompt during next-goal generation drops the half-advanced state", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
@@ -418,6 +436,21 @@ describe("loop prompts", () => {
     expect(text).toContain('iteration="3"')
     expect(text).toContain("next thing")
     expect(text).toContain("prev summary")
+  })
+
+  test("loopContinuation tells the armed iteration to re-read repo state before trusting the armed summary", () => {
+    const text = Prompt.loopContinuation({ iteration: 3, maxLoops: 5, condition: "next thing", previousSummary: "prev summary", reason: "r" }, { required: false, branch: "dev", reason: "t" })
+    // Re-arm hygiene: ground truth is the tree (log/status/worktree), not the summary.
+    expect(text).toContain("git log --oneline -5")
+    expect(text).toContain("git status --short")
+    expect(text).toContain("coordinator status --json")
+    expect(text).toContain("stale")
+  })
+
+  test("the evaluator rubric demands fresh evidence at the current HEAD, not prior summaries", () => {
+    const text = Prompt.evaluateInSession("do it", { turn: 2, elapsedMs: 1000 }, { required: false, branch: "dev", reason: "t" })
+    expect(text).toContain("current HEAD")
+    expect(text).toContain("fresh")
   })
 
   test("summarizer asks for a bounded machine-consumable block", () => {

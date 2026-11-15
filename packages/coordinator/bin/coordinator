@@ -527,6 +527,29 @@ do_merge_next() {
     git -C "$MAIN_ROOT" worktree remove --force "$MAIN_ROOT/$wt_rel" >/dev/null 2>&1 || true
   fi
   git -C "$MAIN_ROOT" branch -d "$branch" >/dev/null 2>&1 || true
+  # Bookkeeping policy: merge-next auto-commits the coordinator state file on dev, so the exempt residue
+  # never accumulates. The worktree copy and dev's committed copy can diverge (a wt branch may record
+  # bookkeeping of its own), so union them: lease keys from both, live copy wins per key — never let the
+  # auto-commit revert an entry the merge just landed. mergeLock is forced to null (the merge is closing).
+  # This chore commit is part of the merge flow (the only path to dev), not a direct dev commit by an agent.
+  if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
+    _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
+    _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
+    if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null \
+      && jq -n --slurpfile head "$_head_tmp" --slurpfile live "$STATE_FILE" \
+        '$head[0] + { version: ($live[0].version // 1), leases: (($head[0].leases // {}) * ($live[0].leases // {})), mergeLock: null }' \
+        > "$_union_tmp" 2>/dev/null; then
+      cp "$_union_tmp" "$STATE_FILE"
+    fi
+    rm -f "$_head_tmp" "$_union_tmp"
+  fi
+  if git -C "$MAIN_ROOT" add -- .term/coordinator/state.json >/dev/null 2>&1; then
+    if ! git -C "$MAIN_ROOT" diff --cached --quiet -- .term/coordinator/state.json; then
+      if ! git -C "$MAIN_ROOT" commit -q -m "chore(coordinator): record ${slug} lease done after merge" >/dev/null 2>&1; then
+        printf 'warning: could not commit .term/coordinator/state.json bookkeeping; it remains as exempt dirt\n' >&2
+      fi
+    fi
+  fi
   release_merge_lock
   printf 'merged into %s\n' "$DEV_BRANCH"
 }

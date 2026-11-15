@@ -371,3 +371,71 @@ or `opencode api --server http://127.0.0.1:<port> POST /api/rpc/goal/get
 `rpc.unavailable` (HTTP 400, not a 500), which is not a handler failure. With it, the benign
 fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live on 2026-11-15,
 `goal/list` likewise returns `{"output":{"goals":[...]}}`).
+
+## Workstream J — loop hardening: verifier, bookkeeping, probe isolation, spec honesty, re-arm hygiene
+
+Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
+guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
+
+<!-- spec-check files=32 tests=244 -->
+
+44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
+    disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
+    600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
+    (`verifyMet`, `src/runtime/controller.ts`): the plugin itself runs the command
+    (`VerifierPort`, `src/runtime/ports.ts`; implemented in `src/index.ts` `createVerifier` as `bash -c`,
+    `cwd` = the goal's directory, combined output tail-capped at 16 kB, deadline `verifyTimeoutMs`) and accepts
+    `met` only on exit 0. Non-zero exit, spawn error, or timeout downgrades the verdict to `not_met` with the
+    last ~12 lines of output in the reason; a warning notice fires; the normal not_met path dispatches a
+    continuation carrying that tail. A missing verifier port is fail-closed (downgraded, never met). The gate
+    runs on `met` only — not_met/impossible paths are untouched — and a looped goal cannot advance on a
+    failed verification. With the default empty command, behavior is byte-compatible with before.
+45. Evidence the evaluator accepts is defined and documented: fresh command output at the current HEAD after
+    the last change — never prior summaries, the agent's narration, or a previous verdict. The rubric
+    (`src/core/prompts.ts` `RULES`) states this; README, `docs/config.html`, `docs/runtime.html` and AGENTS.md
+    document it. The prompt-level evaluator still cannot run commands; the harness gate is what makes
+    `met` verifiable end-to-end.
+46. Bookkeeping policy, one, documented: `packages/coordinator/bin/coordinator merge-next` unions the live
+    `.term/coordinator/state.json` with the committed copy (lease keys from both, live bus wins per key,
+    `mergeLock` reset to null) and auto-commits the result on `dev` as
+    `chore(coordinator): record <slug> lease done after merge`. The union guarantees an entry landed on `dev`
+    by a wt bookkeeping branch is never reverted by the merge's own lease flip. The chore commit is part of
+    the merge flow (the only sanctioned path to `dev`), not a direct dev commit by an agent; a failed commit
+    leaves the dirt exempt and the next merge-next retries. AGENTS.md documents the policy; `test/coordinator.test.ts`
+    proves: the lease flip is committed on `dev`, the main worktree is clean for `state.json`, and the union
+    keeps `old-record` while adding the merge's lease (regression test added for the clobbering case).
+47. Probe isolation: `OPENCODE_GOAL_PROBE=1` puts plugin storage in read-only mode (`GoalStore` drops
+    saves/removes, reads pass through), so a probe opencode server or a second `restore()` cannot mutate the
+    live goal records. Probe mode is logged at setup. Documented in AGENTS.md, README.md, `docs/config.html`,
+    `docs/install.html` and `docs/runtime.html`; `test/store.test.ts` proves dropped writes, unchanged reads.
+    Verify commands still execute in the probe's cwd — probes must target a throwaway checkout.
+48. Spec honesty gate: `scripts/spec-check.ts` (`bun run check:spec`, wired into `bun run check` after
+    `docs:check`) reads the `<!-- spec-check files=N tests=N -->` marker in this file and exits 1 listing
+    mismatches when the `npm pack --dry-run --json` file count or the `bun test` pass count trails it.
+    Read-only; counts only (sizes excluded as npm-version noise). The marker above is part of the definition
+    of green; it must be updated in the same commit that changes shipped files or tests. CI inherits the gate.
+49. Re-arm hygiene: the armed `/goal-loop` iteration's directive (`loopContinuation`,
+    `src/core/prompts.ts`) requires re-reading `git log --oneline -5`, `git status --short`,
+    `git branch --show-current` (plus `coordinator status --json` / `git worktree list` in coordinator repos)
+    and the current check output *before* any work — the armed summary is labeled stale until then.
+    Zero-progress is harness-verified: `iterationToolCalls` comes from the plugin's own tool events
+    (`onToolCalled`), never from model self-report; two consecutive zero-tool iterations pause the loop
+    (`loopNotProgress`). Regression test: a loop whose evaluator claims heavy work with zero harness tool
+    calls still pauses after two iterations, and both loop-history entries record `toolCalls: 0`.
+50. Audit trail: SPEC (this workstream), AGENTS.md (evidence requirements, probe isolation, bookkeeping
+    policy, spec gate, re-arm hygiene), README.md ("Running the loop safely" checklist + options table),
+    `docs/runtime.html` (verification gate and fresh-session promotion checklist), `docs/config.html`,
+    `docs/install.html`, `docs/core.html`. `bun run docs:check` stays green.
+51. `bun run check` passes: tsc, `bun test` (244 tests at the time of writing), compile, `check:tui`,
+    `docs:check`, `check:spec`.
+
+Verification (all run in the worktree): `bun test` (verify/loop/store/coordinator/loop-prompt suites),
+`bun run check` end-to-end green including `spec-check`, `bash -n packages/coordinator/bin/coordinator`,
+coordinator submit + merge-next (this branch's own merge exercises the new auto-commit path on dev),
+then commit the state.json bookkeeping via the merge itself.
+
+Out of scope / follow-ups (bigger than one iteration; not this loop's job):
+- An argv-based verifier (skip `bash -c`) for hosts without a shell; quoting bugs in complex verifyCommands.
+- spec-check enforcing tarball size bands, and SPEC counts beyond the marker (per-workstream historical claims).
+- A host-side fix for prompt.footer staleness after the first loop arm (already a known host issue).
+- Wiring verifyCommand into the live dev repo's own `opencode.json` (policy choice, not a code change).

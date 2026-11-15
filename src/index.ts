@@ -57,6 +57,61 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true })
   })
 
+/** Env flag: `1/true/yes/on` (case-insensitive) enables; anything else is off. Probe mode makes plugin storage read-only. */
+const probeFlag = (value: string | undefined) => {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return ["1", "true", "yes", "on"].includes(normalized)
+}
+
+/** Runs a verification command via the user's shell, capturing combined output (tail kept). Never touches plugin storage. */
+function createVerifier() {
+  return {
+    async verify({ command, cwd, timeoutMs, signal }: { command: string; cwd: string; timeoutMs: number; signal: AbortSignal }) {
+      const MAX = 16_000
+      const child = Bun.spawn(["bash", "-c", command], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+        env: process.env,
+      })
+      let output = ""
+      const append = (chunk: Uint8Array) => {
+        output = (output + new TextDecoder().decode(chunk)).slice(-MAX)
+      }
+      const drain = async () => {
+        for (const stream of [child.stdout, child.stderr]) {
+          if (!stream) continue
+          const reader = stream.getReader()
+          try {
+            for (;;) {
+              const { done, value } = await reader.read()
+              if (done) break
+              if (value) append(value)
+            }
+          } catch {
+            // stream closed by kill
+          }
+        }
+      }
+      let timedOut = false
+      const timer = setTimeout(() => {
+        timedOut = true
+        child.kill("SIGKILL")
+      }, timeoutMs)
+      const onAbort = () => child.kill("SIGKILL")
+      signal.addEventListener("abort", onAbort, { once: true })
+      try {
+        const [code] = await Promise.all([child.exited, drain()])
+        return { code, output, timedOut }
+      } finally {
+        clearTimeout(timer)
+        signal.removeEventListener("abort", onAbort)
+      }
+    },
+  }
+}
+
 export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
@@ -121,7 +176,9 @@ export default Plugin.define({
       notice: (notice) => emit.notice(notice),
     }
 
-    const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }))
+    const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
+    if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
+    const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
     const controller = new GoalController({
       config,
       directory: ctx.location.directory,
@@ -131,6 +188,7 @@ export default Plugin.define({
       background,
       store,
       emitter,
+      verifier: createVerifier(),
       clock: systemClock,
       log,
     })
