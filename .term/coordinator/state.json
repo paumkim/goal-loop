@@ -110,6 +110,17 @@
       "submittedAt": "2026-11-15T06:17:24Z",
       "mergedAt": "2026-11-15T06:17:27Z",
       "mergedInto": "dev"
+    },
+    "goal-tool-count-restore": {
+      "agent": "orchestrator",
+      "paths": "src,test",
+      "branch": "wt/goal-tool-count-restore",
+      "worktree": "worktrees/wt-goal-tool-count-restore",
+      "status": "done",
+      "createdAt": "2026-11-15T06:52:16Z",
+      "submittedAt": "2026-11-15T06:53:30Z",
+      "mergedAt": "2026-11-15T06:53:49Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
