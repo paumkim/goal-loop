@@ -528,6 +528,17 @@
       "submittedAt": "2026-11-15T20:33:42Z",
       "mergedAt": "2026-11-15T20:33:50Z",
       "mergedInto": "dev"
+    },
+    "a2-planner-maxchars": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a2-planner-maxchars",
+      "worktree": "worktrees/wt-a2-planner-maxchars",
+      "status": "done",
+      "createdAt": "2026-11-15T20:34:43Z",
+      "submittedAt": "2026-11-15T20:35:25Z",
+      "mergedAt": "2026-11-15T20:35:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
