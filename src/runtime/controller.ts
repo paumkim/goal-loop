@@ -83,6 +83,8 @@ interface Runtime {
   /** One-shot notice flags for caps an armed loop runs past without pausing (never re-fired; anti-stacking). */
   capNotified?: boolean
   stallNotified?: boolean
+  /** One-shot: the "paused at turn cap" courtesy warning already fired for this freeze. */
+  capFreezeNotified?: boolean
 }
 
 const HISTORY = 20
@@ -383,7 +385,11 @@ export class GoalController {
       // Stay paused; the user must clear or set a new goal (a restart resets the turn counter).
       if (!record.loopEnabled && this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
         this.clearDeferred(runtime)
-        this.notify(sessionID, "paused", "warning", "Goal paused at turn cap", `${record.reason ?? "Reached the turn limit."} A message will not extend the cap; run /goal clear or set a new goal.`)
+        // One courtesy warning per freeze; later prompts in the same pause stay silent.
+        if (!runtime.capFreezeNotified) {
+          runtime.capFreezeNotified = true
+          this.notify(sessionID, "paused", "warning", "Goal paused at turn cap", `${record.reason ?? "Reached the turn limit."} A message will not extend the cap; run /goal clear or set a new goal.`)
+        }
         this.commit(record)
         return
       }
