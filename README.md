@@ -7,16 +7,19 @@ Claude Code's `/goal` for **OpenCode v2**. Give the agent a finish line; it keep
 ## Install
 
 ```sh
-opencode plugin add @el4cteo/opencode-goal
+npm i -g @el4cteo/opencode-goal
+opencode-goal install
 ```
 
-Or from GitHub: `opencode plugin add github:EL4CTEO/opencode-goal`, or point `plugins` in `opencode.json` at a local clone:
+Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer; the installer itself needs Node or Bun and has zero dependencies.
 
-```json
-{ "plugins": ["/path/to/opencode-goal"] }
+```sh
+opencode-goal uninstall          # removes exactly what install added; opencode is as it was
+opencode-goal status             # scope, config path, installed yes/no
+opencode-goal install --project  # target the project's config instead of global
 ```
 
-Requires OpenCode 2.0.29 or newer.
+The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and `uninstall --restore` puts the newest backup back if you want it. Prefer doing it by hand? Add `"plugins": ["@el4cteo/opencode-goal"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
 
 ## Use
 
