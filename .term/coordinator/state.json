@@ -297,6 +297,17 @@
       "submittedAt": "2026-11-15T17:42:52Z",
       "mergedAt": "2026-11-15T17:42:58Z",
       "mergedInto": "dev"
+    },
+    "goal-history-pace": {
+      "agent": "inkling-goal-loop-3",
+      "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
+      "branch": "wt/goal-history-pace",
+      "worktree": "worktrees/wt-goal-history-pace",
+      "status": "done",
+      "createdAt": "2026-11-15T17:43:58Z",
+      "submittedAt": "2026-11-15T17:47:34Z",
+      "mergedAt": "2026-11-15T17:47:40Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
