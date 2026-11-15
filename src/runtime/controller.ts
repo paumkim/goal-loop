@@ -1107,7 +1107,9 @@ export class GoalController {
           return
         }
         record.final = usage
-        void this.deps.store.save(record)
+        // Route the final snapshot through commit so the no-op cache mirrors the stored record exactly;
+        // a direct store.save left lastCommit holding the pre-`final` serialized string.
+        void this.commit(record)
       })
       .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
     return saved

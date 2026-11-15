@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=353 -->
+<!-- spec-check files=35 tests=354 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1084,6 +1084,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `store.save` directly, bypassing `commit()`'s no-op cache.** The final spend snapshot is written with the pre-`final` serialized string
   still in `lastCommit`; correctness survives (the next identical `commit()` re-saves), but the cache invariant "lastCommit mirrors the
   durable state" is broken. Proposed fix: route the final save through `commit()` (set `record.final` then `await this.commit(record)`).
+  Resolution: Workstream AK — snapshot re-save routes through commit; no-op cache invariant restored.
 - **A-10 (low) — `src/runtime/controller.ts:1055-1066` — final spend snapshot is fire-and-forget with no retry.** If the snapshot save
   fails it is only logged; the record on disk lacks `final` and `/goal` history loses spend. Acceptable: the error is logged and the
   snapshot is best-effort — waived with reason (spend snapshot is informational, not load-bearing for loop correctness).
@@ -1312,3 +1313,20 @@ and still suppresses the fan-out entirely.
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (353 tests, spec-check ok); coordinator submit.
+
+## Workstream AK — the final spend re-save goes through commit()'s no-op cache (A-9)
+
+`finish()` persisted the terminal record via `commit()` (no-op cache set to the pre-`final` serialized string),
+then the background final-spend snapshot re-saved directly via `store.save()`, leaving `lastCommit` holding a
+stale pre-`final` marker. Correctness survived (the next identical commit would re-save), but the cache
+invariant — `lastCommit` mirrors the last persisted serialization — was broken, so a later commit of the
+`final`-carrying record would redundantly re-save instead of skipping. The snapshot now re-saves via
+`commit(record)`, restoring the invariant.
+
+132. Pin test (`test/loop.test.ts`, 1 new): after the final spend snapshot lands, the controller's no-op cache
+     entry `lastCommit` equals `JSON.stringify(record)` including `final`. Verified to fail on the pre-fix tree
+     and pass with it. Test count 353 → 354.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (354 tests, spec-check ok); coordinator submit.
