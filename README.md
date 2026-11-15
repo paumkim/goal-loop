@@ -31,6 +31,7 @@ The installer only edits the `plugins` array in the global config opencode itsel
 | `/goal-loop <objective>` | Like `/goal`, but when a goal is met the loop summarizes it and arms the next, harder goal automatically |
 | `/goal-loop` | Shows the loop status: objective, iteration, per-iteration history |
 | `/goal-loop clear` | Ends the loop (same aliases as `/goal clear`) |
+| `/goal-loop-<N> <objective>` | Like `/goal-loop`, but caps the loop at `N` iterations for this run only (an integer from 1 to 1000; `/goal-loop=N` works too). An invalid count is called out in a toast and the configured limit applies — it is never guessed or clamped silently |
 
 ```text
 /goal bun test passes with 0 failures and no test file is modified
@@ -98,6 +99,17 @@ under the same `/goal` retry/commit/restore rules; an armed loop does not pause 
 ```text
 /goal-loop make the docs site faster and more complete
 ```
+
+To ask for a different cap on a single run — without touching the configured default — put the count in the
+command itself: `/goal-loop-188 make the whole release pipeline green` or `/goal-loop=3 audit the TUI` arms the
+loop with `maxLoops = 188` (or `3`) for that run only. `N` must be an integer from 1 to 1000 and is never part of
+the objective or the completion condition (`/goal-loop investigate the 12 failing tests` arms the default limit;
+the `12` is objective text). An invalid or out-of-range count (`/goal-loop-abc`, `/goal-loop-0`,
+`/goal-loop-1001`) is stated in a warning toast and the configured limit (default 5) is used — it is not guessed.
+Later parameterless `/goal-loop` runs keep the configured default, and a later `/goal-loop-12 ...` applies only to
+that new run. The directive works from the raw prompt line, so these spellings function even in harnesses that
+do not know them: the plugin's prompt hook strips the token (and the count) before the model ever sees the
+objective, and applies the count to that run only.
 
 The footer shows the iteration (`◎ loop · v2 · active · 14m · 2 turns`); the status dialog shows the objective
 and one line per completed iteration.

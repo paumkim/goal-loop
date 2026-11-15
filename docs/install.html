@@ -31,8 +31,11 @@ opencode-goal --version</code></pre>
 <tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr>
 <tr><td><code>/goal-loop &lt;objective&gt;</code></td><td>Set a goal; each achieved goal arms an improved one until <code>maxLoops</code>, <code>LOOP_COMPLETE</code>, an impossible verdict, or clear</td></tr>
 <tr><td><code>/goal-loop</code></td><td>Show loop status (objective, iteration, history)</td></tr>
-<tr><td><code>/goal-loop clear</code></td><td>End the loop (same aliases as <code>/goal clear</code>)</td></tr></tbody></table></div>
-<pre><code>/goal-loop make the docs site faster and more complete</code></pre>
+<tr><td><code>/goal-loop clear</code></td><td>End the loop (same aliases as <code>/goal clear</code>)</td></tr>
+<tr><td><code>/goal-loop-&lt;N&gt; &lt;objective&gt;</code></td><td>Like <code>/goal-loop</code>, capped at <code>N</code> iterations for this run only (integer 1–1000; <code>/goal-loop=N</code> works too). Invalid counts (<code>/goal-loop-abc</code>, <code>/goal-loop-0</code>, <code>/goal-loop-1001</code>) are called out and the configured limit applies</td></tr></tbody></table></div>
+<pre><code>/goal-loop make the docs site faster and more complete
+/goal-loop-188 make the whole release pipeline green</code></pre>
+<p><code>N</code> is an integer from 1 to 1000 and never becomes part of the objective or completion condition (<code>/goal-loop investigate the 12 failing tests</code> keeps the <code>12</code> as objective text). A per-run cap overrides <code>maxLoops</code> for that run only — the configured default is never rewritten — and a later <code>/goal-loop-12 ...</code> applies only to that new run. The directive also works from a raw prompt line in harnesses that do not know the spelling: the plugin strips the token and applies the count itself (<code>src/core/parse.ts</code>, <code>src/index.ts</code>).</p>
 <p>The loop advances only on a <code>met</code> verdict; each iteration is summarized into a short machine-consumable block and the evaluator proposes the next goal under a strict contract. Pause reasons and resume rules are the same as <code>/goal</code>, plus: an armed <code>/goal-loop</code> never pauses at the turn cap or the stall guard — a one-time warning notice is emitted and the loop keeps running; its stops are Esc, a fatal provider error, or <code>/goal clear</code>; zero-tool-call iterations are recorded but never pause the loop; the loop keeps arming with a fresh compacted context each version.</p>
 <pre><code>/goal bun test passes with 0 failures and no test file is modified</code></pre>
 <p>Parsing: <code>src/core/parse.ts:13</code>.</p></section>

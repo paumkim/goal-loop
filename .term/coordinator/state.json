@@ -842,8 +842,19 @@
       "paths": "src,test,docs,SPEC.md",
       "branch": "wt/goal-loop-command-syntax",
       "worktree": "worktrees/wt-goal-loop-command-syntax",
+      "status": "done",
+      "createdAt": "2026-11-15T22:29:33Z",
+      "submittedAt": "2026-11-15T22:39:32Z",
+      "mergedAt": "2026-11-15T22:45:25Z",
+      "mergedInto": "dev"
+    },
+    "cli-installer": {
+      "agent": "inkling",
+      "paths": "package.json,bin,scripts/,docs/,README.md,SPEC.md,test/",
+      "branch": "wt/cli-installer",
+      "worktree": "worktrees/wt-cli-installer",
       "status": "claimed",
-      "createdAt": "2026-11-15T22:29:33Z"
+      "createdAt": "2026-11-15T22:42:41Z"
     }
   },
   "mergeLock": null

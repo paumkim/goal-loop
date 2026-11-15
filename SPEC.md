@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=413 -->
+<!-- spec-check files=41 tests=435 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1756,15 +1756,68 @@ the check and byte-identical.
 
 Verification: `bun run check` green in the worktree (388 tests / 19 files, tsc clean, TUI load ok, docs
 freshness ok, spec-check ok 39/388); coordinator submit.
-## Workstream AY — CLI installer: `opencode-goal` bin, two-command install/uninstall (iteration 1 condition)
+
+## Workstream AY — goal-loop command syntax (`/goal-loop-<N>`)
+
+Landed after Workstream AX (dead-surface trim); the item numbers below continue from AX (154–157).
+
+Armed condition: parameterized `/goal-loop-<N>` / `/goal-loop=N <objective>` support, implemented in the plugin
+(never the host binary), with the parsing contract below. Parsing rule for N: an integer from 1 to 1000; the
+token is removed from the objective, the per-run cap never rewrites `config.maxLoops`, and an invalid count is
+stated and the configured default is used — never guessed, never silently clamped.
+
+159. `src/core/parse.ts` — `parseGoalLoopDirective(raw): { objective, maxLoops?, invalidCount? } | undefined`.
+     Matches only at the very beginning of the message (leading whitespace tolerated): `/goal-loop`,
+     optionally followed by `-N` or `=N`, bounded by whitespace or end of input. `N` must be ASCII digits and an
+     integer from 1 to 1000 (zero-padded counts are integers in range). Anything else with a suffix — `abc`,
+     `0`, `1001`, `1.5`, `-3`, empty — reports `invalidCount` and falls back to the configured default (a
+     present-but-out-of-range count is invalid, not clamped: rules 2/5 of the contract, not the prose clamp).
+     Everything after the token is the objective (trimmed); the count never enters the completion condition;
+     `/goal-loop investigate the 12 failing tests` keeps `12` as objective text. A bare directive parses with an
+     empty objective (status behavior upstream). `/goal-loopy`, `/goal-loops`, `/goal anything` do not match.
+160. `src/runtime/controller.ts` — record creation factored into a shared private `arm()` (baseline usage,
+     `loopEnabled`/`loopIteration`/`loopObjective`/`loopMaxLoops`/`loopHistory`/`loopNotProgress`, commit, "set"
+     notice). `set()` (command path) is `arm()` + synthetic directive prompt as before. New public
+     `armFromPrompt({ sessionID, condition, maxLoops?, invalidCount? })` is `arm()` only, for the prompt-hook path
+     where the admitted user message IS the kickoff (no synthetic prompt); it fires the "Loop count ignored"
+     warning when `invalidCount` is set (`noteInvalidLoopCount`) and falls back to `config.maxLoops`. The set
+     notice for a loop carries the effective limit (`iteration="1" max="N" · <condition>`). `maxLoops` rides the
+     record; re-anchors and `loopAdvance` read `record.loopMaxLoops ?? config.maxLoops`, so the per-run cap
+     applies end-to-end and later parameterless runs keep the configured default (rule 10).
+161. `src/index.ts` — the session `prompt` hook (real user prompts only; synthetic continuations excluded) parses
+     the raw text first. A valid directive with a non-empty objective is rewritten in place to the `directive()`
+     text (token and count removed; the host awaits the hook before admitting the prompt and reads the mutated
+     text), then the loop is armed via `armFromPrompt`. A bare directive (no objective) shows status and arms
+     nothing; the resume semantics of the hook are unchanged for non-directive prompts. A present-but-invalid
+     count is stated (`Loop count ignored` toast) and the default is used. This is the fix the spec's key limit
+     note calls for — the plugin intercepts before the model sees the prompt; harnesses that hard-reject unknown
+     slash commands before `SessionPrompt.prepare` are out of the plugin's reach by design.
+162. Tests: `test/core.test.ts` (directive parser table, 22 new assertions across parser + plugin + loop
+     suites), `test/loop.test.ts` (`armFromPrompt`: per-run cap recorded, cap ends the loop at N, continuation
+     directive shows the per-run max, a later unparameterized loop uses the default, invalid counts warn and
+     default — 0 and 1001 never clamped), `test/plugin.test.ts` (hook end-to-end: `/goal-loop-188`,
+     `/goal-loop=3`, `/goal-loop-abc`, out-of-range, bare directive, `/goal` untouched — text mutation, storage
+     record, notices). 410 passing, 0 failing (19 files).
+163. Docs (`docs/install.html`, `docs/index.html`, `README.md` commands tables + loop section) document the
+     syntax, the 1..1000 rule, the objective/count separation, and the per-run-only semantics. `/goal` and
+     `/goal-loop` command behavior is unchanged; `/goal` ignores the directive entirely.
+
+Files touched: `src/core/parse.ts`, `src/runtime/controller.ts`, `src/index.ts`, `test/core.test.ts`,
+`test/loop.test.ts`, `test/plugin.test.ts`, `docs/install.html`, `docs/index.html`, `README.md`, `SPEC.md`.
+
+Verification: `bun run check` green in the worktree (410 tests, tsc clean, TUI load ok, docs freshness ok after
+the stamp refresh, spec-check ok 39/410 after the marker bump in this commit); coordinator submit.
+
+## Workstream AZ — CLI installer: `opencode-goal` bin, two-command install/uninstall (iteration 1 condition)
 
 Interpretation of the armed condition: "zero-dependency ESM bin `opencode-goal` in package.json `bin`;
 `install` (default) / `status` / `uninstall`; `--global` (default) / `--project` / `--dry-run`; minimal,
 fail-loud one-line errors, never a stack trace on expected failure paths. User flow:
 `npm i -g @el4cteo/opencode-goal` → `opencode-goal install` → `/goal` → `opencode-goal uninstall`."
 All mechanisms were discovered against the installed opencode v2.3.0, not assumed.
+Landed after Workstream AY (goal-loop command syntax); the item numbers below continue from AY (159–163).
 
-158. **Mechanism decision (verified, not guessed).** OpenCode v2 discovers configured plugins from the
+164. **Mechanism decision (verified, not guessed).** OpenCode v2 discovers configured plugins from the
      `plugins` array in its config file. npm package plugins are installed automatically at startup with
      Bun and cached under `~/.cache/opencode/node_modules`; the server AND TUI entrypoints of the package
      are loaded from that one config entry (verified in a live smoke run: the plugin listed under both
@@ -1775,19 +1828,19 @@ All mechanisms were discovered against the installed opencode v2.3.0, not assume
      config was off the table. The installer therefore edits the `plugins` array itself, surgically.
      Evidence: context7 v2 docs, strings in the installed v2.3.0 binary, and a scratch `XDG_CONFIG_HOME`
      `--standalone` smoke run during design.
-159. **Discovery rules mirrored from the installed binary (v2.3.0)**, documented in the bin's header
+165. **Discovery rules mirrored from the installed binary (v2.3.0)**, documented in the bin's header
      comment: global dir = `$XDG_CONFIG_HOME/opencode` when set, else `~/.config/opencode`; within it
      `opencode.jsonc` wins over `opencode.json` when both exist; `opencode.jsonc` is created when neither
      does. Project: first existing of `opencode.json`, `opencode.jsonc`, `.opencode/opencode.json`,
      `.opencode/opencode.jsonc`; `./opencode.json` is created when none exists (the binary's project
      default). The global/project asymmetry is faithful to the binary and documented as such.
-160. **install** (`bin/opencode-goal.mjs`). Backs up every touched file first (`<file>.<yyyy-MM-DD-HH-mm-ss>Z.bak`,
+166. **install** (`bin/opencode-goal.mjs`). Backs up every touched file first (`<file>.<yyyy-MM-DD-HH-mm-ss>Z.bak`,
      never overwritten; `-2`, `-3`, … on same-second collision). Adds only the `plugins` array entry;
      comments, formatting and unrelated keys survive via a minimal JSONC parser with source spans (no
      re-serialization of the document). Idempotent (`already installed`, exit 0). Creates the config with a
      `$schema` skeleton when absent. Refuses to touch a non-array `plugins` value. Writes never escape the
      target scope; `--dry-run` prints what would happen and writes nothing.
-161. **uninstall.** Removes exactly the entry install added. Drops the whole `plugins` property when it
+167. **uninstall.** Removes exactly the entry install added. Drops the whole `plugins` property when it
      becomes empty. Deletes the config file only when the remaining root is empty or exactly install's
      `$schema` skeleton; otherwise the file stays. If the entry is already missing it reports
      `not installed` and exits 0 (a config file install created is NOT deleted in this case unless it is
@@ -1796,13 +1849,13 @@ All mechanisms were discovered against the installed opencode v2.3.0, not assume
      backup on a missing entry: a backup is pre-install state, and copying it back would silently revert
      post-install edits the user made to unrelated keys — the "never clobber unrelated user config" rule
      wins. Would be reversed to always-restore if the user explicitly asks for `--restore`.
-162. **CLI surface.** `opencode-goal` with no subcommand runs `install`. Subcommands: `install`,
+168. **CLI surface.** `opencode-goal` with no subcommand runs `install`. Subcommands: `install`,
      `uninstall`, `status`. Flags: `--global` (default), `--project`, `--dry-run`, `--restore`
      (uninstall-only), `--help`, `--version`. `--global` and `--project` are mutually exclusive. Expected
      failure paths print one human line (exit 1 for operational failures such as non-array `plugins` or an
      unparseable config, exit 2 for usage errors); no stack trace ever. `status` prints scope, config path,
      installed yes/no, and the detected opencode version (best-effort `opencode --version`).
-163. **Testing** (`test/cli-installer.test.ts`, 25 tests). Failing-before recorded: the suite was written
+169. **Testing** (`test/cli-installer.test.ts`, 25 tests). Failing-before recorded: the suite was written
      first against the not-yet-existing module (`Cannot find module '../bin/opencode-goal.mjs'` — all
      tests failed), the implementation landed, and the three initial mismatches (status wording, a
      multi-line usage dump on the unknown-command path — now one line, and `--version` reading the old
@@ -1811,17 +1864,17 @@ All mechanisms were discovered against the installed opencode v2.3.0, not assume
      discovery order, install creates/adds/backs-up/idempotent/object-form entries/dry-run/project-scope
      isolation, uninstall remove/drop-empty-array/delete-created-file/idempotent/`--restore`, status, and
      `runCli` exit codes/messages.
-164. **Ship surface.** package.json `bin`: `opencode-goal → ./bin/opencode-goal.mjs` (shebang
+170. **Ship surface.** package.json `bin`: `opencode-goal → ./bin/opencode-goal.mjs` (shebang
      `#!/usr/bin/env node`, chmod 755); `files` gains `bin` (the `.d.mts` ships beside it — it is required
      by `tsc` for the test's `.mjs` import and gives TS consumers types); version 1.0.1 → 1.1.0 (semver
      minor: new feature, no breaking change). `npm pack --dry-run` file list inspected; the tarball
      contains the bin and its declarations.
-165. **Docs** (this commit): `docs/install.html` Install section rewritten to the two-command flow
+171. **Docs** (this commit): `docs/install.html` Install section rewritten to the two-command flow
      (install / uninstall / status / project scope / dry-run / --restore / "what the installer touches" /
      manual alternative); README Install section rewritten to match; `docs/index.html` search keywords
      updated. `package.json:40`-style line citations removed from the page prose.
-166. **Marker** bumped `files=39 tests=388` → `files=41 tests=413` (two new shipped files, +25 tests).
-167. **Not run, honestly:** `bun run e2e` — plugin behavior is untouched (this workstream adds an
+172. **Marker** bumped `files=39 tests=410` → `files=41 tests=435` (two new shipped files, +25 tests; dev's marker on the merge base was files=39 tests=410).
+173. **Not run, honestly:** `bun run e2e` — plugin behavior is untouched (this workstream adds an
      installer bin, docs and a version bump; the goal plugin's runtime, evaluator and TUI are unchanged),
      so the e2e's signal would not cover anything this workstream changed; the live scratch proof and
      `bun run check` are the verification. `npm publish` is attempted only with `npm whoami` succeeding;
@@ -1835,3 +1888,5 @@ Verification: `bun run check` green in the worktree before commit (413 tests / 2
 spec-check ok 41/413 after the marker bump in this commit); live scratch proof (fresh `XDG_CONFIG_HOME`,
 `opencode plugin list --standalone` before/after) recorded in the loop report; one read-only
 `opencode-goal status` against the real global config permitted and run.
+
+Merge note (this file): dev gained Workstream AY (goal-loop command syntax) after this branch was cut. The sections were renumbered on merge — AY (159–163) stands as landed on dev; this workstream is AZ (164–173), marker reconciled to the merged tree (files=41, tests=435). The test/check figures in AZ's verification paragraph are the pre-merge worktree record (413 tests); the merged tree was re-verified by the coordinator's merged-result gate before dev advanced.
