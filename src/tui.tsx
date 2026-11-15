@@ -8,8 +8,10 @@
 import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes } from "@opentui/core"
-import { createMemo, createSignal, Show } from "solid-js"
-import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
+import { useTerminalDimensions } from "@opentui/solid"
+import type { JSX } from "@opentui/solid"
+import { createMemo, createSignal, For, Show } from "solid-js"
+import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
 import type { GoalSnapshot, Notice } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
 
@@ -21,6 +23,21 @@ interface Entry {
 
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
+
+/**
+ * Host xlarge dialogs size to their content and can outgrow the terminal; clamping the column to the
+ * viewport (minus one row) keeps the header and hint pinned while the scrollbox gives way. The terminal
+ * dimensions hook only works inside a rendered component (plugins mount before the renderer exists), so
+ * the clamp lives in its own tiny component rendered by the dialog, never in plugin setup.
+ */
+const ClampedColumn = (props: { children?: JSX.Element }) => {
+  const dimensions = useTerminalDimensions()
+  return (
+    <box flexDirection="column" height="100%" maxHeight={Math.max(8, dimensions().height - 1)} paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
+      {props.children}
+    </box>
+  )
+}
 
 export default Plugin.define({
   id: "opencode-goal.tui",
@@ -35,32 +52,111 @@ export default Plugin.define({
     /**
      * Long status text gets a large, scrollable dialog instead of the truncating alert. The host owns the
      * chrome: backdrop, z-index, focus, Esc/ctrl+c dismissal (see `ui/dialog.tsx` in the host sources,
-     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout`/`DialogHeader`
-     * conventions (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right);
-     * those internals are not exported to plugins, so the layout is re-created with the same constants and
+     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout` conventions
+     * (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right); those
+     * internals are not exported to plugins, so the layout is re-created with the same constants and
      * theme tokens instead of being imported.
+     *
+     * The body renders from the live `entries()` snapshot, so it stays current while the dialog is open;
+     * when no snapshot is cached (RPC miss) it falls back to the status notice text.
      */
-    const showStatusDialog = (title: string, message: string) => {
+    const LABEL = 10
+    const label = (text: string) => (
+      <text fg={context.theme.text.faint} flexShrink={0} width={LABEL}>
+        {text}
+      </text>
+    )
+    const field = (name: string, children: JSX.Element, wide = false) => (
+      <box flexDirection="row" gap={2}>
+        {label(name)}
+        <text wrapMode="word" fg={context.theme.text.base} flexGrow={wide ? 1 : 0}>
+          {children}
+        </text>
+      </box>
+    )
+    const statusBody = (sessionID: string, fallback: string) => {
+      const entry = () => entries()[sessionID]
+      const goal = () => entry()?.goal ?? undefined
+      const elapsed = () => {
+        const g = goal()
+        if (!g) return 0
+        return g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry()?.receivedAt ?? now())) : g.elapsedMs
+      }
+      const stateColor = () =>
+        goal()?.status === "paused"
+          ? context.theme.text.feedback.warning.base
+          : goal()?.status === "active"
+            ? context.theme.text.feedback.info.base
+            : context.theme.text.muted
+      return (
+        <Show when={goal()} fallback={<text wrapMode="word" fg={context.theme.text.base}>{fallback}</text>}>
+          {(g) => (
+            <box flexDirection="column" gap={1}>
+              <box flexDirection="row" gap={2}>
+                <text fg={stateColor()} attributes={TextAttributes.BOLD}>
+                  {g().status}
+                </text>
+                <text fg={context.theme.text.muted}>
+                  {formatDurationCoarse(elapsed())} · {g().turns} turn{g().turns === 1 ? "" : "s"}
+                  {g().evaluating ? " · checking" : g().waiting ? " · waiting" : ""}
+                </text>
+              </box>
+              {field("goal", g().condition, true)}
+              <Show when={g().reason}>{(reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
+              <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
+              <Show when={g().loopEnabled}>
+                <box flexDirection="column" gap={1}>
+                  <text fg={context.theme.text.faint}>
+                    loop · v{g().loopIteration ?? 1} of at most {g().loopMaxLoops ?? "?"}
+                  </text>
+                  {field("objective", g().loopObjective ?? "?", true)}
+                  <For each={g().loopHistory ?? []}>
+                    {(entry) => field(`v${entry.version}`, `met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.summary}`, true)}
+                  </For>
+                </box>
+              </Show>
+            </box>
+          )}
+        </Show>
+      )
+    }
+    const showStatusDialog = (sessionID: string, fallback: string) => {
+      try {
+        showStatusDialogInner(sessionID, fallback)
+      } catch (error) {
+        try {
+          context.ui.toast.show({ title: "goal plugin error (dialog)", message: String((error as Error)?.stack ?? error).slice(0, 900), variant: "error", duration: 30000 })
+        } catch {
+          // Even the error toast must not take the plugin down.
+        }
+      }
+    }
+    const showStatusDialogInner = (sessionID: string, fallback: string) => {
       setScrollRef(undefined)
+      // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
+      void rpc
+        .get({ sessionID }, at(sessionID))
+        .then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
+        .catch(() => {})
+      // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
+      const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
-          <box flexDirection="column" height="100%" paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
+          <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
-                {title}
+                {GOAL_GLYPH} /goal{looped() ? " · loop" : ""}
               </text>
               <text fg={context.theme.text.muted} flexShrink={0}>
                 esc
               </text>
             </box>
-            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false}>
-              <text wrapMode="word" fg={context.theme.text.base}>
-                {message}
-              </text>
+            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
+              {statusBody(sessionID, fallback)}
             </scrollbox>
-            <text fg={context.theme.text.muted}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
-          </box>
+            <text fg={context.theme.text.faint}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+          </ClampedColumn>
         ),
         () => {
           setStatusDialogOpen(false)
@@ -91,30 +187,54 @@ export default Plugin.define({
     }
 
     const live = (sessionID: string | undefined) => {
-      if (!sessionID) return undefined
-      ensure(sessionID)
-      const goal = entries()[sessionID]?.goal
-      return goal && (goal.status === "active" || goal.status === "paused") ? goal : undefined
+      try {
+        if (!sessionID) return undefined
+        ensure(sessionID)
+        const goal = entries()[sessionID]?.goal
+        return goal && (goal.status === "active" || goal.status === "paused") ? goal : undefined
+      } catch {
+        return undefined
+      }
     }
 
     const currentSession = () => {
-      const route = context.ui.router.current()
-      return route.type === "session" ? route.sessionID : undefined
+      try {
+        const route = context.ui.router.current()
+        return route.type === "session" ? route.sessionID : undefined
+      } catch {
+        return undefined
+      }
     }
 
+    const safeToast = (options: { title: string; message: string; variant?: "info" | "success" | "warning" | "error"; sessionID?: string; duration?: number }) => {
+      try {
+        context.ui.toast.show({ ...options, variant: options.variant ?? "info" })
+      } catch {
+        // Never let a toast failure take the plugin down with it.
+      }
+    }
     const onNotice = (notice: Notice) => {
+      try {
+        onNoticeInner(notice)
+      } catch {
+        safeToast({ title: "goal plugin notice handler failed", message: "see logs", variant: "error", duration: 8000 })
+      }
+    }
+    const onNoticeInner = (notice: Notice) => {
       const here = currentSession() === notice.sessionID
       if (notice.kind === "status") {
-        // formatStatus() repeats the title in its first line ("Goal active: ..."); don't print it twice.
-        const body = notice.message.startsWith(notice.title) ? notice.message : `${notice.title}\n\n${notice.message}`
-        if (here) showStatusDialog(`${GOAL_GLYPH} /goal`, body)
+        // formatStatus() repeats the title in its first line ("Goal active: ..."); the dialog renders from the live snapshot itself.
+        // Always open the detail view for the session the notice carries: the notice is the response to an explicit
+        // /goal (or palette) action, so the sessionID identifies where to point it; the previous current-tab gate could
+        // swallow the response entirely when the TUI route did not match.
+        showStatusDialog(notice.sessionID, notice.message)
         return
       }
       const important = ATTENTION_KINDS.has(notice.kind)
       if (!here && !important) return
       // Passing sessionID lets the host offer an "Open" action when the notice belongs to a session family
       // that is not currently open (see the plugin toast adapter in the host sources, plugin/api.tsx).
-      context.ui.toast.show({
+      safeToast({
         title: `${GOAL_GLYPH} ${notice.title}`,
         message: notice.message,
         variant: notice.level,
@@ -122,19 +242,33 @@ export default Plugin.define({
         duration: notice.level === "error" || notice.level === "warning" ? 8_000 : 4_000,
       })
       if (important)
-        void context.attention.notify({
-          title: `OpenCode \u00B7 ${notice.title}`,
-          message: notice.message,
-          notification: { when: "blurred" },
-          sound: { name: notice.kind === "achieved" ? "done" : "error", when: "blurred" },
-        })
+        try {
+          void context.attention.notify({
+            title: `OpenCode \u00B7 ${notice.title}`,
+            message: notice.message,
+            notification: { when: "blurred" },
+            sound: { name: notice.kind === "achieved" ? "done" : "error", when: "blurred" },
+          })
+        } catch {
+          // Attention is best-effort; the toast already landed.
+        }
     }
 
     const offChanged = rpc.events.on("changed", (event) => {
-      const data = event.data as { sessionID?: unknown; goal?: GoalSnapshot | null }
-      if (typeof data.sessionID === "string") put(data.sessionID, data.goal ?? null)
+      try {
+        const data = event?.data as { sessionID?: unknown; goal?: GoalSnapshot | null } | undefined
+        if (data && typeof data.sessionID === "string") put(data.sessionID, data.goal ?? null)
+      } catch {
+        // A malformed event must not take the plugin's render tree down.
+      }
     })
-    const offNotice = rpc.events.on("notice", (event) => onNotice(event.data as unknown as Notice))
+    const offNotice = rpc.events.on("notice", (event) => {
+      try {
+        onNotice(event?.data as unknown as Notice)
+      } catch {
+        // Same.
+      }
+    })
 
     // Minute-resolution clock, ticking only while some goal is active.
     const timer = setInterval(() => {
@@ -148,21 +282,37 @@ export default Plugin.define({
     context.ui.slot({
       append: "prompt.footer",
       render: (props) => {
-        const goal = createMemo(() => (props.mode === "normal" ? live(props.sessionID) : undefined))
-        const label = createMemo(() => {
-          const g = goal()
-          if (!g || !props.sessionID) return ""
-          const entry = entries()[props.sessionID]
-          const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs
-          const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
-          const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
-          return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+        const goal = createMemo(() => {
+          try {
+            return props.mode === "normal" ? live(props.sessionID) : undefined
+          } catch {
+            return undefined
+          }
         })
-        const color = () =>
-          goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted
+        const label = createMemo(() => {
+          try {
+            const g = goal()
+            if (!g || !props.sessionID) return ""
+            const entry = entries()[props.sessionID]
+            const elapsed = g.status === "active" ? g.elapsedMs + Math.max(0, now() - (entry?.receivedAt ?? now())) : g.elapsedMs
+            const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
+            const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
+            if (g.loopEnabled) return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+            return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+          } catch {
+            return ""
+          }
+        })
+        const color = () => {
+          try {
+            return goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted
+          } catch {
+            return context.theme.text.muted
+          }
+        }
         return (
           <Show when={goal()}>
-            <box flexShrink={0} onMouseUp={() => props.sessionID && context.keymap.dispatch("goal.status")}>
+            <box flexShrink={0} onMouseUp={() => { try { if (props.sessionID) context.keymap.dispatch("goal.status") } catch {} }}>
               <text fg={color()} wrapMode="none">
                 {label()}
               </text>
@@ -187,7 +337,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "up",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollBy(-3),
+          run: () => { try { scrollRef()?.scrollBy(-3) } catch {} },
         },
         {
           id: "goal.status.scroll-down",
@@ -195,7 +345,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "down",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollBy(3),
+          run: () => { try { scrollRef()?.scrollBy(3) } catch {} },
         },
         {
           id: "goal.status.page-up",
@@ -203,7 +353,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "pageup",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollBy(-15),
+          run: () => { try { scrollRef()?.scrollBy(-15) } catch {} },
         },
         {
           id: "goal.status.page-down",
@@ -211,7 +361,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "pagedown",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollBy(15),
+          run: () => { try { scrollRef()?.scrollBy(15) } catch {} },
         },
         {
           id: "goal.status.home",
@@ -219,7 +369,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "home",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollTo(0),
+          run: () => { try { scrollRef()?.scrollTo(0) } catch {} },
         },
         {
           id: "goal.status.end",
@@ -227,7 +377,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "end",
           enabled: () => statusDialogOpen(),
-          run: () => scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER),
+          run: () => { try { scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER) } catch {} },
         },
       ],
     }))
@@ -252,6 +402,28 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession())),
+          run: () => {
+            const sessionID = currentSession()
+            if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
+          },
+        },
+        {
+          id: "goal.loop.status",
+          title: "Goal loop: show status",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession())?.loopEnabled ?? entries()[currentSession() ?? ""]?.goal?.loopEnabled),
+          run: () => {
+            const sessionID = currentSession()
+            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
+          },
+        },
+        {
+          id: "goal.loop.clear",
+          title: "Goal loop: clear",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession())?.loopEnabled),
           run: () => {
             const sessionID = currentSession()
             if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})

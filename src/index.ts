@@ -1,9 +1,12 @@
 /**
- * opencode-goal: `/goal <condition>` for OpenCode v2.
+ * opencode-goal: `/goal <condition>` and `/goal-loop <objective>` for OpenCode v2.
  *
  * Sets a completion condition for the session; after every turn an evaluator checks it against the conversation
- * and, until it holds, the plugin starts the next turn itself. Mirrors Claude Code's /goal (status, clear aliases,
- * met / not met / impossible verdicts, stall guard, retries, background-work check-ins, restore on restart).
+ * and, until it holds, the plugin starts the next turn itself. `/goal-loop` layers a continuous improvement
+ * loop on the same machinery: once the evaluator says `met`, the achieved iteration is summarized and the next,
+ * harder goal is armed automatically until the loop is cleared, capped, or the evaluator finds nothing left.
+ * Mirrors Claude Code's /goal (status, clear aliases, met / not met / impossible verdicts, stall guard, retries,
+ * background-work check-ins, restore on restart).
  */
 import { Plugin } from "@opencode/plugin"
 import { spawnSync } from "node:child_process"
@@ -24,6 +27,7 @@ import { GoalStore } from "./runtime/store.ts"
 export const PLUGIN_ID = "opencode-goal"
 
 const DESCRIPTION = "keep working until a condition is met"
+const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"
 
 function createLogger(): Logger {
   const tag = `[${PLUGIN_ID}]`
@@ -170,22 +174,26 @@ export default Plugin.define({
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
-    // ---- the /goal command
+    // ---- the /goal and /goal-loop commands
     await ctx.command.transform((editor) => {
-      editor.add({
-        name: "goal",
-        description: DESCRIPTION,
-        execute: async ({ sessionID, prompt, delivery }) => {
-          await controller.command({
-            sessionID,
-            text: prompt.text ?? "",
-            delivery,
-            ...(prompt.files ? { files: prompt.files } : {}),
-            ...(prompt.agents ? { agents: prompt.agents } : {}),
-            ...(prompt.skills ? { skills: prompt.skills } : {}),
-          })
-        },
-      })
+      const addCommand = (name: string, description: string, loop: boolean) =>
+        editor.add({
+          name,
+          description,
+          execute: async ({ sessionID, prompt, delivery }) => {
+            await controller.command({
+              sessionID,
+              text: prompt.text ?? "",
+              delivery,
+              loop,
+              ...(prompt.files ? { files: prompt.files } : {}),
+              ...(prompt.agents ? { agents: prompt.agents } : {}),
+              ...(prompt.skills ? { skills: prompt.skills } : {}),
+            })
+          },
+        })
+      addCommand("goal", DESCRIPTION, false)
+      addCommand("goal-loop", LOOP_DESCRIPTION, true)
     })
 
     // ---- hooks

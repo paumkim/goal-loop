@@ -63,13 +63,28 @@ export interface VerdictEntry {
   readonly at: number
 }
 
+/** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */
+export interface LoopEntry {
+  /** 1-based iteration number (v1 is 1). */
+  readonly version: number
+  /** The condition that was achieved. */
+  readonly condition: string
+  /** Machine-consumable summary produced by the evaluator when the iteration was met. */
+  readonly summary: string
+  readonly reason: string
+  readonly turns: number
+  readonly toolCalls: number
+  readonly endedAt: number
+}
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 export interface GoalRecord {
   readonly version: 1
   readonly id: string
   readonly sessionID: string
   readonly directory: string
-  readonly condition: string
+  /** Mutable: `/goal-loop` re-arms the same record with the next iteration's condition. */
+  condition: string
   status: GoalStatus
   /** Latest evaluator reason, pause cause, or end reason. */
   reason?: string
@@ -89,6 +104,19 @@ export interface GoalRecord {
   baseline: UsageSnapshot
   final?: UsageSnapshot
   history: VerdictEntry[]
+  /** Loop fields (additive; absent on records written before `/goal-loop`). */
+  /** True when this goal was armed by `/goal-loop`; the loop advances only on a `met` verdict. */
+  loopEnabled?: boolean
+  /** 1-based iteration; 1 is the goal set by `/goal-loop` itself. */
+  loopIteration?: number
+  /** The objective passed to `/goal-loop`; constant across iterations. */
+  loopObjective?: string
+  /** The loop cap captured when the loop was set (from config at that time). */
+  loopMaxLoops?: number
+  /** Completed iterations, oldest first. */
+  loopHistory?: LoopEntry[]
+  /** Consecutive iterations with zero tool calls; two pause the loop. */
+  loopNotProgress?: number
 }
 
 /** Read model shared with clients over RPC. */
@@ -115,7 +143,7 @@ export interface FailureInfo {
 
 export type NoticeLevel = "info" | "success" | "warning" | "error"
 
-export type NoticeKind = "set" | "status" | "cleared" | "achieved" | "impossible" | "paused" | "resumed" | "retry" | "failed" | "checkin" | "error" | "compact"
+export type NoticeKind = "set" | "status" | "cleared" | "achieved" | "impossible" | "paused" | "resumed" | "retry" | "failed" | "checkin" | "error" | "compact" | "loop"
 
 export interface Notice {
   readonly sessionID: string

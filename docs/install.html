@@ -15,7 +15,12 @@
 <div class="tablewrap"><table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
 <tr><td><code>/goal &lt;condition&gt;</code></td><td>Set goal and start immediately</td></tr>
 <tr><td><code>/goal</code></td><td>Show status</td></tr>
-<tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr></tbody></table></div>
+<tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr>
+<tr><td><code>/goal-loop &lt;objective&gt;</code></td><td>Set a goal; each achieved goal arms an improved one until <code>maxLoops</code>, <code>LOOP_COMPLETE</code>, an impossible verdict, or clear</td></tr>
+<tr><td><code>/goal-loop</code></td><td>Show loop status (objective, iteration, history)</td></tr>
+<tr><td><code>/goal-loop clear</code></td><td>End the loop (same aliases as <code>/goal clear</code>)</td></tr></tbody></table></div>
+<pre><code>/goal-loop make the docs site faster and more complete</code></pre>
+<p>The loop advances only on a <code>met</code> verdict; each iteration is summarized into a short machine-consumable block and the evaluator proposes the next goal under a strict contract. Pause reasons and resume rules are the same as <code>/goal</code>, plus: two consecutive zero-tool-call iterations pause the loop.</p>
 <pre><code>/goal bun test passes with 0 failures and no test file is modified</code></pre>
 <p>Parsing: <code>src/core/parse.ts:13</code>.</p></section>
 <section id="options"><h2>opencode.json options</h2>
@@ -37,6 +42,9 @@ OPENCODE_GOAL_MAX_TURNS
 OPENCODE_GOAL_CHECKIN_MINUTES
 OPENCODE_GOAL_COMMIT_BRANCH
 OPENCODE_GOAL_REQUIRE_COMMIT
-OPENCODE_GOAL_COORDINATOR</code></pre></section>
+OPENCODE_GOAL_COORDINATOR
+OPENCODE_GOAL_COMPACT_AT_TOKENS
+OPENCODE_GOAL_MAX_LOOPS
+OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS</code></pre></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#install">Install</a></li><li><a href="#commands">Commands</a></li><li><a href="#options">Options</a></li><li><a href="#troubleshoot">Troubleshooting</a></li></ul></aside>
 </div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-14 03:23 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer><script src="app.js"></script></body></html>

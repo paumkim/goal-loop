@@ -11,12 +11,13 @@ import {
   type GoalRecord,
   type GoalSnapshot,
   type GoalStatus,
+  type LoopEntry,
   type Notice,
   type NoticeKind,
   type NoticeLevel,
   type UsageSnapshot,
 } from "../core/types.ts"
-import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
+import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
 import type { GoalStore } from "./store.ts"
 
 export interface ControllerDeps {
@@ -39,6 +40,8 @@ interface Runtime {
   /** Bumped by anything that invalidates in-flight async work (new turn, prompt, clear, replace). */
   epoch: number
   toolCalls: number
+  /** Tool calls accumulated across the whole current loop iteration (resets when the iteration is armed). */
+  iterationToolCalls: number
   /** Tool calls from turns whose evaluation was deferred by background work. */
   carriedToolCalls: number
   evaluating: boolean
@@ -121,8 +124,8 @@ export class GoalController {
 
   // ---------------------------------------------------------------- commands
 
-  /** Entry point for `/goal <args>`. */
-  async command(input: { sessionID: string; text: string; delivery: Delivery } & PromptAttachments): Promise<void> {
+  /** Entry point for `/goal <args>` and `/goal-loop <args>`. */
+  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
     const parsed = parseGoalCommand(input.text, this.deps.config.maxConditionChars)
     switch (parsed.type) {
       case "status":
@@ -131,19 +134,21 @@ export class GoalController {
         this.clear(input.sessionID)
         return
       case "invalid":
-        this.notify(input.sessionID, "error", "error", "Goal not set", parsed.message)
+        this.notify(input.sessionID, "error", "error", `${input.loop ? "Loop" : "Goal"} not set`, parsed.message)
         return
       case "set":
-        return this.set({ ...input, condition: parsed.condition })
+        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}) })
     }
   }
 
-  async set(input: { sessionID: string; condition: string; delivery: Delivery } & PromptAttachments): Promise<void> {
+  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
     const { sessionID, condition } = input
     const previous = this.live(sessionID)
     if (previous) this.finish(previous, "cleared", "Replaced by a new goal.")
     const now = this.deps.clock.now()
     const baseline = (await this.deps.session.usage(sessionID).catch(() => undefined)) ?? EMPTY_USAGE
+    const loop = input.loop === true
+    const maxLoops = this.deps.config.maxLoops
     const record: GoalRecord = {
       version: 1,
       id: this.newId(),
@@ -159,22 +164,30 @@ export class GoalController {
       checkins: 0,
       baseline,
       history: [],
+      ...(loop
+        ? { loopEnabled: true, loopIteration: 1, loopObjective: condition, loopMaxLoops: maxLoops, loopHistory: [], loopNotProgress: 0 }
+        : {}),
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
     this.commit(record)
-    this.notify(sessionID, "set", "info", previous ? "Goal replaced" : "Goal set", condition)
+    const loopLabel = loop ? "Loop" : "Goal"
+    this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, condition)
     try {
       await this.deps.session.prompt({
         sessionID,
-        text: Prompt.directive(condition, this.deps.commit),
+        text: Prompt.directive(
+          condition,
+          this.deps.commit,
+          loop ? { iteration: 1, maxLoops, objective: condition, history: [] } : undefined,
+        ),
         delivery: input.delivery,
         ...(input.files?.length ? { files: input.files } : {}),
         ...(input.agents?.length ? { agents: input.agents } : {}),
         ...(input.skills?.length ? { skills: input.skills } : {}),
       })
     } catch (error) {
-      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the goal: ${message(error)}`)
+      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${message(error)}`)
       throw error
     }
   }
@@ -375,10 +388,12 @@ export class GoalController {
     record.retries = 0
     record.verdict = result.verdict
     record.reason = result.reason || undefined
+    runtime.iterationToolCalls += tools
     record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now() })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
     if (result.verdict === "met") {
+      if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
       this.finish(record, "achieved", result.reason)
       this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, result.reason || record.condition)
       return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason)
@@ -397,6 +412,131 @@ export class GoalController {
       text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason }, this.deps.commit),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
+    })
+  }
+
+  /**
+   * Loop step, run only on a `met` verdict for a looped goal. Summarizes the achieved iteration into a compact
+   * machine-consumable block, then asks the evaluator for the next condition (or LOOP_COMPLETE). Arms the next
+   * iteration under the same /goal rules, or ends the loop cleanly. Never runs on not_met/impossible/pause/retry.
+   *
+   * Loop bookkeeping is on the record: `loopHistory` carries completed iterations, `loopNotProgress` counts
+   * consecutive iterations with zero tool calls (two pause the loop). Every await is epoch-guarded; a superseded
+   * loop step drops its result without saving.
+   */
+  private async loopAdvance(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    result: EvaluationResult,
+    turn: number,
+  ): Promise<void> {
+    const { config, clock, log } = this.deps
+    const sessionID = record.sessionID
+    const iteration = record.loopIteration ?? 1
+    const maxLoops = record.loopMaxLoops ?? config.maxLoops
+    const objective = record.loopObjective ?? record.condition
+    const history: LoopEntry[] = [...(record.loopHistory ?? [])]
+    const now = clock.now()
+    const iterationTools = runtime.iterationToolCalls
+
+    const endClean = (reason: string) => {
+      record.loopHistory = history
+      this.finish(record, "achieved", reason)
+      this.notify(sessionID, "achieved", "success", "Loop complete", reason)
+      return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
+    }
+
+    if (!this.deps.evaluator.summarize || !this.deps.evaluator.nextGoal) {
+      const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
+      log.error("loop step unavailable", { sessionID })
+      record.loopHistory = history
+      return this.pause(record, reason)
+    }
+
+    const summarize = new AbortController()
+    let summary: string
+    try {
+      summary = (
+        await this.deps.evaluator.summarize({
+          sessionID,
+          objective,
+          condition: record.condition,
+          reason: result.reason,
+          turn,
+          elapsedMs: now - record.startedAt,
+          toolCalls: iterationTools,
+          history,
+          maxSummaryTokens: config.maxLoopSummaryTokens,
+          signal: summarize.signal,
+        })
+      ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
+    } catch (error) {
+      if (this.stale(record, runtime, epoch)) return
+      log.error("loop summary failed", { sessionID, error: message(error) })
+      return this.pause(record, `The loop summary failed: ${truncate(message(error), 160)}`)
+    }
+    if (this.stale(record, runtime, epoch)) return
+
+    const entry: LoopEntry = {
+      version: iteration,
+      condition: record.condition,
+      summary: summary.trim(),
+      reason: result.reason,
+      turns: turn,
+      toolCalls: iterationTools,
+      endedAt: clock.now(),
+    }
+    history.push(entry)
+    record.loopHistory = history
+    record.loopNotProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
+    log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
+
+    if ((record.loopNotProgress ?? 0) >= 2) {
+      return this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
+    }
+    if (history.length >= maxLoops) {
+      return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${history.length} achieved iteration${history.length === 1 ? "" : "s"}.`)
+    }
+
+    const generate = new AbortController()
+    let reply: string
+    try {
+      reply = await this.deps.evaluator.nextGoal({ sessionID, objective, history, latestSummary: entry.summary, signal: generate.signal })
+    } catch (error) {
+      if (this.stale(record, runtime, epoch)) return
+      log.error("loop next-goal generation failed", { sessionID, error: message(error) })
+      return this.pause(record, `The loop next-goal generator failed: ${truncate(message(error), 160)}`)
+    }
+    if (this.stale(record, runtime, epoch)) return
+
+    if (Prompt.isLoopComplete(reply)) {
+      return endClean(`Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}: the evaluator found nothing worth improving.`)
+    }
+    const condition = Prompt.parseNextCondition(reply)
+    if (!condition) {
+      return endClean("Loop complete: the next-goal generator returned nothing usable.")
+    }
+
+    const nextIteration = iteration + 1
+    record.condition = condition
+    record.loopIteration = nextIteration
+    record.turns = 0
+    record.stall = 0
+    record.retries = 0
+    record.checkins = 0
+    record.verdict = undefined
+    record.reason = undefined
+    record.startedAt = clock.now()
+    this.clearDeferred(runtime)
+    runtime.iterationToolCalls = 0
+    this.commit(record)
+    this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
+    await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    await this.continueWith(record, {
+      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+      description: `goal-loop · arming v${nextIteration}`,
+      turn: 1,
     })
   }
 
@@ -556,7 +696,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { epoch: 0, toolCalls: 0, carriedToolCalls: 0, evaluating: false }
+      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -569,6 +709,7 @@ export class GoalController {
     this.runtimes.set(sessionID, {
       epoch: (previous?.epoch ?? 0) + 1,
       toolCalls: previous?.toolCalls ?? 0,
+      iterationToolCalls: 0,
       carriedToolCalls: 0,
       evaluating: false,
     })
