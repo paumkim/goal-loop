@@ -283,14 +283,20 @@ export class GoalController {
     }
   }
 
-  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
+  /**
+   * Create, persist and announce a goal/loop record. Shared by the command path (`set()`, which then asks the host
+   * to admit a synthetic directive message) and the prompt-hook path (`armFromPrompt()`, where the host admits the
+   * user's own directive-carrying prompt as the kickoff, so no synthetic message is sent). Returns the record.
+   */
+  private async arm(input: { sessionID: string; condition: string; loop: boolean; maxLoops?: number }): Promise<GoalRecord> {
     const { sessionID, condition } = input
     const previous = this.live(sessionID)
     if (previous) this.finish(previous, "cleared", "Replaced by a new goal.")
     const now = this.deps.clock.now()
     const baseline = (await this.deps.session.usage(sessionID).catch(() => undefined)) ?? EMPTY_USAGE
-    const loop = input.loop === true
-    const maxLoops = this.deps.config.maxLoops
+    const loop = input.loop
+    // Per-run override only: this never touches config.maxLoops, so a later /goal-loop-<N> applies to that run alone.
+    const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
     const record: GoalRecord = {
       version: 1,
       id: this.newId(),
@@ -312,10 +318,20 @@ export class GoalController {
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
-    // Await the initial write: a crash between set() returning and the record landing would silently un-set the goal.
+    // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
     const loopLabel = loop ? "Loop" : "Goal"
-    this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, condition)
+    const detail = loop ? `iteration="1" max="${maxLoops}" · ${condition}` : condition
+    this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, detail)
+    return record
+  }
+
+  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean; maxLoops?: number } & PromptAttachments): Promise<void> {
+    const { sessionID, condition } = input
+    const loop = input.loop === true
+    const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
+    const record = await this.arm({ sessionID, condition, loop, ...(input.maxLoops !== undefined ? { maxLoops: input.maxLoops } : {}) })
+    const loopLabel = loop ? "Loop" : "Goal"
     try {
       await this.deps.session.prompt({
         sessionID,
@@ -333,6 +349,27 @@ export class GoalController {
       if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${errorMessage(error)}`)
       throw error
     }
+  }
+
+  /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
+  noteInvalidLoopCount(sessionID: string, invalidCount: string): void {
+    this.notify(
+      sessionID,
+      "set",
+      "warning",
+      "Loop count ignored",
+      `"${invalidCount}" is not a valid loop count (an integer from 1 to 1000); using the default limit of ${this.deps.config.maxLoops}.`,
+    )
+  }
+
+  /**
+   * Arm a loop from a raw user prompt that carried the `/goal-loop[-N|=N]` directive (the unknown-slash-command
+   * path). The host admits the rewritten prompt as the kickoff message, so unlike `set()` this does not ask the host
+   * to send a synthetic directive — it only creates the record. `maxLoops` is a per-run cap; config.maxLoops is untouched.
+   */
+  async armFromPrompt(input: { sessionID: string; condition: string; maxLoops?: number; invalidCount?: string }): Promise<GoalRecord> {
+    if (input.invalidCount !== undefined) this.noteInvalidLoopCount(input.sessionID, input.invalidCount)
+    return this.arm({ sessionID: input.sessionID, condition: input.condition, loop: true, ...(input.maxLoops !== undefined ? { maxLoops: input.maxLoops } : {}) })
   }
 
   clear(sessionID: string): boolean {
