@@ -180,10 +180,12 @@ or requested within the last 2 minutes is not re-requested; a lost in-flight mar
 
 ```sh
 bun install
-bun run check                         # typecheck + unit tests
+bun run check                         # typecheck + unit tests + compile + TUI load check (also runs in CI, see .github/workflows/check.yml)
 bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server (model also via E2E_MODEL, default opencode/deepseek-v4.1-flash-free)
 E2E_MODEL=opencode/deepseek-v4.1-flash-free bun run e2e <empty-dir>
 ```
+
+Every push to `dev`/`main` and every pull request runs `bun install --frozen-lockfile`, `bun run check` and an `npm pack --dry-run` smoke test on GitHub Actions (`.github/workflows/check.yml`).
 
 ## Documentation
 

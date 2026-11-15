@@ -11,6 +11,16 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-14 23:08 UTC</code></td><td>fix(loop): count superseded tool work and background deferral toward iterations</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 23:04 UTC</code></td><td>fix(store): never let a failed durable write pass for a persisted one</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 23:00 UTC</code></td><td>fix(loop): re-check epoch staleness before the arming steer</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 22:58 UTC</code></td><td>fix(loop): ignore straggler succeeded events after failed/interrupted turns</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 22:55 UTC</code></td><td>fix(loop): close four arm-time failure modes</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 22:44 UTC</code></td><td>fix(loop): await the terminal persist in goal-loop end paths</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 22:25 UTC</code></td><td>fix(loop): persist the armed iteration before announcing it; drop duplicate advances</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 22:03 UTC</code></td><td>refactor(prompts): extract the shared commitRuleSentence builder used by suffix, retry, check-in, system reminder and evaluator facts; outputs pinned byte-identical by test/commit-rule.test.ts</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:56 UTC</code></td><td>refactor: dedupe shared helpers (errorMessage, truncate, nextGoalFacts, elapsedOf/refresh), purge unused exports and dead code</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:52 UTC</code></td><td>docs: sync line refs, add missing compactor/context-size pages, document top-level model option, regenerate changelog</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(tui): skip setEntries when an incoming snapshot is identical, so renders happen only on real change</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(controller): skip store writes and change emissions when the record is unchanged since the last commit</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 21:45 UTC</code></td><td>refactor(config): unify string/boolean flag parsing behind one flag() helper</td><td>commit</td></tr>
@@ -31,18 +41,8 @@
 <tr><td><code>2026-11-14 03:12 UTC</code></td><td>docs: sync docs, README, SPEC, AGENTS with code</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 03:07 UTC</code></td><td>feat: plugin-managed auto-compaction at an absolute token threshold</td><td>commit</td></tr>
 <tr><td><code>2026-11-09 15:52 UTC</code></td><td>feat: coordinator bootstrap, strict detection, locks, fuzzy SPEC</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 15:41 UTC</code></td><td>fix(tui): HUD overlays existing backdrop, no own background</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 15:25 UTC</code></td><td>Left-align goal HUD in session.composer.top (avoid Jump to latest)</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 15:20 UTC</code></td><td>Move goal HUD from footer to composer-top, right-aligned</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 13:43 UTC</code></td><td>fix: full audit — coordinator locks, controller restore/deferred, error taxonomy + tests</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 12:52 UTC</code></td><td>enable coordinator:true (always-on mode for /goal)</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 12:10 UTC</code></td><td>trim coordinator prompt to thin adapter (3-line agent flow, strict evaluator)</td><td>commit</td></tr>
-<tr><td><code>2026-11-09 11:01 UTC</code></td><td>feat(goal): add coordinator mode for wt/&lt;slug&gt; + submit flow</td><td>commit</td></tr>
-<tr><td><code>2026-11-07 07:34 UTC</code></td><td>Add dark mode theme for docs site (midnight palette + toggle)</td><td>commit</td></tr>
-<tr><td><code>2026-11-07 07:27 UTC</code></td><td>Add how-to-view docs guide to README and install page</td><td>commit</td></tr>
-<tr><td><code>2026-11-07 07:20 UTC</code></td><td>Add flat HTML docs site for opencode-goalv2</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-14 21:45 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-14 21:52 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
