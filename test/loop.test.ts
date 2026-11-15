@@ -1068,6 +1068,16 @@ describe("/goal-loop idempotent arming", () => {
   })
 })
 
+  test("a plain (non-loop) goal gets no boundary compaction at restore (a4)", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.setGoal("all tests pass")
+    await h.controller.dispose()
+    const h2 = harness({}, storage)
+    expect(await h2.controller.restore()).toBe(1)
+    expect(h2.compactCalls).toHaveLength(0)
+  })
+
   test("restore({ boundaryCompact: false }) adopts live records without requesting a host compaction", async () => {
     const storage = new MemoryStorage()
     const h = harness({}, storage)
