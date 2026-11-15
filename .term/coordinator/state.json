@@ -792,6 +792,25 @@
       "submittedAt": "2026-11-15T22:02:12Z",
       "mergedAt": "2026-11-15T22:03:57Z",
       "mergedInto": "dev"
+    },
+    "async-hole-sweep": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test,SPEC.md,dist",
+      "branch": "wt/async-hole-sweep",
+      "worktree": "worktrees/wt-async-hole-sweep",
+      "status": "done",
+      "createdAt": "2026-11-15T22:05:01Z",
+      "submittedAt": "2026-11-15T22:08:33Z",
+      "mergedAt": "2026-11-15T22:08:54Z",
+      "mergedInto": "dev"
+    },
+    "opencode-cli-slotmap-verify": {
+      "agent": "",
+      "paths": "SPEC.md",
+      "branch": "wt/opencode-cli-slotmap-verify",
+      "worktree": "worktrees/wt-opencode-cli-slotmap-verify",
+      "status": "claimed",
+      "createdAt": "2026-11-15T22:08:37Z"
     }
   },
   "mergeLock": null
