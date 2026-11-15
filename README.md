@@ -12,7 +12,13 @@ From GitHub, no npm account or registry access needed:
 opencode plugin add github:paumkim/opencode-goalv2#v1.1.0
 ```
 
-That installs the plugin and registers it in your global opencode config. Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer.
+That installs the plugin and registers it in your global opencode config (as `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`). No npm account or registry is involved — opencode fetches the tag straight from GitHub. Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer.
+
+To remove it, ask opencode to remove it — the CLI installer's `uninstall` does not touch entries it did not add:
+
+```sh
+opencode plugin remove github:paumkim/opencode-goalv2#v1.1.0
+```
 
 Alternatively, install the CLI installer from the GitHub release and let it register the plugin for you:
 
@@ -21,7 +27,7 @@ npm i -g https://github.com/paumkim/opencode-goalv2/releases/download/v1.1.0/ope
 opencode-goal install
 ```
 
-`npm i -g opencode-goalv2` (no URL) only works once the package is published to npmjs.org; until then use one of the two routes above.
+Note: the installer always registers the bare `"opencode-goalv2"` specifier, which opencode resolves from the npm registry — on a machine whose opencode cache does not already hold the package, the plugin shows as `failed` in `/plugins` until `opencode-goalv2` is published on npmjs.org. Until then, route one is the registry-free option. `npm i -g opencode-goalv2` (no URL) and the route-two plugin entry both work once the package is published.
 
 ```sh
 opencode-goal uninstall          # removes exactly what install added; opencode is as it was
