@@ -781,6 +781,17 @@
       "submittedAt": "2026-11-15T21:56:39Z",
       "mergedAt": "2026-11-15T21:56:56Z",
       "mergedInto": "dev"
+    },
+    "opencode-cli-scratch-config-spec-md": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-cli.ts",
+      "branch": "wt/opencode-cli-scratch-config-spec-md",
+      "worktree": "worktrees/wt-opencode-cli-scratch-config-spec-md",
+      "status": "done",
+      "createdAt": "2026-11-15T22:01:08Z",
+      "submittedAt": "2026-11-15T22:02:12Z",
+      "mergedAt": "2026-11-15T22:03:57Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
