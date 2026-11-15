@@ -154,6 +154,17 @@
       "submittedAt": "2026-11-15T07:12:54Z",
       "mergedAt": "2026-11-15T07:13:15Z",
       "mergedInto": "dev"
+    },
+    "goal-rpc-no-500": {
+      "agent": "orchestrator",
+      "paths": "src,test",
+      "branch": "wt/goal-rpc-no-500",
+      "worktree": "worktrees/wt-goal-rpc-no-500",
+      "status": "done",
+      "createdAt": "2026-11-15T07:16:37Z",
+      "submittedAt": "2026-11-15T07:19:59Z",
+      "mergedAt": "2026-11-15T07:20:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
