@@ -242,6 +242,36 @@
       "submittedAt": "2026-11-15T16:54:33Z",
       "mergedAt": "2026-11-15T16:54:39Z",
       "mergedInto": "dev"
+    },
+    "record-fix-spec-scoping": {
+      "agent": "orchestrator",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/record-fix-spec-scoping",
+      "worktree": "worktrees/wt-record-fix-spec-scoping",
+      "status": "done",
+      "createdAt": "2026-11-15T16:54:58Z",
+      "submittedAt": "2026-11-15T16:55:09Z",
+      "mergedAt": "2026-11-15T16:55:14Z",
+      "mergedInto": "dev"
+    },
+    "goal-loop-audit-hardening": {
+      "agent": "orchestrator",
+      "paths": "src,test,docs,scripts,SPEC.md,AGENTS.md,package.json",
+      "branch": "wt/goal-loop-audit-hardening",
+      "worktree": "worktrees/wt-goal-loop-audit-hardening",
+      "status": "done",
+      "createdAt": "2026-11-15T16:57:50Z",
+      "submittedAt": "2026-11-15T17:13:23Z",
+      "mergedAt": "2026-11-15T17:18:37Z",
+      "mergedInto": "dev"
+    },
+    "record-final-leases": {
+      "agent": "orchestrator",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/record-final-leases",
+      "worktree": "worktrees/wt-record-final-leases",
+      "status": "claimed",
+      "createdAt": "2026-11-15T17:22:00Z"
     }
   },
   "mergeLock": null
