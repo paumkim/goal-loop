@@ -853,8 +853,11 @@
       "paths": "package.json,bin,scripts/,docs/,README.md,SPEC.md,test/",
       "branch": "wt/cli-installer",
       "worktree": "worktrees/wt-cli-installer",
-      "status": "claimed",
-      "createdAt": "2026-11-15T22:42:41Z"
+      "status": "done",
+      "createdAt": "2026-11-15T22:42:41Z",
+      "submittedAt": "2026-11-15T22:49:09Z",
+      "mergedAt": "2026-11-15T22:53:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
