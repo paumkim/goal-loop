@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatTokens } from "../src/core/format.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens } from "../src/core/format.ts"
 import { parseGoalCommand } from "../src/core/parse.ts"
 import {
   checkin,
@@ -13,7 +13,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
-import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy } from "../src/core/types.ts"
+import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { parseVerdict } from "../src/core/verdict.ts"
 
 const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
@@ -191,6 +191,58 @@ describe("format", () => {
   })
   test("usage diff never goes negative", () => {
     expect(diffUsage(EMPTY_USAGE, { ...EMPTY_USAGE, cost: 5 }).cost).toBe(0)
+  })
+})
+
+describe("formatStatus", () => {
+  const base = (): GoalRecord => ({
+    version: 1,
+    id: "goal_test",
+    sessionID: "ses_test",
+    directory: "/tmp/goal-test",
+    condition: "all tests pass",
+    status: "active",
+    setAt: 1_000,
+    startedAt: 1_000,
+    turns: 3,
+    stall: 0,
+    retries: 0,
+    checkins: 0,
+    baseline: EMPTY_USAGE,
+    history: [],
+  })
+  const looped = (loopCompact?: GoalRecord["loopCompact"]): GoalRecord => ({
+    ...base(),
+    loopEnabled: true,
+    loopIteration: 2,
+    loopObjective: "ship the thing",
+    loopMaxLoops: 5,
+    loopHistory: [
+      { version: 1, condition: "all tests pass", summary: "did the first part", reason: "ok", turns: 2, toolCalls: 4, endedAt: 2_000 },
+    ],
+    ...(loopCompact ? { loopCompact } : {}),
+  })
+  test("plain goals never render a compact line", () => {
+    const text = formatStatus(base(), 10_000, undefined)
+    expect(text).not.toContain("Loop compact")
+    expect(text).not.toContain("Loop:")
+  })
+  test("a pending boundary compact renders age and miss count", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 1 }), 70_000, undefined)
+    expect(text).toMatch(/Loop compact: pending \d/)
+    expect(text).toContain("(miss 1/2)")
+  })
+  test("misses at the re-request threshold render verbatim", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, iteration: 2, misses: 2 }), 70_000, undefined)
+    expect(text).toContain("(miss 2/2)")
+  })
+  test("a landed boundary compact renders the landing, not a miss", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 3, landedAt: 60_000 }), 70_000, undefined)
+    expect(text).toMatch(/Loop compact: landed /)
+    expect(text).not.toContain("(miss")
+  })
+  test("a loop without a compaction request omits the line entirely", () => {
+    expect(formatStatus(looped(), 10_000, undefined)).not.toContain("Loop compact")
   })
 })
 

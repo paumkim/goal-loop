@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=327 -->
+<!-- spec-check files=35 tests=332 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -867,3 +867,31 @@ Verification: `test/loop.test.ts` (re-anchor queued on landing with armed iterat
 queued with NO pending boundary request — host-side compaction; not queued for a plain goal, a terminal loop, or a
 paused loop; a throwing synthetic dispatch does not break `onCompactionLanded`; prompt-builder content and history
 format), `bun run check` green (327 tests), coordinator submit.
+
+## Workstream X — the boundary-compact state on every goal surface
+
+Iteration 4 continued iteration 2's accepted-vs-completed tracking: that work detected and recorded the
+landing, re-requested at 2 misses, and put `Loop compact:` lines into `formatStatus` — but the two surfaces
+the user actually looks at render from the live snapshot. The prompt footer showed only a bare
+`compact pending` (no miss count), and the `/goal` detail dialog (`LoopSection`) rendered no compaction
+state at all, so an armed-but-unlanded request was invisible exactly where the loop is most visible.
+
+102. LoopSection compact row (`src/tui-history.tsx`, additive): when `goal.loopCompact` is present, the
+    `/goal` detail dialog renders a `compact` row directly under the objective — pending renders
+    warning-colored `pending <age> · miss N/2 · ~<estimate> at request`; landed renders info-colored
+    `landed <age> ago`. Absent entirely on records with no boundary-compact request (back-compat with
+    pre-loop records and loops armed before the feature). Verified headlessly via a throwaway
+    `@opentui/solid` test-renderer harness in all four states (pending miss 0, pending miss 2, landed,
+    absent) — the row is present in the first three with the documented copy and absent in the fourth.
+103. Prompt footer (`src/tui.tsx`): the loop footer marker carries the miss count while a boundary compact
+    is pending — `· compact pending (N/2)` — matching the `formatStatus` phrasing; still omitted entirely
+    once landed. `formatStatus` (the `/goal` fallback text) is unchanged in content.
+104. `formatStatus` under test (`test/core.test.ts`): plain goals render no compact line; a pending
+    request renders its age and `(miss N/2)` including the 2/2 re-request threshold; a landed request
+    renders `landed … ago` and no miss annotation; a loop without a request omits the line.
+
+Files touched: `src/tui-history.tsx`, `src/tui.tsx`, `test/core.test.ts`, `SPEC.md`, `README.md`, `docs/`.
+
+Verification: `test/core.test.ts` (5 new `formatStatus` tests, including both miss counts and the landed
+shape); headless render of the `LoopSection` compact row; `bun run check` green (332 tests); coordinator
+submit.

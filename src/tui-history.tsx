@@ -10,7 +10,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
-import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
+import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
@@ -134,6 +134,24 @@ export const LoopSection = (props: {
           {props.goal.loopObjective ?? "?"}
         </text>
       </box>
+      {/* boundary compaction: asked of the host at the last arm; awaits the host's safe point */}
+      <Show when={props.goal.loopCompact}>
+        {(compact) => {
+          const c = compact()
+          const pending = () => c.landedAt === undefined
+          const age = () => formatDuration(nowMs() - (c.landedAt ?? c.requestedAt))
+          return (
+            <box flexDirection="row" gap={2}>
+              {label(theme(), "compact")}
+              <text wrapMode="none" fg={pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base}>
+                {pending()
+                  ? `pending ${age()} · miss ${c.misses}/2${c.estimatedTokens !== undefined ? ` · ~${formatTokens(c.estimatedTokens)} at request` : ""}`
+                  : `landed ${age()} ago`}
+              </text>
+            </box>
+          )
+        }}
+      </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector */}
       <For each={history()}>
         {(entry, index) => (
