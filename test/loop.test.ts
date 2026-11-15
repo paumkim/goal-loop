@@ -513,13 +513,16 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v3 condition")
     await h.turn(1)
     expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    // No re-request at one miss: only the settle counts it.
+    expect(h.compactCalls).toHaveLength(1)
     h.verdicts.push(met("v3 done"))
     h.summaries.push("s3")
     h.nextGoals.push("v4 condition")
     await h.turn(1)
     const record = h.controller.get(SID)!
     expect(record.loopCompact).toMatchObject({ iteration: 4, misses: 2 })
-    expect(h.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.compactCalls).toHaveLength(2)
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
     expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /not landed/i.test(n.message))).toBe(true)
   })
 
@@ -543,8 +546,72 @@ describe("/goal-loop", () => {
     expect(record.loopCompact!.misses).toBe(2)
     // Force was requested at the wiring level, but the outcome stayed a busy denial:
     // the record keeps pointing at the original unlanded request.
-    expect(h.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
     expect(record.loopCompact!.iteration).toBe(2)
+  })
+
+  test("a compaction that lands at an arm skips the fresh boundary request at that arm", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    expect(h.compactCalls).toHaveLength(1)
+    h.setContextSize(90_000) // the host compacted between arms: a fraction of the ~estimated size
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success" && /dropped/i.test(n.message))).toBe(true)
+    // The arm that observed the landing does not ask the host for another compaction.
+    expect(h.compactCalls).toHaveLength(1)
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
+  })
+
+  test("two quick landings within 2 minutes queue one re-anchor; one after 2 minutes queues another", async () => {
+    await h.setLoop("improve the parser")
+    await h.controller.onCompactionLanded(SID)
+    await h.controller.onCompactionLanded(SID)
+    let reanchors = h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))
+    expect(reanchors).toHaveLength(1)
+    await h.clock.advance(130_000)
+    await h.controller.onCompactionLanded(SID)
+    reanchors = h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))
+    expect(reanchors).toHaveLength(2)
+  })
+
+  test("restore does not stack a compaction on top of an unlanded pending request", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    expect(h.compactCalls).toHaveLength(1)
+    await h.controller.dispose()
+
+    const h2 = harness({}, h.storage)
+    const restored = await h2.controller.restore()
+    expect(restored).toBe(1)
+    expect(h2.compactCalls).toHaveLength(0)
+    // The pending request stays recorded; the arm-time settle re-requests at 2 misses.
+    expect(h2.controller.get(SID)!.loopCompact!.landedAt).toBeUndefined()
+  })
+
+  test("restore does not compact again right after a landing", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1) // records the pending boundary request
+    expect(h.compactCalls).toHaveLength(1)
+    await h.controller.onCompactionLanded(SID) // marks the pending request landed
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
+    await h.controller.dispose()
+
+    const h2 = harness({}, h.storage)
+    const restored = await h2.controller.restore()
+    expect(restored).toBe(1)
+    expect(h2.compactCalls).toHaveLength(0)
   })
 
   test("onCompactionLanded with no pending request is a no-op", async () => {

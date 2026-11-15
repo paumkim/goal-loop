@@ -186,7 +186,7 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
-| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight); an unlanded request is re-requested after 2 armed iterations. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
+| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request is re-requested only after 2 armed iterations. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
@@ -207,7 +207,8 @@ which is relative to the model's context window.
 
 `compactOnLoopIteration` (default `true`) is the loop-boundary complement: at every `/goal-loop` iteration arm
 the plugin asks the host to compact the session regardless of the token threshold, so the next version arms
-with a fresh context. It also compacts restored live goals on plugin startup. Boundary compaction is skipped
+with a fresh context. It also compacts restored live goals on plugin startup — unless a boundary request is already
+pending, or one landed within the last 10 minutes. Boundary compaction is skipped
 for tiny contexts (< 10k estimated tokens), honors the same in-flight/cooldown guards, and is queued *before*
 the armed iteration's synthetic steer. `compactOnLoopIteration: false` (or `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION=0`)
 turns it off. opencode's own auto-compaction near the model window remains the backstop.
@@ -224,14 +225,18 @@ requested estimate) — and surfaced as a "Compaction landed" notice, in `/goal`
 dialog (a `compact` row under the objective while pending or after landing), and in the status line (the footer
 marker carries the miss count while a request is outstanding).
 A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
-never past the busy gate) with a "Compaction pending" warning.
+never past the busy gate) with a "Compaction pending" warning. An arm that just recorded the landing, or that
+has an unlanded request with fewer than 2 misses, makes no request at all — arms never stack compactions; only
+the 2-miss re-request (and a fresh request on the arm after a landing) goes to the host.
 
 **Compaction cuts the context, not the loop.** When a compaction lands, the history the armed directive, the
 objective and the completed iterations live in is replaced by a lossy summary. The plugin then queues a
 `<goal-loop-reanchor>` note restating the objective, the armed condition, the iteration position and the
 completed iterations from its own record, plus the re-read-the-tree mandate. It is delivered as a queued,
 non-waking message: it never interleaves into a turn in flight and never wakes the session — the next
-continuation steer carries it into view. Plain goals rely on the per-turn system reminder instead.
+continuation steer carries it into view. Plain goals rely on the per-turn system reminder instead. The note is coalesced to at most one per session per
+2 minutes, so back-to-back landings (host auto-compact, a boundary request, a restart restore) do not stack
+`re-anchor after compaction` entries.
 
 The estimate is the last assistant message's `input + cache.read + cache.write` token usage, measured right
 after each turn ends (`session.execution.succeeded`). Reasoning and output tokens are not counted: output has
