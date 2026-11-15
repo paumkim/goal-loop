@@ -225,7 +225,9 @@ export class GoalController {
 
   onExecutionStarted(sessionID: string) {
     this.running.add(sessionID)
-    const runtime = this.runtimes.get(sessionID)
+    // Lazy-create the runtime when a goal exists: after a restart/plugin reload the runtime map is empty,
+    // and every tool event before the first execution-end would otherwise be dropped.
+    const runtime = this.goals.has(sessionID) ? this.runtime(sessionID) : this.runtimes.get(sessionID)
     if (!runtime) return
     this.invalidate(runtime)
     runtime.toolCalls = 0
@@ -233,12 +235,12 @@ export class GoalController {
   }
 
   onToolCalled(sessionID: string) {
-    const runtime = this.runtimes.get(sessionID)
-    if (runtime) {
-      runtime.toolCalls++
-      // Counted eagerly so a turn whose evaluation is later superseded or dropped still counts as work for the loop.
-      runtime.iterationToolCalls++
-    }
+    // Same lazy-create as onExecutionStarted: a session with a live goal must never silently drop tool events.
+    if (!this.goals.has(sessionID)) return
+    const runtime = this.runtime(sessionID)
+    runtime.toolCalls++
+    // Counted eagerly so a turn whose evaluation is later superseded or dropped still counts as work for the loop.
+    runtime.iterationToolCalls++
   }
 
   /** A user prompt was admitted (not synthetic). Resumes a paused goal and re-arms idle check-ins. */
@@ -360,6 +362,8 @@ export class GoalController {
         // with its previous baseline rather than deleting it.
         Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
         this.goals.set(record.sessionID, record)
+        // Create the runtime up front so tool events that arrive before the first execution-end are counted.
+        this.runtime(record.sessionID)
         this.commit(record)
       }),
     )
