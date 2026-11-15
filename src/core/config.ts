@@ -124,23 +124,25 @@ export function resolveConfig(
   }
 }
 
+/** Truthy spellings are `1/true/yes/on`, falsy are `0/false/no/off` (case-insensitive); anything else is unrecognized. */
+const TRUTHY = ["1", "true", "yes", "on"]
+const FALSY = ["0", "false", "no", "off"]
+const flag = (value: unknown): boolean | undefined => {
+  if (typeof value === "boolean") return value
+  if (typeof value !== "string") return undefined
+  const normalized = value.trim().toLowerCase()
+  if (TRUTHY.includes(normalized)) return true
+  if (FALSY.includes(normalized)) return false
+  return undefined
+}
+
 /** Coordinator option: `"auto"` (default, detect from repo), `true` (force), `false` (off). */
 function parseCoordinator(value: unknown): "auto" | boolean {
   if (value === undefined || value === "auto" || value === "") return "auto"
-  if (typeof value === "boolean") return value
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase()
-    if (["1", "true", "yes", "on"].includes(normalized)) return true
-    if (["0", "false", "no", "off"].includes(normalized)) return false
-  }
-  return "auto"
+  return flag(value) ?? "auto"
 }
 
 /** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */
 function envBool(value: string | undefined, fallback: boolean) {
-  if (value === undefined) return fallback
-  const normalized = value.trim().toLowerCase()
-  if (["1", "true", "yes", "on"].includes(normalized)) return true
-  if (["0", "false", "no", "off"].includes(normalized)) return false
-  return fallback
+  return (value === undefined ? undefined : flag(value)) ?? fallback
 }
