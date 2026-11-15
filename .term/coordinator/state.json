@@ -418,6 +418,17 @@
       "submittedAt": "2026-11-15T19:27:51Z",
       "mergedAt": "2026-11-15T19:28:03Z",
       "mergedInto": "dev"
+    },
+    "loop-compact-coalesce": {
+      "agent": "orchestrator",
+      "paths": "src,test,SPEC.md,README.md,docs,dist",
+      "branch": "wt/loop-compact-coalesce",
+      "worktree": "worktrees/wt-loop-compact-coalesce",
+      "status": "done",
+      "createdAt": "2026-11-15T19:32:30Z",
+      "submittedAt": "2026-11-15T19:39:51Z",
+      "mergedAt": "2026-11-15T19:40:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
