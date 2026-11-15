@@ -32,7 +32,7 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 
 ## Coordinator (`packages/coordinator/bin/coordinator`)
 
-- Flow: `claim <task> --agent <you> --paths <scope>` → work in `worktrees/wt-<slug>` on `wt/<slug>` → `submit`. Never commit to `dev`/`main` directly; only `merge-next` lands on `dev`. The main checkout must be clean (the coordinator state file is exempt).
+- Flow: `claim <task> --agent <you> --paths <scope>` → work in `worktrees/wt-<slug>` on `wt/<slug>` → `submit`. Never commit to `dev`/`main` directly; only `merge-next` lands on `dev`. The main checkout must be clean (the coordinator state file is exempt; merge-next stashes that exempt dirt around the trial merge and restores it, so a branch recording only `state.json` lease bookkeeping merges cleanly).
 - Requires `jq` (plus `git`, `bun` for the merge gate). Claim is flock-locked with lease re-check; path overlap without `--force` is a hard error; `status --json` lists leases (`state.json` is the coordination bus).
 - `merge-next` removes the merged worktree + `wt/` branch and marks the lease `done`. Leftover `worktrees/wt-*` dirs are safe to prune; leases in `.term/coordinator/state.json` are the source of truth.
 - This repo's own `opencode.json` forces `coordinator: true`. Work here the same way: claim, worktree, submit.
