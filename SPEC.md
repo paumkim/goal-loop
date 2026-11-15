@@ -1669,3 +1669,36 @@ check (byte-identical; the TUI bundle does not include the controller).
 Verification: `bun run check` green in the worktree (388 tests / 19 files, tsc clean, TUI load ok, docs
 freshness ok after the stamp refresh, spec-check ok 39/388 after the marker bump in this commit); coordinator
 submit.
+
+## Workstream AW — Iteration 4: end-to-end sanity pass (e2e green, exit 0)
+
+Armed condition (iteration 4 of the loop): run `bun run e2e ''` in a fresh scratch checkout and report
+the honest outcome; if it fails, land the smallest fix with a failing-before test and show
+`bun run check` green at dev. Outcome: it passed. No code change; no failing-before test applies.
+
+150. Fresh scratch checkout: `git clone --branch dev` of dev tip `53403d6` into
+     `/tmp/opencode/e2e-checkout`, `bun install` (358 packages), then `bun run check` inside the scratch
+     checkout: 388 pass / 0 fail (19 files), tsc clean, TUI load ok, docs freshness ok, spec-check ok
+     (39/388). Dev reproduces from a clean clone.
+151. E2E run: fresh empty project `/tmp/opencode/e2e-project-1794780812`; `bun run e2e <dir>` with the
+     default live model (`opencode/deepseek-v4.1-flash-free`) against a private standalone `opencode serve`
+     on `127.0.0.1:4893`. Plugin registered `/goal` (`goal command registered: true`). Prompt:
+     `notes/plan.md exists with exactly three numbered steps for brewing tea, and notes/done.txt contains
+     the single word DONE. Prove both by printing the files.` One arm, one turn, one steer: the model ran
+     bash (`mkdir`/`printf`/`cat`/`wc -l`), the independent evaluator judged the visible transcript
+     (files printed, `wc -l` = 3 and 1), **Goal achieved in 1 turn**, `final` status `achieved`, spend
+     recorded (input 13595, output 333), history `["1:met"]`. Files verified on disk: `notes/plan.md` has
+     exactly the three steps; `notes/done.txt` is `DONE\n`. Digest rendered: 1655 chars. **Exit 0.**
+152. Cosmetic observation, not a failure: the `plugin.list` RPC returned `data: []`, so the e2e script's
+     `OpenCodeGoal` match printed the raw payload instead of a plugin row. The plugin plainly loaded (the
+     `/goal` command registered and the full set → evaluate → met → note lifecycle ran). No fix: the
+     pass/fail gates are command registration and the achieved verdict, both green. Recorded here so the
+     next person who reads `plugin:` output in the e2e log does not chase it.
+153. No source or test changes, so the spec-check marker is unchanged (`files=39 tests=388`). Fresh-clone
+     and worktree `bun run check` agree.
+
+Files touched: `SPEC.md` only.
+
+Verification: e2e exit 0 (see transcript and `/tmp/opencode/e2e-run-iter4.log`); `bun run check` green in
+the scratch checkout and in this worktree; coordinator submit. This workstream adds no gates and weakens
+nothing.
