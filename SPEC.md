@@ -200,8 +200,8 @@ folds the TUI load check into `bun run check`, and regenerates the docs metadata
 22. `bun run check` includes `check:tui` (`bun scripts/tui-load-check.ts ./tui.ts`, loads `tui.ts` the way
     the OpenCode host does; fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and
     this file state the composition; superseded by Workstream E, which appends `docs:check`.
-23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (31 files, ~62 kB) with no
-    `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
+23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (32 files, ~64 kB as of 2026-11-15,
+    i.e. including `src/rpc-handlers.ts`) with no `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
 
 Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: loaded TUI plugin "opencode-goal.tui"`),
 `npm pack --dry-run`, `git status --short`, then coordinator submit.
@@ -224,11 +224,15 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     EvaluationError, pre-aborted signal unwinds `isEvaluating`, summary cap formula, nextGoal
     trim/cap) and `test/store.test.ts` (`sameDirectory` normalization, `loadLive` directory
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
-28. Docs line references point at the real definitions (`docs/config.html`: `prompts.ts`
+28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
     `coordinatorFlow` `:64`, `commitStatusSuffix` `:82`, `rubric` `:263`, `facts` `:288`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:702`, `prompts.ts:164`), the README
-    coordinator section documents the `.gitignore` auto-append and the missing-binary behavior,
-    and `docs/changelog.html` + page stamps are regenerated.
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:461`, `prompts.ts:164`). References were
+    re-synced against HEAD on 2026-11-15 after the restoreOne/sameDirectory and merge-next merges
+    shifted `controller.ts`. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
+    points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
+    source moves. The README coordinator section documents the `.gitignore` auto-append and the
+    missing-binary behavior, and `docs/changelog.html` + page stamps are regenerated.
 
 Verification (all run in the worktree): `bun install --frozen-lockfile`, `bun run check`
 (expect 200 pass, `ok: loaded TUI plugin`), `npm pack --dry-run`, `bash -n
