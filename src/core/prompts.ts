@@ -1,4 +1,5 @@
 import { formatDuration, formatSpend, truncate } from "./format.ts"
+import { isOpencodeCliCondition, opencodeCliGuide } from "./opencode-cli.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
@@ -144,6 +145,9 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
       ``,
       `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
     )
+  }
+  if (isOpencodeCliCondition(condition)) {
+    lines.push(``, opencodeCliGuide())
   }
   if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")

@@ -383,7 +383,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=37 tests=363 -->
+<!-- spec-check files=38 tests=371 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1497,3 +1497,48 @@ landed through merge-next's own merge step (`aecd9ec`, and this note). All findi
 records stands as written. This note is the waiver of record; if the project owner wants dev history rewritten
 through merge-next instead, say so and the procedure is documented in the progress report (rebase both wt/<slug>
 branches onto pre-hand-merge dev with regenerated changelogs; merge-next then trial-merges cleanly).
+
+## Workstream AT — opencode-CLI goal guide
+
+Interpretation of the armed condition: goals that mention opencode (the v2 CLI itself) need the same kind of
+first-turn steer the fuzzy-condition hint gives vague goals — a short operating guide for the harness the
+plugin runs inside. `src/core/opencode-cli.ts` (new) exports `isOpencodeCliCondition` and `opencodeCliGuide`;
+`directive()` in `src/core/prompts.ts` injects the `<opencode-cli>` block right after the fuzzy hint when (and
+only when) the condition mentions opencode. No config option, no env var: the trigger is the condition text,
+exactly like `isFuzzyCondition`.
+
+136. `isOpencodeCliCondition(condition)` is true iff the condition matches /\bopencode\b/i (word-bounded, any
+     case) — "opencode v2 CLI", "OpenCode's plugin api", "opencode-goal" all match; "opencoding", "open coding"
+     do not. Pure function, no I/O.
+137. When it matches, the first-turn directive injects an `<opencode-cli>` block (after the fuzzy-condition
+     SPEC.md hint, before the commit rule) carrying the operating guide: check `opencode --version` and never
+     rebuild/replace the installed binary; the nearest source clone may lag; the plugin API contract is
+     `node_modules/@opencode/plugin/dist/tui/index.d.ts` and the SlotMap is the only stable TUI extension
+     surface; search the binary for element IDs with targeted grep -ao + string-window extraction; never modify
+     host sources to test a plugin — verify with a headless opentui render in /tmp (`createTestRenderer` from
+     `@opentui/core/testing` + `render` from `@opentui/solid`, `renderOnce()`, `captureCharFrame()`, assert on
+     rows); plugins are `Plugin.define({ id, setup })` from `@opencode/plugin/tui`, server entry
+     `src/index.ts`, TUI entry `src/tui.tsx` → precompiled `dist/tui.js`; mount via
+     `~/.config/opencode/opencode.jsonc` / `tui.jsonc`; restart the TUI (no hot reload of unbuilt code); test
+     with the real binary in a throwaway `--config` dir in tmux/a PTY + `tmux capture-pane -p`, logs under the
+     opencode data/logs path; a failure ladder (binary newer → string-extract and diff; silent slot → grep the
+     binary, check the plugin mounted, check the render returned JSX; negative offset → check ancestors'
+     overflow/position first); and the two honest limits: no stable documented headless-drive tool for the v2
+     TUI (scrape a PTY/tmux session or reproduce layout in `@opentui/core/testing`), and the installed binary
+     is ahead of any public clone so string extraction is often the only source of truth. Rules: minimal
+     slot-level changes, never commit to the host repo, keep plugin tests headless, and report which layer
+     (binary / source / test-render / live TUI) each claim was verified at.
+138. The block is first-turn only (like the fuzzy hint): continuations, retries, check-ins, the loop
+     preamble/re-anchor, the system reminder and the evaluator rubric are untouched — no per-turn context
+     cost, no evaluator behavior change.
+139. Goals whose condition never mentions opencode get a byte-identical directive to before this workstream.
+140. Tests pin it: `test/opencode-cli.test.ts` (8 tests) covers the word-boundary matcher, the balanced tagged
+     block and its key invariants (`opencode --version`, SlotMap, `@opentui/core/testing`, `captureCharFrame()`,
+     `tmux capture-pane -p`, `Plugin.define`, the layer-reporting rule, both honest limits), injection on/off in
+     `directive()`, coexistence with the fuzzy hint, placement before the commit rule, and injection on a
+     non-fuzzy opencode condition. Docs: README ("OpenCode CLI work" paragraph), AGENTS.md (module list +
+     bullet), `docs/core.html` (card). Test count 363 → 371, files 37 → 38; the spec-check marker is updated in
+     the same commit.
+
+Verification: `bun run check` green in the worktree (371 tests / 38 files, spec-check ok, docs freshness ok
+after the stamp refresh), coordinator submit + merge-next.
