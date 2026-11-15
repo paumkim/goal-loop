@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-15 14:14 UTC</code></td><td>fix(loop): suspend boundary re-requests after 4 consecutive unlanded misses</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 14:01 UTC</code></td><td>fix(loop): record a compaction landing only when the context actually drops</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 13:53 UTC</code></td><td>docs: state the armed-loop no-pause rule in install.html</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 13:51 UTC</code></td><td>fix(loop): an armed loop never pauses at the turn cap or stall guard</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-15 00:53 UTC</code></td><td>fix(loop): count tool calls after a plugin reload before the first execution-end</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 00:16 UTC</code></td><td>feat: docs freshness gate — docs:check wired into bun run check and CI</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 00:11 UTC</code></td><td>fix: coordinator bin never repo-relative; align summary cap formula; coordinator bash hygiene; evaluator/store tests; docs sync</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 00:05 UTC</code></td><td>ci: add GitHub Actions check workflow; fold TUI load check into bun run check; regenerate docs stamps/changelog</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
