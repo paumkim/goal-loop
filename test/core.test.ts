@@ -188,6 +188,9 @@ describe("format", () => {
     expect(formatTokens(950)).toBe("950")
     expect(formatTokens(12_345)).toBe("12k")
     expect(formatTokens(2_500_000)).toBe("2.50M")
+    expect(formatTokens(999_499)).toBe("999k")
+    expect(formatTokens(999_500)).toBe("1.00M")
+    expect(formatTokens(999_999)).toBe("1.00M")
   })
   test("usage diff never goes negative", () => {
     expect(diffUsage(EMPTY_USAGE, { ...EMPTY_USAGE, cost: 5 }).cost).toBe(0)
