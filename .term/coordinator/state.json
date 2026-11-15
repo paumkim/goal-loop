@@ -561,6 +561,17 @@
       "submittedAt": "2026-11-15T20:39:30Z",
       "mergedAt": "2026-11-15T20:39:39Z",
       "mergedInto": "dev"
+    },
+    "a8-set-await-commit": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a8-set-await-commit",
+      "worktree": "worktrees/wt-a8-set-await-commit",
+      "status": "done",
+      "createdAt": "2026-11-15T20:41:15Z",
+      "submittedAt": "2026-11-15T20:41:49Z",
+      "mergedAt": "2026-11-15T20:41:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
