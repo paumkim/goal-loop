@@ -754,9 +754,11 @@
       "paths": "SPEC.md",
       "branch": "wt/reland-processnote",
       "worktree": "worktrees/wt-reland-processnote",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T21:36:42Z",
-      "submittedAt": "2026-11-15T21:37:39Z"
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:45:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
