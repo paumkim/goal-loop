@@ -1129,6 +1129,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   Proposed fix: one-shot flag (runtime boolean) so the notice fires once per pause.
 - **A-25 (low) — `src/status-dialog.tsx` & `src/tui-history.tsx` — `const LABEL = 10` duplicated.** Hoist into `src/core/history.ts` (pure,
   importable) or a shared `LABEL` export.
+  Resolution: Workstream AD — hoisted as `LABEL` in `src/core/history.ts`, imported by both.
 - **A-26 (low) — `src/runtime/controller.ts:508-510`, `src/runtime/compactor.ts`, `src/core/types.ts` — magic numbers duplicated across
   files:** `10_000` (boundary floor, inline twice in `contextDropped`, and `BOUNDARY_MIN_TOKENS` in compactor), the `0.6` drop factor,
   `120_000` (`REANCHOR_MIN_INTERVAL_MS` vs `REQUEST_COOLDOWN_MS`), `10 * 60_000` (the restore-time landed cooldown). Proposed fix: a small
@@ -1196,3 +1197,14 @@ Files touched: `src/core/types.ts`, `src/runtime/controller.ts`, `test/loop.test
 
 Verification: `test/loop.test.ts` 78 pass; `bun test` 347 tests; pre-fix failure of the pin test verified;
 `bun run check` green; coordinator submit.
+
+## Workstream AD — one LABEL constant for the goal surfaces (A-25)
+
+`const LABEL = 10` (label column width in the detail dialog rows and the history rail) was declared
+independently in `src/status-dialog.tsx` and `src/tui-history.tsx`. Hoisted to `src/core/history.ts` as an
+export (`LABEL`, documented), imported by both components. Pure refactor; no visual change. Test count
+unchanged (347). `dist/tui.js` rebuilt (50952 bytes) and committed in this workstream per policy.
+
+Files touched: `src/core/history.ts`, `src/status-dialog.tsx`, `src/tui-history.tsx`, `dist/tui.js`, `SPEC.md`.
+
+Verification: `bun run check` green (347 tests, spec-check ok); coordinator submit.

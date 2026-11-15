@@ -91,6 +91,7 @@ import { For, Show } from "solid-js";
 
 // src/core/history.ts
 var BAR_CELLS = 18;
+var LABEL = 10;
 function renderBar(done, max, cells = BAR_CELLS) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
@@ -255,7 +256,7 @@ var SUMMARY_MAX = 400;
 var label = (theme, text) => (() => {
   var _el$ = _$createElement("text");
   _$setProp(_el$, "flexShrink", 0);
-  _$setProp(_el$, "width", 10);
+  _$setProp(_el$, "width", LABEL);
   _$insert(_el$, text);
   _$effect((_$p) => _$setProp(_el$, "fg", theme.text.faint, _$p));
   return _el$;
@@ -330,7 +331,7 @@ var LoopSection = (props) => {
     _$insertNode(_el$5, _el$7);
     _$setProp(_el$5, "flexDirection", "row");
     _$setProp(_el$5, "gap", 2);
-    _$setProp(_el$6, "width", 10);
+    _$setProp(_el$6, "width", LABEL);
     _$setProp(_el$6, "flexShrink", 0);
     _$setProp(_el$7, "flexDirection", "row");
     _$setProp(_el$7, "flexShrink", 0);
@@ -435,7 +436,7 @@ var LoopSection = (props) => {
             _$setProp(_el$26, "gap", 2);
             _$insertNode(_el$27, _$createTextNode(`\u2502`));
             _$setProp(_el$27, "flexShrink", 0);
-            _$setProp(_el$27, "width", 10);
+            _$setProp(_el$27, "width", LABEL);
             _$setProp(_el$29, "wrapMode", "word");
             _$setProp(_el$29, "flexGrow", 1);
             _$insert(_el$29, () => `\u2502 ${truncate(entry.summary, SUMMARY_MAX)}`);
@@ -695,7 +696,7 @@ var StatusDialogBody = (props) => {
   const label = (text) => (() => {
     var _el$ = _$createElement2("text");
     _$setProp2(_el$, "flexShrink", 0);
-    _$setProp2(_el$, "width", 10);
+    _$setProp2(_el$, "width", LABEL);
     _$insert2(_el$, text);
     _$effect2((_$p) => _$setProp2(_el$, "fg", theme().text.faint, _$p));
     return _el$;
