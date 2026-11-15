@@ -37,7 +37,14 @@
  *     <file>.<yyyy-MM-DD-HH-mm-ss>Z.bak (never overwritten).
  *   - Only the `plugins` array (and, when empty, the array property) is
  *     edited; all unrelated keys, comments and formatting survive.
- *   - Uninstall removes exactly the entry install added. If the config file
+ *   - Uninstall removes exactly the entry install added. If the entry is missing
+ *     but an install-time backup exists (one whose parsed content provably lacks
+ *     the plugin), uninstall restores that pre-install config unchanged instead
+ *     of printing a note — taking a safety backup of the current state first
+ *     (the user chose --restore explicitly to get a plugin-containing backup back).
+ *     If the config already matches the pre-install backup, uninstall is a clean
+ *     no-op. Uninstall never auto-restores a backup that contains the plugin.
+ *     If the config file
  *     was created by install and nothing but install's skeleton remains, the
  *     file is deleted. `uninstall --restore` copies the newest pre-install
  *     .bak back over the config instead (taking a fresh .bak of the current
@@ -351,6 +358,57 @@ function listBackups(file) {
     .sort();
 }
 
+/** True when the parsed backup provably lacks the plugin (the install-time original). Null = unverifiable, do not trust it. */
+function backupPluginFree(bak) {
+  try {
+    const root = parseJsonc(readFileSync(bak, "utf8"));
+    const prop = findPluginsProperty(root);
+    if (!prop) return true; // parsed, no plugins key at all
+    if (prop.value.type !== "array") return true; // parsed, no resolvable plugin element
+    return !prop.value.elements.some((el) => elementMatchesPackage(el, PLUGIN_PACKAGE));
+  } catch {
+    return null; // unparseable backup — never restore from it
+  }
+}
+
+/** Newest backup whose content provably lacks the plugin; the install-time original config. */
+function preInstallBackup(file) {
+  const baks = listBackups(file); // ascending by name (timestamps sort lexically)
+  for (let i = baks.length - 1; i >= 0; i--) {
+    if (backupPluginFree(baks[i]) === true) return baks[i];
+  }
+  return undefined;
+}
+
+/** Shared outcome for "nothing to remove" (file missing or entry missing). See header for the restore rule. */
+function missingEntryOutcome(file, dryRun) {
+  const out = [];
+  const candidate = preInstallBackup(file);
+  if (candidate) {
+    if (existsSync(file)) {
+      if (readFileSync(file, "utf8") === readFileSync(candidate, "utf8")) {
+        out.push(`not installed (${file}); config already matches the pre-install backup`);
+        return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
+      }
+    }
+    if (!dryRun) {
+      let safety = null;
+      if (existsSync(file)) safety = backupFile(file); // never clobber: keep the drifted state
+      else mkdirSync(scopeDirOf(file), { recursive: true });
+      copyFileSync(candidate, file); // the pre-install config, byte for byte
+      out.push(`entry was missing; restored the pre-install config from ${candidate} over ${file}${safety ? ` (backup of the current state: ${safety})` : ""}; restart opencode`);
+    } else {
+      out.push(`dry-run: entry was missing; would restore ${candidate} over ${file}`);
+    }
+    return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
+  }
+  if (!existsSync(file)) out.push(`not installed (no config at ${file})`);
+  else out.push(`not installed (${file}); nothing to do`);
+  const baks = listBackups(file);
+  if (baks.length > 0) out.push(`note: backups exist (they contain the plugin entry); --restore puts ${baks[baks.length - 1]} back over the config`);
+  return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
+}
+
 // ---------------------------------------------------------------------------
 // Commands — each returns { code, stdout, stderr }
 // ---------------------------------------------------------------------------
@@ -416,21 +474,11 @@ export function uninstall(args, opts = {}) {
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
 
-  if (!existsSync(file)) {
-    out.push(`not installed (no config at ${file})`);
-    const baks = listBackups(file);
-    if (baks.length > 0) out.push(`note: pre-install backups exist; run with --restore to put ${baks[baks.length - 1]} back`);
-    return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
-  }
+  if (!existsSync(file)) return missingEntryOutcome(file, dryRun);
 
   const text = readFileSync(file, "utf8");
   const result = removePluginText(text);
-  if (!result.removed) {
-    out.push(`not installed (${file}); nothing to do`);
-    const baks = listBackups(file);
-    if (baks.length > 0) out.push(`note: pre-install backups exist; run with --restore to put ${baks[baks.length - 1]} back`);
-    return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
-  }
+  if (!result.removed) return missingEntryOutcome(file, dryRun);
   if (!dryRun) {
     const bak = backupFile(file);
     if (result.emptyRoot || result.skeletonRoot) {

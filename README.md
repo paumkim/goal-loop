@@ -19,7 +19,7 @@ opencode-goal status             # scope, config path, installed yes/no
 opencode-goal install --project  # target the project's config instead of global
 ```
 
-The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and `uninstall --restore` puts the newest backup back if you want it. Prefer doing it by hand? Add `"plugins": ["@el4cteo/opencode-goal"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
+The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing but an install-time backup exists (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["@el4cteo/opencode-goal"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
 
 ## Use
 
