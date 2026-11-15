@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, currentIterationVerdict, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -324,5 +324,27 @@ describe("turnsSinceVerdict", () => {
   test("non-finite input yields 0", () => {
     expect(turnsSinceVerdict(Number.NaN, 3)).toBe(0)
     expect(turnsSinceVerdict(4, Number.NaN)).toBe(0)
+  })
+})
+
+describe("durationShares", () => {
+  test("even split sums to ~100", () => {
+    expect(durationShares([10_000, 10_000])).toEqual([50, 50])
+  })
+
+  test("uneven split rounds to integers", () => {
+    expect(durationShares([1_000, 3_000])).toEqual([25, 75])
+  })
+
+  test("zero-sum input yields all zeros", () => {
+    expect(durationShares([0, 0, 0])).toEqual([0, 0, 0])
+  })
+
+  test("single iteration takes 100", () => {
+    expect(durationShares([42_000])).toEqual([100])
+  })
+
+  test("non-finite spans degrade to zero", () => {
+    expect(durationShares([Number.NaN, 8_000])).toEqual([0, 100])
   })
 })

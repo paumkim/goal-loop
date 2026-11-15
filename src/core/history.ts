@@ -197,3 +197,10 @@ export function turnsSinceVerdict(turns: number, verdictTurn: number): number {
   if (!Number.isFinite(turns) || !Number.isFinite(verdictTurn)) return 0
   return Math.max(0, Math.floor(turns) - Math.floor(verdictTurn))
 }
+
+/** Per-iteration share of completed wall time as integer percentages (rounds; may sum to ~100). Zero-sum input yields all zeros. */
+export function durationShares(durations: readonly number[]): number[] {
+  const total = durations.reduce((sum, span) => sum + Math.max(0, Number.isFinite(span) ? span : 0), 0)
+  if (total <= 0) return durations.map(() => 0)
+  return durations.map((span) => Math.round((Math.max(0, Number.isFinite(span) ? span : 0) / total) * 100))
+}
