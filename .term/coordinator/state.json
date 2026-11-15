@@ -759,6 +759,17 @@
       "submittedAt": "2026-11-15T21:37:39Z",
       "mergedAt": "2026-11-15T21:45:04Z",
       "mergedInto": "dev"
+    },
+    "opencode-cli-guide": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-cli.ts src/core/prompts.ts test/opencode-cli.test.ts README.md SPEC.md AGENTS.md docs/core.html",
+      "branch": "wt/opencode-cli-guide",
+      "worktree": "worktrees/wt-opencode-cli-guide",
+      "status": "done",
+      "createdAt": "2026-11-15T21:49:38Z",
+      "submittedAt": "2026-11-15T21:49:38Z",
+      "mergedAt": "2026-11-15T21:52:00Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
