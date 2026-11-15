@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -135,6 +135,45 @@ describe("coordinator merge-next", () => {
     const remaining = git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()
     expect(remaining).toContain("merge-check-fresh-1")
     expect(remaining).not.toContain("merge-check-stale-1")
+  })
+
+  test("a branch recording only .term/coordinator/state.json merges cleanly through the gate", () => {
+    setup("true")
+    // The bookkeeping branch carries a fabricated record for a PREVIOUS merge — never the lease
+    // being merged now (exactly like the real-world record-leases branch).
+    const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
+    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
+    claimCommitSubmit("record-clean", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("merged into dev")
+    // dev gained the bookkeeping entry from the branch...
+    expect(fileOnDev(".term/coordinator/state.json").stdout).toContain("\"old-record\"")
+    // ...and the exempt dirt (this lease's submitted record) survived the merge, now flipped to done.
+    const after = JSON.parse(readFileSync(join(dir, ".term/coordinator/state.json"), "utf8"))
+    expect(after.leases["record-clean"].status).toBe("done")
+    expect(after.leases["record-clean"].mergedInto).toBe("dev")
+    expect(after.leases["record-clean"].submittedAt).toBeTruthy()
+    // No stash files leak into the coordinator directory.
+    expect(readdirSync(join(dir, ".term", "coordinator")).filter((f: string) => f.startsWith(".state-stash."))).toEqual([])
+  })
+
+  test("a failing merged result restores the exempt state.json dirt and keeps the lease submitted", () => {
+    setup("false")
+    const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
+    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
+    claimCommitSubmit("record-fail", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(1)
+    expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
+    const after = JSON.parse(readFileSync(join(dir, ".term/coordinator/state.json"), "utf8"))
+    expect(after.leases["record-fail"].status).toBe("submitted")
+    expect(after.leases["record-fail"].submittedAt).toBeTruthy()
+    expect(fileOnDev(".term/coordinator/state.json").stdout).not.toContain("\"old-record\"")
+    expect(readdirSync(join(dir, ".term", "coordinator")).filter((f: string) => f.startsWith(".state-stash."))).toEqual([])
+    // and no scratch branches survive the failed gate.
+    expect(git(dir, ["branch", "--list", "merge-check-*"]).trim()).toBe("")
   })
 
   test("a failed gate run leaves no scratch branches behind", () => {

@@ -361,7 +361,21 @@ do_merge_next() {
       exit 1
     fi
   fi
+  # A wt branch that records only .term/coordinator/state.json lease bookkeeping must merge cleanly
+  # through the gate. The state file is exempt from the cleanliness check below (claim/submit leave it
+  # dirty by design), but the trial merge and the final --ff-only refuse path-level when the worktree
+  # copy differs from HEAD. Stash the dirt for the duration of the merge and restore it before the
+  # lease is recorded done (or on any failure), so the submitted record is never lost.
+  local state_stash=""
+  restore_state_stash() {
+    if [ -n "$state_stash" ] && [ -f "$state_stash" ]; then
+      cp "$state_stash" "$STATE_FILE" 2>/dev/null || true
+      rm -f "$state_stash"
+    fi
+    state_stash=""
+  }
   release_merge_lock() {
+    restore_state_stash
     if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
       local _tmp
       _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null || mktemp) || true
@@ -415,12 +429,37 @@ do_merge_next() {
   fi
 
   # the main worktree must be clean for a safe merge; refuse otherwise.
-  # The coordinator's own state file is exempt: claim/submit leave it dirty by design and merges never touch it.
+  # The coordinator's own state file is exempt: claim/submit leave it dirty by design.
   if ! git -C "$MAIN_ROOT" diff --quiet -- . ':(exclude).term/coordinator/state.json' ||
      ! git -C "$MAIN_ROOT" diff --cached --quiet -- . ':(exclude).term/coordinator/state.json'; then
     printf 'error: uncommitted changes outside .term/coordinator/state.json in %s; commit or stash them first\n' "$MAIN_ROOT" >&2
     release_merge_lock
     exit 1
+  fi
+
+  # Stash the exempt dirt for the trial merge (see above): the worktree copy must equal HEAD for the
+  # merge to touch the file, and the submitted lease record it carries must survive the merge.
+  if ! git -C "$MAIN_ROOT" diff --quiet -- .term/coordinator/state.json ||
+     ! git -C "$MAIN_ROOT" diff --cached --quiet -- .term/coordinator/state.json; then
+    state_stash="$(mktemp "$DATA_DIR/.state-stash.XXXXXX")" || {
+      printf 'error: cannot create state stash in %s\n' "$DATA_DIR" >&2
+      release_merge_lock
+      exit 1
+    }
+    cp "$STATE_FILE" "$state_stash" || {
+      rm -f "$state_stash"
+      state_stash=""
+      printf 'error: cannot read %s\n' "$STATE_FILE" >&2
+      release_merge_lock
+      exit 1
+    }
+    if ! git -C "$MAIN_ROOT" restore --staged --worktree -- .term/coordinator/state.json; then
+      rm -f "$state_stash"
+      state_stash=""
+      printf 'error: cannot reset .term/coordinator/state.json for the merge\n' >&2
+      release_merge_lock
+      exit 1
+    fi
   fi
 
   git -C "$MAIN_ROOT" fetch >/dev/null 2>&1 || true
@@ -474,6 +513,9 @@ do_merge_next() {
     exit 1
   fi
   git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+
+  # Bring back the exempt dirt (it carries this lease's submitted record) before flipping it done.
+  restore_state_stash
 
   local ts
   ts=$(now_iso)

@@ -293,12 +293,18 @@ was blocked by the state it repairs — a deadlock that forced a manual unblock 
     A failing merged result aborts with `dev` untouched (no merge commit, no lease marked done).
     Scratch branches from interrupted runs are pruned best-effort on every run.
 35. The main checkout must be clean for the merge, with the coordinator's own
-    `.term/coordinator/state.json` exempt (claim/submit leave it dirty by design; merges never touch it).
-    A tracked, non-exempt modification aborts the merge before any branch is created.
-36. `test/coordinator.test.ts` proves the four paths in a throwaway git repo: a merge that is the fix
+    `.term/coordinator/state.json` exempt (claim/submit leave it dirty by design).
+    A tracked, non-exempt modification aborts the merge before any branch is created. The exempt dirt
+    is stashed to `.term/coordinator/.state-stash.*` for the duration of the trial merge and restored
+    afterwards (or by the exit trap on failure), so a wt branch that records only `.term/coordinator/state.json`
+    lease bookkeeping merges cleanly through the gate, and the submitted lease record survives any
+    outcome of the merge (restored before the lease is flipped `done`, or by the trap on failure).
+36. `test/coordinator.test.ts` proves the paths in a throwaway git repo: a merge that is the fix
     for the gate succeeds and lands (lease `done`); a merged result that fails the check aborts with
     `dev` and the lease untouched; a normal green merge lands; a dirty (non-exempt) main checkout is
-    refused. Scratch branches are cleaned up on failure.
+    refused; a branch recording only `.term/coordinator/state.json` bookkeeping merges cleanly and the
+    submitted lease record survives (success path flips it `done`; the failing path keeps it
+    `submitted`), with no `.state-stash.*` files left behind. Scratch branches are cleaned up on failure.
 37. `AGENTS.md`, `docs/install.html` and this file document the merged-result gate and the cleanliness
     exemption; `bun run check` stays green (205+ tests, docs freshness passes).
 
