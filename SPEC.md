@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=290 -->
+<!-- spec-check files=35 tests=298 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -629,3 +629,27 @@ setup closure, unverifiable headlessly.
 
 Verification: `bun --preload @opentui/solid/preload scripts/render-dialog.tsx` (both default and
 `--height=22` and `--buggy` frames eyeballed), `bun run check` green, coordinator submit + merge-next.
+
+## Workstream Q — last-verdict now row, absolute ended timestamps
+
+Interpretation of this iteration's condition: the rail said *how long ago* each iteration finished
+but not *when*, and the running iteration's now row gave no hint of the evaluator's latest word on
+the current iteration.
+
+80. Each rail row appends an absolute local wall-clock time beside the relative suffix:
+    `· ended <ago> at HH:MM` (local time, 24h, zero-padded; non-finite input yields `--:--`).
+81. The looped now row appends the current iteration's last verdict: a bold colored glyph (same
+    colorFor mapping as the rest of the dialog) after the elapsed segment, preceded by a faint
+    `· last`, followed by `<N> turn(s) since` (0 → `this turn`). "Current iteration" = verdicts in
+    `(last loopHistory endedAt | setAt, ∞)`; turns-since is `goal.turns − verdict.turn` clamped to ≥ 0
+    (both are the per-iteration counters). Rendered only when the current iteration has ≥ 1 verdict;
+    otherwise the now row is unchanged. The base text now wraps (`word`) instead of overflowing the
+    rail's width, so the verdict suffix stays pinned after wrapping text.
+82. New pure helpers `localTime`, `currentIterationVerdict`, `turnsSinceVerdict` in
+    `src/core/history.ts`, unit-tested (`test/history.test.ts`).
+83. `scripts/render-history.tsx` frames (looped, paused, complete) show `at HH:MM` on rail rows and
+    the `· last <glyph> … since` segment on the now row; the paused and complete frames verify both.
+
+Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames show the HH:MM suffix and the last-verdict segment on all three loop frames), `bun run check`
+green, coordinator submit + merge-next.

@@ -52,7 +52,10 @@ const loopedGoal: GoalSnapshot = {
   retries: 0,
   checkins: 0,
   baseline,
-  history: empty ? [] : verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "not yet", at: now - 1000 * 60 * (42 - index) })),
+  history: empty ? [] : [
+    ...verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "not yet", at: now - 1000 * 60 * (42 - index) })),
+    { turn: 3, verdict: "not_met" as Verdict, reason: "still not", at: now - 1000 * 10 },
+  ],
   loopEnabled: true,
   loopIteration: 3,
   loopObjective: "ship the /goal-loop observability pass: every iteration of the loop is visible at a glance in the /goal dialog",

@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, barCaption, currentIterationVerdict, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
@@ -59,7 +59,7 @@ export const LoopSection = (props: {
     const mix = mixes()[index]
     return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
   }
-  const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())}`
+  const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
   const paused = () => props.goal.status === "paused"
   const stateWord = () => {
     const s = props.goal.status
@@ -68,6 +68,11 @@ export const LoopSection = (props: {
     return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active"
   }
   const nowMs = () => props.nowMs?.() ?? Date.now()
+  const iterVerdict = () => currentIterationVerdict(props.goal.history ?? [], history(), props.goal.setAt)
+  const turnsSince = () => {
+    const v = iterVerdict()
+    return v ? turnsSinceVerdict(props.goal.turns, v.turn) : 0
+  }
   const streakSuffix = () => {
     const s = verdictStreak(props.goal.history ?? [])
     return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
@@ -159,9 +164,24 @@ export const LoopSection = (props: {
         <text wrapMode="none" flexShrink={0} fg={nowColor()} attributes={TextAttributes.BOLD}>
           ◎
         </text>
-        <text wrapMode="none" fg={theme().text.base}>
+        <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
           {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}`}
         </text>
+        <Show when={iterVerdict()}>
+          {(entry) => (
+            <box flexDirection="row" gap={1} flexShrink={0}>
+              <text wrapMode="none" fg={theme().text.muted}>
+                · last
+              </text>
+              <text wrapMode="none" fg={colorFor(theme(), entry().verdict)} attributes={TextAttributes.BOLD}>
+                {verdictGlyph(entry().verdict)}
+              </text>
+              <text wrapMode="none" fg={theme().text.faint}>
+                {turnsSince() === 0 ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}
+              </text>
+            </box>
+          )}
+        </Show>
       </box>
       {/* final tally: only once the loop is over */}
       <Show when={finished()}>

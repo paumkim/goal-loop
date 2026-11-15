@@ -172,3 +172,28 @@ export function loopTotals(entries: readonly LoopEntry[], setAt: number): LoopTo
   const spanMs = entries.length === 0 ? 0 : Math.max(0, lastEnded - setAt)
   return { iterations: entries.length, turns, tools, spanMs }
 }
+
+/** Local wall-clock HH:MM for a timestamp (24h, zero-padded). Non-finite input yields "--:--". */
+export function localTime(ms: number): string {
+  if (!Number.isFinite(ms)) return "--:--"
+  const date = new Date(ms)
+  if (Number.isNaN(date.getTime())) return "--:--"
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+}
+
+/** The most recent verdict inside the current iteration's window — `(last endedAt | setAt, ∞)`. Undefined when the current iteration has no verdict yet. */
+export function currentIterationVerdict(history: readonly VerdictEntry[], entries: readonly LoopEntry[], setAt: number): VerdictEntry | undefined {
+  const from = entries.length > 0 ? entries[entries.length - 1]!.endedAt : setAt
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const entry = history[index]!
+    if (entry.at > from) return entry
+    break
+  }
+  return undefined
+}
+
+/** Evaluated turns after the given verdict's turn (same per-iteration counter). Clamps to >= 0. */
+export function turnsSinceVerdict(turns: number, verdictTurn: number): number {
+  if (!Number.isFinite(turns) || !Number.isFinite(verdictTurn)) return 0
+  return Math.max(0, Math.floor(turns) - Math.floor(verdictTurn))
+}

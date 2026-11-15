@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, currentIterationVerdict, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -271,5 +271,58 @@ describe("loopTotals", () => {
   test("non-finite entry fields degrade to zero", () => {
     const entries = [{ ...entry(1, Number.NaN), turns: Number.NaN, toolCalls: Number.NaN }]
     expect(loopTotals(entries, setAt)).toEqual({ iterations: 1, turns: 0, tools: 0, spanMs: 0 })
+  })
+})
+
+describe("localTime", () => {
+  test("formats HH:MM zero-padded in local time", () => {
+    const ms = new Date(2026, 10, 15, 9, 5).getTime()
+    expect(localTime(ms)).toBe("09:05")
+  })
+
+  test("non-finite input yields --:--", () => {
+    expect(localTime(Number.NaN)).toBe("--:--")
+    expect(localTime(Number.POSITIVE_INFINITY)).toBe("--:--")
+  })
+})
+
+describe("currentIterationVerdict", () => {
+  const setAt = 1_000
+  const entries = [entry(1, 11_000), entry(2, 21_000)]
+
+  test("returns the newest verdict inside the current iteration window", () => {
+    const history = [
+      { ...verdict(8, "met"), at: 9_000 },
+      { ...verdict(9, "not_met"), at: 15_000 },
+      { ...verdict(10, "not_met"), at: 25_000 },
+    ]
+    expect(currentIterationVerdict(history, entries, setAt)?.turn).toBe(10)
+  })
+
+  test("window opens at setAt for a loop that has completed nothing", () => {
+    const history = [{ ...verdict(1, "not_met"), at: 5_000 }]
+    expect(currentIterationVerdict(history, [], setAt)?.turn).toBe(1)
+  })
+
+  test("verdicts at or before the last iteration's endedAt belong to the previous iteration", () => {
+    const history = [{ ...verdict(3, "met"), at: 21_000 }]
+    expect(currentIterationVerdict(history, entries, setAt)).toBeUndefined()
+  })
+
+  test("empty history yields undefined", () => {
+    expect(currentIterationVerdict([], entries, setAt)).toBeUndefined()
+  })
+})
+
+describe("turnsSinceVerdict", () => {
+  test("difference clamped to >= 0", () => {
+    expect(turnsSinceVerdict(4, 3)).toBe(1)
+    expect(turnsSinceVerdict(3, 3)).toBe(0)
+    expect(turnsSinceVerdict(2, 3)).toBe(0)
+  })
+
+  test("non-finite input yields 0", () => {
+    expect(turnsSinceVerdict(Number.NaN, 3)).toBe(0)
+    expect(turnsSinceVerdict(4, Number.NaN)).toBe(0)
   })
 })
