@@ -902,6 +902,26 @@
       "submittedAt": "2026-11-15T23:41:59Z",
       "mergedAt": "2026-11-15T23:42:10Z",
       "mergedInto": "dev"
+    },
+    "release-github-install": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs",
+      "branch": "wt/release-github-install",
+      "worktree": "worktrees/wt-release-github-install",
+      "status": "done",
+      "createdAt": "2026-11-15T23:43:36Z",
+      "submittedAt": "2026-11-15T23:44:36Z",
+      "mergedAt": "2026-11-15T23:47:10Z",
+      "mergedInto": "dev"
+    },
+    "v4-proof": {
+      "agent": "inkling",
+      "paths": "SPEC.md",
+      "branch": "wt/v4-proof",
+      "worktree": "worktrees/wt-v4-proof",
+      "status": "submitted",
+      "createdAt": "2026-11-15T23:44:56Z",
+      "submittedAt": "2026-11-15T23:45:28Z"
     }
   },
   "mergeLock": null
