@@ -385,14 +385,8 @@ do_merge_next() {
   # record lock owner in state (atomic)
   state_jq --arg s "$slug" '.mergeLock = $s'
 
-  # tests block the merge: a failing check aborts instead of warning and continuing
-  if command -v bun >/dev/null 2>&1; then
-    if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
-      printf 'error: tests failed, aborting merge\n' >&2
-      release_merge_lock
-      exit 1
-    fi
-  fi
+  # drop any stale scratch branches from interrupted merges (best effort)
+  git -C "$MAIN_ROOT" branch --list 'merge-check-*' -D >/dev/null 2>&1 || true
 
   # ensure on dev branch in main worktree
   local cur_main
@@ -411,14 +405,63 @@ do_merge_next() {
     exit 1
   fi
 
-  # merge wt branch into dev (plain git, no remote needed)
+  # the main worktree must be clean for a safe merge; refuse otherwise.
+  # The coordinator's own state file is exempt: claim/submit leave it dirty by design and merges never touch it.
+  if ! git -C "$MAIN_ROOT" diff --quiet -- . ':(exclude).term/coordinator/state.json' ||
+     ! git -C "$MAIN_ROOT" diff --cached --quiet -- . ':(exclude).term/coordinator/state.json'; then
+    printf 'error: uncommitted changes outside .term/coordinator/state.json in %s; commit or stash them first\n' "$MAIN_ROOT" >&2
+    release_merge_lock
+    exit 1
+  fi
+
   git -C "$MAIN_ROOT" fetch >/dev/null 2>&1 || true
+
+  # Gate on the merged result, not on dev's pre-merge HEAD. A branch whose merge is the fix
+  # for the very staleness the gate detects (e.g. a docs freshness refresh) must not be blocked
+  # by the state it repairs. The trial merge happens on a throwaway branch; dev is moved only
+  # after the merged result passes the check, and is left untouched on failure.
+  local tmp_branch="merge-check-${slug}-$$"
+  if ! git -C "$MAIN_ROOT" branch "$tmp_branch" "$DEV_BRANCH" >/dev/null 2>&1; then
+    printf 'error: cannot create scratch branch %s\n' "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
+  if ! git -C "$MAIN_ROOT" checkout "$tmp_branch" >/dev/null 2>&1; then
+    git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+    printf 'error: cannot checkout scratch branch %s\n' "$tmp_branch" >&2
+    release_merge_lock
+    exit 1
+  fi
   if ! git -C "$MAIN_ROOT" merge --no-ff --no-edit -m "merge $branch into $DEV_BRANCH" "$branch" >/dev/null 2>&1; then
     git -C "$MAIN_ROOT" merge --abort >/dev/null 2>&1 || true
+    git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1 || true
+    git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
     printf 'error: merge failed\n' >&2
     release_merge_lock
     exit 1
   fi
+  if command -v bun >/dev/null 2>&1; then
+    if ! (cd "$MAIN_ROOT" && bun run check >/dev/null 2>&1); then
+      git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1 || true
+      git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
+      printf 'error: merged result fails the check; aborting merge (dev untouched)\n' >&2
+      release_merge_lock
+      exit 1
+    fi
+  fi
+  # merged result is green: move dev onto it
+  if ! git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1; then
+    git -C "$MAIN_ROOT" checkout --detach >/dev/null 2>&1 || true
+    printf 'error: cannot checkout %s after the merged result passed\n' "$DEV_BRANCH" >&2
+    release_merge_lock
+    exit 1
+  fi
+  if ! git -C "$MAIN_ROOT" merge --ff-only "$tmp_branch" >/dev/null 2>&1; then
+    printf 'error: cannot fast-forward %s onto the verified merge\n' "$DEV_BRANCH" >&2
+    release_merge_lock
+    exit 1
+  fi
+  git -C "$MAIN_ROOT" branch -D "$tmp_branch" >/dev/null 2>&1 || true
 
   local ts
   ts=$(now_iso)
