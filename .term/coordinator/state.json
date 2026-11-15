@@ -594,6 +594,17 @@
       "submittedAt": "2026-11-15T20:45:49Z",
       "mergedAt": "2026-11-15T20:45:56Z",
       "mergedInto": "dev"
+    },
+    "a24-cap-paused-oneshot": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a24-cap-paused-oneshot",
+      "worktree": "worktrees/wt-a24-cap-paused-oneshot",
+      "status": "done",
+      "createdAt": "2026-11-15T20:46:42Z",
+      "submittedAt": "2026-11-15T20:48:32Z",
+      "mergedAt": "2026-11-15T20:48:38Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
