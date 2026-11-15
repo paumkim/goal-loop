@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, iterationDurations, renderBar, trailWindow, verdictGlyph } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, lastVerdict, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -110,5 +110,52 @@ describe("trailWindow", () => {
 
   test("empty history yields an empty window", () => {
     expect(trailWindow([], 24)).toEqual({ shown: [], total: 0 })
+  })
+})
+
+describe("verdictCounts", () => {
+  test("tallies each verdict kind and the total", () => {
+    const counts = verdictCounts([verdict(1, "not_met"), verdict(2, "met"), verdict(3, "not_met"), verdict(4, "impossible")])
+    expect(counts).toEqual({ met: 1, not_met: 2, impossible: 1, total: 4 })
+  })
+
+  test("empty history yields all zeros", () => {
+    expect(verdictCounts([])).toEqual({ met: 0, not_met: 0, impossible: 0, total: 0 })
+  })
+})
+
+describe("lastVerdict", () => {
+  test("returns the newest entry (history is oldest first)", () => {
+    expect(lastVerdict([verdict(1, "not_met"), verdict(2, "met")])?.turn).toBe(2)
+  })
+
+  test("returns undefined for an empty history", () => {
+    expect(lastVerdict([])).toBeUndefined()
+  })
+})
+
+describe("renderPips", () => {
+  test("renders filled and empty pips up to the cap", () => {
+    expect(renderPips(2, 5)).toBe("●●○○○")
+  })
+
+  test("all completed renders all filled", () => {
+    expect(renderPips(5, 5)).toBe("●●●●●")
+  })
+
+  test("done beyond the cap clamps", () => {
+    expect(renderPips(9, 5)).toBe("●●●●●")
+  })
+
+  test("missing, zero, negative, NaN or oversized caps render nothing", () => {
+    expect(renderPips(1, undefined)).toBe("")
+    expect(renderPips(1, 0)).toBe("")
+    expect(renderPips(1, -2)).toBe("")
+    expect(renderPips(1, Number.NaN)).toBe("")
+    expect(renderPips(1, 9)).toBe("")
+  })
+
+  test("zero done renders all empty", () => {
+    expect(renderPips(0, 3)).toBe("○○○")
   })
 })

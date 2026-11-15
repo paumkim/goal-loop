@@ -56,3 +56,40 @@ export function trailWindow(history: readonly VerdictEntry[], limit = 24): { sho
   const shown = limit >= total ? history : history.slice(total - limit)
   return { shown, total }
 }
+
+export interface VerdictCounts {
+  readonly met: number
+  readonly not_met: number
+  readonly impossible: number
+  readonly total: number
+}
+
+/** Per-verdict tallies over the evaluated turns (oldest first input). */
+export function verdictCounts(history: readonly VerdictEntry[]): VerdictCounts {
+  let met = 0
+  let not_met = 0
+  let impossible = 0
+  for (const entry of history) {
+    if (entry.verdict === "met") met += 1
+    else if (entry.verdict === "impossible") impossible += 1
+    else not_met += 1
+  }
+  return { met, not_met, impossible, total: history.length }
+}
+
+/** The most recent verdict, or undefined when nothing has been evaluated yet. */
+export function lastVerdict(history: readonly VerdictEntry[]): VerdictEntry | undefined {
+  return history.length === 0 ? undefined : history[history.length - 1]
+}
+
+/**
+ * Iteration pips for the prompt-footer loop indicator: `●` per completed iteration, `○` for the
+ * remaining cap. Rendered only for small, known caps (1–8) so the footer stays compact; empty otherwise.
+ */
+export function renderPips(done: number, max: number | undefined): string {
+  if (typeof max !== "number" || !Number.isFinite(max)) return ""
+  const cap = Math.floor(max)
+  if (cap < 1 || cap > 8) return ""
+  const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap)
+  return "●".repeat(filled) + "○".repeat(cap - filled)
+}
