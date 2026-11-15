@@ -10,8 +10,7 @@ import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend } from "./core/format.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
-
-const LABEL = 10
+import { LABEL } from "./core/history.ts"
 
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined

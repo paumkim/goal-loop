@@ -6,6 +6,9 @@ import type { LoopEntry, VerdictEntry } from "./types.ts"
 
 export const BAR_CELLS = 18
 
+/** Width of the label column in the goal surfaces (detail dialog rows, history rail). */
+export const LABEL = 10
+
 /** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. */
 export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS): { filled: number; text: string } {
   const width = Math.max(1, Math.floor(cells))
