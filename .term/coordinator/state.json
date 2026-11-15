@@ -652,11 +652,14 @@
     },
     "goal-jump-row-indicator": {
       "agent": "orchestrator",
-      "paths": "src/tui.tsx,dist/tui.js",
+      "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/core.html,docs/runtime.html",
       "branch": "wt/goal-jump-row-indicator",
       "worktree": "worktrees/wt-goal-jump-row-indicator",
-      "status": "claimed",
-      "createdAt": "2026-11-15T20:56:54Z"
+      "status": "done",
+      "createdAt": "2026-11-15T21:03:34Z",
+      "submittedAt": "2026-11-15T21:04:48Z",
+      "mergedAt": "2026-11-15T21:16:55Z",
+      "mergedInto": "dev"
     },
     "a26-shared-constants": {
       "agent": "orchestrator",
@@ -679,6 +682,77 @@
       "submittedAt": "2026-11-15T21:03:10Z",
       "mergedAt": "2026-11-15T21:03:18Z",
       "mergedInto": "dev"
+    },
+    "a11-entries-prune": {
+      "agent": "orchestrator",
+      "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md",
+      "branch": "wt/a11-entries-prune",
+      "worktree": "worktrees/wt-a11-entries-prune",
+      "status": "done",
+      "createdAt": "2026-11-15T21:04:24Z",
+      "submittedAt": "2026-11-15T21:09:14Z",
+      "mergedAt": "2026-11-15T21:18:39Z",
+      "mergedInto": "dev"
+    },
+    "spec-audit-wave-complete": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-audit-wave-complete",
+      "worktree": "worktrees/wt-spec-audit-wave-complete",
+      "status": "done",
+      "createdAt": "2026-11-15T21:20:34Z",
+      "submittedAt": "2026-11-15T21:20:49Z",
+      "mergedAt": "2026-11-15T21:20:58Z",
+      "mergedInto": "dev"
+    },
+    "spec-coordinator-process-note": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-coordinator-process-note",
+      "worktree": "worktrees/wt-spec-coordinator-process-note",
+      "status": "done",
+      "createdAt": "2026-11-15T21:23:43Z",
+      "submittedAt": "2026-11-15T21:24:11Z",
+      "mergedAt": "2026-11-15T21:24:25Z",
+      "mergedInto": "dev"
+    },
+    "reland-gjr": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/changelog.html,docs/core.html,docs/runtime.html",
+      "branch": "wt/reland-gjr",
+      "worktree": "worktrees/wt-reland-gjr",
+      "status": "done",
+      "createdAt": "2026-11-15T21:35:57Z",
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:38:04Z",
+      "mergedInto": "dev"
+    },
+    "reland-a11": {
+      "agent": "orchestrator",
+      "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md,docs/changelog.html",
+      "branch": "wt/reland-a11",
+      "worktree": "worktrees/wt-reland-a11",
+      "status": "submitted",
+      "createdAt": "2026-11-15T21:36:24Z",
+      "submittedAt": "2026-11-15T21:37:39Z"
+    },
+    "reland-specnote": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/reland-specnote",
+      "worktree": "worktrees/wt-reland-specnote",
+      "status": "submitted",
+      "createdAt": "2026-11-15T21:36:35Z",
+      "submittedAt": "2026-11-15T21:37:39Z"
+    },
+    "reland-processnote": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/reland-processnote",
+      "worktree": "worktrees/wt-reland-processnote",
+      "status": "submitted",
+      "createdAt": "2026-11-15T21:36:42Z",
+      "submittedAt": "2026-11-15T21:37:39Z"
     }
   },
   "mergeLock": null
