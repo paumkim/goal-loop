@@ -74,6 +74,9 @@ interface Runtime {
   lastCheckinAt?: number
   /** Backoff counter for retrying a failed loop-planner step. */
   loopRetries?: number
+  /** One-shot notice flags for caps an armed loop runs past without pausing (never re-fired; anti-stacking). */
+  capNotified?: boolean
+  stallNotified?: boolean
 }
 
 const HISTORY = 20
@@ -334,9 +337,10 @@ export class GoalController {
     record.checkins = 0
     runtime.lastCheckinAt = undefined
     if (record.status === "paused") {
-      // Turn-cap freeze: a message does not extend the cap, so resume would re-pause after one turn.
+      // Turn-cap freeze (plain goals only): a message does not extend the cap, so resume would re-pause
+      // after one turn. An armed /goal-loop resumes on a message even past the cap.
       // Stay paused; the user must clear or set a new goal (a restart resets the turn counter).
-      if (this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
+      if (!record.loopEnabled && this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
         this.clearDeferred(runtime)
         this.notify(sessionID, "paused", "warning", "Goal paused at turn cap", `${record.reason ?? "Reached the turn limit."} A message will not extend the cap; run /goal clear or set a new goal.`)
         this.commit(record)
@@ -568,8 +572,22 @@ export class GoalController {
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", result.reason || record.condition)
       return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
-    if (config.maxTurns > 0 && turn >= config.maxTurns) return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
-    if (stall >= config.stallTurns && config.stallTurns > 0) return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
+    if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
+      return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
+    }
+    if (config.maxTurns > 0 && turn >= config.maxTurns && record.loopEnabled && !runtime.capNotified) {
+      // Armed loops never pause at the turn cap: one notice, then the loop keeps running.
+      runtime.capNotified = true
+      this.notify(sessionID, "loop", "warning", "Turn cap passed — loop keeps running", `Reached the ${config.maxTurns}-turn safety limit; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
+    }
+    if (stall >= config.stallTurns && config.stallTurns > 0 && !record.loopEnabled) {
+      return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
+    }
+    if (stall >= config.stallTurns && config.stallTurns > 0 && record.loopEnabled && !runtime.stallNotified) {
+      // Armed loops never pause at the stall guard: one notice, then the loop keeps running.
+      runtime.stallNotified = true
+      this.notify(sessionID, "loop", "warning", "No progress — loop keeps running", `${stall} turns in a row without tool use; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
+    }
     this.commit(record)
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return

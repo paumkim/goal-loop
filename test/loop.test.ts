@@ -661,12 +661,45 @@ describe("/goal-loop", () => {
   })
 
   test("a paused loop is not re-anchored", async () => {
-    const h3 = harness({ maxTurns: 1 })
+    const h3 = harness()
     await h3.setLoop("improve the parser")
-    h3.verdicts.push(notMet("not yet"))
-    await h3.turn(3) // hits the 1-turn cap -> paused
+    h3.controller.onExecutionInterrupted(SID, "user")
+    expect(h3.controller.get(SID)?.status).toBe("paused")
     await h3.controller.onCompactionLanded(SID)
     expect(h3.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+  })
+
+  test("an armed loop never pauses at the turn cap; it notifies once and keeps arming", async () => {
+    const h3 = harness({ maxTurns: 1 })
+    await h3.setLoop("improve the parser")
+    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    await h3.turn()
+    await h3.turn()
+    await h3.turn()
+    expect(h3.controller.get(SID)?.status).toBe("active")
+    const capNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("Turn cap"))
+    expect(capNotices).toHaveLength(1)
+  })
+
+  test("an armed loop never pauses at the stall guard; it notifies once and keeps running", async () => {
+    const h3 = harness({ stallTurns: 2 })
+    await h3.setLoop("improve the parser")
+    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    await h3.turn(0)
+    await h3.turn(0)
+    await h3.turn(0)
+    expect(h3.controller.get(SID)?.status).toBe("active")
+    const stallNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("No progress"))
+    expect(stallNotices).toHaveLength(1)
+  })
+
+  test("a message resumes an armed loop even past the cap", async () => {
+    const h3 = harness({ maxTurns: 1 })
+    await h3.setLoop("improve the parser")
+    h3.controller.onExecutionInterrupted(SID, "user")
+    expect(h3.controller.get(SID)?.status).toBe("paused")
+    h3.controller.onUserPrompt(SID)
+    expect(h3.controller.get(SID)?.status).toBe("active")
   })
 
   test("a failing re-anchor does not break compaction landing", async () => {

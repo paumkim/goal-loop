@@ -51,7 +51,7 @@ While a goal runs, the footer shows its state:
 
 Safety rails:
 
-- **Never pauses automatically:** it keeps going across turns, failure retries (rate limits every 15 minutes, transient errors with capped exponential backoff) and zero-tool-call stretches. It stops only on (1) your interrupt (Esc), (2) a terminal provider error the user must fix — auth, credit balance, quota exhaustion — the goal fails instead of waiting, (3) an explicit `maxTurns` cap you set yourself (default 0 = off), or (4) `/goal clear`. (An explicit cap still stays paused at the cap; a message will not extend it.)
+- **Never pauses automatically:** it keeps going across turns, failure retries (rate limits every 15 minutes, transient errors with capped exponential backoff) and zero-tool-call stretches. It stops only on (1) your interrupt (Esc), (2) a terminal provider error the user must fix — auth, credit balance, quota exhaustion — the goal fails instead of waiting, (3) explicit `maxTurns`/`stallTurns` caps you set yourself (default 0 = off; plain goals only — an armed `/goal-loop` never pauses at either, it emits a one-time warning and keeps running), or (4) `/goal clear`. (An explicit cap still stays paused at the cap; a message will not extend it.)
 - **Retries** dropped connections and overloads forever with capped exponential backoff; rate/usage-limit failures are retried every 15 minutes. `checkinMinutes: 0` only disables idle check-in nudges, not retries.
 - **Fails** (distinct from `cleared`) on errors you must fix: auth, credit, context overflow, missing model. A failed goal is terminal and is not resumable by sending a message; fix the cause and run `/goal` again. `cleared` only means you (or a replacement goal) ended it.
 - **Waits** while subagents or background shells run, with check-ins at 30 min, then 60, then 120.
@@ -88,7 +88,7 @@ Fuzzy requests: a vague goal like "make it look like a rabbit" is turned into a 
 `/goal <objective>` stops the moment the evaluator says **met**. `/goal-loop <objective>` does not: each met
 verdict triggers a compact summary of what was achieved (a short machine-consumable block, not a transcript
 dump), then the evaluator generates the next, harder goal from that summary, and the agent arms it immediately
-under the same `/goal` rules — turn cap, stall guard, retries, commit rule, restore on restart.
+under the same `/goal` retry/commit/restore rules; an armed loop does not pause at the turn cap or stall guard (a plain goal still can when configured).
 
 ```text
 /goal-loop make the docs site faster and more complete
@@ -177,8 +177,8 @@ All optional, set in `opencode.json`:
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
 | `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND` |
 | `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
-| `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default) |
-| `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default) |
+| `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default); armed `/goal-loop` runs never pause here — one notice, kept running |
+| `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default); armed `/goal-loop` runs never pause here — one notice, kept running |
 | `checkinMinutes` | `30` | First background check-in; `0` disables idle check-in nudges (automatic retries never stop) |
 | `maxIdleCheckins` | `3` | Max idle check-ins while background work runs |
 | `maxRetries` | `3` | Retained for compatibility; no longer gates anything — automatic retries are unlimited with capped backoff |
