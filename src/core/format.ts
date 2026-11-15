@@ -69,7 +69,7 @@ function elapsed(record: GoalRecord, now: number) {
 }
 
 /** Multi-line report used by `/goal` with no arguments. */
-export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapshot | undefined): string {
+export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapshot | undefined, defaultMaxLoops?: number): string {
   const lines = [
     `Goal ${statusLabel(record.status)}: ${record.condition}`,
     `${record.endedAt ? "Ran" : "Running"} for ${formatDuration(elapsed(record, now))}${record.turns > 0 ? ` \u00B7 ${record.turns} turn${record.turns === 1 ? "" : "s"} evaluated` : ""}`,
@@ -77,7 +77,7 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
   if (spend) lines.push(`Spend: ${formatSpend(spend)}`)
   if (record.loopEnabled) {
     const iteration = record.loopIteration ?? 1
-    const max = record.loopMaxLoops ?? "?"
+    const max = record.loopMaxLoops ?? defaultMaxLoops ?? "?"
     lines.push(`Loop: iteration="${iteration}" max="${max}" · objective: ${record.loopObjective ?? record.condition}`)
     const pending = record.loopCompact
     if (pending) {
