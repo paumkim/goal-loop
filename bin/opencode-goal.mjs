@@ -38,8 +38,8 @@
  *   - Only the `plugins` array (and, when empty, the array property) is
  *     edited; all unrelated keys, comments and formatting survive.
  *   - Uninstall removes exactly the entry install added. If the entry is missing
- *     but an install-time backup exists (one whose parsed content provably lacks
- *     the plugin), uninstall restores that pre-install config unchanged instead
+ *     but an install-time backup exists (the OLDEST backup whose parsed content
+ *     provably lacks the plugin — i.e. the first install-time original), uninstall restores that pre-install config unchanged instead
  *     of printing a note — taking a safety backup of the current state first
  *     (the user chose --restore explicitly to get a plugin-containing backup back).
  *     If the config already matches the pre-install backup, uninstall is a clean
@@ -348,6 +348,18 @@ function backupFile(file) {
   return dest;
 }
 
+function backupChronologyKey(f) {
+  // <file>.<yyyy-MM-DD-HH-mm-ss>Z[-N].bak — collision suffix -N sorts AFTER the plain backup of the same second
+  const m = f.match(/\.(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})Z(?:-(\d+))?\.bak$/);
+  return m ? [m[1], m[2] ? Number(m[2]) : 0] : [f, 0];
+}
+
+function compareBackupsChronologically(a, b) {
+  const [ta, ia] = backupChronologyKey(a);
+  const [tb, ib] = backupChronologyKey(b);
+  return ta < tb ? -1 : ta > tb ? 1 : ia - ib;
+}
+
 function listBackups(file) {
   const dir = resolve(file, "..");
   const base = file.slice(dir.length + 1);
@@ -355,7 +367,7 @@ function listBackups(file) {
   return readdirSync(dir)
     .filter((f) => f.startsWith(`${base}.`) && f.endsWith(".bak"))
     .map((f) => join(dir, f))
-    .sort();
+    .sort(compareBackupsChronologically); // ascending by true creation time
 }
 
 /** True when the parsed backup provably lacks the plugin (the install-time original). Null = unverifiable, do not trust it. */
@@ -371,11 +383,18 @@ function backupPluginFree(bak) {
   }
 }
 
-/** Newest backup whose content provably lacks the plugin; the install-time original config. */
+/**
+ * The install-time original: the OLDEST backup whose content provably lacks the
+ * plugin. Safety copies taken during a restore are also plugin-free, so the
+ * newest-plugin-free rule used to let a restore rewrite the pre-install config
+ * with drifted bytes on a later run. Oldest-first makes repeated runs converge:
+ * once the config matches the pre-install original, further uninstalls are a
+ * clean no-op. Never a backup containing the plugin.
+ */
 function preInstallBackup(file) {
-  const baks = listBackups(file); // ascending by name (timestamps sort lexically)
-  for (let i = baks.length - 1; i >= 0; i--) {
-    if (backupPluginFree(baks[i]) === true) return baks[i];
+  const baks = listBackups(file); // oldest first
+  for (const bak of baks) {
+    if (backupPluginFree(bak) === true) return bak;
   }
   return undefined;
 }

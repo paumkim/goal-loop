@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=442 -->
+<!-- spec-check files=41 tests=446 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1961,3 +1961,36 @@ Files touched: `package.json`, `bin/opencode-goal.mjs`, `AGENTS.md`, `README.md`
 Verification: `bun run check` green in the worktree (442 tests / 20 files, tsc clean, TUI load ok, docs
 freshness ok, spec-check ok 41/442); coordinator submit; merged-result gate at `merge-next`; fresh `bun run
 check` at dev HEAD; scratch restore proof (see the iteration-2 report) byte-identical with safety backup.
+
+## Workstream BB — live-proof bug fix: restore candidate chronology (goal iteration 2 follow-up)
+
+The iteration-2 live proof (fresh scratch XDG_CONFIG_HOME, pre-install config, drift, uninstall) showed the
+byte-identical restore working, but the final no-op step did NOT no-op. Item 174's rule picks the NEWEST
+plugin-free backup as the restore candidate; a safety backup taken during an earlier restore is plugin-free
+too, so the re-run restored the drifted bytes over the correctly-restored pre-install config (exit 0, still
+wrong). Item 174's candidate rule is superseded by this section; the rest stands.
+
+182. **Root cause (two coupled defects).** (a) `preInstallBackup` scanned backups newest-first, so the newest
+     plugin-free backup — any safety copy of drifted state — shadowed the older install-time original.
+     (b) `listBackups` sorted names lexically; a collision-suffixed backup (`…Z-2.bak`, created after the
+     plain `…Z.bak` of the same second) sorts BEFORE the plain one, so its "newest" was not even
+     creation-order under same-second backups (which is how unit tests run).
+183. **Fix.** `listBackups` now sorts chronologically (`<ts>`, then collision index, absent = 0).
+     `preInstallBackup` picks the OLDEST backup whose parsed content provably lacks the plugin (first in
+     chronological order). Repeated runs converge: once the config equals the oldest plugin-free backup,
+     helpers short-circuit to `not installed` (exit 0) and never rewrite it. Oldest-first also means a restore
+     restores the FIRST install-time original; the fresh safety backup (taken before any overwrite) preserves
+     the drifted state, so no bytes are ever lost silently. `--restore` and the `note:` hint use the same
+     chronological order (newest = last). Failing-before evidence: new describe block (4 tests); the new
+     "newer plugin-free backup does not shadow the older pre-install original" test FAILED pre-fix (byte
+     mismatch); the others pin behavior through the collision-suffix and plugin-containing-backup edges.
+     After the fix: 36/36 in the file, 446 total.
+184. **Marker** bumped `files=41 tests=442` → `files=41 tests=446` (+4 tests, no new files). Docs: the
+     README and `docs/install.html` restore rule now names the oldest-plugin-free candidate.
+
+Files touched: `bin/opencode-goal.mjs`, `test/cli-installer.test.ts`, `SPEC.md`, `README.md`,
+`docs/install.html`.
+
+Verification: full suite green (446); fresh live proof in /tmp/opencode/restore-fix-proof.* (install → drift →
+uninstall restores byte-identical pre-install config → safety backup holds drifted bytes → uninstall again is a
+clean `not installed` no-op, file unchanged, exit 0) using the FIXED global-bin install from this tree.
