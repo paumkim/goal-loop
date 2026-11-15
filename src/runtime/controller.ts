@@ -91,6 +91,13 @@ const HISTORY = 20
 const RETRY_BASE_MS = 15_000
 const RETRY_MAX_MS = 5 * 60_000
 const REEVALUATE_BASE_MS = 10_000
+/**
+ * Exponential backoff with a cap. Two growth curves, intentionally different: evaluator retries use
+ * `REEVALUATE_BASE_MS × 3ⁿ` (10s → 30s → 90s; evaluator failures are usually transient and cheap to retry),
+ * planner/continue retries use `RETRY_BASE_MS × 4ⁿ` (15s → 60s → 240s; a failing planner or dispatch
+ * burns a full model round-trip, so back off harder). Both are capped at RETRY_MAX_MS.
+ */
+const backoffMs = (base: number, growth: number, exponent: number) => Math.min(base * growth ** exponent, RETRY_MAX_MS)
 /** Fixed backoff for rate/usage-limit-class failures; these windows clear on their own. */
 const PAUSE_RETRY_MS = 15 * 60_000
 /** Backoff for a failed synthetic-continue dispatch. */
@@ -801,7 +808,7 @@ export class GoalController {
       // The summary and history stay local until the arm lands, so a retry recomputes them identically;
       // record.loopNotProgress is untouched here on purpose.
       const attempt = runtime.loopRetries ?? 0
-      const delay = Math.min(RETRY_BASE_MS * 4 ** attempt, RETRY_MAX_MS)
+      const delay = backoffMs(RETRY_BASE_MS, 4, attempt)
       runtime.loopRetries = attempt + 1
       this.notify(
         sessionID,
@@ -961,7 +968,7 @@ export class GoalController {
     const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
     record.retries++
-    const delay = Math.min(REEVALUATE_BASE_MS * 3 ** (record.retries - 1), RETRY_MAX_MS)
+    const delay = backoffMs(REEVALUATE_BASE_MS, 3, record.retries - 1)
     this.commit(record)
     this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator failed (${truncate(errorMessage(error), 120)}); retrying in ${formatDuration(delay)}.`)
     this.schedule(runtime, delay, () => {
@@ -980,7 +987,7 @@ export class GoalController {
     record.retries++
     // Rate/usage-limit windows clear on their own, so a fixed long backoff beats burning evaluations;
     // transient errors use capped exponential backoff. Both retry forever.
-    const delay = failure.kind === "pause" ? PAUSE_RETRY_MS : Math.min(RETRY_BASE_MS * 4 ** (record.retries - 1), RETRY_MAX_MS)
+    const delay = failure.kind === "pause" ? PAUSE_RETRY_MS : backoffMs(RETRY_BASE_MS, 4, record.retries - 1)
     this.commit(record)
     this.notify(record.sessionID, "retry", "warning", "Goal still active", `Turn failed (${failure.label}); retrying in ${formatDuration(delay)}.`)
     this.schedule(runtime, delay, () => {

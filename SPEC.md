@@ -1125,6 +1125,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-21 (low) — backoff curve drift: `evaluationFailed` uses `x3`, `handleFailure`/`loopAdvance` retry use `x4`.** Two different
   exponential bases in one file with no stated rationale. Proposed fix: one shared backoff helper (`RETRY_BASE_MS * base ** n`, capped), or a
   comment stating the intentional difference.
+  Resolution: Workstream AM — shared `backoffMs` helper; the two curves documented; byte-compatible.
 - **A-22 (low) — `src/core/format.ts` / `src/tui.tsx` — `1000k` rollover** (same as A-6; listed once here, fixed once).
   Resolution: Workstream AE — the A-6 fix.
 - **A-23 (low) — `src/core/history.ts:renderPips` — pips render only for caps 1–8** and vanish for larger caps; intentional compactness,
@@ -1344,5 +1345,18 @@ the same freeze stay silent; a restart begins a fresh freeze and may notify once
      354 → 355.
 
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
+
+## Workstream AM — one capped backoff helper, two documented curves (A-21)
+
+`evaluationFailed` used `REEVALUATE_BASE_MS × 3ⁿ` while `handleFailure` and the loop-planner retry used
+`RETRY_BASE_MS × 4ⁿ`, with no stated rationale. A shared `backoffMs(base, growth, exponent)` helper (capped at
+`RETRY_MAX_MS`) now backs all three sites, and the curve difference is documented at the helper: evaluator
+failures are transient and cheap to retry (10s/30s/90s), while a failing planner or dispatch burns a full model
+round-trip (15s/60s/240s). Byte-compatible delays; the existing backoff tests (e.g. the planner retry after
+15s, the evaluator retry) pass unchanged. Pure dedup — no test added.
+
+Files touched: `src/runtime/controller.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
