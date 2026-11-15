@@ -300,7 +300,10 @@ var LoopSection = (props) => {
     return s.count >= 2 && s.verdict ? ` \xB7 ${s.count}\xD7 ${s.verdict.replace("_", " ")} in a row` : "";
   };
   const isTerminal = () => props.goal.status === "achieved" || props.goal.status === "impossible" || props.goal.status === "cleared" || props.goal.status === "failed";
-  const capReached = () => typeof max() === "number" && Number.isFinite(max()) && done() >= max();
+  const capReached = () => {
+    const limit = max();
+    return typeof limit === "number" && Number.isFinite(limit) && done() >= limit;
+  };
   const livePace = () => isTerminal() ? undefined : pace();
   const finished = () => history().length > 0 && (isTerminal() || capReached());
   const totals = () => loopTotals(history(), props.goal.setAt);
@@ -903,6 +906,117 @@ var GoalRpc = Rpc.define({
   }
 });
 
+// src/core/wire.ts
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var isString = (value) => typeof value === "string";
+var isBoolean = (value) => typeof value === "boolean";
+var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
+var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
+var VERDICTS = new Set(["met", "not_met", "impossible"]);
+var isVerdict = (value) => isString(value) && VERDICTS.has(value);
+var NOTICE_KINDS = new Set([
+  "set",
+  "status",
+  "cleared",
+  "achieved",
+  "impossible",
+  "paused",
+  "resumed",
+  "retry",
+  "failed",
+  "checkin",
+  "error",
+  "compact",
+  "loop"
+]);
+var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
+var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
+var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
+var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at);
+var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt);
+var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.missesCountedAtEvent === undefined || isBoolean(value.missesCountedAtEvent));
+var isGoalSnapshot = (value) => {
+  if (!isRecord(value))
+    return false;
+  if (value.version !== 1)
+    return false;
+  if (!isString(value.id) || value.id === "" || !isString(value.sessionID) || value.sessionID === "" || !isString(value.directory) || !isString(value.condition))
+    return false;
+  if (!isGoalStatus(value.status))
+    return false;
+  if (value.reason !== undefined && !isString(value.reason))
+    return false;
+  if (value.verdict !== undefined && !isVerdict(value.verdict))
+    return false;
+  if (!isFiniteNumber(value.setAt) || !isFiniteNumber(value.startedAt))
+    return false;
+  if (value.endedAt !== undefined && !isFiniteNumber(value.endedAt))
+    return false;
+  if (!isFiniteNumber(value.turns) || !isFiniteNumber(value.stall) || !isFiniteNumber(value.retries) || !isFiniteNumber(value.checkins))
+    return false;
+  if (!isUsageSnapshot(value.baseline))
+    return false;
+  if (value.final !== undefined && !isUsageSnapshot(value.final))
+    return false;
+  if (!Array.isArray(value.history) || !value.history.every(isVerdictEntry))
+    return false;
+  if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
+    return false;
+  if (value.spend !== undefined && !isUsageSnapshot(value.spend))
+    return false;
+  if (value.loopEnabled !== undefined && !isBoolean(value.loopEnabled))
+    return false;
+  if (value.loopIteration !== undefined && !isFiniteNumber(value.loopIteration))
+    return false;
+  if (value.loopObjective !== undefined && !isString(value.loopObjective))
+    return false;
+  if (value.loopMaxLoops !== undefined && !isFiniteNumber(value.loopMaxLoops))
+    return false;
+  if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress))
+    return false;
+  if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry)))
+    return false;
+  if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact))
+    return false;
+  return true;
+};
+var parseGoalSnapshot = (value) => isGoalSnapshot(value) ? value : undefined;
+var parseGetGoalOutput = (value) => {
+  if (!isRecord(value))
+    return;
+  const goal = value.goal;
+  if (goal === null)
+    return { goal: null };
+  const parsed = parseGoalSnapshot(goal);
+  return parsed ? { goal: parsed } : undefined;
+};
+var parseChangedEvent = (value) => {
+  if (!isRecord(value))
+    return;
+  const sessionID = value.sessionID;
+  if (!isString(sessionID) || sessionID === "")
+    return;
+  const goal = value.goal;
+  if (goal === null || goal === undefined)
+    return { sessionID, goal: null };
+  const parsed = parseGoalSnapshot(goal);
+  return parsed ? { sessionID, goal: parsed } : undefined;
+};
+var parseNotice = (value) => {
+  if (!isRecord(value))
+    return;
+  const { sessionID, kind, level, title, message } = value;
+  if (!isString(sessionID) || sessionID === "")
+    return;
+  if (!isNoticeKind(kind) || !isNoticeLevel(level))
+    return;
+  if (!isString(title) || !isString(message))
+    return;
+  return { sessionID, kind, level, title, message };
+};
+
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
@@ -973,7 +1087,7 @@ var tui_default = Plugin.define({
         try {
           context.ui.toast.show({
             title: "goal plugin error (dialog)",
-            message: String(error?.stack ?? error).slice(0, 900),
+            message: String(error instanceof Error ? error.stack ?? error : error).slice(0, 900),
             variant: "error",
             duration: 30000
           });
@@ -1063,7 +1177,11 @@ var tui_default = Plugin.define({
     };
     const refresh = (sessionID) => rpc.get({
       sessionID
-    }, at(sessionID)).then((result) => put(sessionID, result.goal));
+    }, at(sessionID)).then((result) => {
+      const output = parseGetGoalOutput(result);
+      if (output)
+        put(sessionID, output.goal);
+    });
     const put = (sessionID, goal) => setEntries((previous) => {
       const existing = previous[sessionID];
       if (existing && goalsEqual(existing.goal, goal))
@@ -1155,14 +1273,16 @@ var tui_default = Plugin.define({
     };
     const offChanged = rpc.events.on("changed", (event) => {
       try {
-        const data = event?.data;
-        if (data && typeof data.sessionID === "string")
-          put(data.sessionID, data.goal ?? null);
+        const parsed = parseChangedEvent(event?.data);
+        if (parsed)
+          put(parsed.sessionID, parsed.goal);
       } catch {}
     });
     const offNotice = rpc.events.on("notice", (event) => {
       try {
-        onNotice(event?.data);
+        const notice = parseNotice(event?.data);
+        if (notice)
+          onNotice(notice);
       } catch {}
     });
     const timer = setInterval(() => {

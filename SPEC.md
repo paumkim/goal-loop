@@ -383,7 +383,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=38 tests=371 -->
+<!-- spec-check files=39 tests=385 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1544,3 +1544,50 @@ exactly like `isFuzzyCondition`.
 
 Verification: `bun run check` green in the worktree (371 tests / 38 files, spec-check ok, docs freshness ok
 after the stamp refresh), coordinator submit + merge-next.
+
+## Workstream AU — the RPC/TUI boundary has zero trust-casts (iteration 2 condition)
+
+Interpretation of the armed condition: zero `as any` / `as unknown` casts in the RPC/TUI boundary
+(`rpc.ts`, `src/rpc-handlers.ts`, `src/tui.tsx`, `src/tui-history.tsx`, `src/status-dialog.tsx`; `src/rpc.ts`
+included for completeness), each replaced by a validated narrow, with pin tests where behavior could change.
+The boundary files in fact carry zero value casts of any kind after this workstream (the only remaining `as`
+tokens in `src/rpc.ts` are its `as const` schema literals, which are not value casts). `status-dialog.tsx`
+never carried a cast and is unchanged.
+
+141. New pure module `src/core/wire.ts` holds every validated narrow. Base guard `isRecord` (plain, non-array
+     object) and the enum guards `isGoalStatus` / `isVerdict` / `isNoticeKind` / `isNoticeLevel` (the full
+     `NoticeKind` and `NoticeLevel` unions from `src/core/types.ts`). Composite guards `isUsageSnapshot`,
+     `isVerdictEntry`, `isLoopEntry`, `isLoopCompact`, and `isGoalSnapshot` — a full structural check of the
+     read model the server emits (required `version: 1`, non-empty `id`/`sessionID`, known status, finite
+     numbers for turns/stall/retries/checkins/elapsedMs, a fully validated `baseline`, `history` entries
+     verdict-checked); optional additive fields are validated when present and unknown extra fields are
+     tolerated, so older clients keep working against newer servers. `parseGoalSnapshot`,
+     `parseGetGoalOutput` (`{ goal: GoalSnapshot | null }` or drop) and `parseChangedEvent`
+     (sessionID-validated; explicit or absent `goal` narrows to null, matching the previous `?? null`)
+     each return `undefined` on malformed input. `parseNotice` builds a fresh `Notice` from enum-checked
+     parts. No casts anywhere in the module — type predicates only.
+142. Call sites. `src/rpc-handlers.ts` `sessionIDOf` narrows through `isRecord` (behavior identical: null,
+     arrays, primitives and missing/empty/non-string `sessionID` all still throw `sessionID is required`).
+     `src/tui.tsx` `refresh()` drops an unusable `goal` RPC result and keeps the previous entry (the same
+     posture as a failed fetch) instead of trust-casting `result`; the `changed` handler drops events with a
+     malformed sessionID or snapshot instead of blanking a live entry; the `notice` handler drops malformed
+     notices instead of pushing them into the render tree; the dialog error-toast path uses
+     `error instanceof Error` instead of `(error as Error)?.stack`. `src/tui-history.tsx` `capReached()`
+     binds `max()` to a local (`const limit = max()`) instead of `(max() as number)`.
+143. Behavior changes are confined to the fail-closed direction, and each is pinned: a present-but-malformed
+     snapshot in a `changed` event is dropped (previously it overwrote the cached entry with garbage, or
+     blanked it); an unusable `goal` RPC response no longer reaches `put()` (previously it was cast and
+     cached); a notice with an unknown `kind`/`level` is dropped (previously rendered as-is). Valid payloads
+     behave exactly as before — the same object flows downstream once narrowed.
+144. Pin tests `test/wire.test.ts` (14 tests): the `isRecord` matrix; `parseGoalSnapshot` accepts a minimal
+     record, a fully looped record and legacy records without optional fields, and rejects 16 required-field
+     breakages plus 8 optional-field breakages (loop fields, spend, reason/verdict types, NaN elapsedMs);
+     `parseGetGoalOutput` for `{ goal: snapshot }` / `{ goal: null }` / tolerated extras / unusable payloads;
+     `parseChangedEvent` for sessionID validation, explicit/absent null parity and malformed-snapshot drops;
+     `parseNotice` across all 13 kinds × 4 levels and the drop cases. Fail-before verified: with
+     `src/core/wire.ts` removed, `bun test wire.test.ts` fails at import (0 pass, 1 error); with it restored,
+     14/14 pass. Test count 371 → 385, files 38 → 39; the spec-check marker in Workstream J is updated in the
+     same commit.
+
+Verification: `bun run check` green in the worktree (385 tests / 19 files, tsc clean, `dist/tui.js` rebuilt,
+TUI load ok, docs freshness ok after the stamp refresh, spec-check ok 39/385), coordinator submit.

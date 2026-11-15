@@ -79,7 +79,10 @@ export const LoopSection = (props: {
     return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
   }
   const isTerminal = () => props.goal.status === "achieved" || props.goal.status === "impossible" || props.goal.status === "cleared" || props.goal.status === "failed"
-  const capReached = () => typeof max() === "number" && Number.isFinite(max()) && done() >= (max() as number)
+  const capReached = () => {
+    const limit = max()
+    return typeof limit === "number" && Number.isFinite(limit) && done() >= limit
+  }
   const livePace = () => (isTerminal() ? undefined : pace())
   const finished = () => history().length > 0 && (isTerminal() || capReached())
   const totals = () => loopTotals(history(), props.goal.setAt)

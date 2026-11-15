@@ -1,5 +1,6 @@
 import { errorMessage } from "./core/errors.ts"
 import type { GoalSnapshot, UsageSnapshot } from "./core/types.ts"
+import { isRecord } from "./core/wire.ts"
 import type { Logger } from "./runtime/ports.ts"
 
 /** Structural view of the controller surface the RPC handlers need (GoalController satisfies it). */
@@ -14,7 +15,7 @@ export interface RpcGoalController {
 }
 
 const sessionIDOf = (input: unknown): string => {
-  const id = (input as { sessionID?: unknown } | undefined)?.sessionID
+  const id = isRecord(input) ? input.sessionID : undefined
   if (typeof id !== "string" || id === "") throw new Error("sessionID is required")
   return id
 }

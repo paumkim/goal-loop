@@ -19,6 +19,7 @@ import { StatusDialogBody } from "./status-dialog.tsx"
 import { renderPips } from "./core/history.ts"
 import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
+import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
 
 type Entry = GoalSnapshotCacheEntry
 
@@ -93,7 +94,7 @@ export default Plugin.define({
         showStatusDialogInner(sessionID, fallback)
       } catch (error) {
         try {
-          context.ui.toast.show({ title: "goal plugin error (dialog)", message: String((error as Error)?.stack ?? error).slice(0, 900), variant: "error", duration: 30000 })
+          context.ui.toast.show({ title: "goal plugin error (dialog)", message: String(error instanceof Error ? (error.stack ?? error) : error).slice(0, 900), variant: "error", duration: 30000 })
         } catch {
           // Even the error toast must not take the plugin down.
         }
@@ -146,9 +147,12 @@ export default Plugin.define({
       return location ? { location } : undefined
     }
 
-    /** Pull a fresh snapshot from the server and cache it. */
+    /** Pull a fresh snapshot from the server and cache it. A malformed RPC response keeps the previous entry (same posture as a failed fetch). */
     const refresh = (sessionID: string) =>
-      rpc.get({ sessionID }, at(sessionID)).then((result) => put(sessionID, (result as { goal: GoalSnapshot | null }).goal))
+      rpc.get({ sessionID }, at(sessionID)).then((result) => {
+        const output = parseGetGoalOutput(result)
+        if (output) put(sessionID, output.goal)
+      })
 
     const put = (sessionID: string, goal: GoalSnapshot | null) =>
       setEntries((previous) => {
@@ -237,15 +241,16 @@ export default Plugin.define({
 
     const offChanged = rpc.events.on("changed", (event) => {
       try {
-        const data = event?.data as { sessionID?: unknown; goal?: GoalSnapshot | null } | undefined
-        if (data && typeof data.sessionID === "string") put(data.sessionID, data.goal ?? null)
+        const parsed = parseChangedEvent(event?.data)
+        if (parsed) put(parsed.sessionID, parsed.goal)
       } catch {
         // A malformed event must not take the plugin's render tree down.
       }
     })
     const offNotice = rpc.events.on("notice", (event) => {
       try {
-        onNotice(event?.data as unknown as Notice)
+        const notice = parseNotice(event?.data)
+        if (notice) onNotice(notice)
       } catch {
         // Same.
       }
