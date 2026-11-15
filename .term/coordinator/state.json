@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "leases": {
+    "ship-coordinator-binary": {
+      "agent": "orchestrator",
+      "paths": "packages/coordinator",
+      "branch": "wt/ship-coordinator-binary",
+      "worktree": "worktrees/wt-ship-coordinator-binary",
+      "status": "done",
+      "createdAt": "2026-11-09T19:06:12Z",
+      "submittedAt": "2026-11-09T19:07:43Z",
+      "mergedAt": "2026-11-09T19:08:10Z",
+      "mergedInto": "dev"
+    },
+    "full-audit-fix": {
+      "agent": "orchestrator",
+      "paths": "src,packages,scripts,test,docs,package.json,index.ts,rpc.ts,tui.ts",
+      "branch": "wt/full-audit-fix",
+      "worktree": "worktrees/wt-full-audit-fix",
+      "status": "done",
+      "createdAt": "2026-11-09T19:19:47Z",
+      "submittedAt": "2026-11-09T19:45:10Z",
+      "mergedAt": "2026-11-09T19:45:20Z",
+      "mergedInto": "dev"
+    },
+    "goal-hud-move-fix-load": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,opencode.json,SPEC.md,test,dist",
+      "branch": "wt/goal-hud-move-fix-load",
+      "worktree": "worktrees/wt-goal-hud-move-fix-load",
+      "status": "done",
+      "createdAt": "2026-11-09T21:16:28Z",
+      "submittedAt": "2026-11-09T21:21:06Z",
+      "mergedAt": "2026-11-09T21:21:11Z",
+      "mergedInto": "dev"
+    },
+    "goal-hud-left-align": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,dist",
+      "branch": "wt/goal-hud-left-align",
+      "worktree": "worktrees/wt-goal-hud-left-align",
+      "status": "done",
+      "createdAt": "2026-11-09T21:25:15Z",
+      "submittedAt": "2026-11-09T21:25:56Z",
+      "mergedAt": "2026-11-09T21:26:08Z",
+      "mergedInto": "dev"
+    },
+    "goal-hud-no-backdrop": {
+      "agent": "opencode-goal",
+      "paths": "src/tui.tsx,dist/tui.js",
+      "branch": "wt/goal-hud-no-backdrop",
+      "worktree": "worktrees/wt-goal-hud-no-backdrop",
+      "status": "done",
+      "createdAt": "2026-11-09T21:30:06Z",
+      "submittedAt": "2026-11-09T21:41:51Z",
+      "mergedAt": "2026-11-09T21:44:39Z",
+      "mergedInto": "dev"
+    }
+  },
+  "mergeLock": null
+}

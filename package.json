@@ -5,13 +5,13 @@
   "author": "EL4CTEO",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/EL4CTEO/opencode-goal#readme",
+  "homepage": "https://github.com/paumkim/opencode-goalv2#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EL4CTEO/opencode-goal.git"
+    "url": "git+https://github.com/paumkim/opencode-goalv2.git"
   },
   "bugs": {
-    "url": "https://github.com/EL4CTEO/opencode-goal/issues"
+    "url": "https://github.com/paumkim/opencode-goalv2/issues"
   },
   "keywords": [
     "opencode",
@@ -31,7 +31,11 @@
     "tui.ts",
     "rpc.ts",
     "src",
-    "dist"
+    "dist",
+    "packages/coordinator/bin/coordinator",
+    "packages/coordinator/README.md",
+    ".term/coordinator/config.json",
+    ".term/coordinator/state.json"
   ],
   "engines": {
     "opencode": ">=2.0.29"
@@ -42,7 +46,9 @@
     "e2e": "bun scripts/e2e.ts",
     "check": "tsc --noEmit && bun test && bun run compile",
     "prepublishOnly": "bun run compile && bun test",
-    "compile": "bun scripts/build.ts"
+    "compile": "bun scripts/build.ts",
+    "docs:watch": "bun script/docs-watch.ts watch",
+    "docs:once": "bun script/docs-watch.ts once"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.29",
@@ -74,5 +80,8 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "maintainers": [
+    "paumkim"
+  ]
 }

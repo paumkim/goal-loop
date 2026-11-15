@@ -3,6 +3,9 @@
  *
  *   bun scripts/e2e.ts <empty-project-dir> [provider/model] [condition]
  *
+ * The model defaults to the `opencode` provider; override it with the second argument or the E2E_MODEL
+ * environment variable (e.g. `E2E_MODEL=openrouter/anthropic/claude bun scripts/e2e.ts <dir>`).
+ *
  * Writes `.opencode/opencode.json` loading this plugin into the project, starts a standalone server there (your
  * background service is untouched), runs `/goal` through the API and follows the loop until the goal resolves.
  */
@@ -13,7 +16,7 @@ import path from "node:path"
 import { renderTranscript } from "../src/core/transcript.ts"
 import { GoalRpc } from "../src/rpc.ts"
 
-const [projectArg, modelArg = "opencode/deepseek-v4.1-flash-free", conditionArg] = process.argv.slice(2)
+const [projectArg, modelArg = process.env.E2E_MODEL ?? "opencode/deepseek-v4.1-flash-free", conditionArg] = process.argv.slice(2)
 if (!projectArg) throw new Error("usage: bun scripts/e2e.ts <empty-project-dir> [provider/model] [condition]")
 const project = path.resolve(projectArg)
 const pluginRoot = path.resolve(import.meta.dir, "..")

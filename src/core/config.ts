@@ -24,6 +24,12 @@ export interface GoalConfig {
   readonly systemReminder: boolean
   /** Records verdicts in the transcript as synthetic notes. */
   readonly transcriptNotes: boolean
+  /** Auto-compact when the estimated model-visible context (last assistant token usage) is at or above this many tokens. 0 disables. Env OPENCODE_GOAL_COMPACT_AT_TOKENS. */
+  readonly compactAtTokens: number
+  /** `/goal-loop` iteration cap; counts completed iterations. */
+  readonly maxLoops: number
+  /** Token budget for the per-iteration summary and the next-goal generation; enforced as tokens*4 characters. */
+  readonly maxLoopSummaryTokens: number
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
 }
@@ -37,7 +43,11 @@ export const DEFAULTS = {
   checkinMinutes: 30,
   maxIdleCheckins: 3,
   maxRetries: 3,
-  maxConditionChars: 4_000,
+  compactAtTokens: 0,
+  maxLoops: 5,
+  maxLoopSummaryTokens: 400,
+  // Effectively unlimited: goals are pasted from the clipboard and can run to whole files, so the default never rejects.
+  maxConditionChars: Number.MAX_SAFE_INTEGER,
   commitBranch: "dev",
 } as const
 
@@ -76,7 +86,8 @@ const branch = (value: unknown, fallback: string) => {
 /**
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
- * OPENCODE_GOAL_REQUIRE_COMMIT.
+ * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
+ * OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -102,11 +113,27 @@ export function resolveConfig(
     maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 100),
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),
+    compactAtTokens: int(env.OPENCODE_GOAL_COMPACT_AT_TOKENS ?? options.compactAtTokens, DEFAULTS.compactAtTokens, 0),
+    maxLoops: int(env.OPENCODE_GOAL_MAX_LOOPS ?? options.maxLoops, DEFAULTS.maxLoops, 1, 100),
+    maxLoopSummaryTokens: int(env.OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS ?? options.maxLoopSummaryTokens, DEFAULTS.maxLoopSummaryTokens, 50, 4_000),
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),
       branch: branch(env.OPENCODE_GOAL_COMMIT_BRANCH ?? options.commitBranch, DEFAULTS.commitBranch),
+      coordinator: parseCoordinator(env.OPENCODE_GOAL_COORDINATOR ?? options.coordinator),
     },
   }
+}
+
+/** Coordinator option: `"auto"` (default, detect from repo), `true` (force), `false` (off). */
+function parseCoordinator(value: unknown): "auto" | boolean {
+  if (value === undefined || value === "auto" || value === "") return "auto"
+  if (typeof value === "boolean") return value
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase()
+    if (["1", "true", "yes", "on"].includes(normalized)) return true
+    if (["0", "false", "no", "off"].includes(normalized)) return false
+  }
+  return "auto"
 }
 
 /** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */

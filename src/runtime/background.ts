@@ -41,6 +41,15 @@ export class BackgroundTracker implements BackgroundPort {
     if (status === "running" && typeof owner === "string") this.shells.set(id, owner)
   }
 
+  shellUpdated(id: string, status: string, owner: unknown) {
+    if (status !== "running") {
+      this.shells.delete(id)
+      return
+    }
+    // Running with a known owner: track it. Running without an owner: keep any existing entry.
+    if (typeof owner === "string") this.shells.set(id, owner)
+  }
+
   shellEnded(id: string) {
     this.shells.delete(id)
   }

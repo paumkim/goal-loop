@@ -1,5 +1,5 @@
 import type { GoalConfig } from "../core/config.ts"
-import { classifyFailure } from "../core/errors.ts"
+import { classifyFailure, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, formatDuration, formatStatus, statusLabel, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
@@ -11,12 +11,13 @@ import {
   type GoalRecord,
   type GoalSnapshot,
   type GoalStatus,
+  type LoopEntry,
   type Notice,
   type NoticeKind,
   type NoticeLevel,
   type UsageSnapshot,
 } from "../core/types.ts"
-import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
+import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
 import type { GoalStore } from "./store.ts"
 
 export interface ControllerDeps {
@@ -39,6 +40,8 @@ interface Runtime {
   /** Bumped by anything that invalidates in-flight async work (new turn, prompt, clear, replace). */
   epoch: number
   toolCalls: number
+  /** Tool calls accumulated across the whole current loop iteration (resets when the iteration is armed). */
+  iterationToolCalls: number
   /** Tool calls from turns whose evaluation was deferred by background work. */
   carriedToolCalls: number
   evaluating: boolean
@@ -121,8 +124,8 @@ export class GoalController {
 
   // ---------------------------------------------------------------- commands
 
-  /** Entry point for `/goal <args>`. */
-  async command(input: { sessionID: string; text: string; delivery: Delivery } & PromptAttachments): Promise<void> {
+  /** Entry point for `/goal <args>` and `/goal-loop <args>`. */
+  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
     const parsed = parseGoalCommand(input.text, this.deps.config.maxConditionChars)
     switch (parsed.type) {
       case "status":
@@ -131,19 +134,21 @@ export class GoalController {
         this.clear(input.sessionID)
         return
       case "invalid":
-        this.notify(input.sessionID, "error", "error", "Goal not set", parsed.message)
+        this.notify(input.sessionID, "error", "error", `${input.loop ? "Loop" : "Goal"} not set`, parsed.message)
         return
       case "set":
-        return this.set({ ...input, condition: parsed.condition })
+        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}) })
     }
   }
 
-  async set(input: { sessionID: string; condition: string; delivery: Delivery } & PromptAttachments): Promise<void> {
+  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
     const { sessionID, condition } = input
     const previous = this.live(sessionID)
     if (previous) this.finish(previous, "cleared", "Replaced by a new goal.")
     const now = this.deps.clock.now()
     const baseline = (await this.deps.session.usage(sessionID).catch(() => undefined)) ?? EMPTY_USAGE
+    const loop = input.loop === true
+    const maxLoops = this.deps.config.maxLoops
     const record: GoalRecord = {
       version: 1,
       id: this.newId(),
@@ -159,22 +164,30 @@ export class GoalController {
       checkins: 0,
       baseline,
       history: [],
+      ...(loop
+        ? { loopEnabled: true, loopIteration: 1, loopObjective: condition, loopMaxLoops: maxLoops, loopHistory: [], loopNotProgress: 0 }
+        : {}),
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
     this.commit(record)
-    this.notify(sessionID, "set", "info", previous ? "Goal replaced" : "Goal set", condition)
+    const loopLabel = loop ? "Loop" : "Goal"
+    this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, condition)
     try {
       await this.deps.session.prompt({
         sessionID,
-        text: Prompt.directive(condition, this.deps.commit),
+        text: Prompt.directive(
+          condition,
+          this.deps.commit,
+          loop ? { iteration: 1, maxLoops, objective: condition, history: [] } : undefined,
+        ),
         delivery: input.delivery,
         ...(input.files?.length ? { files: input.files } : {}),
         ...(input.agents?.length ? { agents: input.agents } : {}),
         ...(input.skills?.length ? { skills: input.skills } : {}),
       })
     } catch (error) {
-      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the goal: ${message(error)}`)
+      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${message(error)}`)
       throw error
     }
   }
@@ -226,11 +239,24 @@ export class GoalController {
     record.checkins = 0
     runtime.lastCheckinAt = undefined
     if (record.status === "paused") {
+      // Turn-cap freeze: a message does not extend the cap, so resume would re-pause after one turn.
+      // Stay paused; the user must clear or set a new goal (a restart resets the turn counter).
+      if (this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
+        this.clearDeferred(runtime)
+        this.notify(sessionID, "paused", "warning", "Goal paused at turn cap", `${record.reason ?? "Reached the turn limit."} A message will not extend the cap; run /goal clear or set a new goal.`)
+        this.commit(record)
+        return
+      }
+      this.clearDeferred(runtime)
       record.status = "active"
       record.reason = undefined
       record.stall = 0
       record.retries = 0
+      // A resumed /goal-loop starts the not-progress count fresh, so a benign zero-tool iteration cannot instantly re-pause it.
+      if (record.loopEnabled) record.loopNotProgress = 0
       this.notify(sessionID, "resumed", "info", "Goal resumed", record.condition)
+    } else {
+      this.clearDeferred(runtime)
     }
     this.commit(record)
   }
@@ -258,7 +284,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
-    runtime.carriedToolCalls += runtime.toolCalls
+    this.clearDeferred(runtime)
     runtime.toolCalls = 0
     this.handleFailure(record, runtime, classifyFailure(error))
   }
@@ -269,6 +295,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
+    this.clearDeferred(runtime)
     if (reason === "user") return this.pause(record, "Interrupted.")
     if (reason === "inactivity") return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
     // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn.
@@ -293,13 +320,22 @@ export class GoalController {
     await Promise.all(
       records.map(async (record) => {
         if (this.goals.has(record.sessionID)) return
-        const usage = await this.deps.session.usage(record.sessionID).catch(() => undefined)
-        if (!usage) {
-          // The session no longer exists (or is unreachable): drop the stale goal.
+        let usage: UsageSnapshot | undefined
+        let notFound = false
+        try {
+          usage = await this.deps.session.usage(record.sessionID)
+        } catch (error) {
+          if (isNotFoundError(error)) notFound = true
+          else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: message(error) })
+        }
+        if (notFound) {
+          // Definitive not-found only: the session no longer exists, drop the stale goal.
           void this.deps.store.remove(record.sessionID)
           return
         }
-        Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage })
+        // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
+        // with its previous baseline rather than deleting it.
+        Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
         this.goals.set(record.sessionID, record)
         this.commit(record)
       }),
@@ -354,10 +390,12 @@ export class GoalController {
     record.retries = 0
     record.verdict = result.verdict
     record.reason = result.reason || undefined
+    runtime.iterationToolCalls += tools
     record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now() })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
     if (result.verdict === "met") {
+      if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
       this.finish(record, "achieved", result.reason)
       this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, result.reason || record.condition)
       return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason)
@@ -365,7 +403,7 @@ export class GoalController {
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", result.reason || record.condition)
-      return this.note(record, "Goal cleared: the evaluator judged it impossible.", result.reason)
+      return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns) return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
     if (stall >= config.stallTurns) return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
@@ -376,6 +414,151 @@ export class GoalController {
       text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason }, this.deps.commit),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
+    })
+  }
+
+  /**
+   * Loop step, run only on a `met` verdict for a looped goal. Summarizes the achieved iteration into a compact
+   * machine-consumable block, then asks the evaluator for the next condition (or LOOP_COMPLETE). Arms the next
+   * iteration under the same /goal rules, or ends the loop cleanly. Never runs on not_met/impossible/pause/retry.
+   *
+   * Loop bookkeeping is on the record: `loopHistory` carries completed iterations, `loopNotProgress` counts
+   * consecutive iterations with zero tool calls (two pause the loop). Every await is epoch-guarded; a superseded
+   * loop step drops its result without saving.
+   */
+  private async loopAdvance(
+    record: GoalRecord,
+    runtime: Runtime,
+    epoch: number,
+    result: EvaluationResult,
+    turn: number,
+  ): Promise<void> {
+    const { config, clock, log } = this.deps
+    const sessionID = record.sessionID
+    const iteration = record.loopIteration ?? 1
+    const maxLoops = record.loopMaxLoops ?? config.maxLoops
+    const objective = record.loopObjective ?? record.condition
+    // A resumed loop can re-enter advance for the same iteration; never record it twice.
+    const history: LoopEntry[] = (record.loopHistory ?? []).filter((e) => e.version !== iteration)
+    const now = clock.now()
+    const iterationTools = runtime.iterationToolCalls
+    const notProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
+    const makeEntry = (summary: string): LoopEntry => ({
+      version: iteration,
+      condition: record.condition,
+      summary,
+      reason: result.reason,
+      turns: turn,
+      toolCalls: iterationTools,
+      endedAt: clock.now(),
+    })
+    // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
+    const saveLoopState = () => {
+      record.loopHistory = history
+      record.loopNotProgress = notProgress
+    }
+
+    const endClean = (reason: string) => {
+      saveLoopState()
+      this.finish(record, "achieved", reason)
+      this.notify(sessionID, "achieved", "success", "Loop complete", reason)
+      return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
+    }
+
+    if (!this.deps.evaluator.summarize || !this.deps.evaluator.nextGoal) {
+      const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
+      log.error("loop step unavailable", { sessionID })
+      history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
+      saveLoopState()
+      return this.pause(record, reason)
+    }
+
+    const summarize = new AbortController()
+    runtime.abort = summarize
+    let summary: string
+    try {
+      summary = (
+        await this.deps.evaluator.summarize({
+          sessionID,
+          objective,
+          condition: record.condition,
+          reason: result.reason,
+          turn,
+          elapsedMs: now - record.startedAt,
+          toolCalls: iterationTools,
+          history,
+          maxSummaryTokens: config.maxLoopSummaryTokens,
+          signal: summarize.signal,
+        })
+      ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
+    } catch (error) {
+      if (runtime.abort === summarize) runtime.abort = undefined
+      if (this.stale(record, runtime, epoch)) return
+      log.error("loop summary failed", { sessionID, error: message(error) })
+      history.push(makeEntry(`(summary failed: ${truncate(message(error), 80)})`))
+      saveLoopState()
+      return this.pause(record, `The loop summary failed: ${truncate(message(error), 160)}`)
+    } finally {
+      if (runtime.abort === summarize) runtime.abort = undefined
+    }
+    if (this.stale(record, runtime, epoch)) return
+
+    const entry = makeEntry(summary.trim())
+    history.push(entry)
+    log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
+
+    if (notProgress >= 2) {
+      saveLoopState()
+      return this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
+    }
+    if (history.length >= maxLoops) {
+      return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${history.length} achieved iteration${history.length === 1 ? "" : "s"}.`)
+    }
+
+    const generate = new AbortController()
+    runtime.abort = generate
+    let reply: string
+    try {
+      reply = await this.deps.evaluator.nextGoal({ sessionID, objective, history, latestSummary: entry.summary, signal: generate.signal })
+    } catch (error) {
+      if (runtime.abort === generate) runtime.abort = undefined
+      if (this.stale(record, runtime, epoch)) return
+      log.error("loop next-goal generation failed", { sessionID, error: message(error) })
+      saveLoopState()
+      return this.pause(record, `The loop next-goal generator failed: ${truncate(message(error), 160)}`)
+    } finally {
+      if (runtime.abort === generate) runtime.abort = undefined
+    }
+    if (this.stale(record, runtime, epoch)) return
+
+    if (Prompt.isLoopComplete(reply)) {
+      return endClean(`Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}: the evaluator found nothing worth improving.`)
+    }
+    const condition = Prompt.parseNextCondition(reply)
+    if (!condition) {
+      return endClean("Loop complete: the next-goal generator returned nothing usable.")
+    }
+
+    const nextIteration = iteration + 1
+    saveLoopState()
+    record.condition = condition
+    record.loopIteration = nextIteration
+    record.turns = 0
+    record.stall = 0
+    record.retries = 0
+    record.checkins = 0
+    record.verdict = undefined
+    record.reason = undefined
+    record.startedAt = clock.now()
+    this.clearDeferred(runtime)
+    runtime.iterationToolCalls = 0
+    this.commit(record)
+    this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
+    await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    await this.continueWith(record, {
+      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+      description: `goal-loop · arming v${nextIteration}`,
+      turn: 1,
     })
   }
 
@@ -397,9 +580,9 @@ export class GoalController {
   private handleFailure(record: GoalRecord, runtime: Runtime, failure: ReturnType<typeof classifyFailure>) {
     const { config } = this.deps
     if (failure.kind === "fatal") {
-      const reason = `Goal cleared after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
+      const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
       this.finish(record, "failed", reason)
-      this.notify(record.sessionID, "failed", "error", "Goal cleared", reason)
+      this.notify(record.sessionID, "failed", "error", "Goal failed", reason)
       return
     }
     if (failure.kind === "pause" || config.checkinMinutes === 0) return this.pause(record, `Turn failed: ${failure.label}.`)
@@ -475,17 +658,27 @@ export class GoalController {
   private pause(record: GoalRecord, reason: string) {
     const runtime = this.runtime(record.sessionID)
     this.invalidate(runtime)
+    this.clearDeferred(runtime)
     record.status = "paused"
     record.reason = reason
     this.commit(record)
-    this.notify(record.sessionID, "paused", "warning", "Goal paused", `${reason} Send a message to resume, or /goal clear.`)
+    const atCap = this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns
+    this.notify(
+      record.sessionID,
+      "paused",
+      "warning",
+      "Goal paused",
+      atCap
+        ? `${reason} It stays paused at the turn cap until you /goal clear or set a new goal; a message will not extend the cap.`
+        : `${reason} Send a message to resume, or /goal clear.`,
+    )
   }
 
   private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string) {
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
-      runtime.deferredSince = undefined
+      this.clearDeferred(runtime)
     }
     record.status = status
     if (reason) record.reason = reason
@@ -494,11 +687,15 @@ export class GoalController {
     void this.deps.session
       .usage(record.sessionID)
       .then((usage) => {
-        if (!usage || this.goals.get(record.sessionID) !== record) return
+        if (this.goals.get(record.sessionID) !== record) return
+        if (!usage) {
+          this.deps.log.warn("final spend snapshot unavailable", { sessionID: record.sessionID })
+          return
+        }
         record.final = usage
         void this.deps.store.save(record)
       })
-      .catch(() => {})
+      .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: message(error) }))
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
@@ -521,7 +718,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { epoch: 0, toolCalls: 0, carriedToolCalls: 0, evaluating: false }
+      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -534,9 +731,17 @@ export class GoalController {
     this.runtimes.set(sessionID, {
       epoch: (previous?.epoch ?? 0) + 1,
       toolCalls: previous?.toolCalls ?? 0,
+      iterationToolCalls: 0,
       carriedToolCalls: 0,
       evaluating: false,
     })
+  }
+
+  /** Deferred background-wait state must not survive resume, failure, interrupt, pause or finish. */
+  private clearDeferred(runtime: Runtime) {
+    runtime.deferredSince = undefined
+    runtime.carriedToolCalls = 0
+    runtime.lastCheckinAt = undefined
   }
 
   private invalidate(runtime: Runtime) {

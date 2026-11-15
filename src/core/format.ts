@@ -56,7 +56,7 @@ const STATUS_LABEL: Record<GoalStatus, string> = {
   achieved: "achieved",
   impossible: "judged impossible",
   cleared: "cleared",
-  failed: "cleared after an unrecoverable error",
+  failed: "failed after an unrecoverable error",
 }
 
 export const statusLabel = (status: GoalStatus) => STATUS_LABEL[status]
@@ -72,6 +72,13 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
     `${record.endedAt ? "Ran" : "Running"} for ${formatDuration(elapsed(record, now))}${record.turns > 0 ? ` \u00B7 ${record.turns} turn${record.turns === 1 ? "" : "s"} evaluated` : ""}`,
   ]
   if (spend) lines.push(`Spend: ${formatSpend(spend)}`)
+  if (record.loopEnabled) {
+    const iteration = record.loopIteration ?? 1
+    const max = record.loopMaxLoops ?? "?"
+    lines.push(`Loop: iteration v${iteration} of at most ${max} · objective: ${record.loopObjective ?? record.condition}`)
+    for (const entry of record.loopHistory ?? [])
+      lines.push(`  v${entry.version} · met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${truncate(entry.summary, 140)}`)
+  }
   if (record.reason) lines.push(`${record.status === "active" ? "Evaluator" : "Reason"}: ${record.reason}`)
   return lines.join("\n")
 }

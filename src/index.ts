@@ -1,17 +1,23 @@
 /**
- * opencode-goal: `/goal <condition>` for OpenCode v2.
+ * opencode-goal: `/goal <condition>` and `/goal-loop <objective>` for OpenCode v2.
  *
  * Sets a completion condition for the session; after every turn an evaluator checks it against the conversation
- * and, until it holds, the plugin starts the next turn itself. Mirrors Claude Code's /goal (status, clear aliases,
- * met / not met / impossible verdicts, stall guard, retries, background-work check-ins, restore on restart).
+ * and, until it holds, the plugin starts the next turn itself. `/goal-loop` layers a continuous improvement
+ * loop on the same machinery: once the evaluator says `met`, the achieved iteration is summarized and the next,
+ * harder goal is armed automatically until the loop is cleared, capped, or the evaluator finds nothing left.
+ * Mirrors Claude Code's /goal (status, clear aliases, met / not met / impossible verdicts, stall guard, retries,
+ * background-work check-ins, restore on restart).
  */
 import { Plugin } from "@opencode/plugin"
+import { spawnSync } from "node:child_process"
+import { ensureCoordinatorLayout, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { resolveCommitPolicy } from "./core/git.ts"
+import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { GoalRpc } from "./rpc.ts"
 import { BackgroundTracker } from "./runtime/background.ts"
+import { AutoCompactor } from "./runtime/compactor.ts"
 import { GoalController } from "./runtime/controller.ts"
 import { Evaluator } from "./runtime/evaluator.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
@@ -21,6 +27,7 @@ import { GoalStore } from "./runtime/store.ts"
 export const PLUGIN_ID = "opencode-goal"
 
 const DESCRIPTION = "keep working until a condition is met"
+const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"
 
 function createLogger(): Logger {
   const tag = `[${PLUGIN_ID}]`
@@ -64,9 +71,30 @@ export default Plugin.define({
     const lifetime = new AbortController()
 
     // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
-    // inside one the finished work has to land on a branch before the goal counts as met.
-    const commit = resolveCommitPolicy(config.commit, ctx.location.directory)
-    log.info("commit rule", { required: commit.required, branch: commit.branch, reason: commit.reason })
+    // inside one the finished work has to land on a branch before the goal counts as met. In coordinator
+    // repositories (term) normal agents land on wt/<slug> and submit; the coordinator merges to the target.
+    let coordinatorBin: string | undefined
+    try {
+      const pluginRoot = pluginRootFromMeta(import.meta.dir)
+      if (config.commit.enabled && config.commit.coordinator !== false) {
+        const repository = findRepository(ctx.location.directory)
+        if (repository) {
+          const bootstrap = ensureCoordinatorLayout(repository.root, pluginRoot)
+          if (bootstrap.created.length > 0) log.info("coordinator bootstrap", { created: bootstrap.created })
+          coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
+          try {
+            const jq = spawnSync("sh", ["-c", "command -v jq"], { stdio: "ignore" })
+            if (jq.status !== 0) log.warn("jq not found; coordinator state requires jq")
+          } catch {
+            // Best effort: the warn above is enough; never crash setup.
+          }
+        }
+      }
+    } catch (error) {
+      log.warn("coordinator bootstrap failed", { error: String(error) })
+    }
+    const commit = resolveCommitPolicy(config.commit, ctx.location.directory, coordinatorBin)
+    log.info("commit rule", { required: commit.required, branch: commit.branch, mode: commit.mode ?? "direct", reason: commit.reason })
 
     // ---- ports onto the OpenCode context
     const session: SessionPort = {
@@ -77,6 +105,9 @@ export default Plugin.define({
         await ctx.session.synthetic(input as Parameters<typeof ctx.session.synthetic>[0])
       },
       usage: async (sessionID) => toUsage(await ctx.session.get({ sessionID })),
+      compact: async (sessionID) => {
+        await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+      },
     }
 
     const evaluator = new Evaluator(
@@ -115,6 +146,15 @@ export default Plugin.define({
       log,
     })
 
+    const compactor = new AutoCompactor({
+      config,
+      compact: (sessionID) => session.compact(sessionID),
+      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
+      emitter,
+      clock: systemClock,
+      log,
+    })
+
     // ---- RPC for clients (status line, dialogs, palette actions)
     const rpc = await ctx.rpc.register(GoalRpc, {
       get: async (input) => {
@@ -134,22 +174,26 @@ export default Plugin.define({
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
-    // ---- the /goal command
+    // ---- the /goal and /goal-loop commands
     await ctx.command.transform((editor) => {
-      editor.add({
-        name: "goal",
-        description: DESCRIPTION,
-        execute: async ({ sessionID, prompt, delivery }) => {
-          await controller.command({
-            sessionID,
-            text: prompt.text ?? "",
-            delivery,
-            ...(prompt.files ? { files: prompt.files } : {}),
-            ...(prompt.agents ? { agents: prompt.agents } : {}),
-            ...(prompt.skills ? { skills: prompt.skills } : {}),
-          })
-        },
-      })
+      const addCommand = (name: string, description: string, loop: boolean) =>
+        editor.add({
+          name,
+          description,
+          execute: async ({ sessionID, prompt, delivery }) => {
+            await controller.command({
+              sessionID,
+              text: prompt.text ?? "",
+              delivery,
+              loop,
+              ...(prompt.files ? { files: prompt.files } : {}),
+              ...(prompt.agents ? { agents: prompt.agents } : {}),
+              ...(prompt.skills ? { skills: prompt.skills } : {}),
+            })
+          },
+        })
+      addCommand("goal", DESCRIPTION, false)
+      addCommand("goal-loop", LOOP_DESCRIPTION, true)
     })
 
     // ---- hooks
@@ -167,7 +211,7 @@ export default Plugin.define({
     }
 
     // ---- event pump with reconnect
-    const route = createRouter({ controller, background, log })
+    const route = createRouter({ controller, background, log, compactor })
     void (async () => {
       let backoff = 500
       while (!lifetime.signal.aborted) {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
-import { classifyFailure } from "../src/core/errors.ts"
+import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
 import { diffUsage, formatDuration, formatDurationCoarse, formatTokens } from "../src/core/format.ts"
 import { parseGoalCommand } from "../src/core/parse.ts"
 import {
@@ -59,6 +59,12 @@ describe("parseVerdict", () => {
     expect(parseVerdict("I think we are close")).toBeUndefined()
     expect(parseVerdict('{"verdict":"maybe"}')).toBeUndefined()
   })
+  test("blocked/cannot are not_met, not impossible", () => {
+    expect(parseVerdict('{"verdict":"blocked","reason":"waiting"}')?.verdict).toBe("not_met")
+    expect(parseVerdict('{"verdict":"cannot","reason":"no api"}')?.verdict).toBe("not_met")
+    expect(parseVerdict('{"verdict":"impossible"}')?.verdict).toBe("impossible")
+    expect(parseVerdict('{"verdict":"infeasible"}')?.verdict).toBe("impossible")
+  })
   test("long reasons are clamped", () => {
     expect(parseVerdict(JSON.stringify({ verdict: "met", reason: "a".repeat(2000) }))!.reason.length).toBeLessThanOrEqual(600)
   })
@@ -84,6 +90,46 @@ describe("classifyFailure", () => {
     expect(classifyFailure({ message: "weird thing" })).toEqual({ kind: "pause", label: "weird thing" })
     expect(classifyFailure(undefined).kind).toBe("pause")
   })
+  // Parametrized taxonomy per src/core/errors.ts status + pattern order (402/404/413/408/500, hook, capacity, timeout).
+  const cases: Array<[string, Parameters<typeof classifyFailure>[0], FailureClass]> = [
+    ["402 credit bare", { status: 402 }, "fatal"],
+    ["402 payment required", { status: 402, message: "Payment Required" }, "fatal"],
+    ["402 message credit", { message: "insufficient credit balance" }, "fatal"],
+    ["404 model", { status: 404, message: "model gpt-x not found" }, "fatal"],
+    ["404 bare model", { status: 404 }, "fatal"],
+    ["404 session not found pauses, not model", { status: 404, message: "session not found" }, "pause"],
+    ["413 context", { status: 413 }, "fatal"],
+    ["413 context message", { status: 413, message: "prompt is too long" }, "fatal"],
+    ["408 timeout", { status: 408 }, "transient"],
+    ["500 server", { status: 500 }, "transient"],
+    ["503 unavailable", { status: 503, message: "service unavailable" }, "transient"],
+    ["529 overload", { status: 529, message: "Overloaded" }, "transient"],
+    ["hook pauses", { message: "hook denied this turn" }, "pause"],
+    ["capacity transient", { message: "capacity exceeded, try again" }, "transient"],
+    ["timeout transient", { message: "request timed out" }, "transient"],
+    ["429 bare pauses", { status: 429 }, "pause"],
+    ["429 rate limit pauses", { status: 429, message: "Rate limit reached" }, "pause"],
+    ["429 quota is fatal credit", { status: 429, message: "You exceeded your current quota" }, "fatal"],
+    ["429 credit balance fatal", { status: 429, message: "insufficient credit" }, "fatal"],
+    ["401 auth", { status: 401 }, "fatal"],
+    ["403 auth", { status: 403 }, "fatal"],
+    ["network transient", { message: "fetch failed: ECONNRESET" }, "transient"],
+    ["unknown pauses", { message: "weird thing" }, "pause"],
+  ]
+  for (const [name, input, kind] of cases) {
+    test(`classify: ${name}`, () => {
+      expect(classifyFailure(input).kind).toBe(kind)
+    })
+  }
+  test("isNotFoundError only for definitive not-found", () => {
+    expect(isNotFoundError({ status: 404, message: "session not found" })).toBeTrue()
+    expect(isNotFoundError(new Error("session not found"))).toBeTrue()
+    expect(isNotFoundError({ message: "no such session" })).toBeTrue()
+    expect(isNotFoundError(new Error("ECONNRESET socket hang up"))).toBeFalse()
+    expect(isNotFoundError(new Error("timeout"))).toBeFalse()
+    expect(isNotFoundError(undefined)).toBeFalse()
+    expect(isNotFoundError(null)).toBeFalse()
+  })
 })
 
 describe("config", () => {
@@ -107,12 +153,16 @@ describe("config", () => {
     expect(config.evaluator.model).toEqual({ providerID: "x", id: "y" })
   })
   test("commit options", () => {
-    expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev" })
+    expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev", coordinator: "auto" })
     expect(resolveConfig({ requireCommit: false }).commit.enabled).toBe(false)
     expect(resolveConfig({ commitBranch: "main" }).commit.branch).toBe("main")
     expect(resolveConfig({}, { OPENCODE_GOAL_COMMIT_BRANCH: "release" }).commit.branch).toBe("release")
     expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "0" }).commit.enabled).toBe(false)
     expect(resolveConfig({}, { OPENCODE_GOAL_REQUIRE_COMMIT: "yes" }).commit.enabled).toBe(true)
+    expect(resolveConfig({ coordinator: false }).commit.coordinator).toBe(false)
+    expect(resolveConfig({ coordinator: true }).commit.coordinator).toBe(true)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COORDINATOR: "off" }).commit.coordinator).toBe(false)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COORDINATOR: "on" }).commit.coordinator).toBe(true)
   })
   test("a blank branch name falls back to the default", () => {
     expect(resolveConfig({ commitBranch: "   " }).commit.branch).toBe("dev")
@@ -176,6 +226,25 @@ describe("prompts", () => {
     const independent = evaluateIndependently("all tests pass", facts, "transcript", COMMIT)
     expect(independent).toContain("Commit rule")
     expect(independent).toContain("`dev` branch")
+  })
+  test("coordinator mode injects the wt/<slug> flow everywhere and the rubric accepts submit evidence", () => {
+    const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktrees" }
+    const text = directive("add feature", coord)
+    expect(text).toContain("Coordinator repo. Before editing")
+    expect(text).toContain("wt/<slug>")
+    expect(text).toContain("submit")
+    expect(text).not.toContain("serial lock")
+    expect(text).not.toContain("land.ts")
+    expect(text).not.toContain("heartbeat")
+    expect(text).not.toContain("guard-")
+    expect(continuation({ condition: "a", turn: 2, reason: "x" }, coord)).toContain("wt/<slug>")
+    expect(retry({ condition: "a", label: "timeout" }, coord)).toContain("wt/<slug>")
+    expect(checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, coord)).toContain("wt/<slug>")
+    expect(systemReminder("a", coord)).toContain("wt/<slug>")
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    expect(evaluateInSession("add feature", facts, coord)).toContain("wt/<slug>")
+    expect(evaluateIndependently("add feature", facts, "transcript", coord)).toContain("submit")
+    expect(evaluateInSession("add feature", facts, coord)).toContain("merge-next")
   })
   test("the harness facts state the rule as measured outside the conversation", () => {
     const text = evaluateInSession("all tests pass", { turn: 1, elapsedMs: 1_000 }, COMMIT)

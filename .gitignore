@@ -1,3 +1,10 @@
 node_modules/
 *.log
 .DS_Store
+worktrees/
+.term/coordinator/*.lock
+.term/coordinator/.claim-lock-file
+.term/coordinator/.merge-lock-file
+.term/coordinator/.state.*
+worktrees/wt-*
+.docs-watch-state.json

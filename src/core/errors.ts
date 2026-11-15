@@ -1,7 +1,7 @@
 import type { FailureInfo } from "./types.ts"
 
 /**
- * - `fatal`: will not clear until the user fixes something; the goal is cleared (auth, credit, context, model).
+ * - `fatal`: will not clear until the user fixes something; the goal fails (auth, credit, context, model).
  * - `transient`: tends to clear on its own; retried with backoff (overload, network, timeouts).
  * - `pause`: a retry would only repeat it; the goal waits for the user (rate/usage limits, unknown errors).
  */
@@ -29,9 +29,21 @@ const TRANSIENT: ReadonlyArray<readonly [RegExp, string]> = [
   [/timeout|timed[\s_-]*out|econnreset|econnrefused|enotfound|socket|network|fetch failed|connection|stream[\s_-]*(closed|ended|error)|aborted|eai_again/i, "dropped connection"],
 ]
 
+/** Definitive not-found: the session/model genuinely does not exist (404 / "not found" / "no such session"). */
+export function isNotFoundError(error: unknown): boolean {
+  if (typeof error === "string") return /not[\s_-]*found|no[\s_-]*such[\s_-]*session|unknown[\s_-]*session/i.test(error)
+  if (typeof error !== "object" || error === null) return false
+  const record = error as { status?: unknown; code?: unknown; type?: unknown; message?: unknown; name?: unknown }
+  if (record.status === 404) return true
+  const text = `${typeof record.type === "string" ? record.type : ""} ${typeof record.message === "string" ? record.message : ""} ${typeof record.name === "string" ? record.name : ""} ${typeof record.code === "string" ? record.code : ""}`
+  return /not[\s_-]*found|no[\s_-]*such[\s_-]*session|unknown[\s_-]*session|session[\s_-]*(?:not[\s_-]*found|missing|deleted)/i.test(text)
+}
+
 export function classifyFailure(error: FailureInfo | undefined): Classified {
   const text = `${error?.type ?? ""} ${error?.message ?? ""}`
   const status = error?.status
+  // A missing session is not a missing model: it pauses for the user, it must not be labelled "model".
+  if (/session[\s_-]*(?:not[\s_-]*found|missing|deleted)|no[\s_-]*such[\s_-]*session/i.test(text)) return { kind: "pause", label: "session not found" }
   // Credit errors arrive as 402 or as 429 with a quota message; check them before rate limits.
   for (const [pattern, label] of FATAL) if (pattern.test(text)) return { kind: "fatal", label }
   if (status === 401 || status === 403) return { kind: "fatal", label: "authentication failure" }

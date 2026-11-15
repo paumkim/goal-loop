@@ -7,9 +7,11 @@ export interface ParsedVerdict {
 
 const MAX_REASON = 600
 
+// Only explicit permanent words count as impossible. "blocked"/"cannot" are ambiguous (usually temporary or
+// "cannot yet"), so they count as not_met: ending the goal on them would be a false terminal verdict.
 const SYNONYMS: ReadonlyArray<readonly [RegExp, Verdict]> = [
-  [/^(not[\s_-]*(yet[\s_-]*)?met|unmet|not[\s_-]*done|incomplete|in[\s_-]*progress|continue|pending|no)$/i, "not_met"],
-  [/^(impossible|unachievable|unsatisfiable|infeasible|blocked|cannot|can't)$/i, "impossible"],
+  [/^(not[\s_-]*(yet[\s_-]*)?met|unmet|not[\s_-]*done|incomplete|in[\s_-]*progress|continue|pending|no|blocked|cannot|can't)$/i, "not_met"],
+  [/^(impossible|unachievable|unsatisfiable|infeasible)$/i, "impossible"],
   [/^(met|achieved|done|complete|completed|satisfied|success|yes|true|pass|passed)$/i, "met"],
 ]
 

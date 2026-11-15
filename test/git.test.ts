@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { branchExists, currentBranch, findRepository, resolveCommitPolicy } from "../src/core/git.ts"
+import { dirname, join } from "node:path"
+import { branchExists, currentBranch, detectCoordinator, findRepository, resolveCommitPolicy } from "../src/core/git.ts"
 
 /** A throwaway directory that is removed when the test ends. */
 function scratch(): string {
@@ -90,5 +90,44 @@ describe("resolveCommitPolicy", () => {
     const policy = resolveCommitPolicy({ enabled: true, branch: "dev" }, root)
     expect(policy.required).toBe(true)
     expect(policy.branch).toBe("main")
+  })
+  test("a coordinator repo resolves to coordinator mode on auto", () => {
+    const root = repo(["dev", "main"], "dev")
+    mkdirSync(join(root, ".term", "coordinator"), { recursive: true })
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}')
+    writeFileSync(join(root, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}')
+    mkdirSync(join(root, "packages/coordinator/bin"), { recursive: true })
+    writeFileSync(join(root, "packages/coordinator/bin/coordinator"), "#!/bin/sh\n")
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev", coordinator: "auto" }, root)
+    expect(policy.required).toBe(true)
+    expect(policy.mode).toBe("coordinator")
+    expect(policy.branch).toBe("dev")
+    expect(policy.coordinatorBin?.endsWith("packages/coordinator/bin/coordinator")).toBe(true)
+    expect(policy.coordinatorBin).toBe(join(root, "packages/coordinator/bin/coordinator"))
+    expect(policy.worktreeDir).toBe("worktrees")
+  })
+  test("detectCoordinator needs two markers", () => {
+    const root = repo(["dev"], "dev")
+    mkdirSync(join(root, ".term/coordinator"), { recursive: true })
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev"}')
+    expect(detectCoordinator(root)).toBeUndefined()
+    writeFileSync(join(root, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}')
+    expect(detectCoordinator(root)?.devBranch).toBe("dev")
+    expect(dirname(root)).not.toBe(root)
+  })
+  test("coordinator: false disables coordinator mode even with markers", () => {
+    const root = repo(["dev", "main"], "dev")
+    mkdirSync(join(root, ".term/coordinator"), { recursive: true })
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev"}')
+    writeFileSync(join(root, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}')
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev", coordinator: false }, root)
+    expect(policy.mode).toBe("direct")
+    expect(policy.branch).toBe("dev")
+  })
+  test("coordinator: true forces coordinator mode without markers", () => {
+    const root = repo(["dev"], "dev")
+    const policy = resolveCommitPolicy({ enabled: true, branch: "dev", coordinator: true }, root)
+    expect(policy.mode).toBe("coordinator")
+    expect(policy.branch).toBe("dev")
   })
 })

@@ -1,5 +1,5 @@
 import { formatDuration, formatSpend } from "./format.ts"
-import type { CommitPolicy, UsageSnapshot } from "./types.ts"
+import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
 export const MARKER = "goal"
@@ -12,15 +12,82 @@ const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
  * The rule is the point of the whole plugin here: a goal that ends with its work still uncommitted leaves the
  * job half done, because nothing about it is in the repository's history. The agent is told the branch, because
  * "commit your work" on its own leaves the branch choice to the agent, and the branch is the whole point.
+ *
+ * Coordinator repositories need a different branch story: normal agents own only `wt/<slug>` in its own
+ * worktree, never the target or `main`. `coordinatorFlow` is the exact operator flow the plugin injects so a
+ * fresh `/goal <objective>` session knows how to work with no operator help; `packages/coordinator/README.md`
+ * in the repo says the same.
  */
 function commitRule(policy: CommitPolicy) {
+  if (policy.required && policy.mode === "coordinator") return coordinatorFlow(policy)
   return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on, or a \`git status\` on that branch with no uncommitted changes. Work that is done but uncommitted is not done work, and the evaluator will not mark the goal met without a visible commit on \`${policy.branch}\`.`
 }
 
-/** First turn: the condition itself is the directive. */
-export function directive(condition: string, policy: CommitPolicy): string {
+/** The coordinator flow injected into every /goal prompt in a coordinator repo. */
+export function coordinatorFlow(policy: CommitPolicy): string {
+  const rawBin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
+  const bin = /\s/.test(rawBin) ? `"${rawBin}"` : rawBin
+  const target = policy.branch
+  return [
+    `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
+    `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,
+    `Never commit to ${target}/main directly.`,
+  ].join("\n")
+}
+
+export function commitStatusSuffix(policy: CommitPolicy): string {
+  if (!policy.required) return ""
+  if (policy.mode === "coordinator") {
+    return `Commit on your wt/<slug> branch and submit before the goal counts as done.`
+  }
+  return `commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on`
+}
+
+/** True when the goal has no hard evidence token or reads as vague. */
+export function isFuzzyCondition(condition: string): boolean {
+  const text = condition.toLowerCase()
+  const vague = ["look like", "like a rabbit", "pretty", "nice", "better", "improve", "redesign", "rework", "rabbit"]
+  if (vague.some((word) => text.includes(word))) return true
+  const hard = /\b(test|tests|build|lint|file|exists|passes|pass|exits|exit|commit|committed)\b/.test(text) || /\d/.test(text)
+  return !hard
+}
+
+export interface LoopPreamble {
+  /** 1-based iteration; 1 is the goal set by `/goal-loop` itself. */
+  readonly iteration: number
+  readonly maxLoops: number
+  readonly objective: string
+  /** Completed iterations, oldest first. */
+  readonly history: ReadonlyArray<LoopEntry>
+}
+
+/** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
+export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
+  if (history.length === 0) return "(none — this is the first iteration)"
+  // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
+  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
+}
+
+const truncateLine = (text: string, max: number) => {
+  const flat = text.replace(/\s+/g, " ").trim()
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`
+}
+
+/** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
+export function loopPreamble(loop: LoopPreamble): string[] {
+  return [
+    `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
+    `Objective (constant): ${escape(loop.objective)}`,
+    `Prior iterations:\n${historyBlock(loop.history)}`,
+    `When this iteration is met, the loop summarizes it and arms the next one; you do not need to decide that. Keep the objective in mind, not just this condition.`,
+  ]
+}
+
+/** First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals. */
+export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble): string {
   const lines = [
     `<goal>`,
+    ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
     escape(condition),
     `</goal>`,
     ``,
@@ -29,8 +96,33 @@ export function directive(condition: string, policy: CommitPolicy): string {
     ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
+  if (isFuzzyCondition(condition)) {
+    lines.push(
+      ``,
+      `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
+    )
+  }
   if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")
+}
+
+/** Synthetic prompt arming iteration N+1 after iteration N was met. */
+export function loopContinuation(
+  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string },
+  policy: CommitPolicy,
+): string {
+  return [
+    `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
+    `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
+    escape(input.condition),
+    ``,
+    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo):`,
+    escape(input.previousSummary),
+    ``,
+    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
+    policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
+    `</goal-loop>`,
+  ].join("\n")
 }
 
 export function continuation(input: { condition: string; turn: number; reason: string }, policy: CommitPolicy): string {
@@ -42,7 +134,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `Evaluator: ${escape(input.reason || "No reason given.")}`,
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
-    policy.required ? `Before you call the goal done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on.` : ``,
+    policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-continuation>`,
   ].join("\n")
 }
@@ -52,7 +144,7 @@ export function retry(input: { condition: string; label: string }, policy: Commi
     `<goal-retry>`,
     `The previous turn failed (${input.label}). The goal is still active; continue from where you left off.`,
     `Goal: ${escape(input.condition)}`,
-    policy.required ? `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done.` : ``,
+    policy.required ? `${policy.mode === "coordinator" ? `Commit on your wt/<slug> branch and submit before the goal counts as done.` : `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done.`}` : ``,
     `</goal-retry>`,
   ].join("\n")
 }
@@ -74,7 +166,11 @@ export function checkin(
       ? `Background work (${work}) has kept the goal waiting for ${formatDuration(input.waitedMs)}. Read their output: keep waiting if they are progressing, and fix or stop any that are stuck.`
       : `Background work stopped without reporting a result. Continue toward the goal.`,
     `Goal: ${escape(input.condition)}`,
-    policy.required ? `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done, and show the commit output.` : ``,
+    policy.required
+      ? policy.mode === "coordinator"
+        ? `Commit on your wt/<slug> branch and submit before the goal counts as done.`
+        : `Commit the finished work to the \`${policy.branch}\` branch before the goal counts as done, and show the commit output.`
+      : ``,
     `</goal-checkin>`,
   ].join("\n")
 }
@@ -88,8 +184,10 @@ export function systemReminder(condition: string, policy: CommitPolicy): string 
     `An active /goal is set for this session: ${escape(condition)}`,
     `An independent evaluator checks it after every turn from visible evidence only. Keep working until it holds and surface proof (command output, test results) in the conversation.`,
   ]
-  if (policy.required)
-    lines.push(`Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`)
+  if (policy.required) {
+    if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy), `Finished work has to be committed on your wt/<slug> branch and submitted before the goal counts as met.`)
+    else lines.push(`Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`)
+  }
   return lines.join("\n")
 }
 
@@ -123,18 +221,31 @@ const RULES = [
  * can look for. A commit hash on the named branch, or a `git status` on that branch with nothing uncommitted, is
  * what "committed" looks like from the outside. Without this the evaluator would accept a finished, verified,
  * uncommitted job as met, which is the exact case the rule exists to catch.
+ *
+ * In coordinator mode the evidence is two-step: a commit hash on `wt/<slug>` plus a submit or merge step.
+ * `submit` output showing the task submitted, `merge-next` output showing it merged into the target branch, or a
+ * coordinator `status`/`queue` snapshot showing the lease submitted/done counts. A commit that lives only on the
+ * target branch with no wt/ history proves the wrong path for a normal agent (only the coordinator may commit
+ * there), so it is `not_met` unless the transcript shows the `coordinator` agent itself did it.
  */
 function rubric(policy: CommitPolicy) {
   const lines = [...VERDICTS]
   if (policy.required) {
-    lines.push(
-      ``,
-      `Commit rule: the finished work has to be committed on the \`${policy.branch}\` branch. Evidence is a commit`,
-      `hash shown together with the branch it landed on, a \`git status\` on that branch with no uncommitted`,
-      `changes, or a \`git log\` that shows the commit on \`${policy.branch}\`. Uncommitted changes to the goal's`,
-      `files, or a commit that is not on \`${policy.branch}\`, mean "not_met", and the reason names the commit as`,
-      `the missing step.`,
-    )
+    if (policy.mode === "coordinator") {
+      lines.push(
+        ``,
+        `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` or \`merge-next\` output showing it merged into \`${policy.branch}\`. Uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+      )
+    } else {
+      lines.push(
+        ``,
+        `Commit rule: the finished work has to be committed on the \`${policy.branch}\` branch. Evidence is a commit`,
+        `hash shown together with the branch it landed on, a \`git status\` on that branch with no uncommitted`,
+        `changes, or a \`git log\` that shows the commit on \`${policy.branch}\`. Uncommitted changes to the goal's`,
+        `files, or a commit that is not on \`${policy.branch}\`, mean "not_met", and the reason names the commit as`,
+        `the missing step.`,
+      )
+    }
   }
   lines.push(``, ...RULES)
   return lines.join("\n")
@@ -149,10 +260,16 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
     `- Elapsed time: ${formatDuration(input.elapsedMs)}.`,
   ]
   if (input.spend) lines.push(`- Spend since the goal was set: ${formatSpend(input.spend)}.`)
-  if (policy.required)
-    lines.push(
-      `- This session runs inside a git repository. Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`,
-    )
+  if (policy.required) {
+    if (policy.mode === "coordinator")
+      lines.push(
+        `- This session runs inside a git repository managed by the coordinator. Finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted (merge into \`${policy.branch}\` by the coordinator) before the goal counts as met.`,
+      )
+    else
+      lines.push(
+        `- This session runs inside a git repository. Finished work has to be committed to the \`${policy.branch}\` branch before the goal counts as met.`,
+      )
+  }
   return lines.join("\n")
 }
 
@@ -199,6 +316,131 @@ export function evaluateIndependently(
     ``,
     OUTPUT,
   ].join("\n")
+}
+
+export interface LoopSummaryInput {
+  readonly objective: string
+  readonly condition: string
+  readonly reason: string
+  readonly turn: number
+  readonly elapsedMs: number
+  readonly toolCalls: number
+  readonly history: ReadonlyArray<LoopEntry>
+  /** Hard output budget; callers also truncate to `maxSummaryTokens * 4` characters. */
+  readonly maxSummaryTokens: number
+}
+
+export interface NextGoalInput {
+  readonly objective: string
+  /** Completed iterations, oldest first (including the one that just ended). */
+  readonly history: ReadonlyArray<LoopEntry>
+  readonly latestSummary: string
+}
+
+const summarizeFacts = (input: LoopSummaryInput) => [
+  `Objective (constant): ${escape(input.objective)}`,
+  `Condition just achieved: ${escape(input.condition)}`,
+  `Evaluator verdict: met — ${escape(input.reason || "no reason given")}`,
+  `Harness facts (authoritative): end of turn ${input.turn} since this iteration started; elapsed ${formatDuration(input.elapsedMs)}; ${input.toolCalls} tool calls this iteration.`,
+]
+
+const SUMMARY_ASK = (input: LoopSummaryInput) => [
+  `Write a compact, machine-consumable summary of this loop iteration for the next-goal generator.`,
+  `At most ~${input.maxSummaryTokens} tokens. Plain text only: no markdown headings, no greetings, no advice to the user.`,
+  `Cover exactly three things: what was achieved (with evidence pointers), key constraints the next iteration must keep, and what remains improvable or unfinished.`,
+  `Prior iterations (oldest first):`,
+  historyBlock(input.history),
+]
+
+/** Appended to the live session transcript by `session.generate` (session summarizer). */
+export function summarizeInSession(input: LoopSummaryInput): string {
+  return [
+    `<goal-loop-summary>`,
+    `Step out of the agent role. You are now a compactor: summarize one completed iteration of an autonomous improvement loop. Do not call tools and do not address the user.`,
+    ``,
+    ...summarizeFacts(input),
+    ``,
+    ...SUMMARY_ASK(input),
+    `</goal-loop-summary>`,
+  ].join("\n")
+}
+
+/** Standalone prompt for an independent summarizer model reading a transcript digest. */
+export function summarizeIndependently(input: LoopSummaryInput, transcript: string): string {
+  return [
+    `You are a compactor for an autonomous improvement loop. Summarize one completed iteration from the transcript below; you cannot run commands or read files.`,
+    ``,
+    ...summarizeFacts(input),
+    ``,
+    ...SUMMARY_ASK(input),
+    ``,
+    `<transcript>`,
+    transcript,
+    `</transcript>`,
+  ].join("\n")
+}
+
+const NEXT_GOAL_ASK = [
+  `Reply with EXACTLY ONE of these, and nothing else:`,
+  `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
+  `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+]
+
+/** Appended to the live session transcript by `session.generate` (session generator). */
+export function nextGoalInSession(input: NextGoalInput): string {
+  return [
+    `<goal-loop-next>`,
+    `Step out of the agent role. You are the planner of this improvement loop. Do not call tools and do not address the user.`,
+    ``,
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(input.latestSummary),
+    ``,
+    ...NEXT_GOAL_ASK,
+    `</goal-loop-next>`,
+  ].join("\n")
+}
+
+/** Standalone prompt for an independent planner model; the summary replaces the transcript. */
+export function nextGoalIndependently(input: NextGoalInput): string {
+  return [
+    `You are the planner of an autonomous improvement loop. Choose the next goal from the summaries below; you cannot run commands or read files.`,
+    ``,
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(input.latestSummary),
+    ``,
+    ...NEXT_GOAL_ASK,
+  ].join("\n")
+}
+
+/** The only output that ends a loop early: nothing worth improving remains. */
+export const LOOP_COMPLETE = "LOOP_COMPLETE"
+
+/** True when the generator's reply means "nothing worth improving" (tolerates quotes/case). */
+export function isLoopComplete(reply: string): boolean {
+  const cleaned = reply.trim().replace(/^["'`]+|["'`]+$/g, "").trim()
+  return cleaned.toUpperCase() === LOOP_COMPLETE
+}
+
+/**
+ * Normalize a generator reply into a usable condition, or return undefined when it is unusable.
+ * Collapses newlines (the contract is one line), strips surrounding quotes/backticks, and enforces `maxChars`.
+ */
+export function parseNextCondition(reply: string, maxChars = 2_000): string | undefined {
+  if (isLoopComplete(reply)) return undefined
+  const cleaned = reply
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned || cleaned.length > maxChars) return undefined
+  return cleaned
 }
 
 export const REPAIR = `Your previous reply was not valid. ${OUTPUT}`
