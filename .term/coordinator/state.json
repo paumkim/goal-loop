@@ -814,6 +814,26 @@
       "submittedAt": "2026-11-15T22:09:21Z",
       "mergedAt": "2026-11-15T22:09:34Z",
       "mergedInto": "dev"
+    },
+    "e2e-sanity-pass": {
+      "agent": "inkling",
+      "paths": "SPEC.md,docs",
+      "branch": "wt/e2e-sanity-pass",
+      "worktree": "worktrees/wt-e2e-sanity-pass",
+      "status": "done",
+      "createdAt": "2026-11-15T22:14:13Z",
+      "submittedAt": "2026-11-15T22:15:21Z",
+      "mergedAt": "2026-11-15T22:28:20Z",
+      "mergedInto": "dev"
+    },
+    "dead-surface-trim": {
+      "agent": "inkling",
+      "paths": "src,SPEC.md",
+      "branch": "wt/dead-surface-trim",
+      "worktree": "worktrees/wt-dead-surface-trim",
+      "status": "submitted",
+      "createdAt": "2026-11-15T22:22:43Z",
+      "submittedAt": "2026-11-15T22:24:59Z"
     }
   },
   "mergeLock": null
