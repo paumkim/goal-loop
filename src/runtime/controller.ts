@@ -74,6 +74,8 @@ export class GoalController {
   private readonly runtimes = new Map<string, Runtime>()
   private readonly running = new Set<string>()
   private readonly newId: () => string
+  /** sessionID -> serialized record as of the last store write; lets commit() skip no-op saves and emissions. */
+  private readonly lastCommit = new Map<string, string>()
   private disposed = false
 
   constructor(private readonly deps: ControllerDeps) {
@@ -308,6 +310,7 @@ export class GoalController {
     this.runtimes.delete(sessionID)
     // Finished goals are not kept in memory after a restart, so always drop the stored record.
     void this.deps.store.remove(sessionID)
+    this.lastCommit.delete(sessionID)
     if (this.goals.delete(sessionID)) this.deps.emitter.changed(sessionID, null)
   }
 
@@ -766,6 +769,14 @@ export class GoalController {
   }
 
   private commit(record: GoalRecord) {
+    let serialized: string
+    try {
+      serialized = JSON.stringify(record)
+    } catch {
+      serialized = "" // Unserializable record: never skip the save.
+    }
+    if (serialized && this.lastCommit.get(record.sessionID) === serialized) return
+    this.lastCommit.set(record.sessionID, serialized)
     void this.deps.store.save(record)
     this.emit(record)
   }
