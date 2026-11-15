@@ -638,6 +638,25 @@
       "submittedAt": "2026-11-15T20:55:24Z",
       "mergedAt": "2026-11-15T20:55:31Z",
       "mergedInto": "dev"
+    },
+    "a15-events-guard": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/events.ts,SPEC.md",
+      "branch": "wt/a15-events-guard",
+      "worktree": "worktrees/wt-a15-events-guard",
+      "status": "done",
+      "createdAt": "2026-11-15T20:56:04Z",
+      "submittedAt": "2026-11-15T20:59:14Z",
+      "mergedAt": "2026-11-15T20:59:21Z",
+      "mergedInto": "dev"
+    },
+    "goal-jump-row-indicator": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,dist/tui.js",
+      "branch": "wt/goal-jump-row-indicator",
+      "worktree": "worktrees/wt-goal-jump-row-indicator",
+      "status": "claimed",
+      "createdAt": "2026-11-15T20:56:54Z"
     }
   },
   "mergeLock": null
