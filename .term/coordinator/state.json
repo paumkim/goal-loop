@@ -209,6 +209,17 @@
       "submittedAt": "2026-11-15T16:38:11Z",
       "mergedAt": "2026-11-15T16:40:02Z",
       "mergedInto": "dev"
+    },
+    "fix-merge-state-stash": {
+      "agent": "orchestrator",
+      "paths": "packages/coordinator,test/coordinator.test.ts,SPEC.md,AGENTS.md,README.md,docs",
+      "branch": "wt/fix-merge-state-stash",
+      "worktree": "worktrees/wt-fix-merge-state-stash",
+      "status": "done",
+      "createdAt": "2026-11-15T16:48:57Z",
+      "submittedAt": "2026-11-15T16:51:15Z",
+      "mergedAt": "2026-11-15T16:51:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
