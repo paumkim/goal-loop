@@ -697,6 +697,32 @@ describe("/goal-loop", () => {
     expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
   })
 
+  test("one no-op ended event plus one arm counts exactly one miss (a1)", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    // No-op compaction reported via the ended event: one miss, counted at the event.
+    await h.controller.onCompactionLanded(SID)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    // The arm observes the same unlanded request; it must not count a second miss.
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    expect(h.compactCalls).toHaveLength(1)
+    // The flag was consumed by that arm; a still-unlanded request counts normally at the next one.
+    h.verdicts.push(met("v3 done"))
+    h.summaries.push("s3")
+    h.nextGoals.push("v4 condition")
+    await h.turn(1)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(2)
+    expect(h.compactCalls).toHaveLength(2)
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+  })
+
   test("an unestimable context counts as a miss, not a landing", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))

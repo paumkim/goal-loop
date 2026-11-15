@@ -195,7 +195,9 @@ export class GoalController {
         this.notify(sessionID, "compact", "success", "Compaction landed", `The host compacted the session at the loop boundary; context dropped to ~${size} tokens.`)
       } else {
         const misses = pending.misses + 1
-        record.loopCompact = { ...pending, misses }
+        // Single-source miss accounting: flag this pending so the next arm-time settle does not count the
+        // same unlanded compaction a second time. The flag is cleared by the settle that skips it.
+        record.loopCompact = { ...pending, misses, missesCountedAtEvent: true }
         try {
           await this.commit(record)
         } catch (error) {
@@ -877,9 +879,20 @@ export class GoalController {
           skipRequest = "landed"
           await this.commit(record)
           this.notify(sessionID, "compact", "success", "Compaction landed", `Context dropped to ~${size} tokens at the loop boundary.`)
+        } else if (pending.missesCountedAtEvent) {
+          // The compaction-ended event already counted this pending's unlanded observation; count it once.
+          // The ended-event path emitted any pending/capped notice for this count, so the re-request decision
+          // below reuses the count without re-notifying. The flag is consumed by this settle, so the following
+          // arm counts a still-unlanded request normally.
+          record.loopCompact = { ...pending, missesCountedAtEvent: undefined }
+          misses = pending.misses
+          force = misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP
+          capped = misses >= COMPACT_MISS_CAP
+          log.info("loop boundary compact miss already counted at the compaction-ended event; re-using the count", { sessionID, misses, force, capped })
+          await this.commit(record)
         } else {
           misses = pending.misses + 1
-          record.loopCompact = { ...pending, misses }
+          record.loopCompact = { ...pending, misses, missesCountedAtEvent: undefined }
           force = misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP
           capped = misses >= COMPACT_MISS_CAP
           if (capped) {

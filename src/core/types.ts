@@ -91,8 +91,10 @@ export interface LoopCompactState {
   readonly iteration: number
   /** Set when the compaction was observed to land (compaction-ended event, or the context-size drop). */
   landedAt?: number
-  /** Consecutive armed iterations in which a pending request did not land. Two force a re-request; at COMPACT_MISS_CAP (4) requests suspend until a landing is observed. */
+  /** Consecutive observations in which a pending request did not land. Two force a re-request; at COMPACT_MISS_CAP (4) requests suspend until a landing is observed. */
   misses: number
+  /** Set when the latest miss was counted by the compaction-ended event path; the next arm-time settle skips it once, so one physical no-op compaction is never counted twice. */
+  missesCountedAtEvent?: boolean
 }
 
 export interface GoalRecord {
