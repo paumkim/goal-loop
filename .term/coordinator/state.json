@@ -143,6 +143,17 @@
       "submittedAt": "2026-11-15T07:06:31Z",
       "mergedAt": "2026-11-15T07:06:48Z",
       "mergedInto": "dev"
+    },
+    "rpc-restore-read-through": {
+      "agent": "orchestrator",
+      "paths": "src,test",
+      "branch": "wt/rpc-restore-read-through",
+      "worktree": "worktrees/wt-rpc-restore-read-through",
+      "status": "done",
+      "createdAt": "2026-11-15T07:09:45Z",
+      "submittedAt": "2026-11-15T07:12:54Z",
+      "mergedAt": "2026-11-15T07:13:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
