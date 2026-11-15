@@ -330,6 +330,17 @@
       "submittedAt": "2026-11-15T17:53:44Z",
       "mergedAt": "2026-11-15T17:53:50Z",
       "mergedInto": "dev"
+    },
+    "goal-dialog-design": {
+      "agent": "inkling-dialog-fix",
+      "paths": "src/tui.tsx,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md,scripts,test,dist,docs/changelog.html",
+      "branch": "wt/goal-dialog-design",
+      "worktree": "worktrees/wt-goal-dialog-design",
+      "status": "done",
+      "createdAt": "2026-11-15T18:00:22Z",
+      "submittedAt": "2026-11-15T18:09:38Z",
+      "mergedAt": "2026-11-15T18:09:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
