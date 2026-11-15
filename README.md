@@ -6,12 +6,22 @@ Claude Code's `/goal` for **OpenCode v2**. Give the agent a finish line; it keep
 
 ## Install
 
+From GitHub, no npm account or registry access needed:
+
 ```sh
-npm i -g opencode-goalv2
+opencode plugin add github:paumkim/opencode-goalv2#v1.1.0
+```
+
+That installs the plugin and registers it in your global opencode config. Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer.
+
+Alternatively, install the CLI installer from the GitHub release and let it register the plugin for you:
+
+```sh
+npm i -g https://github.com/paumkim/opencode-goalv2/releases/download/v1.1.0/opencode-goalv2-1.1.0.tgz
 opencode-goal install
 ```
 
-Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer; the installer itself needs Node or Bun and has zero dependencies.
+`npm i -g opencode-goalv2` (no URL) only works once the package is published to npmjs.org; until then use one of the two routes above.
 
 ```sh
 opencode-goal uninstall          # removes exactly what install added; opencode is as it was
