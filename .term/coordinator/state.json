@@ -550,6 +550,17 @@
       "submittedAt": "2026-11-15T20:37:30Z",
       "mergedAt": "2026-11-15T20:37:36Z",
       "mergedInto": "dev"
+    },
+    "a5-repeat-condition-normalize": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a5-repeat-condition-normalize",
+      "worktree": "worktrees/wt-a5-repeat-condition-normalize",
+      "status": "done",
+      "createdAt": "2026-11-15T20:38:41Z",
+      "submittedAt": "2026-11-15T20:39:30Z",
+      "mergedAt": "2026-11-15T20:39:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
