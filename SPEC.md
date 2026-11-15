@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=332 -->
+<!-- spec-check files=35 tests=336 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -895,3 +895,32 @@ Files touched: `src/tui-history.tsx`, `src/tui.tsx`, `test/core.test.ts`, `SPEC.
 Verification: `test/core.test.ts` (5 new `formatStatus` tests, including both miss counts and the landed
 shape); headless render of the `LoopSection` compact row; `bun run check` green (332 tests); coordinator
 submit.
+
+## Workstream Y — boundary compactions stop stacking
+
+Iteration 4 surfaced the accepted-vs-completed gap; it did not fix request frequency. Every arm issued a
+fresh boundary request (subject only to the 2-minute cooldown), so arms stacked compactions, the host kept
+answering "Nothing to compact yet", and every `session.compaction.ended` queued another
+`goal-loop · re-anchor after compaction` — three re-anchor notes were visible on screen at once. This
+workstream makes the boundary path conservative: request rarely, re-anchor once.
+
+105. No fresh boundary request on an arm that just observed a landing: when the arm-time settle records a
+    landed boundary compact (context-size drop, ≤ 60% of the requested estimate), the arm makes no request
+    of the host — the context is already fresh.
+106. No fresh boundary request on an arm whose pending request has not reached 2 misses: an unlanded
+    boundary compact is re-issued only by the forced re-request at `misses >= 2` (past the cooldown, never
+    past the busy/in-flight gates). At one miss the settle only counts; the arm stays silent (log line).
+107. Re-anchor coalescing: `onCompactionLanded` queues the `<goal-loop-reanchor>` note at most once per
+    session per 2 minutes (`REANCHOR_MIN_INTERVAL_MS`); back-to-back landings (host auto-compact + boundary
+    request + restore) produce one re-anchor instead of a stack. In-flight timestamp is per session and
+    cleared on `session.deleted`.
+108. `restore()` does not stack a boundary request on top of state that makes one pointless: an unlanded
+    pending `loopCompact` is left to the arm-time settle (forced at 2 misses), and a request that landed
+    within the last 10 minutes is not re-requested on plugin reload.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/`.
+
+Verification: `test/loop.test.ts` (arm that just landed makes no fresh request; one miss makes no
+re-request; two landings within 2 minutes queue one re-anchor and a third after 2 minutes queues a second;
+restore with an unlanded pending request makes no request; restore right after a landing makes no request);
+`bun run check` green (336 tests); coordinator submit.

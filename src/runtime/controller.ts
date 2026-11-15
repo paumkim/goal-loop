@@ -21,6 +21,14 @@ import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, Eval
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"
 
+/**
+ * Minimum gap between two re-anchor synthetics queued for the same session. A compaction can land for several
+ * reasons at once (host auto-compact, a boundary request, a restart restore); each used to queue its own
+ * re-anchor and the "goal-loop · re-anchor after compaction" entries stacked up in the transcript. One re-anchor
+ * carries the same ground truth for all of them.
+ */
+const REANCHOR_MIN_INTERVAL_MS = 120_000
+
 export interface ControllerDeps {
   readonly config: GoalConfig
   readonly directory: string
@@ -98,6 +106,7 @@ export class GoalController {
   private readonly newId: () => string
   /** sessionID -> serialized record as of the last store write; lets commit() skip no-op saves and emissions. */
   private readonly lastCommit = new Map<string, string>()
+  private readonly lastReanchorAt = new Map<string, number>()
   private disposed = false
 
   constructor(private readonly deps: ControllerDeps) {
@@ -166,8 +175,15 @@ export class GoalController {
     if (record && record.loopEnabled && record.status === "active") this.reanchor(record)
   }
 
-  /** Queue the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. */
+  /** Queue the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
   private reanchor(record: GoalRecord) {
+    const now = this.deps.clock.now()
+    const last = this.lastReanchorAt.get(record.sessionID)
+    if (last !== undefined && now - last < REANCHOR_MIN_INTERVAL_MS) {
+      this.deps.log.info("loop re-anchor coalesced: one was queued recently", { sessionID: record.sessionID })
+      return
+    }
+    this.lastReanchorAt.set(record.sessionID, now)
     void this.deps.session
       .synthetic({
         sessionID: record.sessionID,
@@ -399,6 +415,7 @@ export class GoalController {
     // Finished goals are not kept in memory after a restart, so always drop the stored record.
     void this.deps.store.remove(sessionID)
     this.lastCommit.delete(sessionID)
+    this.lastReanchorAt.delete(sessionID)
     if (this.goals.delete(sessionID)) this.deps.emitter.changed(sessionID, null)
   }
 
@@ -443,6 +460,12 @@ export class GoalController {
     // as pending so the next arm can detect whether it lands (or re-request it).
     for (const record of this.goals.values()) {
       if (record.status !== "active" || !this.deps.compactAtBoundary) continue
+      // Do not stack a restore-time request on top of one already in flight, nor on top of one that just
+      // landed: the arm-time settle re-requests an unlanded one (forced at 2 misses), and the host answers
+      // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.
+      const existing = record.loopCompact
+      if (existing && !existing.landedAt) continue
+      if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < 10 * 60_000) continue
       void this.deps
         .compactAtBoundary(record.sessionID)
         .then(async (result) => {
@@ -777,11 +800,16 @@ export class GoalController {
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
     // an earlier arm is settled first: a landed compaction is recorded as such; one that never landed is
     // re-requested (forced past the cooldown) after 2 armed iterations without an observed landing.
+    // An unlanded pending request is NOT re-issued on every arm, and a fresh request is not made on the arm
+    // that just observed the landing: every arm stacking a request is what piled up "Nothing to compact yet"
+    // dividers and their re-anchor notes. Only the forced re-request at 2 misses (or the first arm after a
+    // landing) goes to the host.
     if (this.deps.compactAtBoundary) {
       const now = clock.now()
       const pending = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
       let force = false
       let misses = 0
+      let skipRequest: "landed" | "pending" | undefined
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
         if (this.stale(record, runtime, epoch)) return
@@ -792,6 +820,7 @@ export class GoalController {
             : size <= Math.max(10_000, Math.floor(pending.estimatedTokens * 0.6)))
         if (landed) {
           record.loopCompact = { ...pending, landedAt: now }
+          skipRequest = "landed"
           await this.commit(record)
           this.notify(sessionID, "compact", "success", "Compaction landed", `Context dropped to ~${size} tokens at the loop boundary.`)
         } else {
@@ -805,12 +834,19 @@ export class GoalController {
         }
         if (this.stale(record, runtime, epoch)) return
       }
-      const result = await this.deps
-        .compactAtBoundary(sessionID, force ? { force: true } : undefined)
-        .catch((error): BoundaryCompactResult => {
-          log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
-          return { requested: false, reason: "read-failed" }
-        })
+      if (pending && !skipRequest && !force) skipRequest = "pending"
+      if (skipRequest) {
+        log.info("loop boundary compact skipped at this arm", { sessionID, reason: skipRequest })
+      }
+      const result: BoundaryCompactResult =
+        skipRequest !== undefined
+          ? { requested: false, reason: skipRequest === "landed" ? "too-small" : "cooldown" }
+          : await this.deps
+              .compactAtBoundary(sessionID, force ? { force: true } : undefined)
+              .catch((error): BoundaryCompactResult => {
+                log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
+                return { requested: false, reason: "read-failed" }
+              })
       if (this.stale(record, runtime, epoch)) return
       if (result.requested) {
         // Carry the miss count forward until a compaction actually lands: re-requesting is not evidence of landing.
