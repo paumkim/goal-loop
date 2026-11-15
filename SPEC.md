@@ -383,7 +383,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=39 tests=385 -->
+<!-- spec-check files=39 tests=388 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1603,3 +1603,59 @@ never carried a cast and is unchanged.
 
 Verification: `bun run check` green in the worktree (385 tests / 19 files, tsc clean, `dist/tui.js` rebuilt,
 TUI load ok, docs freshness ok after the stamp refresh, spec-check ok 39/385), coordinator submit.
+
+## Workstream AV — Phase 3 async-hole sweep: commit() can no longer reject (iteration 3 condition)
+
+Interpretation of the armed condition: find un-awaited promises / `.catch` gaps around synthetic sends,
+commits, evaluator calls and the `stale()` re-check, and give each a failing-before fault-injection test.
+Method: every `this.commit(` / `this.finish(` / `this.pause(` / `this.continueWith(` / `this.note(` /
+`void this.*` call site in `src/runtime/controller.ts` was traced to its rejection behavior. One reachable
+hole was found and fixed; two unguarded fire-and-forget dispatches were hardened (defensive, no reachable
+rejection today); the evaluator calls and every `stale()` re-check were audited and are already fenced.
+
+145. The hole: `commit()` returned `saved.then(ok => …)` where `saved = this.deps.store.save(record)`.
+     `GoalStore`'s own saves resolve with a boolean (storage faults inside its queue land as `false`), but a
+     `save()` that itself rejects — a storage fault at the port boundary, e.g. `structuredClone` failing on the
+     port — propagated out of `commit()`. Every un-awaited `this.commit(record)` in the state machine
+     (`evaluate` not_met path, `evaluationFailed`, `handleFailure`, `checkin`, `adoptRestored`,
+     `onUserPrompt`, the final-spend re-save in `finish()`) became an unhandled rejection, and the `lastCommit`
+     no-op marker was never dropped, so a later identical commit would skip the durable write believing it had
+     landed. Fix: `commit()` normalizes a rejecting save to `false` (plus a `log.warn`), so the promise never
+     rejects for storage reasons and the existing `!ok → lastCommit.delete` path arms the retry, exactly as
+     for a `false` return. Fire-and-forget call sites are safe by construction; `emit()` stays synchronous and
+     unchanged (a hostile emitter still throws synchronously into its guarded callers).
+146. Two unguarded fire-and-forget dispatches got `.catch(log.error)`: the `handleFailure` retry's
+     `void this.continueWith(…)` ("retry continuation failed") and the in-`continueWith` retry of a failed
+     synthetic steer ("continuation retry failed"), plus the idle-check-in's `checkin` dispatch
+     ("goal check-in failed"). `continueWith`/`checkin` are total today (every await inside is fenced —
+     the synthetic send is try/catch with a scheduled retry), so these three are belt-and-braces, not bug
+     fixes; no failing-before test is possible for them. The two remaining `void this.evaluate(...)` and
+     `void this.loopAdvance(...)` retry sites already carried `.catch`.
+147. Evaluator calls audited, no changes needed: `this.deps.evaluator.evaluate` is awaited inside try/catch
+     (failure → `evaluationFailed`, which backs off REEVALUATE_BASE_MS × 3ⁿ and retries forever);
+     `verifyMet`'s verifier call is awaited inside try/catch and fails closed (downgraded to `not_met`);
+     `summarize`/`nextGoal` in `loopAdvance` are awaited inside try/catch (summary failure → placeholder
+     summary + retry via `loopRetries` backoff; a met verdict is never advanced on a thrown planner).
+148. `stale()` re-checks audited, none missing: every await whose continuation mutates the record or arms
+     host work (`session.usage` before evaluation, `busy()` before the defer decision, the evaluator itself,
+     `verifyMet`, `summarize`, `nextGoal`, all boundary-compact settles) is followed by an
+     `if (this.stale(record, runtime, epoch)) return` before any state mutation or dispatch; the
+     `restore()`-time compaction fan-out re-checks `goals.get(…) === record && status === "active"` after its
+     await. `finish()`'s final-spend snapshot checks `goals.get(record.sessionID) === record` before writing
+     `record.final`. No behavior change.
+149. Pin tests (`test/controller.test.ts`, "GoalController async holes", 3 new). The failing-before pin:
+     monkeypatch `store.save` to reject → `set()` resolves, `save` was attempted once, the record is active,
+     and a subsequent identical-state `onUserPrompt` re-attempts the write (marker was dropped) — this test
+     fails before the fix at the `await h.set(...)` (rejects) and at the retry assertion. A second test faults
+     storage under an evaluator throw: the `retry` notice fires and the scheduled re-evaluation on the fake
+     clock re-attempts the durable write. A third pins the unchanged success path (healthy store still
+     short-circuits identical commits on the no-op marker). Fail-before verified by stashing the fix: both
+     fault tests fail pre-fix (33 pass / 2 fail), all 35 pass post-fix; this suite grew 32 → 35 tests.
+     Test count 385 → 388, files 39.
+
+Files touched: `src/runtime/controller.ts`, `test/controller.test.ts`, `SPEC.md`. `dist/tui.js` rebuilt by the
+check (byte-identical; the TUI bundle does not include the controller).
+
+Verification: `bun run check` green in the worktree (388 tests / 19 files, tsc clean, TUI load ok, docs
+freshness ok after the stamp refresh, spec-check ok 39/388 after the marker bump in this commit); coordinator
+submit.
