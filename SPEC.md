@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=347 -->
+<!-- spec-check files=35 tests=348 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1048,6 +1048,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `Prompt.parseNextCondition(reply)` is called with the library default (2000 chars) while user-set conditions respect
   `config.maxConditionChars`. A `maxConditionChars: 100` configuration still arms 2000-char planner conditions.
   Proposed fix: pass `config.maxConditionChars` (clamped to the parser's accepted range) as `maxChars`.
+  Resolution: Workstream AF — configured limit passed through; behavior note recorded there.
 - **A-3 (medium) — `src/rpc-handlers.ts:49` — the read-only `list` RPC fans out host side effects.** When the in-memory list is empty,
   `list()` calls `controller.restore()`, which adopts records AND queues a boundary-compaction request at the host for every active goal.
   A client asking "what goals exist" can ask the host to compact sessions it does not even render.
@@ -1224,3 +1225,21 @@ audit IDs; A-22 is the same defect listed once under TUI.
 Files touched: `src/core/format.ts`, `test/core.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (347 tests, spec-check ok); coordinator submit.
+
+## Workstream AF — planner-armed conditions respect maxConditionChars (A-2)
+
+`Prompt.parseNextCondition(reply)` was called with the library default (2000), so a planner-armed condition
+bypassed `config.maxConditionChars` — a `maxConditionChars: 100` configuration still armed 2000-char conditions.
+The arm path now passes the configured limit (clamped to `Math.max(1, floor(...))`).
+
+125. Behavior note: with default config (`maxConditionChars` unlimited by documentation), planner-armed
+     conditions are now unbounded in length rather than capped at the hidden library default of 2000 — the
+     documented semantics of the option. The pre-existing "unusable next-goal generation ends the loop cleanly"
+     test was updated to set `maxConditionChars: 2000` explicitly so it pins the same 2000-char boundary it
+     always exercised.
+126. Pin test (`test/loop.test.ts`, 1 new): `maxConditionChars: 100` with a 150-char planner reply ends the loop
+     cleanly ("nothing usable"); verified to fail on the pre-fix tree and pass with it.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (348 tests, spec-check ok); coordinator submit.

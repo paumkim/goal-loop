@@ -815,7 +815,7 @@ export class GoalController {
     if (Prompt.isLoopComplete(reply)) {
       return endClean(`Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}: the evaluator found nothing worth improving.`)
     }
-    const condition = Prompt.parseNextCondition(reply)
+    const condition = Prompt.parseNextCondition(reply, Math.max(1, Math.floor(this.deps.config.maxConditionChars)))
     if (!condition) {
       return endClean("Loop complete: the next-goal generator returned nothing usable.")
     }

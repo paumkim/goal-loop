@@ -226,13 +226,27 @@ describe("/goal-loop", () => {
     expect(h.notices.some((n) => n.kind === "achieved")).toBe(true)
   })
 
+  test("planner-armed conditions respect maxConditionChars (a2)", async () => {
+    const limited = harness({ maxConditionChars: 100 })
+    await limited.setLoop("objective")
+    limited.verdicts.push(met("done"))
+    limited.summaries.push("summary")
+    // 150 chars: under the library default (2000) but over the configured 100.
+    limited.nextGoals.push("x".repeat(150))
+    await limited.turn()
+    const record = limited.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/nothing usable/i)
+  })
+
   test("unusable next-goal generation ends the loop cleanly", async () => {
-    await h.setLoop("objective")
-    h.verdicts.push(met("done"))
-    h.summaries.push("summary")
-    h.nextGoals.push("x".repeat(3_000))
-    await h.turn()
-    const record = h.controller.get(SID)!
+    const capped = harness({ maxConditionChars: 2_000 })
+    await capped.setLoop("objective")
+    capped.verdicts.push(met("done"))
+    capped.summaries.push("summary")
+    capped.nextGoals.push("x".repeat(3_000))
+    await capped.turn()
+    const record = capped.controller.get(SID)!
     expect(record.status).toBe("achieved")
     expect(record.reason).toMatch(/nothing usable/i)
   })
