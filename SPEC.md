@@ -677,3 +677,21 @@ live. Two glance-level additions from snapshot data; no RPC/schema/storage chang
 
 Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames show the wall-share suffix), `bun run check` green, coordinator submit + merge-next.
+
+## Workstream S — mouse-clickable `esc` in the dialog header
+
+Interpretation of the request: the header's `esc` label painted itself as a close affordance but
+ignored the mouse; pressing Esc works. The label is now a click target that closes the dialog through
+the host's programmatic path.
+
+88. The `/goal` dialog header's `esc` label is wrapped in a 1-cell-padded box with `onMouseUp`
+    (the same click convention as the prompt-footer indicator) that calls `context.ui.dialog.clear()`
+    — the host's "close the active dialog" primitive, which is the programmatic equivalent of the Esc
+    key: modal mode ends, the backdrop drops, and the dialog's onClose runs. The plugin also resets
+    its own dialog-open flag and scroll ref in the same handler, idempotently, so the scroll keymap
+    layer disarms whether or not the host fires onClose for a programmatically cleared dialog.
+    Keyboard Esc behavior is unchanged.
+89. Verification: `bun run check` green; mouse behavior itself is host-owned and verified in a live
+    TUI (TUI mouse reporting routes through the host to the opentui renderable tree).
+
+Verification: `bun run check` green, coordinator submit + merge-next.

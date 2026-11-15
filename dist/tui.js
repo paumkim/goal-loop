@@ -897,6 +897,13 @@ var tui_default = Plugin.define({
         nowMs: () => now()
       });
     };
+    const closeStatusDialog = () => {
+      try {
+        context.ui.dialog.clear();
+      } catch {}
+      setStatusDialogOpen(false);
+      setScrollRef(undefined);
+    };
     const showStatusDialog = (sessionID, fallback) => {
       try {
         showStatusDialogInner(sessionID, fallback);
@@ -926,7 +933,7 @@ var tui_default = Plugin.define({
       context.ui.dialog.show(() => _$createComponent3(ClampedColumn, {
         get children() {
           return [(() => {
-            var _el$2 = _$createElement3("box"), _el$3 = _$createElement3("text"), _el$4 = _$createTextNode3(` /goal`), _el$5 = _$createElement3("text");
+            var _el$2 = _$createElement3("box"), _el$3 = _$createElement3("text"), _el$4 = _$createTextNode3(` /goal`), _el$5 = _$createElement3("box"), _el$6 = _$createElement3("text");
             _$insertNode3(_el$2, _el$3);
             _$insertNode3(_el$2, _el$5);
             _$setProp3(_el$2, "flexDirection", "row");
@@ -938,13 +945,17 @@ var tui_default = Plugin.define({
               var _c$ = _$memo3(() => !!looped());
               return () => _c$() ? ` \xB7 loop${loopPosition()}` : "";
             })(), null);
-            _$insertNode3(_el$5, _$createTextNode3(`esc`));
+            _$insertNode3(_el$5, _el$6);
             _$setProp3(_el$5, "flexShrink", 0);
+            _$setProp3(_el$5, "paddingLeft", 1);
+            _$setProp3(_el$5, "paddingRight", 1);
+            _$setProp3(_el$5, "onMouseUp", () => closeStatusDialog());
+            _$insertNode3(_el$6, _$createTextNode3(`esc`));
             _$effect3((_p$) => {
               var _v$ = TextAttributes3.BOLD, _v$2 = context.theme.text.base, _v$3 = context.theme.text.muted;
               _v$ !== _p$.e && (_p$.e = _$setProp3(_el$3, "attributes", _v$, _p$.e));
               _v$2 !== _p$.t && (_p$.t = _$setProp3(_el$3, "fg", _v$2, _p$.t));
-              _v$3 !== _p$.a && (_p$.a = _$setProp3(_el$5, "fg", _v$3, _p$.a));
+              _v$3 !== _p$.a && (_p$.a = _$setProp3(_el$6, "fg", _v$3, _p$.a));
               return _p$;
             }, {
               e: undefined,
@@ -953,21 +964,21 @@ var tui_default = Plugin.define({
             });
             return _el$2;
           })(), (() => {
-            var _el$7 = _$createElement3("scrollbox");
-            _$use((el) => setScrollRef(el), _el$7);
-            _$setProp3(_el$7, "scrollX", false);
-            _$setProp3(_el$7, "flexGrow", 1);
-            _$setProp3(_el$7, "stickyScroll", false);
-            _$setProp3(_el$7, "contentOptions", {
+            var _el$8 = _$createElement3("scrollbox");
+            _$use((el) => setScrollRef(el), _el$8);
+            _$setProp3(_el$8, "scrollX", false);
+            _$setProp3(_el$8, "flexGrow", 1);
+            _$setProp3(_el$8, "stickyScroll", false);
+            _$setProp3(_el$8, "contentOptions", {
               minHeight: 0
             });
-            _$insert3(_el$7, () => statusBody(sessionID, fallback));
-            return _el$7;
-          })(), (() => {
-            var _el$8 = _$createElement3("text");
-            _$insertNode3(_el$8, _$createTextNode3(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
-            _$effect3((_$p) => _$setProp3(_el$8, "fg", context.theme.text.faint, _$p));
+            _$insert3(_el$8, () => statusBody(sessionID, fallback));
             return _el$8;
+          })(), (() => {
+            var _el$9 = _$createElement3("text");
+            _$insertNode3(_el$9, _$createTextNode3(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
+            _$effect3((_$p) => _$setProp3(_el$9, "fg", context.theme.text.faint, _$p));
+            return _el$9;
           })()];
         }
       }), () => {
@@ -1134,19 +1145,19 @@ var tui_default = Plugin.define({
             return goal();
           },
           get children() {
-            var _el$0 = _$createElement3("box"), _el$1 = _$createElement3("text");
-            _$insertNode3(_el$0, _el$1);
-            _$setProp3(_el$0, "flexShrink", 0);
-            _$setProp3(_el$0, "onMouseUp", () => {
+            var _el$1 = _$createElement3("box"), _el$10 = _$createElement3("text");
+            _$insertNode3(_el$1, _el$10);
+            _$setProp3(_el$1, "flexShrink", 0);
+            _$setProp3(_el$1, "onMouseUp", () => {
               try {
                 if (props.sessionID)
                   context.keymap.dispatch("goal.status");
               } catch {}
             });
-            _$setProp3(_el$1, "wrapMode", "none");
-            _$insert3(_el$1, label);
-            _$effect3((_$p) => _$setProp3(_el$1, "fg", color(), _$p));
-            return _el$0;
+            _$setProp3(_el$10, "wrapMode", "none");
+            _$insert3(_el$10, label);
+            _$effect3((_$p) => _$setProp3(_el$10, "fg", color(), _$p));
+            return _el$1;
           }
         });
       }
