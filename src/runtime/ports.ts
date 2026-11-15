@@ -107,7 +107,6 @@ export interface Logger {
   error(message: string, extra?: Record<string, unknown>): void
 }
 
-export type { FailureInfo }
 
 export const systemClock: Clock = {
   now: () => Date.now(),

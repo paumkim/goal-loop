@@ -1,6 +1,6 @@
 import type { CommitRequest, ModelRef } from "./types.ts"
 
-export type EvaluatorMode = "auto" | "session" | "independent"
+type EvaluatorMode = "auto" | "session" | "independent"
 
 export interface GoalConfig {
   readonly evaluator: {

@@ -1,5 +1,5 @@
 import type { GoalConfig } from "../core/config.ts"
-import { classifyFailure, isNotFoundError } from "../core/errors.ts"
+import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, formatDuration, formatStatus, statusLabel, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
@@ -189,7 +189,7 @@ export class GoalController {
         ...(input.skills?.length ? { skills: input.skills } : {}),
       })
     } catch (error) {
-      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${message(error)}`)
+      if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${errorMessage(error)}`)
       throw error
     }
   }
@@ -329,7 +329,7 @@ export class GoalController {
           usage = await this.deps.session.usage(record.sessionID)
         } catch (error) {
           if (isNotFoundError(error)) notFound = true
-          else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: message(error) })
+          else this.deps.log.warn("restore kept goal after transient usage failure", { sessionID: record.sessionID, error: errorMessage(error) })
         }
         if (notFound) {
           // Definitive not-found only: the session no longer exists, drop the stale goal.
@@ -497,10 +497,10 @@ export class GoalController {
     } catch (error) {
       if (runtime.abort === summarize) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
-      log.error("loop summary failed", { sessionID, error: message(error) })
-      history.push(makeEntry(`(summary failed: ${truncate(message(error), 80)})`))
+      log.error("loop summary failed", { sessionID, error: errorMessage(error) })
+      history.push(makeEntry(`(summary failed: ${truncate(errorMessage(error), 80)})`))
       saveLoopState()
-      return this.pause(record, `The loop summary failed: ${truncate(message(error), 160)}`)
+      return this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
     } finally {
       if (runtime.abort === summarize) runtime.abort = undefined
     }
@@ -526,9 +526,9 @@ export class GoalController {
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
-      log.error("loop next-goal generation failed", { sessionID, error: message(error) })
+      log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
       saveLoopState()
-      return this.pause(record, `The loop next-goal generator failed: ${truncate(message(error), 160)}`)
+      return this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
     } finally {
       if (runtime.abort === generate) runtime.abort = undefined
     }
@@ -567,16 +567,16 @@ export class GoalController {
 
   private evaluationFailed(record: GoalRecord, runtime: Runtime, tools: number, error: unknown) {
     const { config, log } = this.deps
-    log.warn("goal evaluation failed", { sessionID: record.sessionID, error: message(error) })
+    log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
     if (config.checkinMinutes === 0 || record.retries >= config.maxRetries)
-      return this.pause(record, `The evaluator failed: ${truncate(message(error), 160)}`)
+      return this.pause(record, `The evaluator failed: ${truncate(errorMessage(error), 160)}`)
     record.retries++
     const delay = Math.min(REEVALUATE_BASE_MS * 3 ** (record.retries - 1), RETRY_MAX_MS)
     this.commit(record)
-    this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator failed (${truncate(message(error), 120)}); retrying in ${formatDuration(delay)}.`)
+    this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator failed (${truncate(errorMessage(error), 120)}); retrying in ${formatDuration(delay)}.`)
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
-      void this.evaluate(record, runtime, ++runtime.epoch, tools).catch((e) => log.error("re-evaluation failed", { error: message(e) }))
+      void this.evaluate(record, runtime, ++runtime.epoch, tools).catch((e) => log.error("re-evaluation failed", { error: errorMessage(e) }))
     })
   }
 
@@ -654,7 +654,7 @@ export class GoalController {
         delivery: "steer",
       })
     } catch (error) {
-      if (this.goals.get(record.sessionID) === record && record.status === "active") this.pause(record, `Could not continue: ${truncate(message(error), 160)}`)
+      if (this.goals.get(record.sessionID) === record && record.status === "active") this.pause(record, `Could not continue: ${truncate(errorMessage(error), 160)}`)
     }
   }
 
@@ -698,7 +698,7 @@ export class GoalController {
         record.final = usage
         void this.deps.store.save(record)
       })
-      .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: message(error) }))
+      .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
@@ -713,7 +713,7 @@ export class GoalController {
         delivery: "queue",
         resume: false,
       })
-      .catch((error) => this.deps.log.warn("could not record goal note", { error: message(error) }))
+      .catch((error) => this.deps.log.warn("could not record goal note", { error: errorMessage(error) }))
   }
 
   // ---------------------------------------------------------------- plumbing
@@ -793,8 +793,3 @@ export class GoalController {
   }
 }
 
-function message(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === "object" && error !== null && "message" in error) return String((error as { message: unknown }).message)
-  return String(error)
-}

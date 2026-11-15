@@ -169,9 +169,6 @@ export function detectCoordinator(root: string, pluginBin?: string): Coordinator
   return { coordinatorBin, worktreeDir, ...(devBranch ? { devBranch } : {}) }
 }
 
-export function isCoordinatorPolicy(policy: CommitPolicy): boolean {
-  return policy.required && policy.mode === "coordinator"
-}
 
 function read(path: string): string | undefined {
   try {

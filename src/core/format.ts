@@ -26,7 +26,7 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`
 }
 
-export function formatCost(usd: number): string {
+function formatCost(usd: number): string {
   if (usd <= 0) return "$0"
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`
 }
@@ -61,7 +61,7 @@ const STATUS_LABEL: Record<GoalStatus, string> = {
 
 export const statusLabel = (status: GoalStatus) => STATUS_LABEL[status]
 
-export function elapsed(record: GoalRecord, now: number) {
+function elapsed(record: GoalRecord, now: number) {
   return (record.endedAt ?? now) - record.startedAt
 }
 
