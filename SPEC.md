@@ -59,7 +59,7 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
     achieved iteration into a compact machine-consumable block via the evaluator
     (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
-    `tokens * 4` characters), (b) asks the evaluator to generate the next goal (v2…) from the summary,
+    `max(200, tokens) * 4` characters (an 800-char floor applies below 200 tokens)), (b) asks the evaluator to generate the next goal (v2…) from the summary,
     the loop objective and the prior history, under a strict output contract (a single verifiable
     condition, or exactly `LOOP_COMPLETE`), (c) arms the next goal immediately under the same `/goal`
     rules. Goal v1 and each later iteration are kept as `loopHistory` in the persisted record — never

@@ -139,6 +139,7 @@ All optional, set in `opencode.json`:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
+| `model` | — | Top-level fallback for `evaluator.model` (used only when it is unset; the env var wins over both) |
 | `evaluator.model` | session model | Separate model that judges the goal (fresh eyes, uses a transcript digest) |
 | `evaluator.mode` | `auto` | `session`, `independent`, or `auto` (independent when a model is set) |
 | `evaluator.maxTranscriptChars` | `60000` | Transcript digest budget for the independent evaluator (min 4000) |
@@ -154,7 +155,7 @@ All optional, set in `opencode.json`:
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
-| `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as tokens × 4 characters |
+| `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
 | `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
 | `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
