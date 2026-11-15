@@ -826,7 +826,8 @@ export class GoalController {
       return endClean("Loop complete: the next-goal generator returned nothing usable.")
     }
     // A planner that repeats an already-completed condition would spin the loop on the same work; end instead.
-    const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+    // Punctuation-insensitive: collapse every run of non-alphanumerics to one space (unicode letters/numbers kept).
+    const normalize = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
     const completed = new Set([
       normalize(record.condition),
       ...(record.loopObjective ? [normalize(record.loopObjective)] : []),

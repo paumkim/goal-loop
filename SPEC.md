@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=350 -->
+<!-- spec-check files=35 tests=351 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1063,6 +1063,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `"Fix the flaky test."` after `"fix the flaky test"` was completed arms the same work again — the exact failure mode the guard exists
   to stop ("keeps offering the already-completed condition" never fires on near-identical strings). Proposed fix: normalize more
   aggressively (collapse all non-alphanumeric runs to one space, trim) before the `completed` comparison; pin with a test.
+  Resolution: Workstream AH — non-alphanumeric runs collapse to one space (unicode aware); punctuation-drifted repeats rejected.
 - **A-6 (low) — `src/core/format.ts:24-28` — `formatTokens` rolls over badly at the million boundary.** `999_999` renders as `"1000k"`
   (the `< 1_000_000` branch never falls through to the `M` format). Proposed fix: round-then-compare or special-case values whose
   rounded form exceeds the unit, e.g. compare `n >= 999_500` for the `k` branch. Cosmetic, one-line fix + test.
@@ -1263,3 +1264,17 @@ goals exist" could ask the host to compact sessions it never rendered.
 Files touched: `src/runtime/controller.ts`, `src/rpc-handlers.ts`, `test/loop.test.ts`, `test/rpc-handlers.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (350 tests, spec-check ok); coordinator submit.
+
+## Workstream AH — repeat-condition guard ignores punctuation (A-5)
+
+The loop's completed-condition normalization stripped whitespace and lowercased, but kept punctuation, so a
+planner offering "Fix the flaky test." after "fix the flaky test" was completed armed the same work again — the
+exact failure the guard exists to stop. Normalization now collapses every run of non-alphanumerics (unicode
+letters and numbers kept) into one space: `value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()`.
+
+129. Pin test (`test/loop.test.ts`, 1 new): punctuation-drifted repeat of a completed condition ends the loop
+     cleanly ("already-completed"); verified to fail on the pre-fix tree and pass with it. Test count 350 → 351.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (351 tests, spec-check ok); coordinator submit.

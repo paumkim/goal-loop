@@ -1243,6 +1243,22 @@ describe("/goal-loop failure modes", () => {
     expect(h.notices.some((n) => n.kind === "achieved" && n.title === "Loop complete")).toBe(true)
   })
 
+  test("a planner's punctuation-drifted repeat of a completed condition ends the loop cleanly (a5)", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("fix the flaky test")
+    await h.turn() // arms v2 = "fix the flaky test"
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("Fix the flaky test.") // punctuation drift of the completed v2 condition
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
+  })
+
   test("a planner that repeats an earlier iteration's condition ends the loop cleanly", async () => {
     const h = harness()
     await h.setLoop("objective")
