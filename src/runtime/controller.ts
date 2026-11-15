@@ -998,7 +998,7 @@ export class GoalController {
         text: Prompt.retry({ condition: record.condition, label: failure.label }, this.deps.commit),
         description: `goal \u00B7 retry ${record.retries}`,
         turn: record.turns + 1,
-      })
+      }).catch((e) => this.deps.log.error("retry continuation failed", { error: errorMessage(e) }))
     })
   }
 
@@ -1013,7 +1013,7 @@ export class GoalController {
     if (config.checkinMinutes === 0 || record.checkins >= config.maxIdleCheckins) return
     const interval = config.checkinMinutes * 60_000 * Math.min(2 ** record.checkins, 4)
     const due = (runtime.lastCheckinAt ?? runtime.deferredSince) + interval
-    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, work))
+    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, work).catch((e) => this.deps.log.error("goal check-in failed", { error: errorMessage(e) })))
   }
 
   private async checkin(record: GoalRecord, runtime: Runtime, previous: BackgroundWork) {
@@ -1066,7 +1066,7 @@ export class GoalController {
         this.notify(record.sessionID, "retry", "warning", "Goal still active", `Could not continue (${truncate(errorMessage(error), 160)}); retrying in ${formatDuration(CONTINUE_RETRY_MS)}.`)
         this.schedule(runtime, CONTINUE_RETRY_MS, () => {
           if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
-          void this.continueWith(record, input)
+          void this.continueWith(record, input).catch((e) => this.deps.log.error("continuation retry failed", { error: errorMessage(e) }))
         })
       }
     }
@@ -1200,9 +1200,10 @@ export class GoalController {
   }
 
   /**
-   * Resolves once the write has been attempted. Most callers ignore the result; the loop arm awaits it so a restart
-   * cannot restore the pre-arm state. A failed write drops the record from the no-op cache so the next identical
-   * commit retries the durable write instead of assuming it landed.
+   * Resolves once the write has been attempted; a rejecting durable write is normalized to "did not land"
+   * (and logged), so the promise never rejects and fire-and-forget call sites are safe by construction.
+   * Most callers ignore the result; the loop arm awaits it so a restart cannot restore the pre-arm state.
+   * A failed write drops the record from the no-op cache so the next identical commit retries the durable write instead of assuming it landed.
    */
   private commit(record: GoalRecord): Promise<void> {
     let serialized: string
@@ -1213,7 +1214,14 @@ export class GoalController {
     }
     if (serialized && this.lastCommit.get(record.sessionID) === serialized) return Promise.resolve()
     this.lastCommit.set(record.sessionID, serialized)
-    const saved = this.deps.store.save(record)
+    const saved = this.deps.store.save(record).catch((error: unknown) => {
+      // The store's own contract is "resolves with whether it landed", but a save() that itself rejects
+      // (storage fault at the port boundary) would otherwise propagate: every un-awaited this.commit call site
+      // in the state machine would become an unhandled rejection, and the no-op marker would keep claiming
+      // the write landed. Treat it as unwritten: drop the marker (below), retry on the next identical commit.
+      this.deps.log.warn("goal record save failed; treated as unwritten", { sessionID: record.sessionID, error: errorMessage(error) })
+      return false
+    })
     this.emit(record)
     return saved.then((ok) => {
       // Keep the marker only when the write landed; otherwise the next identical commit retries.

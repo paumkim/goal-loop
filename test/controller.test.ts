@@ -613,3 +613,60 @@ describe("event router", () => {
     expect((await background.busy(SID)).subagents).toBe(1)
   })
 })
+
+describe("GoalController async holes", () => {
+  test("a rejecting durable write is treated as unwritten: set() resolves, the no-op marker drops, the next identical commit retries", async () => {
+    const h = harness()
+    // Storage fault at the port boundary: save() itself rejects (distinct from a swallowed fallible set()).
+    let saveCalls = 0
+    h.store.save = async (): Promise<boolean> => {
+      saveCalls++
+      throw new Error("pin: save rejects")
+    }
+    await h.set("all tests pass")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(saveCalls).toBe(1)
+    // The record state is identical, so the commit only lands if the no-op marker was dropped with the failed write.
+    h.controller.onUserPrompt(SID)
+    await flush()
+    expect(saveCalls).toBe(2)
+  })
+
+  test("an evaluator fault under a storage fault still arms the retry and persists nothing durable", async () => {
+    const h = harness()
+    let saveCalls = 0
+    h.store.save = async (): Promise<boolean> => {
+      saveCalls++
+      throw new Error("pin: save rejects")
+    }
+    await h.set("all tests pass")
+    const baseline = saveCalls
+    h.verdicts.push(new Error("evaluator down"))
+    await h.turn()
+    await flush()
+    expect(h.notices.some((n) => n.kind === "retry")).toBe(true)
+    const afterFailure = saveCalls
+    expect(afterFailure).toBeGreaterThan(baseline)
+    await h.clock.advance(10_500)
+    await flush()
+    // The retry fired (second evaluation attempt) and its failed write was attempted, not skipped on the stale marker.
+    expect(h.requests.length).toBe(2)
+    expect(saveCalls).toBeGreaterThanOrEqual(afterFailure + 1)
+  })
+
+  test("a healthy store still short-circuits identical commits on the no-op marker", async () => {
+    const h = harness()
+    let saveCalls = 0
+    const original = h.store.save.bind(h.store)
+    h.store.save = async (record) => {
+      saveCalls++
+      return original(record)
+    }
+    await h.set("all tests pass")
+    expect(saveCalls).toBe(1)
+    h.controller.onUserPrompt(SID)
+    await flush()
+    // Identical record: no second durable write.
+    expect(saveCalls).toBe(1)
+  })
+})
