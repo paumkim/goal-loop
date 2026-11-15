@@ -1078,6 +1078,21 @@ describe("/goal-loop idempotent arming", () => {
     expect(h2.compactCalls).toHaveLength(0)
   })
 
+  test("the final spend re-save goes through commit's no-op cache (a9)", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    h.verdicts.push(met("done"))
+    await h.turn()
+    // Let the fire-and-forget final usage snapshot land.
+    await flush()
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.final).toBeDefined()
+    // The cache that guards redundant saves must mirror what was persisted, including `final`.
+    const marker = (h.controller as any).lastCommit.get(SID) as string | undefined
+    expect(marker).toBe(JSON.stringify(record))
+  })
+
   test("restore({ boundaryCompact: false }) adopts live records without requesting a host compaction", async () => {
     const storage = new MemoryStorage()
     const h = harness({}, storage)
