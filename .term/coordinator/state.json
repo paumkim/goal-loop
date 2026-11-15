@@ -858,6 +858,25 @@
       "submittedAt": "2026-11-15T22:49:09Z",
       "mergedAt": "2026-11-15T22:53:58Z",
       "mergedInto": "dev"
+    },
+    "cli-uninstall-restore": {
+      "agent": "inkling",
+      "paths": "bin,test,SPEC.md,docs,README.md",
+      "branch": "wt/cli-uninstall-restore",
+      "worktree": "worktrees/wt-cli-uninstall-restore",
+      "status": "done",
+      "createdAt": "2026-11-15T23:01:52Z",
+      "submittedAt": "2026-11-15T23:05:34Z",
+      "mergedAt": "2026-11-15T23:06:03Z",
+      "mergedInto": "dev"
+    },
+    "release-checklist-goal-loop-n": {
+      "agent": "orchestrator",
+      "paths": "RELEASE-CHECKLIST.md,src/index.ts,src/runtime/controller.ts,src/core/format.ts,src/core/parse.ts,test/loop.test.ts,test/plugin.test.ts",
+      "branch": "wt/release-checklist-goal-loop-n",
+      "worktree": "worktrees/wt-release-checklist-goal-loop-n",
+      "status": "claimed",
+      "createdAt": "2026-11-15T23:02:16Z"
     }
   },
   "mergeLock": null
