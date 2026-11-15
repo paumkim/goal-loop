@@ -203,6 +203,7 @@ describe("GoalController", () => {
   })
 
   test("stall guard pauses after N turns without tool use, and a user prompt resumes", async () => {
+    h = harness({ stallTurns: 3 })
     await h.set()
     for (let i = 0; i < 3; i++) {
       h.verdicts.push(notMet())
@@ -332,7 +333,7 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(1)
   })
 
-  test("transient failures retry with backoff, then pause", async () => {
+  test("transient failures retry with capped backoff, forever", async () => {
     h = harness({ maxRetries: 2 })
     await h.set()
     h.controller.onExecutionStarted(SID)
@@ -347,10 +348,13 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(2)
     h.controller.onExecutionStarted(SID)
     h.controller.onExecutionFailed(SID, { status: 503, message: "unavailable" })
-    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    await h.clock.advance(5 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(3)
+    expect(h.controller.get(SID)?.status).toBe("active")
   })
 
-  test("fatal failures clear the goal; rate limits pause", async () => {
+  test("fatal failures clear the goal; rate limits retry with long backoff and never pause", async () => {
     await h.set()
     h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
     expect(h.controller.get(SID)?.status).toBe("failed")
@@ -358,14 +362,21 @@ describe("GoalController", () => {
 
     await h.set()
     h.controller.onExecutionFailed(SID, { status: 429, message: "slow down" })
-    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.notices.at(-1)?.title).toBe("Goal still active")
+    const before = h.calls.synthetic.length
+    await h.clock.advance(15 * 60_000)
+    expect(h.calls.synthetic.length).toBeGreaterThan(before)
+    expect(h.controller.get(SID)?.status).toBe("active")
   })
 
-  test("checkinMinutes 0 disables retries", async () => {
+  test("checkinMinutes 0 disables idle check-in nudges, not retries", async () => {
     h = harness({ checkinMinutes: 0 })
     await h.set()
     h.controller.onExecutionFailed(SID, { status: 529, message: "Overloaded" })
-    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    await h.clock.advance(15_000)
+    expect(h.calls.synthetic).toHaveLength(1)
   })
 
   test("user interrupt pauses; shutdown keeps the goal active", async () => {
@@ -376,16 +387,18 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.status).toBe("paused")
   })
 
-  test("evaluator errors retry, then pause", async () => {
+  test("evaluator errors retry forever with capped backoff", async () => {
     h = harness({ maxRetries: 1 })
     await h.set()
     h.verdicts.push(new Error("boom"))
     await h.turn()
     expect(h.controller.get(SID)?.retries).toBe(1)
+    expect(h.controller.get(SID)?.status).toBe("active")
     h.verdicts.push(new Error("boom again"))
     await h.clock.advance(10_000)
-    expect(h.controller.get(SID)?.status).toBe("paused")
-    expect(h.controller.get(SID)?.reason).toContain("evaluator failed")
+    expect(h.controller.get(SID)?.retries).toBe(2)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.reason).toBeUndefined()
   })
 
   test("goals persist and restore with reset counters; finished goals are not restored", async () => {

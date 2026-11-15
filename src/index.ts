@@ -179,6 +179,14 @@ export default Plugin.define({
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
     if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
     const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
+    const compactor = new AutoCompactor({
+      config,
+      compact: (sessionID) => session.compact(sessionID),
+      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
+      emitter,
+      clock: systemClock,
+      log,
+    })
     const controller = new GoalController({
       config,
       directory: ctx.location.directory,
@@ -189,15 +197,7 @@ export default Plugin.define({
       store,
       emitter,
       verifier: createVerifier(),
-      clock: systemClock,
-      log,
-    })
-
-    const compactor = new AutoCompactor({
-      config,
-      compact: (sessionID) => session.compact(sessionID),
-      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
-      emitter,
+      compactAtBoundary: (sessionID) => compactor.compactAtBoundary(sessionID),
       clock: systemClock,
       log,
     })

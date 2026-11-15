@@ -214,3 +214,49 @@ describe("AutoCompactor.maybeCompact", () => {
     expect(notice?.message).toContain("timed out")
   })
 })
+
+describe("AutoCompactor.compactAtBoundary", () => {
+  test("compactOnLoopIteration=false does not read the context or compact", async () => {
+    const h = harness({ compactAtTokens: 260_000, compactOnLoopIteration: false })
+    await h.compactor.compactAtBoundary(SID)
+    expect(h.contextCalls).toBe(0)
+    expect(h.compactCalls).toEqual([])
+  })
+
+  test("tiny context (< 10k tokens) is skipped without a notice", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([assistant({ input: 1_000, cache: { read: 2_000, write: 0 } })])
+    await h.compactor.compactAtBoundary(SID)
+    expect(h.compactCalls).toEqual([])
+    expect(h.notices).toEqual([])
+  })
+
+  test("context at or above 10k tokens compacts and emits the boundary notice", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([assistant({ input: 8_000, cache: { read: 2_500, write: 0 } })])
+    await h.compactor.compactAtBoundary(SID)
+    expect(h.compactCalls).toEqual([SID])
+    const notice = h.notices.find((n) => n.kind === "compact")
+    expect(notice?.level).toBe("info")
+    expect(notice?.title).toBe("Auto-compact requested (loop boundary)")
+    expect(notice?.message).toContain("~10500")
+    expect(notice?.message).toContain("boundary")
+  })
+
+  test("no assistant token usage (estimate undefined) compacts with an unknown-size message", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([{ type: "user", text: "hi" }])
+    await h.compactor.compactAtBoundary(SID)
+    expect(h.compactCalls).toEqual([SID])
+    const notice = h.notices.find((n) => n.kind === "compact")
+    expect(notice?.title).toBe("Auto-compact requested (loop boundary)")
+    expect(notice?.message).toBe("context size unknown; compacting at the loop boundary")
+  })
+
+  test("two immediate calls compact only once (in-flight/cooldown honored)", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    await h.compactor.compactAtBoundary(SID)
+    await h.compactor.compactAtBoundary(SID)
+    expect(h.compactCalls).toEqual([SID])
+  })
+})

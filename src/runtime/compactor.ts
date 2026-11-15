@@ -24,6 +24,8 @@ export interface CompactorDeps {
 const REQUEST_COOLDOWN_MS = 120_000
 /** An in-flight entry older than this is considered lost and swept. */
 const INFLIGHT_STALE_MS = 10 * 60_000
+/** Contexts smaller than this are not worth a boundary compaction. */
+const BOUNDARY_MIN_TOKENS = 10_000
 
 export class AutoCompactor {
   private readonly inFlight = new Map<string, number>()
@@ -31,13 +33,18 @@ export class AutoCompactor {
 
   constructor(private readonly deps: CompactorDeps) {}
 
+  /** Sweep stale in-flight entries; a compaction that never reported back is presumed lost. */
+  private sweepStale(): void {
+    const now = this.deps.clock.now()
+    for (const [id, at] of this.inFlight) if (now - at >= INFLIGHT_STALE_MS) this.inFlight.delete(id)
+  }
+
   /** Compact the session when the estimated context is at or above `config.compactAtTokens`. */
   async maybeCompact(sessionID: string): Promise<void> {
     const { config, compact, context, emitter, clock, log } = this.deps
     if (config.compactAtTokens <= 0) return
     const now = clock.now()
-    // Sweep stale in-flight entries; a compaction that never reported back is presumed lost.
-    for (const [id, at] of this.inFlight) if (now - at >= INFLIGHT_STALE_MS) this.inFlight.delete(id)
+    this.sweepStale()
     if (this.inFlight.has(sessionID)) return
     if (now - (this.requestedAt.get(sessionID) ?? 0) < REQUEST_COOLDOWN_MS) return
 
@@ -79,6 +86,46 @@ export class AutoCompactor {
       level: "info",
       title: "Auto-compact requested",
       message: `~${size} tokens estimated (threshold ${config.compactAtTokens})`,
+    })
+  }
+
+  /** Compacts at a loop-iteration boundary regardless of the token threshold, so the next iteration starts from a fresh context. Subject to in-flight and cooldown guards; skips tiny contexts. */
+  async compactAtBoundary(sessionID: string): Promise<void> {
+    const { config, compact, context, emitter, clock, log } = this.deps
+    if (!config.compactOnLoopIteration) return
+    this.sweepStale()
+    const now = clock.now()
+    if (this.inFlight.has(sessionID)) return
+    if (now - (this.requestedAt.get(sessionID) ?? 0) < REQUEST_COOLDOWN_MS) return
+    let messages: readonly unknown[] | undefined
+    try {
+      messages = await context(sessionID)
+    } catch (error) {
+      log.warn("boundary compact: could not read the session context", { sessionID, error: String(error) })
+      return
+    }
+    const size = estimateContextTokens(messages)
+    if (size !== undefined && size < BOUNDARY_MIN_TOKENS) {
+      log.info("boundary compact skipped: context is small", { sessionID, size })
+      return
+    }
+    this.requestedAt.set(sessionID, now)
+    this.inFlight.set(sessionID, now)
+    try {
+      await compact(sessionID)
+    } catch (error) {
+      this.inFlight.delete(sessionID)
+      const message = truncate(errorMessage(error), 160)
+      log.warn("boundary compact failed to start", { sessionID, error: message })
+      emitter.notice({ sessionID, kind: "compact", level: "warning", title: "Auto-compact failed to start", message })
+      return
+    }
+    emitter.notice({
+      sessionID,
+      kind: "compact",
+      level: "info",
+      title: "Auto-compact requested (loop boundary)",
+      message: size !== undefined ? `~${size} tokens estimated at the loop boundary` : "context size unknown; compacting at the loop boundary",
     })
   }
 

@@ -51,11 +51,11 @@ While a goal runs, the footer shows its state:
 
 Safety rails:
 
-- **Pauses** after 3 turns in a row without tool use, on rate limits, or on interrupt (Esc). Send any message to resume. At the 200-turn cap it pauses and stays paused until you `/goal clear` or set a new goal (raising `maxTurns`); a message alone will not extend the cap.
-- **Retries** dropped connections and overloads with backoff (up to 3 times).
+- **Never pauses automatically:** it keeps going across turns, failure retries (rate limits every 15 minutes, transient errors with capped exponential backoff) and zero-tool-call stretches. It stops only on (1) your interrupt (Esc), (2) a terminal provider error the user must fix — auth, credit balance, quota exhaustion — the goal fails instead of waiting, (3) an explicit `maxTurns` cap you set yourself (default 0 = off), or (4) `/goal clear`. (An explicit cap still stays paused at the cap; a message will not extend it.)
+- **Retries** dropped connections and overloads forever with capped exponential backoff; rate/usage-limit failures are retried every 15 minutes. `checkinMinutes: 0` only disables idle check-in nudges, not retries.
 - **Fails** (distinct from `cleared`) on errors you must fix: auth, credit, context overflow, missing model. A failed goal is terminal and is not resumable by sending a message; fix the cause and run `/goal` again. `cleared` only means you (or a replacement goal) ended it.
 - **Waits** while subagents or background shells run, with check-ins at 30 min, then 60, then 120.
-- **Restores** active goals after a restart or plugin reload.
+- **Restores** active goals after a restart or plugin reload, and compacts them at the boundary so they resume from a fresh context.
 
 ## The commit rule
 
@@ -98,14 +98,17 @@ The footer shows the iteration (`◎ loop · v2 · active · 14m · 2 turns`); t
 and one line per completed iteration.
 
 The loop only advances on a **met** verdict — never on not-met, stall, pause, interrupt or retry paths. It
-ends when any of these happens:
+keeps arming across failure retries and zero-tool-call stretches: two consecutive zero-tool iterations are
+recorded (`loopNotProgress`) but never pause the loop; the loop keeps arming. At every iteration boundary the
+plugin asks the host to compact the session first (`compactOnLoopIteration`, default on), so each version
+arms with a fresh context. It ends when any of these happens:
 
 - You run `/goal-loop clear` (or `stop`, `off`, `reset`, `none`, `cancel`), or set a new goal.
 - The evaluator judges an iteration **impossible** (terminal, like `/goal`).
 - The loop reaches `maxLoops` completed iterations (default 5) — ends cleanly as achieved.
 - The evaluator finds nothing meaningful left to improve and replies `LOOP_COMPLETE` — ends cleanly as achieved.
-- The evaluator machine fails repeatedly (pause, like `/goal`), or two consecutive iterations complete with zero
-  tool use (pause, with a notice).
+- The evaluator machine cannot summarize or plan at all (unsupported evaluator) — ends cleanly as achieved.
+- A planner that repeats an already-completed condition — ends cleanly as achieved instead of spinning.
 
 Each achieved iteration fires one info toast (`◎ Loop 1 achieved · → v2: …`); the end of the loop fires the
 normal achieved toast once.
@@ -122,8 +125,8 @@ servers overwriting the live goal records.
    in a coordinator repo) and the current check output *before* touching anything. The loop summary is a hint,
    not ground truth; the tree is.
 2. **Zero-progress is measured by the harness.** An iteration with zero tool calls (as counted by the plugin's
-   own `onToolCalled` events) increments `loopNotProgress`; two in a row pause the loop. The model's account of
-   how much work it did is irrelevant to this count.
+   own `onToolCalled` events) increments `loopNotProgress`; consecutive zero-tool iterations are recorded but
+   never pause the loop. The model's account of how much work it did is irrelevant to this count.
 3. **Met means verified, not narrated.** The evaluator requires fresh command output at the current HEAD, and
    with `evaluator.verifyCommand` set the plugin itself reruns the check before accepting met. Without the gate,
    a persuasive transcript that never shows the check passing is still not met.
@@ -145,13 +148,14 @@ All optional, set in `opencode.json`:
       "package": "@el4cteo/opencode-goal",
       "options": {
         "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
-        "maxTurns": 200,
-        "stallTurns": 3,
+        "maxTurns": 0,
+        "stallTurns": 0,
         "checkinMinutes": 30,
         "maxRetries": 3,
         "systemReminder": false,
         "transcriptNotes": true,
         "compactAtTokens": 0,
+        "compactOnLoopIteration": true,
         "maxLoops": 5,
         "maxLoopSummaryTokens": 400,
         "requireCommit": true,
@@ -173,15 +177,16 @@ All optional, set in `opencode.json`:
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
 | `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND` |
 | `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
-| `maxTurns` | `200` | Hard turn cap, `0` = none |
-| `stallTurns` | `3` | Turns without tool use before pausing |
-| `checkinMinutes` | `30` | First background check-in; `0` disables check-ins and retries |
+| `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default) |
+| `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default) |
+| `checkinMinutes` | `30` | First background check-in; `0` disables idle check-in nudges (automatic retries never stop) |
 | `maxIdleCheckins` | `3` | Max idle check-ins while background work runs |
-| `maxRetries` | `3` | Automatic retries after transient errors |
+| `maxRetries` | `3` | Retained for compatibility; no longer gates anything — automatic retries are unlimited with capped backoff |
 | `maxConditionChars` | unlimited | Condition length cap (min 100); default never rejects |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
+| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
@@ -190,7 +195,7 @@ All optional, set in `opencode.json`:
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`.
+`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`.
 
 `OPENCODE_GOAL_PROBE=1` puts the plugin in probe mode: plugin storage becomes read-only (goal records are never written or deleted, so `restore()` has no side effects). Use it for any probe opencode server or scratch instance that loads the plugin — otherwise a probe can mutate the live goal records shared with your real sessions. Verification commands still execute in the probe's working directory, so point probes at a throwaway checkout.
 
@@ -199,6 +204,13 @@ Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCO
 `compactAtTokens` makes the plugin itself ask the host to compact the session once the estimated model-visible
 context reaches an absolute token count — a window-independent complement to opencode's `compaction.buffer`,
 which is relative to the model's context window.
+
+`compactOnLoopIteration` (default `true`) is the loop-boundary complement: at every `/goal-loop` iteration arm
+the plugin asks the host to compact the session regardless of the token threshold, so the next version arms
+with a fresh context. It also compacts restored live goals on plugin startup. Boundary compaction is skipped
+for tiny contexts (< 10k estimated tokens), honors the same in-flight/cooldown guards, and is queued *before*
+the armed iteration's synthetic steer. `compactOnLoopIteration: false` (or `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION=0`)
+turns it off. opencode's own auto-compaction near the model window remains the backstop.
 
 The estimate is the last assistant message's `input + cache.read + cache.write` token usage, measured right
 after each turn ends (`session.execution.succeeded`). Reasoning and output tokens are not counted: output has

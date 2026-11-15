@@ -232,7 +232,7 @@ describe("/goal-loop", () => {
     expect(record.loopHistory ?? []).toHaveLength(0)
   })
 
-  test("two consecutive zero-tool-call iterations pause the loop", async () => {
+  test("two consecutive zero-tool-call iterations keep the loop alive (never pause)", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
     h.summaries.push("s1")
@@ -244,14 +244,17 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v3 condition")
     await h.turn(0)
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/zero tool use|without tool use/i)
-    expect(h.notices.some((n) => n.kind === "paused")).toBe(true)
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(3)
+    expect(record.loopNotProgress).toBe(2)
+    expect(record.loopHistory).toHaveLength(2)
+    const v3Arming = h.calls.synthetic.find((s) => String(s.description).includes("arming v3"))
+    expect(v3Arming).toBeDefined()
   })
 
   test("zero-progress is counted by the harness, not by the model's report", async () => {
     // The evaluator claims lots of work happened; the harness counted zero tool calls.
-    // The not-progress guard must follow the harness count, so two such iterations pause the loop.
+    // The not-progress count must follow the harness count; the loop keeps running either way.
     await h.setLoop("objective")
     h.verdicts.push(met("did tons of work, verified thoroughly"))
     h.summaries.push("s1")
@@ -262,8 +265,9 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v3 condition")
     await h.turn(0)
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/zero tool use|without tool use/i)
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(3)
+    expect(record.loopNotProgress).toBe(2)
     expect(record.loopHistory?.map((e) => e.toolCalls)).toEqual([0, 0])
   })
 
@@ -287,29 +291,44 @@ describe("/goal-loop", () => {
     expect(record.status).toBe("active")
   })
 
-  test("summary failure pauses the loop and records the achieved iteration", async () => {
+  test("summary failure is recorded and the loop advances anyway", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
-    // No summary queued: the evaluator throws, and the loop must pause rather than lose the achieved iteration.
+    // No summary queued: the evaluator throws, and the loop must record the failure and keep going.
+    h.nextGoals.push("v2 condition")
     await h.turn(1)
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/summary failed/i)
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(2)
     expect(record.loopHistory).toHaveLength(1)
     expect(record.loopHistory![0]!.summary).toMatch(/summary failed/i)
+    const v2Arming = h.calls.synthetic.find((s) => String(s.description).includes("arming v2"))
+    expect(v2Arming).toBeDefined()
   })
 
-  test("next-goal failure pauses the loop and keeps the achieved iteration", async () => {
+  test("next-goal failure retries the planner with backoff and then advances", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
     h.summaries.push("s1")
     // No next goal queued: the planner throws, and the achieved iteration must survive in history.
+    // The failed step persists no loop state; the retry recomputes and records the entry.
     await h.turn(1)
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/next-goal generator failed/i)
-    expect(record.loopHistory).toHaveLength(1)
-    expect(record.loopHistory![0]!.summary).toBe("s1")
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(1)
+    expect(record.loopHistory).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "retry" && /could not plan/i.test(n.message))).toBe(true)
+    // Push a planner reply; the whole loop step retries after the backoff and arms v2.
+    h.nextGoals.push("v2 condition")
+    h.summaries.push("s1 (retried)")
+    await h.clock.advance(15_000)
+    const after = h.controller.get(SID)!
+    expect(after.loopIteration).toBe(2)
+    expect(after.status).toBe("active")
+    expect(after.loopHistory).toHaveLength(1)
+    expect(after.loopHistory![0]!.summary).toBe("s1 (retried)")
+    const v2Arming = h.calls.synthetic.find((s) => String(s.description).includes("arming v2"))
+    expect(v2Arming).toBeDefined()
   })
 
   test("resumed loop resets the zero-tool not-progress count", async () => {
@@ -322,6 +341,9 @@ describe("/goal-loop", () => {
     h.summaries.push("s2")
     h.nextGoals.push("v3 condition")
     await h.turn(0)
+    expect(h.controller.get(SID)!.status).toBe("active")
+    expect(h.controller.get(SID)!.loopNotProgress).toBe(2)
+    h.controller.onExecutionInterrupted(SID, "user")
     expect(h.controller.get(SID)!.status).toBe("paused")
     h.controller.onUserPrompt(SID)
     const record = h.controller.get(SID)!
@@ -723,7 +745,7 @@ describe("/goal-loop failure modes", () => {
     expect(h.notices.some((n) => n.kind === "retry")).toBe(false)
   })
 
-  test("a planner that repeats the current condition pauses instead of re-arming it", async () => {
+  test("a planner that repeats the current condition ends the loop cleanly instead of spinning", async () => {
     const h = harness()
     await h.setLoop("objective")
     h.verdicts.push(met("done"))
@@ -731,14 +753,15 @@ describe("/goal-loop failure modes", () => {
     h.nextGoals.push("   OBJECTIVE  ") // normalized repeat of the v1 condition/objective
     await h.turn()
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/already-completed|already completed|repeat|verbatim/i)
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
     expect(record.loopIteration).toBe(1)
     expect(record.loopHistory).toHaveLength(1)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "achieved" && n.title === "Loop complete")).toBe(true)
   })
 
-  test("a planner that repeats an earlier iteration's condition pauses", async () => {
+  test("a planner that repeats an earlier iteration's condition ends the loop cleanly", async () => {
     const h = harness()
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"), met("v2 done"))
@@ -748,10 +771,11 @@ describe("/goal-loop failure modes", () => {
     expect(h.controller.get(SID)!.loopIteration).toBe(2)
     await h.turn() // v2 met; the planner repeats v1's condition verbatim
     const record = h.controller.get(SID)!
-    expect(record.status).toBe("paused")
-    expect(record.reason).toMatch(/already-completed|already completed|repeat|verbatim/i)
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
     expect(record.loopIteration).toBe(2)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "achieved" && n.title === "Loop complete")).toBe(true)
   })
 })
 
