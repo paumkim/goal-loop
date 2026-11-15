@@ -832,7 +832,11 @@ export class GoalController {
     return this.disposed || runtime.epoch !== epoch || this.goals.get(record.sessionID) !== record || record.status !== "active"
   }
 
-  /** Resolves once the durable write lands (or is skipped as a no-op). Most callers ignore it; loop arming awaits it. */
+  /**
+   * Resolves once the write has been attempted. Most callers ignore the result; the loop arm awaits it so a restart
+   * cannot restore the pre-arm state. A failed write drops the record from the no-op cache so the next identical
+   * commit retries the durable write instead of assuming it landed.
+   */
   private commit(record: GoalRecord): Promise<void> {
     let serialized: string
     try {
@@ -844,7 +848,10 @@ export class GoalController {
     this.lastCommit.set(record.sessionID, serialized)
     const saved = this.deps.store.save(record)
     this.emit(record)
-    return saved
+    return saved.then((ok) => {
+      // Keep the marker only when the write landed; otherwise the next identical commit retries.
+      if (serialized && !ok) this.lastCommit.delete(record.sessionID)
+    })
   }
 
   private emit(record: GoalRecord) {

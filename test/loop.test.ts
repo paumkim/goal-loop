@@ -722,3 +722,30 @@ describe("/goal-loop straggler completions after failure", () => {
     expect(h.summaryRequests).toHaveLength(0)
   })
 })
+
+describe("/goal-loop storage failure recovery", () => {
+  test("a failed durable write is retried by the next commit of the same record", async () => {
+    const storage = new MemoryStorage()
+    const realSet = storage.set.bind(storage)
+    let failing = true
+    storage.set = async (key: string, value: unknown) => {
+      if (failing) throw new Error("storage down")
+      return realSet(key, value)
+    }
+    const h = harness({}, storage) // the harness store logs errors by throwing; they must not break the loop
+    await h.setLoop("objective")
+    h.verdicts.push(met("done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    // All durable writes failed; the in-memory record is still armed, and storage never saw it.
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    expect(storage.data.has("goal/v1/ses_1")).toBe(false)
+    failing = false
+    h.controller.onUserPrompt(SID)
+    await flush()
+    const persisted = storage.data.get("goal/v1/ses_1") as { loopIteration?: number; condition: string } | undefined
+    expect(persisted?.loopIteration).toBe(2)
+    expect(persisted?.condition).toBe("v2 condition")
+  })
+})

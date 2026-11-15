@@ -31,12 +31,12 @@ export class GoalStore {
     private readonly onError: (error: unknown) => void,
   ) {}
 
-  save(record: GoalRecord): Promise<void> {
+  save(record: GoalRecord): Promise<boolean> {
     const snapshot = structuredClone(record)
     return this.enqueue(record.sessionID, () => this.storage.set(keyFor(record.sessionID), snapshot))
   }
 
-  remove(sessionID: string): Promise<void> {
+  remove(sessionID: string): Promise<boolean> {
     return this.enqueue(sessionID, () => this.storage.remove(keyFor(sessionID)))
   }
 
@@ -58,13 +58,30 @@ export class GoalStore {
     await Promise.all(this.chains.values())
   }
 
-  private enqueue(sessionID: string, write: () => Promise<void>): Promise<void> {
+  /**
+   * Every queued write resolves with whether it landed. The onError hook observes failures for logging; a throwing
+   * hook must not wedge the chain or surface as an unhandled rejection, so both are fenced off here.
+   */
+  private enqueue(sessionID: string, write: () => Promise<void>): Promise<boolean> {
     const previous = this.chains.get(sessionID) ?? Promise.resolve()
-    const next = previous.then(write).catch(this.onError)
-    this.chains.set(sessionID, next)
-    void next.then(() => {
-      if (this.chains.get(sessionID) === next) this.chains.delete(sessionID)
+    const run = previous.then(async () => {
+      try {
+        await write()
+        return true
+      } catch (error) {
+        try {
+          this.onError(error)
+        } catch {
+          // A throwing error hook is not allowed to break write ordering.
+        }
+        return false
+      }
     })
-    return next
+    const chain = run.then(() => {})
+    this.chains.set(sessionID, chain)
+    void chain.then(() => {
+      if (this.chains.get(sessionID) === chain) this.chains.delete(sessionID)
+    })
+    return run
   }
 }

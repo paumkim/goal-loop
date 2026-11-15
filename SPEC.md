@@ -65,8 +65,12 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     rules. Goal v1 and each later iteration are kept as `loopHistory` in the persisted record — never
     re-injected in full. Invariant: a met verdict advances the loop exactly once, and an armed
     objective is never re-armed verbatim — the arm is persisted to storage before it is announced
-    (note, toast, arming steer), and a loop step whose iteration already advanced drops itself instead
-    of re-firing the arm.
+    (note, toast, arming steer), the achieved history and the armed iteration land in a single durable
+    write (recovering either the pre-arm or the armed state, never a half-advanced one), a loop step
+    whose iteration already advanced drops itself instead of re-firing the arm, a next-goal reply that
+    normalizes to an already-completed condition pauses the loop rather than re-arming it, a stale
+    loop step drops before the arming steer is dispatched, and a completion event delivered after a
+    plugin-dispatched steer or a failed turn is ignored until the next execution starts.
 13. Loop guards (all mandatory): `maxLoops` (default 5, env `OPENCODE_GOAL_MAX_LOOPS`; counts completed
     iterations) ends the loop cleanly as *achieved-complete*; the per-iteration turn cap reuses
     `maxTurns` (reset per iteration); evaluator failures exhaust `maxRetries` and pause as today; a hard
