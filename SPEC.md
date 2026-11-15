@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=351 -->
+<!-- spec-check files=35 tests=352 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1078,6 +1078,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `/goal` returns can lose the just-set record even though `set()` is async and `commit()` returns a promise. Same pattern in
   `onUserPrompt`, `evaluationFailed`, `handleFailure` (intentional fire-and-forget there, results superseded by the next commit) — but the
   set path is the one place a lost write silently un-sets the goal. Proposed fix: `await this.commit(record)` in `set()`.
+  Resolution: Workstream AI — set() awaits the initial commit; pin test added.
 - **A-9 (medium) — `src/runtime/store.ts:63-66`, `src/runtime/controller.ts:1058-1066` — `finish()` re-saves the record via
   `store.save` directly, bypassing `commit()`'s no-op cache.** The final spend snapshot is written with the pre-`final` serialized string
   still in `lastCommit`; correctness survives (the next identical `commit()` re-saves), but the cache invariant "lastCommit mirrors the
@@ -1278,3 +1279,20 @@ letters and numbers kept) into one space: `value.toLowerCase().replace(/[^\p{L}\
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (351 tests, spec-check ok); coordinator submit.
+
+## Workstream AI — set() awaits the initial record write (A-8)
+
+`set()` kicked off `commit(record)` without awaiting it; a crash right after `/goal` returns could lose the
+just-set record even though the store queue and `commit()` are promise-based. The set path is the one place a
+lost write silently un-sets the goal, so it now awaits the initial commit. (`onUserPrompt`, `evaluationFailed`,
+`handleFailure` keep their fire-and-forget commits — superseded by the next commit by design.) `store.save`
+never rejects (write failures resolve `false` and clear the no-op marker for retry), so the await cannot wedge
+`set()`.
+
+130. Pin test (`test/loop.test.ts`, 1 new): a storage write gated on a manual gate blocks `set()`'s return and
+     the directive prompt; releasing the gate lets both proceed. Verified to fail on the pre-fix tree and pass
+     with it. Test count 351 → 352.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (352 tests, spec-check ok); coordinator submit.
