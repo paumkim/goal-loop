@@ -605,6 +605,17 @@
       "submittedAt": "2026-11-15T20:48:32Z",
       "mergedAt": "2026-11-15T20:48:38Z",
       "mergedInto": "dev"
+    },
+    "a21-backoff-helper": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,SPEC.md",
+      "branch": "wt/a21-backoff-helper",
+      "worktree": "worktrees/wt-a21-backoff-helper",
+      "status": "done",
+      "createdAt": "2026-11-15T20:49:17Z",
+      "submittedAt": "2026-11-15T20:50:10Z",
+      "mergedAt": "2026-11-15T20:50:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
