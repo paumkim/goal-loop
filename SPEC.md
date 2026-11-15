@@ -15,8 +15,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
    `/goal clear` (aliases `stop`, `off`, `reset`, `none`, `cancel`) ends it. Any other text is the condition
    (`src/core/parse.ts`, `src/core/types.ts` `CLEAR_ALIASES`).
 2. After every turn an evaluator answers `met` / `not_met` / `impossible`. `not_met` starts the next turn
-   with a synthetic steer prompt; `met` / `impossible` end the goal. The turn cap (default 200), the stall
-   guard (default 3 turns without tool use), and fatal errors can also end or pause the goal
+   with a synthetic steer prompt; `met` / `impossible` end the goal. The turn cap (default 0 = off) and the
+   stall guard (default 0 = off; turns without tool use) are opt-in plain-goal stops; an armed `/goal-loop`
+   never pauses at either — it emits a one-time notice and keeps running. Fatal errors can also end the goal
    (`src/runtime/controller.ts`).
 3. Finished work must be committed before the goal counts as met, inside a git repository, on branch `dev`
    by default; coordinator repositories use the `wt/<slug>` + submit flow. Outside a git repository the rule
@@ -377,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=336 -->
+<!-- spec-check files=35 tests=339 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -746,7 +747,8 @@ bounded-backoff retry; `pause()` survives only for the interrupt and the explici
     opt-in caps only: `maxTurns` (default changed 200 → 0) and `stallTurns` (default changed 3 → 0, min-clamp
     1 → 0; the stall guard now requires `config.stallTurns > 0`); the turn-cap freeze-on-resume rule still
     applies for explicit caps; (4) `/goal clear` or a replacement goal (terminal `cleared`). Nothing else
-    pauses or ends a live goal automatically.
+    pauses or ends a live goal automatically. Armed `/goal-loop` runs are exempt from the turn-cap and
+    stall-guard stops — one notice each, the loop keeps running (see Workstream Z).
 93. Failure handling: `handleFailure` — `fatal` → `finish failed` (unchanged); `pause`-class failures
     (429 rate/usage-limit, hook, unknown) → fixed `PAUSE_RETRY_MS` (15 min) retry forever; everything else
     (`transient`) → `RETRY_BASE_MS × 4^(n-1)` capped at `RETRY_MAX_MS` (5m), unlimited retries. The
@@ -924,3 +926,34 @@ Verification: `test/loop.test.ts` (arm that just landed makes no fresh request; 
 re-request; two landings within 2 minutes queue one re-anchor and a third after 2 minutes queues a second;
 restore with an unlanded pending request makes no request; restore right after a landing makes no request);
 `bun run check` green (336 tests); coordinator submit.
+
+## Workstream Z — an armed loop never pauses at the turn cap or stall guard
+
+Interpretation of the armed condition's pause gap: Workstream U removed every automatic pause except the
+explicit opt-in caps (`maxTurns` / `stallTurns`) — but an armed `/goal-loop` runs past those too, since the
+"token budget from the api provider" is the only accepted stop. The explicit caps keep their plain-goal
+semantics; an armed loop now gets a one-time notice and keeps running.
+
+109. One-shot notice flags on the volatile `Runtime` state (`src/runtime/controller.ts`, additive,
+    never persisted, anti-stacking): `runtime.capNotified` and `runtime.stallNotified`. Each fires at most
+    once per session per kind, never re-fired within the session.
+110. Armed-loop fall-through: in `evaluate()`, the turn-cap branch now pauses only when `!record.loopEnabled`;
+    when a loop is armed and the cap is passed and `runtime.capNotified` is unset, it sets the flag and emits
+    a single `loop`-kind warning notice ("Turn cap passed — loop keeps running") and falls through to the
+    existing commit + `continueWith(...)` path. Same shape for the stall guard ("No progress — loop keeps
+    running"). Non-loop goals pause exactly as before (byte-compatible); `loopNotProgress` untouched.
+111. `onUserPrompt()` cap-freeze restricted to plain goals: the "message does not extend the cap" freeze now
+    applies only when `!record.loopEnabled`; an armed `/goal-loop` resumes on a message even past the cap.
+    `pause()` itself, the interrupt path, the TUI/dialog pause rendering and the `atCap` wording are unchanged.
+112. Tests (`test/loop.test.ts`): the `a paused loop is not re-anchored` test now pauses via a manual user
+    interrupt instead of the cap; three new tests — an armed loop never pauses at the turn cap (one "Turn cap"
+    notice, stays active, keeps arming), never pauses at the stall guard (one "No progress" notice, stays
+    active), and a message resumes an armed loop even past the cap. Plain-goal cap/stall tests in
+    `test/controller.test.ts` are unchanged and green.
+113. Stale acceptance-criteria intro corrected: the turn cap and stall guard are documented as opt-in
+    (default 0 = off) plain-goal stops; an armed `/goal-loop` never pauses at either.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `AGENTS.md`, `docs/`.
+
+Verification: `test/loop.test.ts` (the three new tests; the rewritten paused-loop test), `bun test`
+(339 tests), `bun run check` green; coordinator submit.

@@ -30,7 +30,7 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 - **Cold-start:** on `setup()` in a git repo, `ensureCoordinatorLayout()` creates `.term/coordinator/{config,state}.json` + `worktrees/` if missing (never overwrites) and the commit policy becomes coordinator mode. Detection needs `.term/coordinator/config.json` + `state.json`, or the coordinator bin + one json.
 - **Commit rule:** coordinator repos → agent works on `wt/<slug>` and `submit`s; `merge-next` merges into `dev` and gates on `bun run check` **of the merged result** (trial merge on a scratch branch; `dev` is untouched on failure). Outside a git repo the rule is off. `resolveCommitPolicy` takes an optional absolute plugin coordinator bin — never emit a repo-relative bin path.
 - **Vague goals** (`isFuzzyCondition` in `prompts.ts`): first turn writes `SPEC.md` (acceptance + verification incl. screenshot for visual requests), then builds, verifies, commits. Precise conditions skip this.
-- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work, 3-turn stall pause, 200-turn cap (pauses and *stays* paused until `/goal clear` or a new goal; a message alone will not extend the cap).
+- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work; the turn cap and stall guard are opt-in (default 0 = off) and apply to plain goals only — an armed /goal-loop never pauses at either (one notice each); a fatal provider error fails the goal; /goal clear stops it.
 
 ## Coordinator (`packages/coordinator/bin/coordinator`)
 
@@ -41,7 +41,7 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 - This repo's own `opencode.json` forces `coordinator: true`. Work here the same way: claim, worktree, submit.
 
 - **SPEC honesty gate.** `bun run check` runs `scripts/spec-check.ts` (`check:spec`): it reads the `<!-- spec-check files=N tests=N -->` marker in SPEC.md and fails when the `npm pack --dry-run --json` file count or the `bun test` pass count trails it. Update the marker in the same commit that ships shipped-file or test changes. It is read-only and never enforces sizes, only counts.
-- **Loop re-arm hygiene.** An armed `/goal-loop` iteration is steered to re-read the repository (`git log --oneline -5`, `git status --short`, `git branch --show-current`, plus `coordinator status --json` / `git worktree list` in coordinator repos) and the current check output before touching anything; the summary is a hint, the tree is truth. Zero-progress iterations are counted by the harness (`onToolCalled` events → `iterationToolCalls`), never by the model's self-report; two consecutive zero-tool iterations pause the loop. A model claiming heavy work with zero harness tool calls still counts as zero.
+- **Loop re-arm hygiene.** An armed `/goal-loop` iteration is steered to re-read the repository (`git log --oneline -5`, `git status --short`, `git branch --show-current`, plus `coordinator status --json` / `git worktree list` in coordinator repos) and the current check output before touching anything; the summary is a hint, the tree is truth. Zero-progress iterations are counted by the harness (`onToolCalled` events → `iterationToolCalls`), never by the model's self-report; two consecutive zero-tool iterations are recorded (loopNotProgress) but never pause the loop. A model claiming heavy work with zero harness tool calls still counts as zero.
 
 ## Config
 
