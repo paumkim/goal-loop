@@ -5,6 +5,7 @@
  * (scripts/ is not in package.json `files`).
  *
  *   bun --preload @opentui/solid/preload scripts/render-history.tsx [width] [height] [--empty]
+ * Width defaults to 112 (the dialog's realistic inner width); 96 clips the fullest rail row.
  *
  * Modes: default prints all three frames (looped goal, non-looped goal with verdicts, fresh
  * non-looped goal); --empty prints the looped frame with an empty history.
@@ -15,7 +16,7 @@ import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
-const width = Number(process.argv[2] ?? 96)
+const width = Number(process.argv[2] ?? 112)
 const height = Number(process.argv[3] ?? 34)
 const empty = process.argv.includes("--empty")
 

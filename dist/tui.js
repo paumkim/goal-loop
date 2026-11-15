@@ -242,6 +242,12 @@ function turnsSinceVerdict(turns, verdictTurn) {
     return 0;
   return Math.max(0, Math.floor(turns) - Math.floor(verdictTurn));
 }
+function durationShares(durations) {
+  const total = durations.reduce((sum, span) => sum + Math.max(0, Number.isFinite(span) ? span : 0), 0);
+  if (total <= 0)
+    return durations.map(() => 0);
+  return durations.map((span) => Math.round(Math.max(0, Number.isFinite(span) ? span : 0) / total * 100));
+}
 
 // src/tui-history.tsx
 var SUMMARY_MAX = 400;
@@ -262,6 +268,8 @@ var LoopSection = (props) => {
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1);
   const bar = () => renderBar(done(), max());
   const durations = () => iterationDurations(history(), props.goal.setAt);
+  const shares = () => durationShares(durations());
+  const shareSuffix = (index) => shares()[index] === undefined ? "" : ` \xB7 ${shares()[index]}% of wall`;
   const pace = () => paceEstimate(durations(), max());
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt);
   const mixSuffix = (index) => {
@@ -389,7 +397,7 @@ var LoopSection = (props) => {
         _$setProp(_el$21, "wrapMode", "none");
         _$setProp(_el$21, "flexShrink", 0);
         _$setProp(_el$23, "wrapMode", "none");
-        _$insert(_el$23, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}`);
+        _$insert(_el$23, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`);
         _$insert(_el$19, _$createComponent(Show, {
           get when() {
             return entry.summary.trim().length > 0;
@@ -907,6 +915,14 @@ var tui_default = Plugin.define({
       setScrollRef(undefined);
       refresh(sessionID).catch(() => {});
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
+      const loopPosition = () => {
+        const g = entries()[sessionID]?.goal;
+        if (!g?.loopEnabled)
+          return "";
+        const iteration = g.loopIteration ?? 1;
+        const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : "";
+        return ` \xB7 v${iteration}${cap}`;
+      };
       context.ui.dialog.show(() => _$createComponent3(ClampedColumn, {
         get children() {
           return [(() => {
@@ -918,7 +934,10 @@ var tui_default = Plugin.define({
             _$setProp3(_el$2, "gap", 2);
             _$insertNode3(_el$3, _el$4);
             _$insert3(_el$3, GOAL_GLYPH, _el$4);
-            _$insert3(_el$3, () => looped() ? " \xB7 loop" : "", null);
+            _$insert3(_el$3, (() => {
+              var _c$ = _$memo3(() => !!looped());
+              return () => _c$() ? ` \xB7 loop${loopPosition()}` : "";
+            })(), null);
             _$insertNode3(_el$5, _$createTextNode3(`esc`));
             _$setProp3(_el$5, "flexShrink", 0);
             _$effect3((_p$) => {

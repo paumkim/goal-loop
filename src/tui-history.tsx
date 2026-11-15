@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, barCaption, currentIterationVerdict, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
@@ -53,6 +53,8 @@ export const LoopSection = (props: {
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
   const bar = () => renderBar(done(), max())
   const durations = () => iterationDurations(history(), props.goal.setAt)
+  const shares = () => durationShares(durations())
+  const shareSuffix = (index: number) => (shares()[index] === undefined ? "" : ` · ${shares()[index]}% of wall`)
   const pace = () => paceEstimate(durations(), max())
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
   const mixSuffix = (index: number) => {
@@ -142,7 +144,7 @@ export const LoopSection = (props: {
                 ✓
               </text>
               <text wrapMode="none" fg={theme().text.base}>
-                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}`}
+                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`}
               </text>
             </box>
             <Show when={entry.summary.trim().length > 0}>

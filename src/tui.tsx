@@ -87,13 +87,20 @@ export default Plugin.define({
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       void refresh(sessionID).catch(() => {})
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
+      const loopPosition = () => {
+        const g = entries()[sessionID]?.goal
+        if (!g?.loopEnabled) return ""
+        const iteration = g.loopIteration ?? 1
+        const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""
+        return ` · v${iteration}${cap}`
+      }
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
           <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
-                {GOAL_GLYPH} /goal{looped() ? " · loop" : ""}
+                {GOAL_GLYPH} /goal{looped() ? ` · loop${loopPosition()}` : ""}
               </text>
               <text fg={context.theme.text.muted} flexShrink={0}>
                 esc

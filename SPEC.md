@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=298 -->
+<!-- spec-check files=35 tests=303 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -653,3 +653,27 @@ the current iteration.
 Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames show the HH:MM suffix and the last-verdict segment on all three loop frames), `bun run check`
 green, coordinator submit + merge-next.
+
+## Workstream R — iteration wall-time share, loop position in the dialog header
+
+Interpretation of this iteration: the rail shows each iteration's duration but not where the wall
+clock actually went, and the dialog header says `◎ /goal · loop` without showing which iteration is
+live. Two glance-level additions from snapshot data; no RPC/schema/storage changes.
+
+84. Each rail row appends a faint wall-time share after the ended suffix: `· NN% of wall`, where
+    NN = round(iterationDuration / total completed iteration durations × 100). Sums to ~100 across
+    rows (rounding drift is accepted); an iteration whose duration is 0 shares 0. Rendered only for
+    loops with at least one completed iteration (shares are of completed wall time; the running
+    iteration is excluded).
+85. The dialog header shows the loop position when a loop is armed: `◎ /goal · loop · v<N>/<M>`
+    (or `v<N>` when `loopMaxLoops` is unknown), replacing the bare `◎ /goal · loop`. Non-looped goals
+    keep `◎ /goal`. Purely cosmetic; host chrome unchanged (Esc handling, sizing, header convention).
+86. New pure helper `durationShares(durations): number[]` in `src/core/history.ts`, unit-tested
+    (even/uneven splits, zero-sum input yields all zeros, single iteration yields 100).
+87. `scripts/render-history.tsx` frames (looped, paused, complete) show `· NN% of wall` on rail rows;
+    the frame width defaults to 112 (the dialog's realistic inner width; 96 clips the fullest rail
+    row). The header position is presentational and verified by tsc + the load check (the dialog opens
+    with the same chrome).
+
+Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames show the wall-share suffix), `bun run check` green, coordinator submit + merge-next.
