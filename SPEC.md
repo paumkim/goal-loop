@@ -1518,8 +1518,13 @@ exactly like `isFuzzyCondition`.
      `@opencode/plugin`, TUI entry `src/tui.tsx` → precompiled `dist/tui.js` imports `Plugin` from
      `@opencode/plugin/tui`; mount the local checkout in `~/.config/opencode/opencode.jsonc` under
      `"plugins": [...]` (v2 server config key; TUI plugins via `~/.config/opencode/tui.jsonc` `"plugin": [...]`);
-     restart the TUI (no hot reload of unbuilt code); test with the real binary in a throwaway `--config` dir in
-     tmux/a PTY + `tmux capture-pane -p`, logs at `~/.local/share/opencode/log/opencode.log`; a failure ladder
+     restart the TUI (no hot reload of unbuilt code); test with the real binary via a throwaway
+     `XDG_CONFIG_HOME=<scratch>` (config at `<scratch>/opencode/opencode.jsonc`) and `--standalone`
+     (default attaches to the background service, which keeps service-start config and ignores env
+     overrides; there is no `--config` flag) in tmux/a PTY + `tmux capture-pane -p`; verify the mount
+     via `/plugins` in-session (empty `"plugins": []` → "No items available", a local checkout → listed
+     as `local` under TUI/Server); server plugins in `<config>/plugins/*.ts` auto-load too; logs at
+     `~/.local/share/opencode/log/opencode.log` (`run=<id>` groups each process); a failure ladder
      (binary newer → string-extract and diff; silent slot → grep the
      binary, check the plugin mounted, check the render returned JSX; negative offset → check ancestors'
      overflow/position first); and the two honest limits: no stable documented headless-drive tool for the v2
@@ -1543,7 +1548,14 @@ exactly like `isFuzzyCondition`.
      the same commit.
 
 Verification: `bun run check` green in the worktree (371 tests / 38 files, spec-check ok, docs freshness ok
-after the stamp refresh), coordinator submit + merge-next.
+after the stamp refresh), coordinator submit + merge-next. Iteration 3 (live TUI smoke on installed v2.3.0):
+scratch `XDG_CONFIG_HOME` + `--standalone` boots the TUI with the throwaway config; `/plugins` renders "No
+items available" when `"plugins": []` (discriminator) and lists the locally mounted opencode-goal plugin as
+`local` under both TUI (`opencode-goal.tui`) and Server (`opencode-goal`); the standalone log confirms only
+the goal plugin loaded (`run=<id>` groups; no `<config>/plugins/*.ts` entries from the scratch tree). The
+guide's former "throwaway `--config` dir" claim was falsified (no `--config` flag in v2.3.0; default attaches
+to the background service, which keeps service-start config and ignores env overrides) and was rewritten to
+the verified XDG_CONFIG_HOME + `--standalone` recipe in this commit.
 
 ## Workstream AU — the RPC/TUI boundary has zero trust-casts (iteration 2 condition)
 
