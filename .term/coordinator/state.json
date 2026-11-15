@@ -693,6 +693,17 @@
       "submittedAt": "2026-11-15T21:09:14Z",
       "mergedAt": "2026-11-15T21:18:39Z",
       "mergedInto": "dev"
+    },
+    "spec-audit-wave-complete": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-audit-wave-complete",
+      "worktree": "worktrees/wt-spec-audit-wave-complete",
+      "status": "done",
+      "createdAt": "2026-11-15T21:20:34Z",
+      "submittedAt": "2026-11-15T21:20:49Z",
+      "mergedAt": "2026-11-15T21:20:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
