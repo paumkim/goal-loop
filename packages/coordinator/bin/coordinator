@@ -385,8 +385,17 @@ do_merge_next() {
   # record lock owner in state (atomic)
   state_jq --arg s "$slug" '.mergeLock = $s'
 
-  # drop any stale scratch branches from interrupted merges (best effort)
-  git -C "$MAIN_ROOT" branch --list 'merge-check-*' -D >/dev/null 2>&1 || true
+  # Prune scratch branches from interrupted merges only once they are definitively stale (last commit
+  # older than the 60-minute stale-lock window). A fresher scratch may hold a verified-green merged
+  # result whose merge was interrupted; deleting it would discard that state, so keep it for recovery.
+  local _scratch _ts_now _ts_branch
+  _ts_now=$(date +%s)
+  for _scratch in $(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list 'merge-check-*'); do
+    _ts_branch=$(git -C "$MAIN_ROOT" log -1 --format=%ct "$_scratch" 2>/dev/null || printf '0')
+    if [ $((_ts_now - _ts_branch)) -gt 3600 ]; then
+      git -C "$MAIN_ROOT" branch -D "$_scratch" >/dev/null 2>&1 || true
+    fi
+  done
 
   # ensure on dev branch in main worktree
   local cur_main
@@ -451,13 +460,16 @@ do_merge_next() {
   fi
   # merged result is green: move dev onto it
   if ! git -C "$MAIN_ROOT" checkout "$DEV_BRANCH" >/dev/null 2>&1; then
-    git -C "$MAIN_ROOT" checkout --detach >/dev/null 2>&1 || true
-    printf 'error: cannot checkout %s after the merged result passed\n' "$DEV_BRANCH" >&2
+    # Do not detach HEAD or delete the scratch branch: it holds the verified-green merged result.
+    # Stay on it and tell the operator how to finish the merge by hand.
+    printf 'error: cannot checkout %s after the merged result passed; staying on %s\n' "$DEV_BRANCH" "$tmp_branch" >&2
+    printf 'recovery: discard the uncommitted changes blocking the checkout, then run: git -C %s checkout %s && git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$DEV_BRANCH" "$MAIN_ROOT" "$tmp_branch" >&2
     release_merge_lock
     exit 1
   fi
   if ! git -C "$MAIN_ROOT" merge --ff-only "$tmp_branch" >/dev/null 2>&1; then
-    printf 'error: cannot fast-forward %s onto the verified merge\n' "$DEV_BRANCH" >&2
+    printf 'error: cannot fast-forward %s onto the verified merge; merged result kept on %s\n' "$DEV_BRANCH" "$tmp_branch" >&2
+    printf 'recovery: git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$tmp_branch" >&2
     release_merge_lock
     exit 1
   fi

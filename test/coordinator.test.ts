@@ -101,6 +101,42 @@ describe("coordinator merge-next", () => {
     expect(fileOnDev("FILE").status).not.toBe(0)
   })
 
+  test("a post-green checkout failure keeps HEAD on the scratch branch and tells the operator how to finish", () => {
+    // The merged result's `check` dirties a file the wt branch adds, so `git checkout dev` must refuse.
+    setup("echo dirty >> FILE")
+    claimCommitSubmit("stuck", { FILE: "from-wt\n" }, "2026-11-02T10:00:00+00:00")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("cannot checkout dev")
+    expect(result.stderr).toContain("recovery:")
+    expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
+    // HEAD must not be detached; it stays on the scratch branch holding the verified-green merge.
+    const head = git(dir, ["branch", "--show-current"]).trim()
+    expect(head).toMatch(/^merge-check-stuck-/)
+    expect(git(dir, ["branch", "--list", "merge-check-*"]).trim()).toMatch(/^\*?\s*merge-check-stuck-/)
+    expect(lease("stuck").status).toBe("submitted")
+  })
+
+  test("the merge-check prune keeps fresh scratch branches and drops stale ones", () => {
+    setup("true")
+    // Stale scratch: tip commit is the 2026-11-01 initial commit, far older than 60 minutes.
+    git(dir, ["branch", "merge-check-stale-1", "dev"])
+    // Fresh scratch: tip commit dated now.
+    git(dir, ["checkout", "-q", "-b", "merge-check-fresh-1"])
+    writeFileSync(join(dir, "fresh.txt"), "x\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "fresh scratch"])
+    git(dir, ["checkout", "-q", "dev"])
+
+    claimCommitSubmit("green", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    const remaining = git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()
+    expect(remaining).toContain("merge-check-fresh-1")
+    expect(remaining).not.toContain("merge-check-stale-1")
+  })
+
   test("a failed gate run leaves no scratch branches behind", () => {
     setup("test -f FIXED")
     claimCommitSubmit("no-fix-2", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
