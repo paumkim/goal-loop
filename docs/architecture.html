@@ -15,7 +15,7 @@
 <p><code>set → active → evaluate → continue / met / impossible; paused / failed / cleared</code> (<code>src/runtime/controller.ts:76</code>).</p>
 <div class="tablewrap"><table><thead><tr><th>State</th><th>Meaning</th><th>Source</th></tr></thead><tbody>
 <tr><td><span class="chip a">active</span></td><td>Goal live, turns run and evaluate</td><td><code>src/core/types.ts:2</code></td></tr>
-<tr><td><span class="chip w">paused</span></td><td>Paused; a user message (or a resumed turn) clears it. Stall, turn cap, retry exhaustion, interrupt or a rate limit pause it</td><td><code>src/runtime/controller.ts:257</code></td></tr>
+<tr><td><span class="chip w">paused</span></td><td>Paused; a user message resumes it. Interrupt (user) or an explicit maxTurns cap pauses it</td><td><code>src/runtime/controller.ts</code></td></tr>
 <tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:446</code></td></tr>
 <tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:451</code></td></tr>
 <tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:207</code></td></tr>

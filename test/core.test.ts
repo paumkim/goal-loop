@@ -149,8 +149,16 @@ describe("config", () => {
     const config = resolveConfig({ maxTurns: 10, stallTurns: -4 }, { OPENCODE_GOAL_CHECKIN_MINUTES: "0", OPENCODE_GOAL_MODEL: "x/y" })
     expect(config.checkinMinutes).toBe(0)
     expect(config.maxTurns).toBe(10)
-    expect(config.stallTurns).toBe(1)
+    expect(config.stallTurns).toBe(0)
     expect(config.evaluator.model).toEqual({ providerID: "x", id: "y" })
+  })
+  test("defaults: maxTurns 0, stallTurns 0, compactOnLoopIteration true", () => {
+    const config = resolveConfig({})
+    expect(config.maxTurns).toBe(0)
+    expect(config.stallTurns).toBe(0)
+    expect(config.compactOnLoopIteration).toBe(true)
+    expect(resolveConfig({ compactOnLoopIteration: false }).compactOnLoopIteration).toBe(false)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION: "0" }).compactOnLoopIteration).toBe(false)
   })
   test("commit options", () => {
     expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev", coordinator: "auto" })

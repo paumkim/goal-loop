@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=303 -->
+<!-- spec-check files=35 tests=309 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -695,3 +695,90 @@ the host's programmatic path.
     TUI (TUI mouse reporting routes through the host to the opentui renderable tree).
 
 Verification: `bun run check` green, coordinator submit + merge-next.
+
+## Workstream T — self-governing context management (smart compactor)
+
+Interpretation of the directive "context managements self govern system. there are time the /goal-loop is
+paused. i don't like that no no pausing." for the context half: a loop that keeps running must also keep a
+workable context without the user ever intervening. The plugin already had a threshold compactor; this
+workstream adds boundary compaction so every loop iteration arms from a fresh context, and on restore of a
+live goal after a restart.
+
+90. `AutoCompactor.compactAtBoundary(sessionID)` compacts at a loop-iteration boundary regardless of the
+    `compactAtTokens` threshold, so the next version arms with a fresh context. Same guards as
+    `maybeCompact` (in-flight dedupe, 120s request cooldown, stale-inflight sweep extracted as a shared
+    `sweepStale()`); contexts with an estimated size below `BOUNDARY_MIN_TOKENS` (10k tokens, estimate =
+    last assistant `input + cache.read + cache.write`) are skipped with a log line; an undefined estimate
+    (no assistant token usage) compacts with a "context size unknown" notice. The method is wired into the
+    controller via the optional `ControllerDeps.compactAtBoundary` port (omitted by tests/probes) and called
+    (a) in `loopAdvance` after the arm commit/notify/note and before the armed `continueWith` synthetic
+    steer — compaction is queued BEFORE the armed iteration runs; awaiting only waits for the host's
+    acceptance of the `session.compact` request, not the summary; and (b) in `restore()` for every adopted
+    ACTIVE record, so a plugin restart also resumes from a fresh context. `opencode` itself auto-compacts
+    near the model window by default; the per-boundary request is the window-independent complement and is
+    accepted even when `compaction.auto` is false (requests run at the next safe point).
+91. New option `compactOnLoopIteration` (default `true`, env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`;
+    `bool(options.compactOnLoopIteration, ...)`) gates the boundary path. `compactAtTokens` stays opt-in
+    with no universal default (window sizes vary; the estimate is window-independent but the right absolute
+    threshold is not universal). opencode's window-relative buffer remains the backstop for non-loop turns.
+    Interpretation note: "always run with a clean fresh context" means compaction at every loop-iteration
+    arm plus on restore of live goals; tiny contexts and non-loop turns are NOT force-compacted.
+
+Files touched: `src/runtime/compactor.ts`, `src/runtime/controller.ts`, `src/index.ts`, `src/core/config.ts`.
+
+Verification: `test/compactor.test.ts` gains a `describe("AutoCompactor.compactAtBoundary")` suite: gate off
+→ context unread; small context → skipped, no notice; ≥10k → compact + "Auto-compact requested (loop
+boundary)" notice; undefined estimate → compacts with the "context size unknown" message; two immediate
+calls → one compaction (in-flight/cooldown honored). Existing maybeCompact tests unchanged and green.
+`bun run check` green, coordinator submit.
+
+## Workstream U — never-pause loop
+
+Interpretation of the directive for the pause half: once the user activates a goal or loop, it must keep
+running unless the API provider ends the token budget (a terminal error the user must fix) — or the user
+explicitly opts into a cap, or explicitly clears. Every automatic pause path was removed or converted to a
+bounded-backoff retry; `pause()` survives only for the interrupt and the explicit opt-in caps.
+
+92. Exactly what still stops a goal/loop: (1) Esc (`onExecutionInterrupted` reason `user`) → `paused`
+    (unchanged, plus the `inactivity` class routes through the failure path); (2) fatal provider errors
+    (`classifyFailure` kind `fatal`: 401/402/403/404/413, insufficient quota/credit/billing, auth) →
+    terminal `failed` — this is the "token budget from the api provider end" the user accepts; (3) explicit
+    opt-in caps only: `maxTurns` (default changed 200 → 0) and `stallTurns` (default changed 3 → 0, min-clamp
+    1 → 0; the stall guard now requires `config.stallTurns > 0`); the turn-cap freeze-on-resume rule still
+    applies for explicit caps; (4) `/goal clear` or a replacement goal (terminal `cleared`). Nothing else
+    pauses or ends a live goal automatically.
+93. Failure handling: `handleFailure` — `fatal` → `finish failed` (unchanged); `pause`-class failures
+    (429 rate/usage-limit, hook, unknown) → fixed `PAUSE_RETRY_MS` (15 min) retry forever; everything else
+    (`transient`) → `RETRY_BASE_MS × 4^(n-1)` capped at `RETRY_MAX_MS` (5m), unlimited retries. The
+    `checkinMinutes === 0` branch and the `maxRetries` cutoff are gone; the pause-on-retry-exhaustion is
+    gone. `evaluationFailed` likewise retries forever (`REEVALUATE_BASE_MS × 3^(n-1)` cap, no pause).
+    `checkinMinutes: 0` now only disables idle check-in nudges (the `defer()` path; unchanged). `maxRetries`
+    is retained for compatibility and no longer gates anything. Retry notifications keep the "Goal still
+    active" title; the retry description dropped the `/<maxRetries>` suffix.
+94. Loop-advance paths that paused now never do: `notProgress >= 2` pause REMOVED (zero-tool iterations
+    are recorded on `record.loopNotProgress`; the loop keeps arming — the boundary compaction of Workstream
+    T refreshes its context); loop summary failure → the entry records `(summary failed: …)` and the loop
+    advances anyway (summarize stage falls through to the planner with a placeholder when no summarizer
+    exists, or a "(summary failed: …)" fallback string on error); both evaluators missing → `endClean`
+    (terminal `achieved`, "Loop complete: this evaluator cannot summarize or plan the next iteration.");
+    next-goal generator missing → `endClean` ("Loop complete: this evaluator cannot plan the next
+    iteration."); next-goal generator error → whole loop step retried with exponential backoff
+    (`runtime.loopRetries`, `RETRY_BASE_MS × 4^attempt`, cap `RETRY_MAX_MS`), unlimited, idempotent via
+    epoch guard and `record.loopNotProgress` mutation only at arm time; a planner that repeats an
+    already-completed condition → `endClean` ("Loop complete: the planner keeps offering the already-completed
+    condition …; nothing new to plan."), never a re-arm and never a pause. `loopAdvance` resets
+    `runtime.loopRetries = 0` on a successful arm. `continueWith` dispatch failure → the straggler flag is
+    dropped, a "Goal still active" warning notifies, and the dispatch retries every `CONTINUE_RETRY_MS`
+    (60s) forever; any user prompt/clear/dispose calls `invalidate(runtime)` which clears `runtime.timer`,
+    cancelling the pending retry (noted in a comment at the call site).
+95. `restore()` compacts adopted ACTIVE records at the boundary (Workstream T) and logs restores as before.
+    The evaluator-stale guard, epoch guard, verify-gate fail-closed, commit rule, defer/background-work
+    behavior and check-in cadence are all unchanged. The state-machine doc comment reflects the new shape
+    (active → not_met → continue; met/impossible → terminal; user interrupt or explicit cap → paused;
+    fatal provider error → failed).
+
+Verification: `test/controller.test.ts` (transient failures retry with capped backoff forever; 401 fatal ≠
+429 rate-limit — 429 stays active and retries after 15m; `checkinMinutes: 0` disables idle check-ins, not
+retries; evaluator errors retry forever), `test/loop.test.ts` (zero-tool iterations keep the loop alive;
+summary failure advances anyway; planner failure backs off and advances; planner repeat → clean achieved;
+existing durable-arming/straggler/race suites unchanged and green), `bun run check` green, coordinator submit.

@@ -32,6 +32,11 @@ export interface ControllerDeps {
   readonly emitter: EmitterPort
   /** Optional harness-side verifier for `evaluator.verifyCommand`. Required only when the command is configured; a `met` verdict is downgraded to `not_met` without one (fail closed). */
   readonly verifier?: VerifierPort
+  /**
+   * Asks the host to compact the session at a loop-iteration boundary so the next iteration arms with a fresh
+   * context. Optional so tests/probes can omit it; awaiting only waits for the host's acceptance of the request.
+   */
+  readonly compactAtBoundary?: (sessionID: string) => Promise<void>
   readonly clock: Clock
   readonly log: Logger
   readonly newId?: () => string
@@ -55,12 +60,18 @@ interface Runtime {
   timer?: unknown
   deferredSince?: number
   lastCheckinAt?: number
+  /** Backoff counter for retrying a failed loop-planner step. */
+  loopRetries?: number
 }
 
 const HISTORY = 20
 const RETRY_BASE_MS = 15_000
 const RETRY_MAX_MS = 5 * 60_000
 const REEVALUATE_BASE_MS = 10_000
+/** Fixed backoff for rate/usage-limit-class failures; these windows clear on their own. */
+const PAUSE_RETRY_MS = 15 * 60_000
+/** Backoff for a failed synthetic-continue dispatch. */
+const CONTINUE_RETRY_MS = 60_000
 
 export type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" | (string & {})
 
@@ -69,8 +80,9 @@ export type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" 
  *
  *   set -> active --turn ends--> evaluate --not_met--> continue (synthetic turn) --> ...
  *                                         --met/impossible--> terminal
- *   active --interrupt | stall | limit | non-retryable error--> paused --user prompt--> active
- *   active --fatal error--> failed       any --clear--> cleared
+ *   active --interrupt | explicit opt-in cap (maxTurns/stallTurns)--> paused --user prompt--> active
+ *   active --fatal provider error--> failed       any --clear--> cleared
+ *   retryable failures are retried forever with capped backoff; the loop never pauses on its own.
  *
  * Async work is guarded by an epoch per session: whenever the world moves on (a new execution starts, the user
  * prompts, the goal is cleared or replaced), stale evaluations and timers drop their results instead of racing.
@@ -375,6 +387,11 @@ export class GoalController {
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
+    // A restart resumes from a fresh context: compact live goal sessions at the boundary.
+    for (const record of this.goals.values()) {
+      if (record.status !== "active" || !this.deps.compactAtBoundary) continue
+      void this.deps.compactAtBoundary(record.sessionID).catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
+    }
     return this.goals.size
   }
 
@@ -463,7 +480,7 @@ export class GoalController {
       return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns) return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
-    if (stall >= config.stallTurns) return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
+    if (stall >= config.stallTurns && config.stallTurns > 0) return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
     this.commit(record)
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return
@@ -515,7 +532,7 @@ export class GoalController {
    * iteration under the same /goal rules, or ends the loop cleanly. Never runs on not_met/impossible/pause/retry.
    *
    * Loop bookkeeping is on the record: `loopHistory` carries completed iterations, `loopNotProgress` counts
-   * consecutive iterations with zero tool calls (two pause the loop). Every await is epoch-guarded; a superseded
+   * consecutive iterations with zero tool calls (recorded, never a pause). Every await is epoch-guarded; a superseded
    * loop step drops its result without saving.
    */
   private async loopAdvance(
@@ -559,43 +576,43 @@ export class GoalController {
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
     }
 
-    if (!this.deps.evaluator.summarize || !this.deps.evaluator.nextGoal) {
-      const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
+    if (!this.deps.evaluator.summarize && !this.deps.evaluator.nextGoal) {
       log.error("loop step unavailable", { sessionID })
-      history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
-      assignLoopState()
-      await this.pause(record, reason)
-      return
+      history.push(makeEntry("(loop advance unavailable: this evaluator cannot summarize or plan)"))
+      return endClean("Loop complete: this evaluator cannot summarize or plan the next iteration.")
     }
 
-    const summarize = new AbortController()
-    runtime.abort = summarize
     let summary: string
-    try {
-      summary = (
-        await this.deps.evaluator.summarize({
-          sessionID,
-          objective,
-          condition: record.condition,
-          reason: result.reason,
-          turn,
-          elapsedMs: now - record.startedAt,
-          toolCalls: iterationTools,
-          history,
-          maxSummaryTokens: config.maxLoopSummaryTokens,
-          signal: summarize.signal,
-        })
-      ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
-    } catch (error) {
-      if (runtime.abort === summarize) runtime.abort = undefined
-      if (this.stale(record, runtime, epoch)) return
-      log.error("loop summary failed", { sessionID, error: errorMessage(error) })
-      history.push(makeEntry(`(summary failed: ${truncate(errorMessage(error), 80)})`))
-      assignLoopState()
-      await this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
-      return
-    } finally {
-      if (runtime.abort === summarize) runtime.abort = undefined
+    if (this.deps.evaluator.summarize) {
+      const summarize = new AbortController()
+      runtime.abort = summarize
+      try {
+        summary = (
+          await this.deps.evaluator.summarize({
+            sessionID,
+            objective,
+            condition: record.condition,
+            reason: result.reason,
+            turn,
+            elapsedMs: now - record.startedAt,
+            toolCalls: iterationTools,
+            history,
+            maxSummaryTokens: config.maxLoopSummaryTokens,
+            signal: summarize.signal,
+          })
+        ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
+      } catch (error) {
+        if (runtime.abort === summarize) runtime.abort = undefined
+        if (this.stale(record, runtime, epoch)) return
+        log.error("loop summary failed", { sessionID, error: errorMessage(error) })
+        summary = `(summary failed: ${truncate(errorMessage(error), 80)})`
+      } finally {
+        if (runtime.abort === summarize) runtime.abort = undefined
+      }
+    } else {
+      // A planner without a summarizer still works: carry a placeholder instead of pausing.
+      log.warn("loop summary unavailable: this evaluator cannot summarize", { sessionID })
+      summary = "(summary unavailable: this evaluator cannot summarize)"
     }
     if (this.stale(record, runtime, epoch)) return
 
@@ -603,15 +620,14 @@ export class GoalController {
     history.push(entry)
     log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
 
-    if (notProgress >= 2) {
-      assignLoopState()
-      await this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
-      return
-    }
     if (history.length >= maxLoops) {
       return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${history.length} achieved iteration${history.length === 1 ? "" : "s"}.`)
     }
 
+    if (!this.deps.evaluator.nextGoal) {
+      log.error("loop next-goal generation unavailable", { sessionID })
+      return endClean("Loop complete: this evaluator cannot plan the next iteration.")
+    }
     const generate = new AbortController()
     runtime.abort = generate
     let reply: string
@@ -621,8 +637,22 @@ export class GoalController {
       if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
-      assignLoopState()
-      await this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
+      // The summary and history stay local until the arm lands, so a retry recomputes them identically;
+      // record.loopNotProgress is untouched here on purpose.
+      const attempt = runtime.loopRetries ?? 0
+      const delay = Math.min(RETRY_BASE_MS * 4 ** attempt, RETRY_MAX_MS)
+      runtime.loopRetries = attempt + 1
+      this.notify(
+        sessionID,
+        "retry",
+        "warning",
+        "Loop still active",
+        `Could not plan the next iteration (${truncate(errorMessage(error), 160)}); retrying in ${formatDuration(delay)}.`,
+      )
+      this.schedule(runtime, delay, () => {
+        if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
+        void this.loopAdvance(record, runtime, ++runtime.epoch, result, turn).catch((e) => log.error("loop retry failed", { error: errorMessage(e) }))
+      })
       return
     } finally {
       if (runtime.abort === generate) runtime.abort = undefined
@@ -642,7 +672,7 @@ export class GoalController {
     if (!condition) {
       return endClean("Loop complete: the next-goal generator returned nothing usable.")
     }
-    // A planner that repeats an already-completed condition would spin the loop on the same work; pause instead.
+    // A planner that repeats an already-completed condition would spin the loop on the same work; end instead.
     const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
     const completed = new Set([
       normalize(record.condition),
@@ -651,15 +681,11 @@ export class GoalController {
     ])
     if (completed.has(normalize(condition))) {
       log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
-      assignLoopState()
-      await this.pause(
-        record,
-        `The loop planner returned the already-completed condition "${truncate(condition, 80)}"; the loop is paused rather than spun. Send a message to resume, or /goal-loop clear.`,
-      )
-      return
+      return endClean(`Loop complete: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; nothing new to plan.`)
     }
 
     const nextIteration = iteration + 1
+    runtime.loopRetries = 0
     assignLoopState()
     record.condition = condition
     record.loopIteration = nextIteration
@@ -681,6 +707,12 @@ export class GoalController {
     await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
     // The note round-trips through synthetic; the world may have moved on while it landed.
     if (this.stale(record, runtime, epoch)) return
+    // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version
+    // arm with a fresh context. Awaiting only waits for the host's acceptance of the compact request.
+    if (this.deps.compactAtBoundary) {
+      await this.deps.compactAtBoundary(sessionID).catch((e) => log.warn("loop boundary compact failed", { sessionID, error: errorMessage(e) }))
+      if (this.stale(record, runtime, epoch)) return
+    }
     await this.continueWith(record, {
       text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
       description: `goal-loop · arming v${nextIteration}`,
@@ -689,10 +721,8 @@ export class GoalController {
   }
 
   private evaluationFailed(record: GoalRecord, runtime: Runtime, tools: number, error: unknown) {
-    const { config, log } = this.deps
+    const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
-    if (config.checkinMinutes === 0 || record.retries >= config.maxRetries)
-      return this.pause(record, `The evaluator failed: ${truncate(errorMessage(error), 160)}`)
     record.retries++
     const delay = Math.min(REEVALUATE_BASE_MS * 3 ** (record.retries - 1), RETRY_MAX_MS)
     this.commit(record)
@@ -704,24 +734,23 @@ export class GoalController {
   }
 
   private handleFailure(record: GoalRecord, runtime: Runtime, failure: ReturnType<typeof classifyFailure>) {
-    const { config } = this.deps
     if (failure.kind === "fatal") {
       const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
       this.finish(record, "failed", reason)
       this.notify(record.sessionID, "failed", "error", "Goal failed", reason)
       return
     }
-    if (failure.kind === "pause" || config.checkinMinutes === 0) return this.pause(record, `Turn failed: ${failure.label}.`)
-    if (record.retries >= config.maxRetries) return this.pause(record, `Turn failed: ${failure.label} (after ${record.retries} automatic retries).`)
     record.retries++
-    const delay = Math.min(RETRY_BASE_MS * 4 ** (record.retries - 1), RETRY_MAX_MS)
+    // Rate/usage-limit windows clear on their own, so a fixed long backoff beats burning evaluations;
+    // transient errors use capped exponential backoff. Both retry forever.
+    const delay = failure.kind === "pause" ? PAUSE_RETRY_MS : Math.min(RETRY_BASE_MS * 4 ** (record.retries - 1), RETRY_MAX_MS)
     this.commit(record)
     this.notify(record.sessionID, "retry", "warning", "Goal still active", `Turn failed (${failure.label}); retrying in ${formatDuration(delay)}.`)
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
       void this.continueWith(record, {
         text: Prompt.retry({ condition: record.condition, label: failure.label }, this.deps.commit),
-        description: `goal \u00B7 retry ${record.retries}/${config.maxRetries}`,
+        description: `goal \u00B7 retry ${record.retries}`,
         turn: record.turns + 1,
       })
     })
@@ -783,7 +812,17 @@ export class GoalController {
         delivery: "steer",
       })
     } catch (error) {
-      if (this.goals.get(record.sessionID) === record && record.status === "active") this.pause(record, `Could not continue: ${truncate(errorMessage(error), 160)}`)
+      // A synthetic steer that fails to land must not stop the goal: drop the straggler flag and retry the dispatch.
+      // onUserPrompt/clear/isDisposed all call invalidate(runtime), which clears runtime.timer, so a user prompt
+      // cancels the pending retry.
+      runtime.awaitingExecution = false
+      if (this.goals.get(record.sessionID) === record && record.status === "active") {
+        this.notify(record.sessionID, "retry", "warning", "Goal still active", `Could not continue (${truncate(errorMessage(error), 160)}); retrying in ${formatDuration(CONTINUE_RETRY_MS)}.`)
+        this.schedule(runtime, CONTINUE_RETRY_MS, () => {
+          if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
+          void this.continueWith(record, input)
+        })
+      }
     }
   }
 
