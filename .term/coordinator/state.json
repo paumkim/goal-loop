@@ -72,9 +72,20 @@
       "paths": "SPEC.md,dist,.term/coordinator/state.json",
       "branch": "wt/binary-rebuild-cleanup",
       "worktree": "worktrees/wt-binary-rebuild-cleanup",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T05:47:25Z",
-      "submittedAt": "2026-11-15T05:49:32Z"
+      "submittedAt": "2026-11-15T05:49:32Z",
+      "mergedAt": "2026-11-15T05:52:21Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-state-done": {
+      "agent": "opencode",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/coordinator-state-done",
+      "worktree": "worktrees/wt-coordinator-state-done",
+      "status": "submitted",
+      "createdAt": "2026-11-15T05:53:22Z",
+      "submittedAt": "2026-11-15T05:53:34Z"
     }
   },
   "mergeLock": null
