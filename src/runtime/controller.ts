@@ -37,7 +37,7 @@ const REANCHOR_MIN_INTERVAL_MS = COMPACT_COOLDOWN_MS
 // armed loops only; plain goals never request boundary compaction at all.
 const COMPACT_MISS_RETRY = 2
 
-export interface ControllerDeps {
+interface ControllerDeps {
   readonly config: GoalConfig
   readonly directory: string
   /** The commit rule that applies to this session's directory. */
@@ -105,7 +105,7 @@ const PAUSE_RETRY_MS = 15 * 60_000
 /** Backoff for a failed synthetic-continue dispatch. */
 const CONTINUE_RETRY_MS = 60_000
 
-export type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" | (string & {})
+type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" | (string & {})
 
 /**
  * The /goal state machine. Event-driven, one record per session:

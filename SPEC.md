@@ -43,8 +43,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 ## Workstream A — detail dialog acceptance criteria
 
 8. The `/goal` detail dialog keeps the host chrome (`ui.dialog.show`, xlarge, centered, Esc/ctrl+c
-   dismissal owned by the host) and the header convention: bold title left, `esc` right, `DIALOG_INSET=3`
-   side padding, gap 1, bottom pad 1. The body is composed from theme tokens only (`text.base`,
+   dismissal owned by the host) and the header convention: bold title left, `esc` right, the 3-cell
+   side padding (`paddingLeft={3} paddingRight={3}` on the host's `ClampedColumn`, `src/tui.tsx`), gap 1,
+   bottom pad 1. The body is composed from theme tokens only (`text.base`,
    `text.muted`, `text.faint`, `text.feedback.*`); no hardcoded RGBA, no custom borders, no absolute
    positioning (`src/tui.tsx`).
 9. The body renders from the live `GoalSnapshot` (not only the status notice text): status line
@@ -147,7 +148,7 @@ Verified live:
   observed for REPRO (wt/repro-txt-ok), WATCH (wt/watch-txt-ok), Z3 and COUNTER loops.
 - Per-iteration toasts (one info toast per met verdict) read fine live; not noisy at 2-7
   iterations. Kept: one info toast per iteration, one achieved toast at loop end.
-- The detail dialog: host chrome (bold title left, esc right, DIALOG_INSET=3, theme tokens,
+- The detail dialog: host chrome (bold title left, esc right, 3-cell side padding, theme tokens,
   sticky scrollbox off, contentOptions.minHeight=0, clamped column) — verified with content
   taller than the viewport: header and hint pinned, scrollbox scrolls, no clipping.
 
@@ -615,8 +616,8 @@ setup closure, unverifiable headlessly.
 
 77. The `/goal` dialog body is a standalone presentational component `StatusDialogBody`
     (`src/status-dialog.tsx`): the state line, the wrapped condition/evaluator/reason rows, spend, and
-    the history sections, plus a 3-cell internal right gutter (matching the `DIALOG_INSET = 3`
-    convention). `src/tui.tsx` keeps host orchestration only (host chrome, keymap, RPC, prompt-footer,
+    the history sections, plus a 3-cell internal right gutter (`paddingRight={3}` on the body column,
+    `src/status-dialog.tsx`). `src/tui.tsx` keeps host orchestration only (host chrome, keymap, RPC, prompt-footer,
     toasts) and renders it inside the host's `ui.dialog.show` xlarge centered dialog — the Workstream
     A chrome (backdrop, Esc/ctrl+c dismissal, header convention, sizing) is unchanged.
 78. The body scrollbox no longer forces both scrollbars visible. `scrollbarOptions={{ visible: true }}`
@@ -798,7 +799,7 @@ with the armed condition's accepted-vs-completed gap: the plugin requests compac
 actual point, so the plugin must (a) never ask while work is in flight, and (b) observe whether an accepted
 boundary request actually lands, record it, surface it, and re-request when it never lands.
 
-96. Mid-work deferral (additive dep `AutoCompactorDeps.isBusy?: (sessionID) => Promise<boolean>`, wired in
+96. Mid-work deferral (additive dep `CompactorDeps.isBusy?: (sessionID) => Promise<boolean>`, wired in
     `src/index.ts` as `work.subagents + work.shells > 0 || controller.isExecuting(sessionID)` where `isBusy`
     reads `background.busy()` (event-fed descendant-session + shell tracker) OR the controller's in-memory
     executing-turn set via the new public `GoalController.isExecuting()`). BOTH compaction paths consult the
@@ -1669,3 +1670,57 @@ check (byte-identical; the TUI bundle does not include the controller).
 Verification: `bun run check` green in the worktree (388 tests / 19 files, tsc clean, TUI load ok, docs
 freshness ok after the stamp refresh, spec-check ok 39/388 after the marker bump in this commit); coordinator
 submit.
+
+## Workstream AX — dead-surface trim: 33 zero-user exports unexported, stale SPEC claims corrected (iteration 5 condition)
+
+Interpretation of the armed condition: "find exported symbols with zero users and stale SPEC/comment claims,
+remove or correct them (never code to fit stale SPEC), add failing-before tests for any behavior change,
+one coordinator workstream". Phase 3 sweep, first pass.
+
+150. **Method.** Enumerated all 176 `export` declarations across `src/` and cross-checked every name against
+     the whole shipped surface: `src/`, `test/`, `scripts/`, `index.ts`, `rpc.ts`, `tui.ts` (all files an
+     in-repo consumer could import), plus `SPEC.md`/`README.md`/`docs/`/`opencode.json`/`package.json` for
+     prose accuracy. Thirty-three names had zero references outside their defining file (in-file uses only).
+     Every one of them keeps its symbol; only the `export` keyword was removed — a visibility narrowing,
+     not a deletion (nothing was dead inside its own file) and not a behavior change. The boundary
+     composition roots (`isRecord`, `isGoalSnapshot`, …) and every symbol any test imports
+     (`isGoalSnapshot`, `parseGoalSnapshot`, `parseGetGoalOutput`, `parseChangedEvent`, `parseNotice`) stay
+     exported. `GoalRpc` stays exported (the `./rpc` entrypoint contract). The TUI bundle is unchanged
+     (`bun run compile` byte-identical; `tui-load-check` passes).
+151. **Unexported (33).** Types/interfaces used only as parameter/return types inside their own module:
+     `BackgroundDeps` (background.ts), `CompactorDeps`, `BoundaryCompactMiss` (compactor.ts),
+     `ControllerDeps`, `InterruptReason` (controller.ts), `EvaluatorDeps` (evaluator.ts), `BootstrapResult`
+     (bootstrap.ts), `Classified` (errors.ts), `CoordinatorDetection` (git.ts), `VerdictCounts`,
+     `LoopTotals` (history.ts), `GoalCommand` (parse.ts), `DigestOptions` (transcript.ts),
+     `ParsedVerdict` (verdict.ts), `EvaluationFacts`, `LoopPreamble`, `LoopSummaryInput`, `NextGoalInput`
+     (prompts.ts). Module-internal render/prompt helpers with no external importer: `renderMessage`
+     (transcript.ts), `normalizeVerdict` (verdict.ts), `coordinatorFlow`, `historyBlock`, `loopPreamble`
+     (prompts.ts). Wire-boundary enum guards composed only inside `wire.ts` (its own `isGoalSnapshot` and
+     the composite builders use them): `isGoalStatus`, `isVerdict`, `isNoticeKind`, `isNoticeLevel`,
+     `isUsageSnapshot`, `isVerdictEntry`, `isLoopEntry`, `isLoopCompact`. Entrypoint constant with no
+     consumer: `PLUGIN_ID` (index.ts; `Plugin.define` carries its own `id`). TUI presentational component
+     used only inside tui-history.tsx: `VerdictTrail`.
+152. **Stale SPEC claims corrected (code untouched, per "never code to fit stale SPEC").** The SPEC named a
+     phantom constant `DIALOG_INSET = 3` three times (Workstream A header convention, the smoke-test record,
+     the Workstream P body-gutter item). No such symbol ever existed; the real code is
+     `paddingLeft={3} paddingRight={3}` on the host's `ClampedColumn` (`src/tui.tsx`) and `paddingRight={3}`
+     on the body column (`src/status-dialog.tsx`). The three references now name the actual code. The
+     mid-work deferral item (Workstream M, item 96) named `AutoCompactorDeps.isBusy?` — the interface is
+     `CompactorDeps` in `src/runtime/compactor.ts`; corrected. A repository-wide scan of SPEC-quoted
+     symbols (backticked identifiers with `Deps|Config|Snapshot|Compact|Verdict|Loop|Goal|Rpc|Dialog|
+     Wire|Entries` in their name) now reports zero that are absent from the tree; code comments referencing
+     symbols were scanned the same way — none are missing.
+153. **No failing-before test applies.** Part 150 is visibility narrowing (compile-time only, verified by
+     `tsc --noEmit` exiting 0 — nothing outside the 15 touched files named any of the 33 symbols) and Part
+     152 is SPEC-text correction. There is no runtime behavior to pin; adding a test that asserts an
+     interface's non-exportability is not expressible in bun:test. Test count and file count unchanged.
+
+Files touched: 15 sources (`src/core/bootstrap.ts`, `src/core/errors.ts`, `src/core/git.ts`,
+`src/core/history.ts`, `src/core/parse.ts`, `src/core/prompts.ts`, `src/core/transcript.ts`,
+`src/core/verdict.ts`, `src/core/wire.ts`, `src/index.ts`, `src/runtime/background.ts`,
+`src/runtime/compactor.ts`, `src/runtime/controller.ts`, `src/runtime/evaluator.ts`,
+`src/tui-history.tsx`) and `SPEC.md`. The marker stays `files=39 tests=388`. `dist/tui.js` rebuilt by
+the check and byte-identical.
+
+Verification: `bun run check` green in the worktree (388 tests / 19 files, tsc clean, TUI load ok, docs
+freshness ok, spec-check ok 39/388); coordinator submit.

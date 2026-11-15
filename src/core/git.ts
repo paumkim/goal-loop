@@ -136,7 +136,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
   return { required: true, branch: request.branch, mode: "direct", reason: "repository found" }
 }
 
-export interface CoordinatorDetection {
+interface CoordinatorDetection {
   /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
   readonly worktreeDir: string

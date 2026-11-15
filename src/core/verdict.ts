@@ -1,6 +1,6 @@
 import type { Verdict } from "./types.ts"
 
-export interface ParsedVerdict {
+interface ParsedVerdict {
   readonly verdict: Verdict
   readonly reason: string
 }
@@ -15,7 +15,7 @@ const SYNONYMS: ReadonlyArray<readonly [RegExp, Verdict]> = [
   [/^(met|achieved|done|complete|completed|satisfied|success|yes|true|pass|passed)$/i, "met"],
 ]
 
-export function normalizeVerdict(value: unknown): Verdict | undefined {
+function normalizeVerdict(value: unknown): Verdict | undefined {
   if (typeof value === "boolean") return value ? "met" : "not_met"
   if (typeof value !== "string") return undefined
   const text = value.trim()

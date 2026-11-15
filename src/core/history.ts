@@ -60,7 +60,7 @@ export function trailWindow(history: readonly VerdictEntry[], limit = 24): { sho
   return { shown, total }
 }
 
-export interface VerdictCounts {
+interface VerdictCounts {
   readonly met: number
   readonly not_met: number
   readonly impossible: number
@@ -155,7 +155,7 @@ export function pauseDiagnostics(stall: number, retries: number): string {
   return `stall ${clean(stall)} · retries ${clean(retries)}`
 }
 
-export interface LoopTotals {
+interface LoopTotals {
   readonly iterations: number
   readonly turns: number
   readonly tools: number

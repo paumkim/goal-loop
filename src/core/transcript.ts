@@ -5,7 +5,7 @@
 
 type Unknown = Record<string, unknown>
 
-export interface DigestOptions {
+interface DigestOptions {
   readonly maxChars: number
   /** Per-tool-output cap. Tails are kept: test runners and builds report results last. */
   readonly maxToolChars?: number
@@ -64,7 +64,7 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
   return blocks.length ? `ASSISTANT:\n${blocks.join("\n\n")}` : ""
 }
 
-export function renderMessage(message: unknown, options: Required<DigestOptions>): string {
+function renderMessage(message: unknown, options: Required<DigestOptions>): string {
   if (typeof message !== "object" || message === null) return ""
   const m = message as Unknown
   switch (m.type) {
