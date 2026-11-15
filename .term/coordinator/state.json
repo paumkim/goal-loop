@@ -743,9 +743,11 @@
       "paths": "SPEC.md",
       "branch": "wt/reland-specnote",
       "worktree": "worktrees/wt-reland-specnote",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T21:36:35Z",
-      "submittedAt": "2026-11-15T21:37:39Z"
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:44:57Z",
+      "mergedInto": "dev"
     },
     "reland-processnote": {
       "agent": "orchestrator",
