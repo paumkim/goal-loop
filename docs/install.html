@@ -13,7 +13,7 @@ opencode-goal install</code></pre>
 <p>That is the whole first-time setup. <code>opencode-goal install</code> registers the plugin in your global opencode config and tells you to restart opencode; the plugin then loads on the next start of both the TUI and the server. Requires OpenCode ≥2.0.29 and Node (or Bun) for the installer itself. The installer has zero runtime dependencies.</p>
 <h3>Uninstall</h3>
 <pre><code>opencode-goal uninstall</code></pre>
-<p>Removes exactly what the installer added and leaves opencode as it was. If the config file the installer created is left empty, it is deleted. <code>opencode-goal uninstall --restore</code> copies the newest <code>.bak</code> back over the config instead (taking a fresh backup first).</p>
+<p>Removes exactly what the installer added and leaves opencode as it was. If the config file the installer created is left empty, it is deleted. If the plugin entry is already missing but an install-time backup exists (a backup whose content provably lacks the plugin), uninstall restores that pre-install config unchanged — after taking a fresh safety backup of the current state. A backup that contains the plugin is never restored automatically; <code>opencode-goal uninstall --restore</code> copies the newest <code>.bak</code> back over the config on demand instead (taking a fresh backup first).</p>
 <h3>The other subcommands</h3>
 <pre><code>opencode-goal            # same as install
 opencode-goal status     # scope, config path, installed yes/no
