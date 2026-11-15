@@ -224,6 +224,13 @@ requested estimate) — and surfaced as a "Compaction landed" notice, in `/goal`
 A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
 never past the busy gate) with a "Compaction pending" warning.
 
+**Compaction cuts the context, not the loop.** When a compaction lands, the history the armed directive, the
+objective and the completed iterations live in is replaced by a lossy summary. The plugin then queues a
+`<goal-loop-reanchor>` note restating the objective, the armed condition, the iteration position and the
+completed iterations from its own record, plus the re-read-the-tree mandate. It is delivered as a queued,
+non-waking message: it never interleaves into a turn in flight and never wakes the session — the next
+continuation steer carries it into view. Plain goals rely on the per-turn system reminder instead.
+
 The estimate is the last assistant message's `input + cache.read + cache.write` token usage, measured right
 after each turn ends (`session.execution.succeeded`). Reasoning and output tokens are not counted: output has
 already become input for the next step. Set e.g. `"compactAtTokens": 260000` in `opencode.json` or

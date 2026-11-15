@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=320 -->
+<!-- spec-check files=35 tests=327 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -834,3 +834,36 @@ paths; `force` bypassing cooldown only — busy and in-flight hold; failing `isB
 detected at the next arm; two unlanded armed iterations force the third re-request with `opts.force`;
 busy denial counts a miss, persists it, and stays a busy denial even under force), `bun run check` green
 (320 tests), coordinator submit.
+## Workstream W — post-compaction loop re-anchor
+
+Interpretation of the armed condition's need for a loop that survives the host's compaction intact: a landed
+compaction (plugin-requested at a boundary, or the host's own window-relative auto-compaction) replaces the
+conversation with a lossy summary, so the armed directive, the constant objective and the completed-iteration
+history — everything the plugin alone knows — were invisible to the model after the cut. The plugin cannot stop
+the host compacting, but it can restore the ground truth on the next one.
+
+99. Prompt builder `loopReanchor` (`src/core/prompts.ts`, additive): emits
+    `<goal-loop-reanchor iteration="N" max="M">` carrying the constant objective, the armed condition, the
+    completed-iteration history (via the shared `historyBlock`), the shared `TREE_TRUTH` re-read mandate
+    (extracted from `loopContinuation` into one byte-identical constant used by both), and an explicit "do not
+    wait for a user message — the loop continues automatically" line. History injection keeps the same -10
+    slice as the other loop prompts.
+100. Controller `onCompactionLanded()` (public, `session.compaction.ended` path): settles any pending
+     boundary-compact request as before, then — when the record is a LIVE ACTIVE loop (`loopEnabled` and
+     `status === "active"`) — queues the re-anchor via `session.synthetic` with `delivery: "queue"` and
+     `resume: false`. Queued, never a steer: it cannot wake an idle session behind the loop's back and cannot
+     interleave into a turn in flight; the next arm/continuation steer the loop already dispatches carries it
+     into the model's view after the summary. Fire-and-forget with a warn on failure — a host rejection never
+     breaks the landing bookkeeping (same posture as `note()`). Paused and terminal loops are not re-anchored;
+     plain (non-loop) goals are not re-anchored (the `systemReminder` hook already re-states their condition
+     every model call).
+101. Surfacing: none beyond the synthetic message itself — no record field, no notice kind, no dialog chrome.
+     The re-anchor is a transcript artifact (`metadata: { source: "goal", goal: record.id, anchor: true }`,
+     description `goal-loop · re-anchor after compaction`).
+
+Files touched: `src/core/prompts.ts`, `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/`.
+
+Verification: `test/loop.test.ts` (re-anchor queued on landing with armed iteration/condition/objective/history;
+queued with NO pending boundary request — host-side compaction; not queued for a plain goal, a terminal loop, or a
+paused loop; a throwing synthetic dispatch does not break `onCompactionLanded`; prompt-builder content and history
+format), `bun run check` green (327 tests), coordinator submit.

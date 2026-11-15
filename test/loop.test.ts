@@ -63,6 +63,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const gate: { nextGoal?: Promise<void> } = {}
   // Test hook: when set, the first matching synthetic call awaits this gate before delivering (simulates a slow steer round-trip).
   const syntheticGate: { promise?: Promise<void>; match?: string } = {}
+  // Test hook: when set, every synthetic call throws (simulates the host rejecting the dispatch).
+  const syntheticFail: { error?: Error } = {}
   const notices: Notice[] = []
   const work = { subagents: 0, shells: 0 }
   const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean } }> = []
@@ -85,6 +87,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     session: {
       prompt: async (input) => void calls.prompts.push(input),
       synthetic: async (input) => {
+        if (syntheticFail.error) throw syntheticFail.error
         if (syntheticGate.promise && (!syntheticGate.match || String(input.description).includes(syntheticGate.match))) {
           const gatePromise = syntheticGate.promise
           syntheticGate.promise = undefined
@@ -144,6 +147,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     notices,
     compactCalls,
     setCompactOutcome: (outcome: BoundaryCompactResult) => void (compactOutcome = outcome),
+    setSyntheticError: (error?: Error) => void (syntheticFail.error = error),
     setContextSize: (size: number | undefined) => void (contextSize = size),
     controller,
     storage,
@@ -548,6 +552,61 @@ describe("/goal-loop", () => {
     await h.controller.onCompactionLanded(SID)
     expect(h.notices.filter((n) => n.kind === "compact")).toHaveLength(0)
   })
+
+  test("a landed compaction queues a re-anchor restating the armed loop ground truth", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("parser rewritten and tests green")
+    h.nextGoals.push("add fuzz coverage for the parser")
+    await h.turn(1)
+    await h.controller.onCompactionLanded(SID)
+    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
+    expect(reanchor).toBeDefined()
+    expect(reanchor.delivery).toBe("queue")
+    expect(reanchor.resume).toBe(false)
+    expect(reanchor.metadata?.anchor).toBe(true)
+    expect(reanchor.text).toContain("<goal-loop-reanchor iteration=\"2\" max=\"5\">")
+    expect(reanchor.text).toContain("improve the parser") // the constant objective
+    expect(reanchor.text).toContain("add fuzz coverage for the parser") // the armed condition
+    expect(reanchor.text).toContain("- v1:") // the completed iteration survives the cut
+    expect(reanchor.text).toContain("git log --oneline -5")
+    expect(reanchor.text).toContain("Do not wait for a user message.")
+  })
+
+  test("re-anchor is queued even with no pending boundary request (the host compacted on its own)", async () => {
+    await h.setLoop("improve the parser")
+    await h.controller.onCompactionLanded(SID)
+    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
+    expect(reanchor).toBeDefined()
+    expect(reanchor.text).toContain('iteration="1"')
+  })
+
+  test("no re-anchor for a plain goal, or for a terminal loop", async () => {
+    await h.setGoal("all tests pass")
+    await h.controller.onCompactionLanded(SID)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+
+    const h2 = harness()
+    await h2.setLoop("improve the parser")
+    h2.controller.clear(SID)
+    await h2.controller.onCompactionLanded(SID)
+    expect(h2.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+  })
+
+  test("a paused loop is not re-anchored", async () => {
+    const h3 = harness({ maxTurns: 1 })
+    await h3.setLoop("improve the parser")
+    h3.verdicts.push(notMet("not yet"))
+    await h3.turn(3) // hits the 1-turn cap -> paused
+    await h3.controller.onCompactionLanded(SID)
+    expect(h3.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+  })
+
+  test("a failing re-anchor does not break compaction landing", async () => {
+    await h.setLoop("improve the parser")
+    h.setSyntheticError(new Error("host busy"))
+    await expect(h.controller.onCompactionLanded(SID)).resolves.toBeUndefined()
+  })
 })
 
 describe("loop prompts", () => {
@@ -567,6 +626,23 @@ describe("loop prompts", () => {
     expect(text).toContain('iteration="3"')
     expect(text).toContain("next thing")
     expect(text).toContain("prev summary")
+  })
+
+  test("loopReanchor restates the loop ground truth after a compaction", () => {
+    const text = Prompt.loopReanchor({ iteration: 3, maxLoops: 5, objective: "the object", condition: "next thing", history: [entry] })
+    expect(text).toContain('<goal-loop-reanchor iteration="3" max="5">')
+    expect(text).toContain("the object")
+    expect(text).toContain("next thing")
+    expect(text).toContain("- v1: c — s")
+    expect(text).toContain("git log --oneline -5")
+    expect(text).toContain("git status --short")
+    expect(text).toContain("Do not wait for a user message.")
+    expect(text).toContain("</goal-loop-reanchor>")
+  })
+
+  test("loopReanchor history block is shared with the loop directive format", () => {
+    const text = Prompt.loopReanchor({ iteration: 1, maxLoops: 5, objective: "o", condition: "c", history: [] })
+    expect(text).toContain("(none — this is the first iteration)")
   })
 
   test("loopContinuation tells the armed iteration to re-read repo state before trusting the armed summary", () => {
