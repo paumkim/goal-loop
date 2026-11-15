@@ -26,13 +26,13 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 
 - **The plugin never runs git or edits files.** It reads `.git`/`HEAD`/`refs`/`packed-refs` (see `src/core/git.ts`) and directs the *agent* to commit; the evaluator judges only visible transcript evidence, so commit output must appear in the conversation.
 - **Cold-start:** on `setup()` in a git repo, `ensureCoordinatorLayout()` creates `.term/coordinator/{config,state}.json` + `worktrees/` if missing (never overwrites) and the commit policy becomes coordinator mode. Detection needs `.term/coordinator/config.json` + `state.json`, or the coordinator bin + one json.
-- **Commit rule:** coordinator repos → agent works on `wt/<slug>` and `submit`s; `merge-next` merges into `dev` and gates on `bun run check`. Outside a git repo the rule is off. `resolveCommitPolicy` takes an optional absolute plugin coordinator bin — never emit a repo-relative bin path.
+- **Commit rule:** coordinator repos → agent works on `wt/<slug>` and `submit`s; `merge-next` merges into `dev` and gates on `bun run check` **of the merged result** (trial merge on a scratch branch; `dev` is untouched on failure). Outside a git repo the rule is off. `resolveCommitPolicy` takes an optional absolute plugin coordinator bin — never emit a repo-relative bin path.
 - **Vague goals** (`isFuzzyCondition` in `prompts.ts`): first turn writes `SPEC.md` (acceptance + verification incl. screenshot for visual requests), then builds, verifies, commits. Precise conditions skip this.
 - **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work, 3-turn stall pause, 200-turn cap (pauses and *stays* paused until `/goal clear` or a new goal; a message alone will not extend the cap).
 
 ## Coordinator (`packages/coordinator/bin/coordinator`)
 
-- Flow: `claim <task> --agent <you> --paths <scope>` → work in `worktrees/wt-<slug>` on `wt/<slug>` → `submit`. Never commit to `dev`/`main` directly; only `merge-next` lands on `dev`.
+- Flow: `claim <task> --agent <you> --paths <scope>` → work in `worktrees/wt-<slug>` on `wt/<slug>` → `submit`. Never commit to `dev`/`main` directly; only `merge-next` lands on `dev`. The main checkout must be clean (the coordinator state file is exempt).
 - Requires `jq` (plus `git`, `bun` for the merge gate). Claim is flock-locked with lease re-check; path overlap without `--force` is a hard error; `status --json` lists leases (`state.json` is the coordination bus).
 - `merge-next` removes the merged worktree + `wt/` branch and marks the lease `done`. Leftover `worktrees/wt-*` dirs are safe to prune; leases in `.term/coordinator/state.json` are the source of truth.
 - This repo's own `opencode.json` forces `coordinator: true`. Work here the same way: claim, worktree, submit.

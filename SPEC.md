@@ -276,3 +276,27 @@ tool event until the first `session.execution.succeeded` lazily created one.
     the loop history entry records `toolCalls: 5`. All 205 tests pass.
 
 Verification: `bun test` (205 pass), `bun run check`, coordinator submit + merge-next.
+
+## Workstream G — merge-next gates on the merged result
+
+Interpretation of the armed condition: `merge-next` ran `bun run check` on dev's pre-merge HEAD, so a
+branch whose merge is the fix for the very staleness the gate detects (e.g. a docs freshness refresh)
+was blocked by the state it repairs — a deadlock that forced a manual unblock (2026-11-15).
+
+34. `packages/coordinator/bin/coordinator merge-next` trial-merges the candidate `wt/<slug>` branch into
+    `dev` on a throwaway `merge-check-<slug>-<pid>` branch (created from `dev` and checked out), runs
+    `bun run check` on that merged result, and only then moves `dev` onto it via `merge --ff-only`.
+    A failing merged result aborts with `dev` untouched (no merge commit, no lease marked done).
+    Scratch branches from interrupted runs are pruned best-effort on every run.
+35. The main checkout must be clean for the merge, with the coordinator's own
+    `.term/coordinator/state.json` exempt (claim/submit leave it dirty by design; merges never touch it).
+    A tracked, non-exempt modification aborts the merge before any branch is created.
+36. `test/coordinator.test.ts` proves the four paths in a throwaway git repo: a merge that is the fix
+    for the gate succeeds and lands (lease `done`); a merged result that fails the check aborts with
+    `dev` and the lease untouched; a normal green merge lands; a dirty (non-exempt) main checkout is
+    refused. Scratch branches are cleaned up on failure.
+37. `AGENTS.md`, `docs/install.html` and this file document the merged-result gate and the cleanliness
+    exemption; `bun run check` stays green (205+ tests, docs freshness passes).
+
+Verification: `bun test test/coordinator.test.ts` (5 tests), `bun run check` green, coordinator
+submit + merge-next (this branch merges through the new gate), then commit state.json to dev.

@@ -1,0 +1,112 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { execFileSync, spawnSync } from "node:child_process"
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+
+const SCRIPT = join(import.meta.dir, "..", "packages", "coordinator", "bin", "coordinator")
+
+const GIT_ENV = {
+  ...process.env,
+  GIT_AUTHOR_NAME: "t",
+  GIT_AUTHOR_EMAIL: "t@t",
+  GIT_COMMITTER_NAME: "t",
+  GIT_COMMITTER_EMAIL: "t@t",
+}
+
+const git = (dir: string, args: string[], date?: string) =>
+  execFileSync("git", ["-c", "commit.gpgsign=false", "-C", dir, ...args], {
+    env: date ? { ...GIT_ENV, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : GIT_ENV,
+    encoding: "utf8",
+  })
+
+const run = (dir: string, args: string[]) =>
+  spawnSync(SCRIPT, args, { cwd: dir, encoding: "utf8", env: GIT_ENV })
+
+let dir: string
+
+const setup = (checkScript: string) => {
+  dir = mkdtempSync(join(tmpdir(), "coordinator-test-"))
+  git(dir, ["init", "-q", "-b", "dev"])
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture", scripts: { check: checkScript } }) + "\n")
+  mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
+  writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}\n')
+  writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
+  git(dir, ["add", "-A"])
+  git(dir, ["commit", "-q", "-m", "initial"], "2026-11-01T10:00:00+00:00")
+}
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
+
+/** Claim, commit in the wt worktree, submit. Returns the worktree path. */
+const claimCommitSubmit = (slug: string, files: Record<string, string>, date: string) => {
+  expect(run(dir, ["claim", slug, "--agent", "t", "--paths", "."]).status).toBe(0)
+  const wt = join(dir, "worktrees", `wt-${slug}`)
+  for (const [rel, content] of Object.entries(files)) writeFileSync(join(wt, rel), content)
+  git(wt, ["add", "-A"])
+  git(wt, ["commit", "-q", "-m", `work for ${slug}`], date)
+  expect(run(wt, ["submit"]).status).toBe(0)
+  return wt
+}
+
+const lease = (slug: string) =>
+  JSON.parse(readFileSync(join(dir, ".term/coordinator/state.json"), "utf8")).leases[slug]
+
+const fileOnDev = (path: string) => spawnSync("git", ["-C", dir, "show", `dev:${path}`], { encoding: "utf8" })
+
+describe("coordinator merge-next", () => {
+  test("a branch whose merge fixes the gate is merged (gate runs on the merged result)", () => {
+    // dev's `check` fails pre-merge (FIXED absent) and passes post-merge (wt branch adds it).
+    setup("test -f FIXED")
+    claimCommitSubmit("fix-gate", { FIXED: "yes\n" }, "2026-11-02T10:00:00+00:00")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("merged into dev")
+    expect(git(dir, ["rev-parse", "dev"]).trim()).not.toBe(devBefore)
+    expect(fileOnDev("FIXED").stdout.trim()).toBe("yes")
+    expect(lease("fix-gate").status).toBe("done")
+  })
+
+  test("a merged result that fails the check aborts; dev and the lease are untouched", () => {
+    setup("test -f FIXED")
+    claimCommitSubmit("no-fix", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("merged result fails the check")
+    expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
+    expect(fileOnDev("OTHER").status).not.toBe(0)
+    expect(lease("no-fix").status).toBe("submitted")
+  })
+
+  test("a normal green merge still lands and the lease is marked done", () => {
+    setup("true")
+    claimCommitSubmit("good", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(fileOnDev("FILE").stdout.trim()).toBe("y")
+    expect(lease("good").status).toBe("done")
+  })
+
+  test("the main worktree must be clean before merging", () => {
+    setup("true")
+    claimCommitSubmit("dirty", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    writeFileSync(join(dir, "package.json"), '{"name":"dirty","scripts":{"check":"true"}}\n')
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("uncommitted changes")
+    expect(fileOnDev("FILE").status).not.toBe(0)
+  })
+
+  test("a failed gate run leaves no scratch branches behind", () => {
+    setup("test -f FIXED")
+    claimCommitSubmit("no-fix-2", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
+    run(dir, ["merge-next"])
+    const branches = git(dir, ["branch", "--list", "merge-check-*"]).trim()
+    expect(branches).toBe("")
+    expect(git(dir, ["branch", "--show-current"]).trim()).toBe("dev")
+  })
+})
