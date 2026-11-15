@@ -152,8 +152,12 @@ export function loopContinuation(
     `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
     escape(input.condition),
     ``,
-    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo):`,
+    `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
+    ``,
+    `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
+    `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
+    `equivalent). What these show is the ground truth; the summary is only a hint.`,
     ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
@@ -242,8 +246,9 @@ const VERDICTS = [
 
 const RULES = [
   `Rules: claims without evidence do not count; if the agent says tests pass but no test output is visible, the`,
-  `condition is not met. Judge the current state, not intentions. Constraints in the condition (things that must`,
-  `not change) are part of it.`,
+  `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
+  `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
+  `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
 ]
 
 /**

@@ -89,3 +89,23 @@ describe("GoalStore.load", () => {
     expect((await store.load("ses_ok"))?.sessionID).toBe("ses_ok")
   })
 })
+
+describe("GoalStore probe mode (read-only)", () => {
+  test("saves and removes are dropped; reads still work", async () => {
+    const storage = new MemoryStorage()
+    const live = new GoalStore(storage, () => {})
+    await live.save(record({ sessionID: "ses_live", status: "active" }))
+    await live.flush()
+    expect(storage.data.has(keyFor("ses_live"))).toBe(true)
+
+    const probe = new GoalStore(storage, () => { throw new Error("probe onError must not fire for dropped writes") }, { readOnly: true })
+    // A probe save is a no-op: it reports success so callers behave, but nothing is written.
+    expect(await probe.save(record({ sessionID: "ses_probe", status: "active" }))).toBe(true)
+    expect(await probe.remove("ses_live")).toBe(true)
+    expect(storage.data.has(keyFor("ses_probe"))).toBe(false)
+    expect(storage.data.has(keyFor("ses_live"))).toBe(true)
+    // Reads pass through untouched.
+    expect((await probe.load("ses_live"))?.sessionID).toBe("ses_live")
+    expect((await probe.loadLive("/work/project")).map((entry) => entry.sessionID)).toEqual(["ses_live"])
+  })
+})

@@ -17,7 +17,7 @@ import {
   type NoticeLevel,
   type UsageSnapshot,
 } from "../core/types.ts"
-import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort } from "./ports.ts"
+import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"
 
 export interface ControllerDeps {
@@ -30,6 +30,8 @@ export interface ControllerDeps {
   readonly background: BackgroundPort
   readonly store: GoalStore
   readonly emitter: EmitterPort
+  /** Optional harness-side verifier for `evaluator.verifyCommand`. Required only when the command is configured; a `met` verdict is downgraded to `not_met` without one (fail closed). */
+  readonly verifier?: VerifierPort
   readonly clock: Clock
   readonly log: Logger
   readonly newId?: () => string
@@ -432,6 +434,14 @@ export class GoalController {
     }
     if (this.stale(record, runtime, epoch)) return
 
+    // Verifier, not transcriber: a met verdict is not accepted until the configured
+    // verification command exits 0 against the current checkout. The output tail rides the
+    // not_met reason, so the next turn sees exactly what failed.
+    if (result.verdict === "met" && config.evaluator.verifyCommand) {
+      result = await this.verifyMet(record, runtime, result)
+      if (this.stale(record, runtime, epoch)) return
+    }
+
     record.turns = turn
     record.stall = stall
     record.retries = 0
@@ -462,6 +472,41 @@ export class GoalController {
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
     })
+  }
+
+  /**
+   * Runs the configured verification command and returns the (possibly downgraded) verdict.
+   * A missing verifier is a fail-closed error, not a pass: the whole point of the gate is that
+   * met claims are backed by fresh command output, not transcript summaries.
+   */
+  private async verifyMet(
+    record: GoalRecord,
+    runtime: Runtime,
+    result: EvaluationResult,
+  ): Promise<EvaluationResult> {
+    const { config, log } = this.deps
+    const sessionID = record.sessionID
+    const command = config.evaluator.verifyCommand
+    const fail = (detail: string): EvaluationResult => {
+      log.warn("met verdict downgraded to not_met by the verification gate", { sessionID, command, detail })
+      this.notify(sessionID, "retry", "warning", "Verification failed", `${command}: ${truncate(detail, 160)}`)
+      return { verdict: "not_met", reason: `Verification \`${truncate(command, 120)}\` did not pass: ${truncate(detail, 240)}` }
+    }
+    const verifier = this.deps.verifier
+    if (!verifier) return fail("no verifier port is wired for this plugin instance (fail closed)")
+    runtime.evaluating = true
+    this.emit(record)
+    try {
+      const signal = AbortSignal.timeout(config.evaluator.verifyTimeoutMs)
+      const run = await verifier.verify({ command, cwd: this.deps.directory, timeoutMs: config.evaluator.verifyTimeoutMs, signal })
+      if (run.code === 0) return result
+      const tail = run.output.trim().split("\n").slice(-12).join("\n")
+      return fail(run.timedOut ? `timed out after ${formatDuration(config.evaluator.verifyTimeoutMs)}` : `exit ${run.code ?? "unknown"}: ${tail || "(no output)"}`)
+    } catch (error) {
+      return fail(`verification errored: ${errorMessage(error)}`)
+    } finally {
+      if (runtime.abort === undefined) runtime.evaluating = false
+    }
   }
 
   /**

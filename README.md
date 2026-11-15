@@ -44,7 +44,8 @@ While a goal runs, the footer shows its state:
 - After every turn, an evaluator reads the conversation and answers **met**, **not met** or **impossible**.
 - **Not met:** the agent gets the reason and starts the next turn on its own.
 - **Met / impossible:** the goal ends and a note is added to the transcript.
-- The evaluator only sees what's in the conversation, so the agent is told to show proof (test output, command results).
+- The evaluator only accepts **fresh evidence**: command output produced at the current HEAD, after the last change — not earlier turns' claims or the agent's own summary. If the agent says tests pass with no test output in front of you, that is **not met**.
+- When `evaluator.verifyCommand` is set, a met verdict is not accepted until the plugin itself runs that command (e.g. `bun run check`) and it exits 0. The evaluator proposes; the verifier disposes. A failing command downgrades the verdict to not-met with the output tail in the reason, so the next turn knows exactly what broke.
 - By default the evaluator reuses the session's cached context, so each check costs little more than a short answer.
 - Finished work has to be committed before the goal counts as met. See [the commit rule](#the-commit-rule).
 
@@ -109,6 +110,30 @@ ends when any of these happens:
 Each achieved iteration fires one info toast (`◎ Loop 1 achieved · → v2: …`); the end of the loop fires the
 normal achieved toast once.
 
+## Running the loop safely (fresh session checklist)
+
+A fresh session that picks up or continues a `/goal-loop` should not trust anything carried over by the
+arming steer. The failure modes this avoids: stale summaries describing work that was reverted, zero-progress
+iterations waved through because the model said so, met verdicts accepted from narrated evidence, and probe
+servers overwriting the live goal records.
+
+1. **Re-read HEAD before working.** Every armed iteration is told to re-read `git log --oneline -5`,
+   `git status --short`, `git branch --show-current` (plus `coordinator status --json` / `git worktree list`
+   in a coordinator repo) and the current check output *before* touching anything. The loop summary is a hint,
+   not ground truth; the tree is.
+2. **Zero-progress is measured by the harness.** An iteration with zero tool calls (as counted by the plugin's
+   own `onToolCalled` events) increments `loopNotProgress`; two in a row pause the loop. The model's account of
+   how much work it did is irrelevant to this count.
+3. **Met means verified, not narrated.** The evaluator requires fresh command output at the current HEAD, and
+   with `evaluator.verifyCommand` set the plugin itself reruns the check before accepting met. Without the gate,
+   a persuasive transcript that never shows the check passing is still not met.
+4. **Probes are read-only.** Launch probe/scratch instances with `OPENCODE_GOAL_PROBE=1` so the plugin never
+   writes goal storage; point them at a throwaway checkout. Live sessions are then unaffected by probe accidents.
+5. **Bookkeeping is the merge's job.** Lease records in `.term/coordinator/state.json` are committed by
+   `merge-next` itself (see above); never hand-commit them and never commit to `dev` directly.
+
+For the operational version of this checklist see `docs/runtime.html`.
+
 ## Options
 
 All optional, set in `opencode.json`:
@@ -146,6 +171,8 @@ All optional, set in `opencode.json`:
 | `evaluator.maxTranscriptChars` | `60000` | Transcript digest budget for the independent evaluator (min 4000) |
 | `evaluator.maxOutputTokens` | `4096` | Verdict answer budget (min 256) |
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
+| `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND` |
+| `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
 | `maxTurns` | `200` | Hard turn cap, `0` = none |
 | `stallTurns` | `3` | Turns without tool use before pausing |
 | `checkinMinutes` | `30` | First background check-in; `0` disables check-ins and retries |
@@ -163,7 +190,9 @@ All optional, set in `opencode.json`:
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`.
+`OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`.
+
+`OPENCODE_GOAL_PROBE=1` puts the plugin in probe mode: plugin storage becomes read-only (goal records are never written or deleted, so `restore()` has no side effects). Use it for any probe opencode server or scratch instance that loads the plugin — otherwise a probe can mutate the live goal records shared with your real sessions. Verification commands still execute in the probe's working directory, so point probes at a throwaway checkout.
 
 ### Auto-compaction
 
