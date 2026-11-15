@@ -1,9 +1,11 @@
 # SPEC — current behavior of opencode-goal
 
-Status: current as of v1.0.1 (plus the two workstreams specified below). The TUI indicator renders natively: a compact segment in the `prompt.footer`
-row (the slot the host's built-in PromptFooter plugin claims with `append`), state transitions surface as
+Status: current as of v1.0.1 (plus the two workstreams specified below). The TUI indicator renders natively: a compact segment painted on the
+empty left side of the host's jump-to-latest row (the 1-row strip directly above the input prompt, claimed through the host's
+`session.composer.top` slot with a zero-flow absolute box), state transitions surface as
 host toasts, and the `/goal` detail view is a host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal,
-xlarge centered sizing) built from theme tokens only (see `src/tui.tsx`). There is no custom-painted overlay.
+xlarge centered sizing) built from theme tokens only (see `src/tui.tsx`). The only exception to "host-owned
+layout" is that one 1-row absolute box; no custom chrome, no custom colors.
 The project `opencode.json` points at the local checkout.
 
 This file is the acceptance spec for the plugin as it ships today. The how and why live in README.md and
@@ -29,11 +31,14 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 6. Docs in `README.md`, `docs/*.html`, `AGENTS.md` and this file match the code. Every option, default, env
    var, NoticeKind and status value named there exists in `src/core/config.ts`, `src/core/types.ts` or
    `src/core/parse.ts`. `bun run check` passes.
-7. The TUI has no hand-painted overlay: the active/paused indicator renders inside the host's
-   `prompt.footer` slot (append), the detail view renders through `ui.dialog.show` host chrome (Esc and
+7. The TUI renders through host chrome: the active/paused indicator claims the host's
+   `session.composer.top` slot (append) and paints one zero-flow absolute 1-row box on the empty left side
+   of the host's jump-to-latest row (the full-width strip above the input prompt, which the host renders with
+   the pill flush right); the detail view renders through `ui.dialog.show` host chrome (Esc and
    ctrl+c dismiss it, backdrop and focus owned by the host), transitions use `ui.toast.show` with the host's
    variants, and every color/border/font comes from `context.theme` tokens (no hardcoded RGBA, no custom
-   borders). Layout, z-index, focus and dismissal stay with the host (`src/tui.tsx`).
+   borders). Layout of the strip itself stays with the host; the indicator never adds a row
+   (`src/tui.tsx`).
 
 ## Workstream A — detail dialog acceptance criteria
 
