@@ -8,6 +8,7 @@
  * Mirrors Claude Code's /goal (status, clear aliases, met / not met / impossible verdicts, stall guard, retries,
  * background-work check-ins, restore on restart).
  */
+import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
@@ -179,14 +180,10 @@ export default Plugin.define({
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
     if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
     const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
-    const compactor = new AutoCompactor({
-      config,
-      compact: (sessionID) => session.compact(sessionID),
-      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
-      emitter,
-      clock: systemClock,
-      log,
-    })
+    // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
+    // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
+    // The compactor is assigned before anything can call it, so the deferred closure is safe.
+    let compactor!: AutoCompactor
     const controller = new GoalController({
       config,
       directory: ctx.location.directory,
@@ -197,9 +194,22 @@ export default Plugin.define({
       store,
       emitter,
       verifier: createVerifier(),
-      compactAtBoundary: (sessionID) => compactor.compactAtBoundary(sessionID),
+      compactAtBoundary: (sessionID, opts) => compactor.compactAtBoundary(sessionID, opts),
+      estimateContext: async (sessionID) => estimateContextTokens((await ctx.session.context({ sessionID })) as readonly unknown[]),
       clock: systemClock,
       log,
+    })
+    compactor = new AutoCompactor({
+      config,
+      compact: (sessionID) => session.compact(sessionID),
+      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
+      emitter,
+      clock: systemClock,
+      log,
+      isBusy: async (sessionID) => {
+        const work = await background.busy(sessionID).catch(() => ({ subagents: 0, shells: 0 }))
+        return work.subagents + work.shells > 0 || controller.isExecuting(sessionID)
+      },
     })
 
     // ---- RPC for clients (status line, dialogs, palette actions)

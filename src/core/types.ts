@@ -78,6 +78,20 @@ export interface LoopEntry {
 }
 
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
+/** Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage. */
+export interface LoopCompactState {
+  /** When the plugin asked the host to compact (ms since epoch). */
+  readonly requestedAt: number
+  /** Context size in tokens at the time the request was made; absent when the estimate was unknown. */
+  readonly estimatedTokens?: number
+  /** The loop iteration that armed when the request was made (1-based). */
+  readonly iteration: number
+  /** Set when the compaction was observed to land (compaction-ended event, or the context-size drop). */
+  landedAt?: number
+  /** Consecutive armed iterations in which a pending request did not land. Two force a re-request. */
+  misses: number
+}
+
 export interface GoalRecord {
   readonly version: 1
   readonly id: string
@@ -117,6 +131,8 @@ export interface GoalRecord {
   loopHistory?: LoopEntry[]
   /** Consecutive iterations with zero tool calls; two pause the loop. */
   loopNotProgress?: number
+  /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */
+  loopCompact?: LoopCompactState
 }
 
 /** Read model shared with clients over RPC. */

@@ -18,6 +18,7 @@ import {
   type UsageSnapshot,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
+import type { BoundaryCompactResult } from "./compactor.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"
 
 export interface ControllerDeps {
@@ -35,8 +36,11 @@ export interface ControllerDeps {
   /**
    * Asks the host to compact the session at a loop-iteration boundary so the next iteration arms with a fresh
    * context. Optional so tests/probes can omit it; awaiting only waits for the host's acceptance of the request.
+   * `force` skips the cooldown (never the in-flight/busy gate): used to re-request a compaction that never landed.
    */
-  readonly compactAtBoundary?: (sessionID: string) => Promise<void>
+  readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean }) => Promise<BoundaryCompactResult>
+  /** Estimated model-visible context size in tokens, or undefined when unknown. Used to detect a landed boundary compaction. */
+  readonly estimateContext?: (sessionID: string) => Promise<number | undefined>
   readonly clock: Clock
   readonly log: Logger
   readonly newId?: () => string
@@ -132,6 +136,28 @@ export class GoalController {
 
   list(): GoalSnapshot[] {
     return [...this.goals.keys()].map((id) => this.snapshot(id)).filter((s): s is GoalSnapshot => s !== null)
+  }
+
+  /** True while a turn is executing for the session. Used to defer mid-work compaction. */
+  isExecuting(sessionID: string): boolean {
+    return this.running.has(sessionID)
+  }
+
+  /**
+   * The host reported a compaction ended for the session: mark any pending boundary-compaction request as landed.
+   * Notified with a success notice; subsequent arms skip the settle check.
+   */
+  async onCompactionLanded(sessionID: string): Promise<void> {
+    const record = this.goals.get(sessionID)
+    const pending = record?.loopCompact
+    if (!record || !pending || pending.landedAt) return
+    record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
+    try {
+      await this.commit(record)
+    } catch (error) {
+      this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
+    }
+    this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session at the loop boundary.")
   }
 
   async spend(sessionID: string): Promise<UsageSnapshot | undefined> {
@@ -387,10 +413,24 @@ export class GoalController {
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
-    // A restart resumes from a fresh context: compact live goal sessions at the boundary.
+    // A restart resumes from a fresh context: compact live goal sessions at the boundary. The request is recorded
+    // as pending so the next arm can detect whether it lands (or re-request it).
     for (const record of this.goals.values()) {
       if (record.status !== "active" || !this.deps.compactAtBoundary) continue
-      void this.deps.compactAtBoundary(record.sessionID).catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
+      void this.deps
+        .compactAtBoundary(record.sessionID)
+        .then(async (result) => {
+          if (!result.requested) return
+          if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
+          record.loopCompact = {
+            requestedAt: this.deps.clock.now(),
+            ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
+            iteration: record.loopIteration ?? 1,
+            misses: 0,
+          }
+          await this.commit(record).catch(() => {})
+        })
+        .catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
     }
     return this.goals.size
   }
@@ -707,11 +747,58 @@ export class GoalController {
     await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
     // The note round-trips through synthetic; the world may have moved on while it landed.
     if (this.stale(record, runtime, epoch)) return
-    // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version
-    // arm with a fresh context. Awaiting only waits for the host's acceptance of the compact request.
+    // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
+    // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
+    // an earlier arm is settled first: a landed compaction is recorded as such; one that never landed is
+    // re-requested (forced past the cooldown) after 2 armed iterations without an observed landing.
     if (this.deps.compactAtBoundary) {
-      await this.deps.compactAtBoundary(sessionID).catch((e) => log.warn("loop boundary compact failed", { sessionID, error: errorMessage(e) }))
+      const now = clock.now()
+      const pending = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
+      let force = false
+      let misses = 0
+      if (pending) {
+        const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
+        if (this.stale(record, runtime, epoch)) return
+        const landed =
+          size !== undefined &&
+          (pending.estimatedTokens === undefined
+            ? size < 10_000
+            : size <= Math.max(10_000, Math.floor(pending.estimatedTokens * 0.6)))
+        if (landed) {
+          record.loopCompact = { ...pending, landedAt: now }
+          await this.commit(record)
+          this.notify(sessionID, "compact", "success", "Compaction landed", `Context dropped to ~${size} tokens at the loop boundary.`)
+        } else {
+          misses = pending.misses + 1
+          record.loopCompact = { ...pending, misses }
+          force = misses >= 2
+          if (force) {
+            this.notify(sessionID, "compact", "warning", "Compaction pending", "The boundary compaction has not landed after 2 armed iterations; re-requesting.")
+          }
+          await this.commit(record)
+        }
+        if (this.stale(record, runtime, epoch)) return
+      }
+      const result = await this.deps
+        .compactAtBoundary(sessionID, force ? { force: true } : undefined)
+        .catch((error): BoundaryCompactResult => {
+          log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
+          return { requested: false, reason: "read-failed" }
+        })
       if (this.stale(record, runtime, epoch)) return
+      if (result.requested) {
+        // Carry the miss count forward until a compaction actually lands: re-requesting is not evidence of landing.
+        record.loopCompact = {
+          requestedAt: clock.now(),
+          ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
+          iteration: nextIteration,
+          misses,
+        }
+        await this.commit(record)
+        if (this.stale(record, runtime, epoch)) return
+      }
+      // A denied request stays as-is: the settle step already counted this arm as a miss when a pending request exists,
+      // and a busy deferral never forces an unsafe compact.
     }
     await this.continueWith(record, {
       text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),

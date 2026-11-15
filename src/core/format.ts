@@ -76,6 +76,11 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
     const iteration = record.loopIteration ?? 1
     const max = record.loopMaxLoops ?? "?"
     lines.push(`Loop: iteration v${iteration} of at most ${max} · objective: ${record.loopObjective ?? record.condition}`)
+    const pending = record.loopCompact
+    if (pending) {
+      if (pending.landedAt) lines.push(`Loop compact: landed ${formatDuration(now - pending.landedAt)} ago`)
+      else lines.push(`Loop compact: pending ${formatDuration(now - pending.requestedAt)} (miss ${pending.misses}/2)`)
+    }
     for (const entry of record.loopHistory ?? [])
       lines.push(`  v${entry.version} · met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${truncate(entry.summary, 140)}`)
   }
