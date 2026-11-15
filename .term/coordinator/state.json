@@ -655,9 +655,11 @@
       "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/core.html,docs/runtime.html",
       "branch": "wt/goal-jump-row-indicator",
       "worktree": "worktrees/wt-goal-jump-row-indicator",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T21:03:34Z",
-      "submittedAt": "2026-11-15T21:04:48Z"
+      "submittedAt": "2026-11-15T21:04:48Z",
+      "mergedAt": "2026-11-15T21:16:55Z",
+      "mergedInto": "dev"
     },
     "a26-shared-constants": {
       "agent": "orchestrator",
