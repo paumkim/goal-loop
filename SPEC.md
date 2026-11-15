@@ -964,36 +964,6 @@ Verification: `test/loop.test.ts` (the three new tests; the rewritten paused-loo
 
 ## Workstream AA — evidence-based compaction landing
 
-Interpretation of the armed condition's landing-detection gap: `session.compaction.ended` fired whenever the
-host finished a compaction, including no-ops ("Nothing to compact yet"), and the plugin recorded a landing
-unconditionally — a no-op looked like a fresh context and disarmed the 2-miss re-request. A landing is now
-recorded only on evidence that the context actually dropped.
-
-114. Shared drop heuristic: the context-size drop test (`size !== undefined && (estimatedTokens === undefined ?
-    size < 10_000 : size <= max(10_000, floor(estimatedTokens × 0.6)))`) is extracted into one private
-    `contextDropped(pending, size)` helper used by BOTH the arm-time settle (unchanged behavior) and
-    `onCompactionLanded()`.
-115. Evidence-based `onCompactionLanded()`: a pending unlanded request is settled only after an optional
-    `estimateContext` probe (`.catch(() => undefined)`, exactly as the settle does) and a staleness re-check
-    after the await (`goals.get(sessionID) !== record` → drop the write). On an observed drop the landing path
-    is exactly as before (`landedAt`, commit, "Compaction landed" success notice, re-anchor queued). Otherwise —
-    no estimate, an estimation error, or no drop (a no-op compaction) — the event counts as a miss: `misses + 1`,
-    commit, no `landedAt`, NO re-anchor (a no-op compaction does not replace history); at `misses >= 2` the same
-    "Compaction pending" warning the arm path emits fires. No pending unlanded request: unchanged (re-anchor
-    only). `events.ts` unchanged — failed compactions stay unwired. Plain goals untouched; one notice per event.
-116. Tests (`test/loop.test.ts`): existing landing tests set `setContextSize(90_000)` before the event; four new
-    tests — a no-op compaction counts as a miss, not a landing (misses 1 → 2, no success notice, no re-anchor,
-    warning at 2); an evidence-based landing records and re-anchors (`iteration="2"`); two no-op landings push
-    the miss count to 2 and the next arm force re-requests (`compactCalls[1]` = `{ sessionID, opts: { force: true } }`);
-    an unestimable context counts as a miss, not a landing.
-
-Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/`.
-
-Verification: `test/loop.test.ts` (the four new tests; the evidence-based landing tests updated), `bun test`
-(343 tests), `bun run check` green; coordinator submit.
-
-## Workstream AA — evidence-based compaction landing
-
 Interpretation of the armed condition's accepted-vs-completed remainder: Workstream V detected a landing two
 ways, but the `session.compaction.ended` path recorded one unconditionally — the host can complete a
 compaction that removes nothing ("Nothing to compact yet"), and the plugin counted that as a landing, so the
