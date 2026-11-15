@@ -363,6 +363,17 @@
       "submittedAt": "2026-11-15T18:20:50Z",
       "mergedAt": "2026-11-15T18:20:57Z",
       "mergedInto": "dev"
+    },
+    "esc-mouse-close": {
+      "agent": "inkling-goal-loop-6",
+      "paths": "src/tui.tsx,src/status-dialog.tsx,SPEC.md,dist,docs/changelog.html",
+      "branch": "wt/esc-mouse-close",
+      "worktree": "worktrees/wt-esc-mouse-close",
+      "status": "done",
+      "createdAt": "2026-11-15T18:22:00Z",
+      "submittedAt": "2026-11-15T18:23:44Z",
+      "mergedAt": "2026-11-15T18:23:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
