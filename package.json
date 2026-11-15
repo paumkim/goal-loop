@@ -42,7 +42,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "e2e": "bun scripts/e2e.ts",
-    "check": "tsc --noEmit && bun test test/ && bun run compile && bun run check:tui && bun run docs:check && bun run check:spec",
+    "check": "tsc --noEmit && (cd test && bun test) && bun run compile && bun run check:tui && bun run docs:check && bun run check:spec",
     "check:tui": "bun scripts/tui-load-check.ts ./tui.ts",
     "docs:check": "bun scripts/docs-watch.ts check",
     "check:spec": "bun scripts/spec-check.ts",
