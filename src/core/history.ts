@@ -93,3 +93,42 @@ export function renderPips(done: number, max: number | undefined): string {
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap)
   return "●".repeat(filled) + "○".repeat(cap - filled)
 }
+
+/** Mean per-iteration duration (ms) and estimated remaining wall time (ms) at that pace. Undefined when no iteration has completed or the cap is unknown/exhausted. */
+export function paceEstimate(durations: readonly number[], max: number | undefined): { perIteration: number; remaining: number } | undefined {
+  if (durations.length === 0) return undefined
+  if (typeof max !== "number" || !Number.isFinite(max) || max <= 0) return undefined
+  const left = Math.floor(max) - durations.length
+  if (left <= 0) return undefined
+  const perIteration = durations.reduce((sum, span) => sum + span, 0) / durations.length
+  return { perIteration, remaining: perIteration * left }
+}
+
+/**
+ * Per-iteration verdict mix: assigns each verdict to the iteration whose `(from, to]` window contains
+ * its timestamp. The first window opens at `setAt`, later windows at the previous entry's `endedAt`.
+ * Zero-verdict iterations yield `undefined`.
+ */
+export function iterationVerdictMix(history: readonly VerdictEntry[], entries: readonly LoopEntry[], setAt: number): Array<VerdictCounts | undefined> {
+  const out: Array<VerdictCounts | undefined> = []
+  let start = setAt
+  for (const entry of entries) {
+    const end = entry.endedAt
+    const slice = history.filter((verdict) => verdict.at > start && verdict.at <= end)
+    out.push(slice.length === 0 ? undefined : verdictCounts(slice))
+    start = end
+  }
+  return out
+}
+
+/** Consecutive identical verdicts at the tail of the history. `count` is 0 when the history is empty. */
+export function verdictStreak(history: readonly VerdictEntry[]): { verdict: VerdictEntry["verdict"] | undefined; count: number } {
+  const last = history[history.length - 1]
+  if (!last) return { verdict: undefined, count: 0 }
+  let count = 1
+  for (let index = history.length - 2; index >= 0; index -= 1) {
+    if (history[index]?.verdict !== last.verdict) break
+    count += 1
+  }
+  return { verdict: last.verdict, count }
+}

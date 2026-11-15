@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, barCaption, iterationDurations, lastVerdict, renderBar, trailWindow, verdictCounts, verdictGlyph } from "./core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
@@ -51,6 +51,12 @@ export const LoopSection = (props: {
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
   const bar = () => renderBar(done(), max())
   const durations = () => iterationDurations(history(), props.goal.setAt)
+  const pace = () => paceEstimate(durations(), max())
+  const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
+  const mixSuffix = (index: number) => {
+    const mix = mixes()[index]
+    return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
+  }
   const paused = () => props.goal.status === "paused"
   const stateWord = () => (paused() ? "paused" : props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active")
   const nowColor = () => (paused() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
@@ -78,6 +84,17 @@ export const LoopSection = (props: {
         </Show>
         </box>
       </box>
+      {/* pace: mean iteration duration and the estimated remaining wall time at that pace */}
+      <Show when={pace()}>
+        {(estimate) => (
+          <box flexDirection="row" gap={2}>
+            {label(theme(), "pace")}
+            <text wrapMode="none" fg={theme().text.faint}>
+              {`~${formatDurationCoarse(estimate().perIteration)}/iteration · ~${formatDurationCoarse(estimate().remaining)} left at this pace`}
+            </text>
+          </box>
+        )}
+      </Show>
       {/* objective */}
       <box flexDirection="row" gap={2}>
         {label(theme(), "objective")}
@@ -95,7 +112,7 @@ export const LoopSection = (props: {
                 ✓
               </text>
               <text wrapMode="none" fg={theme().text.base}>
-                met · {entry.turns} turn{entry.turns === 1 ? "" : "s"} · {entry.toolCalls} tool{entry.toolCalls === 1 ? "" : "s"} · {formatDuration(durations()[index()] ?? 0)}
+                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}`}
               </text>
             </box>
             <Show when={entry.summary.trim().length > 0}>
@@ -161,6 +178,11 @@ export const HistoryBlock = (props: {
   const history = () => props.goal.history ?? []
   const counts = () => verdictCounts(history())
   const last = () => lastVerdict(history())
+  const streak = () => verdictStreak(history())
+  const streakSuffix = () => {
+    const s = streak()
+    return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
+  }
   const elapsed = () => formatDurationCoarse(props.elapsedMs())
   const countsText = () => {
     const c = counts()
@@ -186,7 +208,7 @@ export const HistoryBlock = (props: {
                 {verdictGlyph(entry().verdict)}
               </text>
               <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
-                {`last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} · ${countsText()} · ${elapsed()} elapsed`}
+                {`last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} · ${countsText()} · ${elapsed()} elapsed${streakSuffix()}`}
               </text>
             </box>
           )}
