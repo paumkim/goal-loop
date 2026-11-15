@@ -1098,6 +1098,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-13 (low) — `src/core/types.ts:135` — stale comment: "Consecutive iterations with zero tool calls; two pause the loop."** Armed
   loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
   Proposed fix: rewrite the comment.
+  Resolution: Workstream AN — comment rewritten to match the never-pause policy.
 - **A-14 (low) — `src/runtime/events.ts:17` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
   payloads are only destructured defensively at read sites. Proposed fix: `Record<string, unknown>` + a tiny guard helper (or keep `any`
   contained to this file and document).
@@ -1358,5 +1359,15 @@ round-trip (15s/60s/240s). Byte-compatible delays; the existing backoff tests (e
 15s, the evaluator retry) pass unchanged. Pure dedup — no test added.
 
 Files touched: `src/runtime/controller.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
+
+## Workstream AN — stale loopNotProgress comment corrected (A-13)
+
+`src/core/types.ts` claimed "two [zero-tool iterations] pause the loop", contradicting the never-pause policy
+(one notice, armed loop keeps arming) enforced in `loopAdvance` and pinned by `loop.test.ts`. The comment now
+states what the field is: consecutive zero-tool iterations, recorded and surfaced in the TUI, never a pause.
+
+Files touched: `src/core/types.ts`, `SPEC.md`. No behavior change; test count unchanged (355).
 
 Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
