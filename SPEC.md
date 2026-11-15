@@ -1102,6 +1102,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-14 (low) — `src/runtime/events.ts:17` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
   payloads are only destructured defensively at read sites. Proposed fix: `Record<string, unknown>` + a tiny guard helper (or keep `any`
   contained to this file and document).
+  Resolution: Workstream AO — `Record<string, unknown>` + `asRecord` guard; closure-narrowing gap fixed.
 
 ### C. Event routing / async
 
@@ -1369,5 +1370,19 @@ Verification: `bun run check` green (355 tests, spec-check ok); coordinator subm
 states what the field is: consecutive zero-tool iterations, recorded and surfaced in the TUI, never a pause.
 
 Files touched: `src/core/types.ts`, `SPEC.md`. No behavior change; test count unchanged (355).
+
+Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
+
+## Workstream AO — the event payload boundary is `unknown`, not `any` (A-14)
+
+`type Data = Record<string, any>` leaked `any` across every session-event read site. `Data` is now
+`Record<string, unknown>`; nested shell payloads (`info`, `metadata`) narrow through a tiny `asRecord` guard
+(object check + cast, local to the file). One latent strictness gap surfaced and fixed: `info.id`'s `typeof`
+narrowing did not propagate into the `safe()` closure, so the id is extracted to a `const` first. Runtime
+behavior is identical; `tsc --noEmit` enforces the boundary. No test added (types-only change; existing
+plugin/controller event tests pass unchanged) — stated plainly rather than dressing up a type refactor as a
+behavioral fix.
+
+Files touched: `src/runtime/events.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
