@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=346 -->
+<!-- spec-check files=35 tests=347 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1043,6 +1043,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   and the "Compaction pending" notice an iteration early. Proposed fix: single-source miss accounting — the arm-time settle must not count a
   pending request whose ended-event path already counted it (mark the pending with the count time/flag), or drop the ended-event increment
   and let arms count alone. Decide in the fix workstream and pin with a test: one no-op ended event + one arm = misses exactly 1.
+  Resolution: Workstream AC — single-source accounting via the `missesCountedAtEvent` one-shot flag; pin test added (fails pre-fix, passes post-fix).
 - **A-2 (medium) — `src/runtime/controller.ts:816` — planner-armed conditions bypass the configured length limit.**
   `Prompt.parseNextCondition(reply)` is called with the library default (2000 chars) while user-set conditions respect
   `config.maxConditionChars`. A `maxConditionChars: 100` configuration still arms 2000-char planner conditions.
@@ -1169,3 +1170,29 @@ Checked on every await in `controller.ts`: `onCompactionLanded` re-reads `this.g
 boundary-compact awaits; `checkin` re-checks after the busy await; `verifyMet` relies on the trailing `stale()` in `evaluate`. No await lacks a
 post-await staleness gate. The one soft spot is `reanchor()` (synchronous, reads the record without a guard) — safe only because every call site
 is already post-gate; noted for the Phase 3 sweep.
+
+## Workstream AC — compaction misses are counted once (A-1)
+
+Fix for the double-count found in the Phase 1 audit: a no-op compaction reported via
+`session.compaction.ended` incremented `loopCompact.misses` on the ended-event path, and the next arm-time
+settle counted the same pending request again, so one physical unlanded compaction consumed two of the four
+misses and forced the re-request and the "Compaction pending" notice an iteration early.
+
+122. Single-source accounting with a one-shot flag. `LoopCompactState` gains `missesCountedAtEvent?: boolean`
+    (`src/core/types.ts`). `onCompactionLanded()` sets the flag when its ended-event path counts a miss. The
+    arm-time settle consumes the flag exactly once: it re-uses the already-counted `misses` for the
+    force/cap decision (`force = misses >= 2 && misses < 4`, `capped = misses >= 4`) without incrementing and
+    without re-emitting the notice the ended-event path already sent for that count; it clears the flag so a
+    still-unlanded request counts normally at the following arm. A landing observed at the arm takes precedence
+    over the flag (an observed drop records `landedAt`, as before). Notices are never doubled: whichever path
+    counts the miss emits its notice; the other path stays silent about that observation.
+123. Pin test (`test/loop.test.ts`, 1 new): one no-op ended event plus one arm yields `misses === 1` and no
+    compact request; the following still-unlanded arm counts `misses === 2` and force re-requests. The pin test
+    fails on the pre-fix tree (verified by stashing the fix and re-running it) and passes with it. All pre-fix
+    tests pass unchanged, including the ended-event cap test and the "no-op landing pushes the miss count to 2"
+    re-request test, which exercise the notice path and the re-request decision on event-counted misses.
+
+Files touched: `src/core/types.ts`, `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `test/loop.test.ts` 78 pass; `bun test` 347 tests; pre-fix failure of the pin test verified;
+`bun run check` green; coordinator submit.
