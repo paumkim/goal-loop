@@ -1509,19 +1509,25 @@ exactly like `isFuzzyCondition`.
 
 136. `isOpencodeCliCondition(condition)` is true iff the condition matches /\bopencode\b/i (word-bounded, any
      case) — "opencode v2 CLI", "OpenCode's plugin api", "opencode-goal" all match; "opencoding", "open coding"
-     do not. Pure function, no I/O.
+     do not. Pure function, no I/O. Matcher decision (deliberately a bare word match, no cli-ish keyword gate):
+     a false positive costs one static block (~600 tokens) once in turn 1; a keyword gate produces false
+     negatives exactly when the guide is needed most ("opencode v2.3.0 broke my workflow" carries no cli-ish
+     keyword beyond the product name). \b keeps possessives and filenames matching ("OpenCode's",
+     "opencode.jsonc", "opencode-goal") while rejecting "opencoding" and "open coding".
 137. When it matches, the first-turn directive injects an `<opencode-cli>` block (after the fuzzy-condition
      SPEC.md hint, before the commit rule) carrying the operating guide: check `opencode --version` and never
      rebuild/replace the installed binary; the nearest source clone may lag; the plugin API contract is
-     `node_modules/@opencode/plugin/dist/tui/index.d.ts` and the SlotMap is the only stable TUI extension
+     `node_modules/@opencode/plugin/dist/tui/context.d.ts` and the SlotMap is the only stable TUI extension
      surface; search the binary for element IDs with targeted grep -ao + string-window extraction; never modify
      host sources to test a plugin — verify with a headless opentui render in /tmp (`createTestRenderer` from
      `@opentui/core/testing` + `render` from `@opentui/solid`, `renderOnce()`, `captureCharFrame()`, assert on
-     rows); plugins are `Plugin.define({ id, setup })` from `@opencode/plugin/tui`, server entry
-     `src/index.ts`, TUI entry `src/tui.tsx` → precompiled `dist/tui.js`; mount via
-     `~/.config/opencode/opencode.jsonc` / `tui.jsonc`; restart the TUI (no hot reload of unbuilt code); test
-     with the real binary in a throwaway `--config` dir in tmux/a PTY + `tmux capture-pane -p`, logs under the
-     opencode data/logs path; a failure ladder (binary newer → string-extract and diff; silent slot → grep the
+     rows); plugins are `Plugin.define({ id, setup })` — server entry `src/index.ts` imports `Plugin` from
+     `@opencode/plugin`, TUI entry `src/tui.tsx` → precompiled `dist/tui.js` imports `Plugin` from
+     `@opencode/plugin/tui`; mount the local checkout in `~/.config/opencode/opencode.jsonc` under
+     `"plugins": [...]` (v2 server config key; TUI plugins via `~/.config/opencode/tui.jsonc` `"plugin": [...]`);
+     restart the TUI (no hot reload of unbuilt code); test with the real binary in a throwaway `--config` dir in
+     tmux/a PTY + `tmux capture-pane -p`, logs at `~/.local/share/opencode/log/opencode.log`; a failure ladder
+     (binary newer → string-extract and diff; silent slot → grep the
      binary, check the plugin mounted, check the render returned JSX; negative offset → check ancestors'
      overflow/position first); and the two honest limits: no stable documented headless-drive tool for the v2
      TUI (scrape a PTY/tmux session or reproduce layout in `@opentui/core/testing`), and the installed binary
@@ -1530,7 +1536,10 @@ exactly like `isFuzzyCondition`.
      (binary / source / test-render / live TUI) each claim was verified at.
 138. The block is first-turn only (like the fuzzy hint): continuations, retries, check-ins, the loop
      preamble/re-anchor, the system reminder and the evaluator rubric are untouched — no per-turn context
-     cost, no evaluator behavior change.
+     cost, no evaluator behavior change. `loopContinuation` deliberately does NOT re-inject the guide: it is
+     one-time turn-1 context, loop iterations still see the arming directive and its `<opencode-cli>` block in
+     conversation history, and re-injecting per iteration would add ~600 tokens of zero-information repetition.
+     If a loop ever needs the guide re-surfaced, that is a rubric/preamble decision, not a silent injection.
 139. Goals whose condition never mentions opencode get a byte-identical directive to before this workstream.
 140. Tests pin it: `test/opencode-cli.test.ts` (8 tests) covers the word-boundary matcher, the balanced tagged
      block and its key invariants (`opencode --version`, SlotMap, `@opentui/core/testing`, `captureCharFrame()`,

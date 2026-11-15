@@ -39,7 +39,7 @@ describe("opencodeCliGuide", () => {
     expect(guide).toContain("~/Projects/opencode-v2-fake")
     expect(guide).toContain("Never rebuild or replace the installed binary")
     // The stable extension surface for TUI UI.
-    expect(guide).toContain("node_modules/@opencode/plugin/dist/tui/index.d.ts")
+    expect(guide).toContain("node_modules/@opencode/plugin/dist/tui/context.d.ts")
     expect(guide).toContain("SlotMap")
     expect(guide).toContain("session.composer.top")
     // Headless verification route: opentui test renderer + tmux/PTY scrape of the real binary.
