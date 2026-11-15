@@ -1,9 +1,11 @@
 /**
- * Terminal UI for opencode-goal: a compact goal indicator in the prompt footer, verdict toasts and notifications,
- * the `/goal` status dialog, and palette actions. Purely presentational; all state lives in the server plugin and
- * arrives over RPC. Everything renders through the host's own UI primitives: the `prompt.footer` slot for the
- * indicator, `ui.toast.show` for transitions, and `ui.dialog.show` (host backdrop, Esc handling, sizing) for the
- * detail view. No overlays, no absolutely positioned boxes, no custom colors — theme tokens only.
+ * Terminal UI for opencode-goal: a compact goal indicator painted on the left side of the host's jump-to-latest
+ * row (directly above the input prompt, claimed through the `session.composer.top` slot), verdict toasts and
+ * notifications, the `/goal` status dialog, and palette actions. Purely presentational; all state lives in the
+ * server plugin and arrives over RPC. Everything renders through the host's own UI primitives and theme tokens;
+ * the one exception is the indicator's single absolute 1-row box, which lands on the empty left side of the
+ * host's jump row without adding a line. The detail view goes through `ui.dialog.show` (host backdrop, Esc
+ * handling, sizing); transitions go through `ui.toast.show`.
  */
 import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
@@ -251,16 +253,24 @@ export default Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
     }, TICK_MS)
 
-    // Compact indicator in the native prompt-footer row, same slot the built-in session status uses
-    // (`prompt.footer`, claimed with `append` by the host's own PromptFooter plugin). The host row owns
-    // layout, spacing and baseline alignment; this only contributes a themed, non-wrapping text segment.
-    // Hidden in shell mode to match the built-in footer, which swaps to its shell hint and drops usage/cost.
+    // Compact indicator painted on the empty left side of the host's jump-to-latest row, the full-width
+    // 1-row strip directly above the input prompt. The host renders that row with
+    // `justifyContent="flex-end"` (the pill hugs the right edge) inside a `flexShrink={0}` wrapper whose
+    // top edge sits directly under it, and mounts `session.composer.top` inside that wrapper as the first
+    // contribution. Every opentui box is `position: relative` by default, so a 1-row absolute box with
+    // `top={-1}` anchored to our slot's parent wraps across the jump row itself: zero added rows, zero
+    // layout shift, pill untouched on the right. The default `overflow: visible` lets the negative top paint
+    // outside the wrapper, and the wrapper paints after the jump row, so the text lands on top of it.
+    // The host publishes no slot for the jump row, so this reuses the documented `session.composer.top`
+    // claim; layout and sizing of the row itself stay with the host. The slot's input carries no `mode`,
+    // so the indicator no longer hides in shell mode. Click dispatches `goal.status`, the same convention
+    // the old `prompt.footer` segment used to open the detail dialog.
     context.ui.slot({
-      append: "prompt.footer",
+      append: "session.composer.top",
       render: (props) => {
         const goal = createMemo(() => {
           try {
-            return props.mode === "normal" ? live(props.sessionID) : undefined
+            return live(props.sessionID)
           } catch {
             return undefined
           }
@@ -294,7 +304,7 @@ export default Plugin.define({
         }
         return (
           <Show when={goal()}>
-            <box flexShrink={0} onMouseUp={() => { try { if (props.sessionID) context.keymap.dispatch("goal.status") } catch {} }}>
+            <box position="absolute" top={-1} left={0} height={1} paddingLeft={1} flexDirection="row" onMouseUp={() => { try { if (props.sessionID) context.keymap.dispatch("goal.status") } catch {} }}>
               <text fg={color()} wrapMode="none">
                 {label()}
               </text>
