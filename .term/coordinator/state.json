@@ -484,6 +484,17 @@
       "submittedAt": "2026-11-15T20:15:36Z",
       "mergedAt": "2026-11-15T20:15:48Z",
       "mergedInto": "dev"
+    },
+    "audit-phase1": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/audit-phase1",
+      "worktree": "worktrees/wt-audit-phase1",
+      "status": "done",
+      "createdAt": "2026-11-15T20:22:57Z",
+      "submittedAt": "2026-11-15T20:24:57Z",
+      "mergedAt": "2026-11-15T20:25:07Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
