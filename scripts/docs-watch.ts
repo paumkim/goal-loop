@@ -37,7 +37,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative } from "node:path";
 
-const WATCH_PATHS = ["docs", "src", "script", "README.md"];
+const WATCH_PATHS = ["docs", "src", "scripts", "README.md"];
 const LOG = ".docs-watch.log";
 const STATE = ".docs-watch-state.json";
 const CHANGE_START = "<!-- changes:start -->";
@@ -147,7 +147,7 @@ const changelogRows = (root: string): string => {
       "docs/",
       "README.md",
       "src/",
-      "script/",
+      "scripts/",
     ]);
     for (const line of out.split("\n").filter(Boolean)) {
       const [when, ...rest] = line.split("\t");
@@ -158,7 +158,7 @@ const changelogRows = (root: string): string => {
   }
   // The HTML table is a pure function of git history so the committed page never
   // drifts. Working-tree (uncommitted) changes live in LOG and are shown by
-  // `bun script/docs-watch.ts log`; they stay out of the committed HTML.
+  // `bun scripts/docs-watch.ts log`; they stay out of the committed HTML.
   rows.sort((a, b) => (a.when < b.when ? 1 : a.when > b.when ? -1 : 0));
   return rows
     .map(
@@ -262,7 +262,7 @@ const main = (): void => {
     return; // never resolves; the watchers keep the process alive
   }
 
-  console.error("usage: bun script/docs-watch.ts once|watch|log");
+  console.error("usage: bun scripts/docs-watch.ts once|watch|log");
   process.exit(2);
 };
 

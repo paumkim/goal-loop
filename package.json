@@ -33,9 +33,7 @@
     "src",
     "dist",
     "packages/coordinator/bin/coordinator",
-    "packages/coordinator/README.md",
-    ".term/coordinator/config.json",
-    ".term/coordinator/state.json"
+    "packages/coordinator/README.md"
   ],
   "engines": {
     "opencode": ">=2.0.29"
@@ -47,8 +45,8 @@
     "check": "tsc --noEmit && bun test && bun run compile",
     "prepublishOnly": "bun run compile && bun test",
     "compile": "bun scripts/build.ts",
-    "docs:watch": "bun script/docs-watch.ts watch",
-    "docs:once": "bun script/docs-watch.ts once"
+    "docs:watch": "bun scripts/docs-watch.ts watch",
+    "docs:once": "bun scripts/docs-watch.ts once"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.29",

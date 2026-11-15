@@ -9,8 +9,7 @@
  * background-work check-ins, restore on restart).
  */
 import { Plugin } from "@opencode/plugin"
-import { spawnSync } from "node:child_process"
-import { ensureCoordinatorLayout, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
+import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { systemReminder } from "./core/prompts.ts"
@@ -82,12 +81,7 @@ export default Plugin.define({
           const bootstrap = ensureCoordinatorLayout(repository.root, pluginRoot)
           if (bootstrap.created.length > 0) log.info("coordinator bootstrap", { created: bootstrap.created })
           coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
-          try {
-            const jq = spawnSync("sh", ["-c", "command -v jq"], { stdio: "ignore" })
-            if (jq.status !== 0) log.warn("jq not found; coordinator state requires jq")
-          } catch {
-            // Best effort: the warn above is enough; never crash setup.
-          }
+          if (!hasJq()) log.warn("jq not found; coordinator state requires jq")
         }
       }
     } catch (error) {

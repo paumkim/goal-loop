@@ -9,18 +9,10 @@
 import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
-import { findRepository, type Repository } from "./git.ts"
 
 export interface BootstrapResult {
   readonly created: string[]
   readonly skipped: string[]
-}
-
-export interface PreflightResult {
-  readonly repository?: Repository
-  readonly bootstrap: BootstrapResult
-  readonly coordinatorBin?: string
-  readonly jqFound: boolean
 }
 
 /**
@@ -128,33 +120,4 @@ export function ensureCoordinatorLayout(projectRoot: string, pluginRoot?: string
     // Best effort: report whatever was done so far, never throw.
   }
   return { created, skipped }
-}
-
-/**
- * One call that finds the repository, runs the bootstrap, resolves the
- * coordinator binary and checks for `jq`. Never throws.
- */
-export function preflight(directory: string, pluginRoot: string): PreflightResult {
-  let jqFound = false
-  try {
-    jqFound = hasJq()
-  } catch {
-    jqFound = false
-  }
-  try {
-    const repository = findRepository(directory)
-    if (!repository) {
-      return { bootstrap: { created: [], skipped: ["not a git repository"] }, jqFound }
-    }
-    const bootstrap = ensureCoordinatorLayout(repository.root, pluginRoot)
-    const coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
-    return {
-      repository,
-      bootstrap,
-      ...(coordinatorBin ? { coordinatorBin } : {}),
-      jqFound,
-    }
-  } catch {
-    return { bootstrap: { created: [], skipped: ["preflight failed"] }, jqFound }
-  }
 }
