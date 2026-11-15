@@ -11,7 +11,24 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(tui): skip setEntries when an incoming snapshot is identical, so renders happen only on real change</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(controller): skip store writes and change emissions when the record is unchanged since the last commit</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:45 UTC</code></td><td>refactor(config): unify string/boolean flag parsing behind one flag() helper</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:45 UTC</code></td><td>chore: prune bloat — drop e2e-marker.txt, unship coordinator bus files, unify script/ into scripts/, remove dead preflight()/PreflightResult, dedupe jq check via hasJq()</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 21:31 UTC</code></td><td>fix(loop): review findings — local-only loop bookkeeping across awaits, resume resets not-progress, abortable loop generations, clamped prompt history, lossless pause diagnostics</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 14:23 UTC</code></td><td>tui: never call renderer hooks at setup time</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 10:45 UTC</code></td><td>tui: let the dialog scrollbox shrink below its content</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 09:57 UTC</code></td><td>feat: /goal-loop — continuous improvement loop after a met verdict</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 09:35 UTC</code></td><td>tui: render the /goal dialog from the live snapshot with fielded rows</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 04:12 UTC</code></td><td>Merge branch 'dev' into wt/goal-native-tui</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 04:06 UTC</code></td><td>refactor(tui): express goal state through opencode-v2 native UI primitives</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 04:02 UTC</code></td><td>docs: premium redesign of static docs site (fluid type, extended layout, responsive to tablet)</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:32 UTC</code></td><td>Merge branch 'dev' into wt/docs-footer-license</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:31 UTC</code></td><td>Merge branch 'dev' into wt/docs-last-updated</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:30 UTC</code></td><td>Merge branch 'dev' into wt/docs-sync</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:29 UTC</code></td><td>docs: add site footer with credits, MIT license attribution for fork</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 03:23 UTC</code></td><td>docs: git-derived Last updated stamps, watcher, changelog page</td><td>commit</td></tr>
+<tr><td><code>2026-11-14 03:12 UTC</code></td><td>docs: sync docs, README, SPEC, AGENTS with code</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 03:07 UTC</code></td><td>feat: plugin-managed auto-compaction at an absolute token threshold</td><td>commit</td></tr>
 <tr><td><code>2026-11-09 15:52 UTC</code></td><td>feat: coordinator bootstrap, strict detection, locks, fuzzy SPEC</td><td>commit</td></tr>
 <tr><td><code>2026-11-09 15:41 UTC</code></td><td>fix(tui): HUD overlays existing backdrop, no own background</td><td>commit</td></tr>
@@ -24,13 +41,8 @@
 <tr><td><code>2026-11-07 07:34 UTC</code></td><td>Add dark mode theme for docs site (midnight palette + toggle)</td><td>commit</td></tr>
 <tr><td><code>2026-11-07 07:27 UTC</code></td><td>Add how-to-view docs guide to README and install page</td><td>commit</td></tr>
 <tr><td><code>2026-11-07 07:20 UTC</code></td><td>Add flat HTML docs site for opencode-goalv2</td><td>commit</td></tr>
-<tr><td><code>2026-11-05 10:01 UTC</code></td><td>fix(goal): scrollable status dialog and unlimited condition length</td><td>commit</td></tr>
-<tr><td><code>2026-10-19 12:09 UTC</code></td><td>fix(goal): hold the commit to the named branch, not to any branch</td><td>commit</td></tr>
-<tr><td><code>2026-10-19 12:05 UTC</code></td><td>feat(goal): require finished work to be committed before the goal counts as met</td><td>commit</td></tr>
-<tr><td><code>2026-10-15 22:13 UTC</code></td><td>Publish to npm as @el4cteo/opencode-goal</td><td>commit</td></tr>
-<tr><td><code>2026-10-15 22:05 UTC</code></td><td>Add /goal plugin for OpenCode v2</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-14 03:23 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-14 21:45 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
