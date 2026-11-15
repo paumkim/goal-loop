@@ -99,6 +99,17 @@
       "submittedAt": "2026-11-15T06:11:42Z",
       "mergedAt": "2026-11-15T06:11:51Z",
       "mergedInto": "dev"
+    },
+    "docs-freshness-gate": {
+      "agent": "orchestrator",
+      "paths": "scripts,docs,test,package.json,SPEC.md,README.md,AGENTS.md,.github",
+      "branch": "wt/docs-freshness-gate",
+      "worktree": "worktrees/wt-docs-freshness-gate",
+      "status": "done",
+      "createdAt": "2026-11-15T06:13:12Z",
+      "submittedAt": "2026-11-15T06:17:24Z",
+      "mergedAt": "2026-11-15T06:17:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
