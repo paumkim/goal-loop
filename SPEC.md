@@ -197,11 +197,9 @@ folds the TUI load check into `bun run check`, and regenerates the docs metadata
 21. `.github/workflows/check.yml` exists and runs on push to `dev`/`main` and on pull requests:
     `bun install --frozen-lockfile`, `bun run check`, and an `npm pack --dry-run` smoke test. The workflow
     uses `oven-sh/setup-bun@v2` and has no secrets or network dependencies beyond package registries.
-22. `bun run check` is `tsc --noEmit && bun test && bun run compile && bun run check:tui`, where
-    `check:tui` runs `bun scripts/tui-load-check.ts ./tui.ts` (loads `tui.ts` the way the OpenCode host does;
-    fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and this file state the new
-    composition; the `docs/` pages' "Last updated" stamps and `docs/changelog.html` are regenerated with
-    `bun scripts/docs-watch.ts once` on this branch.
+22. `bun run check` includes `check:tui` (`bun scripts/tui-load-check.ts ./tui.ts`, loads `tui.ts` the way
+    the OpenCode host does; fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and
+    this file state the composition; superseded by Workstream E, which appends `docs:check`.
 23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (31 files, ~62 kB) with no
     `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
 
