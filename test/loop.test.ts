@@ -339,6 +339,26 @@ describe("/goal-loop", () => {
     expect(record.loopNotProgress).toBe(0)
   })
 
+  test("a restored loop counts tool calls before the first execution-end", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("the summary")
+    h.nextGoals.push("v2 condition")
+    await h.turn(4)
+    await h.controller.dispose()
+
+    const storage2 = h.storage
+    const h2 = harness({}, storage2)
+    expect(await h2.controller.restore()).toBe(1)
+    // Tool events arrive for the restored session before any execution ends; they must be counted.
+    h2.verdicts.push(met("v2 done"))
+    h2.summaries.push("the summary 2")
+    h2.nextGoals.push("v3 condition")
+    await h2.turn(5)
+    const record = h2.controller.get(SID)!
+    expect(record.loopHistory!.at(-1)!.toolCalls).toBe(5)
+  })
+
   test("restore keeps loop state across a restart", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))

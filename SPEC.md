@@ -257,3 +257,22 @@ workstream adds a read-only gate.
 
 Verification: `bun run docs:check` (pass on dev after the refresh commit), `bun test test/docs-watch.test.ts`,
 `bun run check` green, docs regenerated, coordinator submit.
+
+## Workstream F — tool-call counting regression acceptance criteria
+
+Interpretation of "the loop is pausing": two loop iterations completed real work (hundreds of tool calls),
+yet both loop history entries recorded `toolCalls: 0`, so the two-strike not-progress guard paused the
+loop with "two consecutive iterations without tool use" after iteration 2 was met. Root cause: after a
+plugin reload (e.g. triggered by a merge changing the plugin's watched files), `restore()` rebuilt the
+goals map but never the per-session runtime, so `onToolCalled`/`onExecutionStarted` silently dropped every
+tool event until the first `session.execution.succeeded` lazily created one.
+
+32. `onToolCalled` and `onExecutionStarted` lazy-create the per-session runtime whenever a goal exists for
+    the session (`this.runtime(sessionID)`), so tool events before the first execution-end are always
+    counted; `restore()` creates one up front for every restored live record. Tool events for sessions
+    with no goal still no-op.
+33. Regression test `test/loop.test.ts` "a restored loop counts tool calls before the first execution-end":
+    arms a loop, disposes, restores from the same storage, runs an execution with 5 tool calls, and asserts
+    the loop history entry records `toolCalls: 5`. All 205 tests pass.
+
+Verification: `bun test` (205 pass), `bun run check`, coordinator submit + merge-next.
