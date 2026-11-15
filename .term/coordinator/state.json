@@ -506,6 +506,17 @@
       "submittedAt": "2026-11-15T20:29:13Z",
       "mergedAt": "2026-11-15T20:30:17Z",
       "mergedInto": "dev"
+    },
+    "a25-label-width-shared": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md",
+      "branch": "wt/a25-label-width-shared",
+      "worktree": "worktrees/wt-a25-label-width-shared",
+      "status": "done",
+      "createdAt": "2026-11-15T20:31:03Z",
+      "submittedAt": "2026-11-15T20:32:02Z",
+      "mergedAt": "2026-11-15T20:32:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
