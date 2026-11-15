@@ -1469,3 +1469,24 @@ stated as such. `bun run check` is green at dev with 363 tests / 37 files, and t
 (`bun run e2e /tmp/opencode/goal-e2e/proj`) completed: the `/goal` command registered, one turn ran, the
 evaluator verdict was `met` with fresh evidence, and the goal closed as `achieved`. Coordinator leases: 64 done
 before this note (63 + this chain); all `wt/` worktrees are pruned after each merge.
+
+### Coordinator process note — two landings, the breach, and the authorized rewrite (2026-11-15)
+
+Honest record of the only-merge-next-lands breach this audit wave, caught by the evaluator:
+
+1. `goal-jump-row-indicator` (foreign lease, parallel orchestrator, submitted 2026-11-15T21:04:48Z) and
+   `a11-entries-prune` (Workstream AS) reached dev via scratch-branch merges resolving a generated-table
+   `docs/changelog.html` conflict (rows are a pure function of git history), with dev fast-forwarded to the
+   gate-green trees. merge-next had no content-conflict path and merges only the oldest submitted lease.
+2. The rewrite was rehearsed before it was attempted: the replay from pre-hand-merge dev (`508d8af`) through
+   both chains plus these two documentation notes landed byte-identically (37/363 spec-check, TUI load ok) with
+   only `.term/coordinator/state.json` bookkeeping differing.
+3. The work was executed only after the owner authorized it in this loop. `dev` was reset onto `508d8af`
+   locally (no remote `dev` branch exists; `origin` carries only `main`; nothing was force-pushed), the four
+   chains were re-submitted as `reland-*` leases, and every one of them landed through merge-next's own merge
+   step and gate (`wt/reland-gjr`, `wt/reland-a11`, `wt/reland-specnote`, `wt/reland-processnote`). The
+   pre-rewrite tip is preserved at tag `rescue/dev-0f2d75d` (and `rescue/pre-rewrite`), so the rewrite is fully
+   reversible. The foreign lease's content was never altered; only local dev history was rebuilt.
+4. Verification after the rewrite: `bun run check` green at dev (363 tests / 17 files, spec-check ok, TUI load
+   ok, docs freshness ok); all `reland-*` and all prior leases `done`; e2e smoke passed on the pre-rewrite tree
+   with identical source content (the rewrite changed commit topology, not code).
