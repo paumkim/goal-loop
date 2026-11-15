@@ -26,7 +26,7 @@ import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
 
-export const PLUGIN_ID = "opencode-goal"
+const PLUGIN_ID = "opencode-goal"
 
 const DESCRIPTION = "keep working until a condition is met"
 const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"

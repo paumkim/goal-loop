@@ -1,4 +1,4 @@
-export type GoalCommand =
+type GoalCommand =
   | { readonly type: "status" }
   | { readonly type: "clear" }
   | { readonly type: "set"; readonly condition: string }

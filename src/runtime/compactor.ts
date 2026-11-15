@@ -12,7 +12,7 @@ import { errorMessage } from "../core/errors.ts"
 import { truncate } from "../core/format.ts"
 import type { Clock, EmitterPort, Logger } from "./ports.ts"
 
-export interface CompactorDeps {
+interface CompactorDeps {
   readonly config: GoalConfig
   readonly compact: (sessionID: string) => Promise<void>
   readonly context: (sessionID: string) => Promise<readonly unknown[]>
@@ -27,7 +27,7 @@ export interface CompactorDeps {
   readonly isBusy?: (sessionID: string) => Promise<boolean>
 }
 
-export type BoundaryCompactMiss = "disabled" | "in-flight" | "cooldown" | "too-small" | "read-failed" | "busy" | "compact-failed" | "capped"
+type BoundaryCompactMiss = "disabled" | "in-flight" | "cooldown" | "too-small" | "read-failed" | "busy" | "compact-failed" | "capped"
 /** Outcome of a boundary-compaction request. `requested: false` carries why nothing was asked of the host. */
 export type BoundaryCompactResult = { readonly requested: true; readonly estimatedTokens?: number } | { readonly requested: false; readonly reason: BoundaryCompactMiss }
 

@@ -13,7 +13,7 @@ import type { CommitPolicy, ModelRef } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
 
-export interface EvaluatorDeps {
+interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
   /** Sessionless generation on a specific model. */
