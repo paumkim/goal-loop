@@ -14,6 +14,11 @@ import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
 import { createMemo, createSignal, Show as Show3 } from "solid-js";
 
+// src/core/types.ts
+var LIVE_STATUSES = new Set(["active", "paused"]);
+var isLive = (status) => LIVE_STATUSES.has(status);
+var COMPACT_MISS_CAP = 4;
+
 // src/core/format.ts
 var GOAL_GLYPH = "\u25CE";
 function formatDuration(ms) {
@@ -59,10 +64,6 @@ function truncate(text, max) {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length <= max ? flat : `${flat.slice(0, max - 1)}\u2026`;
 }
-
-// src/core/types.ts
-var LIVE_STATUSES = new Set(["active", "paused"]);
-var isLive = (status) => LIVE_STATUSES.has(status);
 
 // src/status-dialog.tsx
 import { createTextNode as _$createTextNode2 } from "@opentui/solid";
@@ -397,7 +398,7 @@ var LoopSection = (props) => {
           _$setProp(_el$20, "wrapMode", "none");
           _$insert(_el$20, (() => {
             var _c$ = _$memo(() => !!pending());
-            return () => _c$() ? `pending ${age()} \xB7 miss ${c.misses}/2${c.estimatedTokens !== undefined ? ` \xB7 ~${formatTokens(c.estimatedTokens)} at request` : ""}` : `landed ${age()} ago`;
+            return () => _c$() ? `pending ${age()} \xB7 miss ${c.misses}/${COMPACT_MISS_CAP}${c.estimatedTokens !== undefined ? ` \xB7 ~${formatTokens(c.estimatedTokens)} at request` : ""}` : `landed ${age()} ago`;
           })());
           _$effect((_$p) => _$setProp(_el$20, "fg", pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
           return _el$19;
@@ -1151,7 +1152,7 @@ var tui_default = Plugin.define({
               const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : "";
               const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops);
               const compactPending = g.loopCompact && !g.loopCompact.landedAt ? g.loopCompact : undefined;
-              const compacting = compactPending ? ` \xB7 compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/2)` : ""}` : "";
+              const compacting = compactPending ? ` \xB7 compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/${COMPACT_MISS_CAP})` : ""}` : "";
               return `${GOAL_GLYPH} loop \xB7 v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}`;
             }
             return `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
