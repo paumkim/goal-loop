@@ -47,6 +47,8 @@ interface Runtime {
   evaluating: boolean
   /** Set when a synthetic steer was dispatched (continuation, retry, check-in, loop arm): the next execution's succeeded event evaluates; any succeeded delivered before the next started is a straggler and is ignored. */
   awaitingExecution: boolean
+  /** Set when this iteration deferred an evaluation because background work was running: background work is real work for the zero-tool not-progress guard. */
+  iterationDeferred: boolean
   abort?: AbortController
   timer?: unknown
   deferredSince?: number
@@ -232,7 +234,11 @@ export class GoalController {
 
   onToolCalled(sessionID: string) {
     const runtime = this.runtimes.get(sessionID)
-    if (runtime) runtime.toolCalls++
+    if (runtime) {
+      runtime.toolCalls++
+      // Counted eagerly so a turn whose evaluation is later superseded or dropped still counts as work for the loop.
+      runtime.iterationToolCalls++
+    }
   }
 
   /** A user prompt was admitted (not synthetic). Resumes a paused goal and re-arms idle check-ins. */
@@ -407,7 +413,7 @@ export class GoalController {
     record.retries = 0
     record.verdict = result.verdict
     record.reason = result.reason || undefined
-    runtime.iterationToolCalls += tools
+    // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
     record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now() })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
@@ -459,7 +465,7 @@ export class GoalController {
     const history: LoopEntry[] = (record.loopHistory ?? []).filter((e) => e.version !== iteration)
     const now = clock.now()
     const iterationTools = runtime.iterationToolCalls
-    const notProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
+    const notProgress = iterationTools === 0 && !runtime.iterationDeferred ? (record.loopNotProgress ?? 0) + 1 : 0
     const makeEntry = (summary: string): LoopEntry => ({
       version: iteration,
       condition: record.condition,
@@ -597,6 +603,7 @@ export class GoalController {
     record.startedAt = clock.now()
     this.clearDeferred(runtime)
     runtime.iterationToolCalls = 0
+    runtime.iterationDeferred = false
     // Single durable write: the achieved history and the armed iteration land together or not at all.
     // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)
@@ -655,6 +662,7 @@ export class GoalController {
   private defer(record: GoalRecord, runtime: Runtime, work: BackgroundWork, tools: number) {
     const { config, clock } = this.deps
     runtime.carriedToolCalls += tools
+    runtime.iterationDeferred = true
     const firstDefer = runtime.deferredSince === undefined
     runtime.deferredSince ??= clock.now()
     if (firstDefer) this.emit(record)
@@ -693,6 +701,10 @@ export class GoalController {
 
   private async continueWith(record: GoalRecord, input: { text: string; description: string; turn: number }) {
     const runtime = this.runtime(record.sessionID)
+    // Every completion event after this dispatch belongs to the execution the steer starts; a succeeded delivered
+    // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
+    // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.
+    runtime.awaitingExecution = true
     try {
       await this.deps.session.synthetic({
         sessionID: record.sessionID,
@@ -701,8 +713,6 @@ export class GoalController {
         metadata: { source: Prompt.MARKER, goal: record.id, turn: input.turn },
         delivery: "steer",
       })
-      // The steer starts the next execution; a succeeded delivered before its started is a straggler duplicate.
-      runtime.awaitingExecution = true
     } catch (error) {
       if (this.goals.get(record.sessionID) === record && record.status === "active") this.pause(record, `Could not continue: ${truncate(errorMessage(error), 160)}`)
     }
@@ -784,7 +794,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false }
+      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, iterationDeferred: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -801,6 +811,7 @@ export class GoalController {
       carriedToolCalls: 0,
       evaluating: false,
       awaitingExecution: false,
+      iterationDeferred: false,
     })
   }
 
