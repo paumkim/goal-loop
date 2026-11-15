@@ -876,6 +876,19 @@ describe("/goal-loop", () => {
     expect(stallNotices).toHaveLength(1)
   })
 
+  test("the cap-freeze warning fires once per pause, not on every prompt (a24)", async () => {
+    const capped = harness({ maxTurns: 2 })
+    await capped.setGoal("all tests pass")
+    capped.verdicts.push(notMet(), notMet())
+    await capped.turn()
+    await capped.turn()
+    expect(capped.controller.get(SID)?.status).toBe("paused")
+    capped.controller.onUserPrompt(SID)
+    capped.controller.onUserPrompt(SID)
+    const freezeNotices = capped.notices.filter((n) => n.title === "Goal paused at turn cap")
+    expect(freezeNotices).toHaveLength(1)
+  })
+
   test("a message resumes an armed loop even past the cap", async () => {
     const h3 = harness({ maxTurns: 1 })
     await h3.setLoop("improve the parser")

@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=354 -->
+<!-- spec-check files=35 tests=355 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1135,6 +1135,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-24 (low) — `src/runtime/controller.ts` `onUserPrompt` — the cap-paused warning fires on every user message.** While a plain goal is
   paused at the turn cap, each prompt re-notifies "Goal paused at turn cap" — the one-courtesy-notice-per-event-kind discipline is not kept.
   Proposed fix: one-shot flag (runtime boolean) so the notice fires once per pause.
+  Resolution: Workstream AL — `capFreezeNotified` runtime flag; one warning per freeze.
 - **A-25 (low) — `src/status-dialog.tsx` & `src/tui-history.tsx` — `const LABEL = 10` duplicated.** Hoist into `src/core/history.ts` (pure,
   importable) or a shared `LABEL` export.
   Resolution: Workstream AD — hoisted as `LABEL` in `src/core/history.ts`, imported by both.
@@ -1330,3 +1331,18 @@ invariant — `lastCommit` mirrors the last persisted serialization — was brok
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (354 tests, spec-check ok); coordinator submit.
+
+## Workstream AL — the cap-freeze courtesy warning fires once per freeze (A-24)
+
+While a plain goal sat paused at the turn cap, every user prompt re-notified "Goal paused at turn cap",
+violating the one-courtesy-notice-per-event-kind discipline. The notice is now one-shot per pause via a
+session-scoped runtime flag (`capFreezeNotified`, alongside `capNotified`/`stallNotified`). Later prompts in
+the same freeze stay silent; a restart begins a fresh freeze and may notify once again.
+
+133. Pin test (`test/loop.test.ts`, 1 new): two prompts on a capped, paused plain goal produce exactly one
+     "Goal paused at turn cap" notice. Verified to fail on the pre-fix tree and pass with it. Test count
+     354 → 355.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (355 tests, spec-check ok); coordinator submit.
