@@ -200,7 +200,7 @@ folds the TUI load check into `bun run check`, and regenerates the docs metadata
 22. `bun run check` includes `check:tui` (`bun scripts/tui-load-check.ts ./tui.ts`, loads `tui.ts` the way
     the OpenCode host does; fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and
     this file state the composition; superseded by Workstream E, which appends `docs:check`.
-23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (32 files, ~64 kB as of 2026-11-15,
+23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (32 files, ~65 kB as of 2026-11-15,
     i.e. including `src/rpc-handlers.ts`) with no `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
 
 Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: loaded TUI plugin "opencode-goal.tui"`),
@@ -346,11 +346,28 @@ storage failures, mid-restore state); any throw escaped the plugin as an unhandl
     `get` performs the storage read-through (`restoreOne`) inside its own guarded path, and a failure
     there or inside `snapshot`/`spend` still yields `goal: null`, never an exception.
 42. Malformed or missing inputs never throw: `undefined`, `null`, `{}`, empty/non-string `sessionID`
-    all return `{ goal: null }`. `test/rpc-handlers.test.ts` proves this plus double-failure paths
-    (spend throws AND snapshot throws; restoreOne throws; list explodes; status explodes; clear explodes)
-    and the `GoalRpc` output shape. `src/index.ts` registers exactly these handlers.
-43. `bun run check` stays green (223 tests) and dev is green after merge.
+    all return `{ goal: null }` at the handler layer. Two layers reject before the handler ever runs,
+    both verified live on 2026-11-15: the RPC schema (`sessionInput`, `additionalProperties: false`)
+    answers `rpc.invalid_input` (`Missing key at ["sessionID"]`, `Expected string`, `Expected object`,
+    `Expected never` for extra props) and a non-JSON body answers `InvalidRequestError` — all
+    structured 400s, never a 500. `test/rpc-handlers.test.ts` proves the handler layer plus
+    double-failure paths (spend throws AND snapshot throws; restoreOne throws; list explodes;
+    status explodes; clear explodes) and the `GoalRpc` output shape. `src/index.ts` registers
+    exactly these handlers.
+43. `bun run check` stays green (228 tests) and dev is green after merge.
 
 Verification: `bun test test/rpc-handlers.test.ts` (9 tests), `bun run check`, coordinator submit +
-merge-next, then commit state.json to dev; `opencode api POST /api/rpc/goal/get -d '{"input":{"sessionID":"x"}}'`
-after the merge shows the benign fallback instead of a 500.
+merge-next, then commit state.json to dev. Note: plugin RPC calls are directory-scoped — the
+`/api/rpc/<rpcID>/<method>` endpoint requires the `location[directory]=<abs path>` query parameter
+(deepObject style), e.g.
+
+    curl -g -u opencode:$OPENCODE_PASSWORD -H 'Content-Type: application/json' \
+      -X POST 'http://127.0.0.1:<port>/api/rpc/goal/get?location[directory]=/home/pauk/Projects/opencode-v2-goal/opencode-goalv2' \
+      -d '{"input":{"sessionID":"x"}}'
+
+or `opencode api --server http://127.0.0.1:<port> POST /api/rpc/goal/get
+--param 'location[directory]=/home/pauk/Projects/opencode-v2-goal/opencode-goalv2'
+-d '{"input":{"sessionID":"x"}}'`. Without the parameter the server answers a structured
+`rpc.unavailable` (HTTP 400, not a 500), which is not a handler failure. With it, the benign
+fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live on 2026-11-15,
+`goal/list` likewise returns `{"output":{"goals":[...]}}`).
