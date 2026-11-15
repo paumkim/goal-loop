@@ -473,6 +473,17 @@
       "submittedAt": "2026-11-15T20:14:17Z",
       "mergedAt": "2026-11-15T20:14:28Z",
       "mergedInto": "dev"
+    },
+    "tui-dist-rebuild": {
+      "agent": "orchestrator",
+      "paths": "dist/tui.js,dist/tui.d.ts",
+      "branch": "wt/tui-dist-rebuild",
+      "worktree": "worktrees/wt-tui-dist-rebuild",
+      "status": "done",
+      "createdAt": "2026-11-15T20:15:17Z",
+      "submittedAt": "2026-11-15T20:15:36Z",
+      "mergedAt": "2026-11-15T20:15:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
