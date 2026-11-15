@@ -117,7 +117,7 @@ export default Plugin.define({
               <Show when={g().reason}>{(reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
               <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
               <Show when={g().loopEnabled}>
-                <LoopSection goal={g()} theme={context.theme} elapsedMs={elapsed} />
+                <LoopSection goal={g()} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} />
               </Show>
               <Show when={!g().loopEnabled}>
                 <HistoryBlock goal={g()} theme={context.theme} elapsedMs={elapsed} />

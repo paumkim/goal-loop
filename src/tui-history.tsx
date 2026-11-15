@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
@@ -43,6 +43,8 @@ export const LoopSection = (props: {
   theme: HistoryTheme
   /** Live extrapolated elapsed time for the running iteration, in ms. Getter form so it stays reactive. */
   elapsedMs: () => number
+  /** Reference clock for `ended <ago>` labels. Getter form so it stays reactive; defaults to Date.now(). */
+  nowMs?: () => number
 }): JSX.Element => {
   const theme = () => props.theme
   const history = () => props.goal.loopHistory ?? []
@@ -57,8 +59,10 @@ export const LoopSection = (props: {
     const mix = mixes()[index]
     return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
   }
+  const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())}`
   const paused = () => props.goal.status === "paused"
   const stateWord = () => (paused() ? "paused" : props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active")
+  const nowMs = () => props.nowMs?.() ?? Date.now()
   const nowColor = () => (paused() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
   return (
     <box flexDirection="column" gap={1}>
@@ -112,7 +116,7 @@ export const LoopSection = (props: {
                 ✓
               </text>
               <text wrapMode="none" fg={theme().text.base}>
-                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}`}
+                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}`}
               </text>
             </box>
             <Show when={entry.summary.trim().length > 0}>
@@ -135,7 +139,7 @@ export const LoopSection = (props: {
           ◎
         </text>
         <text wrapMode="none" fg={theme().text.base}>
-          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} · ${formatDurationCoarse(props.elapsedMs())} elapsed`}
+          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed`}
         </text>
       </box>
       {/* evaluator verdict trail */}
