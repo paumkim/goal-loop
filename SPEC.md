@@ -383,7 +383,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=36 tests=356 -->
+<!-- spec-check files=37 tests=363 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1096,6 +1096,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-11 (low) — `src/tui.tsx` — `entries()` map is never pruned.** Sessions that go terminal (or are deleted) stay in the map for the
   life of the TUI process; the 15s tick only exempts non-active goals from re-rendering, so memory still grows. Proposed fix: drop
   entries whose goal is null and not referenced by an open dialog, or cap the map.
+  Resolution: Workstream AS — `src/core/entries.ts`; inline prune in `put`; open-dialog session is always kept; live goals never evicted.
 - **A-12 (low) — `src/runtime/controller.ts` — `loopHistory` grows without bound.** Every iteration appends a `LoopEntry` (condition +
   summary, ~1–2 KB) and every `commit()` `structuredClone`s the whole record, making persistence O(n²) in loop lifetime. Proposed fix:
   no functional change required for correctness, but note; waive formal trimming unless a measured problem appears (history is user-visible
@@ -1436,3 +1437,23 @@ No code change; nothing removed; SPEC-only workstream.
 Files touched: `SPEC.md`. Test count unchanged (356, 36 files).
 
 Verification: `bun run check` green (spec-check ok); coordinator submit.
+
+## Workstream AS — the TUI goal-snapshot cache is pruned and capped (A-11)
+
+`entries()` in `src/tui.tsx` only got entries added; terminal sessions' snapshots (and null entries for
+deleted/never-goaled sessions) accumulated for the life of the process. New pure module `src/core/entries.ts`
+exports `pruneSnapshotEntries` (and `ENTRY_CAP = 64`): null-valued entries are dropped unless an open dialog is
+rendering that session, the map is capped with oldest non-live entries evicted first, and live
+(active/paused) entries are never evicted by the cap. `tui.tsx` tracks the open dialog's session via a
+`statusDialogSession` signal (set on show, cleared on close/onClose/teardown) and prunes inline in the
+`put` path — no timers, nothing else re-renders. Returns the same reference when nothing changed (Solid signal
+stays quiet). dist/tui.js rebuilt and committed in this workstream.
+
+135. Pin tests (`test/entries.test.ts`, 7 new): null drop, keep-the-dialog-session, same-reference no-op, cap
+     eviction order (oldest non-live, keep wins), live entries never evicted, cap-exceeding all-live map. The
+     TUI wiring is covered by the rebuilt-load check (`scripts/tui-load-check.ts`) and the unchanged dialog
+     tests. Test count 356 → 363, files 36 → 37.
+
+Files touched: `src/core/entries.ts` (new), `src/tui.tsx`, `dist/tui.js`, `test/entries.test.ts` (new), `SPEC.md`.
+
+Verification: `bun run check` green (363 tests, 37 files, spec-check ok); coordinator submit.
