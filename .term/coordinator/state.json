@@ -451,6 +451,25 @@
       "submittedAt": "2026-11-15T20:02:29Z",
       "mergedAt": "2026-11-15T20:02:39Z",
       "mergedInto": "dev"
+    },
+    "compact-evidence-spec-dedupe": {
+      "agent": "compact-evidence-subagent",
+      "paths": "SPEC.md",
+      "branch": "wt/compact-evidence-spec-dedupe",
+      "worktree": "worktrees/wt-compact-evidence-spec-dedupe",
+      "status": "done",
+      "createdAt": "2026-11-15T20:06:19Z",
+      "submittedAt": "2026-11-15T20:07:04Z",
+      "mergedAt": "2026-11-15T20:08:09Z",
+      "mergedInto": "dev"
+    },
+    "compact-cap": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/changelog.html,docs/index.html",
+      "branch": "wt/compact-cap",
+      "worktree": "worktrees/wt-compact-cap",
+      "status": "claimed",
+      "createdAt": "2026-11-15T20:06:56Z"
     }
   },
   "mergeLock": null
