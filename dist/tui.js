@@ -101,6 +101,13 @@ var GoalRpc = Rpc.define({
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
+var goalsEqual = (a, b) => {
+  if (a === b)
+    return true;
+  if (!a || !b)
+    return false;
+  return JSON.stringify(a) === JSON.stringify(b);
+};
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions();
   return (() => {
@@ -322,13 +329,18 @@ var tui_default = Plugin.define({
         location
       } : undefined;
     };
-    const put = (sessionID, goal) => setEntries((previous) => ({
-      ...previous,
-      [sessionID]: {
-        goal,
-        receivedAt: Date.now()
-      }
-    }));
+    const put = (sessionID, goal) => setEntries((previous) => {
+      const existing = previous[sessionID];
+      if (existing && goalsEqual(existing.goal, goal))
+        return previous;
+      return {
+        ...previous,
+        [sessionID]: {
+          goal,
+          receivedAt: Date.now()
+        }
+      };
+    });
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
         return;

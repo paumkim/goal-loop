@@ -24,6 +24,13 @@ interface Entry {
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
 
+/** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
+const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
+  if (a === b) return true
+  if (!a || !b) return false
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
 /**
  * Host xlarge dialogs size to their content and can outgrow the terminal; clamping the column to the
  * viewport (minus one row) keeps the header and hint pinned while the scrollbox gives way. The terminal
@@ -173,7 +180,12 @@ export default Plugin.define({
     }
 
     const put = (sessionID: string, goal: GoalSnapshot | null) =>
-      setEntries((previous) => ({ ...previous, [sessionID]: { goal, receivedAt: Date.now() } }))
+      setEntries((previous) => {
+        const existing = previous[sessionID]
+        // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.
+        if (existing && goalsEqual(existing.goal, goal)) return previous
+        return { ...previous, [sessionID]: { goal, receivedAt: Date.now() } }
+      })
 
     /** Lazily fetches a session's goal the first time a view asks for it; events keep it fresh afterwards. */
     const ensure = (sessionID: string) => {
