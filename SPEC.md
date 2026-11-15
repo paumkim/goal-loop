@@ -237,3 +237,25 @@ Verification (all run in the worktree): `bun install --frozen-lockfile`, `bun ru
 packages/coordinator/bin/coordinator`, overlap trim exercised end-to-end against a throwaway repo
 (`claim --paths docs` against a lease with `"src, docs"` fails with a single error; a
 non-overlapping claim succeeds), then coordinator submit.
+
+
+## Workstream E — docs freshness gate acceptance criteria
+
+Interpretation of the armed condition: docs stamps and the changelog had no automated guard, so they
+drifted silently (iteration 1 committed stamps that already trailed the commit containing them). This
+workstream adds a read-only gate.
+
+29. `bun scripts/docs-watch.ts check` (`bun run docs:check`) exits 0 when every `docs/*.html` page's
+    `<span class="stamp">` equals the date of the newest non-merge commit touching that page, excluding
+    mechanical `docs: refresh` commits, and `docs/changelog.html`'s table equals the regenerated rows
+    (same exclusions). Otherwise it exits 1 and lists every stale page/table with the expected date.
+    The check is read-only (never writes) and never requires network or repos beyond git itself.
+30. `bun run check` is `tsc --noEmit && bun test && bun run compile && bun run check:tui && bun run docs:check`;
+    CI (`.github/workflows/check.yml`) enforces it unchanged. `AGENTS.md`, `README.md` document the
+    gate and the restamp workflow (`once`, then commit as `docs: refresh stamps and changelog`).
+31. `test/docs-watch.test.ts` proves the gate end-to-end against a throwaway git repository: fresh state
+    passes, a docs commit without a restamp fails with the stale page listed, `docs-watch.ts once` +
+    refresh commit makes it pass again; `bash -n`-equivalent guarantees keep the script typed (it is TS run by bun).
+
+Verification: `bun run docs:check` (pass on dev after the refresh commit), `bun test test/docs-watch.test.ts`,
+`bun run check` green, docs regenerated, coordinator submit.
