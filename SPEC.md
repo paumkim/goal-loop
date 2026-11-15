@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=339 -->
+<!-- spec-check files=35 tests=343 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -808,10 +808,12 @@ boundary request actually lands, record it, surface it, and re-request when it n
     (a) in `loopAdvance` after the arm commit — a returned boundary-compact result with `requested: true`
     overwrites the record with a fresh pending state (iteration = the newly armed iteration, `misses` carried
     forward until an actual landing is observed, never reset by a mere re-request); (b) in `restore()` for
-    adopted ACTIVE records that the boundary compaction was re-requested for. Landing detection runs at the
-    NEXT arm before a new request is issued, in one of two ways: (i) the `session.compaction.ended` event
-    marks the pending state `landedAt` via the controller's public `onCompactionLanded()` and emits a
-    "Compaction landed" success notice; (ii) a context-size drop at the next arm — via the new optional
+    adopted ACTIVE records that the boundary compaction was re-requested for. Landing detection (i) — the
+    `session.compaction.ended` event settles the pending state via the controller's public
+    `onCompactionLanded()` — is evidence-based: it marks `landedAt` only on an observed context-size drop
+    (same threshold as (ii)); an unestimable or no-op compaction counts as a miss toward the 2-miss
+    re-request and queues no re-anchor (Workstream AA). Landing detection (ii) runs at the next arm before a
+    new request is issued — a context-size drop at the next arm — via the new optional
     `ControllerDeps.estimateContext` port (`ctx.session.context` + `estimateContextTokens`, estimate
     unavailable → treated as not-landed) — marks landing when `size <= max(10_000, floor(estimatedTokens
     × 0.6))` (unknown baseline estimate: `size < 10_000`). An unlanded pending request accumulates `misses`
@@ -832,7 +834,7 @@ Files touched: `src/core/types.ts`, `src/core/format.ts`, `src/runtime/compactor
 
 Verification: `test/compactor.test.ts` (result-object API for `compactAtBoundary`; busy deferral for both
 paths; `force` bypassing cooldown only — busy and in-flight hold; failing `isBusy` probe fails closed), `test/loop.test.ts`
-(pending state recorded at arm; `onCompactionLanded` marks landed with a success notice; context-size drop
+(pending state recorded at arm; `onCompactionLanded` marks landed on an observed drop with a success notice; context-size drop
 detected at the next arm; two unlanded armed iterations force the third re-request with `opts.force`;
 busy denial counts a miss, persists it, and stays a busy denial even under force), `bun run check` green
 (320 tests), coordinator submit.
@@ -851,7 +853,9 @@ the host compacting, but it can restore the ground truth on the next one.
     wait for a user message — the loop continues automatically" line. History injection keeps the same -10
     slice as the other loop prompts.
 100. Controller `onCompactionLanded()` (public, `session.compaction.ended` path): settles any pending
-     boundary-compact request as before, then — when the record is a LIVE ACTIVE loop (`loopEnabled` and
+     boundary-compact request as before — evidence-based since Workstream AA: a landing is recorded only on an
+     observed context-size drop, otherwise the event counts as a miss — then, on a landing or with no pending
+     request, when the record is a LIVE ACTIVE loop (`loopEnabled` and
      `status === "active"`) — queues the re-anchor via `session.synthetic` with `delivery: "queue"` and
      `resume: false`. Queued, never a steer: it cannot wake an idle session behind the loop's back and cannot
      interleave into a turn in flight; the next arm/continuation steer the loop already dispatches carries it
@@ -957,3 +961,64 @@ Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `REA
 
 Verification: `test/loop.test.ts` (the three new tests; the rewritten paused-loop test), `bun test`
 (339 tests), `bun run check` green; coordinator submit.
+
+## Workstream AA — evidence-based compaction landing
+
+Interpretation of the armed condition's landing-detection gap: `session.compaction.ended` fired whenever the
+host finished a compaction, including no-ops ("Nothing to compact yet"), and the plugin recorded a landing
+unconditionally — a no-op looked like a fresh context and disarmed the 2-miss re-request. A landing is now
+recorded only on evidence that the context actually dropped.
+
+114. Shared drop heuristic: the context-size drop test (`size !== undefined && (estimatedTokens === undefined ?
+    size < 10_000 : size <= max(10_000, floor(estimatedTokens × 0.6)))`) is extracted into one private
+    `contextDropped(pending, size)` helper used by BOTH the arm-time settle (unchanged behavior) and
+    `onCompactionLanded()`.
+115. Evidence-based `onCompactionLanded()`: a pending unlanded request is settled only after an optional
+    `estimateContext` probe (`.catch(() => undefined)`, exactly as the settle does) and a staleness re-check
+    after the await (`goals.get(sessionID) !== record` → drop the write). On an observed drop the landing path
+    is exactly as before (`landedAt`, commit, "Compaction landed" success notice, re-anchor queued). Otherwise —
+    no estimate, an estimation error, or no drop (a no-op compaction) — the event counts as a miss: `misses + 1`,
+    commit, no `landedAt`, NO re-anchor (a no-op compaction does not replace history); at `misses >= 2` the same
+    "Compaction pending" warning the arm path emits fires. No pending unlanded request: unchanged (re-anchor
+    only). `events.ts` unchanged — failed compactions stay unwired. Plain goals untouched; one notice per event.
+116. Tests (`test/loop.test.ts`): existing landing tests set `setContextSize(90_000)` before the event; four new
+    tests — a no-op compaction counts as a miss, not a landing (misses 1 → 2, no success notice, no re-anchor,
+    warning at 2); an evidence-based landing records and re-anchors (`iteration="2"`); two no-op landings push
+    the miss count to 2 and the next arm force re-requests (`compactCalls[1]` = `{ sessionID, opts: { force: true } }`);
+    an unestimable context counts as a miss, not a landing.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/`.
+
+Verification: `test/loop.test.ts` (the four new tests; the evidence-based landing tests updated), `bun test`
+(343 tests), `bun run check` green; coordinator submit.
+
+## Workstream AA — evidence-based compaction landing
+
+Interpretation of the armed condition's accepted-vs-completed remainder: Workstream V detected a landing two
+ways, but the `session.compaction.ended` path recorded one unconditionally — the host can complete a
+compaction that removes nothing ("Nothing to compact yet"), and the plugin counted that as a landing, so the
+loop re-armed on false evidence. Landing is now recorded only when the estimated context actually drops.
+
+114. Shared drop heuristic `contextDropped(pending, size)` (private, `src/runtime/controller.ts`): `size < 10_000`
+    when the request carried no estimate, else `size <= max(10_000, floor(estimatedTokens × 0.6))` — the same
+    threshold the arm-time settle has always used. An unknown/unestimable/unchanged size is not a drop.
+115. `onCompactionLanded()` (`session.compaction.ended`) is evidence-based: it estimates the context first
+    (optional `ControllerDeps.estimateContext` shared with the arm settle, errors → unknown), re-checks the
+    session identity after the await (a cleared/replaced record drops the result), and only then records
+    `landedAt` + the success notice + the re-anchor. A no-op compaction (no estimate, estimation error, or no
+    drop) instead persists `misses + 1` on the pending request, emits the "Compaction pending" warning only
+    when `misses` reaches 2 (same crossing as the arm path), marks nothing landed and queues NO re-anchor — a
+    no-op does not replace history. Plain goals and the no-pending-request path (host compacted on its own)
+    are unchanged. The arm-time settle uses the same shared helper; its behavior is unchanged.
+116. A no-op compaction therefore counts as a miss toward the 2-miss re-request exactly like an unlanded
+    armed iteration: after two no-op ended-events, the next arm passes `{ force: true }` to the host.
+117. Tests (`test/loop.test.ts`, 4 new): a no-op compaction counts as a miss (no landing, no success notice,
+    no re-anchor; second event brings misses to 2 with the warning); an evidence-based landing records +
+    re-anchors; two no-op ended-events push misses to 2 and the next arm force re-requests
+    (`compactCalls[1]` = `{ force: true }`); an unestimable context counts as a miss. Existing landing tests
+    were updated to set `setContextSize(90_000)` before expecting a landing.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/runtime.html`.
+
+Verification: `test/loop.test.ts` (the 4 new tests; updated landing tests), `bun test` (343 tests),
+`bun run check` green; coordinator submit.
