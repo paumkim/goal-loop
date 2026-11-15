@@ -1,0 +1,58 @@
+/**
+ * Pure helpers behind the goal-history rendering in the TUI detail dialog (`src/tui-history.tsx`).
+ * No I/O, no JSX, no theme — everything here is unit-tested in `test/history.test.ts`.
+ */
+import type { LoopEntry, VerdictEntry } from "./types.ts"
+
+export const BAR_CELLS = 18
+
+/** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. */
+export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS): { filled: number; text: string } {
+  const width = Math.max(1, Math.floor(cells))
+  const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0
+  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
+  const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round((safeDone / safeMax) * width)))
+  return { filled, text: "█".repeat(filled) + "░".repeat(width - filled) }
+}
+
+/** Caption under/near the bar, e.g. `v3 of at most 5 · 2 complete`. */
+export function barCaption(current: number, max: number | undefined, done: number): string {
+  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
+  const v = Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1
+  return typeof max === "number" && Number.isFinite(max) && max > 0
+    ? `v${v} of at most ${Math.floor(max)} · ${safeDone} complete`
+    : `v${v} · ${safeDone} complete`
+}
+
+export function verdictGlyph(verdict: VerdictEntry["verdict"]): string {
+  switch (verdict) {
+    case "met":
+      return "✓"
+    case "impossible":
+      return "⊘"
+    default:
+      return "✗"
+  }
+}
+
+/** Per-iteration durations in ms; v1 anchors at the record's setAt, vN at the previous entry's endedAt. Negative spans clamp to 0. */
+export function iterationDurations(entries: readonly LoopEntry[], setAt: number): number[] {
+  const out: number[] = []
+  let previous = setAt
+  for (const entry of entries) {
+    const span = Number.isFinite(entry.endedAt) ? entry.endedAt - previous : 0
+    out.push(Math.max(0, span))
+    previous = Number.isFinite(entry.endedAt) ? entry.endedAt : previous
+  }
+  return out
+}
+
+/**
+ * The verdict trail to render: at most `limit` newest verdicts, oldest first.
+ * `total` is the full history length so the caption can say `<shown> of <total> verdicts`.
+ */
+export function trailWindow(history: readonly VerdictEntry[], limit = 24): { shown: readonly VerdictEntry[]; total: number } {
+  const total = history.length
+  const shown = limit >= total ? history : history.slice(total - limit)
+  return { shown, total }
+}

@@ -56,7 +56,7 @@ export interface UsageSnapshot {
 
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
-interface VerdictEntry {
+export interface VerdictEntry {
   readonly turn: number
   readonly verdict: Verdict
   readonly reason: string

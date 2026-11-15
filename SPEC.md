@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=32 tests=244 -->
+<!-- spec-check files=34 tests=261 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -439,3 +439,47 @@ Out of scope / follow-ups (bigger than one iteration; not this loop's job):
 - spec-check enforcing tarball size bands, and SPEC counts beyond the marker (per-workstream historical claims).
 - A host-side fix for prompt.footer staleness after the first loop arm (already a known host issue).
 - Wiring verifyCommand into the live dev repo's own `opencode.json` (policy choice, not a code change).
+
+## Workstream K — the goal history, re-imagined in the detail dialog
+
+Interpretation of "keep improving the terminal tui display of this current plugin how it shows the goal
+histories be creative": the `/goal` detail dialog rendered the loop history as flat `vN · met · turns ·
+summary` rows — a wall of near-identical text with no sense of progress, no per-iteration timing, and the
+per-turn evaluator verdict trail (`GoalSnapshot.history`) was not rendered at all. This workstream rebuilds
+the history section as a visual iteration rail with a progress bar, per-iteration timing and tool counts, a
+"now" row for the running iteration, and an evaluator verdict trail, rendered entirely from existing
+snapshot fields (no RPC, schema, storage or controller changes).
+
+52. The loop history renders as an iteration rail (`src/tui-history.tsx`, pure helpers in
+    `src/core/history.ts`): for each `loopHistory` entry a `✓` glyph (feedback.info) on a vertical `│`
+    rail, then `vN · met · <turns> turns · <toolCalls> tools · <duration>` — duration is `endedAt` minus the
+    previous entry's `endedAt` (or `setAt` for v1), via `formatDuration` — and the entry's `summary` wrapped
+    on a `│`-prefixed line in `text.faint`, indented under the rail. Theme tokens only; no borders, no
+    hardcoded RGBA, no absolute positioning.
+53. A progress bar sits above the rail: `█` filled (feedback.info.base) vs `░` empty (text.faint),
+    fixed 18 cells, filled = round(completed / loopMaxLoops × 18), clamped to [0, 18]; caption
+    `v<current> of at most <max> · <done> complete`. When `loopMaxLoops` is absent the bar renders
+    all-empty with caption `v<current> · <done> complete` and never divides by zero.
+54. A "now" row closes the rail for the running iteration: `◎ v<current> · <state> · <turns> turns ·
+    <elapsed>` (elapsed extrapolated live by the dialog as today) in feedback.info when active /
+    text.warning when paused. Rendered as the rail's last row; when the history is empty (a loop that
+    has not completed v1 yet) it stands alone — just the bar, objective and now row render, no rail rows.
+55. The evaluator verdict trail renders below the rail from `GoalSnapshot.history`: up to the last 24
+    verdicts, one glyph each — `✓` met (feedback.info.base), `✗` not_met (text.faint), `⊘` impossible
+    (text.warning.base) — oldest first, then a `text.muted` caption `<shown> of <total> verdicts`.
+    Renders nothing (section omitted) when `history` is empty. Long trails never wrap mid-glyph:
+    trail + caption truncate from the left, keeping the newest verdicts.
+56. The prompt footer loop indicator shows the cap when known: `◎ loop · v<N>/<max> · …` (was
+    `◎ loop · v<N> · …`); unchanged when `loopMaxLoops` is absent.
+57. The `/goal` status dialog keeps the host chrome, header convention, scrollbox and footer hint exactly
+    as Workstream A/7-10 describe; only the loop section inside the body is re-laid-out (status line,
+    condition, evaluator/reason, spend and the non-looped path are unchanged).
+58. `scripts/render-history.tsx` renders the history components headlessly via `@opentui/solid`'s
+    `testRender` (fixed width/height, sample loop with 2 completed iterations and a running v3, sample
+    verdict trail) and prints the captured char frame; it is a verification tool, not shipped (scripts/
+    is not in `files`). Visual check: the rail, bar, now row and trail are all legible in the captured frame.
+
+Verification: `bun test` (new `test/history.test.ts` covers `renderBar` clamping/zero-max/rounding,
+`verdictGlyph`, `iterationDurations` with v1 anchored at `setAt`, `trailWindow` left-truncation; existing
+suites untouched and green), `bun run check` (tsc, tests, compile, check:tui, docs:check, check:spec),
+`bun --preload @opentui/solid/preload scripts/render-history.tsx` output captured in the commit message evidence (the preload maps solid-js’s server build to the client build, exactly how the host loads the plugin), coordinator submit.
