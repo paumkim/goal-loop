@@ -132,6 +132,17 @@
       "submittedAt": "2026-11-15T06:55:00Z",
       "mergedAt": "2026-11-15T06:58:48Z",
       "mergedInto": "dev"
+    },
+    "merge-next-merged-gate": {
+      "agent": "orchestrator",
+      "paths": "packages/coordinator,test,SPEC.md,README.md,docs",
+      "branch": "wt/merge-next-merged-gate",
+      "worktree": "worktrees/wt-merge-next-merged-gate",
+      "status": "done",
+      "createdAt": "2026-11-15T07:01:55Z",
+      "submittedAt": "2026-11-15T07:06:31Z",
+      "mergedAt": "2026-11-15T07:06:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
