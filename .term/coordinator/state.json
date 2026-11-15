@@ -809,8 +809,11 @@
       "paths": "SPEC.md",
       "branch": "wt/opencode-cli-slotmap-verify",
       "worktree": "worktrees/wt-opencode-cli-slotmap-verify",
-      "status": "claimed",
-      "createdAt": "2026-11-15T22:08:37Z"
+      "status": "done",
+      "createdAt": "2026-11-15T22:08:37Z",
+      "submittedAt": "2026-11-15T22:09:21Z",
+      "mergedAt": "2026-11-15T22:09:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
