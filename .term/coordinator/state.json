@@ -572,6 +572,17 @@
       "submittedAt": "2026-11-15T20:41:49Z",
       "mergedAt": "2026-11-15T20:41:56Z",
       "mergedInto": "dev"
+    },
+    "a4-restore-fanout-loop-only": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a4-restore-fanout-loop-only",
+      "worktree": "worktrees/wt-a4-restore-fanout-loop-only",
+      "status": "done",
+      "createdAt": "2026-11-15T20:42:16Z",
+      "submittedAt": "2026-11-15T20:43:19Z",
+      "mergedAt": "2026-11-15T20:43:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
