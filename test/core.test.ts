@@ -246,6 +246,13 @@ describe("prompts", () => {
     expect(evaluateIndependently("add feature", facts, "transcript", coord)).toContain("submit")
     expect(evaluateInSession("add feature", facts, coord)).toContain("merge-next")
   })
+  test("a coordinator policy without an absolute bin never emits a repo-relative path", () => {
+    const noBin: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", worktreeDir: "worktrees" }
+    const text = directive("add feature", noBin)
+    expect(text).toContain("no coordinator binary")
+    expect(text).not.toContain("packages/coordinator/bin/coordinator")
+    expect(text).toContain("wt/<slug>")
+  })
   test("the harness facts state the rule as measured outside the conversation", () => {
     const text = evaluateInSession("all tests pass", { turn: 1, elapsedMs: 1_000 }, COMMIT)
     expect(text).toContain("Harness facts")

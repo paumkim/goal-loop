@@ -62,9 +62,16 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
 
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
 export function coordinatorFlow(policy: CommitPolicy): string {
-  const rawBin = policy.coordinatorBin ?? "packages/coordinator/bin/coordinator"
-  const bin = /\s/.test(rawBin) ? `"${rawBin}"` : rawBin
   const target = policy.branch
+  if (!policy.coordinatorBin) {
+    // Detection held on the json markers but no absolute binary could be located: never invent or
+    // relativize a path the agent cannot run. Say exactly what is missing.
+    return [
+      `Coordinator repository detected on this machine, but no coordinator binary was found in the project or the plugin.`,
+      `Do NOT guess or construct a path to one. Create and work on a \`wt/<slug>\` branch, commit there, and in your final report state that the coordinator binary is missing so the merge into \`${target}\` has to be run manually.`,
+    ].join("\n")
+  }
+  const bin = /\s/.test(policy.coordinatorBin) ? `"${policy.coordinatorBin}"` : policy.coordinatorBin
   return [
     `Coordinator repo. Before editing: claim first — run \`${bin} claim <goal-slug> --agent <you> --paths <scope>\`.`,
     `Derive the slug from the goal, then \`cd <worktree>\` and work only there, commit on your wt/<slug> branch. When done, run \`submit\`.`,

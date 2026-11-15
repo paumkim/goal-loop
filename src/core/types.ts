@@ -31,7 +31,7 @@ export interface CommitPolicy {
   readonly reason: string
   /** Commit routing mode; omitted means `direct`. */
   readonly mode?: CommitMode
-  /** Coordinator wrapper path, e.g. `packages/coordinator/bin/coordinator`. */
+  /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
   /** Worktree directory, e.g. `worktrees`. */
   readonly worktreeDir?: string

@@ -71,9 +71,10 @@ The rule follows the repository:
 
 ### Coordinator mode and first-run bootstrap
 
-When the plugin loads inside a git repository, it creates `.term/coordinator/` and `worktrees/` for you (plus stub `config.json`/`state.json`, never overwriting existing files). No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
+When the plugin loads inside a git repository, it creates `.term/coordinator/` and `worktrees/` for you (plus stub `config.json`/`state.json`, never overwriting existing files). If a `.gitignore` is present it also appends `worktrees/` and `.term/coordinator/*.lock` to it (idempotent; missing entries only). No manual setup is needed beyond `git init` and installing the plugin. The agent claims a `wt/<slug>` lease, works in its own worktree, commits there, and submits; the coordinator merges to `dev` and removes the worktree and branch. `main` stays read-only for agents.
 With `coordinator: true` the agent always goes `claim -> wt/<slug> -> submit`.
 The evaluator is read-only and gates `not_met` until wt commit + submit evidence appears.
+If no coordinator binary can be located (neither the project's `packages/coordinator/bin/coordinator` nor one bundled with the plugin), the prompt says so instead of naming a path; the agent works on a `wt/<slug>` branch and the merge to the target branch is left to you.
 
 Prerequisites: a git repository where the coordinator's target branch exists (`dev` by default; `merge-next` checks it out), and `jq` for coordinator state.
 
@@ -180,10 +181,12 @@ or requested within the last 2 minutes is not re-requested; a lost in-flight mar
 
 ```sh
 bun install
-bun run check                         # typecheck + unit tests
+bun run check                         # typecheck + unit tests + compile + TUI load check (also runs in CI, see .github/workflows/check.yml)
 bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server (model also via E2E_MODEL, default opencode/deepseek-v4.1-flash-free)
 E2E_MODEL=opencode/deepseek-v4.1-flash-free bun run e2e <empty-dir>
 ```
+
+Every push to `dev`/`main` and every pull request runs `bun install --frozen-lockfile`, `bun run check` and an `npm pack --dry-run` smoke test on GitHub Actions (`.github/workflows/check.yml`).
 
 ## Documentation
 

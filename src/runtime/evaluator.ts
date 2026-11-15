@@ -126,9 +126,9 @@ export class Evaluator implements EvaluatorPort {
     }
   }
 
-  /** Hard token budget: at most `tokens * 4` characters, single trailing ellipsis when cut. */
+  /** Hard budget per the documented formula: at most `max(200, tokens) * 4` characters, single trailing ellipsis when cut. */
   private cap(text: string, tokens: number): string {
-    const limit = Math.max(200, tokens * 4)
+    const limit = Math.max(200, tokens) * 4
     const flat = text.trim()
     return flat.length <= limit ? flat : `${flat.slice(0, limit - 1)}…`
   }

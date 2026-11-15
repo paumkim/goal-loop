@@ -110,17 +110,20 @@ check_overlap() {
   [ -z "$new_paths" ] && return 0
   local others other other_paths
   others=$(jq -r '.leases | keys[] // empty' "$STATE_FILE" 2>/dev/null || true)
-  IFS=$'\n' read -r -d '' _newp <<<"$new_paths" || true
   local other
   for other in $others; do
     [ "$other" = "$cur_slug" ] && continue
     other_paths=$(jq -r --arg o "$other" '.leases[$o].paths // empty' "$STATE_FILE" 2>/dev/null || true)
     [ -z "$other_paths" ] && continue
     # comma-separated scopes: check each pair
-    local -a n_arr o_arr
-    IFS=',' read -r -a n_arr <<<"$new_paths"
-    IFS=',' read -r -a o_arr <<<"$other_paths"
-    local p q
+    local -a n_arr o_arr raw
+    local p q tok
+    n_arr=()
+    IFS=',' read -r -a raw <<<"$new_paths"
+    for tok in "${raw[@]}"; do tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"; [ -n "$tok" ] && n_arr+=("$tok"); done
+    o_arr=()
+    IFS=',' read -r -a raw <<<"$other_paths"
+    for tok in "${raw[@]}"; do tok="${tok#"${tok%%[![:space:]]*}"}"; tok="${tok%"${tok##*[![:space:]]}"}"; [ -n "$tok" ] && o_arr+=("$tok"); done
     for p in "${n_arr[@]}"; do
       for q in "${o_arr[@]}"; do
         if paths_overlap "$p" "$q"; then
@@ -234,7 +237,6 @@ do_claim() {
 
   # overlap is a hard error unless --force is given
   if ! check_overlap "$paths" "$slug" "$force"; then
-    printf 'error: path overlap with existing lease; use --force to claim anyway\n' >&2
     release_claim_lock
     exit 1
   fi
@@ -328,10 +330,6 @@ do_merge_next() {
   if [ -z "$slug" ]; then
     printf 'no submitted tasks\n'
     return 0
-  fi
-  if [ -z "$slug" ]; then
-    printf 'error: empty slug for merge\n' >&2
-    exit 1
   fi
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
   # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
