@@ -21,12 +21,12 @@ function repository(): string {
  * Only the parts the plugin touches are implemented, and every call is recorded so the test can assert on what
  * the plugin asked the host to do.
  */
-function context(directory: string) {
+function context(directory: string, options: Record<string, unknown> = {}) {
   const calls = { prompts: [] as any[], commands: [] as any[], notices: [] as any[] }
   const hooks: Record<string, (event: any) => any> = {}
   const storage = new Map<string, unknown>()
   const ctx = {
-    options: {},
+    options,
     location: { directory },
     session: {
       prompt: async (input: any) => void calls.prompts.push(input),
@@ -165,6 +165,54 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
       await hooks.prompt!(event)
       expect(event.prompt.text).toBe("/goal all tests pass")
       expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("an objective longer than maxConditionChars is rejected, nothing armed, prompt untouched", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory, { maxConditionChars: 100 })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const original = "/goal-loop-5 " + "this objective is far too long for the configured hundred character limit and keeps going " + "x".repeat(40)
+      const event = promptEvent(original)
+      await hooks.prompt!(event)
+      // The prompt is left untouched; no goal is armed.
+      expect(event.prompt.text).toBe(original)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      const error = calls.notices.find((n: any) => n.title === "Loop not set")
+      expect(error?.level).toBe("error")
+      expect(error?.message).toContain("100")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("an invalid count whose suffix carries control bytes is sanitized in the toast", async () => {
+    const directory = repository()
+    const { ctx, hooks, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop-\u001b[2Jabc fix it")
+      await hooks.prompt!(event)
+      const warning = calls.notices.find((n: any) => /Loop count ignored/.test(n.title))
+      expect(warning).toBeDefined()
+      for (const ch of warning.message as string) expect(ch.charCodeAt(0)).toBeGreaterThanOrEqual(32)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare directive with an empty count (/goal-loop-) warns instead of echoing empty quotes", async () => {
+    const directory = repository()
+    const { ctx, hooks, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop- fix it")
+      await hooks.prompt!(event)
+      const warning = calls.notices.find((n: any) => /Loop count ignored/.test(n.title))
+      expect(warning?.message).toContain("nothing was provided")
     } finally {
       await dispose?.()
     }

@@ -1614,6 +1614,23 @@ describe("goal-loop command syntax (/goal-loop-<N>)", () => {
     expect(warning!.message).toContain("5")
   })
 
+  test("an empty invalid count is stated as missing, never echoed as empty quotes", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: undefined, invalidCount: "" })
+    const warning = h.notices.find((n) => n.kind === "set" && /Loop count ignored/.test(n.title))
+    expect(warning).toBeDefined()
+    expect(warning!.message).toContain("nothing was provided")
+    expect(warning!.message).not.toContain('""')
+  })
+
+  test("a control-laden invalid count is sanitized before it is echoed", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: undefined, invalidCount: "\u001b[2Jabc" })
+    const warning = h.notices.find((n) => n.kind === "set" && /Loop count ignored/.test(n.title))
+    expect(warning).toBeDefined()
+    for (const ch of warning!.message as string) expect(ch.charCodeAt(0)).toBeGreaterThanOrEqual(32)
+  })
+
   test("out-of-range counts (0 and 1001) are treated as invalid, not clamped", async () => {
     const h = harness()
     for (const bad of ["0", "1001"]) {
