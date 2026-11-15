@@ -40,6 +40,12 @@ export class GoalStore {
     return this.enqueue(sessionID, () => this.storage.remove(keyFor(sessionID)))
   }
 
+  /** Reads one record; undefined when missing or malformed. */
+  async load(sessionID: string): Promise<GoalRecord | undefined> {
+    const value = await this.storage.get(keyFor(sessionID)).catch(() => undefined)
+    return isRecord(value) ? value : undefined
+  }
+
   /** Live goals owned by `directory`, for restore after a restart or plugin reload. */
   async loadLive(directory: string): Promise<GoalRecord[]> {
     const found: GoalRecord[] = []

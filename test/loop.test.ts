@@ -861,3 +861,55 @@ describe("/goal-loop background work counting", () => {
     expect(record.loopNotProgress).toBe(0)
   })
 })
+
+describe("RPC read-through after a reload", () => {
+  test("restoreOne adopts a live record from storage with an empty in-memory map", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    h1.verdicts.push(met("v1 done"))
+    h1.summaries.push("the summary")
+    h1.nextGoals.push("v2 condition")
+    await h1.turn(3)
+    await h1.controller.dispose()
+
+    // Fresh controller with an empty goals map — exactly the post-reload state.
+    const h2 = harness({}, h1.storage)
+    expect(h2.controller.get(SID)).toBeUndefined()
+    expect(await h2.controller.restoreOne(SID)).toBe(true)
+    const record = h2.controller.get(SID)!
+    expect(record.loopIteration).toBe(2)
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopEnabled).toBe(true)
+    expect(h2.controller.snapshot(SID)?.status).toBe("active")
+  })
+
+  test("restoreOne leaves finished records un-restored and missing ones alone", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    h1.verdicts.push(met("v1 done"))
+    h1.summaries.push("the summary")
+    h1.nextGoals.push("v2 condition")
+    await h1.turn(1)
+    // Finish the looped goal so the persisted record is terminal.
+    h1.controller.clear(SID)
+    await h1.controller.dispose()
+
+    const h2 = harness({}, h1.storage)
+    expect(await h2.controller.restoreOne(SID)).toBe(false)
+    expect(h2.controller.get(SID)).toBeUndefined()
+    expect(await h2.controller.restoreOne("ses_missing")).toBe(false)
+  })
+
+  test("list() falls back to a storage restore when memory is empty", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    await h1.controller.dispose()
+
+    const h2 = harness({}, h1.storage)
+    expect(h2.controller.list()).toEqual([])
+    expect(await h2.controller.restore()).toBe(1)
+    const listed = h2.controller.list()
+    expect(listed).toHaveLength(1)
+    expect(listed[0]!.sessionID).toBe(SID)
+  })
+})
