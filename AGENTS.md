@@ -13,7 +13,7 @@ Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion
 
 ```sh
 bun install
-bun run check                 # tsc --noEmit && bun test && bun run compile && bun run check:tui && bun run docs:check (TUI load + docs freshness; order matters: tsc first)
+bun run check                 # tsc --noEmit && bun test test/ (scoped: worktrees/ carries forks of the suite) && bun run compile && bun run check:tui && bun run docs:check (TUI load + docs freshness; order matters: tsc first)
 bun test test/git.test.ts     # single file; bun test <file-or-pattern> for the rest
 bun run compile               # rebuild dist/tui.js from src/tui.tsx (required after any TUI/JSX change)
 bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~10min; E2E_MODEL overrides model

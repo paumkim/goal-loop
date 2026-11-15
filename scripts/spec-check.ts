@@ -6,7 +6,7 @@
  *   Reads the machine-readable marker `<!-- spec-check files=N tests=N -->` from SPEC.md and
  *   asserts both numbers against reality:
  *     files  `npm pack --dry-run --json` — the exact file count of the published tarball
- *     tests  `bun test` — the number of passing tests at the current HEAD
+ *     tests  `bun test test/` — the number of passing tests at the current HEAD (scoped to the repo's own suite)
  *   Exits 1 and lists every mismatch when a claim trails reality. Exits 0 otherwise.
  *   Never writes anything. Wired into `bun run check` and CI.
  *
@@ -47,9 +47,10 @@ try {
   failures.push(`npm pack --dry-run --json failed: ${error instanceof Error ? error.message : String(error)}`);
 }
 
-// tests: bun test -> the reporter summary ("  N pass") goes to stderr, not stdout; merge both.
+// tests: `bun test test/` (scoped, so a repo that carries opencode worktrees under worktrees/
+// does not double-count the suite); the reporter summary goes to stderr, not stdout; merge both.
 {
-  const run = spawnSync("bun", ["test"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const run = spawnSync("bun", ["test", "test/"], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const out = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
   const match = out.match(/(\d+) pass/);
   const actual = match ? Number(match[1]) : -1;
