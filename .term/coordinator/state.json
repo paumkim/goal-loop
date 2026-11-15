@@ -616,6 +616,17 @@
       "submittedAt": "2026-11-15T20:50:10Z",
       "mergedAt": "2026-11-15T20:50:17Z",
       "mergedInto": "dev"
+    },
+    "a13-stale-comment": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts,SPEC.md",
+      "branch": "wt/a13-stale-comment",
+      "worktree": "worktrees/wt-a13-stale-comment",
+      "status": "done",
+      "createdAt": "2026-11-15T20:51:01Z",
+      "submittedAt": "2026-11-15T20:51:56Z",
+      "mergedAt": "2026-11-15T20:52:03Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
