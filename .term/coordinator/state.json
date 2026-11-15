@@ -919,9 +919,11 @@
       "paths": "SPEC.md",
       "branch": "wt/v4-proof",
       "worktree": "worktrees/wt-v4-proof",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T23:44:56Z",
-      "submittedAt": "2026-11-15T23:45:28Z"
+      "submittedAt": "2026-11-15T23:45:28Z",
+      "mergedAt": "2026-11-15T23:47:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
