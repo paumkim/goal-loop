@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, truncate } from "./core/format.ts"
 import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
 
@@ -61,9 +61,30 @@ export const LoopSection = (props: {
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())}`
   const paused = () => props.goal.status === "paused"
-  const stateWord = () => (paused() ? "paused" : props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active")
+  const stateWord = () => {
+    const s = props.goal.status
+    if (s === "paused") return "paused"
+    if (s !== "active") return s
+    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active"
+  }
   const nowMs = () => props.nowMs?.() ?? Date.now()
-  const nowColor = () => (paused() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
+  const streakSuffix = () => {
+    const s = verdictStreak(props.goal.history ?? [])
+    return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
+  }
+  const isTerminal = () => props.goal.status === "achieved" || props.goal.status === "impossible" || props.goal.status === "cleared" || props.goal.status === "failed"
+  const capReached = () => typeof max() === "number" && Number.isFinite(max()) && done() >= (max() as number)
+  const livePace = () => (isTerminal() ? undefined : pace())
+  const finished = () => history().length > 0 && (isTerminal() || capReached())
+  const totals = () => loopTotals(history(), props.goal.setAt)
+  const finalGlyph = () => (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
+  const finalColor = () => (props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint)
+  const nowColor = () => {
+    const s = props.goal.status
+    if (s === "paused" || s === "impossible") return theme().text.feedback.warning.base
+    if (s === "active") return theme().text.feedback.info.base
+    return theme().text.faint
+  }
   return (
     <box flexDirection="column" gap={1}>
       {/* progress: vN of at most M, then the block bar on its own row */}
@@ -89,7 +110,7 @@ export const LoopSection = (props: {
         </box>
       </box>
       {/* pace: mean iteration duration and the estimated remaining wall time at that pace */}
-      <Show when={pace()}>
+      <Show when={livePace()}>
         {(estimate) => (
           <box flexDirection="row" gap={2}>
             {label(theme(), "pace")}
@@ -139,9 +160,21 @@ export const LoopSection = (props: {
           ◎
         </text>
         <text wrapMode="none" fg={theme().text.base}>
-          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed`}
+          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}`}
         </text>
       </box>
+      {/* final tally: only once the loop is over */}
+      <Show when={finished()}>
+        <box flexDirection="row" gap={2}>
+          {label(theme(), "final")}
+          <text wrapMode="none" flexShrink={0} fg={finalColor()} attributes={TextAttributes.BOLD}>
+            {finalGlyph()}
+          </text>
+          <text wrapMode="none" fg={theme().text.base}>
+            {`loop ${props.goal.status} · ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} · ${totals().turns} turns · ${totals().tools} tools · ${formatDurationCoarse(totals().spanMs)} wall`}
+          </text>
+        </box>
+      </Show>
       {/* evaluator verdict trail */}
       <VerdictTrail theme={theme()} history={props.goal.history ?? []} />
     </box>

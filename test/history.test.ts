@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, barCaption, iterationDurations, iterationVerdictMix, lastVerdict, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -248,5 +248,28 @@ describe("pauseDiagnostics", () => {
     expect(pauseDiagnostics(3, 2)).toBe("stall 3 · retries 2")
     expect(pauseDiagnostics(2.9, -1)).toBe("stall 2 · retries 0")
     expect(pauseDiagnostics(Number.NaN, Number.NaN)).toBe("stall 0 · retries 0")
+  })
+})
+
+describe("loopTotals", () => {
+  const setAt = 1_000
+
+  test("aggregates turns, tools and span from setAt to last endedAt", () => {
+    const entries = [entry(1, 11_000, 10, 3), entry(2, 31_000, 20, 4)]
+    expect(loopTotals(entries, setAt)).toEqual({ iterations: 2, turns: 7, tools: 30, spanMs: 30_000 })
+  })
+
+  test("empty history yields zeros and span 0", () => {
+    expect(loopTotals([], setAt)).toEqual({ iterations: 0, turns: 0, tools: 0, spanMs: 0 })
+  })
+
+  test("last endedAt out of order cannot shrink the span below zero", () => {
+    const entries = [entry(1, 500), entry(2, 2_000)]
+    expect(loopTotals(entries, setAt).spanMs).toBe(1_000)
+  })
+
+  test("non-finite entry fields degrade to zero", () => {
+    const entries = [{ ...entry(1, Number.NaN), turns: Number.NaN, toolCalls: Number.NaN }]
+    expect(loopTotals(entries, setAt)).toEqual({ iterations: 1, turns: 0, tools: 0, spanMs: 0 })
   })
 })
