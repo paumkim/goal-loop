@@ -875,8 +875,20 @@
       "paths": "RELEASE-CHECKLIST.md,src/index.ts,src/runtime/controller.ts,src/core/format.ts,src/core/parse.ts,test/loop.test.ts,test/plugin.test.ts",
       "branch": "wt/release-checklist-goal-loop-n",
       "worktree": "worktrees/wt-release-checklist-goal-loop-n",
-      "status": "claimed",
-      "createdAt": "2026-11-15T23:02:16Z"
+      "status": "done",
+      "createdAt": "2026-11-15T23:02:16Z",
+      "submittedAt": "2026-11-15T23:08:18Z",
+      "mergedAt": "2026-11-15T23:34:36Z",
+      "mergedInto": "dev"
+    },
+    "rename-opencode-goalv2": {
+      "agent": "inkling",
+      "paths": "package.json,bin,docs,README.md,SPEC.md,test",
+      "branch": "wt/rename-opencode-goalv2",
+      "worktree": "worktrees/wt-rename-opencode-goalv2",
+      "status": "submitted",
+      "createdAt": "2026-11-15T23:13:16Z",
+      "submittedAt": "2026-11-15T23:15:10Z"
     }
   },
   "mergeLock": null

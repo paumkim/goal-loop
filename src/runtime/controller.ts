@@ -353,13 +353,15 @@ export class GoalController {
 
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
   noteInvalidLoopCount(sessionID: string, invalidCount: string): void {
-    this.notify(
-      sessionID,
-      "set",
-      "warning",
-      "Loop count ignored",
-      `"${invalidCount}" is not a valid loop count (an integer from 1 to 1000); using the default limit of ${this.deps.config.maxLoops}.`,
-    )
+    const shown = sanitizeCountEcho(invalidCount)
+    const reason =
+      shown === "" ? "nothing was provided after `/goal-loop-` or `/goal-loop=`" : `"${shown}" is not a valid loop count (an integer from 1 to 1000)`
+    this.notify(sessionID, "set", "warning", "Loop count ignored", `${reason}; using the default limit of ${this.deps.config.maxLoops}.`)
+  }
+
+  /** Report an objective that exceeds the configured condition limit. Called before the directive is rewritten; nothing is armed and the prompt is left untouched. */
+  noteConditionTooLong(sessionID: string, length: number, limit: number): void {
+    this.notify(sessionID, "error", "error", "Loop not set", `Goal condition is ${length} characters; the limit is ${limit}.`)
   }
 
   /**
@@ -390,7 +392,7 @@ export class GoalController {
       return
     }
     const spend = await this.spend(sessionID)
-    const text = formatStatus(record, this.deps.clock.now(), spend)
+    const text = formatStatus(record, this.deps.clock.now(), spend, this.deps.config.maxLoops)
     const title = isLive(record.status) ? `Goal ${statusLabel(record.status)}` : record.status === "achieved" ? "No goal set \u00B7 last goal achieved" : "No goal set"
     this.notify(sessionID, "status", "info", title, text)
   }
@@ -911,8 +913,8 @@ export class GoalController {
     // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)
     if (this.stale(record, runtime, epoch)) return
-    this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
-    await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    this.notify(sessionID, "loop", "info", `Loop ${iteration} of ${maxLoops} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
+    await this.note(record, `Loop ${iteration} of ${maxLoops} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
     // The note round-trips through synthetic; the world may have moved on while it landed.
     if (this.stale(record, runtime, epoch)) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
@@ -1278,3 +1280,13 @@ export class GoalController {
   }
 }
 
+/** Sanitize an invalid count suffix before it is echoed into a notice: printable ASCII only, capped. */
+function sanitizeCountEcho(value: string): string {
+  let out = ""
+  for (const ch of value) {
+    const code = ch.charCodeAt(0)
+    if (out.length >= 32) return `${out}…`
+    out += code >= 32 && code <= 126 ? ch : "?"
+  }
+  return out
+}

@@ -254,6 +254,17 @@ export default Plugin.define({
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
         const objective = goalLoop.objective
+        // The raw-prompt path bypasses parseGoalCommand, so enforce the configured condition limit here too.
+        if (
+          objective !== "" &&
+          Number.isFinite(config.maxConditionChars) &&
+          config.maxConditionChars < Number.MAX_SAFE_INTEGER &&
+          objective.length > config.maxConditionChars
+        ) {
+          controller.noteConditionTooLong(event.sessionID, objective.length, config.maxConditionChars)
+          controller.onUserPrompt(event.sessionID)
+          return
+        }
         if (objective === "") {
           // Bare directive (/goal-loop, /goal-loop-<N> with no objective): same as bare /goal-loop — show status.
           if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
