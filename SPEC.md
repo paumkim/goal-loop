@@ -1027,3 +1027,145 @@ Files touched: `src/core/types.ts`, `src/core/format.ts`, `src/runtime/compactor
 
 Verification: `test/loop.test.ts` + `test/core.test.ts`, `bun test` (346 tests), `bun run check` green;
 coordinator submit.
+
+## Appendix A — Phase 1 audit findings (read-only sweep)
+
+Every `src/**/*.ts*` and `test/*.ts` was read for this appendix. Findings are `{ severity, file:line, problem, proposed_fix }`,
+ranked correctness > reliability > TUI > organization. Each entry carries an ID (`A-<n>`) used to track resolution or waiver in later
+workstream sections; nothing below is silently dropped. `[waived: <reason>]` marks findings intentionally left as-is; every other
+finding names the workstream that resolves it. Line numbers refer to the tree at the Phase 1 commit.
+
+### A. Correctness
+
+- **A-1 (high) — `src/runtime/controller.ts:197` & `:881` — compaction misses are double-counted.** A no-op compaction reported via
+  `session.compaction.ended` increments `loopCompact.misses` (the ended-event path), and the next armed iteration's settle increments the
+  same pending request again (the arm path), so one physical unlanded compaction consumes two of the four misses and forces the re-request
+  and the "Compaction pending" notice an iteration early. Proposed fix: single-source miss accounting — the arm-time settle must not count a
+  pending request whose ended-event path already counted it (mark the pending with the count time/flag), or drop the ended-event increment
+  and let arms count alone. Decide in the fix workstream and pin with a test: one no-op ended event + one arm = misses exactly 1.
+- **A-2 (medium) — `src/runtime/controller.ts:816` — planner-armed conditions bypass the configured length limit.**
+  `Prompt.parseNextCondition(reply)` is called with the library default (2000 chars) while user-set conditions respect
+  `config.maxConditionChars`. A `maxConditionChars: 100` configuration still arms 2000-char planner conditions.
+  Proposed fix: pass `config.maxConditionChars` (clamped to the parser's accepted range) as `maxChars`.
+- **A-3 (medium) — `src/rpc-handlers.ts:49` — the read-only `list` RPC fans out host side effects.** When the in-memory list is empty,
+  `list()` calls `controller.restore()`, which adopts records AND queues a boundary-compaction request at the host for every active goal.
+  A client asking "what goals exist" can ask the host to compact sessions it does not even render.
+  Proposed fix: split restore into adopt (pure) vs adopt+boundary-fan-out; the RPC read path adopts without requesting compaction.
+- **A-4 (medium) — `src/runtime/controller.ts:500-510` — `restore()` requests a boundary compaction for plain (non-loop) goals.**
+  The `loopEnabled` check is absent: any active record, including a plain `/goal`, gets a boundary compaction after a restart. This
+  contradicts the documented discipline that plain goals never reach the boundary-compaction path (see `COMPACT_MISS_CAP` comment in
+  `src/core/types.ts`). Proposed fix: restrict the restore-time fan-out to `record.loopEnabled` records (or document plain-goal compaction at restore if intended); pin with a test.
+- **A-5 (medium) — `src/runtime/controller.ts:797-803` — the repeat-condition guard is punctuation-sensitive.** The loop's
+  `completed` normalization strips whitespace and lowercases, but does not strip punctuation, so a planner offering
+  `"Fix the flaky test."` after `"fix the flaky test"` was completed arms the same work again — the exact failure mode the guard exists
+  to stop ("keeps offering the already-completed condition" never fires on near-identical strings). Proposed fix: normalize more
+  aggressively (collapse all non-alphanumeric runs to one space, trim) before the `completed` comparison; pin with a test.
+- **A-6 (low) — `src/core/format.ts:24-28` — `formatTokens` rolls over badly at the million boundary.** `999_999` renders as `"1000k"`
+  (the `< 1_000_000` branch never falls through to the `M` format). Proposed fix: round-then-compare or special-case values whose
+  rounded form exceeds the unit, e.g. compare `n >= 999_500` for the `k` branch. Cosmetic, one-line fix + test.
+- **A-7 (low) — `src/runtime/controller.ts:296-299` — tool calls zeroed before the stale check.** `onExecutionSucceeded` clears
+  `runtime.toolCalls = 0` before the `background.busy` await; when the record went stale meanwhile the counts are silently lost rather
+  than carried. Benign (the evaluation is dropped anyway) — waived: no observable behavior beyond a dropped, superseded turn.
+
+### B. Reliability
+
+- **A-8 (medium) — `src/runtime/controller.ts:253` — `set()` does not await the initial `commit(record)`.** A crash immediately after
+  `/goal` returns can lose the just-set record even though `set()` is async and `commit()` returns a promise. Same pattern in
+  `onUserPrompt`, `evaluationFailed`, `handleFailure` (intentional fire-and-forget there, results superseded by the next commit) — but the
+  set path is the one place a lost write silently un-sets the goal. Proposed fix: `await this.commit(record)` in `set()`.
+- **A-9 (medium) — `src/runtime/store.ts:63-66`, `src/runtime/controller.ts:1058-1066` — `finish()` re-saves the record via
+  `store.save` directly, bypassing `commit()`'s no-op cache.** The final spend snapshot is written with the pre-`final` serialized string
+  still in `lastCommit`; correctness survives (the next identical `commit()` re-saves), but the cache invariant "lastCommit mirrors the
+  durable state" is broken. Proposed fix: route the final save through `commit()` (set `record.final` then `await this.commit(record)`).
+- **A-10 (low) — `src/runtime/controller.ts:1055-1066` — final spend snapshot is fire-and-forget with no retry.** If the snapshot save
+  fails it is only logged; the record on disk lacks `final` and `/goal` history loses spend. Acceptable: the error is logged and the
+  snapshot is best-effort — waived with reason (spend snapshot is informational, not load-bearing for loop correctness).
+- **A-11 (low) — `src/tui.tsx` — `entries()` map is never pruned.** Sessions that go terminal (or are deleted) stay in the map for the
+  life of the TUI process; the 15s tick only exempts non-active goals from re-rendering, so memory still grows. Proposed fix: drop
+  entries whose goal is null and not referenced by an open dialog, or cap the map.
+- **A-12 (low) — `src/runtime/controller.ts` — `loopHistory` grows without bound.** Every iteration appends a `LoopEntry` (condition +
+  summary, ~1–2 KB) and every `commit()` `structuredClone`s the whole record, making persistence O(n²) in loop lifetime. Proposed fix:
+  no functional change required for correctness, but note; waive formal trimming unless a measured problem appears (history is user-visible
+  and drives TUI rendering).
+- **A-13 (low) — `src/core/types.ts:135` — stale comment: "Consecutive iterations with zero tool calls; two pause the loop."** Armed
+  loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
+  Proposed fix: rewrite the comment.
+- **A-14 (low) — `src/runtime/events.ts:17` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
+  payloads are only destructured defensively at read sites. Proposed fix: `Record<string, unknown>` + a tiny guard helper (or keep `any`
+  contained to this file and document).
+
+### C. Event routing / async
+
+- **A-15 (low) — `src/runtime/events.ts:60-63` — inconsistent safety discipline.** `session.execution.succeeded` wraps
+  `background.executionEnded` in `safe()` but relies on `.catch(fail)` for the async controllers; `session.compaction.ended` likewise.
+  Ordering is correct (noteCompactionEnded before onCompactionLanded) and every async arm has a `.catch`, so no unhandled rejection — but
+  the style split invites drift. Proposed fix: one `guard`/`awaitSafe` helper used uniformly; keep `.catch(fail)` and drop `safe()` or vice versa.
+- **A-16 (low) — `src/index.ts` — events emitted during the reconnect gap are lost.** A dropped stream is re-established with backoff but
+  events between drop and reconnect are never replayed, so a missed `execution.succeeded` silently parks the goal (no evaluation runs)
+  until the next event for that session. Proposed fix: document the limitation (best possible without host replay support); waive code change.
+- **A-17 (low) — `src/core/git.ts:findRepository` — walks to filesystem root on every policy resolution.** Bounded and cached by the OS
+  per process, fine at plugin setup; waived for cost (one call per session).
+
+### D. Math / formatting
+
+- **A-18 (low) — `src/core/context-size.ts` — estimate is `input + cache.read + cache.write`.** Correct for Anthropic-style accounting
+  (input excludes cache reads); under-counts providers whose `input` already includes cache reads. Documented in the file header; waive:
+  no provider-agnostic way to disambiguate, and the compaction thresholds are heuristic anyway.
+- **A-19 (low) — `src/core/history.ts:paceEstimate` — pace is the mean of completed iterations only.** A slow first iteration inflates the
+  estimate for the rest; documented behavior. Waive with reason (estimate, not gate).
+- **A-20 (low) — `src/core/history.ts:durationShares` — percentages may sum to ≠100.** Documented ("may sum to ~100"); waive with reason.
+- **A-21 (low) — backoff curve drift: `evaluationFailed` uses `x3`, `handleFailure`/`loopAdvance` retry use `x4`.** Two different
+  exponential bases in one file with no stated rationale. Proposed fix: one shared backoff helper (`RETRY_BASE_MS * base ** n`, capped), or a
+  comment stating the intentional difference.
+- **A-22 (low) — `src/core/format.ts` / `src/tui.tsx` — `1000k` rollover** (same as A-6; listed once here, fixed once).
+- **A-23 (low) — `src/core/history.ts:renderPips` — pips render only for caps 1–8** and vanish for larger caps; intentional compactness,
+  documented. Waive with reason.
+
+### E. State machine / TUI / organization
+
+- **A-24 (low) — `src/runtime/controller.ts` `onUserPrompt` — the cap-paused warning fires on every user message.** While a plain goal is
+  paused at the turn cap, each prompt re-notifies "Goal paused at turn cap" — the one-courtesy-notice-per-event-kind discipline is not kept.
+  Proposed fix: one-shot flag (runtime boolean) so the notice fires once per pause.
+- **A-25 (low) — `src/status-dialog.tsx` & `src/tui-history.tsx` — `const LABEL = 10` duplicated.** Hoist into `src/core/history.ts` (pure,
+  importable) or a shared `LABEL` export.
+- **A-26 (low) — `src/runtime/controller.ts:508-510`, `src/runtime/compactor.ts`, `src/core/types.ts` — magic numbers duplicated across
+  files:** `10_000` (boundary floor, inline twice in `contextDropped`, and `BOUNDARY_MIN_TOKENS` in compactor), the `0.6` drop factor,
+  `120_000` (`REANCHOR_MIN_INTERVAL_MS` vs `REQUEST_COOLDOWN_MS`), `10 * 60_000` (the restore-time landed cooldown). Proposed fix: a small
+  `src/core/constants.ts` (or exports from `types.ts`) shared by controller and compactor.
+- **A-27 (low) — `src/core/config.ts` — `maxRetries` is dead surface.** Retained "for compatibility", gates nothing, advertised in config
+  docs. Proposed fix: keep the key parsing (backward compat) but flag in docs as inert, or remove with a SPEC/docs note; never silently drop.
+- **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
+  verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped).
+- **A-29 (low) — `src/core/prompts.ts:isFuzzyCondition` — arbitrary keyword list ("rabbit", "look like").** Heuristic by design; waive with
+  reason, but the list should move behind a named constant if it ever grows.
+- **A-30 (low) — `src/runtime/events.ts:RecentIds` — eviction deletes oldest inserted; correct.** Not a bug; noted so the audit shows it was
+  checked. Waive.
+
+### Fix order (correctness → reliability → TUI → organization)
+
+1. A-1 (miss double-count) → 2. A-25 (labels, trivial) → 3. A-6/A-22 (formatTokens rollover) → 4. A-2 (planner maxChars) →
+5. A-3 (RPC list side effect) → 6. A-5 (normalize punctuation) → 7. A-8 (set() await) → 8. A-4 (restore plain-goal compact) →
+9. A-9 (finish() via commit()) → 10. A-24 (cap-paused one-shot) → 11. A-21 (backoff helper) → 12. remaining low/org items as separate
+workstreams, each landing with `bun run check` green.
+
+### Waivers (explicit, one line each)
+
+A-7 (counts dropped with the superseded turn; no behavior), A-10 (spend snapshot best-effort), A-16 (no host replay support), A-17 (bounded
+one-shot walk), A-18 (provider accounting is ambiguous), A-19 (documented heuristic), A-20 (documented rounding), A-23 (compact footer by design),
+A-28 (folds into A-12), A-29 (heuristic by design), A-30 (verified correct), A-12 (user-visible history; no measured problem).
+
+### Restore-vs-arm lease grid (Phase 1 item 2)
+
+`restore()` fans out a boundary compaction for every active record (A-4), and the armed loop's settle re-checks the same pending marker at
+every arm — the two never stack because `loopCompact.landedAt`/`misses` persist on the record; restore skips a pending request and a landing
+newer than 10 minutes. The double-count (A-1) is the one real defect in this grid. `adoptRestored` is re-entrant-safe (`goals.has` short-circuit);
+the RPC `restoreOne` path shares it. A concurrent `adoptRestored` pair can both pass the `has` check and both commit the same record — benign
+(idempotent writes, same values) — noted, not fixed.
+
+### Epoch staleness sweep (Phase 1 item 2)
+
+Checked on every await in `controller.ts`: `onCompactionLanded` re-reads `this.goals.get(sessionID) !== record` after the estimate await;
+`evaluate` re-checks after `session.usage` and after the evaluator/verify awaits; `loopAdvance` re-checks after the summarize, planner and
+boundary-compact awaits; `checkin` re-checks after the busy await; `verifyMet` relies on the trailing `stale()` in `evaluate`. No await lacks a
+post-await staleness gate. The one soft spot is `reanchor()` (synchronous, reads the record without a guard) — safe only because every call site
+is already post-gate; noted for the Phase 3 sweep.
