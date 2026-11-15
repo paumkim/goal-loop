@@ -308,6 +308,17 @@
       "submittedAt": "2026-11-15T17:47:34Z",
       "mergedAt": "2026-11-15T17:47:40Z",
       "mergedInto": "dev"
+    },
+    "loop-rail-ended-paused": {
+      "agent": "inkling-goal-loop-4",
+      "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
+      "branch": "wt/loop-rail-ended-paused",
+      "worktree": "worktrees/wt-loop-rail-ended-paused",
+      "status": "done",
+      "createdAt": "2026-11-15T17:49:17Z",
+      "submittedAt": "2026-11-15T17:50:59Z",
+      "mergedAt": "2026-11-15T17:51:06Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
