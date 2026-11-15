@@ -1550,3 +1550,83 @@ describe("RPC read-through after a reload", () => {
   })
 
 })
+
+describe("goal-loop command syntax (/goal-loop-<N>)", () => {
+  test("an explicit per-run maxLoops is recorded and does not touch the configured default", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "fix the whole release pipeline", maxLoops: 188 })
+    const record = h.controller.get(SID)!
+    expect(record.loopEnabled).toBe(true)
+    expect(record.loopIteration).toBe(1)
+    expect(record.loopMaxLoops).toBe(188)
+    expect(record.condition).toBe("fix the whole release pipeline")
+    expect(record.loopObjective).toBe("fix the whole release pipeline")
+    // No synthetic prompt: the admitted user message is the kickoff.
+    expect(h.calls.prompts).toHaveLength(0)
+    // The armed record announces the effective limit in the iteration="k" max="N" shape.
+    const set = h.notices.findLast((n) => n.kind === "set")
+    expect(set).toBeDefined()
+    expect(set!.message).toContain('iteration="1" max="188"')
+  })
+
+  test("the per-run override caps completed iterations", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "ship it", maxLoops: 1 })
+    h.verdicts.push(met("done"))
+    h.summaries.push("first and only iteration")
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.loopMaxLoops).toBe(1)
+    expect(h.nextGoals).toHaveLength(0)
+  })
+
+  test("an armed loop anchored on v2 shows the per-run limit, not the configured default", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "improve the parser", maxLoops: 188 })
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("v1 summary")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    const arming = h.calls.synthetic.find((s) => String(s.text).includes('iteration="2"'))
+    expect(arming).toBeDefined()
+    expect(String(arming.text)).toContain('max="188"')
+    // The next armed record keeps the per-run limit.
+    expect(h.controller.get(SID)!.loopMaxLoops).toBe(188)
+  })
+
+  test("a later unparameterized loop uses the configured default (rule 10)", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "first loop", maxLoops: 12 })
+    expect(h.controller.get(SID)!.loopMaxLoops).toBe(12)
+    await h.setLoop("second loop")
+    expect(h.controller.get(SID)!.loopMaxLoops).toBe(5)
+  })
+
+  test("an invalid count falls back to the default, with a warning notice", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: undefined, invalidCount: "abc" })
+    const record = h.controller.get(SID)!
+    expect(record.loopMaxLoops).toBe(5)
+    const warning = h.notices.find((n) => n.kind === "set" && /Loop count ignored/.test(n.title))
+    expect(warning).toBeDefined()
+    expect(warning!.message).toContain('"abc"')
+    expect(warning!.message).toContain("5")
+  })
+
+  test("out-of-range counts (0 and 1001) are treated as invalid, not clamped", async () => {
+    const h = harness()
+    for (const bad of ["0", "1001"]) {
+      await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: undefined, invalidCount: bad })
+      expect(h.controller.get(SID)!.loopMaxLoops).toBe(5)
+      h.controller.clear(SID)
+    }
+  })
+
+  test("the record set carries the effective limit for the status line", async () => {
+    const h = harness()
+    await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: 42 })
+    const set = h.notices.findLast((n) => n.kind === "set")!
+    expect(set.message).toBe('iteration="1" max="42" · fix it')
+  })
+})

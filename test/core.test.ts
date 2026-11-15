@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
 import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens } from "../src/core/format.ts"
-import { parseGoalCommand } from "../src/core/parse.ts"
+import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
   checkin,
   continuation,
@@ -35,6 +35,50 @@ describe("parseGoalCommand", () => {
   test("enforces the length limit", () => {
     const result = parseGoalCommand("x".repeat(4001), 4000)
     expect(result.type).toBe("invalid")
+  })
+})
+
+describe("parseGoalLoopDirective", () => {
+  test("plain /goal-loop keeps the default (no override)", () => {
+    expect(parseGoalLoopDirective("/goal-loop fix the auth tests")).toEqual({ objective: "fix the auth tests" })
+    expect(parseGoalLoopDirective("/goal-loop investigate the 12 failing tests")).toEqual({ objective: "investigate the 12 failing tests" })
+  })
+  test("-<N> and =<N> set a per-run override", () => {
+    expect(parseGoalLoopDirective("/goal-loop-188 fix the whole release pipeline")).toEqual({ objective: "fix the whole release pipeline", maxLoops: 188 })
+    expect(parseGoalLoopDirective("/goal-loop=3 audit the TUI")).toEqual({ objective: "audit the TUI", maxLoops: 3 })
+    expect(parseGoalLoopDirective("/goal-loop-1 x")).toEqual({ objective: "x", maxLoops: 1 })
+    expect(parseGoalLoopDirective("/goal-loop-1000 x")).toEqual({ objective: "x", maxLoops: 1000 })
+  })
+  test("the count is never part of the objective", () => {
+    expect(parseGoalLoopDirective("/goal-loop-188 objective 12 things")?.objective).toBe("objective 12 things")
+  })
+  test("invalid counts are reported, never guessed: abc, 0, 1001, 1.5, -3, empty", () => {
+    for (const raw of ["/goal-loop-abc fix it", "/goal-loop-0 fix it", "/goal-loop-1001 fix it", "/goal-loop-1.5 fix it", "/goal-loop--3 fix it", "/goal-loop- fix it", "/goal-loop= fix it"]) {
+      const parsed = parseGoalLoopDirective(raw)
+      expect(parsed).toBeDefined()
+      expect(parsed?.maxLoops).toBeUndefined()
+      expect(typeof parsed?.invalidCount).toBe("string")
+      expect(parsed?.objective).toBe("fix it")
+    }
+    expect(parseGoalLoopDirective("/goal-loop-abc fix it")?.invalidCount).toBe("abc")
+  })
+  test("zero-padded counts are integers in range", () => {
+    expect(parseGoalLoopDirective("/goal-loop-007 x")?.maxLoops).toBe(7)
+  })
+  test("a bare directive parses with an empty objective (status behavior upstream)", () => {
+    expect(parseGoalLoopDirective("/goal-loop")).toEqual({ objective: "" })
+    expect(parseGoalLoopDirective("/goal-loop   ")).toEqual({ objective: "" })
+    expect(parseGoalLoopDirective("/goal-loop-12")).toEqual({ objective: "", maxLoops: 12 })
+  })
+  test("leading whitespace is tolerated; the directive must otherwise be first", () => {
+    expect(parseGoalLoopDirective("  /goal-loop-5 x")?.maxLoops).toBe(5)
+    expect(parseGoalLoopDirective("please /goal-loop-5 x")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal-loopy thing")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal-loops thing")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal fix it")).toBeUndefined()
+  })
+  test("tab after the token still bounds it", () => {
+    expect(parseGoalLoopDirective("/goal-loop-12\tfix it")).toEqual({ objective: "fix it", maxLoops: 12 })
   })
 })
 

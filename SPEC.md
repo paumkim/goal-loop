@@ -383,7 +383,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=39 tests=388 -->
+<!-- spec-check files=39 tests=410 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1702,3 +1702,51 @@ Files touched: `SPEC.md` only.
 Verification: e2e exit 0 (see transcript and `/tmp/opencode/e2e-run-iter4.log`); `bun run check` green in
 the scratch checkout and in this worktree; coordinator submit. This workstream adds no gates and weakens
 nothing.
+## Workstream AX — goal-loop command syntax (`/goal-loop-<N>`)
+
+Armed condition: parameterized `/goal-loop-<N>` / `/goal-loop=N <objective>` support, implemented in the plugin
+(never the host binary), with the parsing contract below. Parsing rule for N: an integer from 1 to 1000; the
+token is removed from the objective, the per-run cap never rewrites `config.maxLoops`, and an invalid count is
+stated and the configured default is used — never guessed, never silently clamped.
+
+154. `src/core/parse.ts` — `parseGoalLoopDirective(raw): { objective, maxLoops?, invalidCount? } | undefined`.
+     Matches only at the very beginning of the message (leading whitespace tolerated): `/goal-loop`,
+     optionally followed by `-N` or `=N`, bounded by whitespace or end of input. `N` must be ASCII digits and an
+     integer from 1 to 1000 (zero-padded counts are integers in range). Anything else with a suffix — `abc`,
+     `0`, `1001`, `1.5`, `-3`, empty — reports `invalidCount` and falls back to the configured default (a
+     present-but-out-of-range count is invalid, not clamped: rules 2/5 of the contract, not the prose clamp).
+     Everything after the token is the objective (trimmed); the count never enters the completion condition;
+     `/goal-loop investigate the 12 failing tests` keeps `12` as objective text. A bare directive parses with an
+     empty objective (status behavior upstream). `/goal-loopy`, `/goal-loops`, `/goal anything` do not match.
+155. `src/runtime/controller.ts` — record creation factored into a shared private `arm()` (baseline usage,
+     `loopEnabled`/`loopIteration`/`loopObjective`/`loopMaxLoops`/`loopHistory`/`loopNotProgress`, commit, "set"
+     notice). `set()` (command path) is `arm()` + synthetic directive prompt as before. New public
+     `armFromPrompt({ sessionID, condition, maxLoops?, invalidCount? })` is `arm()` only, for the prompt-hook path
+     where the admitted user message IS the kickoff (no synthetic prompt); it fires the "Loop count ignored"
+     warning when `invalidCount` is set (`noteInvalidLoopCount`) and falls back to `config.maxLoops`. The set
+     notice for a loop carries the effective limit (`iteration="1" max="N" · <condition>`). `maxLoops` rides the
+     record; re-anchors and `loopAdvance` read `record.loopMaxLoops ?? config.maxLoops`, so the per-run cap
+     applies end-to-end and later parameterless runs keep the configured default (rule 10).
+156. `src/index.ts` — the session `prompt` hook (real user prompts only; synthetic continuations excluded) parses
+     the raw text first. A valid directive with a non-empty objective is rewritten in place to the `directive()`
+     text (token and count removed; the host awaits the hook before admitting the prompt and reads the mutated
+     text), then the loop is armed via `armFromPrompt`. A bare directive (no objective) shows status and arms
+     nothing; the resume semantics of the hook are unchanged for non-directive prompts. A present-but-invalid
+     count is stated (`Loop count ignored` toast) and the default is used. This is the fix the spec's key limit
+     note calls for — the plugin intercepts before the model sees the prompt; harnesses that hard-reject unknown
+     slash commands before `SessionPrompt.prepare` are out of the plugin's reach by design.
+157. Tests: `test/core.test.ts` (directive parser table, 22 new assertions across parser + plugin + loop
+     suites), `test/loop.test.ts` (`armFromPrompt`: per-run cap recorded, cap ends the loop at N, continuation
+     directive shows the per-run max, a later unparameterized loop uses the default, invalid counts warn and
+     default — 0 and 1001 never clamped), `test/plugin.test.ts` (hook end-to-end: `/goal-loop-188`,
+     `/goal-loop=3`, `/goal-loop-abc`, out-of-range, bare directive, `/goal` untouched — text mutation, storage
+     record, notices). 410 passing, 0 failing (19 files).
+158. Docs (`docs/install.html`, `docs/index.html`, `README.md` commands tables + loop section) document the
+     syntax, the 1..1000 rule, the objective/count separation, and the per-run-only semantics. `/goal` and
+     `/goal-loop` command behavior is unchanged; `/goal` ignores the directive entirely.
+
+Files touched: `src/core/parse.ts`, `src/runtime/controller.ts`, `src/index.ts`, `test/core.test.ts`,
+`test/loop.test.ts`, `test/plugin.test.ts`, `docs/install.html`, `docs/index.html`, `README.md`, `SPEC.md`.
+
+Verification: `bun run check` green in the worktree (410 tests, tsc clean, TUI load ok, docs freshness ok after
+the stamp refresh, spec-check ok 39/410 after the marker bump in this commit); coordinator submit.

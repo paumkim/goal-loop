@@ -13,7 +13,8 @@ import { Plugin } from "@opencode/plugin"
 import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
-import { systemReminder } from "./core/prompts.ts"
+import { parseGoalLoopDirective } from "./core/parse.ts"
+import { directive as directivePrompt, systemReminder } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -244,7 +245,36 @@ export default Plugin.define({
 
     // ---- hooks
     // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
-    await ctx.session.hook("prompt", (event) => controller.onUserPrompt(event.sessionID))
+    // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
+    // through to a plain prompt, and the plugin arms the loop right here — the host awaits this hook before the
+    // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
+    // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
+    await ctx.session.hook("prompt", async (event) => {
+      const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
+      const goalLoop = parseGoalLoopDirective(text)
+      if (goalLoop) {
+        const objective = goalLoop.objective
+        if (objective === "") {
+          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): same as bare /goal-loop — show status.
+          if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
+          await controller.status(event.sessionID)
+          controller.onUserPrompt(event.sessionID)
+          return
+        }
+        const maxLoops = goalLoop.maxLoops ?? config.maxLoops
+        // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
+        // command path would have delivered, with the directive token and the count removed from the objective.
+        event.prompt.text = directivePrompt(objective, commit, { iteration: 1, maxLoops, objective, history: [] })
+        await controller.armFromPrompt({
+          sessionID: event.sessionID,
+          condition: objective,
+          maxLoops,
+          ...(goalLoop.invalidCount !== undefined ? { invalidCount: goalLoop.invalidCount } : {}),
+        })
+        return
+      }
+      controller.onUserPrompt(event.sessionID)
+    })
     // Bound the evaluator's transient request without touching tools or system, which would break the cached prefix.
     await ctx.session.hook("generate", (event) => {
       if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
