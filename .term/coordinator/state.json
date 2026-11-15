@@ -83,9 +83,22 @@
       "paths": ".term/coordinator/state.json",
       "branch": "wt/coordinator-state-done",
       "worktree": "worktrees/wt-coordinator-state-done",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T05:53:22Z",
-      "submittedAt": "2026-11-15T05:53:34Z"
+      "submittedAt": "2026-11-15T05:53:34Z",
+      "mergedAt": "2026-11-15T05:54:23Z",
+      "mergedInto": "dev"
+    },
+    "continuous-improvement-iter1": {
+      "agent": "orchestrator",
+      "paths": "src,test,docs,README.md,SPEC.md,package.json,scripts",
+      "branch": "wt/continuous-improvement-iter1",
+      "worktree": "worktrees/wt-continuous-improvement-iter1",
+      "status": "done",
+      "createdAt": "2026-11-15T06:02:29Z",
+      "submittedAt": "2026-11-15T06:11:42Z",
+      "mergedAt": "2026-11-15T06:11:51Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
