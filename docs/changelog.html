@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-15 10:27 UTC</code></td><td>fix(rpc): restoreOne only adopts records owned by this directory</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 01:19 UTC</code></td><td>fix(rpc): goal RPC handlers are total — no input or state yields a 500</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 01:12 UTC</code></td><td>fix(rpc): read goal state through to plugin storage when memory is empty</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 01:06 UTC</code></td><td>fix(coordinator): merge-next gates on the merged result, not dev's pre-merge HEAD</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-14 04:06 UTC</code></td><td>refactor(tui): express goal state through opencode-v2 native UI primitives</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 04:02 UTC</code></td><td>docs: premium redesign of static docs site (fluid type, extended layout, responsive to tablet)</td><td>commit</td></tr>
 <tr><td><code>2026-11-14 03:29 UTC</code></td><td>docs: add site footer with credits, MIT license attribution for fork</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 03:23 UTC</code></td><td>docs: git-derived Last updated stamps, watcher, changelog page</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
