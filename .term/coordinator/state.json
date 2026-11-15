@@ -732,9 +732,11 @@
       "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/reland-a11",
       "worktree": "worktrees/wt-reland-a11",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T21:36:24Z",
-      "submittedAt": "2026-11-15T21:37:39Z"
+      "submittedAt": "2026-11-15T21:37:39Z",
+      "mergedAt": "2026-11-15T21:38:56Z",
+      "mergedInto": "dev"
     },
     "reland-specnote": {
       "agent": "orchestrator",
