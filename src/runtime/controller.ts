@@ -1,3 +1,4 @@
+import { BOUNDARY_DROP_FACTOR, BOUNDARY_LANDING_GRACE_MS, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, formatDuration, formatStatus, statusLabel, truncate } from "../core/format.ts"
@@ -29,7 +30,8 @@ import { sameDirectory, type GoalStore } from "./store.ts"
  * re-anchor and the "goal-loop · re-anchor after compaction" entries stacked up in the transcript. One re-anchor
  * carries the same ground truth for all of them.
  */
-const REANCHOR_MIN_INTERVAL_MS = 120_000
+// Re-anchor coalescing shares the compaction cooldown window (same "don't hammer the host" budget).
+const REANCHOR_MIN_INTERVAL_MS = COMPACT_COOLDOWN_MS
 // Consecutive unlanded boundary compactions at which the plugin force re-requests (2). At COMPACT_MISS_CAP
 // (4 misses, src/core/types.ts) it stops asking the host entirely until a landing is observed. Applies to
 // armed loops only; plain goals never request boundary compaction at all.
@@ -176,7 +178,7 @@ export class GoalController {
    * size is not a drop. Used by the arm-time settle and the compaction-ended event.
    */
   private contextDropped(pending: LoopCompactState, size: number | undefined): boolean {
-    return size !== undefined && (pending.estimatedTokens === undefined ? size < 10_000 : size <= Math.max(10_000, Math.floor(pending.estimatedTokens * 0.6)))
+    return size !== undefined && (pending.estimatedTokens === undefined ? size < BOUNDARY_MIN_TOKENS : size <= Math.max(BOUNDARY_MIN_TOKENS, Math.floor(pending.estimatedTokens * BOUNDARY_DROP_FACTOR)))
   }
 
   /**
@@ -529,7 +531,7 @@ export class GoalController {
         // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.
         const existing = record.loopCompact
         if (existing && !existing.landedAt) continue
-        if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < 10 * 60_000) continue
+        if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < BOUNDARY_LANDING_GRACE_MS) continue
         void this.deps
           .compactAtBoundary(record.sessionID)
           .then(async (result) => {

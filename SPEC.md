@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=356 -->
+<!-- spec-check files=36 tests=356 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1147,6 +1147,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   files:** `10_000` (boundary floor, inline twice in `contextDropped`, and `BOUNDARY_MIN_TOKENS` in compactor), the `0.6` drop factor,
   `120_000` (`REANCHOR_MIN_INTERVAL_MS` vs `REQUEST_COOLDOWN_MS`), `10 * 60_000` (the restore-time landed cooldown). Proposed fix: a small
   `src/core/constants.ts` (or exports from `types.ts`) shared by controller and compactor.
+  Resolution: Workstream AQ — `src/core/constants.ts`; zero magic-number duplication left.
 - **A-27 (low) — `src/core/config.ts` — `maxRetries` is dead surface.** Retained "for compatibility", gates nothing, advertised in config
   docs. Proposed fix: keep the key parsing (backward compat) but flag in docs as inert, or remove with a SPEC/docs note; never silently drop.
 - **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
@@ -1403,3 +1404,17 @@ into the event stream (sync throws caught at call time; async rejections chained
 Files touched: `src/runtime/events.ts`, `test/controller.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (356 tests, spec-check ok); coordinator submit.
+
+## Workstream AQ — one set of boundary-compaction constants (A-26)
+
+Four magic numbers were duplicated across files: the `10_000` boundary-token floor (inline twice in
+`contextDropped`, plus compactor's `BOUNDARY_MIN_TOKENS`), the `0.6` drop factor, the `120_000` cooldown
+(`REANCHOR_MIN_INTERVAL_MS` in controller vs `REQUEST_COOLDOWN_MS` in compactor), and the `10 * 60_000`
+restore-time landed-grace. New `src/core/constants.ts` is the single source: `BOUNDARY_MIN_TOKENS`,
+`BOUNDARY_DROP_FACTOR`, `COMPACT_COOLDOWN_MS`, `BOUNDARY_LANDING_GRACE_MS`. `REANCHOR_MIN_INTERVAL_MS` remains
+as the controller-local name, assigned from `COMPACT_COOLDOWN_MS` (same budget). No behavior change; the
+existing cooldown/drop/restore tests pass unchanged.
+
+Files touched: `src/core/constants.ts` (new), `src/runtime/controller.ts`, `src/runtime/compactor.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (356 tests, 36 files, spec-check ok); coordinator submit.

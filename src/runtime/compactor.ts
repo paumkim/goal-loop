@@ -5,6 +5,7 @@
  *
  * All guards are timestamp-based; the compactor keeps no timers alive.
  */
+import { BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import { estimateContextTokens } from "../core/context-size.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { errorMessage } from "../core/errors.ts"
@@ -31,11 +32,9 @@ export type BoundaryCompactMiss = "disabled" | "in-flight" | "cooldown" | "too-s
 export type BoundaryCompactResult = { readonly requested: true; readonly estimatedTokens?: number } | { readonly requested: false; readonly reason: BoundaryCompactMiss }
 
 /** Minimum gap between compact requests for the same session. */
-const REQUEST_COOLDOWN_MS = 120_000
+const REQUEST_COOLDOWN_MS = COMPACT_COOLDOWN_MS
 /** An in-flight entry older than this is considered lost and swept. */
 const INFLIGHT_STALE_MS = 10 * 60_000
-/** Contexts smaller than this are not worth a boundary compaction. */
-const BOUNDARY_MIN_TOKENS = 10_000
 
 export class AutoCompactor {
   private readonly inFlight = new Map<string, number>()
