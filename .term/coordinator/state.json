@@ -652,11 +652,12 @@
     },
     "goal-jump-row-indicator": {
       "agent": "orchestrator",
-      "paths": "src/tui.tsx,dist/tui.js",
+      "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/core.html,docs/runtime.html",
       "branch": "wt/goal-jump-row-indicator",
       "worktree": "worktrees/wt-goal-jump-row-indicator",
-      "status": "claimed",
-      "createdAt": "2026-11-15T20:56:54Z"
+      "status": "submitted",
+      "createdAt": "2026-11-15T21:03:34Z",
+      "submittedAt": "2026-11-15T21:04:48Z"
     },
     "a26-shared-constants": {
       "agent": "orchestrator",
@@ -679,6 +680,15 @@
       "submittedAt": "2026-11-15T21:03:10Z",
       "mergedAt": "2026-11-15T21:03:18Z",
       "mergedInto": "dev"
+    },
+    "a11-entries-prune": {
+      "agent": "orchestrator",
+      "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md",
+      "branch": "wt/a11-entries-prune",
+      "worktree": "worktrees/wt-a11-entries-prune",
+      "status": "submitted",
+      "createdAt": "2026-11-15T21:04:24Z",
+      "submittedAt": "2026-11-15T21:09:14Z"
     }
   },
   "mergeLock": null

@@ -1132,11 +1132,11 @@ var tui_default = Plugin.define({
         setNow(Date.now());
     }, TICK_MS);
     context.ui.slot({
-      append: "prompt.footer",
+      append: "session.composer.top",
       render: (props) => {
         const goal = createMemo(() => {
           try {
-            return props.mode === "normal" ? live(props.sessionID) : undefined;
+            return live(props.sessionID);
           } catch {
             return;
           }
@@ -1176,7 +1176,12 @@ var tui_default = Plugin.define({
           get children() {
             var _el$1 = _$createElement3("box"), _el$10 = _$createElement3("text");
             _$insertNode3(_el$1, _el$10);
-            _$setProp3(_el$1, "flexShrink", 0);
+            _$setProp3(_el$1, "position", "absolute");
+            _$setProp3(_el$1, "top", -1);
+            _$setProp3(_el$1, "left", 0);
+            _$setProp3(_el$1, "height", 1);
+            _$setProp3(_el$1, "paddingLeft", 1);
+            _$setProp3(_el$1, "flexDirection", "row");
             _$setProp3(_el$1, "onMouseUp", () => {
               try {
                 if (props.sessionID)
