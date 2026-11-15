@@ -167,3 +167,23 @@ the fix, if any, lives in the host event bridge.
 
 Not verified: Antigravity-Free (provider outage). Docs lease: taken (no other holder); README
 and docs/*.html updated for the new command only.
+## Workstream C — dev rebuild and cleanup acceptance criteria
+
+Interpretation of "next merged to dev rebuild the binary and clean up": after wt/goal-loop-failure-modes
+landed on dev (d86c03b), rebuild the shipped TUI bundle, verify the package layout, and consolidate the
+repo state left by the merge.
+
+16. `dist/tui.js` and `dist/tui.d.ts` are rebuilt from the current `src/tui.tsx` via `bun run compile`;
+    after the rebuild and this commit, `git status --short` on this branch reports only tracked files that
+    are meant to ship. If the rebuild is byte-identical, nothing is committed for dist/.
+17. `npm pack --dry-run` (or `bun pm pack` equivalent) lists exactly the files `package.json` declares in
+    `files` (index.ts, tui.ts, rpc.ts, src/, dist/, packages/coordinator/) and reports a reasonable tarball
+    size; no build debris (e.g. logs, caches, .term/) leaks in.
+18. The coordinator lease bookkeeping (`.term/coordinator/state.json`) carries the merge-next entry for
+    goal-loop-failure-modes and is committed to dev, so the coordination bus on dev is not left dirty.
+19. No stale state remains in the repo: `git worktree list` shows only the dev checkout, `git branch` shows
+    only `dev` and `main`, and `worktrees/` contains no `wt-*` directories.
+20. `bun run check` passes on dev (tsc, tests, compile) with this branch merged.
+
+Verification: `bun run compile` (byte-diff of dist/), `npm pack --dry-run`, `git worktree list`,
+`git branch -a`, `git status --short`, `bun run check`, then coordinator submit + merge-next.
