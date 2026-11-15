@@ -43,8 +43,9 @@ function formatDurationCoarse(ms) {
 function formatTokens(n) {
   if (n < 1000)
     return String(Math.round(n));
-  if (n < 1e6)
-    return `${(n / 1000).toFixed(n < 1e4 ? 1 : 0)}k`;
+  const k = (n / 1000).toFixed(n < 1e4 ? 1 : 0);
+  if (n < 1e6 && Number(k) < 1000)
+    return `${k}k`;
   return `${(n / 1e6).toFixed(2)}M`;
 }
 function formatCost(usd) {

@@ -23,7 +23,9 @@ export function formatDurationCoarse(ms: number): string {
 
 export function formatTokens(n: number): string {
   if (n < 1_000) return String(Math.round(n))
-  if (n < 1_000_000) return `${(n / 1_000).toFixed(n < 10_000 ? 1 : 0)}k`
+  // Round-then-compare at the unit boundary: a value whose rounded k-form reaches 1000k renders as M instead.
+  const k = (n / 1_000).toFixed(n < 10_000 ? 1 : 0)
+  if (n < 1_000_000 && Number(k) < 1_000) return `${k}k`
   return `${(n / 1_000_000).toFixed(2)}M`
 }
 

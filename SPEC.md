@@ -1064,6 +1064,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-6 (low) — `src/core/format.ts:24-28` — `formatTokens` rolls over badly at the million boundary.** `999_999` renders as `"1000k"`
   (the `< 1_000_000` branch never falls through to the `M` format). Proposed fix: round-then-compare or special-case values whose
   rounded form exceeds the unit, e.g. compare `n >= 999_500` for the `k` branch. Cosmetic, one-line fix + test.
+  Resolution: Workstream AE — round-then-compare; pin test added (fails pre-fix, passes post-fix).
 - **A-7 (low) — `src/runtime/controller.ts:296-299` — tool calls zeroed before the stale check.** `onExecutionSucceeded` clears
   `runtime.toolCalls = 0` before the `background.busy` await; when the record went stale meanwhile the counts are silently lost rather
   than carried. Benign (the evaluation is dropped anyway) — waived: no observable behavior beyond a dropped, superseded turn.
@@ -1119,6 +1120,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   exponential bases in one file with no stated rationale. Proposed fix: one shared backoff helper (`RETRY_BASE_MS * base ** n`, capped), or a
   comment stating the intentional difference.
 - **A-22 (low) — `src/core/format.ts` / `src/tui.tsx` — `1000k` rollover** (same as A-6; listed once here, fixed once).
+  Resolution: Workstream AE — the A-6 fix.
 - **A-23 (low) — `src/core/history.ts:renderPips` — pips render only for caps 1–8** and vanish for larger caps; intentional compactness,
   documented. Waive with reason.
 
@@ -1206,5 +1208,19 @@ export (`LABEL`, documented), imported by both components. Pure refactor; no vis
 unchanged (347). `dist/tui.js` rebuilt (50952 bytes) and committed in this workstream per policy.
 
 Files touched: `src/core/history.ts`, `src/status-dialog.tsx`, `src/tui-history.tsx`, `dist/tui.js`, `SPEC.md`.
+
+Verification: `bun run check` green (347 tests, spec-check ok); coordinator submit.
+
+## Workstream AE — formatTokens rounds at the unit boundary (A-6, A-22)
+
+`formatTokens(999_999)` rendered as `"1000k"` because the k-branch never fell through to the M format. The fix
+round-then-compares: the k-form is computed first, and a value whose rounded k-form reaches `1000k` falls
+through to the M format (`999_499` → `"999k"`, `999_500` and `999_999` → `"1.00M"`). One fix resolves both
+audit IDs; A-22 is the same defect listed once under TUI.
+
+124. Pin test (`test/core.test.ts`): three boundary expectations added to the existing format test (test count unchanged); verified to fail on the pre-fix
+    tree and pass with it. No other call sites changed.
+
+Files touched: `src/core/format.ts`, `test/core.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (347 tests, spec-check ok); coordinator submit.
