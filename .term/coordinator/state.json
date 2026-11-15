@@ -270,8 +270,11 @@
       "paths": ".term/coordinator/state.json",
       "branch": "wt/record-final-leases",
       "worktree": "worktrees/wt-record-final-leases",
-      "status": "claimed",
-      "createdAt": "2026-11-15T17:22:00Z"
+      "status": "done",
+      "createdAt": "2026-11-15T17:22:00Z",
+      "submittedAt": "2026-11-15T17:22:08Z",
+      "mergedAt": "2026-11-15T17:22:16Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
