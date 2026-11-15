@@ -440,6 +440,17 @@
       "submittedAt": "2026-11-15T19:52:06Z",
       "mergedAt": "2026-11-15T19:54:14Z",
       "mergedInto": "dev"
+    },
+    "compact-evidence": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/changelog.html,docs/index.html,docs/install.html",
+      "branch": "wt/compact-evidence",
+      "worktree": "worktrees/wt-compact-evidence",
+      "status": "done",
+      "createdAt": "2026-11-15T19:57:19Z",
+      "submittedAt": "2026-11-15T20:02:29Z",
+      "mergedAt": "2026-11-15T20:02:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
