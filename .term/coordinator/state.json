@@ -627,6 +627,17 @@
       "submittedAt": "2026-11-15T20:51:56Z",
       "mergedAt": "2026-11-15T20:52:03Z",
       "mergedInto": "dev"
+    },
+    "a14-events-unknown": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/events.ts,SPEC.md",
+      "branch": "wt/a14-events-unknown",
+      "worktree": "worktrees/wt-a14-events-unknown",
+      "status": "done",
+      "createdAt": "2026-11-15T20:52:56Z",
+      "submittedAt": "2026-11-15T20:55:24Z",
+      "mergedAt": "2026-11-15T20:55:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
