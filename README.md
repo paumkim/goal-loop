@@ -220,7 +220,9 @@ forced re-request (see below) skips only the 2-minute request cooldown; the in-f
 **Accepted is not landed.** The host decides the actual compaction point, so the plugin tracks every boundary
 request on the goal record (`loopCompact`: requestedAt, estimated context, iteration, misses). Landing is
 detected two ways — the `session.compaction.ended` event, or a context-size drop at the next arm (≤60% of the
-requested estimate) — and surfaced as a "Compaction landed" notice, in `/goal` output, and in the status line.
+requested estimate) — and surfaced as a "Compaction landed" notice, in `/goal` output, in the `/goal` detail
+dialog (a `compact` row under the objective while pending or after landing), and in the status line (the footer
+marker carries the miss count while a request is outstanding).
 A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
 never past the busy gate) with a "Compaction pending" warning.
 

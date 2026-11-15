@@ -380,62 +380,86 @@ var LoopSection = (props) => {
     _$setProp(_el$1, "wrapMode", "word");
     _$setProp(_el$1, "flexGrow", 1);
     _$insert(_el$1, () => props.goal.loopObjective ?? "?");
+    _$insert(_el$2, _$createComponent(Show, {
+      get when() {
+        return props.goal.loopCompact;
+      },
+      children: (compact) => {
+        const c = compact();
+        const pending = () => c.landedAt === undefined;
+        const age = () => formatDuration(nowMs() - (c.landedAt ?? c.requestedAt));
+        return (() => {
+          var _el$19 = _$createElement("box"), _el$20 = _$createElement("text");
+          _$insertNode(_el$19, _el$20);
+          _$setProp(_el$19, "flexDirection", "row");
+          _$setProp(_el$19, "gap", 2);
+          _$insert(_el$19, () => label(theme(), "compact"), _el$20);
+          _$setProp(_el$20, "wrapMode", "none");
+          _$insert(_el$20, (() => {
+            var _c$ = _$memo(() => !!pending());
+            return () => _c$() ? `pending ${age()} \xB7 miss ${c.misses}/2${c.estimatedTokens !== undefined ? ` \xB7 ~${formatTokens(c.estimatedTokens)} at request` : ""}` : `landed ${age()} ago`;
+          })());
+          _$effect((_$p) => _$setProp(_el$20, "fg", pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
+          return _el$19;
+        })();
+      }
+    }), _el$10);
     _$insert(_el$2, _$createComponent(For, {
       get each() {
         return history();
       },
       children: (entry, index) => (() => {
-        var _el$19 = _$createElement("box"), _el$20 = _$createElement("box"), _el$21 = _$createElement("text"), _el$23 = _$createElement("text");
-        _$insertNode(_el$19, _el$20);
-        _$setProp(_el$19, "flexDirection", "column");
-        _$insertNode(_el$20, _el$21);
-        _$insertNode(_el$20, _el$23);
-        _$setProp(_el$20, "flexDirection", "row");
-        _$setProp(_el$20, "gap", 2);
-        _$insert(_el$20, () => label(theme(), `v${entry.version}`), _el$21);
-        _$insertNode(_el$21, _$createTextNode(`\u2713`));
-        _$setProp(_el$21, "wrapMode", "none");
-        _$setProp(_el$21, "flexShrink", 0);
+        var _el$21 = _$createElement("box"), _el$22 = _$createElement("box"), _el$23 = _$createElement("text"), _el$25 = _$createElement("text");
+        _$insertNode(_el$21, _el$22);
+        _$setProp(_el$21, "flexDirection", "column");
+        _$insertNode(_el$22, _el$23);
+        _$insertNode(_el$22, _el$25);
+        _$setProp(_el$22, "flexDirection", "row");
+        _$setProp(_el$22, "gap", 2);
+        _$insert(_el$22, () => label(theme(), `v${entry.version}`), _el$23);
+        _$insertNode(_el$23, _$createTextNode(`\u2713`));
         _$setProp(_el$23, "wrapMode", "none");
-        _$insert(_el$23, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`);
-        _$insert(_el$19, _$createComponent(Show, {
+        _$setProp(_el$23, "flexShrink", 0);
+        _$setProp(_el$25, "wrapMode", "none");
+        _$insert(_el$25, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`);
+        _$insert(_el$21, _$createComponent(Show, {
           get when() {
             return entry.summary.trim().length > 0;
           },
           get children() {
-            var _el$24 = _$createElement("box"), _el$25 = _$createElement("text"), _el$27 = _$createElement("text");
-            _$insertNode(_el$24, _el$25);
-            _$insertNode(_el$24, _el$27);
-            _$setProp(_el$24, "flexDirection", "row");
-            _$setProp(_el$24, "gap", 2);
-            _$insertNode(_el$25, _$createTextNode(`\u2502`));
-            _$setProp(_el$25, "flexShrink", 0);
-            _$setProp(_el$25, "width", 10);
-            _$setProp(_el$27, "wrapMode", "word");
-            _$setProp(_el$27, "flexGrow", 1);
-            _$insert(_el$27, () => `\u2502 ${truncate(entry.summary, SUMMARY_MAX)}`);
+            var _el$26 = _$createElement("box"), _el$27 = _$createElement("text"), _el$29 = _$createElement("text");
+            _$insertNode(_el$26, _el$27);
+            _$insertNode(_el$26, _el$29);
+            _$setProp(_el$26, "flexDirection", "row");
+            _$setProp(_el$26, "gap", 2);
+            _$insertNode(_el$27, _$createTextNode(`\u2502`));
+            _$setProp(_el$27, "flexShrink", 0);
+            _$setProp(_el$27, "width", 10);
+            _$setProp(_el$29, "wrapMode", "word");
+            _$setProp(_el$29, "flexGrow", 1);
+            _$insert(_el$29, () => `\u2502 ${truncate(entry.summary, SUMMARY_MAX)}`);
             _$effect((_p$) => {
               var _v$0 = theme().text.faint, _v$1 = theme().text.faint;
-              _v$0 !== _p$.e && (_p$.e = _$setProp(_el$25, "fg", _v$0, _p$.e));
-              _v$1 !== _p$.t && (_p$.t = _$setProp(_el$27, "fg", _v$1, _p$.t));
+              _v$0 !== _p$.e && (_p$.e = _$setProp(_el$27, "fg", _v$0, _p$.e));
+              _v$1 !== _p$.t && (_p$.t = _$setProp(_el$29, "fg", _v$1, _p$.t));
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$24;
+            return _el$26;
           }
         }), null);
         _$effect((_p$) => {
           var _v$10 = theme().text.feedback.info.base, _v$11 = theme().text.base;
-          _v$10 !== _p$.e && (_p$.e = _$setProp(_el$21, "fg", _v$10, _p$.e));
-          _v$11 !== _p$.t && (_p$.t = _$setProp(_el$23, "fg", _v$11, _p$.t));
+          _v$10 !== _p$.e && (_p$.e = _$setProp(_el$23, "fg", _v$10, _p$.e));
+          _v$11 !== _p$.t && (_p$.t = _$setProp(_el$25, "fg", _v$11, _p$.t));
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$19;
+        return _el$21;
       })()
     }), _el$10);
     _$insertNode(_el$10, _el$11);
@@ -454,28 +478,28 @@ var LoopSection = (props) => {
         return iterVerdict();
       },
       children: (entry) => (() => {
-        var _el$28 = _$createElement("box"), _el$29 = _$createElement("text"), _el$31 = _$createElement("text"), _el$32 = _$createElement("text");
-        _$insertNode(_el$28, _el$29);
-        _$insertNode(_el$28, _el$31);
-        _$insertNode(_el$28, _el$32);
-        _$setProp(_el$28, "flexDirection", "row");
-        _$setProp(_el$28, "gap", 1);
-        _$setProp(_el$28, "flexShrink", 0);
-        _$insertNode(_el$29, _$createTextNode(`\xB7 last`));
-        _$setProp(_el$29, "wrapMode", "none");
+        var _el$30 = _$createElement("box"), _el$31 = _$createElement("text"), _el$33 = _$createElement("text"), _el$34 = _$createElement("text");
+        _$insertNode(_el$30, _el$31);
+        _$insertNode(_el$30, _el$33);
+        _$insertNode(_el$30, _el$34);
+        _$setProp(_el$30, "flexDirection", "row");
+        _$setProp(_el$30, "gap", 1);
+        _$setProp(_el$30, "flexShrink", 0);
+        _$insertNode(_el$31, _$createTextNode(`\xB7 last`));
         _$setProp(_el$31, "wrapMode", "none");
-        _$insert(_el$31, () => verdictGlyph(entry().verdict));
-        _$setProp(_el$32, "wrapMode", "none");
-        _$insert(_el$32, (() => {
-          var _c$ = _$memo(() => turnsSince() === 0);
-          return () => _c$() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
+        _$setProp(_el$33, "wrapMode", "none");
+        _$insert(_el$33, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$34, "wrapMode", "none");
+        _$insert(_el$34, (() => {
+          var _c$2 = _$memo(() => turnsSince() === 0);
+          return () => _c$2() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
         })());
         _$effect((_p$) => {
           var _v$12 = theme().text.muted, _v$13 = colorFor(theme(), entry().verdict), _v$14 = TextAttributes.BOLD, _v$15 = theme().text.faint;
-          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$29, "fg", _v$12, _p$.e));
-          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$31, "fg", _v$13, _p$.t));
-          _v$14 !== _p$.a && (_p$.a = _$setProp(_el$31, "attributes", _v$14, _p$.a));
-          _v$15 !== _p$.o && (_p$.o = _$setProp(_el$32, "fg", _v$15, _p$.o));
+          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$31, "fg", _v$12, _p$.e));
+          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$33, "fg", _v$13, _p$.t));
+          _v$14 !== _p$.a && (_p$.a = _$setProp(_el$33, "attributes", _v$14, _p$.a));
+          _v$15 !== _p$.o && (_p$.o = _$setProp(_el$34, "fg", _v$15, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -483,7 +507,7 @@ var LoopSection = (props) => {
           a: undefined,
           o: undefined
         });
-        return _el$28;
+        return _el$30;
       })()
     }), null);
     _$insert(_el$2, _$createComponent(Show, {
@@ -551,36 +575,36 @@ var VerdictTrail = (props) => {
       return trail().shown.length > 0;
     },
     get children() {
-      var _el$33 = _$createElement("box"), _el$34 = _$createElement("box"), _el$35 = _$createElement("text"), _el$36 = _$createTextNode(` `), _el$37 = _$createTextNode(` of `), _el$38 = _$createTextNode(` verdict`);
-      _$insertNode(_el$33, _el$34);
-      _$insertNode(_el$33, _el$35);
-      _$setProp(_el$33, "flexDirection", "row");
-      _$setProp(_el$33, "gap", 2);
-      _$insert(_el$33, () => label(props.theme, "trail"), _el$34);
-      _$setProp(_el$34, "flexDirection", "row");
-      _$setProp(_el$34, "flexShrink", 0);
-      _$insert(_el$34, _$createComponent(For, {
+      var _el$35 = _$createElement("box"), _el$36 = _$createElement("box"), _el$37 = _$createElement("text"), _el$38 = _$createTextNode(` `), _el$39 = _$createTextNode(` of `), _el$40 = _$createTextNode(` verdict`);
+      _$insertNode(_el$35, _el$36);
+      _$insertNode(_el$35, _el$37);
+      _$setProp(_el$35, "flexDirection", "row");
+      _$setProp(_el$35, "gap", 2);
+      _$insert(_el$35, () => label(props.theme, "trail"), _el$36);
+      _$setProp(_el$36, "flexDirection", "row");
+      _$setProp(_el$36, "flexShrink", 0);
+      _$insert(_el$36, _$createComponent(For, {
         get each() {
           return trail().shown;
         },
         children: (entry) => (() => {
-          var _el$39 = _$createElement("text");
-          _$setProp(_el$39, "wrapMode", "none");
-          _$insert(_el$39, () => verdictGlyph(entry.verdict));
-          _$effect((_$p) => _$setProp(_el$39, "fg", colorFor(props.theme, entry.verdict), _$p));
-          return _el$39;
+          var _el$41 = _$createElement("text");
+          _$setProp(_el$41, "wrapMode", "none");
+          _$insert(_el$41, () => verdictGlyph(entry.verdict));
+          _$effect((_$p) => _$setProp(_el$41, "fg", colorFor(props.theme, entry.verdict), _$p));
+          return _el$41;
         })()
       }));
-      _$insertNode(_el$35, _el$36);
-      _$insertNode(_el$35, _el$37);
-      _$insertNode(_el$35, _el$38);
-      _$setProp(_el$35, "wrapMode", "none");
-      _$setProp(_el$35, "flexShrink", 0);
-      _$insert(_el$35, () => trail().shown.length, _el$37);
-      _$insert(_el$35, () => trail().total, _el$38);
-      _$insert(_el$35, () => trail().total === 1 ? "" : "s", null);
-      _$effect((_$p) => _$setProp(_el$35, "fg", props.theme.text.muted, _$p));
-      return _el$33;
+      _$insertNode(_el$37, _el$38);
+      _$insertNode(_el$37, _el$39);
+      _$insertNode(_el$37, _el$40);
+      _$setProp(_el$37, "wrapMode", "none");
+      _$setProp(_el$37, "flexShrink", 0);
+      _$insert(_el$37, () => trail().shown.length, _el$39);
+      _$insert(_el$37, () => trail().total, _el$40);
+      _$insert(_el$37, () => trail().total === 1 ? "" : "s", null);
+      _$effect((_$p) => _$setProp(_el$37, "fg", props.theme.text.muted, _$p));
+      return _el$35;
     }
   });
 };
@@ -603,56 +627,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$40 = _$createElement("box"), _el$41 = _$createElement("box");
-    _$insertNode(_el$40, _el$41);
-    _$setProp(_el$40, "flexDirection", "column");
-    _$setProp(_el$40, "gap", 1);
-    _$setProp(_el$41, "flexDirection", "row");
-    _$setProp(_el$41, "gap", 2);
-    _$insert(_el$41, () => label(theme(), "history"), null);
-    _$insert(_el$41, _$createComponent(Show, {
+    var _el$42 = _$createElement("box"), _el$43 = _$createElement("box");
+    _$insertNode(_el$42, _el$43);
+    _$setProp(_el$42, "flexDirection", "column");
+    _$setProp(_el$42, "gap", 1);
+    _$setProp(_el$43, "flexDirection", "row");
+    _$setProp(_el$43, "gap", 2);
+    _$insert(_el$43, () => label(theme(), "history"), null);
+    _$insert(_el$43, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$42 = _$createElement("text"), _el$43 = _$createTextNode(`no verdicts yet \xB7 `), _el$44 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$42, _el$43);
-          _$insertNode(_el$42, _el$44);
-          _$setProp(_el$42, "wrapMode", "none");
-          _$insert(_el$42, elapsed, _el$44);
-          _$effect((_$p) => _$setProp(_el$42, "fg", theme().text.faint, _$p));
-          return _el$42;
+          var _el$44 = _$createElement("text"), _el$45 = _$createTextNode(`no verdicts yet \xB7 `), _el$46 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$44, _el$45);
+          _$insertNode(_el$44, _el$46);
+          _$setProp(_el$44, "wrapMode", "none");
+          _$insert(_el$44, elapsed, _el$46);
+          _$effect((_$p) => _$setProp(_el$44, "fg", theme().text.faint, _$p));
+          return _el$44;
         })();
       },
       children: (entry) => (() => {
-        var _el$45 = _$createElement("box"), _el$46 = _$createElement("text"), _el$47 = _$createElement("text");
-        _$insertNode(_el$45, _el$46);
-        _$insertNode(_el$45, _el$47);
-        _$setProp(_el$45, "flexDirection", "row");
-        _$setProp(_el$45, "gap", 2);
-        _$setProp(_el$45, "flexGrow", 1);
-        _$setProp(_el$46, "wrapMode", "none");
-        _$setProp(_el$46, "flexShrink", 0);
-        _$insert(_el$46, () => verdictGlyph(entry().verdict));
-        _$setProp(_el$47, "wrapMode", "word");
+        var _el$47 = _$createElement("box"), _el$48 = _$createElement("text"), _el$49 = _$createElement("text");
+        _$insertNode(_el$47, _el$48);
+        _$insertNode(_el$47, _el$49);
+        _$setProp(_el$47, "flexDirection", "row");
+        _$setProp(_el$47, "gap", 2);
         _$setProp(_el$47, "flexGrow", 1);
-        _$insert(_el$47, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        _$setProp(_el$48, "wrapMode", "none");
+        _$setProp(_el$48, "flexShrink", 0);
+        _$insert(_el$48, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$49, "wrapMode", "word");
+        _$setProp(_el$49, "flexGrow", 1);
+        _$insert(_el$49, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
           var _v$16 = colorFor(theme(), entry().verdict), _v$17 = TextAttributes.BOLD, _v$18 = theme().text.base;
-          _v$16 !== _p$.e && (_p$.e = _$setProp(_el$46, "fg", _v$16, _p$.e));
-          _v$17 !== _p$.t && (_p$.t = _$setProp(_el$46, "attributes", _v$17, _p$.t));
-          _v$18 !== _p$.a && (_p$.a = _$setProp(_el$47, "fg", _v$18, _p$.a));
+          _v$16 !== _p$.e && (_p$.e = _$setProp(_el$48, "fg", _v$16, _p$.e));
+          _v$17 !== _p$.t && (_p$.t = _$setProp(_el$48, "attributes", _v$17, _p$.t));
+          _v$18 !== _p$.a && (_p$.a = _$setProp(_el$49, "fg", _v$18, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$45;
+        return _el$47;
       })()
     }), null);
-    _$insert(_el$40, _$createComponent(VerdictTrail, {
+    _$insert(_el$42, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -660,7 +684,7 @@ var HistoryBlock = (props) => {
         return history();
       }
     }), null);
-    return _el$40;
+    return _el$42;
   })();
 };
 
@@ -1126,7 +1150,8 @@ var tui_default = Plugin.define({
             if (g.loopEnabled) {
               const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : "";
               const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops);
-              const compacting = g.loopCompact && !g.loopCompact.landedAt ? " \xB7 compact pending" : "";
+              const compactPending = g.loopCompact && !g.loopCompact.landedAt ? g.loopCompact : undefined;
+              const compacting = compactPending ? ` \xB7 compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/2)` : ""}` : "";
               return `${GOAL_GLYPH} loop \xB7 v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}`;
             }
             return `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
