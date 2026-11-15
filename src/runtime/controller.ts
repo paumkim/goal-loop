@@ -296,6 +296,8 @@ export class GoalController {
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     runtime.toolCalls = 0
+    // The execution is over; a straggler succeeded for it must not evaluate. The retry steer re-arms evaluation.
+    runtime.awaitingExecution = true
     this.handleFailure(record, runtime, classifyFailure(error))
   }
 
@@ -307,8 +309,12 @@ export class GoalController {
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     if (reason === "user") return this.pause(record, "Interrupted.")
-    if (reason === "inactivity") return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
-    // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn.
+    if (reason === "inactivity") {
+      runtime.awaitingExecution = true
+      return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
+    }
+    // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn, its events must evaluate.
+    if (reason !== "superseded") runtime.awaitingExecution = true
   }
 
   onSessionDeleted(sessionID: string) {

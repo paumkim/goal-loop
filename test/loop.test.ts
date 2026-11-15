@@ -689,3 +689,36 @@ describe("/goal-loop failure modes", () => {
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
   })
 })
+
+describe("/goal-loop straggler completions after failure", () => {
+  test("a duplicated execution.succeeded after a failing turn does not evaluate the failed turn", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("spurious"))
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onExecutionFailed(SID, { message: "socket hang up" })
+    // The failed turn is over; a duplicate succeeded delivered before the retry's started must not evaluate.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(h.verdicts).toHaveLength(1) // the queued verdict was not consumed
+    expect(record.turns).toBe(0)
+    expect(h.summaryRequests).toHaveLength(0)
+  })
+
+  test("a duplicated execution.succeeded after a non-superseded interrupt does not evaluate", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("spurious"))
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onExecutionInterrupted(SID, "inactivity")
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(h.verdicts).toHaveLength(1)
+    expect(record.turns).toBe(0)
+    expect(h.summaryRequests).toHaveLength(0)
+  })
+})
