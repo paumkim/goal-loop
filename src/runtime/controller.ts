@@ -465,7 +465,7 @@ export class GoalController {
 
     const endClean = async (reason: string) => {
       await saveLoopState()
-      this.finish(record, "achieved", reason)
+      await this.finish(record, "achieved", reason)
       this.notify(sessionID, "achieved", "success", "Loop complete", reason)
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
     }
@@ -475,7 +475,8 @@ export class GoalController {
       log.error("loop step unavailable", { sessionID })
       history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
       await saveLoopState()
-      return this.pause(record, reason)
+      await this.pause(record, reason)
+      return
     }
 
     const summarize = new AbortController()
@@ -502,7 +503,8 @@ export class GoalController {
       log.error("loop summary failed", { sessionID, error: errorMessage(error) })
       history.push(makeEntry(`(summary failed: ${truncate(errorMessage(error), 80)})`))
       await saveLoopState()
-      return this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
+      await this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
+      return
     } finally {
       if (runtime.abort === summarize) runtime.abort = undefined
     }
@@ -514,7 +516,8 @@ export class GoalController {
 
     if (notProgress >= 2) {
       await saveLoopState()
-      return this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
+      await this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
+      return
     }
     if (history.length >= maxLoops) {
       return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${history.length} achieved iteration${history.length === 1 ? "" : "s"}.`)
@@ -530,7 +533,8 @@ export class GoalController {
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
       await saveLoopState()
-      return this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
+      await this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
+      return
     } finally {
       if (runtime.abort === generate) runtime.abort = undefined
     }
@@ -667,13 +671,18 @@ export class GoalController {
     }
   }
 
-  private pause(record: GoalRecord, reason: string) {
+  /**
+   * Persists the paused record before returning; the returned promise resolves once the durable write lands.
+   * Non-loop callers may ignore it (fire-and-forget, as before); loop call sites await it so a restart
+   * cannot restore the pre-pause state.
+   */
+  private pause(record: GoalRecord, reason: string): Promise<void> {
     const runtime = this.runtime(record.sessionID)
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     record.status = "paused"
     record.reason = reason
-    this.commit(record)
+    const saved = this.commit(record)
     const atCap = this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns
     this.notify(
       record.sessionID,
@@ -684,9 +693,16 @@ export class GoalController {
         ? `${reason} It stays paused at the turn cap until you /goal clear or set a new goal; a message will not extend the cap.`
         : `${reason} Send a message to resume, or /goal clear.`,
     )
+    return saved
   }
 
-  private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string) {
+  /**
+   * Persists the terminal status before returning; the returned promise resolves once the durable write lands.
+   * Non-loop callers may ignore it (fire-and-forget, as before); the goal-loop end path awaits it so a crash
+   * between the loop's last met verdict and the write cannot restore an active loop and re-evaluate the condition.
+   * The final spend snapshot still resolves in the background and re-saves the record.
+   */
+  private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string): Promise<void> {
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
@@ -695,7 +711,7 @@ export class GoalController {
     record.status = status
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
-    this.commit(record)
+    const saved = this.commit(record)
     void this.deps.session
       .usage(record.sessionID)
       .then((usage) => {
@@ -708,6 +724,7 @@ export class GoalController {
         void this.deps.store.save(record)
       })
       .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
+    return saved
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
