@@ -1126,7 +1126,8 @@ var tui_default = Plugin.define({
             if (g.loopEnabled) {
               const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : "";
               const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops);
-              return `${GOAL_GLYPH} loop \xB7 v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
+              const compacting = g.loopCompact && !g.loopCompact.landedAt ? " \xB7 compact pending" : "";
+              return `${GOAL_GLYPH} loop \xB7 v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}`;
             }
             return `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`;
           } catch {

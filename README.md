@@ -186,7 +186,7 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
-| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
+| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight); an unlanded request is re-requested after 2 armed iterations. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
@@ -211,6 +211,18 @@ with a fresh context. It also compacts restored live goals on plugin startup. Bo
 for tiny contexts (< 10k estimated tokens), honors the same in-flight/cooldown guards, and is queued *before*
 the armed iteration's synthetic steer. `compactOnLoopIteration: false` (or `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION=0`)
 turns it off. opencode's own auto-compaction near the model window remains the backstop.
+
+**Compaction never fires mid-work.** Both paths refuse to request a compaction while the session has work in
+flight — a turn executing, or background subagents/shells running (tracked from the event stream) — and defer
+with only a log line. The busy check fails closed: if the probe errors, the compaction is deferred. Even a
+forced re-request (see below) skips only the 2-minute request cooldown; the in-flight and busy gates always hold.
+
+**Accepted is not landed.** The host decides the actual compaction point, so the plugin tracks every boundary
+request on the goal record (`loopCompact`: requestedAt, estimated context, iteration, misses). Landing is
+detected two ways — the `session.compaction.ended` event, or a context-size drop at the next arm (≤60% of the
+requested estimate) — and surfaced as a "Compaction landed" notice, in `/goal` output, and in the status line.
+A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
+never past the busy gate) with a "Compaction pending" warning.
 
 The estimate is the last assistant message's `input + cache.read + cache.write` token usage, measured right
 after each turn ends (`session.execution.succeeded`). Reasoning and output tokens are not counted: output has

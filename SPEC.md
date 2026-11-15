@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=309 -->
+<!-- spec-check files=35 tests=320 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -782,3 +782,55 @@ Verification: `test/controller.test.ts` (transient failures retry with capped ba
 retries; evaluator errors retry forever), `test/loop.test.ts` (zero-tool iterations keep the loop alive;
 summary failure advances anyway; planner failure backs off and advances; planner repeat → clean achieved;
 existing durable-arming/straggler/race suites unchanged and green), `bun run check` green, coordinator submit.
+
+## Workstream V — smart compaction: never mid-work, and landing is detected and tracked
+
+Interpretation of the follow-up requirement "the compaction trigger in mid work that is not good it trunckated
+the works. it needs to be smart do not cut off in mid work system that is what the compaction needs" combined
+with the armed condition's accepted-vs-completed gap: the plugin requests compaction but the host decides the
+actual point, so the plugin must (a) never ask while work is in flight, and (b) observe whether an accepted
+boundary request actually lands, record it, surface it, and re-request when it never lands.
+
+96. Mid-work deferral (additive dep `AutoCompactorDeps.isBusy?: (sessionID) => Promise<boolean>`, wired in
+    `src/index.ts` as `work.subagents + work.shells > 0 || controller.isExecuting(sessionID)` where `isBusy`
+    reads `background.busy()` (event-fed descendant-session + shell tracker) OR the controller's in-memory
+    executing-turn set via the new public `GoalController.isExecuting()`). BOTH compaction paths consult the
+    gate and defer with only a log line when busy: `maybeCompact` (the window-independent auto threshold) and
+    `compactAtBoundary` (the loop-boundary path of Workstream T). The busy check fails closed — an erroring
+    probe defers the compaction. The `force` option introduced for boundary re-requests skips ONLY the 120s
+    request cooldown; the in-flight and busy gates hold even under `force`, so a forced re-request can never
+    cut off in-flight work. Plugin-side estimates and `session.compact` are the only levers the host gives
+    us; the gate makes the request safe by construction.
+97. Accepted-vs-completed tracking (`LoopCompactState` on `GoalRecord.loopCompact`, additive, round-trips
+    through plugin storage): `{ requestedAt, estimatedTokens?, iteration, landedAt?, misses }`. Recorded
+    (a) in `loopAdvance` after the arm commit — a returned boundary-compact result with `requested: true`
+    overwrites the record with a fresh pending state (iteration = the newly armed iteration, `misses` carried
+    forward until an actual landing is observed, never reset by a mere re-request); (b) in `restore()` for
+    adopted ACTIVE records that the boundary compaction was re-requested for. Landing detection runs at the
+    NEXT arm before a new request is issued, in one of two ways: (i) the `session.compaction.ended` event
+    marks the pending state `landedAt` via the controller's public `onCompactionLanded()` and emits a
+    "Compaction landed" success notice; (ii) a context-size drop at the next arm — via the new optional
+    `ControllerDeps.estimateContext` port (`ctx.session.context` + `estimateContextTokens`, estimate
+    unavailable → treated as not-landed) — marks landing when `size <= max(10_000, floor(estimatedTokens
+    × 0.6))` (unknown baseline estimate: `size < 10_000`). An unlanded pending request accumulates `misses`
+    per armed iteration; at `misses >= 2` the next arm passes `{ force: true }` (cooldown bypassed; in-flight
+    and busy still enforced) and emits a "Compaction pending" warning notice — the re-request the armed
+    condition asks for. A busy deferral counts as a miss but can never bypass the busy gate; `loopCompact`
+    and all its writes are lost-write-safe under the existing epoch guards (a superseded settle step drops
+    its write).
+98. Surfacing: `formatStatus` prints one line under the `Loop:` line — `Loop compact: landed <ago>` or
+    `Loop compact: pending <dur> (miss m/2)` — only when `record.loopCompact` exists; the TUI `prompt.footer`
+    loop label appends ` · compact pending` while a request is pending; landed/re-request notices carry kind
+    `compact`. `/goal` dialog shows the same via the existing `statusBody` (driven by `formatStatus`); no new
+    dialog chrome was added.
+
+Files touched: `src/core/types.ts`, `src/core/format.ts`, `src/runtime/compactor.ts`,
+`src/runtime/controller.ts`, `src/runtime/events.ts`, `src/index.ts`, `src/tui.tsx`, `test/compactor.test.ts`,
+`test/loop.test.ts`, `SPEC.md`, `README.md`, `docs/`.
+
+Verification: `test/compactor.test.ts` (result-object API for `compactAtBoundary`; busy deferral for both
+paths; `force` bypassing cooldown only — busy and in-flight hold; failing `isBusy` probe fails closed), `test/loop.test.ts`
+(pending state recorded at arm; `onCompactionLanded` marks landed with a success notice; context-size drop
+detected at the next arm; two unlanded armed iterations force the third re-request with `opts.force`;
+busy denial counts a miss, persists it, and stays a busy denial even under force), `bun run check` green
+(320 tests), coordinator submit.

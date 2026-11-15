@@ -5,6 +5,7 @@ import type { CommitPolicy, GoalSnapshot, LoopEntry, Notice, UsageSnapshot } fro
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
+import type { BoundaryCompactResult } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 
@@ -64,6 +65,9 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const syntheticGate: { promise?: Promise<void>; match?: string } = {}
   const notices: Notice[] = []
   const work = { subagents: 0, shells: 0 }
+  const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean } }> = []
+  let compactOutcome: BoundaryCompactResult = { requested: true, estimatedTokens: 250_000 }
+  let contextSize: number | undefined = 250_000
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
     config: resolveConfig(options),
@@ -114,6 +118,11 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     },
     background: { busy: async (): Promise<BackgroundWork> => ({ ...work }) },
     emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+    compactAtBoundary: async (sessionID, opts) => {
+      compactCalls.push(opts ? { sessionID, opts } : { sessionID })
+      return compactOutcome
+    },
+    estimateContext: async () => contextSize,
   })
   const turn = async (tools = 1) => {
     controller.onExecutionStarted(SID)
@@ -133,6 +142,9 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     syntheticGate,
     setWork: (next: BackgroundWork) => Object.assign(work, next),
     notices,
+    compactCalls,
+    setCompactOutcome: (outcome: BoundaryCompactResult) => void (compactOutcome = outcome),
+    setContextSize: (size: number | undefined) => void (contextSize = size),
     controller,
     storage,
     turn,
@@ -438,6 +450,103 @@ describe("/goal-loop", () => {
     expect(h.controller.clear(SID)).toBe(true)
     expect(h.controller.get(SID)!.status).toBe("cleared")
     expect(h.notices.some((n) => n.kind === "cleared")).toBe(true)
+  })
+  test("arming a loop records a pending boundary compaction on the record", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact).toMatchObject({ iteration: 2, misses: 0, estimatedTokens: 250_000 })
+    expect(record.loopCompact!.landedAt).toBeUndefined()
+    expect(h.compactCalls).toEqual([{ sessionID: SID }])
+  })
+
+  test("onCompactionLanded marks the pending request landed and emits a success notice", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    await h.controller.onCompactionLanded(SID)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeNumber()
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(true)
+    // A landed request stays landed; a later arm re-requests from scratch instead of settling it.
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    const armed = h.controller.get(SID)!
+    expect(armed.loopCompact).toMatchObject({ iteration: 3, misses: 0 })
+    expect(armed.loopCompact!.landedAt).toBeUndefined()
+  })
+
+  test("a context-size drop at the next arm counts as the compaction landing", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    // The host compacted between arms: the context is now a fraction of what it was.
+    h.setContextSize(90_000)
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success" && /dropped/i.test(n.message))).toBe(true)
+  })
+
+  test("two armed iterations without a landing force the next re-request", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    h.verdicts.push(met("v3 done"))
+    h.summaries.push("s3")
+    h.nextGoals.push("v4 condition")
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact).toMatchObject({ iteration: 4, misses: 2 })
+    expect(h.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /not landed/i.test(n.message))).toBe(true)
+  })
+
+  test("a busy deferral counts as a miss but is never forced through", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    h.setCompactOutcome({ requested: false, reason: "busy" })
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    h.verdicts.push(met("v3 done"))
+    h.summaries.push("s3")
+    h.nextGoals.push("v4 condition")
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.misses).toBe(2)
+    // Force was requested at the wiring level, but the outcome stayed a busy denial:
+    // the record keeps pointing at the original unlanded request.
+    expect(h.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(record.loopCompact!.iteration).toBe(2)
+  })
+
+  test("onCompactionLanded with no pending request is a no-op", async () => {
+    await h.setGoal("all tests pass")
+    await h.controller.onCompactionLanded(SID)
+    expect(h.notices.filter((n) => n.kind === "compact")).toHaveLength(0)
   })
 })
 
@@ -984,4 +1093,5 @@ describe("RPC read-through after a reload", () => {
     expect(listed).toHaveLength(1)
     expect(listed[0]!.sessionID).toBe(SID)
   })
+
 })

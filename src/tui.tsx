@@ -276,7 +276,8 @@ export default Plugin.define({
             if (g.loopEnabled) {
               const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""
               const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops)
-              return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+              const compacting = g.loopCompact && !g.loopCompact.landedAt ? " · compact pending" : ""
+              return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}`
             }
             return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
           } catch {

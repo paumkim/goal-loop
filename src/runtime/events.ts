@@ -87,8 +87,10 @@ export function createRouter(input: { controller: GoalController; background: Ba
         if (sessionID) safe(() => compactor.noteCompactionStarted(sessionID))
         return
       case "session.compaction.ended":
-        if (sessionID) safe(() => compactor.noteCompactionEnded(sessionID, true))
-        return
+        if (!sessionID) return
+        safe(() => compactor.noteCompactionEnded(sessionID, true))
+        // A landed compaction also settles any pending loop-boundary request.
+        return void controller.onCompactionLanded(sessionID).catch(fail)
       case "session.compaction.failed":
         if (sessionID)
           safe(() => {
