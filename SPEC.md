@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=34 tests=286 -->
+<!-- spec-check files=34 tests=290 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -523,10 +523,11 @@ happened but not the rhythm of it. This workstream adds temporal texture from da
 already carries — verdict timestamps (`VerdictEntry.at`) and per-iteration `endedAt` windows — without
 touching RPC, storage, schema or the controller.
 
-64. The loop section gains a `pace` row (faint) under the block bar, rendered only when at least one
-    iteration completed and `loopMaxLoops` is set: `~<avg>/iteration · ~<remaining> left at this pace`,
-    where avg is the mean of `iterationDurations` and remaining = avg × (loopMaxLoops − completed).
-    Omitted otherwise (never rendered for a fresh loop or a loop with an unknown cap).
+64. The loop section gains a `pace` row (faint) under the block bar, rendered only while the goal is
+    live: at least one iteration completed, `loopMaxLoops` is set, and the status is not terminal
+    (never on achieved/impossible/cleared/failed, never for a fresh loop, never for an unknown cap):
+    `~<avg>/iteration · ~<remaining> left at this pace`, avg = mean of `iterationDurations`,
+    remaining = avg × (loopMaxLoops − completed).
 65. Each rail row gains the iteration's verdict mix, derived by matching `VerdictEntry.at` into the
     iteration's `(previous endedAt | setAt, endedAt]` window: `<met>✓ <not_met>✗[ <impossible>⊘]`
     appended to the row's timing segment (faint). Iterations with zero verdicts in their window render
@@ -570,3 +571,28 @@ why. Both come from data the snapshot already carries (`LoopEntry.endedAt`; `sta
 Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames show ended-ago suffixes and the paused diagnostics), `bun run check` green, coordinator submit +
 merge-next.
+
+## Workstream O — final tally row for finished loops, streak on the looped now row
+
+Interpretation of this iteration: the dialog shows the running and completed iterations but nothing
+about what the whole loop added up to once it finishes, and the trailing-verdict streak surfaced only
+on the non-looped block. Both are closing summaries, from snapshot fields already on the record.
+
+73. When a looped goal is finished — terminal status (`achieved`, `impossible`, `cleared`, `failed`)
+    or `loopHistory.length >= loopMaxLoops` (known cap) — the loop section renders a final `final` row
+    after the now row: glyph colored by outcome (✓ info achieved, ⊘ warning impossible, ✗ faint
+    otherwise) and `<N> iteration{s} · <turns> turns · <tools> tools · <wall> wall` where wall is the
+    span from `setAt` to the last entry's `endedAt` (`<1m` floor; never negative). Not rendered while
+    the loop is live and below the cap.
+74. The looped now row gains the trailing-streak suffix (same rule as the non-looped block, `<N>×
+    <verdict> in a row`, verdict underscores replaced by spaces) appended after the elapsed segment
+    when the trail ends with ≥ 2 identical verdicts.
+75. New pure helper `loopTotals(entries, setAt): { iterations, turns, tools, spanMs }` in
+    `src/core/history.ts`, unit-tested (aggregates, zero completed iterations span 0, last-endedAt
+    anchor).
+76. `scripts/render-history.tsx` prints five frames by default — looped, looped-paused, looped-complete
+    (the `final` row must show the tally), non-looped, non-looped-fresh; `--empty` keeps the
+    empty-loop frame.
+
+Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames show the final tally and streak suffix), `bun run check` green, coordinator submit + merge-next.

@@ -151,3 +151,24 @@ export function pauseDiagnostics(stall: number, retries: number): string {
   const clean = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0)
   return `stall ${clean(stall)} · retries ${clean(retries)}`
 }
+
+export interface LoopTotals {
+  readonly iterations: number
+  readonly turns: number
+  readonly tools: number
+  readonly spanMs: number
+}
+
+/** Aggregate tally for a finished loop: iterations, evaluated turns, tool calls and wall-clock span setAt → last endedAt. Empty input yields zeros with span 0. */
+export function loopTotals(entries: readonly LoopEntry[], setAt: number): LoopTotals {
+  let turns = 0
+  let tools = 0
+  let lastEnded = 0
+  for (const entry of entries) {
+    turns += Number.isFinite(entry.turns) ? entry.turns : 0
+    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0
+    if (Number.isFinite(entry.endedAt) && entry.endedAt > lastEnded) lastEnded = entry.endedAt
+  }
+  const spanMs = entries.length === 0 ? 0 : Math.max(0, lastEnded - setAt)
+  return { iterations: entries.length, turns, tools, spanMs }
+}
