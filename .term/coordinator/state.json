@@ -429,6 +429,17 @@
       "submittedAt": "2026-11-15T19:39:51Z",
       "mergedAt": "2026-11-15T19:40:18Z",
       "mergedInto": "dev"
+    },
+    "loop-no-pause": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,test/controller.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/config.html,docs/architecture.html,docs/changelog.html,docs/index.html",
+      "branch": "wt/loop-no-pause",
+      "worktree": "worktrees/wt-loop-no-pause",
+      "status": "done",
+      "createdAt": "2026-11-15T19:47:12Z",
+      "submittedAt": "2026-11-15T19:52:06Z",
+      "mergedAt": "2026-11-15T19:54:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
