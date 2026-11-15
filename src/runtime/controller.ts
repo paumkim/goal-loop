@@ -12,6 +12,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
+  type LoopCompactState,
   type Notice,
   type NoticeKind,
   type NoticeLevel,
@@ -156,20 +157,49 @@ export class GoalController {
   }
 
   /**
-   * The host reported a compaction ended for the session: mark any pending boundary-compaction request as landed.
-   * Notified with a success notice; subsequent arms skip the settle check.
+   * Shared drop heuristic: true when the estimated context has dropped to a small fraction of what it was when the
+   * boundary request was made (or below an absolute floor when no estimate was recorded). An unknown/unestimable
+   * size is not a drop. Used by the arm-time settle and the compaction-ended event.
+   */
+  private contextDropped(pending: LoopCompactState, size: number | undefined): boolean {
+    return size !== undefined && (pending.estimatedTokens === undefined ? size < 10_000 : size <= Math.max(10_000, Math.floor(pending.estimatedTokens * 0.6)))
+  }
+
+  /**
+   * The host reported a compaction ended for the session. A pending boundary-compaction request is marked landed
+   * only when the estimated context actually dropped since the request was made (evidence-based, same heuristic as
+   * the arm-time settle). A no-op compaction — no estimate, an estimation error, or no drop — counts as a miss
+   * toward the 2-miss re-request and queues no re-anchor (a no-op does not replace history). Notified with a
+   * success notice on a landing; subsequent arms skip the settle check.
    */
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
     const pending = record?.loopCompact
     if (record && pending && !pending.landedAt) {
-      record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
-      try {
-        await this.commit(record)
-      } catch (error) {
-        this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
+      const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
+      // The world may have moved on while the estimate was in flight.
+      if (this.goals.get(sessionID) !== record) return
+      if (this.contextDropped(pending, size)) {
+        record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
+        try {
+          await this.commit(record)
+        } catch (error) {
+          this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
+        }
+        this.notify(sessionID, "compact", "success", "Compaction landed", `The host compacted the session at the loop boundary; context dropped to ~${size} tokens.`)
+      } else {
+        const misses = pending.misses + 1
+        record.loopCompact = { ...pending, misses }
+        try {
+          await this.commit(record)
+        } catch (error) {
+          this.deps.log.warn("compaction-miss record failed to persist", { sessionID, error: errorMessage(error) })
+        }
+        if (misses >= 2) {
+          this.notify(sessionID, "compact", "warning", "Compaction pending", "The boundary compaction has not landed after 2 armed iterations; re-requesting.")
+        }
+        return
       }
-      this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session at the loop boundary.")
     }
     // A landed compaction replaces history with a lossy summary; a live loop re-states its ground truth
     // so the armed condition, the objective and the completed iterations survive the cut. Queued
@@ -831,11 +861,7 @@ export class GoalController {
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
         if (this.stale(record, runtime, epoch)) return
-        const landed =
-          size !== undefined &&
-          (pending.estimatedTokens === undefined
-            ? size < 10_000
-            : size <= Math.max(10_000, Math.floor(pending.estimatedTokens * 0.6)))
+        const landed = this.contextDropped(pending, size)
         if (landed) {
           record.loopCompact = { ...pending, landedAt: now }
           skipRequest = "landed"

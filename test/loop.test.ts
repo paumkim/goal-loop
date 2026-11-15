@@ -473,6 +473,7 @@ describe("/goal-loop", () => {
     h.summaries.push("s1")
     h.nextGoals.push("v2 condition")
     await h.turn(1)
+    h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID)
     const record = h.controller.get(SID)!
     expect(record.loopCompact!.landedAt).toBeNumber()
@@ -570,6 +571,7 @@ describe("/goal-loop", () => {
 
   test("two quick landings within 2 minutes queue one re-anchor; one after 2 minutes queues another", async () => {
     await h.setLoop("improve the parser")
+    h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID)
     await h.controller.onCompactionLanded(SID)
     let reanchors = h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))
@@ -604,6 +606,7 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v2 condition")
     await h.turn(1) // records the pending boundary request
     expect(h.compactCalls).toHaveLength(1)
+    h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID) // marks the pending request landed
     expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
     await h.controller.dispose()
@@ -626,6 +629,7 @@ describe("/goal-loop", () => {
     h.summaries.push("parser rewritten and tests green")
     h.nextGoals.push("add fuzz coverage for the parser")
     await h.turn(1)
+    h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID)
     const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
     expect(reanchor).toBeDefined()
@@ -638,6 +642,72 @@ describe("/goal-loop", () => {
     expect(reanchor.text).toContain("- v1:") // the completed iteration survives the cut
     expect(reanchor.text).toContain("git log --oneline -5")
     expect(reanchor.text).toContain("Do not wait for a user message.")
+  })
+
+  test("a no-op compaction counts as a miss, not a landing", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    // No drop: the context is still at the ~estimated size.
+    await h.controller.onCompactionLanded(SID)
+    let record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeUndefined()
+    expect(record.loopCompact!.misses).toBe(1)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(false)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    await h.controller.onCompactionLanded(SID)
+    record = h.controller.get(SID)!
+    expect(record.loopCompact!.misses).toBe(2)
+    expect(record.loopCompact!.landedAt).toBeUndefined()
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && n.title === "Compaction pending")).toBe(true)
+  })
+
+  test("an evidence-based landing records and re-anchors", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    h.setContextSize(90_000)
+    await h.controller.onCompactionLanded(SID)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeNumber()
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(true)
+    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
+    expect(reanchor).toBeDefined()
+    expect(reanchor.text).toContain('iteration="2"')
+  })
+
+  test("a no-op landing pushes the miss count to 2 and the next arm force re-requests", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    await h.controller.onCompactionLanded(SID)
+    await h.controller.onCompactionLanded(SID)
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(2)
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.compactCalls).toHaveLength(2)
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+  })
+
+  test("an unestimable context counts as a miss, not a landing", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    h.setContextSize(undefined)
+    await h.controller.onCompactionLanded(SID)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeUndefined()
+    expect(record.loopCompact!.misses).toBe(1)
   })
 
   test("re-anchor is queued even with no pending boundary request (the host compacted on its own)", async () => {
