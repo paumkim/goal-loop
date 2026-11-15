@@ -1068,6 +1068,20 @@ describe("/goal-loop idempotent arming", () => {
   })
 })
 
+  test("restore({ boundaryCompact: false }) adopts live records without requesting a host compaction", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.setLoop("improve the parser") // armed v1, no boundary request yet
+    await h.controller.dispose()
+    const adoptOnly = harness({}, storage)
+    expect(await adoptOnly.controller.restore({ boundaryCompact: false })).toBe(1)
+    expect(adoptOnly.compactCalls).toHaveLength(0)
+    // The default restore keeps the restart fan-out (compact live sessions on a fresh context).
+    const fannedOut = harness({}, storage)
+    expect(await fannedOut.controller.restore()).toBe(1)
+    expect(fannedOut.compactCalls).toHaveLength(1)
+  })
+
 describe("/goal-loop durable arming", () => {
   test("the armed record is durably written before the arm is announced", async () => {
     const storage = new MemoryStorage()
