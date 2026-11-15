@@ -900,6 +900,21 @@ describe("RPC read-through after a reload", () => {
     expect(await h2.controller.restoreOne("ses_missing")).toBe(false)
   })
 
+  test("restoreOne does not adopt a record owned by another directory", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    await h1.controller.dispose()
+    // Simulate a record written by another plugin instance for the same storage.
+    const key = "goal/v1/ses_1"
+    const stored = structuredClone(h1.storage.data.get(key)) as { directory: string }
+    stored.directory = "D:/elsewhere/project"
+    h1.storage.data.set(key, stored)
+
+    const h2 = harness({}, h1.storage)
+    expect(await h2.controller.restoreOne(SID)).toBe(false)
+    expect(h2.controller.get(SID)).toBeUndefined()
+  })
+
   test("list() falls back to a storage restore when memory is empty", async () => {
     const h1 = harness()
     await h1.setLoop("objective")
