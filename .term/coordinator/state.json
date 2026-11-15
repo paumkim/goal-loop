@@ -924,6 +924,17 @@
       "submittedAt": "2026-11-15T23:45:28Z",
       "mergedAt": "2026-11-15T23:47:24Z",
       "mergedInto": "dev"
+    },
+    "github-install-proof": {
+      "agent": "inkling",
+      "paths": "SPEC.md,README.md,docs/install.html",
+      "branch": "wt/github-install-proof",
+      "worktree": "worktrees/wt-github-install-proof",
+      "status": "done",
+      "createdAt": "2026-11-15T23:53:53Z",
+      "submittedAt": "2026-11-15T23:55:36Z",
+      "mergedAt": "2026-11-15T23:55:51Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
