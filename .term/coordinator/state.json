@@ -688,9 +688,11 @@
       "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md",
       "branch": "wt/a11-entries-prune",
       "worktree": "worktrees/wt-a11-entries-prune",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T21:04:24Z",
-      "submittedAt": "2026-11-15T21:09:14Z"
+      "submittedAt": "2026-11-15T21:09:14Z",
+      "mergedAt": "2026-11-15T21:18:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
