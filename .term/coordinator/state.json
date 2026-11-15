@@ -396,6 +396,17 @@
       "submittedAt": "2026-11-15T19:12:21Z",
       "mergedAt": "2026-11-15T19:13:02Z",
       "mergedInto": "dev"
+    },
+    "loop-compact-reanchor": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,src/runtime/controller.ts,src/runtime/events.ts,src/index.ts,test,SPEC.md,README.md,docs",
+      "branch": "wt/loop-compact-reanchor",
+      "worktree": "worktrees/wt-loop-compact-reanchor",
+      "status": "done",
+      "createdAt": "2026-11-15T19:15:59Z",
+      "submittedAt": "2026-11-15T19:18:42Z",
+      "mergedAt": "2026-11-15T19:19:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
