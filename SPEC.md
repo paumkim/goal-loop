@@ -1150,6 +1150,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   Resolution: Workstream AQ — `src/core/constants.ts`; zero magic-number duplication left.
 - **A-27 (low) — `src/core/config.ts` — `maxRetries` is dead surface.** Retained "for compatibility", gates nothing, advertised in config
   docs. Proposed fix: keep the key parsing (backward compat) but flag in docs as inert, or remove with a SPEC/docs note; never silently drop.
+  Resolution: Workstream AR — parsing retained, docs flag inert on all surfaces; superseded mentions noted as design history.
 - **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
   verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped).
 - **A-29 (low) — `src/core/prompts.ts:isFuzzyCondition` — arbitrary keyword list ("rabbit", "look like").** Heuristic by design; waive with
@@ -1418,3 +1419,15 @@ existing cooldown/drop/restore tests pass unchanged.
 Files touched: `src/core/constants.ts` (new), `src/runtime/controller.ts`, `src/runtime/compactor.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (356 tests, 36 files, spec-check ok); coordinator submit.
+
+## Workstream AR — maxRetries documented as inert everywhere (A-27)
+
+`maxRetries` parses and validates (backward compatible) but gates nothing — retries are unlimited with capped
+backoff. All current surfaces already flag it as inert: the `config.ts` JSDoc, `docs/config.html`,
+`docs/runtime.html`, and the README options table. The key stays; the stale mention in the goal-loop design
+section is retained as design history and is superseded by the later "the `maxRetries` cutoff is gone" note.
+No code change; nothing removed; SPEC-only workstream.
+
+Files touched: `SPEC.md`. Test count unchanged (356, 36 files).
+
+Verification: `bun run check` green (spec-check ok); coordinator submit.
