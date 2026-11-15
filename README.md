@@ -1,13 +1,13 @@
 # opencode-goal
 
-Claude Code's `/goal` for **OpenCode v2**. Give the agent a finish line; it keeps working, turn after turn, until an evaluator confirms the condition is met.
+Claude Code's `/goal` for **OpenCode v2**. Give the agent a finish line; it keeps working, turn after turn, until an evaluator confirms the condition is met. This is a standalone MIT-licensed fork. If you want the original, installed by its author: `npm i -g @el4cteo/opencode-goal`.
 
-![/goal in the OpenCode CLI](https://raw.githubusercontent.com/EL4CTEO/opencode-goal/main/assets/goal-status.png)
+![/goal in the OpenCode CLI](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-status.png)
 
 ## Install
 
 ```sh
-npm i -g @el4cteo/opencode-goal
+npm i -g opencode-goalv2
 opencode-goal install
 ```
 
@@ -19,7 +19,7 @@ opencode-goal status             # scope, config path, installed yes/no
 opencode-goal install --project  # target the project's config instead of global
 ```
 
-The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing but an install-time backup exists (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["@el4cteo/opencode-goal"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
+The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing but an install-time backup exists (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["opencode-goalv2"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
 
 ## Use
 
@@ -39,7 +39,7 @@ The installer only edits the `plugins` array in the global config opencode itsel
 
 While a goal runs, the footer shows its state:
 
-![footer indicator](https://raw.githubusercontent.com/EL4CTEO/opencode-goal/main/assets/goal-running.png)
+![footer indicator](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-running.png)
 
 **Write a good condition:** one measurable end state, how to prove it (`npm test exits 0`), and anything that must not change. Add a limit for open-ended work, e.g. `or stop after 20 turns`.
 
@@ -162,7 +162,7 @@ All optional, set in `opencode.json`:
 {
   "plugins": [
     {
-      "package": "@el4cteo/opencode-goal",
+      "package": "opencode-goalv2",
       "options": {
         "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
         "maxTurns": 0,

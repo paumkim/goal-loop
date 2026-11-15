@@ -1909,3 +1909,55 @@ spec-check ok 41/413 after the marker bump in this commit); live scratch proof (
 176. Marker bumped `files=41 tests=435` → `files=41 tests=442` (no new shipped files, +7 tests).
 
 Merge note (this file): dev gained Workstream AY (goal-loop command syntax) after this branch was cut. The sections were renumbered on merge — AY (159–163) stands as landed on dev; this workstream is AZ (164–173), marker reconciled to the merged tree (files=41, tests=435). The test/check figures in AZ's verification paragraph are the pre-merge worktree record (413 tests); the merged tree was re-verified by the coordinator's merged-result gate before dev advanced.
+
+## Workstream BA — standalone rename: `@el4cteo/opencode-goal` → `opencode-goalv2`
+
+The fork is standalone and names itself after its own repository. MIT attribution stays (LICENSE, README
+credits footer, this note); nothing here publishes under, or points users at, the original author's
+`@el4cteo` package as the thing to install.
+
+177. **Name gates checked, in order (2026-11-15).** `opencode-goal` → taken: `latest 0.4.3`, owner
+     `mirsella <mirsella@protonmail.com>` ("Add Codex-style long-running goals to OpenCode",
+     `github.com/mirsella/opencode-goal`) — unpublishable for us, a different project. The fallback
+     `@opencode-goal/opencode-goal` → 404 (the scope is free) but the scope cannot be created or owned from
+     this machine (`npm whoami` fails, `ENEEDAUTH`). The user's decision: name the package after its own
+     repository, `opencode-goalv2`. `npm view opencode-goalv2` → 404 (free) at rename time. The CLI keeps
+     its `opencode-goal` brand and the served plugin id stays `opencode-goal` (`src/index.ts` `PLUGIN_ID`) —
+     no id change, `/plugins` output unchanged; only the npm package name and the reference the installer
+     writes change. `bin` stays `opencode-goal`.
+178. **Sites renamed (everything machine-facing).** `package.json` `name` → `opencode-goalv2` (repository/
+     homepage/bugs already pointed at `paumkim/opencode-goalv2`; `author` stays EL4CTEO as attribution;
+     `bin`, `files`, version 1.1.0 unchanged). `bin/opencode-goal.mjs` `PLUGIN_PACKAGE` → `opencode-goalv2`
+     (the single source of truth — header example, `PLUGIN_PACKAGE`, and every test fixture follow it, which
+     is why the suite needed zero edits: it pins behavior through the constant, never the literal).
+     README.md (`npm i -g opencode-goalv2`, manual `plugins` alternative, `package` field in the options
+     example, image URLs → raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/, new fork-attribution
+     line in the intro), `docs/install.html` (same command, same example, new fork-attribution line next to the
+     manual alternative), `docs/index.html` (search keywords), `AGENTS.md` (plugin reference). SPEC
+     history is not rewritten; the AZ smoke lines and the goal-prompt quote stay as landed.
+179. **Fork attribution line (both surfaces).** README and `docs/install.html` now state: "This is a
+     standalone MIT-licensed fork. If you want the original, installed by its author: `npm i -g
+     @el4cteo/opencode-goal`." LICENSE and the docs credits footers are unchanged.
+180. **No failing-before test is defined.** No evaluator can see the rename except through `PLUGIN_PACKAGE`,
+     and the existing suite asserts the constant (`PLUGIN_PACKAGE` import), so the rename passes as written.
+     The behavior pinned by the suite (config contains PLUGIN_PACKAGE, backups, restore, idempotency) is
+     unchanged. Verification instead: `bun run check` green (marker unchanged `files=41 tests=442` — no new
+     shipped files, no test changes), `grep -ri "el4cteo"` outside history/attribution/credit lines returns
+     zero, `npm pack` file list inspected, and a live scratch `XDG_CONFIG_HOME` proof (fresh scratch, existing
+     pre-install config, drift, uninstall → byte-identical pre-install restore; global-bin install →
+     `opencode-goal` → `/plugins` smoke) with the rename-specific caveat recorded honestly: the package is
+     not on the registry (`opencode-goalv2` 404 until publish, `npm whoami` = ENEEDAUTH), so the TUI proof
+     loads from a hand-seeded opencode npm cache built from `npm pack` of the merged tree — the registry
+     path itself is unverified until the user publishes.
+181. **Ship state after merge.** Registry install is not possible yet (see 180). Global bin on this machine
+     re-linked from the merged tree (`npm uninstall -g @el4cteo/opencode-goal`, `npm i -g .`) and
+     `opencode-goal --version` reports 1.1.0. The user runs: `npm login && npm publish --access public`.
+     Repository `origin` = `github.com/paumkim/opencode-goalv2` (this remote); publish and push are the
+     same name/repo, self-consistent.
+
+Files touched: `package.json`, `bin/opencode-goal.mjs`, `AGENTS.md`, `README.md`, `docs/install.html`,
+`docs/index.html`, `SPEC.md`. The marker is unchanged.
+
+Verification: `bun run check` green in the worktree (442 tests / 20 files, tsc clean, TUI load ok, docs
+freshness ok, spec-check ok 41/442); coordinator submit; merged-result gate at `merge-next`; fresh `bun run
+check` at dev HEAD; scratch restore proof (see the iteration-2 report) byte-identical with safety backup.

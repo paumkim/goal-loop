@@ -5,7 +5,7 @@
  * Mechanism (verified against the installed opencode v2.3.0 binary and the v2
  * plugin docs, 2026-11-15):
  *   OpenCode v2 discovers configured plugins from the `plugins` array in its
- *   config file — `"plugins": ["@el4cteo/opencode-goal"]`. npm package plugins
+ *   config file — `"plugins": ["opencode-goalv2"]`. npm package plugins
  *   are installed automatically at startup with Bun and cached in
  *   ~/.cache/opencode/node_modules; server AND TUI entrypoints of the package
  *   are loaded from the one config entry (verified in a live smoke run: the
@@ -72,7 +72,7 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { realpathSync } from "node:fs";
 
-export const PLUGIN_PACKAGE = "@el4cteo/opencode-goal";
+export const PLUGIN_PACKAGE = "opencode-goalv2";
 const SCHEMA_URL = "https://opencode.ai/config.json";
 
 const VERSION = (() => {
