@@ -770,6 +770,17 @@
       "submittedAt": "2026-11-15T21:49:38Z",
       "mergedAt": "2026-11-15T21:52:00Z",
       "mergedInto": "dev"
+    },
+    "boundary-cast-narrows": {
+      "agent": "orchestrator",
+      "paths": "src,test,dist,SPEC.md,docs",
+      "branch": "wt/boundary-cast-narrows",
+      "worktree": "worktrees/wt-boundary-cast-narrows",
+      "status": "done",
+      "createdAt": "2026-11-15T21:52:38Z",
+      "submittedAt": "2026-11-15T21:56:39Z",
+      "mergedAt": "2026-11-15T21:56:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
