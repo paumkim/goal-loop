@@ -11,7 +11,10 @@ export interface ServerEvent {
   readonly data?: unknown
 }
 
-type Data = Record<string, any>
+type Data = Record<string, unknown>
+
+/** Narrows a destructured payload field to a plain object for nested reads (shell info/metadata). */
+const asRecord = (value: unknown): Data => (typeof value === "object" && value !== null ? (value as Data) : {})
 
 /** Remembers recently seen event IDs so a stream reconnect that replays events cannot double-fire a turn. */
 class RecentIds {
@@ -105,20 +108,23 @@ export function createRouter(input: { controller: GoalController; background: Ba
           })
         return
       case "shell.created": {
-        const info = (data.info ?? {}) as Data
-        if (typeof info.id === "string") safe(() => background.shellCreated(info.id, String(info.status), info.metadata?.sessionID))
+        const info = asRecord(data.info)
+        const createdId = typeof info.id === "string" ? info.id : undefined
+        if (createdId) safe(() => background.shellCreated(createdId, String(info.status), asRecord(info.metadata).sessionID))
         return
       }
       case "shell.updated": {
-        const info = (data.info ?? data) as Data
+        const info = asRecord(data.info ?? data)
         const id = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
-        if (id) safe(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), info.metadata?.sessionID ?? data.metadata?.sessionID))
+        const owner = asRecord(info.metadata).sessionID ?? asRecord(data.metadata).sessionID
+        if (id) safe(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), owner))
         return
       }
       case "shell.exited":
       case "shell.deleted": {
         // Exited/deleted always ends the shell, regardless of any status field on the event.
-        const id = typeof data.id === "string" ? data.id : typeof (data.info as Data | undefined)?.id === "string" ? String((data.info as Data).id) : undefined
+        const info = asRecord(data.info)
+        const id = typeof data.id === "string" ? data.id : typeof info.id === "string" ? info.id : undefined
         if (id) safe(() => background.shellEnded(id))
         return
       }
