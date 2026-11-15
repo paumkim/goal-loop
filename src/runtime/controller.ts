@@ -301,7 +301,8 @@ export class GoalController {
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
-    this.commit(record)
+    // Await the initial write: a crash between set() returning and the record landing would silently un-set the goal.
+    await this.commit(record)
     const loopLabel = loop ? "Loop" : "Goal"
     this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, condition)
     try {

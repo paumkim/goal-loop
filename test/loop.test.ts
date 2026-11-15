@@ -1082,6 +1082,34 @@ describe("/goal-loop idempotent arming", () => {
     expect(fannedOut.compactCalls).toHaveLength(1)
   })
 
+  test("set() awaits the initial record write before returning (a8)", async () => {
+    const storage = new MemoryStorage()
+    let releaseGate: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve
+    })
+    const originalSet = storage.set
+    storage.set = async (key: string, value: unknown) => {
+      await gate
+      return originalSet(key, value)
+    }
+    const h = harness({}, storage)
+    let settled = false
+    const pending = h.setGoal("all tests pass").then(() => {
+      settled = true
+    })
+    // The storage write is blocked on the gate: the goal prompt must not be issued and set() must not
+    // resolve before the record is durable.
+    await flush()
+    expect(h.calls.prompts).toHaveLength(0)
+    expect(settled).toBe(false)
+    releaseGate()
+    await pending
+    expect(settled).toBe(true)
+    expect(h.calls.prompts).toHaveLength(1)
+    expect(h.controller.get(SID)!.condition).toBe("all tests pass")
+  })
+
 describe("/goal-loop durable arming", () => {
   test("the armed record is durably written before the arm is announced", async () => {
     const storage = new MemoryStorage()
