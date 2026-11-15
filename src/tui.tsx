@@ -71,6 +71,22 @@ export default Plugin.define({
       }
       return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} />
     }
+    /**
+     * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
+     * active dialog (host modal mode off, backdrop gone, the dialog's onClose runs — which also
+     * resets the plugin's dialog-open flag and scroll ref). The mouse click on the header's
+     * `esc` label calls this directly; the flag resets here too so the keymap layer disarms even
+     * if the host never fires onClose for a programmatically cleared dialog.
+     */
+    const closeStatusDialog = () => {
+      try {
+        context.ui.dialog.clear()
+      } catch {
+        // Best-effort; the flags reset regardless so the keymap layer disarms.
+      }
+      setStatusDialogOpen(false)
+      setScrollRef(undefined)
+    }
     const showStatusDialog = (sessionID: string, fallback: string) => {
       try {
         showStatusDialogInner(sessionID, fallback)
@@ -102,9 +118,9 @@ export default Plugin.define({
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
                 {GOAL_GLYPH} /goal{looped() ? ` · loop${loopPosition()}` : ""}
               </text>
-              <text fg={context.theme.text.muted} flexShrink={0}>
-                esc
-              </text>
+              <box flexShrink={0} paddingLeft={1} paddingRight={1} onMouseUp={() => closeStatusDialog()}>
+                <text fg={context.theme.text.muted}>esc</text>
+              </box>
             </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
               {statusBody(sessionID, fallback)}
