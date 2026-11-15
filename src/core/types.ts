@@ -134,7 +134,7 @@ export interface GoalRecord {
   loopMaxLoops?: number
   /** Completed iterations, oldest first. */
   loopHistory?: LoopEntry[]
-  /** Consecutive iterations with zero tool calls; two pause the loop. */
+  /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */
   loopNotProgress?: number
   /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */
   loopCompact?: LoopCompactState
