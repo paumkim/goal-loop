@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 
-export interface BootstrapResult {
+interface BootstrapResult {
   readonly created: string[]
   readonly skipped: string[]
 }

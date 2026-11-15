@@ -62,7 +62,7 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
 }
 
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
-export function coordinatorFlow(policy: CommitPolicy): string {
+function coordinatorFlow(policy: CommitPolicy): string {
   const target = policy.branch
   if (!policy.coordinatorBin) {
     // Detection held on the json markers but no absolute binary could be located: never invent or
@@ -94,7 +94,7 @@ export function isFuzzyCondition(condition: string): boolean {
   return !hard
 }
 
-export interface LoopPreamble {
+interface LoopPreamble {
   /** 1-based iteration; 1 is the goal set by `/goal-loop` itself. */
   readonly iteration: number
   readonly maxLoops: number
@@ -104,7 +104,7 @@ export interface LoopPreamble {
 }
 
 /** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
-export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
+function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
   return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
@@ -118,7 +118,7 @@ const TREE_TRUTH: ReadonlyArray<string> = [
 ]
 
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
-export function loopPreamble(loop: LoopPreamble): string[] {
+function loopPreamble(loop: LoopPreamble): string[] {
   return [
     `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Objective (constant): ${escape(loop.objective)}`,
@@ -260,7 +260,7 @@ export function systemReminder(condition: string, policy: CommitPolicy): string 
   return lines.join("\n")
 }
 
-export interface EvaluationFacts {
+interface EvaluationFacts {
   /** The turn being evaluated (1-based). */
   readonly turn: number
   readonly elapsedMs: number
@@ -381,7 +381,7 @@ export function evaluateIndependently(
   ].join("\n")
 }
 
-export interface LoopSummaryInput {
+interface LoopSummaryInput {
   readonly objective: string
   readonly condition: string
   readonly reason: string
@@ -393,7 +393,7 @@ export interface LoopSummaryInput {
   readonly maxSummaryTokens: number
 }
 
-export interface NextGoalInput {
+interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>

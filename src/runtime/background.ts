@@ -1,6 +1,6 @@
 import type { BackgroundPort, BackgroundWork } from "./ports.ts"
 
-export interface BackgroundDeps {
+interface BackgroundDeps {
   /** Parent session ID, or undefined for a root session. */
   parentOf(sessionID: string): Promise<string | undefined>
 }

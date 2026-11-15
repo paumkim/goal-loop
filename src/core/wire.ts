@@ -27,10 +27,10 @@ const isBoolean = (value: unknown): value is boolean => typeof value === "boolea
 const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
 const GOAL_STATUSES: ReadonlySet<string> = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"])
-export const isGoalStatus = (value: unknown): value is GoalStatus => isString(value) && GOAL_STATUSES.has(value)
+const isGoalStatus = (value: unknown): value is GoalStatus => isString(value) && GOAL_STATUSES.has(value)
 
 const VERDICTS: ReadonlySet<string> = new Set(["met", "not_met", "impossible"])
-export const isVerdict = (value: unknown): value is Verdict => isString(value) && VERDICTS.has(value)
+const isVerdict = (value: unknown): value is Verdict => isString(value) && VERDICTS.has(value)
 
 const NOTICE_KINDS: ReadonlySet<string> = new Set([
   "set",
@@ -47,12 +47,12 @@ const NOTICE_KINDS: ReadonlySet<string> = new Set([
   "compact",
   "loop",
 ])
-export const isNoticeKind = (value: unknown): value is NoticeKind => isString(value) && NOTICE_KINDS.has(value)
+const isNoticeKind = (value: unknown): value is NoticeKind => isString(value) && NOTICE_KINDS.has(value)
 
 const NOTICE_LEVELS: ReadonlySet<string> = new Set(["info", "success", "warning", "error"])
-export const isNoticeLevel = (value: unknown): value is NoticeLevel => isString(value) && NOTICE_LEVELS.has(value)
+const isNoticeLevel = (value: unknown): value is NoticeLevel => isString(value) && NOTICE_LEVELS.has(value)
 
-export const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
+const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isRecord(value) &&
   isFiniteNumber(value.cost) &&
   isFiniteNumber(value.input) &&
@@ -61,10 +61,10 @@ export const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheRead) &&
   isFiniteNumber(value.cacheWrite)
 
-export const isVerdictEntry = (value: unknown): value is VerdictEntry =>
+const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at)
 
-export const isLoopEntry = (value: unknown): value is LoopEntry =>
+const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&
   isFiniteNumber(value.version) &&
   isString(value.condition) &&
@@ -74,7 +74,7 @@ export const isLoopEntry = (value: unknown): value is LoopEntry =>
   isFiniteNumber(value.toolCalls) &&
   isFiniteNumber(value.endedAt)
 
-export const isLoopCompact = (value: unknown): value is LoopCompactState =>
+const isLoopCompact = (value: unknown): value is LoopCompactState =>
   isRecord(value) &&
   isFiniteNumber(value.requestedAt) &&
   isFiniteNumber(value.iteration) &&

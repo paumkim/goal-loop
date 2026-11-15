@@ -224,7 +224,7 @@ export const LoopSection = (props: {
 }
 
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
-export const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[] }): JSX.Element => {
+const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[] }): JSX.Element => {
   const trail = () => trailWindow(props.history, 24)
   return (
     <Show when={trail().shown.length > 0}>
