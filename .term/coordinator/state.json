@@ -495,6 +495,17 @@
       "submittedAt": "2026-11-15T20:24:57Z",
       "mergedAt": "2026-11-15T20:25:07Z",
       "mergedInto": "dev"
+    },
+    "a1-compaction-miss-single-source": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/core/types.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/a1-compaction-miss-single-source",
+      "worktree": "worktrees/wt-a1-compaction-miss-single-source",
+      "status": "done",
+      "createdAt": "2026-11-15T20:27:02Z",
+      "submittedAt": "2026-11-15T20:29:13Z",
+      "mergedAt": "2026-11-15T20:30:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
