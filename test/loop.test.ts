@@ -436,3 +436,130 @@ describe("loop config", () => {
     expect(env.maxLoopSummaryTokens).toBe(77)
   })
 })
+
+describe("/goal-loop idempotent arming", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  const armingSteers = () => h.calls.synthetic.filter((s) => String(s.description).includes("arming v"))
+
+  test("a met verdict drives exactly one arm: one summary, one steer, one history entry", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    expect(armingSteers()).toHaveLength(1)
+    expect(armingSteers()[0]!.text).toContain('iteration="2"')
+    expect(h.summaryRequests).toHaveLength(1)
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    expect(h.controller.get(SID)!.loopHistory).toHaveLength(1)
+  })
+
+  test("a replayed execution.succeeded after the arm arms nothing new", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const armed = h.controller.get(SID)!
+    expect(armed.loopIteration).toBe(2)
+    // The same execution's succeeded event replays (fresh event id): no verdict is consumed, nothing re-arms.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))).toHaveLength(1)
+    expect(h.summaryRequests).toHaveLength(1)
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    expect(h.controller.get(SID)!.loopHistory).toHaveLength(1)
+  })
+
+  test("a met verdict delivered twice produces one summary entry and one synthetic arm", async () => {
+    await h.setLoop("objective")
+    // Both deliveries are backed by a queued verdict, so a missing guard shows up as a second arm/summary.
+    h.verdicts.push(met("v1 done"), met("v1 done again"))
+    h.summaries.push("s1", "s1 again")
+    h.nextGoals.push("v2 condition", "v2 condition")
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    const first = h.controller.onExecutionSucceeded(SID)
+    const second = h.controller.onExecutionSucceeded(SID)
+    await Promise.all([first, second])
+    await flush()
+    // The same logical met advances the loop once: one history entry, at most one armed objective.
+    expect(h.controller.get(SID)!.loopHistory).toHaveLength(1)
+    expect(armingSteers().length).toBeLessThanOrEqual(1)
+  })
+
+  test("restart mid-loop keeps loopIteration and does not re-arm the current objective", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    // Simulate a restart before the fire-and-forget save landed is not deterministic; flush + restore from disk.
+    await h.controller.dispose()
+    const h2 = harness({}, h.storage)
+    expect(await h2.controller.restore()).toBe(1)
+    const record = h2.controller.get(SID)!
+    expect(record.loopIteration).toBe(2)
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]!.version).toBe(1)
+  })
+})
+
+describe("/goal-loop durable arming", () => {
+  test("the armed record is durably written before the arm is announced", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.setLoop("objective")
+    // Block storage writes from this point on: the arm's save must not be declared durable until it lands.
+    const realSet = storage.set.bind(storage)
+    let gate: Promise<void> | undefined
+    let release: (() => void) | undefined
+    storage.set = async (key: string, value: unknown) => {
+      if (gate) await gate
+      return realSet(key, value)
+    }
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    gate = new Promise<void>((resolve) => (release = resolve))
+    const turn = h.turn()
+    await flush()
+    // Everything that can proceed without the blocked write has proceeded; the arm must not be announced yet.
+    const announced = () => h.calls.synthetic.filter((s) => String(s.description).includes("arming v")).length
+    expect(announced()).toBe(0)
+    release!()
+    await turn
+    await flush()
+    // The persisted record is the armed one: a restart from here cannot re-arm v2.
+    const persisted = storage.data.get("goal/v1/ses_1") as { loopIteration?: number; condition: string } | undefined
+    expect(persisted?.loopIteration).toBe(2)
+    expect(persisted?.condition).toBe("v2 condition")
+    const h2 = harness({}, storage)
+    expect(await h2.controller.restore()).toBe(1)
+    expect(h2.controller.get(SID)!.loopIteration).toBe(2)
+    expect(h2.controller.get(SID)!.condition).toBe("v2 condition")
+  })
+})
+
+describe("/goal-loop completion invariants", () => {
+  test("LOOP_COMPLETE notifies achieved exactly once", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("done"))
+    h.summaries.push("summary")
+    h.nextGoals.push("LOOP_COMPLETE")
+    await h.turn()
+    expect(h.notices.filter((n) => n.kind === "achieved")).toHaveLength(1)
+    // No further loop steps after completion: injecting another execution does not revive the loop.
+    await h.turn()
+    expect(h.notices.filter((n) => n.kind === "achieved")).toHaveLength(1)
+  })
+})

@@ -456,13 +456,15 @@ export class GoalController {
       endedAt: clock.now(),
     })
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
-    const saveLoopState = () => {
+    // The save is awaited so a restart mid-loop restores the advanced iteration instead of the pre-arm state.
+    const saveLoopState = async () => {
       record.loopHistory = history
       record.loopNotProgress = notProgress
+      await this.commit(record)
     }
 
-    const endClean = (reason: string) => {
-      saveLoopState()
+    const endClean = async (reason: string) => {
+      await saveLoopState()
       this.finish(record, "achieved", reason)
       this.notify(sessionID, "achieved", "success", "Loop complete", reason)
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
@@ -472,7 +474,7 @@ export class GoalController {
       const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
       log.error("loop step unavailable", { sessionID })
       history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
-      saveLoopState()
+      await saveLoopState()
       return this.pause(record, reason)
     }
 
@@ -499,7 +501,7 @@ export class GoalController {
       if (this.stale(record, runtime, epoch)) return
       log.error("loop summary failed", { sessionID, error: errorMessage(error) })
       history.push(makeEntry(`(summary failed: ${truncate(errorMessage(error), 80)})`))
-      saveLoopState()
+      await saveLoopState()
       return this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
     } finally {
       if (runtime.abort === summarize) runtime.abort = undefined
@@ -511,7 +513,7 @@ export class GoalController {
     log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
 
     if (notProgress >= 2) {
-      saveLoopState()
+      await saveLoopState()
       return this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
     }
     if (history.length >= maxLoops) {
@@ -527,12 +529,18 @@ export class GoalController {
       if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
-      saveLoopState()
+      await saveLoopState()
       return this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
     } finally {
       if (runtime.abort === generate) runtime.abort = undefined
     }
     if (this.stale(record, runtime, epoch)) return
+    // A met verdict advances the loop exactly once: if this iteration was already armed while we awaited
+    // (duplicate delivery), drop the step instead of re-arming the same objective.
+    if (record.loopIteration !== iteration) {
+      log.warn("loop arm dropped: iteration already advanced", { sessionID, iteration, armed: record.loopIteration })
+      return
+    }
 
     if (Prompt.isLoopComplete(reply)) {
       return endClean(`Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}: the evaluator found nothing worth improving.`)
@@ -543,7 +551,7 @@ export class GoalController {
     }
 
     const nextIteration = iteration + 1
-    saveLoopState()
+    await saveLoopState()
     record.condition = condition
     record.loopIteration = nextIteration
     record.turns = 0
@@ -555,7 +563,8 @@ export class GoalController {
     record.startedAt = clock.now()
     this.clearDeferred(runtime)
     runtime.iterationToolCalls = 0
-    this.commit(record)
+    // Persist the armed state before the arm is announced anywhere: a restart from this point must restore the armed iteration.
+    await this.commit(record)
     this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
     await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
     await this.continueWith(record, {
@@ -768,17 +777,19 @@ export class GoalController {
     return this.disposed || runtime.epoch !== epoch || this.goals.get(record.sessionID) !== record || record.status !== "active"
   }
 
-  private commit(record: GoalRecord) {
+  /** Resolves once the durable write lands (or is skipped as a no-op). Most callers ignore it; loop arming awaits it. */
+  private commit(record: GoalRecord): Promise<void> {
     let serialized: string
     try {
       serialized = JSON.stringify(record)
     } catch {
       serialized = "" // Unserializable record: never skip the save.
     }
-    if (serialized && this.lastCommit.get(record.sessionID) === serialized) return
+    if (serialized && this.lastCommit.get(record.sessionID) === serialized) return Promise.resolve()
     this.lastCommit.set(record.sessionID, serialized)
-    void this.deps.store.save(record)
+    const saved = this.deps.store.save(record)
     this.emit(record)
+    return saved
   }
 
   private emit(record: GoalRecord) {

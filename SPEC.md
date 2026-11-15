@@ -63,7 +63,10 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     the loop objective and the prior history, under a strict output contract (a single verifiable
     condition, or exactly `LOOP_COMPLETE`), (c) arms the next goal immediately under the same `/goal`
     rules. Goal v1 and each later iteration are kept as `loopHistory` in the persisted record — never
-    re-injected in full.
+    re-injected in full. Invariant: a met verdict advances the loop exactly once, and an armed
+    objective is never re-armed verbatim — the arm is persisted to storage before it is announced
+    (note, toast, arming steer), and a loop step whose iteration already advanced drops itself instead
+    of re-firing the arm.
 13. Loop guards (all mandatory): `maxLoops` (default 5, env `OPENCODE_GOAL_MAX_LOOPS`; counts completed
     iterations) ends the loop cleanly as *achieved-complete*; the per-iteration turn cap reuses
     `maxTurns` (reset per iteration); evaluator failures exhaust `maxRetries` and pause as today; a hard
