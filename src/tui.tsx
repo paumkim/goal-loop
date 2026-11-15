@@ -12,7 +12,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
 import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
-import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { renderPips } from "./core/history.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -277,7 +277,7 @@ export default Plugin.define({
               const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""
               const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops)
               const compactPending = g.loopCompact && !g.loopCompact.landedAt ? g.loopCompact : undefined
-              const compacting = compactPending ? ` · compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/2)` : ""}` : ""
+              const compacting = compactPending ? ` · compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
               return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}`
             }
             return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`

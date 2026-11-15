@@ -12,6 +12,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
+  COMPACT_MISS_CAP,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -29,6 +30,10 @@ import { sameDirectory, type GoalStore } from "./store.ts"
  * carries the same ground truth for all of them.
  */
 const REANCHOR_MIN_INTERVAL_MS = 120_000
+// Consecutive unlanded boundary compactions at which the plugin force re-requests (2). At COMPACT_MISS_CAP
+// (4 misses, src/core/types.ts) it stops asking the host entirely until a landing is observed. Applies to
+// armed loops only; plain goals never request boundary compaction at all.
+const COMPACT_MISS_RETRY = 2
 
 export interface ControllerDeps {
   readonly config: GoalConfig
@@ -170,7 +175,8 @@ export class GoalController {
    * only when the estimated context actually dropped since the request was made (evidence-based, same heuristic as
    * the arm-time settle). A no-op compaction — no estimate, an estimation error, or no drop — counts as a miss
    * toward the 2-miss re-request and queues no re-anchor (a no-op does not replace history). Notified with a
-   * success notice on a landing; subsequent arms skip the settle check.
+   * success notice on a landing; subsequent arms skip the settle check. At the miss cap (4) the tiered warning
+   * below fires one final "Not landing" notice and re-requests suspend until a landing is observed.
    */
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
@@ -195,8 +201,10 @@ export class GoalController {
         } catch (error) {
           this.deps.log.warn("compaction-miss record failed to persist", { sessionID, error: errorMessage(error) })
         }
-        if (misses >= 2) {
-          this.notify(sessionID, "compact", "warning", "Compaction pending", "The boundary compaction has not landed after 2 armed iterations; re-requesting.")
+        if (misses === COMPACT_MISS_CAP) {
+          this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} compaction attempts; further re-requests are suspended until a landing is observed. The loop keeps running.`)
+        } else if (misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP) {
+          this.notify(sessionID, "compact", "warning", "Compaction pending", `The boundary compaction has not landed after ${misses} compaction attempts; the next armed iteration re-requests (forced past the cooldown).`)
         }
         return
       }
@@ -847,17 +855,19 @@ export class GoalController {
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
     // an earlier arm is settled first: a landed compaction is recorded as such; one that never landed is
-    // re-requested (forced past the cooldown) after 2 armed iterations without an observed landing.
+    // re-requested (forced past the cooldown) at 2 and 3 misses, then SUSPENDED at 4: no further host
+    // requests until a landing is observed (one final "Not landing" warning at the cap crossing).
     // An unlanded pending request is NOT re-issued on every arm, and a fresh request is not made on the arm
     // that just observed the landing: every arm stacking a request is what piled up "Nothing to compact yet"
-    // dividers and their re-anchor notes. Only the forced re-request at 2 misses (or the first arm after a
-    // landing) goes to the host.
+    // dividers and their re-anchor notes. Only the forced re-request at 2-3 misses (or the first arm after a
+    // landing, or the first arm of the run) goes to the host. The loop keeps running while capped.
     if (this.deps.compactAtBoundary) {
       const now = clock.now()
       const pending = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
       let force = false
+      let capped = false
       let misses = 0
-      let skipRequest: "landed" | "pending" | undefined
+      let skipRequest: "landed" | "pending" | "capped" | undefined
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
         if (this.stale(record, runtime, epoch)) return
@@ -870,21 +880,27 @@ export class GoalController {
         } else {
           misses = pending.misses + 1
           record.loopCompact = { ...pending, misses }
-          force = misses >= 2
-          if (force) {
-            this.notify(sessionID, "compact", "warning", "Compaction pending", "The boundary compaction has not landed after 2 armed iterations; re-requesting.")
+          force = misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP
+          capped = misses >= COMPACT_MISS_CAP
+          if (capped) {
+            if (misses === COMPACT_MISS_CAP) {
+              this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} armed iterations; further re-requests are suspended until a landing is observed. The loop keeps running.`)
+            }
+          } else if (force) {
+            this.notify(sessionID, "compact", "warning", "Compaction pending", `The boundary compaction has not landed after ${misses} armed iterations; re-requesting.`)
           }
           await this.commit(record)
         }
         if (this.stale(record, runtime, epoch)) return
       }
-      if (pending && !skipRequest && !force) skipRequest = "pending"
+      if (capped) skipRequest = "capped"
+      else if (pending && !skipRequest && !force) skipRequest = "pending"
       if (skipRequest) {
         log.info("loop boundary compact skipped at this arm", { sessionID, reason: skipRequest })
       }
       const result: BoundaryCompactResult =
         skipRequest !== undefined
-          ? { requested: false, reason: skipRequest === "landed" ? "too-small" : "cooldown" }
+          ? { requested: false, reason: skipRequest === "landed" ? "too-small" : skipRequest === "capped" ? "capped" : "cooldown" }
           : await this.deps
               .compactAtBoundary(sessionID, force ? { force: true } : undefined)
               .catch((error): BoundaryCompactResult => {

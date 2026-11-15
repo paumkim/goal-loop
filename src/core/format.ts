@@ -1,3 +1,4 @@
+import { COMPACT_MISS_CAP } from "./types.ts"
 import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 
 export const GOAL_GLYPH = "\u25CE"
@@ -79,7 +80,7 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
     const pending = record.loopCompact
     if (pending) {
       if (pending.landedAt) lines.push(`Loop compact: landed ${formatDuration(now - pending.landedAt)} ago`)
-      else lines.push(`Loop compact: pending ${formatDuration(now - pending.requestedAt)} (miss ${pending.misses}/2)`)
+      else lines.push(`Loop compact: pending ${formatDuration(now - pending.requestedAt)} (miss ${pending.misses}/${COMPACT_MISS_CAP})`)
     }
     for (const entry of record.loopHistory ?? [])
       lines.push(`  v${entry.version} · met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${truncate(entry.summary, 140)}`)

@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=343 -->
+<!-- spec-check files=35 tests=346 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -992,3 +992,38 @@ Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, `REA
 
 Verification: `test/loop.test.ts` (the 4 new tests; updated landing tests), `bun test` (343 tests),
 `bun run check` green; coordinator submit.
+
+## Workstream AB — forced boundary re-requests are suspended at 4 misses
+
+Interpretation of the armed condition's need to stop hammering an endless boundary request: Workstreams V/AA
+count misses and force a re-request at 2, but an arm at misses 4, 5, 6… kept asking the host forever (and
+emitting "Compaction pending" every armed iteration) for a context the host refuses to shrink. Consecutive
+unlanded misses are now capped: at 4 the plugin stops requesting until a landing is observed, with one final
+warning instead of one per armed iteration. The armed loop keeps running throughout.
+
+118. Cap constants: `COMPACT_MISS_CAP = 4` lives in `src/core/types.ts` (exported so the core status line and
+    the TUI detail dialog print `miss n/4` instead of a stale `/2`); `COMPACT_MISS_RETRY = 2` stays private to
+    `src/runtime/controller.ts`. Plain goals never reach either path.
+119. Arm-time settle: a miss incurs `force = misses >= 2 && misses < 4` (forced re-request, unchanged at 2 and
+    3 misses) and `capped = misses >= 4`. At the cap the arm makes NO host request at all — not even forced;
+    the request is skipped with `skipRequest = "capped"` and the new `BoundaryCompactMiss` member `"capped"`
+    (`{ requested: false, reason: "capped" }`, `src/runtime/compactor.ts`). Exactly one final
+    `"Compaction not landing"` warning is emitted at the crossing (misses === 4); misses >= 5 are fully silent.
+    Exactly like a busy deferral, a capped arm never counts as landing and never pauses the loop.
+120. `onCompactionLanded()` mirrors the same tiering on the ended-event path: pending-warning for 2-3 misses,
+    one final "Compaction not landing" warning at 4, silence above that. Failed compactions remain unwired.
+    Landing detection is unchanged: an observed drop (ended event or next arm) records the landing and implicitly
+    lifts the suspension — the next arm after a landing arms a fresh request with `misses` reset to 0 (pending
+    is absent/landed, not blocked). Restore() still refuses to stack a request on an outstanding pending one.
+121. Tests (`test/loop.test.ts`, 3 new; maxLoops bumped via `harness({ maxLoops: 50 })` so the loop out-lives
+    the default 5-iteration cap): forced re-requests stop at the 4-miss cap (no request at 4 and 5, exactly
+    one final warning, two pending warnings, session stays active); ended-event misses respect the cap with a
+    single final warning and silence after; a landing lifts the suspension (a fresh request goes out at the
+    next arm with misses back at 0). `test/core.test.ts` expectations updated `/2 → /4`.
+
+Files touched: `src/core/types.ts`, `src/core/format.ts`, `src/runtime/compactor.ts`,
+`src/runtime/controller.ts`, `src/tui-history.tsx`, `test/core.test.ts`, `test/loop.test.ts`, `SPEC.md`,
+`README.md`, `docs/runtime.html`.
+
+Verification: `test/loop.test.ts` + `test/core.test.ts`, `bun test` (346 tests), `bun run check` green;
+coordinator submit.

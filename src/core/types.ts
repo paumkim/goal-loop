@@ -77,6 +77,9 @@ export interface LoopEntry {
   readonly endedAt: number
 }
 
+/** Consecutive unlanded boundary compactions after which the plugin suspends further requests until a landing is observed. 2 misses arm a forced re-request; 4 suspends. Lives here so core formatters can display it. */
+export const COMPACT_MISS_CAP = 4
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 /** Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage. */
 export interface LoopCompactState {
@@ -88,7 +91,7 @@ export interface LoopCompactState {
   readonly iteration: number
   /** Set when the compaction was observed to land (compaction-ended event, or the context-size drop). */
   landedAt?: number
-  /** Consecutive armed iterations in which a pending request did not land. Two force a re-request. */
+  /** Consecutive armed iterations in which a pending request did not land. Two force a re-request; at COMPACT_MISS_CAP (4) requests suspend until a landing is observed. */
   misses: number
 }
 
