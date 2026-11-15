@@ -11,9 +11,9 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
-import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
+import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
-import { HistoryBlock, LoopSection } from "./tui-history.tsx"
+import { StatusDialogBody } from "./status-dialog.tsx"
 import { renderPips } from "./core/history.ts"
 import { GoalRpc } from "./rpc.ts"
 
@@ -62,31 +62,6 @@ export default Plugin.define({
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
 
-    /**
-     * Long status text gets a large, scrollable dialog instead of the truncating alert. The host owns the
-     * chrome: backdrop, z-index, focus, Esc/ctrl+c dismissal (see `ui/dialog.tsx` in the host sources,
-     * `DialogProvider`'s modal keymap layer). The body mirrors the host's `DialogLayout` conventions
-     * (`paddingLeft/Right: DIALOG_INSET`, gap 1, bottom pad 1, bold title left, "esc" right); those
-     * internals are not exported to plugins, so the layout is re-created with the same constants and
-     * theme tokens instead of being imported.
-     *
-     * The body renders from the live `entries()` snapshot, so it stays current while the dialog is open;
-     * when no snapshot is cached (RPC miss) it falls back to the status notice text.
-     */
-    const LABEL = 10
-    const label = (text: string) => (
-      <text fg={context.theme.text.faint} flexShrink={0} width={LABEL}>
-        {text}
-      </text>
-    )
-    const field = (name: string, children: JSX.Element, wide = false) => (
-      <box flexDirection="row" gap={2}>
-        {label(name)}
-        <text wrapMode="word" fg={context.theme.text.base} flexGrow={wide ? 1 : 0}>
-          {children}
-        </text>
-      </box>
-    )
     const statusBody = (sessionID: string, fallback: string) => {
       const entry = () => entries()[sessionID]
       const goal = () => entry()?.goal ?? undefined
@@ -94,38 +69,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      const stateColor = () =>
-        goal()?.status === "paused"
-          ? context.theme.text.feedback.warning.base
-          : goal()?.status === "active"
-            ? context.theme.text.feedback.info.base
-            : context.theme.text.muted
-      return (
-        <Show when={goal()} fallback={<text wrapMode="word" fg={context.theme.text.base}>{fallback}</text>}>
-          {(g) => (
-            <box flexDirection="column" gap={1}>
-              <box flexDirection="row" gap={2}>
-                <text fg={stateColor()} attributes={TextAttributes.BOLD}>
-                  {g().status}
-                </text>
-                <text fg={context.theme.text.muted}>
-                  {formatDurationCoarse(elapsed())} · {g().turns} turn{g().turns === 1 ? "" : "s"}
-                  {g().evaluating ? " · checking" : g().waiting ? " · waiting" : ""}
-                </text>
-              </box>
-              {field("goal", g().condition, true)}
-              <Show when={g().reason}>{(reason) => field(g().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
-              <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
-              <Show when={g().loopEnabled}>
-                <LoopSection goal={g()} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} />
-              </Show>
-              <Show when={!g().loopEnabled}>
-                <HistoryBlock goal={g()} theme={context.theme} elapsedMs={elapsed} />
-              </Show>
-            </box>
-          )}
-        </Show>
-      )
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} />
     }
     const showStatusDialog = (sessionID: string, fallback: string) => {
       try {
@@ -155,7 +99,7 @@ export default Plugin.define({
                 esc
               </text>
             </box>
-            <scrollbox ref={(el) => setScrollRef(el)} scrollbarOptions={{ visible: true }} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
+            <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
             <text fg={context.theme.text.faint}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>

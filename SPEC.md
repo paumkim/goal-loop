@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=34 tests=290 -->
+<!-- spec-check files=35 tests=290 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -596,3 +596,36 @@ on the non-looped block. Both are closing summaries, from snapshot fields alread
 
 Verification: `bun test` (new helper tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
 (frames show the final tally and streak suffix), `bun run check` green, coordinator submit + merge-next.
+
+## Workstream P — dialog scrollbox design repair
+
+Interpretation of the bug report ("the goal's display dialog design current is a bit rough. edges
+the scrolling has design inconsistency flaw", with a screenshot of the paused loop dialog): the body
+scrollbox passed `scrollbarOptions={{ visible: true }}`, which the host fans out to BOTH axes — the
+vertical thumb was always painted (fine while scrolling is needed) and a full-width horizontal track
+was always painted at the bottom edge even though no horizontal scroll ever occurs. Body text wrapped
+flush against the scrollbar with zero gutter. The dialog body was also locked inside the plugin's
+setup closure, unverifiable headlessly.
+
+77. The `/goal` dialog body is a standalone presentational component `StatusDialogBody`
+    (`src/status-dialog.tsx`): the state line, the wrapped condition/evaluator/reason rows, spend, and
+    the history sections, plus a 3-cell internal right gutter (matching the `DIALOG_INSET = 3`
+    convention). `src/tui.tsx` keeps host orchestration only (host chrome, keymap, RPC, prompt-footer,
+    toasts) and renders it inside the host's `ui.dialog.show` xlarge centered dialog — the Workstream
+    A chrome (backdrop, Esc/ctrl+c dismissal, header convention, sizing) is unchanged.
+78. The body scrollbox no longer forces both scrollbars visible. `scrollbarOptions={{ visible: true }}`
+    was replaced by default auto-visibility on both axes (the host's `recalculateVisibility`: a bar
+    paints only when content exceeds that axis) and explicit `scrollX={false}` (no horizontal
+    scrolling is ever required — body content is wrapped by construction and nowrap rows are far
+    shorter than the viewport). Consequences: the permanent full-width horizontal track at the dialog's
+    bottom edge is gone, the vertical scrollbar appears only when the body overflows, and body text
+    wraps with at least a 3-cell gutter before the bar.
+79. Verification: `scripts/render-dialog.tsx` mounts the full dialog chrome (clamped column + header +
+    scrollbox + body + hint) headlessly and prints the captured frame. Before the change it reproduced
+    both defects (horizontal track across the bottom; text flush against the vertical scrollbar);
+    after it, the track is gone, the vertical bar appears only on overflow (`--height=22`) and stays
+    hidden when all content fits (default `--height=46`), and the body wraps short of the scrollbar
+    column. `--buggy` reproduces the original configuration for side-by-side comparison.
+
+Verification: `bun --preload @opentui/solid/preload scripts/render-dialog.tsx` (both default and
+`--height=22` and `--buggy` frames eyeballed), `bun run check` green, coordinator submit + merge-next.
