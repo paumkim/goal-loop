@@ -219,6 +219,29 @@ function loopTotals(entries, setAt) {
   const spanMs = entries.length === 0 ? 0 : Math.max(0, lastEnded - setAt);
   return { iterations: entries.length, turns, tools, spanMs };
 }
+function localTime(ms) {
+  if (!Number.isFinite(ms))
+    return "--:--";
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime()))
+    return "--:--";
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+function currentIterationVerdict(history, entries, setAt) {
+  const from = entries.length > 0 ? entries[entries.length - 1].endedAt : setAt;
+  for (let index = history.length - 1;index >= 0; index -= 1) {
+    const entry = history[index];
+    if (entry.at > from)
+      return entry;
+    break;
+  }
+  return;
+}
+function turnsSinceVerdict(turns, verdictTurn) {
+  if (!Number.isFinite(turns) || !Number.isFinite(verdictTurn))
+    return 0;
+  return Math.max(0, Math.floor(turns) - Math.floor(verdictTurn));
+}
 
 // src/tui-history.tsx
 var SUMMARY_MAX = 400;
@@ -245,7 +268,7 @@ var LoopSection = (props) => {
     const mix = mixes()[index];
     return mix ? ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}` : "";
   };
-  const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())}`;
+  const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`;
   const paused = () => props.goal.status === "paused";
   const stateWord = () => {
     const s = props.goal.status;
@@ -256,6 +279,11 @@ var LoopSection = (props) => {
     return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active";
   };
   const nowMs = () => props.nowMs?.() ?? Date.now();
+  const iterVerdict = () => currentIterationVerdict(props.goal.history ?? [], history(), props.goal.setAt);
+  const turnsSince = () => {
+    const v = iterVerdict();
+    return v ? turnsSinceVerdict(props.goal.turns, v.turn) : 0;
+  };
   const streakSuffix = () => {
     const s = verdictStreak(props.goal.history ?? []);
     return s.count >= 2 && s.verdict ? ` \xB7 ${s.count}\xD7 ${s.verdict.replace("_", " ")} in a row` : "";
@@ -410,8 +438,46 @@ var LoopSection = (props) => {
     _$insertNode(_el$11, _$createTextNode(`\u25CE`));
     _$setProp(_el$11, "wrapMode", "none");
     _$setProp(_el$11, "flexShrink", 0);
-    _$setProp(_el$13, "wrapMode", "none");
+    _$setProp(_el$13, "wrapMode", "word");
+    _$setProp(_el$13, "flexGrow", 1);
     _$insert(_el$13, () => `v${current()} \xB7 ${stateWord()} \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` \xB7 ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} \xB7 ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}`);
+    _$insert(_el$10, _$createComponent(Show, {
+      get when() {
+        return iterVerdict();
+      },
+      children: (entry) => (() => {
+        var _el$28 = _$createElement("box"), _el$29 = _$createElement("text"), _el$31 = _$createElement("text"), _el$32 = _$createElement("text");
+        _$insertNode(_el$28, _el$29);
+        _$insertNode(_el$28, _el$31);
+        _$insertNode(_el$28, _el$32);
+        _$setProp(_el$28, "flexDirection", "row");
+        _$setProp(_el$28, "gap", 1);
+        _$setProp(_el$28, "flexShrink", 0);
+        _$insertNode(_el$29, _$createTextNode(`\xB7 last`));
+        _$setProp(_el$29, "wrapMode", "none");
+        _$setProp(_el$31, "wrapMode", "none");
+        _$insert(_el$31, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$32, "wrapMode", "none");
+        _$insert(_el$32, (() => {
+          var _c$ = _$memo(() => turnsSince() === 0);
+          return () => _c$() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
+        })());
+        _$effect((_p$) => {
+          var _v$12 = theme().text.muted, _v$13 = colorFor(theme(), entry().verdict), _v$14 = TextAttributes.BOLD, _v$15 = theme().text.faint;
+          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$29, "fg", _v$12, _p$.e));
+          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$31, "fg", _v$13, _p$.t));
+          _v$14 !== _p$.a && (_p$.a = _$setProp(_el$31, "attributes", _v$14, _p$.a));
+          _v$15 !== _p$.o && (_p$.o = _$setProp(_el$32, "fg", _v$15, _p$.o));
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined,
+          a: undefined,
+          o: undefined
+        });
+        return _el$28;
+      })()
+    }), null);
     _$insert(_el$2, _$createComponent(Show, {
       get when() {
         return finished();
@@ -477,36 +543,36 @@ var VerdictTrail = (props) => {
       return trail().shown.length > 0;
     },
     get children() {
-      var _el$28 = _$createElement("box"), _el$29 = _$createElement("box"), _el$30 = _$createElement("text"), _el$31 = _$createTextNode(` `), _el$32 = _$createTextNode(` of `), _el$33 = _$createTextNode(` verdict`);
-      _$insertNode(_el$28, _el$29);
-      _$insertNode(_el$28, _el$30);
-      _$setProp(_el$28, "flexDirection", "row");
-      _$setProp(_el$28, "gap", 2);
-      _$insert(_el$28, () => label(props.theme, "trail"), _el$29);
-      _$setProp(_el$29, "flexDirection", "row");
-      _$setProp(_el$29, "flexShrink", 0);
-      _$insert(_el$29, _$createComponent(For, {
+      var _el$33 = _$createElement("box"), _el$34 = _$createElement("box"), _el$35 = _$createElement("text"), _el$36 = _$createTextNode(` `), _el$37 = _$createTextNode(` of `), _el$38 = _$createTextNode(` verdict`);
+      _$insertNode(_el$33, _el$34);
+      _$insertNode(_el$33, _el$35);
+      _$setProp(_el$33, "flexDirection", "row");
+      _$setProp(_el$33, "gap", 2);
+      _$insert(_el$33, () => label(props.theme, "trail"), _el$34);
+      _$setProp(_el$34, "flexDirection", "row");
+      _$setProp(_el$34, "flexShrink", 0);
+      _$insert(_el$34, _$createComponent(For, {
         get each() {
           return trail().shown;
         },
         children: (entry) => (() => {
-          var _el$34 = _$createElement("text");
-          _$setProp(_el$34, "wrapMode", "none");
-          _$insert(_el$34, () => verdictGlyph(entry.verdict));
-          _$effect((_$p) => _$setProp(_el$34, "fg", colorFor(props.theme, entry.verdict), _$p));
-          return _el$34;
+          var _el$39 = _$createElement("text");
+          _$setProp(_el$39, "wrapMode", "none");
+          _$insert(_el$39, () => verdictGlyph(entry.verdict));
+          _$effect((_$p) => _$setProp(_el$39, "fg", colorFor(props.theme, entry.verdict), _$p));
+          return _el$39;
         })()
       }));
-      _$insertNode(_el$30, _el$31);
-      _$insertNode(_el$30, _el$32);
-      _$insertNode(_el$30, _el$33);
-      _$setProp(_el$30, "wrapMode", "none");
-      _$setProp(_el$30, "flexShrink", 0);
-      _$insert(_el$30, () => trail().shown.length, _el$32);
-      _$insert(_el$30, () => trail().total, _el$33);
-      _$insert(_el$30, () => trail().total === 1 ? "" : "s", null);
-      _$effect((_$p) => _$setProp(_el$30, "fg", props.theme.text.muted, _$p));
-      return _el$28;
+      _$insertNode(_el$35, _el$36);
+      _$insertNode(_el$35, _el$37);
+      _$insertNode(_el$35, _el$38);
+      _$setProp(_el$35, "wrapMode", "none");
+      _$setProp(_el$35, "flexShrink", 0);
+      _$insert(_el$35, () => trail().shown.length, _el$37);
+      _$insert(_el$35, () => trail().total, _el$38);
+      _$insert(_el$35, () => trail().total === 1 ? "" : "s", null);
+      _$effect((_$p) => _$setProp(_el$35, "fg", props.theme.text.muted, _$p));
+      return _el$33;
     }
   });
 };
@@ -529,56 +595,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$35 = _$createElement("box"), _el$36 = _$createElement("box");
-    _$insertNode(_el$35, _el$36);
-    _$setProp(_el$35, "flexDirection", "column");
-    _$setProp(_el$35, "gap", 1);
-    _$setProp(_el$36, "flexDirection", "row");
-    _$setProp(_el$36, "gap", 2);
-    _$insert(_el$36, () => label(theme(), "history"), null);
-    _$insert(_el$36, _$createComponent(Show, {
+    var _el$40 = _$createElement("box"), _el$41 = _$createElement("box");
+    _$insertNode(_el$40, _el$41);
+    _$setProp(_el$40, "flexDirection", "column");
+    _$setProp(_el$40, "gap", 1);
+    _$setProp(_el$41, "flexDirection", "row");
+    _$setProp(_el$41, "gap", 2);
+    _$insert(_el$41, () => label(theme(), "history"), null);
+    _$insert(_el$41, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$37 = _$createElement("text"), _el$38 = _$createTextNode(`no verdicts yet \xB7 `), _el$39 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$37, _el$38);
-          _$insertNode(_el$37, _el$39);
-          _$setProp(_el$37, "wrapMode", "none");
-          _$insert(_el$37, elapsed, _el$39);
-          _$effect((_$p) => _$setProp(_el$37, "fg", theme().text.faint, _$p));
-          return _el$37;
+          var _el$42 = _$createElement("text"), _el$43 = _$createTextNode(`no verdicts yet \xB7 `), _el$44 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$42, _el$43);
+          _$insertNode(_el$42, _el$44);
+          _$setProp(_el$42, "wrapMode", "none");
+          _$insert(_el$42, elapsed, _el$44);
+          _$effect((_$p) => _$setProp(_el$42, "fg", theme().text.faint, _$p));
+          return _el$42;
         })();
       },
       children: (entry) => (() => {
-        var _el$40 = _$createElement("box"), _el$41 = _$createElement("text"), _el$42 = _$createElement("text");
-        _$insertNode(_el$40, _el$41);
-        _$insertNode(_el$40, _el$42);
-        _$setProp(_el$40, "flexDirection", "row");
-        _$setProp(_el$40, "gap", 2);
-        _$setProp(_el$40, "flexGrow", 1);
-        _$setProp(_el$41, "wrapMode", "none");
-        _$setProp(_el$41, "flexShrink", 0);
-        _$insert(_el$41, () => verdictGlyph(entry().verdict));
-        _$setProp(_el$42, "wrapMode", "word");
-        _$setProp(_el$42, "flexGrow", 1);
-        _$insert(_el$42, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        var _el$45 = _$createElement("box"), _el$46 = _$createElement("text"), _el$47 = _$createElement("text");
+        _$insertNode(_el$45, _el$46);
+        _$insertNode(_el$45, _el$47);
+        _$setProp(_el$45, "flexDirection", "row");
+        _$setProp(_el$45, "gap", 2);
+        _$setProp(_el$45, "flexGrow", 1);
+        _$setProp(_el$46, "wrapMode", "none");
+        _$setProp(_el$46, "flexShrink", 0);
+        _$insert(_el$46, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$47, "wrapMode", "word");
+        _$setProp(_el$47, "flexGrow", 1);
+        _$insert(_el$47, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$12 = colorFor(theme(), entry().verdict), _v$13 = TextAttributes.BOLD, _v$14 = theme().text.base;
-          _v$12 !== _p$.e && (_p$.e = _$setProp(_el$41, "fg", _v$12, _p$.e));
-          _v$13 !== _p$.t && (_p$.t = _$setProp(_el$41, "attributes", _v$13, _p$.t));
-          _v$14 !== _p$.a && (_p$.a = _$setProp(_el$42, "fg", _v$14, _p$.a));
+          var _v$16 = colorFor(theme(), entry().verdict), _v$17 = TextAttributes.BOLD, _v$18 = theme().text.base;
+          _v$16 !== _p$.e && (_p$.e = _$setProp(_el$46, "fg", _v$16, _p$.e));
+          _v$17 !== _p$.t && (_p$.t = _$setProp(_el$46, "attributes", _v$17, _p$.t));
+          _v$18 !== _p$.a && (_p$.a = _$setProp(_el$47, "fg", _v$18, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$40;
+        return _el$45;
       })()
     }), null);
-    _$insert(_el$35, _$createComponent(VerdictTrail, {
+    _$insert(_el$40, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -586,7 +652,7 @@ var HistoryBlock = (props) => {
         return history();
       }
     }), null);
-    return _el$35;
+    return _el$40;
   })();
 };
 
