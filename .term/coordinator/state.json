@@ -657,6 +657,17 @@
       "worktree": "worktrees/wt-goal-jump-row-indicator",
       "status": "claimed",
       "createdAt": "2026-11-15T20:56:54Z"
+    },
+    "a26-shared-constants": {
+      "agent": "orchestrator",
+      "paths": "src/core/constants.ts,src/runtime/controller.ts,src/runtime/compactor.ts,SPEC.md",
+      "branch": "wt/a26-shared-constants",
+      "worktree": "worktrees/wt-a26-shared-constants",
+      "status": "done",
+      "createdAt": "2026-11-15T21:00:12Z",
+      "submittedAt": "2026-11-15T21:01:49Z",
+      "mergedAt": "2026-11-15T21:01:57Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
