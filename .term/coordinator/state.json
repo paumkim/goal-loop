@@ -517,6 +517,17 @@
       "submittedAt": "2026-11-15T20:32:02Z",
       "mergedAt": "2026-11-15T20:32:13Z",
       "mergedInto": "dev"
+    },
+    "a6-formattokens-rollover": {
+      "agent": "orchestrator",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md",
+      "branch": "wt/a6-formattokens-rollover",
+      "worktree": "worktrees/wt-a6-formattokens-rollover",
+      "status": "done",
+      "createdAt": "2026-11-15T20:32:48Z",
+      "submittedAt": "2026-11-15T20:33:42Z",
+      "mergedAt": "2026-11-15T20:33:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
