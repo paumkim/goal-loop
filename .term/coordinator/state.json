@@ -286,6 +286,17 @@
       "submittedAt": "2026-11-15T17:35:38Z",
       "mergedAt": "2026-11-15T17:37:20Z",
       "mergedInto": "dev"
+    },
+    "goal-history-nonloop-pips": {
+      "agent": "inkling-goal-loop-2",
+      "paths": "src/tui.tsx,src/tui-history.tsx,src/core/history.ts,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
+      "branch": "wt/goal-history-nonloop-pips",
+      "worktree": "worktrees/wt-goal-history-nonloop-pips",
+      "status": "done",
+      "createdAt": "2026-11-15T17:39:30Z",
+      "submittedAt": "2026-11-15T17:42:52Z",
+      "mergedAt": "2026-11-15T17:42:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
