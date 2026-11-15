@@ -230,11 +230,11 @@ describe("formatStatus", () => {
   test("a pending boundary compact renders age and miss count", () => {
     const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 1 }), 70_000, undefined)
     expect(text).toMatch(/Loop compact: pending \d/)
-    expect(text).toContain("(miss 1/2)")
+    expect(text).toContain("(miss 1/4)")
   })
   test("misses at the re-request threshold render verbatim", () => {
     const text = formatStatus(looped({ requestedAt: 4_000, iteration: 2, misses: 2 }), 70_000, undefined)
-    expect(text).toContain("(miss 2/2)")
+    expect(text).toContain("(miss 2/4)")
   })
   test("a landed boundary compact renders the landing, not a miss", () => {
     const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 3, landedAt: 60_000 }), 70_000, undefined)

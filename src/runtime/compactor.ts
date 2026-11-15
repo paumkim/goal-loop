@@ -26,7 +26,7 @@ export interface CompactorDeps {
   readonly isBusy?: (sessionID: string) => Promise<boolean>
 }
 
-export type BoundaryCompactMiss = "disabled" | "in-flight" | "cooldown" | "too-small" | "read-failed" | "busy" | "compact-failed"
+export type BoundaryCompactMiss = "disabled" | "in-flight" | "cooldown" | "too-small" | "read-failed" | "busy" | "compact-failed" | "capped"
 /** Outcome of a boundary-compaction request. `requested: false` carries why nothing was asked of the host. */
 export type BoundaryCompactResult = { readonly requested: true; readonly estimatedTokens?: number } | { readonly requested: false; readonly reason: BoundaryCompactMiss }
 

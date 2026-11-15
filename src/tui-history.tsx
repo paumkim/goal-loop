@@ -11,7 +11,7 @@ import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
-import type { GoalSnapshot, Verdict, VerdictEntry } from "./core/types.ts"
+import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
 export interface HistoryTheme {
@@ -145,7 +145,7 @@ export const LoopSection = (props: {
               {label(theme(), "compact")}
               <text wrapMode="none" fg={pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base}>
                 {pending()
-                  ? `pending ${age()} · miss ${c.misses}/2${c.estimatedTokens !== undefined ? ` · ~${formatTokens(c.estimatedTokens)} at request` : ""}`
+                  ? `pending ${age()} · miss ${c.misses}/${COMPACT_MISS_CAP}${c.estimatedTokens !== undefined ? ` · ~${formatTokens(c.estimatedTokens)} at request` : ""}`
                   : `landed ${age()} ago`}
               </text>
             </box>

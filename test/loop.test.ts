@@ -710,6 +710,79 @@ describe("/goal-loop", () => {
     expect(record.loopCompact!.misses).toBe(1)
   })
 
+  test("forced re-requests stop at the 4-miss cap; one final warning, then silence", async () => {
+    const h4 = harness({ maxLoops: 50 })
+    await h4.setLoop("improve the parser")
+    let n = 0
+    const arm = async () => {
+      h4.verdicts.push(met("step done"))
+      h4.summaries.push("s")
+      h4.nextGoals.push(`iter-${++n}`)
+      await h4.turn(1)
+    }
+    await arm() // fresh boundary request
+    expect(h4.compactCalls).toEqual([{ sessionID: SID }])
+    await arm() // miss 1: silent skip, no request
+    expect(h4.compactCalls).toHaveLength(1)
+    await arm() // miss 2: forced re-request
+    expect(h4.compactCalls).toHaveLength(2)
+    expect(h4.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h4.notices.filter((n2) => n2.kind === "compact" && n2.title === "Compaction pending")).toHaveLength(1)
+    await arm() // miss 3: forced re-request
+    expect(h4.compactCalls).toHaveLength(3)
+    expect(h4.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    await arm() // miss 4: cap — no host request, one final warning
+    expect(h4.compactCalls).toHaveLength(3)
+    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
+    await arm() // miss 5: suspended and silent
+    expect(h4.compactCalls).toHaveLength(3)
+    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
+    expect(h4.notices.filter((n2) => n2.title === "Compaction pending")).toHaveLength(2)
+    expect(h4.controller.get(SID)?.status).toBe("active")
+  })
+
+  test("compaction-ended misses respect the 4-miss cap with one final warning", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    await h.controller.onCompactionLanded(SID) // miss 1
+    await h.controller.onCompactionLanded(SID) // miss 2: pending warning
+    await h.controller.onCompactionLanded(SID) // miss 3: pending warning
+    await h.controller.onCompactionLanded(SID) // miss 4: final warning
+    await h.controller.onCompactionLanded(SID) // miss 5: silent
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(5)
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeUndefined()
+    expect(h.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
+    expect(h.notices.filter((n2) => n2.title === "Compaction pending")).toHaveLength(2)
+  })
+
+  test("a landing clears the suspension: a fresh request resumes on a later arm", async () => {
+    const h5 = harness({ maxLoops: 50 })
+    await h5.setLoop("improve the parser")
+    let n = 0
+    const arm = async () => {
+      h5.verdicts.push(met("step done"))
+      h5.summaries.push("s")
+      h5.nextGoals.push(`iter-${++n}`)
+      await h5.turn(1)
+    }
+    await arm() // fresh boundary request
+    await arm() // miss 1
+    await arm() // miss 2 (forced)
+    await arm() // miss 3 (forced)
+    await arm() // miss 4: capped
+    expect(h5.compactCalls).toHaveLength(3)
+    h5.setContextSize(90_000)
+    await h5.controller.onCompactionLanded(SID) // landing observed via the ended event
+    expect(h5.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
+    await arm() // fresh request resumes from misses 0
+    expect(h5.compactCalls).toHaveLength(4)
+    expect(h5.compactCalls[3]).toEqual({ sessionID: SID })
+    expect(h5.controller.get(SID)!.loopCompact!.misses).toBe(0)
+  })
+
   test("re-anchor is queued even with no pending boundary request (the host compacted on its own)", async () => {
     await h.setLoop("improve the parser")
     await h.controller.onCompactionLanded(SID)

@@ -186,7 +186,7 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
-| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request is re-requested only after 2 armed iterations. Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
+| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request is re-requested at 2–3 misses and is suspended entirely at 4 until a landing is observed (one final warning). Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
@@ -227,9 +227,12 @@ next arm by the same heuristic. A landing is surfaced as a "Compaction landed" n
 dialog (a `compact` row under the objective while pending or after landing), and in the status line (the footer
 marker carries the miss count while a request is outstanding).
 A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
-never past the busy gate) with a "Compaction pending" warning. An arm that just recorded the landing, or that
-has an unlanded request with fewer than 2 misses, makes no request at all — arms never stack compactions; only
-the 2-miss re-request (and a fresh request on the arm after a landing) goes to the host.
+never past the busy gate) with a "Compaction pending" warning — at the third miss likewise. Once misses reach
+4 with still no landing observed, boundary re-requests are suspended entirely — the host is not asked again
+until a landing is observed (one final "Compaction not landing" warning at the crossing, none afterwards), and
+the loop keeps running regardless. An arm that just recorded the landing, or that has an unlanded request with
+fewer than 2 misses, makes no request at all — arms never stack compactions; only the 2–3-miss re-request
+(and a fresh request on the arm after a landing) goes to the host.
 
 **Compaction cuts the context, not the loop.** When a compaction lands, the history the armed directive, the
 objective and the completed iterations live in is replaced by a lossy summary. The plugin then queues a
