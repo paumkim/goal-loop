@@ -45,6 +45,10 @@ interface Runtime {
   /** Tool calls from turns whose evaluation was deferred by background work. */
   carriedToolCalls: number
   evaluating: boolean
+  /** Set when a synthetic steer was dispatched (continuation, retry, check-in, loop arm): the next execution's succeeded event evaluates; any succeeded delivered before the next started is a straggler and is ignored. */
+  awaitingExecution: boolean
+  /** Set when this iteration deferred an evaluation because background work was running: background work is real work for the zero-tool not-progress guard. */
+  iterationDeferred: boolean
   abort?: AbortController
   timer?: unknown
   deferredSince?: number
@@ -225,11 +229,16 @@ export class GoalController {
     if (!runtime) return
     this.invalidate(runtime)
     runtime.toolCalls = 0
+    runtime.awaitingExecution = false
   }
 
   onToolCalled(sessionID: string) {
     const runtime = this.runtimes.get(sessionID)
-    if (runtime) runtime.toolCalls++
+    if (runtime) {
+      runtime.toolCalls++
+      // Counted eagerly so a turn whose evaluation is later superseded or dropped still counts as work for the loop.
+      runtime.iterationToolCalls++
+    }
   }
 
   /** A user prompt was admitted (not synthetic). Resumes a paused goal and re-arms idle check-ins. */
@@ -268,6 +277,11 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
+    if (runtime.awaitingExecution) {
+      // Straggler duplicate of the turn the plugin just steered: an evaluation must wait for the next started.
+      this.deps.log.info("goal evaluation straggler dropped", { sessionID })
+      return
+    }
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
@@ -288,6 +302,8 @@ export class GoalController {
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     runtime.toolCalls = 0
+    // The execution is over; a straggler succeeded for it must not evaluate. The retry steer re-arms evaluation.
+    runtime.awaitingExecution = true
     this.handleFailure(record, runtime, classifyFailure(error))
   }
 
@@ -299,8 +315,12 @@ export class GoalController {
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     if (reason === "user") return this.pause(record, "Interrupted.")
-    if (reason === "inactivity") return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
-    // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn.
+    if (reason === "inactivity") {
+      runtime.awaitingExecution = true
+      return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
+    }
+    // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn, its events must evaluate.
+    if (reason !== "superseded") runtime.awaitingExecution = true
   }
 
   onSessionDeleted(sessionID: string) {
@@ -393,7 +413,7 @@ export class GoalController {
     record.retries = 0
     record.verdict = result.verdict
     record.reason = result.reason || undefined
-    runtime.iterationToolCalls += tools
+    // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
     record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now() })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
@@ -445,7 +465,7 @@ export class GoalController {
     const history: LoopEntry[] = (record.loopHistory ?? []).filter((e) => e.version !== iteration)
     const now = clock.now()
     const iterationTools = runtime.iterationToolCalls
-    const notProgress = iterationTools === 0 ? (record.loopNotProgress ?? 0) + 1 : 0
+    const notProgress = iterationTools === 0 && !runtime.iterationDeferred ? (record.loopNotProgress ?? 0) + 1 : 0
     const makeEntry = (summary: string): LoopEntry => ({
       version: iteration,
       condition: record.condition,
@@ -456,15 +476,15 @@ export class GoalController {
       endedAt: clock.now(),
     })
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
-    // The save is awaited so a restart mid-loop restores the advanced iteration instead of the pre-arm state.
-    const saveLoopState = async () => {
+    // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop
+    // restores either the pre-step or the fully-advanced state, never a half-advanced one.
+    const assignLoopState = () => {
       record.loopHistory = history
       record.loopNotProgress = notProgress
-      await this.commit(record)
     }
 
     const endClean = async (reason: string) => {
-      await saveLoopState()
+      assignLoopState()
       await this.finish(record, "achieved", reason)
       this.notify(sessionID, "achieved", "success", "Loop complete", reason)
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
@@ -474,7 +494,7 @@ export class GoalController {
       const reason = "The loop cannot advance: this evaluator cannot summarize. Send a message to retry, or /goal-loop clear."
       log.error("loop step unavailable", { sessionID })
       history.push(makeEntry("(loop summary unavailable: this evaluator cannot summarize)"))
-      await saveLoopState()
+      assignLoopState()
       await this.pause(record, reason)
       return
     }
@@ -502,7 +522,7 @@ export class GoalController {
       if (this.stale(record, runtime, epoch)) return
       log.error("loop summary failed", { sessionID, error: errorMessage(error) })
       history.push(makeEntry(`(summary failed: ${truncate(errorMessage(error), 80)})`))
-      await saveLoopState()
+      assignLoopState()
       await this.pause(record, `The loop summary failed: ${truncate(errorMessage(error), 160)}`)
       return
     } finally {
@@ -515,7 +535,7 @@ export class GoalController {
     log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
 
     if (notProgress >= 2) {
-      await saveLoopState()
+      assignLoopState()
       await this.pause(record, "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.")
       return
     }
@@ -532,7 +552,7 @@ export class GoalController {
       if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
-      await saveLoopState()
+      assignLoopState()
       await this.pause(record, `The loop next-goal generator failed: ${truncate(errorMessage(error), 160)}`)
       return
     } finally {
@@ -553,9 +573,25 @@ export class GoalController {
     if (!condition) {
       return endClean("Loop complete: the next-goal generator returned nothing usable.")
     }
+    // A planner that repeats an already-completed condition would spin the loop on the same work; pause instead.
+    const normalize = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase()
+    const completed = new Set([
+      normalize(record.condition),
+      ...(record.loopObjective ? [normalize(record.loopObjective)] : []),
+      ...history.map((entry) => normalize(entry.condition)),
+    ])
+    if (completed.has(normalize(condition))) {
+      log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
+      assignLoopState()
+      await this.pause(
+        record,
+        `The loop planner returned the already-completed condition "${truncate(condition, 80)}"; the loop is paused rather than spun. Send a message to resume, or /goal-loop clear.`,
+      )
+      return
+    }
 
     const nextIteration = iteration + 1
-    await saveLoopState()
+    assignLoopState()
     record.condition = condition
     record.loopIteration = nextIteration
     record.turns = 0
@@ -567,10 +603,15 @@ export class GoalController {
     record.startedAt = clock.now()
     this.clearDeferred(runtime)
     runtime.iterationToolCalls = 0
-    // Persist the armed state before the arm is announced anywhere: a restart from this point must restore the armed iteration.
+    runtime.iterationDeferred = false
+    // Single durable write: the achieved history and the armed iteration land together or not at all.
+    // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)
+    if (this.stale(record, runtime, epoch)) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
     await this.note(record, `Loop ${iteration} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    // The note round-trips through synthetic; the world may have moved on while it landed.
+    if (this.stale(record, runtime, epoch)) return
     await this.continueWith(record, {
       text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
       description: `goal-loop · arming v${nextIteration}`,
@@ -621,6 +662,7 @@ export class GoalController {
   private defer(record: GoalRecord, runtime: Runtime, work: BackgroundWork, tools: number) {
     const { config, clock } = this.deps
     runtime.carriedToolCalls += tools
+    runtime.iterationDeferred = true
     const firstDefer = runtime.deferredSince === undefined
     runtime.deferredSince ??= clock.now()
     if (firstDefer) this.emit(record)
@@ -658,6 +700,11 @@ export class GoalController {
   // ---------------------------------------------------------------- transitions
 
   private async continueWith(record: GoalRecord, input: { text: string; description: string; turn: number }) {
+    const runtime = this.runtime(record.sessionID)
+    // Every completion event after this dispatch belongs to the execution the steer starts; a succeeded delivered
+    // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
+    // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.
+    runtime.awaitingExecution = true
     try {
       await this.deps.session.synthetic({
         sessionID: record.sessionID,
@@ -747,7 +794,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false }
+      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, iterationDeferred: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -763,6 +810,8 @@ export class GoalController {
       iterationToolCalls: 0,
       carriedToolCalls: 0,
       evaluating: false,
+      awaitingExecution: false,
+      iterationDeferred: false,
     })
   }
 
@@ -794,7 +843,11 @@ export class GoalController {
     return this.disposed || runtime.epoch !== epoch || this.goals.get(record.sessionID) !== record || record.status !== "active"
   }
 
-  /** Resolves once the durable write lands (or is skipped as a no-op). Most callers ignore it; loop arming awaits it. */
+  /**
+   * Resolves once the write has been attempted. Most callers ignore the result; the loop arm awaits it so a restart
+   * cannot restore the pre-arm state. A failed write drops the record from the no-op cache so the next identical
+   * commit retries the durable write instead of assuming it landed.
+   */
   private commit(record: GoalRecord): Promise<void> {
     let serialized: string
     try {
@@ -806,7 +859,10 @@ export class GoalController {
     this.lastCommit.set(record.sessionID, serialized)
     const saved = this.deps.store.save(record)
     this.emit(record)
-    return saved
+    return saved.then((ok) => {
+      // Keep the marker only when the write landed; otherwise the next identical commit retries.
+      if (serialized && !ok) this.lastCommit.delete(record.sessionID)
+    })
   }
 
   private emit(record: GoalRecord) {

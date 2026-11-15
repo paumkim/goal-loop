@@ -60,7 +60,10 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const nextGoalRequests: NextGoalRequest[] = []
   // Test hook: when set, the next-goal generator awaits this gate before replying (simulates an in-flight planner).
   const gate: { nextGoal?: Promise<void> } = {}
+  // Test hook: when set, the first matching synthetic call awaits this gate before delivering (simulates a slow steer round-trip).
+  const syntheticGate: { promise?: Promise<void>; match?: string } = {}
   const notices: Notice[] = []
+  const work = { subagents: 0, shells: 0 }
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
     config: resolveConfig(options),
@@ -77,7 +80,14 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     }),
     session: {
       prompt: async (input) => void calls.prompts.push(input),
-      synthetic: async (input) => void calls.synthetic.push(input),
+      synthetic: async (input) => {
+        if (syntheticGate.promise && (!syntheticGate.match || String(input.description).includes(syntheticGate.match))) {
+          const gatePromise = syntheticGate.promise
+          syntheticGate.promise = undefined
+          await gatePromise
+        }
+        void calls.synthetic.push(input)
+      },
       usage: async () => ({ cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
       compact: async () => {},
     },
@@ -102,7 +112,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
         return next
       },
     },
-    background: { busy: async (): Promise<BackgroundWork> => ({ subagents: 0, shells: 0 }) },
+    background: { busy: async (): Promise<BackgroundWork> => ({ ...work }) },
     emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
   })
   const turn = async (tools = 1) => {
@@ -120,6 +130,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     summaryRequests,
     nextGoalRequests,
     gate,
+    syntheticGate,
+    setWork: (next: BackgroundWork) => Object.assign(work, next),
     notices,
     controller,
     storage,
@@ -561,5 +573,271 @@ describe("/goal-loop completion invariants", () => {
     // No further loop steps after completion: injecting another execution does not revive the loop.
     await h.turn()
     expect(h.notices.filter((n) => n.kind === "achieved")).toHaveLength(1)
+  })
+})
+
+describe("/goal-loop failure modes", () => {
+  test("the arm is one durable write: no snapshot pairs the recorded history with the pre-arm iteration", async () => {
+    const storage = new MemoryStorage()
+    const writes: Array<Record<string, unknown>> = []
+    const realSet = storage.set.bind(storage)
+    storage.set = async (key: string, value: unknown) => {
+      writes.push(structuredClone(value) as Record<string, unknown>)
+      return realSet(key, value)
+    }
+    const h = harness({}, storage)
+    await h.setLoop("objective")
+    h.verdicts.push(met("done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    // The achieved iteration must never be persisted as "in history, but not yet armed":
+    // a restore from that snapshot would re-advance the same iteration.
+    const halfArmed = writes.filter(
+      (w) =>
+        Array.isArray(w.loopHistory) &&
+        (w.loopHistory as unknown[]).length > 0 &&
+        w.status === "active" &&
+        w.condition === "objective" &&
+        w.loopIteration === 1,
+    )
+    expect(halfArmed).toHaveLength(0)
+  })
+
+  test("a user prompt landing during the arm's persist suppresses the arm announcement", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.setLoop("objective")
+    const realSet = storage.set.bind(storage)
+    let gate: Promise<void> | undefined
+    let release: (() => void) | undefined
+    storage.set = async (key: string, value: unknown) => {
+      if (gate) await gate
+      return realSet(key, value)
+    }
+    h.verdicts.push(met("done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    gate = new Promise<void>((resolve) => (release = resolve))
+    const turn = h.turn()
+    await flush()
+    // The arm's persist is blocked; the user prompt lands while the write is in flight.
+    h.controller.onUserPrompt(SID)
+    release!()
+    await turn
+    await flush()
+    const record = h.controller.get(SID)!
+    // The superseded loop step must not announce the arm into a world that moved on.
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
+    expect(h.notices.filter((n) => n.kind === "loop")).toHaveLength(0)
+    // The armed state itself is still durably written; a restore lands on v2.
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopIteration).toBe(2)
+  })
+
+  test("a duplicated execution.succeeded after an arm is ignored until the next execution starts", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 done"), met("v3 done"))
+    h.summaries.push("s1", "s2")
+    h.nextGoals.push("v2 condition", "v3 condition")
+    await h.turn()
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    const retries = h.controller.get(SID)!.retries
+    // Same execution, re-delivered with a fresh id and no intervening started: must not evaluate.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.loopIteration).toBe(2)
+    expect(record.retries).toBe(retries)
+    expect(h.summaryRequests).toHaveLength(1)
+    expect(h.verdicts).toHaveLength(2)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+  })
+
+  test("a duplicated execution.succeeded after a not_met continuation does not re-evaluate", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet("nope"))
+    await h.turn(1)
+    expect(h.controller.get(SID)!.turns).toBe(1)
+    const retries = h.controller.get(SID)!.retries
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.turns).toBe(1)
+    expect(record.retries).toBe(retries)
+    expect(h.notices.some((n) => n.kind === "retry")).toBe(false)
+  })
+
+  test("a planner that repeats the current condition pauses instead of re-arming it", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("   OBJECTIVE  ") // normalized repeat of the v1 condition/objective
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("paused")
+    expect(record.reason).toMatch(/already-completed|already completed|repeat|verbatim/i)
+    expect(record.loopIteration).toBe(1)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
+  })
+
+  test("a planner that repeats an earlier iteration's condition pauses", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 done"))
+    h.summaries.push("s1", "s2")
+    h.nextGoals.push("tighten the widget", "objective")
+    await h.turn() // arms v2 = "tighten the widget"
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    await h.turn() // v2 met; the planner repeats v1's condition verbatim
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("paused")
+    expect(record.reason).toMatch(/already-completed|already completed|repeat|verbatim/i)
+    expect(record.loopIteration).toBe(2)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+  })
+})
+
+describe("/goal-loop straggler completions after failure", () => {
+  test("a duplicated execution.succeeded after a failing turn does not evaluate the failed turn", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("spurious"))
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onExecutionFailed(SID, { message: "socket hang up" })
+    // The failed turn is over; a duplicate succeeded delivered before the retry's started must not evaluate.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(h.verdicts).toHaveLength(1) // the queued verdict was not consumed
+    expect(record.turns).toBe(0)
+    expect(h.summaryRequests).toHaveLength(0)
+  })
+
+  test("a duplicated execution.succeeded after a non-superseded interrupt does not evaluate", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("spurious"))
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onExecutionInterrupted(SID, "inactivity")
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(h.verdicts).toHaveLength(1)
+    expect(record.turns).toBe(0)
+    expect(h.summaryRequests).toHaveLength(0)
+  })
+})
+
+describe("/goal-loop storage failure recovery", () => {
+  test("a failed durable write is retried by the next commit of the same record", async () => {
+    const storage = new MemoryStorage()
+    const realSet = storage.set.bind(storage)
+    let failing = true
+    storage.set = async (key: string, value: unknown) => {
+      if (failing) throw new Error("storage down")
+      return realSet(key, value)
+    }
+    const h = harness({}, storage) // the harness store logs errors by throwing; they must not break the loop
+    await h.setLoop("objective")
+    h.verdicts.push(met("done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn()
+    // All durable writes failed; the in-memory record is still armed, and storage never saw it.
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    expect(storage.data.has("goal/v1/ses_1")).toBe(false)
+    failing = false
+    h.controller.onUserPrompt(SID)
+    await flush()
+    const persisted = storage.data.get("goal/v1/ses_1") as { loopIteration?: number; condition: string } | undefined
+    expect(persisted?.loopIteration).toBe(2)
+    expect(persisted?.condition).toBe("v2 condition")
+  })
+})
+
+describe("/goal-loop racing user turn", () => {
+  test("a user turn started during the arming steer is evaluated, not swallowed by the straggler guard", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 not done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    let release!: () => void
+    h.syntheticGate.promise = new Promise<void>((resolve) => (release = resolve))
+    h.syntheticGate.match = "arming"
+    const turn = h.turn()
+    await flush() // the loop is now inside the gated arming steer
+    // The user races ahead: their turn starts now, during the steer dispatch.
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    release!()
+    await turn
+    await flush()
+    // The user's turn ends; its succeeded event must be evaluated, not dropped as a straggler.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.turns).toBe(1)
+    expect(h.verdicts).toHaveLength(0)
+  })
+})
+
+describe("/goal-loop zero-tool accounting", () => {
+  test("tool use on a superseded, dropped turn still counts toward the iteration", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 met"))
+    h.summaries.push("s1", "s2")
+    h.nextGoals.push("v2 condition", "v3 condition")
+    await h.turn(1) // arms v2
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    // v2 turn: real work happens, but the evaluation is superseded mid-flight by a user prompt.
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onToolCalled(SID)
+    h.controller.onToolCalled(SID)
+    const succeeded = h.controller.onExecutionSucceeded(SID)
+    h.controller.onUserPrompt(SID)
+    await succeeded
+    await flush()
+    // resumed user turn: zero tools, evaluator says v2 met → armed v3
+    h.controller.onExecutionStarted(SID)
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.loopHistory!.at(-1)!.toolCalls).toBe(3)
+    expect(record.loopNotProgress).toBe(0)
+  })
+})
+
+describe("/goal-loop background work counting", () => {
+  test("an iteration spent waiting on background work is not a zero-tool iteration", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 met"), met("v3 met"))
+    h.summaries.push("s1", "s2", "s3")
+    h.nextGoals.push("v2 condition", "v3 condition", "v4 condition")
+    await h.turn(1) // arms v2
+    // v2 iteration: the session does nothing itself; a subagent builds the feature, then the met verdict lands.
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(0) // defers evaluation; no verdict consumed
+    h.setWork({ subagents: 0, shells: 0 })
+    await h.turn(0) // evaluated met with zero own tools
+    expect(h.controller.get(SID)!.loopIteration).toBe(3)
+    // v3 iteration: same shape; two consecutive background-only iterations must not pause the loop.
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(0)
+    h.setWork({ subagents: 0, shells: 0 })
+    await h.turn(0)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopNotProgress).toBe(0)
   })
 })
