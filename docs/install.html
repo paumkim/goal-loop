@@ -8,12 +8,12 @@
 <main id="main"><h1>Install and use</h1>
 <section id="viewing"><h2>Viewing these docs</h2><p>This site is static HTML/CSS with no build step and no internet. Double-click <code>docs/index.html</code> in your file manager, or run <code>xdg-open docs/index.html</code> from the repo root. Keep the whole <code>docs/</code> folder together — pages use relative links.</p></section>
 <section id="install"><h2>Install</h2>
-<pre><code>npm i -g @el4cteo/opencode-goal
+<pre><code>npm i -g opencode-goalv2
 opencode-goal install</code></pre>
 <p>That is the whole first-time setup. <code>opencode-goal install</code> registers the plugin in your global opencode config and tells you to restart opencode; the plugin then loads on the next start of both the TUI and the server. Requires OpenCode ≥2.0.29 and Node (or Bun) for the installer itself. The installer has zero runtime dependencies.</p>
 <h3>Uninstall</h3>
 <pre><code>opencode-goal uninstall</code></pre>
-<p>Removes exactly what the installer added and leaves opencode as it was. If the config file the installer created is left empty, it is deleted. If the plugin entry is already missing but an install-time backup exists (a backup whose content provably lacks the plugin), uninstall restores that pre-install config unchanged — after taking a fresh safety backup of the current state. A backup that contains the plugin is never restored automatically; <code>opencode-goal uninstall --restore</code> copies the newest <code>.bak</code> back over the config on demand instead (taking a fresh backup first).</p>
+<p>Removes exactly what the installer added and leaves opencode as it was. If the config file the installer created is left empty, it is deleted. If the plugin entry is already missing and an install-time backup exists (the oldest backup whose content provably lacks the plugin — i.e. the first install-time original), uninstall restores that pre-install config unchanged — after taking a fresh safety backup of the current state. A backup that contains the plugin is never restored automatically; <code>opencode-goal uninstall --restore</code> copies the newest <code>.bak</code> back over the config on demand instead (taking a fresh backup first).</p>
 <h3>The other subcommands</h3>
 <pre><code>opencode-goal            # same as install
 opencode-goal status     # scope, config path, installed yes/no
@@ -23,7 +23,7 @@ opencode-goal --version</code></pre>
 <p><code>--global</code> (default) and <code>--project</code> are mutually exclusive. <code>--project</code> targets the current directory's opencode config (discovery order <code>opencode.json</code>, <code>opencode.jsonc</code>, <code>.opencode/opencode.json</code>, <code>.opencode/opencode.jsonc</code> — first existing wins; <code>./opencode.json</code> is created when none exists).</p>
 <h3>What the installer touches</h3>
 <p>One file: the config opencode itself picks. Global: <code>$XDG_CONFIG_HOME/opencode/opencode.jsonc</code>, or <code>~/.config/opencode/opencode.jsonc</code> when XDG is unset (<code>opencode.json</code> wins when only it exists; <code>opencode.jsonc</code> is created when neither exists). Every file is backed up before writing (<code>&lt;file&gt;.&lt;yyyy-MM-DD-HH-mm-ss&gt;Z.bak</code>, never overwritten). Only the <code>plugins</code> array is edited; comments, formatting and unrelated keys survive. The run is idempotent: a second install prints <code>already installed</code> and exits 0; an uninstall with nothing to do prints <code>not installed</code> and exits 0. Writes never leave the target scope, and the installer never opens your config by hand.</p>
-<p>Prefer doing it yourself? Add <code>"plugins": ["@el4cteo/opencode-goal"]</code> to your opencode config, or point <code>plugins</code> at a local clone: <code>{ "plugins": ["/path/to/opencode-goal"] }</code>. The installer exists so you do not have to.</p></section>
+<p>This is a standalone MIT-licensed fork. If you want the original, installed by its author: <code>npm i -g @el4cteo/opencode-goal</code>. Prefer doing it yourself? Add <code>"plugins": ["opencode-goalv2"]</code> to your opencode config, or point <code>plugins</code> at a local clone: <code>{ "plugins": ["/path/to/opencode-goal"] }</code>. The installer exists so you do not have to.</p></section>
 <section id="commands"><h2>Commands</h2>
 <div class="tablewrap"><table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
 <tr><td><code>/goal &lt;condition&gt;</code></td><td>Set goal and start immediately</td></tr>
@@ -42,7 +42,7 @@ opencode-goal --version</code></pre>
 <section id="options"><h2>opencode.json options</h2>
 <pre><code>{
   "plugins": [{
-    "package": "@el4cteo/opencode-goal",
+    "package": "opencode-goalv2",
     "options": {
       "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
       "maxTurns": 0, "stallTurns": 0, "checkinMinutes": 30,
@@ -67,4 +67,4 @@ OPENCODE_GOAL_VERIFY_COMMAND
 OPENCODE_GOAL_VERIFY_TIMEOUT_MS
 OPENCODE_GOAL_PROBE</code></pre></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#install">Install</a></li><li><a href="#commands">Commands</a></li><li><a href="#options">Options</a></li><li><a href="#troubleshoot">Troubleshooting</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-15 17:05 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer><script src="app.js"></script></body></html>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-15 17:23 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer><script src="app.js"></script></body></html>

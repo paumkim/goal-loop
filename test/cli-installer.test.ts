@@ -414,3 +414,58 @@ describe("uninstall with a missing entry and a pre-install backup", () => {
     rmSync(home, { recursive: true, force: true });
   });
 });
+
+describe("uninstall restore: backup chronology (regression)", () => {
+  const ORIG = STRICT;
+  const DRIFT = STRICT.replace("test/model", "test/other");
+
+  test("a newer plugin-free backup does not shadow the older pre-install original", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", ORIG);
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z.bak", ORIG);   // install-time original
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-01Z.bak", DRIFT);  // later safety copy of drifted state
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(ORIG); // not clobbered by the newer drifted backup
+    expect(r.stdout.toLowerCase()).toContain("not installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("chronology: collision-suffixed backups sort after the plain one of the same second", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", ORIG);
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z.bak", ORIG);    // plain: created first
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z-2.bak", DRIFT); // collision suffix: created later
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(ORIG);
+    expect(r.stdout.toLowerCase()).toContain("not installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a plugin-containing backup is never a restore candidate, regardless of age", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", ORIG);
+    const withPlugin = ORIG.replace('"model": "test/model",', '"model": "test/model",\n  "plugins": ["opencode-goalv2"],');
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z.bak", withPlugin); // oldest, but contains the plugin
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-01Z.bak", ORIG);       // plugin-free
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(ORIG);
+    expect(r.stdout.toLowerCase()).toContain("not installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("restores from the oldest plugin-free backup when older ones carry the plugin", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", DRIFT);
+    const withPlugin = ORIG.replace('"model": "test/model",', '"model": "test/model",\n  "plugins": ["opencode-goalv2"],');
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z.bak", withPlugin); // oldest, skipped
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-01Z.bak", ORIG);       // first plugin-free
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(ORIG);
+    expect(r.stdout).toContain("restored");
+    rmSync(home, { recursive: true, force: true });
+  });
+});

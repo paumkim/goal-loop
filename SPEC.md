@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=447 -->
+<!-- spec-check files=41 tests=451 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1909,3 +1909,88 @@ spec-check ok 41/413 after the marker bump in this commit); live scratch proof (
 176. Marker bumped `files=41 tests=435` → `files=41 tests=442` (no new shipped files, +7 tests).
 
 Merge note (this file): dev gained Workstream AY (goal-loop command syntax) after this branch was cut. The sections were renumbered on merge — AY (159–163) stands as landed on dev; this workstream is AZ (164–173), marker reconciled to the merged tree (files=41, tests=435). The test/check figures in AZ's verification paragraph are the pre-merge worktree record (413 tests); the merged tree was re-verified by the coordinator's merged-result gate before dev advanced.
+
+## Workstream BA — standalone rename: `@el4cteo/opencode-goal` → `opencode-goalv2`
+
+The fork is standalone and names itself after its own repository. MIT attribution stays (LICENSE, README
+credits footer, this note); nothing here publishes under, or points users at, the original author's
+`@el4cteo` package as the thing to install.
+
+177. **Name gates checked, in order (2026-11-15).** `opencode-goal` → taken: `latest 0.4.3`, owner
+     `mirsella <mirsella@protonmail.com>` ("Add Codex-style long-running goals to OpenCode",
+     `github.com/mirsella/opencode-goal`) — unpublishable for us, a different project. The fallback
+     `@opencode-goal/opencode-goal` → 404 (the scope is free) but the scope cannot be created or owned from
+     this machine (`npm whoami` fails, `ENEEDAUTH`). The user's decision: name the package after its own
+     repository, `opencode-goalv2`. `npm view opencode-goalv2` → 404 (free) at rename time. The CLI keeps
+     its `opencode-goal` brand and the served plugin id stays `opencode-goal` (`src/index.ts` `PLUGIN_ID`) —
+     no id change, `/plugins` output unchanged; only the npm package name and the reference the installer
+     writes change. `bin` stays `opencode-goal`.
+178. **Sites renamed (everything machine-facing).** `package.json` `name` → `opencode-goalv2` (repository/
+     homepage/bugs already pointed at `paumkim/opencode-goalv2`; `author` stays EL4CTEO as attribution;
+     `bin`, `files`, version 1.1.0 unchanged). `bin/opencode-goal.mjs` `PLUGIN_PACKAGE` → `opencode-goalv2`
+     (the single source of truth — header example, `PLUGIN_PACKAGE`, and every test fixture follow it, which
+     is why the suite needed zero edits: it pins behavior through the constant, never the literal).
+     README.md (`npm i -g opencode-goalv2`, manual `plugins` alternative, `package` field in the options
+     example, image URLs → raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/, new fork-attribution
+     line in the intro), `docs/install.html` (same command, same example, new fork-attribution line next to the
+     manual alternative), `docs/index.html` (search keywords), `AGENTS.md` (plugin reference). SPEC
+     history is not rewritten; the AZ smoke lines and the goal-prompt quote stay as landed.
+179. **Fork attribution line (both surfaces).** README and `docs/install.html` now state: "This is a
+     standalone MIT-licensed fork. If you want the original, installed by its author: `npm i -g
+     @el4cteo/opencode-goal`." LICENSE and the docs credits footers are unchanged.
+180. **No failing-before test is defined.** No evaluator can see the rename except through `PLUGIN_PACKAGE`,
+     and the existing suite asserts the constant (`PLUGIN_PACKAGE` import), so the rename passes as written.
+     The behavior pinned by the suite (config contains PLUGIN_PACKAGE, backups, restore, idempotency) is
+     unchanged. Verification instead: `bun run check` green (marker unchanged `files=41 tests=442` — no new
+     shipped files, no test changes), `grep -ri "el4cteo"` outside history/attribution/credit lines returns
+     zero, `npm pack` file list inspected, and a live scratch `XDG_CONFIG_HOME` proof (fresh scratch, existing
+     pre-install config, drift, uninstall → byte-identical pre-install restore; global-bin install →
+     `opencode-goal` → `/plugins` smoke) with the rename-specific caveat recorded honestly: the package is
+     not on the registry (`opencode-goalv2` 404 until publish, `npm whoami` = ENEEDAUTH), so the TUI proof
+     loads from a hand-seeded opencode npm cache built from `npm pack` of the merged tree — the registry
+     path itself is unverified until the user publishes.
+181. **Ship state after merge.** Registry install is not possible yet (see 180). Global bin on this machine
+     re-linked from the merged tree (`npm uninstall -g @el4cteo/opencode-goal`, `npm i -g .`) and
+     `opencode-goal --version` reports 1.1.0. The user runs: `npm login && npm publish --access public`.
+     Repository `origin` = `github.com/paumkim/opencode-goalv2` (this remote); publish and push are the
+     same name/repo, self-consistent.
+
+Files touched: `package.json`, `bin/opencode-goal.mjs`, `AGENTS.md`, `README.md`, `docs/install.html`,
+`docs/index.html`, `SPEC.md`. The marker is unchanged.
+
+Verification: `bun run check` green in the worktree (442 tests / 20 files, tsc clean, TUI load ok, docs
+freshness ok, spec-check ok 41/442); coordinator submit; merged-result gate at `merge-next`; fresh `bun run
+check` at dev HEAD; scratch restore proof (see the iteration-2 report) byte-identical with safety backup.
+
+## Workstream BB — live-proof bug fix: restore candidate chronology (goal iteration 2 follow-up)
+
+The iteration-2 live proof (fresh scratch XDG_CONFIG_HOME, pre-install config, drift, uninstall) showed the
+byte-identical restore working, but the final no-op step did NOT no-op. Item 174's rule picks the NEWEST
+plugin-free backup as the restore candidate; a safety backup taken during an earlier restore is plugin-free
+too, so the re-run restored the drifted bytes over the correctly-restored pre-install config (exit 0, still
+wrong). Item 174's candidate rule is superseded by this section; the rest stands.
+
+182. **Root cause (two coupled defects).** (a) `preInstallBackup` scanned backups newest-first, so the newest
+     plugin-free backup — any safety copy of drifted state — shadowed the older install-time original.
+     (b) `listBackups` sorted names lexically; a collision-suffixed backup (`…Z-2.bak`, created after the
+     plain `…Z.bak` of the same second) sorts BEFORE the plain one, so its "newest" was not even
+     creation-order under same-second backups (which is how unit tests run).
+183. **Fix.** `listBackups` now sorts chronologically (`<ts>`, then collision index, absent = 0).
+     `preInstallBackup` picks the OLDEST backup whose parsed content provably lacks the plugin (first in
+     chronological order). Repeated runs converge: once the config equals the oldest plugin-free backup,
+     helpers short-circuit to `not installed` (exit 0) and never rewrite it. Oldest-first also means a restore
+     restores the FIRST install-time original; the fresh safety backup (taken before any overwrite) preserves
+     the drifted state, so no bytes are ever lost silently. `--restore` and the `note:` hint use the same
+     chronological order (newest = last). Failing-before evidence: new describe block (4 tests); the new
+     "newer plugin-free backup does not shadow the older pre-install original" test FAILED pre-fix (byte
+     mismatch); the others pin behavior through the collision-suffix and plugin-containing-backup edges.
+     After the fix: 36/36 in the file, 446 total.
+184. **Marker** bumped `files=41 tests=442` → `files=41 tests=446` (+4 tests, no new files). Docs: the
+     README and `docs/install.html` restore rule now names the oldest-plugin-free candidate.
+
+Files touched: `bin/opencode-goal.mjs`, `test/cli-installer.test.ts`, `SPEC.md`, `README.md`,
+`docs/install.html`.
+
+Verification: full suite green (446); fresh live proof in /tmp/opencode/restore-fix-proof.* (install → drift →
+uninstall restores byte-identical pre-install config → safety backup holds drifted bytes → uninstall again is a
+clean `not installed` no-op, file unchanged, exit 0) using the FIXED global-bin install from this tree.

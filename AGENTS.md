@@ -1,6 +1,6 @@
 # opencode-goal
 
-Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`@el4cteo/opencode-goal`).
+Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`opencode-goalv2`).
 
 ## Entrypoints
 
