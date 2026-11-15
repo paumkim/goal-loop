@@ -377,7 +377,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=34 tests=261 -->
+<!-- spec-check files=34 tests=270 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -483,3 +483,34 @@ Verification: `bun test` (new `test/history.test.ts` covers `renderBar` clamping
 `verdictGlyph`, `iterationDurations` with v1 anchored at `setAt`, `trailWindow` left-truncation; existing
 suites untouched and green), `bun run check` (tsc, tests, compile, check:tui, docs:check, check:spec),
 `bun --preload @opentui/solid/preload scripts/render-history.tsx` output captured in the commit message evidence (the preload maps solid-js’s server build to the client build, exactly how the host loads the plugin), coordinator submit.
+
+## Workstream L — non-looped history block and footer pips
+
+Interpretation of iteration 2's condition: Workstream K gave looped goals a rich history section but
+left non-looped goals with nothing but the condition and spend, and the footer's `vN/M` caption gave no
+sense of how far through the cap the loop was. This workstream extends the same visual language to
+non-looped goals and adds iteration pips to the loop footer.
+
+59. Non-looped goals render a compact history block in the `/goal` detail dialog (after spend, and in
+    place of the loop section): a `history` row — the last verdict glyph (bold; info for met, faint for
+    not_met, warning for impossible) followed by `last <verdict> (turn N) · <turns> evaluated turns ·
+    <met> met · <not_met> not_met[ · <impossible> impossible] · <elapsed>` — and below it the shared
+    verdict trail row. When no verdict has been returned yet, the row degrades to
+    `no verdicts yet · <elapsed> elapsed` and the trail row is omitted (`src/tui-history.tsx`
+    `HistoryBlock`).
+60. The verdict trail is extracted as a shared component (`VerdictTrail`) used by both the loop section
+    and the non-looped block; rendering and windowing behavior are unchanged (24 newest, oldest first,
+    `<shown> of <total> verdicts` caption, omitted when empty).
+61. The prompt footer loop indicator gains iteration progress pips when `loopMaxLoops` is a finite
+    number in [1, 8]: `●` per completed iteration (from `loopHistory.length`) + `○` for the remainder,
+    appended after the `vN/M` segment: `◎ loop · v3/5 ●●○○○ · active · 12m · 3 turns`. Rendered in the
+    footer's existing single color; omitted for missing, zero, negative, NaN or >8 caps. Looped dialog
+    content is unchanged.
+62. Pure helpers `verdictCounts`, `lastVerdict`, `renderPips` live in `src/core/history.ts` and are unit
+    tested (`test/history.test.ts`): tallies, empty/newest-last semantics, pip rendering and clamping.
+63. `scripts/render-history.tsx` renders three headless frames by default — looped (full), non-looped
+    with verdicts, fresh non-looped (no verdicts yet); `--empty` keeps the empty-loop frame. All frames
+    legible: last-verdict glyph, counts, elapsed, trail, and the fresh-state fallback line.
+
+Verification: `bun test` (history suite 26 tests), `bun --preload @opentui/solid/preload scripts/render-history.tsx`
+(frames printed and eyeballed), `bun run check` green, coordinator submit + merge-next.

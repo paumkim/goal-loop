@@ -13,7 +13,8 @@ import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
 import { formatDurationCoarse, formatSpend, GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
-import { LoopSection } from "./tui-history.tsx"
+import { HistoryBlock, LoopSection } from "./tui-history.tsx"
+import { renderPips } from "./core/history.ts"
 import { GoalRpc } from "./rpc.ts"
 
 interface Entry {
@@ -117,6 +118,9 @@ export default Plugin.define({
               <Show when={g().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
               <Show when={g().loopEnabled}>
                 <LoopSection goal={g()} theme={context.theme} elapsedMs={elapsed} />
+              </Show>
+              <Show when={!g().loopEnabled}>
+                <HistoryBlock goal={g()} theme={context.theme} elapsedMs={elapsed} />
               </Show>
             </box>
           )}
@@ -302,7 +306,11 @@ export default Plugin.define({
             const elapsed = elapsedOf(g, entry?.receivedAt, now())
             const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
             const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
-            if (g.loopEnabled) return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+            if (g.loopEnabled) {
+              const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""
+              const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops)
+              return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+            }
             return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
           } catch {
             return ""
