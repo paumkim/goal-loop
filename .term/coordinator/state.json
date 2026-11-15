@@ -831,9 +831,30 @@
       "paths": "src,SPEC.md",
       "branch": "wt/dead-surface-trim",
       "worktree": "worktrees/wt-dead-surface-trim",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-15T22:22:43Z",
-      "submittedAt": "2026-11-15T22:24:59Z"
+      "submittedAt": "2026-11-15T22:24:59Z",
+      "mergedAt": "2026-11-15T22:29:44Z",
+      "mergedInto": "dev"
+    },
+    "goal-loop-command-syntax": {
+      "agent": "orchestrator",
+      "paths": "src,test,docs,SPEC.md",
+      "branch": "wt/goal-loop-command-syntax",
+      "worktree": "worktrees/wt-goal-loop-command-syntax",
+      "status": "done",
+      "createdAt": "2026-11-15T22:29:33Z",
+      "submittedAt": "2026-11-15T22:39:32Z",
+      "mergedAt": "2026-11-15T22:45:25Z",
+      "mergedInto": "dev"
+    },
+    "cli-installer": {
+      "agent": "inkling",
+      "paths": "package.json,bin,scripts/,docs/,README.md,SPEC.md,test/",
+      "branch": "wt/cli-installer",
+      "worktree": "worktrees/wt-cli-installer",
+      "status": "claimed",
+      "createdAt": "2026-11-15T22:42:41Z"
     }
   },
   "mergeLock": null
