@@ -499,8 +499,9 @@ export class GoalController {
   /**
    * Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity).
    * `boundaryCompact: false` adopts only (the read-only RPC list path): no host side effects are triggered.
-   * The default keeps the restart fan-out: compact live goal sessions once so a restarted loop resumes on a
-   * fresh context. The request is recorded as pending so the next arm can detect where it landed.
+   * The default keeps the restart fan-out, restricted to armed loops: compact live loop sessions once so a
+   * restarted loop resumes on a fresh context. Plain `/goal` goals never reach the boundary-compaction path;
+   * the request is recorded as pending so the next arm can detect where it landed.
    */
   async restore(options?: { boundaryCompact?: boolean }): Promise<number> {
     const boundaryCompact = options?.boundaryCompact ?? true
@@ -509,7 +510,7 @@ export class GoalController {
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
     if (boundaryCompact) {
       for (const record of this.goals.values()) {
-        if (record.status !== "active" || !this.deps.compactAtBoundary) continue
+        if (record.status !== "active" || !record.loopEnabled || !this.deps.compactAtBoundary) continue
         // Do not stack a restore-time request on top of one already in flight, nor on top of one that just
         // landed: the arm-time settle re-requests an unlanded one (forced at 2 misses), and the host answers
         // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.

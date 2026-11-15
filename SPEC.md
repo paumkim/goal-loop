@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=352 -->
+<!-- spec-check files=35 tests=353 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1058,6 +1058,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   The `loopEnabled` check is absent: any active record, including a plain `/goal`, gets a boundary compaction after a restart. This
   contradicts the documented discipline that plain goals never reach the boundary-compaction path (see `COMPACT_MISS_CAP` comment in
   `src/core/types.ts`). Proposed fix: restrict the restore-time fan-out to `record.loopEnabled` records (or document plain-goal compaction at restore if intended); pin with a test.
+  Resolution: Workstream AJ — fan-out restricted to armed loops; plain goals never compact at restore.
 - **A-5 (medium) — `src/runtime/controller.ts:797-803` — the repeat-condition guard is punctuation-sensitive.** The loop's
   `completed` normalization strips whitespace and lowercases, but does not strip punctuation, so a planner offering
   `"Fix the flaky test."` after `"fix the flaky test"` was completed arms the same work again — the exact failure mode the guard exists
@@ -1296,3 +1297,18 @@ never rejects (write failures resolve `false` and clear the no-op marker for ret
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (352 tests, spec-check ok); coordinator submit.
+
+## Workstream AJ — restore() fans out boundary compactions only for armed loops (A-4)
+
+`restore()` requested a boundary compaction for every active record, plain `/goal` goals included — contradicting
+the documented discipline that plain goals never reach the boundary-compaction path. The fan-out is now
+restricted to `record.loopEnabled`. The `boundaryCompact: false` adopt-only mode (Workstream AG) is unchanged
+and still suppresses the fan-out entirely.
+
+131. Pin test (`test/loop.test.ts`, 1 new): a plain goal restored via the default path requests no host
+     compaction; verified to fail on the pre-fix tree and pass with it. The loop-enabled control fan-out is
+     pinned by the Workstream AG test. Test count 352 → 353.
+
+Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (353 tests, spec-check ok); coordinator submit.
