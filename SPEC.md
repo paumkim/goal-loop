@@ -1556,6 +1556,16 @@ the goal plugin loaded (`run=<id>` groups; no `<config>/plugins/*.ts` entries fr
 guide's former "throwaway `--config` dir" claim was falsified (no `--config` flag in v2.3.0; default attaches
 to the background service, which keeps service-start config and ignores env overrides) and was rewritten to
 the verified XDG_CONFIG_HOME + `--standalone` recipe in this commit.
+Iteration 4 (SlotMap slot-list audit, installed v2.3.0): the guide's full slot list — `app`, `home.footer`,
+`home.footer.status`, `prompt.footer`, `prompt.footer.status`, `prompt.footer.file`, `session.composer.top`
+(input `{sessionID}`), `session.panel`, `sidebar.content`, `sidebar.footer` — matches
+`node_modules/@opencode/plugin/dist/tui/context.d.ts` (@opencode/plugin 2.0.29), the clone source
+(`packages/plugin/src/tui/context.ts`, fake clone dev branch, identical SlotMap), and the installed binary
+(v2.3.0), which registers each of the ten as a `path:"..."` slot boundary and contains no other
+namespaced slot registration (`grep -aoE 'path:"[a-z][a-z.]{2,40}"'` yields exactly the ten plus unrelated
+schema paths such as `sandbox.credentials`/`nullable`). `session.composer.top`'s binary registration reads
+`path:"session.composer.top"` with `input(){return{sessionID:...`, matching the documented input. No slot
+name drift found; guide items 2 and 6 and this criterion stand unchanged.
 
 ## Workstream AU — the RPC/TUI boundary has zero trust-casts (iteration 2 condition)
 
