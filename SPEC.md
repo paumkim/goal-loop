@@ -1994,3 +1994,14 @@ Files touched: `bin/opencode-goal.mjs`, `test/cli-installer.test.ts`, `SPEC.md`,
 Verification: full suite green (446); fresh live proof in /tmp/opencode/restore-fix-proof.* (install → drift →
 uninstall restores byte-identical pre-install config → safety backup holds drifted bytes → uninstall again is a
 clean `not installed` no-op, file unchanged, exit 0) using the FIXED global-bin install from this tree.
+
+## Workstream BC — e2e proof at dev HEAD 39464c1 (`bun run e2e`, 2026-11-15)
+
+Fresh empty project (/tmp/opencode/e2e-empty), `bun run e2e /tmp/opencode/e2e-empty` against dev HEAD with the repo as a local plugin
+(`.opencode/opencode.json` → `{ "plugins": [<repo root>] }`) and default model `opencode/deepseek-v4.1-flash-free`.
+Raw log: /tmp/opencode/e2e-empty-output.log.
+
+185. Result: exit 0. Server up on 127.0.0.1:4772; `session ses_e1e6a5c99ffemfYwLxAnDgH1v7`; plugin `/goal` command registered within ~1s (`goal command registered: true`); `/goal` sent with the default tea-notes condition. One turn executed (tool calls: mkdir+cat plan.md/done.txt, verification cat, wc/od checks), `session.execution.succeeded`, NOTICE `[success] Goal achieved in 1 turn`, `history: ["1:met"]`. Spend: cost 0, input 13791, output 458, reasoning 145, cacheRead 50816. Evaluator digest rendered (1977 chars) and shown to end of episode; files confirmed on disk: `notes/plan.md` = three numbered tea steps, `notes/done.txt` = `DONE`.
+186. Honest caveats, so the next run does not misread them as failures: (a) `client.plugin.list({ location })` returned `{"location":{...},"data":[]}` on the private standalone server — the plugin *is* loaded (slash command registered and the loop ran); the list endpoint reports empty on this build. Known cosmetic quirk. (b) The e2e requires network + an authenticated opencode provider for the default model; if it 200s but the model cannot run, the goal would stall and TIMEOUT_MS would be hit — exit 1, not a code failure. (c) The plugin entry in the scratch project points at the repo working tree, not the npm tarball; the packed-artifact proof remains the scratch TUI/restore proofs above.
+
+Marker unchanged (files=41 tests=451 — no shipped files, no tests added).
