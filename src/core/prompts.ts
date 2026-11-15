@@ -64,7 +64,8 @@ export interface LoopPreamble {
 /** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
 export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
-  return history.map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
+  // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
+  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncateLine(entry.condition, 100))} — ${escape(truncateLine(entry.summary, 160))}`).join("\n")
 }
 
 const truncateLine = (text: string, max: number) => {
