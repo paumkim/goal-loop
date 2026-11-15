@@ -5,7 +5,7 @@ import type { Logger } from "./runtime/ports.ts"
 /** Structural view of the controller surface the RPC handlers need (GoalController satisfies it). */
 export interface RpcGoalController {
   restoreOne(sessionID: string): Promise<boolean>
-  restore(): Promise<number>
+  restore(options?: { boundaryCompact?: boolean }): Promise<number>
   snapshot(sessionID: string, spend?: UsageSnapshot): GoalSnapshot | null
   spend(sessionID: string): Promise<UsageSnapshot | undefined>
   list(): GoalSnapshot[]
@@ -46,7 +46,8 @@ export function createRpcHandlers(deps: { controller: RpcGoalController; log: Lo
       let goals = controller.list()
       // Empty list can mean in-memory records only (post-reload): restore from storage once before answering.
       if (goals.length === 0) {
-        await controller.restore().catch((error) => warn("restore", error))
+        // Read-only answer: adopt records from storage without asking the host to compact anything.
+        await controller.restore({ boundaryCompact: false }).catch((error) => warn("restore", error))
         goals = controller.list()
       }
       return { goals }

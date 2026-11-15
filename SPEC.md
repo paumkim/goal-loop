@@ -378,7 +378,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=35 tests=348 -->
+<!-- spec-check files=35 tests=350 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1053,6 +1053,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   `list()` calls `controller.restore()`, which adopts records AND queues a boundary-compaction request at the host for every active goal.
   A client asking "what goals exist" can ask the host to compact sessions it does not even render.
   Proposed fix: split restore into adopt (pure) vs adopt+boundary-fan-out; the RPC read path adopts without requesting compaction.
+  Resolution: Workstream AG — `restore({ boundaryCompact: false })`; RPC list is adopt-only.
 - **A-4 (medium) — `src/runtime/controller.ts:500-510` — `restore()` requests a boundary compaction for plain (non-loop) goals.**
   The `loopEnabled` check is absent: any active record, including a plain `/goal`, gets a boundary compaction after a restart. This
   contradicts the documented discipline that plain goals never reach the boundary-compaction path (see `COMPACT_MISS_CAP` comment in
@@ -1243,3 +1244,22 @@ The arm path now passes the configured limit (clamped to `Math.max(1, floor(...)
 Files touched: `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`.
 
 Verification: `bun run check` green (348 tests, spec-check ok); coordinator submit.
+
+## Workstream AG — read-only RPC list no longer fans out boundary compactions (A-3)
+
+`list()` (the goals RPC) fell back to `controller.restore()` when the in-memory list was empty — which adopts
+records AND queues a boundary-compaction request at the host for every active goal, so a client asking "what
+goals exist" could ask the host to compact sessions it never rendered.
+
+127. Split: `restore(options?: { boundaryCompact?: boolean })` on `GoalController`. The default (`true`) keeps
+     the restart fan-out unchanged (bootstrap path, `src/index.ts`). The RPC `list` fallback calls
+     `restore({ boundaryCompact: false })` — adopt-only, zero host side effects. `RpcGoalController` in
+     `src/rpc-handlers.ts` carries the same optional parameter.
+128. Pin tests (2 new): `test/rpc-handlers.test.ts` asserts the list fallback calls restore with
+     `{ boundaryCompact: false }`; `test/loop.test.ts` asserts an adopt-only restore of an armed record
+     requests no host compaction while the default restore does. Both verified to fail on the pre-fix tree and
+     pass with it. Test count 348 → 350.
+
+Files touched: `src/runtime/controller.ts`, `src/rpc-handlers.ts`, `test/loop.test.ts`, `test/rpc-handlers.test.ts`, `SPEC.md`.
+
+Verification: `bun run check` green (350 tests, spec-check ok); coordinator submit.

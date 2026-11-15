@@ -495,35 +495,41 @@ export class GoalController {
     return true
   }
 
-  /** Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity). */
-  async restore(): Promise<number> {
+  /**
+   * Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity).
+   * `boundaryCompact: false` adopts only (the read-only RPC list path): no host side effects are triggered.
+   * The default keeps the restart fan-out: compact live goal sessions once so a restarted loop resumes on a
+   * fresh context. The request is recorded as pending so the next arm can detect where it landed.
+   */
+  async restore(options?: { boundaryCompact?: boolean }): Promise<number> {
+    const boundaryCompact = options?.boundaryCompact ?? true
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
-    // A restart resumes from a fresh context: compact live goal sessions at the boundary. The request is recorded
-    // as pending so the next arm can detect whether it lands (or re-request it).
-    for (const record of this.goals.values()) {
-      if (record.status !== "active" || !this.deps.compactAtBoundary) continue
-      // Do not stack a restore-time request on top of one already in flight, nor on top of one that just
-      // landed: the arm-time settle re-requests an unlanded one (forced at 2 misses), and the host answers
-      // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.
-      const existing = record.loopCompact
-      if (existing && !existing.landedAt) continue
-      if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < 10 * 60_000) continue
-      void this.deps
-        .compactAtBoundary(record.sessionID)
-        .then(async (result) => {
-          if (!result.requested) return
-          if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
-          record.loopCompact = {
-            requestedAt: this.deps.clock.now(),
-            ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
-            iteration: record.loopIteration ?? 1,
-            misses: 0,
-          }
-          await this.commit(record).catch(() => {})
-        })
-        .catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
+    if (boundaryCompact) {
+      for (const record of this.goals.values()) {
+        if (record.status !== "active" || !this.deps.compactAtBoundary) continue
+        // Do not stack a restore-time request on top of one already in flight, nor on top of one that just
+        // landed: the arm-time settle re-requests an unlanded one (forced at 2 misses), and the host answers
+        // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.
+        const existing = record.loopCompact
+        if (existing && !existing.landedAt) continue
+        if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < 10 * 60_000) continue
+        void this.deps
+          .compactAtBoundary(record.sessionID)
+          .then(async (result) => {
+            if (!result.requested) return
+            if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
+            record.loopCompact = {
+              requestedAt: this.deps.clock.now(),
+              ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
+              iteration: record.loopIteration ?? 1,
+              misses: 0,
+            }
+            await this.commit(record).catch(() => {})
+          })
+          .catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
+      }
     }
     return this.goals.size
   }

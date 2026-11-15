@@ -28,14 +28,17 @@ const snapshot = (): GoalSnapshot => ({
 interface Stub extends RpcGoalController {
   explode: Record<string, boolean>
   restored: boolean
+  restoreCalls: Array<{ boundaryCompact?: boolean } | undefined>
 }
 
 function stub(overrides: Partial<Stub> = {}): Stub {
   const s: Stub = {
     explode: {},
     restored: false,
+    restoreCalls: [],
     restoreOne: async () => (overrides.restored ?? false),
-    restore: async () => {
+    restore: async (options) => {
+      s.restoreCalls.push(options)
       if (s.explode.restore) throw new Error("storage down")
       s.restored = true
       return 1
@@ -111,6 +114,12 @@ describe("goal RPC handlers", () => {
     const broken = stub()
     broken.explode.list = true
     expect(await handlers(broken).list()).toEqual({ goals: [] })
+  })
+
+  test("list adopts from storage without asking the host to compact (a3)", async () => {
+    const s = stub()
+    expect(await handlers(s).list()).toEqual({ goals: [snapshot()] })
+    expect(s.restoreCalls).toEqual([{ boundaryCompact: false }])
   })
 
   test("status resolves {} even when controller.status throws", async () => {
