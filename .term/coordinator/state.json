@@ -539,6 +539,17 @@
       "submittedAt": "2026-11-15T20:35:25Z",
       "mergedAt": "2026-11-15T20:35:31Z",
       "mergedInto": "dev"
+    },
+    "a3-readonly-list-fanout": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/rpc-handlers.ts,test/loop.test.ts,test/rpc-handlers.test.ts,SPEC.md",
+      "branch": "wt/a3-readonly-list-fanout",
+      "worktree": "worktrees/wt-a3-readonly-list-fanout",
+      "status": "done",
+      "createdAt": "2026-11-15T20:36:25Z",
+      "submittedAt": "2026-11-15T20:37:30Z",
+      "mergedAt": "2026-11-15T20:37:36Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
