@@ -8,6 +8,8 @@
  *   ╭─ ◎ /goal-loop · v3/5 ──────────────────── [esc] ─╮
  *   │ condition  ship the release notes…        (copy) │
  *   │ now        v3 · checking · 4 turns · 12m elapsed │
+ *   │ spend      $0.42 · 182k in · 21k out            │
+ *   │ context    ████████░░░░░░░░ ~95k of 150k · 63%   │  (when the server can estimate)
  *   │ last       ✓ met · this turn                     │
  *   │ ! compact pending 1/4 · …verifyCommand           │  (only when hot / failed)
  *   │ [details] [pin] [clear goal]               esc      │
@@ -18,8 +20,8 @@ import stringWidth from "string-width"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { formatDurationCoarse, formatSpend, goalGlyph, truncate, wrapLines } from "./core/format.ts"
-import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
+import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
+import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
@@ -78,6 +80,8 @@ export interface CardRowPlan {
   readonly hint: boolean
   /** Whether the spend row fits the budget. */
   readonly spend: boolean
+  /** Whether the context meter row fits the budget. */
+  readonly context: boolean
   /** Whether the last-verdict row fits the budget. */
   readonly last: boolean
   /** Whether the remediation row fits the budget. It drops last, after hint, spend and last — first to come back, last to go. */
@@ -88,8 +92,8 @@ export interface CardRowPlan {
  * The one place that decides the card's height. The remediation row wraps at REMEDIATION_WIDTH cells,
  * so its cost is the greedy word wrap of the actual text, never a flat guess. Under `maxRows` — the
  * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
- * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the last
- * verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
+ * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the context
+ * meter, then the last verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
  * ceiling with the menu open (5 core rows + 4 menu rows > maxRows) the anchor still exceeds the ceiling;
  * rows are deliberately left unclamped in that pathological case — the absolute box is anchored
  * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
@@ -101,25 +105,29 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
   const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0
   const hintAvailable = Boolean(evaluatorHint(goal))
   const spendAvailable = Boolean(goal.spend)
+  const contextAvailable = goal.contextSize !== undefined
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
-  const fit = (hint: boolean, spend: boolean, last: boolean, fix: boolean): number =>
-    5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
-  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable, fix = remediationWanted
-  let rows = fit(hint, spend, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
+  const fit = (hint: boolean, spend: boolean, context: boolean, last: boolean, fix: boolean): number =>
+    5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
+  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, last = lastAvailable, fix = remediationWanted
+  let rows = fit(hint, spend, context, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
   hint = false
-  rows = fit(hint, spend, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
+  rows = fit(hint, spend, context, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
   spend = false
-  rows = fit(hint, spend, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
+  rows = fit(hint, spend, context, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  context = false
+  rows = fit(hint, spend, context, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
   last = false
-  rows = fit(hint, spend, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
+  rows = fit(hint, spend, context, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
   fix = false
-  rows = fit(hint, spend, last, fix)
-  return { rows, hint, spend, last, remediation: fix }
+  rows = fit(hint, spend, context, last, fix)
+  return { rows, hint, spend, context, last, remediation: fix }
 }
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
@@ -301,7 +309,7 @@ export const HudCard = (props: {
   /** Wired by the host; absent callback renders the summary row inert. */
   onCopySummary?: (summary: string) => void
   /** Viewport ceiling for the card's total rows (mirror of ClampedColumn's `height - 1`). The plan drops the
-   * teaching hint, then spend, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
+   * teaching hint, then spend, then the context meter, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
   maxRows?: number
 }): JSX.Element => {
   const theme = () => props.theme
@@ -422,6 +430,37 @@ export const HudCard = (props: {
             </text>
           </box>
         )}
+      </Show>
+      {/* context — the estimate against the auto-compact threshold, the same dial the boundary compaction reads. Omitted when the server cannot estimate (same contract as the dialog's context row); dropped by the row plan under a viewport ceiling, after spend. */}
+      <Show when={plan().context && g().contextSize !== undefined}>
+        {(() => {
+          const size = () => g().contextSize as number
+          const meter = () => contextMeter(size(), g().compactAtTokens, CONTEXT_BAR_CELLS, ascii())
+          const hot = () => meter().hot
+          const barFg = () => (mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
+          const trailFg = () => (mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted)
+          return (
+            <Show
+              when={g().compactAtTokens !== undefined}
+              fallback={
+                <box flexDirection="row" gap={1}>
+                  <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
+                    context
+                  </text>
+                  <text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(size())} tokens`}</text>
+                </box>
+              }
+            >
+              <box flexDirection="row" gap={1}>
+                <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
+                  context
+                </text>
+                <text wrapMode="none" flexShrink={0} fg={barFg()}>{meter().text}</text>
+                <text wrapMode="none" fg={trailFg()}>{`~${formatTokens(size())} of ${formatTokens(g().compactAtTokens as number)} · ${meter().pct}%`}</text>
+              </box>
+            </Show>
+          )
+        })()}
       </Show>
       {/* teaching empty state — freshly armed goal, gone after the first turn */}
       <Show when={hint()}>

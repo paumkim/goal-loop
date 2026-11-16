@@ -367,6 +367,54 @@ describe("context meter row", () => {
   })
 })
 
+describe("HUD card context meter row", () => {
+  test("renders the bar and the honest ratio against the auto-compact threshold", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("context")
+    expect(frame).toContain("~95k of 150k")
+    expect(frame).toContain("63%")
+    expect(frame).toContain("█".repeat(10))
+  })
+
+  test("the hot band (≥80% of threshold) renders the warning copy", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 140_000, compactAtTokens: 150_000 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("93%")
+    expect(frame).toContain("█".repeat(15))
+  })
+
+  test("under mono the bar paints the ASCII glyph, never Unicode", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono />)
+    expect(frame).toContain("#".repeat(10))
+    expect(frame).not.toContain("█")
+  })
+
+  test("a snapshot without a threshold renders the bare estimate, no bar", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: undefined })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("~95k tokens")
+    expect(frame).not.toContain("of 150k")
+  })
+
+  test("a snapshot without an estimate omits the row entirely", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).not.toContain("context")
+  })
+
+  test("under a ceiling the context row paints after spend and drops before the last-verdict row", async () => {
+    // spend + hint + context available: full = 5 + 3 = 8; at 6 the hint and spend rows have given way, context has not
+    const spendFirst = loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
+    expect(hudCardRows(spendFirst, false, 6)).toBe(6)
+    const kept = await render(() => <HudCard goal={spendFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    expect(kept).toContain("context") // spend and hint dropped; context kept
+    expect(kept).not.toContain("spend")
+    // verdicts-bearing goal without spend: at a one-row-short ceiling the context row gives way, the last-verdict row stays
+    const lastFirst = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
+    expect(hudCardRows(lastFirst, false, 6)).toBe(6)
+    const lastKept = await render(() => <HudCard goal={lastFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    expect(lastKept).not.toContain("context")
+    expect(lastKept).toContain("not met") // the last-verdict row survived
+  })
+})
+
 describe("retry watch", () => {
   test("a goal stuck at 3 failed turns renders the exact remediation in the dialog fix row", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal({ retries: 3 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
