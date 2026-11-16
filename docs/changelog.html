@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-16 03:33 UTC</code></td><td>fix(tui): reduced-color surfaces demote every verdict glyph — one ascii predicate per component drives the rail marker, mix suffix, final tally and all verdictGlyph calls (NO_COLOR/TERM=dumb no longer paint indistinguishable replacement cells); the copied-state timer is cleared on dispose</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 03:24 UTC</code></td><td>fix(tui): a failed dialog snapshot says so — the get-RPC rejection renders a faint snapshot-unavailable line instead of swallowing it</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 03:22 UTC</code></td><td>fix(tui): pinBudget measures cells on both sides — the pill pin budget is stringWidth-fed end to end, closing the code-unit/cell unit mismatch</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 03:19 UTC</code></td><td>fix(tui): the card row plan owns its ceiling end-to-end — remediation drops as the final rung (after hint, spend, last verdict) under maxRows, and the plan and painter stay in lockstep via CardRowPlan.remediation</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-16 00:30 UTC</code></td><td>feat(tui): every visible string a user wants verbatim is one click from the clipboard — the evaluator/reason row and each loop-rail iteration summary copy on click (underline on hover), toast acknowledges</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:24 UTC</code></td><td>feat(goal): the outcome toast tells the story — turns, wall time and completed iterations lead every achieved/impossible/failed/loop-complete notice</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:19 UTC</code></td><td>feat(tui): a freshly armed goal teaches the one evaluator rule — 'the evaluator reads only the transcript' (card hint row, dialog full line), gone forever after turn 1</td><td>commit</td></tr>
-<tr><td><code>2026-11-16 00:09 UTC</code></td><td>feat(tui): NO_COLOR/TERM=dumb drops the plugin's chromatic accents — weight and glyphs carry all meaning</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
