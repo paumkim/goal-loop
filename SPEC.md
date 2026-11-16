@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=811 -->
+<!-- spec-check files=43 tests=817 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2996,4 +2996,36 @@ remains the live public artifact; all work is local on dev. No docs line referen
 by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (811 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CV — the dialog footer tier is measured, not assumed (2026-11-16)
+
+Interpretation of this iteration: audit finding A1 (fresh re-audit at dev HEAD c9c08cf,
+ses_e1c980f2fffeR6lPzktJKz2sQs) — DIALOG_FOOTER_FULL_HINT (64 cells) + the noun-label buttons
+(49 cells) + 4 gap cells = 117 cells, but the tier switch flipped at 140/96; at 96–112 the row
+overflowed and painted the destructive [clear goal] past the dialog edge.
+
+296. src/hud-card.tsx: DIALOG_FOOTER_FULL_HINT/SHORT_HINT tiers are now computed from measured
+     cells (stringWidth), not constants. New exported `footerButtonCells(label)` (label + brackets
+     + 2 cells of padding = label + 4) and pure `dialogFooterTier(width, copied, pinned)`:
+     budget = floor(width) − 3 (the dialog's paddingRight={3}; the host owns its own frame);
+     wide unlocks only when FULL_HINT + roomy buttons + gaps fit the budget, roomy when SHORT_HINT
+     + roomy buttons fit, compact otherwise. The row can never paint past budget in any
+     copied/pinned state — the labels re-measure at every paint. footerClearLabel unified through
+     the same predicate. Honest consequences: roomy unlocks at 97 (default) / 96 (copied — its
+     label is narrower, the tier measures rather than assumes); 96 paints compact (was: overflowing
+     roomy); full unlocks at 120 (default) / 114 (copied) / 122 (pinned). The 80-column floor is
+     untouched.
+297. Evidence: unit layer (test/tui-hud.test.tsx: footerButtonCells arithmetic; dialogFooterTier
+     boundary table at 80/96/97/99/113/114/120/121/122/140 across the copied/pinned matrix —
+     constants derived from the arithmetic, not from the implementation), render layer (test/
+     tui-render.test.tsx: "at 96 … compact labels hold the row" and "at 100 … the noun labels
+     return"; the pinned-goal noun test moves 96→100). Snapshots: the 96-column frame re-pinned to
+     the compact paint with an honest name, one new 100-column roomy frame pinned; the obsolete
+     96-roomy frame was removed from the .snap. Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=811 to files=43 tests=817. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (817 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.

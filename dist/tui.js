@@ -1716,10 +1716,21 @@ var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy) => copied ? "\u2713 copied" : roomy ? "copy condition" : "copy";
 var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "unpin" : roomy ? "pin condition" : "pin";
+var footerButtonCells = (label) => stringWidth(label) + 4;
+var footerClearLabel = (roomy) => roomy ? "clear goal" : "clear";
+var dialogFooterTier = (width, copied, pinned) => {
+  const budget = Math.floor(width) - 3;
+  const buttons = (roomy) => footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4;
+  return {
+    wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
+    roomy: stringWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget
+  };
+};
 var DialogFooter = (props) => {
   const dimensions = useTerminalDimensions();
-  const wide = () => dimensions().width >= 140;
-  const roomy = () => dimensions().width >= 96;
+  const tier = () => dialogFooterTier(dimensions().width, props.copied(), props.pinned());
+  const wide = () => tier().wide;
+  const roomy = () => tier().wide || tier().roomy;
   return (() => {
     var _el$2 = _$createElement3("box"), _el$3 = _$createElement3("text"), _el$4 = _$createElement3("box");
     _$insertNode3(_el$2, _el$3);
@@ -1762,7 +1773,7 @@ var DialogFooter = (props) => {
         return props.theme;
       },
       get label() {
-        return roomy() ? "clear goal" : "clear";
+        return footerClearLabel(roomy());
       },
       get mono() {
         return props.mono;
