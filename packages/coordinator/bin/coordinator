@@ -765,6 +765,24 @@ do_merge_next() {
   fi
   printf '%s\n' "$spec_note"
 
+  # The changelog is pipeline-owned too: regenerate it (and page stamps) on the merged tree and
+  # commit the result on the scratch branch, so parallel agents never race docs/changelog.html.
+  if [ "${COORDINATOR_SKIP_DOCS_WATCH:-0}" != "1" ] && command -v bun >/dev/null 2>&1 && [ -f "$merge_wt/scripts/docs-watch.ts" ]; then
+    local_docs_out=$(cd "$merge_wt" && bun scripts/docs-watch.ts once 2>&1)
+    if [ $? -eq 0 ]; then
+      if ! git -C "$merge_wt" diff --quiet -- docs/; then
+        git -C "$merge_wt" add docs/ && git -C "$merge_wt" commit -q -m "docs: refresh changelog and stamps on the merged tree"
+        printf 'docs: changelog and page stamps refreshed on %s\n' "$scratch"
+      else
+        printf 'docs: changelog and stamps already accurate on the merged tree\n'
+      fi
+    else
+      printf '%s\n' "$local_docs_out" >&2
+      fail "docs-watch once failed in the merged tree; dev untouched" \
+        "fix docs freshness in the branch (bun scripts/docs-watch.ts once and commit), then re-run coordinator merge-next"
+    fi
+  fi
+
   # Preflight: say, BEFORE the gate runs, what this merge touches and which in-flight leases it invalidates.
   local touched others other ostatus overlap_found=0
   touched=$(git -C "$MAIN_ROOT" diff --name-only "$DEV_BRANCH"..."$scratch" 2>/dev/null || true)

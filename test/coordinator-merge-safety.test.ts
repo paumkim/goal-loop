@@ -319,6 +319,50 @@ process.exit(ok ? 0 : 1);
   })
 })
 
+describe("merge-owned changelog (parallel docs cannot race)", () => {
+  test("merge-next regenerates the changelog on the merged tree and commits it on the scratch branch", () => {
+    setup("true")
+    mkdirSync(join(dir, "scripts"), { recursive: true })
+    writeFileSync(
+      join(dir, "scripts", "docs-watch.ts"),
+      `#!/usr/bin/env bun
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const ROOT = join(import.meta.dir, "..");
+const f = join(ROOT, "docs", "changelog.html");
+const c = readFileSync(f, "utf8");
+writeFileSync(f, c.replace("<!-- changes:end -->", "<tr><td>merged-row</td></tr><!-- changes:end -->"));
+`,
+    )
+    mkdirSync(join(dir, "docs"), { recursive: true })
+    writeFileSync(join(dir, "docs", "changelog.html"), "<!-- changes:start -->\n<!-- changes:end -->\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "docs fixture"])
+    claimCommitSubmit("changelog-flow", { "docs/note.md": "x\n" }, "2026-11-02T10:00:00+00:00", "docs/**")
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(git(dir, ["show", "dev:docs/changelog.html"])).toContain("merged-row")
+    expect(lease("changelog-flow").status).toBe("done")
+  })
+
+  test("docs-watch failures abort the merge; dev untouched", () => {
+    setup("true")
+    mkdirSync(join(dir, "scripts"), { recursive: true })
+    writeFileSync(join(dir, "scripts", "docs-watch.ts"), "process.exit(1)\n")
+    mkdirSync(join(dir, "docs"), { recursive: true })
+    writeFileSync(join(dir, "docs", "changelog.html"), "<!-- changes:start -->\n<!-- changes:end -->\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "docs fixture broken"])
+    claimCommitSubmit("changelog-red", { "docs/note.md": "x\n" }, "2026-11-02T10:00:00+00:00", "docs/**")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    const result = run(dir, ["merge-next"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("docs-watch once failed")
+    expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
+    expect(lease("changelog-red").status).toBe("submitted")
+  })
+})
+
 describe("merge locking that survives crashes (requirement 6)", () => {
   test("stale lock reclamation prints the reclaimed holder instead of silently deleting it", () => {
     setup("true")

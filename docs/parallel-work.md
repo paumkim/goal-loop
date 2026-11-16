@@ -28,6 +28,9 @@ The rules below are enforced by the binary, not by trust.
      `worktrees/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
    - re-counts the SPEC.md `<!-- spec-check files=N tests=N -->` marker on the merged tree
      itself (`bun scripts/spec-check.ts --write`), so nobody hand-bumps counters,
+   - regenerates the changelog and page stamps on the merged tree
+     (`bun scripts/docs-watch.ts once`) and commits any change on the scratch branch,
+     so parallel agents never race docs/changelog.html,
    - prints a preflight: what the merge touches and which in-flight lease overlaps it,
    - runs the gate (`bun run check`) on the merged result. Red gate: `dev` untouched,
      exact recovery printed. Green gate: `dev` fast-forwards onto the merged result,
