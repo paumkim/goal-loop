@@ -1020,6 +1020,17 @@
       "submittedAt": "2026-11-16T01:16:41Z",
       "mergedAt": "2026-11-16T01:16:54Z",
       "mergedInto": "dev"
+    },
+    "render-script-smoke-tests": {
+      "agent": "opencode",
+      "paths": "test,SPEC.md",
+      "branch": "wt/render-script-smoke-tests",
+      "worktree": "worktrees/wt-render-script-smoke-tests",
+      "status": "done",
+      "createdAt": "2026-11-16T01:19:24Z",
+      "submittedAt": "2026-11-16T01:20:18Z",
+      "mergedAt": "2026-11-16T01:20:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
