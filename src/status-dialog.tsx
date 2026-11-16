@@ -190,10 +190,10 @@ export const StatusDialogBody = (props: {
             })()}
           </Show>
           <Show when={goal().loopEnabled}>
-            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
+            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
           </Show>
           <Show when={!goal().loopEnabled}>
-            <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} mono={mono()} />
+            <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
           </Show>
         </box>
         )}

@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=822 -->
+<!-- spec-check files=43 tests=826 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3152,3 +3152,40 @@ public artifact; all work is local on dev. No docs line references were touched 
 
 Verification (all run in the worktree): bun run compile, bun run check (822 pass, spec-check ok),
 coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream DA — the why ledger: the evaluator's most recent reasons, inline (2026-11-17)
+
+Interpretation of this iteration: the verdict trail says *what* the evaluator concluded;
+the evaluator row says why for the latest one. The three verdicts before a resume are the
+context a human needs to trust the loop — so the trail grows a why ledger underneath it.
+
+310. src/tui-history.tsx: new WhyLedger — at most the three most recent verdicts whose
+     reason is non-empty, oldest first (the trail's own direction). One row per verdict:
+     verdict glyph (CU-demoted under reduced color), verdict word, turn, relative time
+     (reusing nowMs()), reason truncated at 400 cells. The first row carries the faint
+     LABEL column ("why"); later rows keep the column for alignment. Click-to-copy when
+     the caller wires onCopyReason (button 0 only, stopPropagation, same grammar as the
+     condition/reason/summary rows: hover underlines + a faint copy hint, a transient
+     " ✓ copied"/" + copied" suffix rides the row for 1.6s). Empty-reason verdicts are
+     filtered before the limit is applied, so an empty row never spends a slot.
+311. Wiring: VerdictTrail (shared by LoopSection and HistoryBlock) gains onCopyReason and
+     nowMs and renders WhyLedger below the trail row. LoopSection and HistoryBlock gain
+     the same optional props (HistoryBlock defaults nowMs to Date.now()); status-dialog
+     threads both through, so the host's single onCopyReason wiring feeds the ledger, the
+     evaluator row and the context menu unchanged.
+312. Evidence: render layer (test/tui-render.test.tsx, 4 new tests): at most three
+     non-empty rows, newest last, glyph/verdict/turn/relative-time/reason content,
+     click-to-copy flipping the row to ✓ copied, inert clicks without onCopyReason, and
+     the empty-transcript degradation (no why rows; the trail still paints). Render layer
+     (test/__snapshots__/tui-snapshots.test.tsx.snap): the six named frames with non-empty
+     verdict history re-pin with the ledger rows under the trail (LoopSection · met,
+     StatusDialogBody · hot / paused / judged impossible, LoopSection · zero-tool,
+     LoopSection · ASCII) — 36 changed lines, nothing else moved. Marker bumped
+     files=43 tests=822 → files=43 tests=826 (4 NEW test functions; in-place .snap re-pins
+     do NOT bump the marker). Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=822 to files=43 tests=826. No version bump, no tag, no push;
+v1.1.0 remains the live public artifact; all work is local on dev. No docs line references
+were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check
+ok), coordinator submit + merge-next, bun run check on dev shown green at the end.
