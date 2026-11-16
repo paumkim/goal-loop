@@ -395,6 +395,13 @@ describe("evaluatorHint", () => {
 })
 
 describe("hudCardRows", () => {
+  test("grows by exactly one row when the snapshot carries a spend estimate", () => {
+    const spend = { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }
+    expect(hudCardRows(loopedGoal({ spend }))).toBe(7)
+    const { history: _h, spend: _s, ...bare } = loopedGoal({ spend })
+    expect(hudCardRows(bare as unknown as GoalSnapshot)).toBe(5)
+  })
+
   test("grows by one row for the last-verdict line and one for the remediation", () => {
     expect(hudCardRows(loopedGoal())).toBe(6)
     expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(8)
@@ -454,6 +461,26 @@ describe("HudCard", () => {
     expect(frame).toContain("fix")
     expect(frame).toContain("2/4")
     expect(frame).toContain("evaluator.verifyCommand")
+    await setup.renderer.destroy()
+  })
+
+  test("a snapshot with spend renders the spend row with tokens and cost", async () => {
+    const goal = loopedGoal({ spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 } })
+    const { frame, setup } = await render(() => (
+      <HudCard goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).toContain("spend")
+    expect(frame).toContain("in ·")
+    expect(frame).toContain("out")
+    expect(frame).toContain("$0.42")
+    await setup.renderer.destroy()
+  })
+
+  test("a snapshot without spend renders no spend row — the row is a promise, not a placeholder", async () => {
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).not.toContain("spend")
     await setup.renderer.destroy()
   })
 
