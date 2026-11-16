@@ -1383,6 +1383,17 @@
       "submittedAt": "2026-11-16T06:47:26Z",
       "mergedAt": "2026-11-16T06:49:40Z",
       "mergedInto": "dev"
+    },
+    "tui-failed-label": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts,src/core/wire.ts,src/core/hud.ts,src/runtime/controller.ts,test/tui-hud.test.tsx,test/controller.test.ts,test/wire.test.ts,SPEC.md,dist",
+      "branch": "wt/tui-failed-label",
+      "worktree": "worktrees/wt-tui-failed-label",
+      "status": "done",
+      "createdAt": "2026-11-16T06:51:44Z",
+      "submittedAt": "2026-11-16T06:53:56Z",
+      "mergedAt": "2026-11-16T06:54:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
