@@ -4,13 +4,15 @@
  * content: state line, wrapped condition/evaluator/spend rows, and the history sections. Everything is
  * presentational, rendered from the live snapshot passed in by the caller; theme tokens only.
  */
-import { For, Show, createSignal, onCleanup } from "solid-js"
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
 import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
+import { buildLoopDossier } from "./core/dossier.ts"
+import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
@@ -61,6 +63,8 @@ export const StatusDialogBody = (props: {
   onCopySummary?: (summary: string, version: number) => void
   /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section boldens on hover. */
   onCopyVerify?: (tail: string) => void
+  /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row boldens on hover. */
+  onCopyDossier?: (dossier: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
   onViewTranscript?: (sessionID: string) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
@@ -73,10 +77,10 @@ export const StatusDialogBody = (props: {
   onToggleExpandedOthers?: () => void
   /** When set and returning true, renders a faint "snapshot unavailable" line above the body — the dialog opened from fallback/stale cache because the live get-RPC failed. */
   noticeStale?: () => boolean
-  /** The dialog's view tab: `overview` paints the goal's state at a glance; `ledger` the iteration history at full length. Uncontrolled when absent (local state, like the elsewhere fold). Pair with onViewChange for the host-controlled arm. */
-  view?: () => "overview" | "ledger"
+  /** The dialog's view tab: `overview` paints the goal's state at a glance; `ledger` the iteration history at full length; `dossier` the whole record as rendered Markdown. Uncontrolled when absent (local state, like the elsewhere fold). Pair with onViewChange for the host-controlled arm. */
+  view?: () => "overview" | "ledger" | "dossier"
   /** Fired on tab activation. Pair with `view`. */
-  onViewChange?: (view: "overview" | "ledger") => void
+  onViewChange?: (view: "overview" | "ledger" | "dossier") => void
   /** Other sessions in this directory holding live goals (active/paused), excluding the session under dialog. Read-only awareness; the host owns session switching. Omitted/empty renders no rows. */
   others?: readonly GoalSnapshot[]
   /** Maps a session ID to its dialog-safe label (the mount passes the session slug when the host knows it). Falls back to the id suffix. */
@@ -86,10 +90,10 @@ export const StatusDialogBody = (props: {
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
   const ascii = motionDisabled(process.env) || props.mono === true
   const mono = () => props.mono === true
-  // View tabs — `overview` (default; the goal's state at a glance) | `ledger` (the iteration history at full length). TUI-local view state: the host wires view/onViewChange and the `t` chord flips the same signal; unwired, the strip works on local state (the elsewhere-fold pattern). Right/middle clicks are inert; the active tab paints base+bold — weight is the NO_COLOR contract.
-  const [localView, setLocalView] = createSignal<"overview" | "ledger">("overview")
+  // View tabs — `overview` (default; the goal's state at a glance) | `ledger` (the iteration history at full length) | `dossier` (the whole record as rendered Markdown). TUI-local view state: the host wires view/onViewChange and the `t` chord cycles the same signal; unwired, the strip works on local state (the elsewhere-fold pattern). Right/middle clicks are inert; the active tab paints base+bold — weight is the NO_COLOR contract.
+  const [localView, setLocalView] = createSignal<"overview" | "ledger" | "dossier">("overview")
   const view = () => props.view?.() ?? localView()
-  const setView = (next: "overview" | "ledger") => {
+  const setView = (next: "overview" | "ledger" | "dossier") => {
     const host = props.onViewChange
     if (host) {
       try {
@@ -101,8 +105,8 @@ export const StatusDialogBody = (props: {
       setLocalView(next)
     }
   }
-  const [viewHovered, setViewHovered] = createSignal<"overview" | "ledger" | undefined>(undefined)
-  const viewTab = (name: "overview" | "ledger") => (
+  const [viewHovered, setViewHovered] = createSignal<"overview" | "ledger" | "dossier" | undefined>(undefined)
+  const viewTab = (name: "overview" | "ledger" | "dossier") => (
     <box
       flexDirection="row"
       onMouseUp={(event) => {
@@ -119,6 +123,13 @@ export const StatusDialogBody = (props: {
     </box>
   )
   const ledger = () => view() === "ledger"
+  const dossier = () => view() === "dossier"
+  // The dossier view's payload: the same document `goal.dossier.copy` writes, memoized on the goal snapshot (the clock rides along; the host re-renders on signal changes, never on the clock alone). Undefined while the goal is absent.
+  const dossierText = createMemo(() => {
+    const goal = props.goal
+    return goal ? buildLoopDossier(goal, props.nowMs()) : undefined
+  })
+  const dossierRows = createMemo(() => (dossierText() === undefined ? [] : dossierLines(dossierText()!)))
   // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter.
   const loopPosition = (goal: GoalSnapshot): string => {
     if (!goal.loopEnabled) return ""
@@ -182,6 +193,7 @@ export const StatusDialogBody = (props: {
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
+  const [dossierHovered, setDossierHovered] = createSignal(false)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
   // The boundary-compaction marker (compaction-landed indicator on the dial the boundary compaction reads). mono drops the hue, ascii demotions live in the text.
@@ -231,6 +243,73 @@ export const StatusDialogBody = (props: {
       // Best-effort.
     }
   }
+  const copyDossier = () => {
+    const text = dossierText()
+    if (!props.onCopyDossier || text === undefined) return
+    try {
+      props.onCopyDossier(text)
+      acknowledge("dossier")
+    } catch {
+      // Best-effort.
+    }
+  }
+  // The dossier view's paint grammar: weight and tone carry meaning, never hue alone; the words are the NO_COLOR contract. Structural markers were lifted by the classifier — what paints here is the record.
+  const dossierRow = (line: { kind: DossierLineKind; text: string }): JSX.Element => {
+    switch (line.kind) {
+      case "title":
+        return (
+          <text wrapMode="word" flexShrink={0} fg={theme().text.base} attributes={TextAttributes.BOLD}>
+            {line.text}
+          </text>
+        )
+      case "section":
+        return (
+          <text wrapMode="word" flexShrink={0} fg={theme().text.base} attributes={TextAttributes.BOLD}>
+            {line.text}
+          </text>
+        )
+      case "quote":
+        return (
+          <text wrapMode="word" flexShrink={0} fg={theme().text.faint}>
+            {line.text}
+          </text>
+        )
+      case "fence":
+        return (
+          <text wrapMode="word" flexShrink={0} fg={theme().text.faint}>
+            {line.text}
+          </text>
+        )
+      case "table":
+        return (
+          <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+            {line.text}
+          </text>
+        )
+      case "bullet":
+        return (
+          <box flexDirection="row" gap={1} flexShrink={0}>
+            <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{"·"}</text>
+            <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
+              {line.text}
+            </text>
+          </box>
+        )
+      case "blank":
+        return (
+          <text wrapMode="none" flexShrink={0}>
+            {" "}
+          </text>
+        )
+      case "body":
+      default:
+        return (
+          <text wrapMode="word" flexShrink={0} fg={theme().text.base}>
+            {line.text}
+          </text>
+        )
+    }
+  }
   return (
     <box flexDirection="column" gap={1}>
       <Show when={props.noticeStale?.()}>
@@ -239,11 +318,13 @@ export const StatusDialogBody = (props: {
       <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
         {(goal) => (
         <box flexDirection="column" gap={1} paddingRight={3}>
-          {/* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */}
+          {/* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else); dossier is the whole record as rendered Markdown (strip, the state row, the copy row and the document, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */}
           <box flexDirection="row" gap={1}>
             {viewTab("overview")}
             <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
             {viewTab("ledger")}
+            <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
+            {viewTab("dossier")}
           </box>
           <box flexDirection="row" gap={2}>
             <text fg={stateColor()} attributes={TextAttributes.BOLD}>
@@ -255,7 +336,7 @@ export const StatusDialogBody = (props: {
               {goal().evaluating ? " · checking" : goal().waiting ? " · waiting" : ""}
             </text>
           </box>
-          <Show when={!ledger()}>
+          <Show when={view() === "overview"}>
             <box flexDirection="column" gap={1}>
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
@@ -378,15 +459,46 @@ export const StatusDialogBody = (props: {
           </Show>
           {/* failure is a first-class screen on the ledger too — the fix row is the one row the focus view keeps; exact remediation, never a vague warning, painted only when a remedy exists */}
           <Show when={ledger() && remediation()}>{(fix) => <FixRow theme={theme()} mono={mono} fix={fix()} />}</Show>
-          {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else */}
-          <Show when={goal().loopEnabled}>
-            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
+          {/* the dossier — the whole record as rendered Markdown: the copy row rides the same click grammar as the other rows, then the document itself, line for line, structural markers lifted into weight/tone. Everything the other views paint scatters as chrome; this is the record, whole. The scrollbox (host-owned) gives the wheel/keys their say. */}
+          <Show when={dossier()}>
+            <box flexDirection="column" gap={1}>
+              <Show
+                when={props.onCopyDossier}
+                fallback={
+                  <box flexDirection="row" gap={2}>
+                    {label("dossier")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.muted}>
+                      {"the whole record as markdown"}
+                    </text>
+                  </box>
+                }
+              >
+                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyDossier() }} onMouseOver={() => setDossierHovered(true)} onMouseOut={() => setDossierHovered(false)}>
+                  {label("dossier")}
+                  <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={dossierHovered() ? TextAttributes.BOLD : undefined}>
+                    {`the whole record as markdown${copiedSuffix("dossier")}`}
+                  </text>
+                  <Show when={dossierHovered()}>
+                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+                  </Show>
+                </box>
+              </Show>
+              <box flexDirection="column" gap={0}>
+                <For each={dossierRows()}>{(line) => dossierRow(line)}</For>
+              </box>
+            </box>
           </Show>
-          <Show when={!goal().loopEnabled}>
-            <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
+          {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else; the dossier tab does not paint it — the document carries the same bookkeeping whole */}
+          <Show when={!dossier()}>
+            <Show when={goal().loopEnabled}>
+              <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
+            </Show>
+            <Show when={!goal().loopEnabled}>
+              <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
+            </Show>
           </Show>
-          {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers. Overview only; the ledger is a history-focus view */}
-          <Show when={!ledger()}>
+          {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers. Overview only; the ledger is a history-focus view, the dossier is the record, whole */}
+          <Show when={view() === "overview"}>
           <Show when={othersLive()}>
             {(rows) => (
               <box flexDirection="column">

@@ -84,8 +84,8 @@ export default Plugin.define({
     const [foreignMoreExpanded, setForeignMoreExpanded] = createSignal(false)
     /** Loop-rail fold: controlled expand for the dialog's "N older iterations" row (keyboard parity with the click target). */
     const [iterationsExpanded, setIterationsExpanded] = createSignal(false)
-    /** View tab: `overview` paints the goal's state at a glance; `ledger` the iteration history at full length. TUI-local, like the pin registry — the strip in the body flips it, the `t` chord is the keyboard twin. */
-    const [dialogView, setDialogView] = createSignal<"overview" | "ledger">("overview")
+    /** View tab: `overview` paints the goal's state at a glance; `ledger` the iteration history at full length; `dossier` the whole record as rendered Markdown. TUI-local, like the pin registry — the strip in the body flips it, the `t` chord cycles it. */
+    const [dialogView, setDialogView] = createSignal<"overview" | "ledger" | "dossier">("overview")
     /** Set when the dialog's live get-RPC rejects; the body renders a faint "snapshot unavailable" line so stale chrome can never pass as fresh. */
     const [dialogNoticeStale, setDialogNoticeStale] = createSignal(false)
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
@@ -98,7 +98,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -846,7 +846,7 @@ export default Plugin.define({
         },
         foreignMoreVisible: () => foreignLiveRows(others(), statusDialogSession()).length > FOREIGN_ROWS_VISIBLE,
         toggleForeignMore: () => setForeignMoreExpanded((v) => !v),
-        toggleView: () => setDialogView((v) => (v === "overview" ? "ledger" : "overview")),
+        toggleView: () => setDialogView((v) => (v === "overview" ? "ledger" : v === "ledger" ? "dossier" : "overview")),
         copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
         flashCopied: flashStatusCopied,
         scrollBy: (cells) => {

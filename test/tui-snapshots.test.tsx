@@ -178,6 +178,15 @@ describe("full-frame snapshots (named layout states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
+  test("StatusDialogBody · dossier tab (the whole record in-screen — the copy row, the document's title, the objective; no dashboard chrome)", async () => {
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossier={() => {}} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
   test("StatusDialogBody · ledger tab failure-first (a hot loop never hides its remedy — the fix row rides the focus view)", async () => {
     const snapshot = await frame(
       () => <StatusDialogBody goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 2 } })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />,

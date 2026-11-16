@@ -1603,7 +1603,7 @@ describe("view tabs (overview · ledger)", () => {
   })
 
   test("clicking a tab with the host wiring flips the controlled view — the strip and the t chord ride one signal", async () => {
-    const state = { view: "overview" as "overview" | "ledger" }
+    const state = { view: "overview" as "overview" | "ledger" | "dossier" }
     const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => state.view} onViewChange={(v) => { state.view = v }} />, { width: 112, height: 44 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
@@ -1635,6 +1635,102 @@ describe("view tabs (overview · ledger)", () => {
     await setup.mockMouse.click(at!.x, at!.y)
     await setup.renderOnce()
     expect(setup.captureCharFrame()).toContain("v1/5") // the armed line never leaves
+    await setup.renderer.destroy()
+  })
+})
+
+describe("dossier tab (the whole record, in-screen — mouse-first)", () => {
+  const dossierAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "dossier")
+  const copyRowAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "the whole record as markdown")
+
+  test("clicking the dossier tab drops the dashboard rows, keeps the armed line, and paints the document — the record, not chrome", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const overview = setup.captureCharFrame()
+    expect(overview).toContain("ship the release notes")
+    expect(overview).toContain("spend")
+    const at = dossierAt(overview)
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("ship the release notes") // the condition rides the overview tab only — the document quotes the loop objective instead
+    expect(frame).toContain("make every loop iteration visible at a glance") // the objective lives on inside the document's blockquote — it IS the record
+    expect(frame).toContain("Goal loop dossier") // the document's title
+    expect(frame).toContain("Completed iterations (") // the per-iteration ledger section (the verdict table rides further down the document — asserted via the copied payload instead)
+    expect(frame).toContain("v3/5") // the armed line never leaves
+    expect(frame).toContain("the whole record as markdown") // the copy row
+    await setup.renderer.destroy()
+  })
+
+  test("clicking the copy row copies the whole record as markdown — one click, the same bytes goal.dossier.copy writes", async () => {
+    const copied: string[] = []
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={(doc) => copied.push(doc)} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const row = copyRowAt(frame)
+    expect(row).toBeDefined()
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(copied.length).toBe(1)
+    expect(copied[0]).toContain("# Goal loop dossier")
+    expect(copied[0]).toContain("make every loop iteration visible at a glance")
+    expect(copied[0]).toContain("### Iteration v1")
+    expect(copied[0]).toContain("## Verdict trail (")
+    expect(setup.captureCharFrame()).toContain("✓ copied") // the in-modal acknowledgment, same grammar as the other rows
+    await setup.renderer.destroy()
+  })
+
+  test("right click on the dossier tab is inert — the view never flips on the power button", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = dossierAt(frame)
+    await setup.mockMouse.click(at!.x, at!.y, 2)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("spend") // still the overview
+    await setup.renderer.destroy()
+  })
+
+  test("clicking back from dossier to overview restores the dashboard — the strip is a round trip", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).not.toContain("spend")
+    const back = findIn(setup.captureCharFrame(), "overview")
+    await setup.mockMouse.click(back!.x, back!.y)
+    await setup.renderOnce()
+    const restored = setup.captureCharFrame()
+    expect(restored).toContain("spend")
+    expect(restored).toContain("ship the release notes")
+    await setup.renderer.destroy()
+  })
+
+  test("the strip switches under mono too — weight carries the words, hue was never the contract", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono={true} onCopyDossier={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("Goal loop dossier")
+    expect(frame).toContain("the whole record as markdown")
+    await setup.renderer.destroy()
+  })
+
+  test("the strip's round trip on a controlled signal repaints between all three views (the signal the t chord drives on the host)", async () => {
+    const [view, setView] = createSignal<"overview" | "ledger" | "dossier">("overview")
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={view} onViewChange={(v) => setView(v)} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(findIn(setup.captureCharFrame(), "dossier")!.x, findIn(setup.captureCharFrame(), "dossier")!.y)
+    expect(view()).toBe("dossier")
+    expect(setup.captureCharFrame()).toContain("Goal loop dossier")
+    await setup.mockMouse.click(findIn(setup.captureCharFrame(), "ledger")!.x, findIn(setup.captureCharFrame(), "ledger")!.y)
+    expect(view()).toBe("ledger")
+    expect(setup.captureCharFrame()).toContain("objective")
+    expect(setup.captureCharFrame()).not.toContain("Goal loop dossier")
     await setup.renderer.destroy()
   })
 })

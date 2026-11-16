@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=45 tests=975 -->
+<!-- spec-check files=46 tests=992 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4470,3 +4470,61 @@ OSC52 path every other copy affordance uses.
      dead); wiring is verified at the source and unit-render layers only. No new click
      targets, no keyboard twin — the palette is the discovery surface, consistent with
      every unadvertised copy affordance.
+
+## Workstream DU — the dossier, in-screen: the third view (2026-11-16)
+
+Interpretation: DT shipped the dossier as a clipboard artifact — the whole record,
+one pause and paste away. But the TUI itself still could not show it; reading the
+record meant leaving for an editor. DU adds the dossier as the dialog's third view
+tab (`overview · ledger · dossier`): the same bytes `goal.dossier.copy` writes,
+rendered in-screen with the structural Markdown lifted into weight/tone (never hue
+alone, never raw syntax), one mouse click — or the `t` chord — away. No footer
+furniture (the three chords stay p/c/x); the tab strip and the chord are the two
+doors, and they ride the one controlled signal the other views use.
+
+434. src/core/dossier-view.ts — `dossierLines(markdown)`, a pure line classifier
+     (I/O-free, JSX-free, deterministic): `title` (`# `), `section` (`## `/`### `),
+     `quote` (`> `/bare `>`), `table`, `bullet` (`- `), `blank`, `body`, and `fence`
+     managed by a fence state machine that pairs on backtick runs of 3+ and treats a
+     shorter run inside a longer fence as payload (CommonMark) — so a verify tail
+     containing marker-looking lines cannot forge document structure. Line order and
+     count are preserved exactly (one input line, one output row); the two structural
+     prefixes are the only things lifted.
+435. src/status-dialog.tsx — the `dossier` view: strip + state row (the armed line
+     never leaves) + a `dossier` copy row (hover boldens, click copies the whole
+     Markdown through the new `onCopyDossier` callback, in-modal `✓ copied`
+     acknowledgment — the same grammar as every row-copy) + the document itself,
+     line for line via `dossierLines` (title base+bold, quotes/fences faint, tables
+     muted, bullets a faint `·` prefix on base text, blank rows one cell tall; the
+     document's own blank lines carry the rhythm, no extra gaps). The dashboard
+     column, the rail and the elsewhere block stay off this view — the record is the
+     screen. The copy-row affordance is omitted (plain label row paints) when the
+     host does not wire `onCopyDossier`. All navigation is left-click only; right and
+     middle clicks are inert everywhere the grammar holds.
+436. Host wiring in src/tui.tsx: `dialogView` becomes a three-way signal
+     (`overview | ledger | dossier`); the strip and the `t` chord cycle it
+     (overview → ledger → dossier → overview); `onCopyDossier` feeds the shared
+     `copyToClipboard(..., "dossier")` path (the same bytes and label as
+     `goal.dossier.copy`). The dialog-keys `t` chord title now reads "cycle the views
+     (overview, iteration ledger, dossier)"; id/bind/group unchanged — the keyboard
+     twin rides the same controlled signal as the strip.
+437. Tests: +10 pure-classifier tests in test/dossier-view.test.ts (line order/count,
+     empty document, prefix lifting, 4+ backtick fence outgrowth, CRLF parity, and
+     the builder's real output — skeleton kinds, nothing dropped or reordered, a
+     fenced verify tail's marker-looking payload); +6 mouse render tests in
+     test/tui-render.test.tsx (tab switch drops dashboard rows and keeps the armed
+     line and the objective quote, click-to-copy delivers the whole Markdown and the
+     ✓ copied ack, right-click inert, round trip back to overview, mono arm, and the
+     three-way controlled signal round trip driven by a solid signal); +1 snapshot in
+     test/tui-snapshots.test.tsx (the dossier frame at 100×44); the 9 pre-existing
+     dialog-frame snapshots regenerated — the only change is the strip row
+     (`overview · ledger` → `overview · ledger · dossier`). spec-check files=46
+     tests=992.
+438. Honest limits: the in-screen document is the record as booked — it was not
+     independently re-verified and its footer says so. Live-TUI behaviour remains
+     unverifiable (provider dead); wiring is verified at the source and the
+     headless render/snapshot layers only. The document renders unbounded inside the
+     host's scrollbox — the wheel and the `up`/`down`/`pgup`/`pgdn`/`home`/`end`
+     ladder are the host's, unchanged. No new chord, no footer furniture, no focus
+     stealing; the dossier tab is reachable by mouse (everyone) and by `t` (the
+     keyboard twin), and nowhere else.
