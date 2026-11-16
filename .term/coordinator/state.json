@@ -1900,6 +1900,17 @@
       "submittedAt": "2026-11-16T12:19:03Z",
       "mergedAt": "2026-11-16T12:20:32.000Z",
       "mergedInto": "dev"
+    },
+    "tui-turn-spend": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts src/core/wire.ts src/runtime/controller.ts src/tui-history.tsx test/controller.test.ts test/wire.test.ts test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html docs/architecture.html docs/index.html docs/runtime.html",
+      "branch": "wt/tui-turn-spend",
+      "worktree": "worktrees/wt-tui-turn-spend",
+      "status": "done",
+      "createdAt": "2026-11-16T12:22:35Z",
+      "submittedAt": "2026-11-16T12:27:10Z",
+      "mergedAt": "2026-11-16T12:27:48.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
