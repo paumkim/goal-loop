@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=803 -->
+<!-- spec-check files=43 tests=806 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2849,3 +2849,36 @@ by this workstream.
 Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (92 pass),
 bun run check green, docs-watch refresh committed alongside, coordinator submit + merge-next, and
 bun run check on dev shown green at the end.
+## Workstream CQ — the iteration rail fold is keyboard-reachable (2026-11-16)
+
+Interpretation of this iteration: craft — keyboard parity for the one remaining mouse-only chrome
+element. Pinned hostile re-audit (session ses_e1c980f2fffeR6lPzktJKz2sQs, HEAD 811136f) ranked the
+mouse-only fold row as its top slice; line-verified at the tree before claiming.
+
+280. src/tui-history.tsx (LoopSection): the fold state of the iteration rail is now controllable —
+     new optional props `expanded?: () => boolean` and `onToggleExpanded?: () => void`. Controlled
+     mode (the status dialog passes both, wired to a plugin-scope signal) lets the dialog's keymap
+     layer flip the fold without focus theft; uncontrolled mode (internal signal) is preserved for
+     every existing caller, so render tests and snapshots that mount the rail directly are byte
+     unchanged. The fold-row click path is unchanged (left button, stopPropagation, button check).
+281. src/tui.tsx + src/status-dialog.tsx: a plugin-scope `iterationsExpanded` signal resets to false
+     on dialog open (same reset cluster as the card disarm), StatusDialogBody threads the pair into
+     LoopSection, and the dialog keymap layer gains chord `x` ("Goal status: show or fold older
+     iterations"), enabled only while the dialog is open — same posture as p/c/scroll chords.
+     DIALOG_FOOTER_SHORT_HINT / DIALOG_FOOTER_FULL_HINT now advertise `x older` (hud-card.tsx);
+     the three pinned tier snapshots (80/96/140) were re-pinned to the new hint, diff verified to
+     touch only the hint cells. No new palette command — chords are the dialog's documented keyboard
+     surface, matching pin/copy; palette stays free of dialog-only actions.
+282. Evidence: render-layer for the rail behavior — three new tests in test/tui-render.test.tsx
+     (controlled expanded renders v1..vN with no click; fold-row click fires the callback without
+     self-flipping; uncontrolled mode still self-flips). The keymap chord itself is source-layer
+     (setup-scope closures cannot mount headlessly, same ceiling as all mount wiring). Snapshot
+     tier frames re-pinned. Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=803 to files=43 tests=806. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun test (806 pass), bun test --update-snapshots (diff
+review, three footer pins only), bun run compile, bun run check green, docs-watch refresh committed
+alongside, coordinator submit + merge-next, and bun run check on dev shown green at the end.

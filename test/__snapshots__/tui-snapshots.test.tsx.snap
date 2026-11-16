@@ -601,21 +601,21 @@ trail       ✓✗✓✓✗   5 of 5 verdicts
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 80 columns (short hint · compact labels) 1`] = `
-"up/down scroll · p pin · c copy                        [copy]   [pin]   [clear] 
+"up/down scroll · p pin · c copy · x older              [copy]   [pin]   [clear] 
                                                                                 
                                                                                 
 "
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 96 columns (short hint · full labels) 1`] = `
-"up/down scroll · p pin · c copy               [copy condition]   [pin condition]   [clear goal] 
+"up/down scroll · p pin · c copy · x older     [copy condition]   [pin condition]   [clear goal] 
                                                                                                 
                                                                                                 
 "
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 140 columns (full hint · full labels) 1`] = `
-"up/down scroll · pgup/pgdn · home/end · p pin · c copy                                    [copy condition]   [pin condition]   [clear goal] 
+"up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older                          [copy condition]   [pin condition]   [clear goal] 
                                                                                                                                             
                                                                                                                                             
 "

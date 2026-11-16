@@ -81,6 +81,10 @@ export const LoopSection = (props: {
   mono?: boolean
   /** When set, clicking a summary line copies that iteration's full summary. The line underlines on hover to advertise it. */
   onCopySummary?: (summary: string, version: number) => void
+  /** Controlled expand state for the iteration rail's fold row (the status dialog drives this from its keymap layer so keyboard users can expand). Uncontrolled when absent. */
+  expanded?: () => boolean
+  /** Fired on fold-row activation. Pair with `expanded` for controlled mode. */
+  onToggleExpanded?: () => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -107,7 +111,11 @@ export const LoopSection = (props: {
   const history = () => props.goal.loopHistory ?? []
   const done = () => history().length
   // Progressive disclosure: at most RAIL_VISIBLE completed iterations render; the rest fold behind one click.
-  const [showAll, setShowAll] = createSignal(false)
+  // Controlled when the caller passes `expanded` (the status dialog drives it from its keymap layer so
+  // keyboard parity holds without stealing focus); uncontrolled otherwise (snapshots/tests).
+  const [localShowAll, setLocalShowAll] = createSignal(false)
+  const showAll = () => props.expanded?.() ?? localShowAll()
+  const toggleShowAll = () => { if (props.onToggleExpanded) { props.onToggleExpanded(); return } setLocalShowAll((v) => !v) }
   const [railHovered, setRailHovered] = createSignal(false)
   const hiddenCount = () => (showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE))
   const visibleHistory = () => (showAll() ? history() : history().slice(-RAIL_VISIBLE))
@@ -240,12 +248,12 @@ export const LoopSection = (props: {
       </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced. Older iterations fold behind one click so a long loop never buries the live row. */}
       <Show when={done() > RAIL_VISIBLE}>
-        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); setShowAll((v) => !v) }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
+        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             …
           </text>
           <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.UNDERLINE : undefined}>
-            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} — click to show`}
+            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} — click or press x`}
           </text>
         </box>
       </Show>

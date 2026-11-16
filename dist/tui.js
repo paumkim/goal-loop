@@ -744,7 +744,15 @@ var LoopSection = (props) => {
   };
   const history = () => props.goal.loopHistory ?? [];
   const done = () => history().length;
-  const [showAll, setShowAll] = createSignal(false);
+  const [localShowAll, setLocalShowAll] = createSignal(false);
+  const showAll = () => props.expanded?.() ?? localShowAll();
+  const toggleShowAll = () => {
+    if (props.onToggleExpanded) {
+      props.onToggleExpanded();
+      return;
+    }
+    setLocalShowAll((v) => !v);
+  };
   const [railHovered, setRailHovered] = createSignal(false);
   const hiddenCount = () => showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE);
   const visibleHistory = () => showAll() ? history() : history().slice(-RAIL_VISIBLE);
@@ -939,7 +947,7 @@ var LoopSection = (props) => {
           if (event.button !== 0)
             return;
           event.stopPropagation();
-          setShowAll((v) => !v);
+          toggleShowAll();
         });
         _$setProp(_el$14, "onMouseOver", () => setRailHovered(true));
         _$setProp(_el$14, "onMouseOut", () => setRailHovered(false));
@@ -949,7 +957,7 @@ var LoopSection = (props) => {
         _$setProp(_el$17, "wrapMode", "none");
         _$insert(_el$17, (() => {
           var _c$ = _$memo(() => !!showAll());
-          return () => _c$() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} \u2014 click to show`;
+          return () => _c$() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} \u2014 click or press x`;
         })());
         _$effect((_p$) => {
           var _v$5 = theme().text.faint, _v$6 = theme().text.faint, _v$7 = railHovered() ? TextAttributes.UNDERLINE : undefined;
@@ -1541,6 +1549,12 @@ var StatusDialogBody = (props) => {
             },
             get onCopySummary() {
               return props.onCopySummary;
+            },
+            get expanded() {
+              return props.expanded;
+            },
+            get onToggleExpanded() {
+              return props.onToggleExpanded;
             }
           });
         }
@@ -1656,8 +1670,8 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => cardRowPlan(goal, contextOpen, maxRows).rows;
 var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
-var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy";
-var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy";
+var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
+var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy) => copied ? "\u2713 copied" : roomy ? "copy condition" : "copy";
 var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "unpin" : roomy ? "pin condition" : "pin";
 var DialogFooter = (props) => {
@@ -2450,6 +2464,7 @@ var tui_default = Plugin.define({
     const [now, setNow] = createSignal4(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
     const [statusDialogSession, setStatusDialogSession] = createSignal4(undefined);
+    const [iterationsExpanded, setIterationsExpanded] = createSignal4(false);
     const [scrollRef, setScrollRef] = createSignal4(undefined);
     const requested = new Set;
     const statusBody = (sessionID, fallback) => {
@@ -2472,7 +2487,9 @@ var tui_default = Plugin.define({
         onCopyCondition: (condition) => copyToClipboard(condition, sessionID),
         onCopyReason: (reason) => copyToClipboard(reason, sessionID, "reason"),
         onCopySummary: (summary) => copyToClipboard(summary, sessionID, "summary"),
-        mono: reducedColor
+        mono: reducedColor,
+        expanded: () => iterationsExpanded(),
+        onToggleExpanded: () => setIterationsExpanded((v) => !v)
       });
     };
     const closeStatusDialog = () => {
@@ -2502,6 +2519,7 @@ var tui_default = Plugin.define({
       setStatusEscHovered(false);
       setContextOpen(false);
       setHudSession(undefined);
+      setIterationsExpanded(false);
       refresh(sessionID).catch(() => {});
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
@@ -3155,6 +3173,17 @@ var tui_default = Plugin.define({
         run: () => {
           try {
             togglePin(statusDialogSession());
+          } catch {}
+        }
+      }, {
+        id: "goal.status.history",
+        title: "Goal status: show or fold older iterations",
+        group: "Goal",
+        bind: "x",
+        enabled: () => statusDialogOpen(),
+        run: () => {
+          try {
+            setIterationsExpanded((v) => !v);
           } catch {}
         }
       }, {
