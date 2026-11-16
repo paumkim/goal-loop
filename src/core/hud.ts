@@ -4,6 +4,7 @@
  * No I/O, no JSX; everything here is unit-tested headlessly. Presentation lives in
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
+import stringWidth from "string-width"
 import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
@@ -43,8 +44,25 @@ const stateWord = (goal: GoalSnapshot): string =>
           ? "stuck"
           : "active"
 
+/**
+ * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
+ * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with `…`
+ * when even it cannot fit; the pill never paints wider than `budget` cells.
+ */
+const fitLadder = (rungs: readonly string[], budget: number): string => {
+  for (const rung of rungs) {
+    if (stringWidth(rung) <= budget) return rung
+  }
+  return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)))
+}
+
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
-export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false): PillModel => {
+/**
+ * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
+ * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the core
+ * with `…`. An unbounded budget (the default) composes exactly the historical full label.
+ */
+export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY): PillModel => {
   const state = stateWord(goal)
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
@@ -66,9 +84,18 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii)
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined
     const compacting = pending ? ` · compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
-    return { text: `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone }
+    const core = `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}`
+    const head = ` · ${state} · ${formatDurationCoarse(elapsed)}`
+    const pipSeg = pips ? ` ${pips}` : ""
+    const text = fitLadder(
+      [`${core}${pipSeg}${head}${turns}${compacting}${retrying}`, `${core}${pipSeg}${head}${turns}${compacting}`, `${core}${pipSeg}${head}${turns}`, `${core}${pipSeg}${head}`, `${core}${head}`],
+      budget,
+    )
+    return { text, tone }
   }
-  return { text: `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}${retrying}`, tone }
+  const core = `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}`
+  const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget)
+  return { text, tone }
 }
 
 /**

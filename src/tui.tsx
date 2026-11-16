@@ -526,7 +526,12 @@ export default Plugin.define({
         const pill = () => {
           try {
             const g = goal()
-            if (g) return pillModel(g, elapsed(), motionDisabled(process.env))
+            // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
+          // minus the landing acknowledgment suffix when it rides the same line. Walks the degradation
+          // ladder (retry → compact → turns → pips) before truncating the core, so an 80-column floor
+          // never clips the state the pill exists to show.
+          const budget = Math.max(1, dimensions().width - 2 - (landingNow() ? LANDING_SUFFIX.length : 0))
+          if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
             return t ? terminalPill(t, t.elapsedMs) : undefined

@@ -484,7 +484,14 @@ var isCompactHot = (goal) => {
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
-var pillModel = (goal, elapsed, ascii = false) => {
+var fitLadder = (rungs, budget) => {
+  for (const rung of rungs) {
+    if (stringWidth(rung) <= budget)
+      return rung;
+  }
+  return truncate(rungs[rungs.length - 1], Math.max(0, Math.floor(budget)));
+};
+var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
   const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
@@ -494,9 +501,15 @@ var pillModel = (goal, elapsed, ascii = false) => {
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii);
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined;
     const compacting = pending ? ` \xB7 compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : "";
-    return { text: `${GOAL_GLYPH} loop \xB7 v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone };
+    const core = `${GOAL_GLYPH} loop \xB7 v${goal.loopIteration ?? 1}${cap}`;
+    const head = ` \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}`;
+    const pipSeg = pips ? ` ${pips}` : "";
+    const text = fitLadder([`${core}${pipSeg}${head}${turns}${compacting}${retrying}`, `${core}${pipSeg}${head}${turns}${compacting}`, `${core}${pipSeg}${head}${turns}`, `${core}${pipSeg}${head}`, `${core}${head}`], budget);
+    return { text, tone };
   }
-  return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${retrying}`, tone };
+  const core = `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}`;
+  const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget);
+  return { text, tone };
 };
 var TERMINAL_ACK_MS = 45000;
 var ACK_FLASH_MS = 1700;
@@ -2859,8 +2872,9 @@ var tui_default = Plugin.define({
         const pill = () => {
           try {
             const g = goal();
+            const budget = Math.max(1, dimensions().width - 2 - (landingNow() ? LANDING_SUFFIX.length : 0));
             if (g)
-              return pillModel(g, elapsed(), motionDisabled(process.env));
+              return pillModel(g, elapsed(), motionDisabled(process.env), budget);
             const t = terminal();
             return t ? terminalPill(t, t.elapsedMs) : undefined;
           } catch {
