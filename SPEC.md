@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=484 -->
+<!-- spec-check files=41 tests=488 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2057,3 +2057,9 @@ Marker bumped `files=41 tests=464` → `files=41 tests=465` (test-only addition;
 202. `test/tui-render.test.tsx` grows from 8 to 27 tests covering the previously unrendered branches of `src/tui-history.tsx` and `src/status-dialog.tsx`: the fresh loop with no verdicts (no trail row, `v1 of at most 5 · 0 complete`, no pace row), the uncapped loop (no `of at most` caption, no pace row), trail-window truncation past 24 verdicts (`24 of 30 verdicts` caption), rail-summary truncation past the 400-char cap (ellipsis, full text absent), blank rail summaries rendering no `│` connector, the current-iteration `last` suffix (`this turn` and `N turns since`), the two-in-a-row streak suffix in the now row, the final-tally row appearing when the cap is reached with a non-terminal status, the `⊘`/`✗` final glyphs for `impossible`/`cleared`/`failed` loops, the pending boundary-compaction row (age, `miss 2/4`, `~182k at request`), the landed compaction row (no miss counter), impossible verdicts in the non-looped counts line, the non-looped streak suffix, the `checking`/`waiting` state words in the dialog body, and the spend row omitted when no spend snapshot is present. The uncapped-loop and spend-absent tests destructure the field out rather than pass an explicit `undefined` (exactOptionalPropertyTypes-safe).
 203. No source behavior changed; the work is test-only. One honest caveat: these remain character-grid render assertions — they pin what is painted, not interaction (keypresses) behavior.
 Marker bumped `files=41 tests=465` → `files=41 tests=484` (test-only addition; no shipped file changed).
+
+## Workstream BK — smoke tests for the standalone render scripts (2026-11-15)
+
+204. New `test/render-scripts.test.ts` (4 tests) spawns `scripts/render-dialog.tsx` (default and `--buggy`) and `scripts/render-history.tsx` (default and `--empty`) exactly the way their header comments invoke them — `bun --preload @opentui/solid/preload scripts/<name>.tsx [flags]`, cwd = repo root — and asserts exit 0, the expected frame header(s) on stdout, and more than 200 non-whitespace characters (100 for the single-frame `--empty` mode) as a proxy for "the grid actually painted". Previously the scripts were verified only by manual invocation; a flag rename or a broken import would have rotted them silently outside `bun run check`. The smoke test imports no Solid code itself, so the suite's preload scoping is unaffected.
+205. No source behavior changed; the work is test-only. The subprocess assertions pin the scripts' contract (exit 0, non-empty grid, frame markers) rather than their visual output, which the 27-case `tui-render.test.tsx` suite already covers via component-level assertions.
+Marker bumped `files=41 tests=484` → `files=41 tests=488` (test-only addition; no shipped file changed).
