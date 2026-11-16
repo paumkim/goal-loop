@@ -1779,6 +1779,17 @@
       "submittedAt": "2026-11-16T10:36:57Z",
       "mergedAt": "2026-11-16T10:37:26Z",
       "mergedInto": "dev"
+    },
+    "tui-truncate-ellipsis-floor": {
+      "agent": "orchestrator",
+      "paths": "src/core/format.ts,src/core/hud.ts,test/core.test.ts,SPEC.md,dist",
+      "branch": "wt/tui-truncate-ellipsis-floor",
+      "worktree": "worktrees/wt-tui-truncate-ellipsis-floor",
+      "status": "done",
+      "createdAt": "2026-11-16T10:38:37Z",
+      "submittedAt": "2026-11-16T10:39:32Z",
+      "mergedAt": "2026-11-16T10:40:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
