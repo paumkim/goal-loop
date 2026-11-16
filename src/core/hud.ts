@@ -159,7 +159,12 @@ export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly
  * undefined — a deliberate user reset is silent, an active goal is not a completion. Same grammar
  * as `pillModel` so the jump-row text does not change shape.
  */
-export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false): PillModel | undefined => {
+/**
+ * The terminal acknowledgment pill. `budget` (cells) is optional: when provided and the armed text would
+ * exceed it, the text truncates to the budget with the surface's ellipsis instead of painting past the
+ * row. Mirrors `pillModel`'s contract — the pill never exceeds the cells it is given.
+ */
+export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget?: number): PillModel | undefined => {
   const glyph = goalGlyph(ascii)
   const tone: HudTone | undefined =
     goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined
@@ -167,12 +172,18 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean
   const word = goal.status === "achieved" ? (goal.loopEnabled ? "complete" : "achieved") : goal.status
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
   const span = `${formatDurationCoarse(elapsed)}${turns}`
-  if (goal.loopEnabled) {
-    const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
-    const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1)
-    return { text: `${glyph} loop ${word} · v${iteration}${cap} · ${span}`, tone }
+  const text = goal.loopEnabled
+    ? (() => {
+        const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
+        const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1)
+        return `${glyph} loop ${word} · v${iteration}${cap} · ${span}`
+      })()
+    : `${glyph} goal ${word} · ${span}`
+  if (budget !== undefined && Number.isFinite(budget)) {
+    const cap = Math.max(1, Math.floor(budget))
+    if (stringWidth(text) > cap) return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone }
   }
-  return { text: `${glyph} goal ${word} · ${span}`, tone }
+  return { text, tone }
 }
 
 /** Minimum cells a pinned condition needs before the pin suffix is worth rendering at all. */

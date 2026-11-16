@@ -11,6 +11,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
+import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
@@ -538,26 +539,29 @@ export default Plugin.define({
             return 0
           }
         }
+        // Declared above pill(): the pill's budget subtracts the landing acknowledgment suffix measured
+        // in CELLS (stringWidth), never in code units, and pillText() rides the same suffix. Single source.
+        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
         const pill = () => {
           try {
             const g = goal()
             // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
           // 2 cells for the open/closed caret prefix, minus the landing acknowledgment suffix when it rides
-          // the same line. Walks the degradation ladder (retry → compact → turns → pips) before truncating
-          // the core, so an 80-column floor never clips the state the pill exists to show.
-          const landing = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? landing().length : 0))
+          // the same line (cells, not .length). Walks the degradation ladder (retry → compact → turns → pips)
+          // before truncating the core, so an 80-column floor never clips the state the pill exists to show.
+          const landingSfx = () => landingSuffix(motionDisabled(process.env))
+          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? stringWidth(landingSfx()) : 0))
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
-            return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env)) : undefined
+            // Same cell budget as the live pill: the ack never paints past the row either.
+            return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env), budget) : undefined
           } catch {
             return undefined
           }
         }
         const dimensions = useTerminalDimensions()
         const pinnedNow = () => isPinned(props.sessionID)
-        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
         // The leading caret is the pill's open/closed affordance: ▾ while the card is painted, ▸ while
         // it is not. Keyed to the card actually rendering (not merely the session's hud slot), so the
         // glyph never claims “open” over a missing card. Two cells, already reserved by the label budget.

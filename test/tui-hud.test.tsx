@@ -395,6 +395,18 @@ describe("terminalPill", () => {
     expect(model?.text).toBe(`${GOAL_GLYPH} goal failed · 2m`)
   })
 
+  test("a width budget caps the acknowledgment — it never paints past the cells it is given", () => {
+    const wide = loopedGoal({ status: "achieved", loopIteration: 12, loopMaxLoops: 20, turns: 142, elapsedMs: 1000 * 60 * 60 * 30 })
+    const unicode = terminalPill(wide, 1000 * 60 * 60 * 30, false, 24)
+    expect(unicode?.text.endsWith("\u2026")).toBe(true)
+    expect(stringWidth(unicode?.text ?? "")).toBeLessThanOrEqual(24)
+    const ascii = terminalPill(wide, 1000 * 60 * 60 * 30, true, 24)
+    expect(ascii?.text.endsWith("...")).toBe(true)
+    expect(stringWidth(ascii?.text ?? "")).toBeLessThanOrEqual(24)
+    // A budget the text fits stays byte-identical, and an absent budget keeps the wire-compatible output.
+    expect(terminalPill(wide, 1000 * 60 * 60 * 30, true, 400)?.text).toBe(terminalPill(wide, 1000 * 60 * 60 * 30, true)?.text)
+  })
+
   test("live and deliberately cleared goals render no acknowledgment", () => {
     expect(terminalPill(loopedGoal({ status: "active" }), 0)).toBeUndefined()
     expect(terminalPill(loopedGoal({ status: "paused" }), 0)).toBeUndefined()
@@ -516,8 +528,9 @@ describe("footerButtonCells / dialogFooterTier", () => {
     expect(goalGlyph(true)).toBe("*")
     expect(landingSuffix(false)).toBe(LANDING_SUFFIX)
     expect(landingSuffix(true)).toBe(" · landed +")
-    // the pill budget math subtracts landingSuffix(...).length on either surface — the arms must agree
+    // the pill budget math subtracts the landing suffix in CELLS (stringWidth) on either surface — the arms must agree
     expect(landingSuffix(true).length).toBe(LANDING_SUFFIX.length)
+    expect(stringWidth(landingSuffix(true))).toBe(stringWidth(LANDING_SUFFIX))
     expect(footerCopyLabel(true, true, true)).toBe("+ copied")
     expect(footerCopyLabel(true, true, false)).toBe("✓ copied")
     // both acknowledgment labels measure the same cells — the tier arithmetic is state-independent
