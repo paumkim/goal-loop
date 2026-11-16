@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-16 01:06 UTC</code></td><td>feat(tui): the footer stops clipping and stops lying — the ≥140 full hint drops the duplicated host Esc chord and the never-fitting 'home/end start/end' wording, documents both plugin chords, and is sized to the host dialog's real inner width (~59 cells at a 160-cell terminal: the centered dialog is ~110 wide, verified live); the pin button keeps its object noun across the toggle at the roomy tier ('pin condition' ↔ 'unpin condition') so the mouse target does not shrink mid-click; footerPinLabel extracted beside footerCopyLabel</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:57 UTC</code></td><td>feat(tui): the loop rail keeps the live row in reach — beyond four completed iterations the oldest fold behind one faint click row ('… N older iterations — click to show', underlined on hover like every copy target); clicking expands the full rail and flips to 'show recent only'; index mapping through the offset keeps durations, verdict mix and wall shares exact; at ≤4 iterations the fold never renders</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:53 UTC</code></td><td>feat(tui): a failed goal names its cause — the record carries the classifier's failureLabel (set at the fatal-failure site, additive, absent on legacy records), the fix row reads 'authentication failure — /goal clear to reset' instead of a bare state word, and the wire parser tolerates/rejects it exactly like pauseCause</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:47 UTC</code></td><td>feat(tui): the card shows what the loop costs — a spend row (tokens in/out, cached, cost) under the state line, same grammar and omit-when-unknown contract as the detail view; the absolute mount anchor grows with it</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-15 18:44 UTC</code></td><td>docs: drop npm-registry specifier from the two remaining examples</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 18:42 UTC</code></td><td>feat(cli): installer registers github spec; GitHub-only release honesty</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 17:55 UTC</code></td><td>docs: GitHub install route proven end-to-end; fix docs to match (Workstream BE)</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 17:44 UTC</code></td><td>docs(install): document GitHub install routes; npm registry route pending publish</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
