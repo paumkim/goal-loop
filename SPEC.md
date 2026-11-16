@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=774 -->
+<!-- spec-check files=43 tests=776 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2617,3 +2617,31 @@ No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check green (774 tests),
 coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CI — pips demote to ASCII under NO_COLOR / TERM=dumb (2026-11-16)
+
+Interpretation of this iteration: craft details, graceful degradation. The bar and the sparkline have
+demoted to ASCII under the same predicate the reduced-motion path uses (NO_COLOR, or a TERM that cannot
+draw eighth-blocks or U+2591), but the loop pips — one ● per completed iteration, one ○ per remaining
+cap slot, on the ambient pill and the card title row — still emitted the bullet glyphs on exactly the
+terminals least likely to have them. Audit finding #6.
+
+258. src/core/history.ts: renderPips gains the standard `ascii` flag (default false, same shape as
+     renderBar/contextSparkline) and exported PIP_FILLED/PIP_EMPTY plus PIP_FILLED_ASCII (#) /
+     PIP_EMPTY_ASCII (-) constants — the same pair as the bar demotion, so the two read as one family.
+259. src/core/hud.ts: pillModel gains an `ascii` third parameter (default false; every existing call
+     site and unit test is byte-compatible) and threads it into renderPips. src/hud-card.tsx passes
+     its mono flag (the NO_COLOR / TERM=dumb mount flag) for the card title row. src/tui.tsx threads
+     motionDisabled(process.env) into the ambient pill's pillModel call. The verdict glyphs
+     (✓ ✗ ⊘) were considered and deliberately left alone this slice — they carry meaning on every
+     surface, not just the pips' two mounts.
+260. test/history.test.ts: pinRenderPips ascii cases (swap pair, Unicode default untouched).
+     test/tui-hud.test.tsx: pillModel ascii case (pips demote, label and tone untouched).
+
+Marker bumped files=43 tests=774 to files=43 tests=776. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched by
+this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test history.test.ts tui-hud.test.tsx
+(151 pass), bun run check green (776 tests), coordinator submit + merge-next, and bun run check on
+dev shown green at the end.

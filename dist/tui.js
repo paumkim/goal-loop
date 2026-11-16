@@ -311,14 +311,20 @@ function verdictCounts(history) {
 function lastVerdict(history) {
   return history.length === 0 ? undefined : history[history.length - 1];
 }
-function renderPips(done, max) {
+var PIP_FILLED = "\u25CF";
+var PIP_EMPTY = "\u25CB";
+var PIP_FILLED_ASCII = "#";
+var PIP_EMPTY_ASCII = "-";
+function renderPips(done, max, ascii = false) {
   if (typeof max !== "number" || !Number.isFinite(max))
     return "";
   const cap = Math.floor(max);
   if (cap < 1 || cap > 8)
     return "";
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap);
-  return "\u25CF".repeat(filled) + "\u25CB".repeat(cap - filled);
+  const filledGlyph = ascii ? PIP_FILLED_ASCII : PIP_FILLED;
+  const emptyGlyph = ascii ? PIP_EMPTY_ASCII : PIP_EMPTY;
+  return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled);
 }
 function paceEstimate(durations, max) {
   if (durations.length === 0)
@@ -478,14 +484,14 @@ var isCompactHot = (goal) => {
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
-var pillModel = (goal, elapsed) => {
+var pillModel = (goal, elapsed, ascii = false) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
   const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
   const tone = goal.status === "paused" ? "paused" : isRetryStuck(goal) ? "retrying" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
-    const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops);
+    const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii);
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined;
     const compacting = pending ? ` \xB7 compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : "";
     return { text: `${GOAL_GLYPH} loop \xB7 v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone };
@@ -1725,7 +1731,7 @@ var HudCard = (props) => {
     return typeof max === "number" && max > 0 ? `/${max}` : "";
   };
   const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1);
-  const pips = () => looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "";
+  const pips = () => looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops, mono()) : "";
   const title = () => looped() ? `${GOAL_GLYPH} /goal-loop \xB7 v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`;
   const borderColor = () => borderAccentColor(theme(), g().status, {
     hot: isCompactHot(g()),
@@ -2854,7 +2860,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             if (g)
-              return pillModel(g, elapsed());
+              return pillModel(g, elapsed(), motionDisabled(process.env));
             const t = terminal();
             return t ? terminalPill(t, t.elapsedMs) : undefined;
           } catch {

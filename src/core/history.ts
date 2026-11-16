@@ -94,16 +94,26 @@ export function lastVerdict(history: readonly VerdictEntry[]): VerdictEntry | un
   return history.length === 0 ? undefined : history[history.length - 1]
 }
 
+/** Unicode pip pair — the default everywhere UTF-8 renders. */
+export const PIP_FILLED = "●"
+export const PIP_EMPTY = "○"
+/** ASCII pip pair — selected under NO_COLOR / TERM=dumb, where the bullet glyphs are not guaranteed to exist. Matches the bar demotion pair so the two read as one family. */
+export const PIP_FILLED_ASCII = "#"
+export const PIP_EMPTY_ASCII = "-"
+
 /**
- * Iteration pips for the prompt-footer loop indicator: `●` per completed iteration, `○` for the
- * remaining cap. Rendered only for small, known caps (1–8) so the footer stays compact; empty otherwise.
+ * Iteration pips for the prompt-footer loop indicator: one pip per completed iteration, one per
+ * remaining cap slot. Rendered only for small, known caps (1–8) so the footer stays compact; empty
+ * otherwise. `ascii` swaps the pair for `#`/`-` under NO_COLOR / TERM=dumb.
  */
-export function renderPips(done: number, max: number | undefined): string {
+export function renderPips(done: number, max: number | undefined, ascii: boolean = false): string {
   if (typeof max !== "number" || !Number.isFinite(max)) return ""
   const cap = Math.floor(max)
   if (cap < 1 || cap > 8) return ""
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap)
-  return "●".repeat(filled) + "○".repeat(cap - filled)
+  const filledGlyph = ascii ? PIP_FILLED_ASCII : PIP_FILLED
+  const emptyGlyph = ascii ? PIP_EMPTY_ASCII : PIP_EMPTY
+  return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled)
 }
 
 /** Mean per-iteration duration (ms) and estimated remaining wall time (ms) at that pace. Undefined when no iteration has completed or the cap is unknown/exhausted. */

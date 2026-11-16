@@ -526,7 +526,7 @@ export default Plugin.define({
         const pill = () => {
           try {
             const g = goal()
-            if (g) return pillModel(g, elapsed())
+            if (g) return pillModel(g, elapsed(), motionDisabled(process.env))
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
             return t ? terminalPill(t, t.elapsedMs) : undefined

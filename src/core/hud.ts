@@ -44,7 +44,7 @@ const stateWord = (goal: GoalSnapshot): string =>
           : "active"
 
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
-export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
+export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false): PillModel => {
   const state = stateWord(goal)
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
@@ -63,7 +63,7 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
               : "armed"
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
-    const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops)
+    const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii)
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined
     const compacting = pending ? ` · compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
     return { text: `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone }
