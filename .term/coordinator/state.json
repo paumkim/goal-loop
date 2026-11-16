@@ -2218,13 +2218,24 @@
       "mergedAt": "2026-11-16T17:45:53Z",
       "mergedInto": "dev"
     },
-    "tui-card-dossier-doors": {
-      "agent": "orchestrator",
-      "paths": "src/**,test/**,SPEC.md",
-      "branch": "wt/tui-card-dossier-doors",
-      "worktree": "worktrees/wt-tui-card-dossier-doors",
-      "status": "claimed",
-      "createdAt": "2026-11-16T17:52:35Z"
+    "tui-card-dossier-doors": "done",
+    "coordinator-scratch-branch-order": {
+      "agent": "inkling",
+      "paths": "packages/coordinator/**,test/coordinator-merge-safety.test.ts",
+      "branch": "wt/coordinator-scratch-branch-order",
+      "worktree": "worktrees/wt-coordinator-scratch-branch-order",
+      "status": "submitted",
+      "createdAt": "2026-11-16T18:02:11Z",
+      "submittedAt": "2026-11-16T18:02:46Z"
+    },
+    "dz-evidence-fresh": {
+      "agent": "inkling",
+      "paths": "SPEC.md",
+      "branch": "wt/dz-evidence-fresh",
+      "worktree": "worktrees/wt-dz-evidence-fresh",
+      "status": "submitted",
+      "createdAt": "2026-11-16T18:03:15Z",
+      "submittedAt": "2026-11-16T18:03:15Z"
     }
   },
   "mergeLock": null
