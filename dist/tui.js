@@ -880,7 +880,6 @@ var LoopSection = (props) => {
     return ascii() ? ` \xB7 ${mix.met}+ ${mix.not_met}x${mix.impossible > 0 ? ` ${mix.impossible}!` : ""}` : ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}`;
   };
   const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`;
-  const shaSuffix = (entry) => entry.sha ? ` \xB7 ${entry.sha.slice(0, 7)}` : "";
   const paused = () => props.goal.status === "paused";
   const stateWord = () => {
     const s = props.goal.status;
@@ -1268,6 +1267,7 @@ var LoopSection = (props) => {
   })();
 };
 var spendSuffix = (entry) => entry.spend && entry.spend.cost > 0 ? ` \xB7 ${formatCost(entry.spend.cost)}` : "";
+var shaSuffix = (entry) => entry.sha ? ` \xB7 ${entry.sha.slice(0, 7)}` : "";
 var WhyLedger = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
@@ -1292,7 +1292,7 @@ var WhyLedger = (props) => {
   });
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT);
   const now = () => props.nowMs?.() ?? Date.now();
-  const furniture = (entry) => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${spendSuffix(entry)}`;
+  const furniture = (entry) => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${shaSuffix(entry)}${spendSuffix(entry)}`;
   const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0);
   return _$createComponent(Show, {
     get when() {
@@ -1590,6 +1590,7 @@ var StatusDialogBody = (props) => {
   const [reasonHovered, setReasonHovered] = createSignal2(false);
   const [conditionHovered, setConditionHovered] = createSignal2(false);
   const [verifyHovered, setVerifyHovered] = createSignal2(false);
+  const [othersHovered, setOthersHovered] = createSignal2(null);
   const copyCondition = (condition) => {
     try {
       props.onCopyCondition?.(condition);
@@ -2019,53 +2020,82 @@ var StatusDialogBody = (props) => {
             _$setProp2(_el$42, "gap", 2);
             _$insert2(_el$42, () => label("elsewhere"), _el$43);
             _$setProp2(_el$43, "wrapMode", "none");
-            _$insert2(_el$43, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals`);
+            _$insert2(_el$43, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 hover a row to open its transcript" : ""}`);
             _$insert2(_el$41, _$createComponent2(For2, {
               get each() {
                 return rows().slice(0, OTHERS_VISIBLE);
               },
-              children: (other) => (() => {
-                var _el$46 = _$createElement2("box"), _el$47 = _$createElement2("text"), _el$48 = _$createElement2("text"), _el$49 = _$createElement2("text"), _el$50 = _$createElement2("text");
-                _$insertNode2(_el$46, _el$47);
-                _$insertNode2(_el$46, _el$48);
-                _$insertNode2(_el$46, _el$49);
-                _$insertNode2(_el$46, _el$50);
-                _$setProp2(_el$46, "flexDirection", "row");
-                _$setProp2(_el$46, "gap", 2);
-                _$insert2(_el$46, () => label(""), _el$47);
-                _$setProp2(_el$47, "wrapMode", "none");
-                _$setProp2(_el$47, "flexShrink", 0);
-                _$insert2(_el$47, (() => {
-                  var _c$2 = _$memo2(() => !!mono());
-                  return () => _c$2() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
-                })());
-                _$setProp2(_el$48, "wrapMode", "none");
-                _$setProp2(_el$48, "flexShrink", 0);
-                _$insert2(_el$48, () => sessionTag(other.sessionID));
-                _$setProp2(_el$49, "wrapMode", "none");
-                _$setProp2(_el$49, "flexShrink", 0);
-                _$insert2(_el$49, (() => {
-                  var _c$3 = _$memo2(() => !!other.loopEnabled);
-                  return () => _c$3() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
-                })());
-                _$setProp2(_el$50, "wrapMode", "none");
-                _$setProp2(_el$50, "flexGrow", 1);
-                _$insert2(_el$50, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
-                _$effect2((_p$) => {
-                  var _v$11 = stateAccentColor(theme(), other.status, false, mono()), _v$12 = theme().text.muted, _v$13 = theme().text.faint, _v$14 = theme().text.muted;
-                  _v$11 !== _p$.e && (_p$.e = _$setProp2(_el$47, "fg", _v$11, _p$.e));
-                  _v$12 !== _p$.t && (_p$.t = _$setProp2(_el$48, "fg", _v$12, _p$.t));
-                  _v$13 !== _p$.a && (_p$.a = _$setProp2(_el$49, "fg", _v$13, _p$.a));
-                  _v$14 !== _p$.o && (_p$.o = _$setProp2(_el$50, "fg", _v$14, _p$.o));
-                  return _p$;
-                }, {
-                  e: undefined,
-                  t: undefined,
-                  a: undefined,
-                  o: undefined
-                });
-                return _el$46;
-              })()
+              children: (other) => {
+                const jump = props.onViewTranscript;
+                const hovered = () => othersHovered() === other.sessionID;
+                return (() => {
+                  var _el$46 = _$createElement2("box"), _el$47 = _$createElement2("text"), _el$48 = _$createElement2("text"), _el$49 = _$createElement2("text"), _el$50 = _$createElement2("text");
+                  _$insertNode2(_el$46, _el$47);
+                  _$insertNode2(_el$46, _el$48);
+                  _$insertNode2(_el$46, _el$49);
+                  _$insertNode2(_el$46, _el$50);
+                  _$setProp2(_el$46, "flexDirection", "row");
+                  _$setProp2(_el$46, "gap", 2);
+                  _$setProp2(_el$46, "onMouseUp", jump ? (event) => {
+                    if (event.button !== 0)
+                      return;
+                    event.stopPropagation();
+                    try {
+                      jump(other.sessionID);
+                    } catch {}
+                  } : undefined);
+                  _$setProp2(_el$46, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
+                  _$setProp2(_el$46, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
+                  _$insert2(_el$46, () => label(""), _el$47);
+                  _$setProp2(_el$47, "wrapMode", "none");
+                  _$setProp2(_el$47, "flexShrink", 0);
+                  _$insert2(_el$47, (() => {
+                    var _c$2 = _$memo2(() => !!mono());
+                    return () => _c$2() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
+                  })());
+                  _$setProp2(_el$48, "wrapMode", "none");
+                  _$setProp2(_el$48, "flexShrink", 0);
+                  _$insert2(_el$48, () => sessionTag(other.sessionID));
+                  _$setProp2(_el$49, "wrapMode", "none");
+                  _$setProp2(_el$49, "flexShrink", 0);
+                  _$insert2(_el$49, (() => {
+                    var _c$3 = _$memo2(() => !!other.loopEnabled);
+                    return () => _c$3() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
+                  })());
+                  _$setProp2(_el$50, "wrapMode", "none");
+                  _$setProp2(_el$50, "flexGrow", 1);
+                  _$insert2(_el$50, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
+                  _$insert2(_el$46, _$createComponent2(Show2, {
+                    get when() {
+                      return jump !== undefined && hovered();
+                    },
+                    get children() {
+                      var _el$51 = _$createElement2("text");
+                      _$setProp2(_el$51, "wrapMode", "none");
+                      _$setProp2(_el$51, "flexShrink", 0);
+                      _$insert2(_el$51, ascii ? "-> transcript" : "\u2192 transcript");
+                      _$effect2((_$p) => _$setProp2(_el$51, "fg", theme().text.faint, _$p));
+                      return _el$51;
+                    }
+                  }), null);
+                  _$effect2((_p$) => {
+                    var _v$11 = stateAccentColor(theme(), other.status, false, mono()), _v$12 = theme().text.muted, _v$13 = theme().text.faint, _v$14 = theme().text.muted, _v$15 = jump !== undefined && hovered() ? TextAttributes2.BOLD : undefined;
+                    _v$11 !== _p$.e && (_p$.e = _$setProp2(_el$47, "fg", _v$11, _p$.e));
+                    _v$12 !== _p$.t && (_p$.t = _$setProp2(_el$48, "fg", _v$12, _p$.t));
+                    _v$13 !== _p$.a && (_p$.a = _$setProp2(_el$49, "fg", _v$13, _p$.a));
+                    _v$14 !== _p$.o && (_p$.o = _$setProp2(_el$50, "fg", _v$14, _p$.o));
+                    _v$15 !== _p$.i && (_p$.i = _$setProp2(_el$50, "attributes", _v$15, _p$.i));
+                    return _p$;
+                  }, {
+                    e: undefined,
+                    t: undefined,
+                    a: undefined,
+                    o: undefined,
+                    i: undefined
+                  });
+                  return _el$46;
+                })();
+              }
             }), null);
             _$insert2(_el$41, _$createComponent2(Show2, {
               get when() {
@@ -3371,6 +3401,14 @@ var tui_default = Plugin.define({
         onCopyReason: (reason) => copyToClipboard(reason, sessionID, "reason"),
         onCopySummary: (summary) => copyToClipboard(summary, sessionID, "summary"),
         onCopyVerify: (tail) => copyToClipboard(tail, sessionID, "verify"),
+        onViewTranscript: (target) => {
+          try {
+            context.ui.router.navigate({
+              type: "session",
+              sessionID: target
+            });
+          } catch {}
+        },
         mono: reducedColor,
         expanded: () => iterationsExpanded(),
         onToggleExpanded: () => setIterationsExpanded((v) => !v),

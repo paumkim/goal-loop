@@ -1333,6 +1333,39 @@ describe("elsewhere block (other sessions holding live goals)", () => {
     expect(frame).not.toContain("ses_3333333333") // achieved is terminal, never listed
   })
 
+  test("a left-click on an elsewhere row asks the host to open that session's transcript route", async () => {
+    const jumps: string[] = []
+    const setup = await testRender(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} onViewTranscript={(id) => { jumps.push(id) }} />), { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "brisk-falcon")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(jumps).toEqual(["ses_1111111111"])
+    // the second other session lands on its own row — the jump carries that id, never the own session
+    const at2 = findIn(setup.captureCharFrame(), "quiet-otter")
+    expect(at2).toBeDefined()
+    await setup.mockMouse.click(at2!.x + 2, at2!.y)
+    await setup.renderOnce()
+    expect(jumps).toEqual(["ses_1111111111", "ses_2222222222"])
+    await setup.renderer.destroy()
+  })
+
+  test("right-click an elsewhere row and nothing jumps", async () => {
+    const jumps: string[] = []
+    const setup = await testRender(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} onViewTranscript={(id) => { jumps.push(id) }} />), { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = findIn(setup.captureCharFrame(), "brisk-falcon")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y, 2)
+    await setup.renderOnce()
+    expect(jumps).toEqual([])
+    await setup.renderer.destroy()
+  })
+
   test("singular noun for exactly one other live session", async () => {
     const frame = await render(() => (
       <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={[foreign[0]!]} sessionLabel={sessionLabel} />

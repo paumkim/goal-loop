@@ -65,6 +65,15 @@ describe("render script smoke tests", () => {
     expect(result.stdout).not.toContain("◎")
   }, 30_000)
 
+  test("render-dialog.tsx paints the elsewhere block (foreign live goal row, jump hint in the header)", () => {
+    const result = run("scripts/render-dialog.tsx", ["--width=100", "--height=92"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("elsewhere")
+    expect(result.stdout).toContain("hover a row to open its transcript")
+    expect(result.stdout).toContain("brisk-falcon")
+  }, 30_000)
+
   test("render-dialog.tsx paints the verify section (the gate's output on screen, ASCII glyph under mono)", () => {
     const color = run("scripts/render-dialog.tsx", ["--width=80"])
     expect(color.error).toBeUndefined()

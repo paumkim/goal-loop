@@ -133,7 +133,7 @@ const setup = await testRender(
           ? { scrollbarOptions: { visible: true }, contentOptions: { minHeight: 0 } }
           : { scrollX: false, contentOptions: { minHeight: 0 } })}
       >
-        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} onCopyVerify={() => {}} />
+        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} onCopyVerify={() => {}} onViewTranscript={() => {}} others={[{ ...goal, sessionID: "ses_render_foreign", id: "goal_render_foreign", condition: "ship the release notes before friday" }]} sessionLabel={(id) => (id === "ses_render_foreign" ? "brisk-falcon" : id)} />
       </scrollbox>
       <DialogFooter
         theme={theme}

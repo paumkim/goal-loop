@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=912 -->
+<!-- spec-check files=44 tests=918 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4066,3 +4066,43 @@ the controller persists a display-safe tail on the record at every gate exit; th
      test-render + snapshot layers; live TUI remains unverifiable (provider dead). Follow-ups
      NOT done: the pill/card do not carry the tail (level (c) only, by design); HudCard's optional
      onCopyVerify passes nothing new; the tail is not shown for never-configured gates.
+
+
+## Workstream DL — the per-verdict ledger gains its commit sha, elsewhere rows gain a transcript jump (2026-11-16)
+
+Interpretation of this iteration: two literal clauses of the armed design bar were unmet at HEAD.
+(1) The narrative ledger asks for "commit sha" per row — the engine stamped `LoopEntry.sha` at
+loop advance and the loop rail painted it, but the per-verdict `VerdictEntry` carried no sha at
+all, so the why ledger (glyph, verdict, turn, time, spend, reason) ended at the bridge between a
+verdict and the commit it judged. (2) Mouse-first ergonomics asks for a clickable "view
+transcript" affordance — absent everywhere on the TUI; the closest surface is the dialog's
+"elsewhere" block listing other sessions' live goals, read-only by design comment, clickable
+nowhere. Both are additive, no behavior change, no new engine contract.
+
+394. src/core/types.ts — VerdictEntry gains additive `sha?: string` (absent on records written
+     before this change, outside a repository, or when HEAD cannot be read — never guessed,
+     never fabricated; version stays 1, the store round-trips it opaquely).
+395. src/runtime/controller.ts — the per-turn history.push stamps the same guarded HEAD sha the
+     loop advance stamps (findRepository + headSha, try/catch to undefined).
+396. src/tui-history.tsx — WhyLedger furniture appends ` · <sha7>` (one shared module-level
+     shaSuffix; the rail's duplicate component-local helper was deduplicated into it). Furniture
+     pin-width math is unchanged (stringWidth max over visible rows), so reasons stay aligned.
+     Width 100/44 snapshot: `why  ✓ met · turn 1 · 26m ago · b1e4d7a  done` etc. — captured.
+397. src/status-dialog.tsx — StatusDialogBody gains optional `onViewTranscript?: (sessionID) =>
+     void`. When wired: the elsewhere row answers left-click with
+     `ui.router.navigate({ type: "session", sessionID })` (host-supported route; right/middle
+     clicks do nothing; the condition boldens + a faint `→ transcript` tag appears on hover;
+     the header line gains "· hover a row to open its transcript"). When unwired: rows paint
+     exactly as before (zero drift on existing elsewhere paint tests). No key chords; focus
+     stays with the host prompt (orthogonal to the CV dialog-keymap decision).
+     src/tui.tsx wires the callback in the dialog mount with its own try/catch guard.
+398. Evidence: bun test 918/918. +2 engine (sha stamped in a bare fixture repo; sha absent in a
+     bare temp dir — the harness's C:/work/project sentinel resolves inside this checkout on
+     Linux, so non-repo tests must use a real temp dir), +2 interactive (left-click elsewhere
+     row jumps with that row's sessionID; right-click jumps nowhere), +1 snapshot (why ledger
+     rows carry shas, width 100/44), +1 smoke pin (render-dialog.tsx --width=100 --height=92
+     paints elsewhere header + foreign row "brisk-falcon"). Snapshot drift: none.
+     Follow-ups NOT done: hover-tag is the only affordance hint (idle rows unchanged by design;
+     a permanent tag costs ~14 cells at the 80-col floor); no transcript jump for the own
+     session (it navigates to the route you are already on — noise); the pill carries no sha
+     (level (c) only, by design).
