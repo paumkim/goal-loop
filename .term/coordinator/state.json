@@ -1295,6 +1295,17 @@
       "submittedAt": "2026-11-16T05:44:49Z",
       "mergedAt": "2026-11-16T05:45:04Z",
       "mergedInto": "dev"
+    },
+    "tui-pause-firstclass": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts,src/core/wire.ts,src/core/hud.ts,src/runtime/controller.ts,test/tui-hud.test.tsx,test/wire.test.ts,test/controller.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-pause-firstclass",
+      "worktree": "worktrees/wt-tui-pause-firstclass",
+      "status": "done",
+      "createdAt": "2026-11-16T05:51:45Z",
+      "submittedAt": "2026-11-16T05:56:50Z",
+      "mergedAt": "2026-11-16T05:57:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
