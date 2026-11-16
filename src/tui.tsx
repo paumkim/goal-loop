@@ -9,7 +9,7 @@
  */
 import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes, type ColorInput } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
@@ -18,7 +18,7 @@ import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseListGoalOutput, parseNotice } from "./core/wire.ts"
@@ -626,7 +626,9 @@ export default Plugin.define({
           const tone = pill()?.tone
           if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible") return context.theme.text.feedback.warning.base
           if (tone === "failed") return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
-          if (tone === "achieved" || tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
+          if (tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
+          // The completion flash speaks the ledger grammar: worked met flashes green on hosts exposing success, satisfied-at-HEAD stays info blue — absent data never upgrades the paint.
+          if (tone === "achieved") return achievedAckAccentColor(context.theme as unknown as NeutralTheme<ColorInput>, (terminal() ?? goal())?.history, false)
           return context.theme.text.muted
         }
         const cardFor = () => {

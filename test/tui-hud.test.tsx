@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -476,6 +476,27 @@ describe("accent mappers (reduced color)", () => {
     // impossible keeps the amber family at zero tools; absent toolCalls reads as "unknown" — the pre-toolCalls path, never fabricated as work or inspection
     expect(verdictEntryAccentColor(theme, { verdict: "impossible", toolCalls: 0 }, false)).toBe(theme.text.feedback.warning.base)
     expect(verdictEntryAccentColor(withSuccess, { verdict: "met" }, false)).toBe(withSuccess.text.feedback.info.base)
+  })
+
+  test("achievedAckAccentColor paints the completion flash green only on measured work", () => {
+    const withSuccess = { ...theme, text: { ...theme.text, feedback: { ...theme.text.feedback, success: { base: RGBA.fromHex("#3fb950") } } } } as HudCardTheme
+    const worked = [{ verdict: "not_met" as const, toolCalls: 4 }, { verdict: "met" as const, toolCalls: 9 }]
+    const head = [{ verdict: "met" as const, toolCalls: 0 }]
+    const unknown = [{ verdict: "met" as const }]
+    // worked met flashes green; hosts without a success token paint exactly the prior info blue
+    expect(achievedAckAccentColor(withSuccess, worked, false)).toBe(withSuccess.text.feedback.success!.base)
+    expect(achievedAckAccentColor(theme, worked, false)).toBe(theme.text.feedback.info.base)
+    // already satisfied at HEAD stays info blue even on a success-capable host
+    expect(achievedAckAccentColor(withSuccess, head, false)).toBe(theme.text.feedback.info.base)
+    // unknown toolCalls is never upgraded to green — the pre-toolCalls path
+    expect(achievedAckAccentColor(withSuccess, unknown, false)).toBe(withSuccess.text.feedback.info.base)
+    // absent or empty history stays info blue
+    expect(achievedAckAccentColor(withSuccess, undefined, false)).toBe(withSuccess.text.feedback.info.base)
+    expect(achievedAckAccentColor(withSuccess, [], false)).toBe(withSuccess.text.feedback.info.base)
+    // a non-met final verdict (cleared-then-achieved shapes) stays info blue
+    expect(achievedAckAccentColor(withSuccess, [{ verdict: "impossible" as const, toolCalls: 3 }], false)).toBe(withSuccess.text.feedback.info.base)
+    // mono paints base — met's mono posture in the accent mappers
+    expect(achievedAckAccentColor(withSuccess, worked, true)).toBe(theme.text.base)
   })
 
   test("verdictEntryAccentColor under mono drops the hue — the glyph shape carries the signal", () => {
