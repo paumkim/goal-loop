@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=48 tests=1071 -->
+<!-- spec-check files=48 tests=1078 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4822,3 +4822,67 @@ printed path, the winner lands green, and the loser's uncommitted bytes are reco
 `refs/coordinator/saved/<slug>-<ts>` after the merge pipeline removes its worktree. spec-check files=47
 tests=1049.
 
+## Workstream DD — the card's menu grows the dossier's two doors; the dossier remembers its re-anchors (2026-11-16)
+
+Interpretation: the dossier had two doors (the palette's `goal.dossier.copy` /
+`goal.dossier.export`, and the dialog's copy / save rows) but the right-click surface —
+the mouse-first menu where a stuck loop is un-stuck — never mentioned the record; and
+the record itself printed nothing about the loop's own re-anchors, though the card painted
+the count as ⟲ N since DY. DD closes both gaps without a new effect vocabulary: the card's
+context menu grows two rows that funnel to the same two doors, and the dossier grows a
+`## Re-anchor` section that reports the count and only the count.
+
+450. HUD card context menu — six rows, fixed order, destructive last: `copy dossier` and
+     `save dossier file` insert between `copy latest summary` and `clear goal`. The rows
+     always paint (fixed geometry keeps the absolute mount's anchor stable); they are
+     enabled iff the host wires BOTH dossier doors — the two-door wiring contract, the same
+     grammar as the reason/summary rows (absent payload or absent wiring renders the row
+     faint and swallows the press — never a trap). `src/core/hud.ts` owns the whole model:
+     `ContextMenuId` widened to "copy-dossier" / "save-dossier", the two constants, the
+     predicate `hasDossier`, and the fixed row order. The keymap's arrow-key selection
+     (`nextMenuIndex`) skips the inert dossier rows exactly as it skips disabled reason/
+     summary rows — no special cases. The card's anchor (`hudCardRows`,
+     `CONTEXT_MENU_ROWS` 4 → 6) grows by exactly the two new rows; under a viewport ceiling
+     the menu still never drops. `hud-card.tsx` maps the two ids to two host callbacks
+     (`onCopyDossier` / `onSaveDossier`), both `menuAction`-wrapped (the menu collapses,
+     the same as every row). Unwired, both rows render faint and do nothing.
+451. Host wiring (`src/tui.tsx`): the card always receives both callbacks. Mouse and
+     keyboard arms produce the same bytes through the same doors as the palette and the
+     dialog — `buildLoopDossier(goal, Date.now())` through `copyToClipboard(…, "dossier")`,
+     and `exportDossier` (the one O_EXCL write funnel, unchanged). The keyboard arm's
+     eligibility mirrors the mouse predicate (`Boolean(goal)`; the host wires both doors
+     whenever a goal exists — one source of truth at the call site, documented at the
+     predicate). Footer chords stay p/c/x; nothing new is bound.
+452. The dossier records its re-anchors. `## Re-anchor` sits between `## Boundary compaction`
+     and `## Verify gate` — the two plumbing chapters stay neighbors, one section per thing
+     the system does to the loop behind its back. A finite positive `reanchorCount` prints
+     `- Re-anchors armed: N` plus the honesty line verbatim: the record keeps the count and
+     nothing else; which turns were re-anchored and what the re-anchored prompt said are not
+     logged anywhere; nothing is re-verified. Absent, zero, negative, NaN and ±Infinity
+     render the absent line ("No post-compaction re-anchors on this record.") — a missing
+     measurement is printed as missing, never as a guess. A fractional count renders verbatim.
+453. Outline rail (DV contract): the hand-label table gains `["re-anchor", "re-anchor"]`
+     (9 columns; the ≤ 12-column contract holds). The rail's partition rule is untouched —
+     the section chips paint the document whole, one more chip, the same grammar.
+454. Tests: +4 pure dossier tests (count present paints the number and the count-only
+     honesty line; the section's position between the two plumbing chapters; absent/zero/
+     negative/NaN/±Infinity all paint the absent line; a fractional count renders verbatim);
+     `tui-hud.test.tsx` re-pinned to the six-row model (fixed order, both dossier rows
+     enabled predicate, clear stays last and sole danger, `nextMenuIndex` skips dossier rows
+     when unwired and honors them when wired, the viewport-ceiling test's menu arithmetic
+     4 → 6, the keyboard-selection render test's clear row index 3 → 5); `tui-render.test.tsx`
+     MenuSpies widened, "all six rows" pinned, +3 mouse tests (copy dossier fires the door and
+     closes the menu, save dossier file fires the file door and closes the menu, and a
+     half-wired host — only `onCopyDossier` wired — renders BOTH rows inert, clicks are
+     swallowed, the menu stays open: the two-door contract is proven, not asserted); the
+     named "dossier tab with the outline rail" snapshot re-recorded (one more `re-anchor`
+     chip) and the "context menu open" frame re-recorded, snapshot test retitled to "all six
+     rows live". package-integrity unchanged at 48 packed files (no new shipped module —
+     the doors and the section ride existing files). spec-check files=48 tests=1054.
+455. Honest limits: the menu rows write and copy the record as it exists — never re-verified,
+     never reformatted, no elisions; the `## Re-anchor` section reports the count and invents
+     no per-turn anchor history (none exists in the record, and none was invented); the file
+     door writes only on explicit user action into the host's cwd, O_EXCL, never overwrites;
+     the two dossier rows are the same artifact as the dialog's rows — one record, four doors;
+     live-TUI behaviour remains unverifiable from this seat; wiring is verified at the source
+     and the headless render layers only.

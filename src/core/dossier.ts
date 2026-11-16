@@ -106,6 +106,23 @@ const verdictProse = (history: readonly VerdictEntry[]): string[] => {
   return lines
 }
 
+/**
+ * Re-anchor honesty: the persisted record keeps only the count (the card paints it as `⟲ N`).
+ * Which turns were re-anchored and what the re-anchored prompt said are not logged anywhere, so
+ * the section says exactly that — a count is reported, never dressed up as a history. Non-finite or
+ * sub-zero counts (legacy/corrupt snapshots) render as the absent case, never as a guess.
+ */
+const reanchorLines = (goal: GoalSnapshot): string[] => {
+  const count = goal.reanchorCount
+  if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) {
+    return ["No post-compaction re-anchors on this record. (The record keeps only the count; a re-anchor re-states the objective through the system prompt after a boundary compaction so the loop does not drift.)"]
+  }
+  return [
+    `- Re-anchors armed: ${count}`,
+    "- What is recorded: the count alone. Which turns were re-anchored and what the re-anchored prompt said are not logged anywhere; nothing here was re-verified.",
+  ]
+}
+
 const boundaryCompactLines = (goal: GoalSnapshot, nowMs: number): string[] => {
   const compact = goal.loopCompact
   if (!compact) {
@@ -247,6 +264,12 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
   lines.push("## Boundary compaction")
   lines.push("")
   lines.push(...boundaryCompactLines(goal, nowMs))
+  lines.push("")
+
+  // ---- Re-anchor (the count the card paints as ⟲ N, said once in the record)
+  lines.push("## Re-anchor")
+  lines.push("")
+  lines.push(...reanchorLines(goal))
   lines.push("")
 
   // ---- Verify gate

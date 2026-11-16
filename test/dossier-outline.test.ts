@@ -232,6 +232,7 @@ describe("dossierOutline on a real buildLoopDossier document", () => {
       "iterations",
       "verdicts",
       "compaction",
+      "re-anchor",
       "verify",
       "totals",
     ])

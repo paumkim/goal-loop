@@ -318,7 +318,7 @@ describe("full-frame snapshots (waiting and remediation states)", () => {
   })
 })
 describe("full-frame snapshots (chrome tiers and reduced-color frames)", () => {
-  test("HudCard · context menu open — all four rows live", async () => {
+  test("HudCard · context menu open — all six rows live", async () => {
     const snapshot = await frame(
       () => <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} onCopyReason={() => {}} onCopySummary={() => {}} contextOpen onToggleContext={() => {}} onCloseMenu={() => {}} />,
       80,

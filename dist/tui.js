@@ -648,6 +648,16 @@ var verdictProse = (history) => {
   }
   return lines;
 };
+var reanchorLines = (goal) => {
+  const count = goal.reanchorCount;
+  if (typeof count !== "number" || !Number.isFinite(count) || count <= 0) {
+    return ["No post-compaction re-anchors on this record. (The record keeps only the count; a re-anchor re-states the objective through the system prompt after a boundary compaction so the loop does not drift.)"];
+  }
+  return [
+    `- Re-anchors armed: ${count}`,
+    "- What is recorded: the count alone. Which turns were re-anchored and what the re-anchored prompt said are not logged anywhere; nothing here was re-verified."
+  ];
+};
 var boundaryCompactLines = (goal, nowMs) => {
   const compact = goal.loopCompact;
   if (!compact) {
@@ -772,6 +782,10 @@ function buildLoopDossier(goal, nowMs) {
   lines.push("");
   lines.push(...boundaryCompactLines(goal, nowMs));
   lines.push("");
+  lines.push("## Re-anchor");
+  lines.push("");
+  lines.push(...reanchorLines(goal));
+  lines.push("");
   lines.push("## Verify gate");
   lines.push("");
   lines.push(...verifyLines(goal));
@@ -872,11 +886,15 @@ var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
 var CONTEXT_MENU_COPY_CONDITION = "copy-condition";
 var CONTEXT_MENU_COPY_REASON = "copy-reason";
 var CONTEXT_MENU_COPY_SUMMARY = "copy-summary";
+var CONTEXT_MENU_COPY_DOSSIER = "copy-dossier";
+var CONTEXT_MENU_SAVE_DOSSIER = "save-dossier";
 var CONTEXT_MENU_CLEAR = "clear";
 var contextMenuRows = (args) => [
   { id: CONTEXT_MENU_COPY_CONDITION, text: "copy condition", enabled: true, danger: false },
   { id: CONTEXT_MENU_COPY_REASON, text: "copy evaluator reason", enabled: args.hasReason, danger: false },
   { id: CONTEXT_MENU_COPY_SUMMARY, text: "copy latest summary", enabled: args.hasSummary, danger: false },
+  { id: CONTEXT_MENU_COPY_DOSSIER, text: "copy dossier", enabled: args.hasDossier, danger: false },
+  { id: CONTEXT_MENU_SAVE_DOSSIER, text: "save dossier file", enabled: args.hasDossier, danger: false },
   { id: CONTEXT_MENU_CLEAR, text: "clear goal", enabled: true, danger: true }
 ];
 var nextMenuIndex = (index, delta, rows) => {
@@ -1141,6 +1159,7 @@ var HAND_LABELS = [
   ["completed iterations", "iterations"],
   ["verdict trail", "verdicts"],
   ["boundary compaction", "compaction"],
+  ["re-anchor", "re-anchor"],
   ["verify gate", "verify"],
   ["totals", "totals"]
 ];
@@ -3204,7 +3223,7 @@ var Hint = (props) => (() => {
   _$effect3((_$p) => _$setProp3(_el$, "fg", props.theme.text.faint, _$p));
   return _el$;
 })();
-var CONTEXT_MENU_ROWS = 4;
+var CONTEXT_MENU_ROWS = 6;
 var CARD_WIDTH_MIN = 52;
 var CARD_WIDTH_MAX = 88;
 var cardWidth = (terminalWidth) => {
@@ -3961,7 +3980,8 @@ var HudCard = (props) => {
         _$setProp3(_el$21, "marginTop", 0);
         _$insert3(_el$21, () => contextMenuRows({
           hasReason: Boolean(g().reason && props.onCopyReason),
-          hasSummary: Boolean(latestSummary() && props.onCopySummary)
+          hasSummary: Boolean(latestSummary() && props.onCopySummary),
+          hasDossier: Boolean(props.onCopyDossier && props.onSaveDossier)
         }).map((row, index) => {
           const gutter = index === 0 ? "menu" : "";
           const selected = () => (props.menuSelected?.() ?? 0) === index;
@@ -4038,6 +4058,50 @@ var HudCard = (props) => {
                     if (s)
                       props.onCopySummary?.(s);
                   });
+                }
+              });
+            case CONTEXT_MENU_COPY_DOSSIER:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(() => props.onCopyDossier?.());
+                }
+              });
+            case CONTEXT_MENU_SAVE_DOSSIER:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(() => props.onSaveDossier?.());
                 }
               });
             case CONTEXT_MENU_CLEAR:
@@ -4994,12 +5058,14 @@ var tui_default = Plugin.define({
         const goal = sessionID ? entries()[sessionID]?.goal : undefined;
         return contextMenuRows({
           hasReason: Boolean(goal?.reason),
-          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary)
+          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary),
+          hasDossier: Boolean(goal)
         });
       } catch {
         return contextMenuRows({
           hasReason: false,
-          hasSummary: false
+          hasSummary: false,
+          hasDossier: false
         });
       }
     };
@@ -5027,6 +5093,13 @@ var tui_default = Plugin.define({
               copyToClipboard(summary, sessionID, "summary");
             break;
           }
+          case CONTEXT_MENU_COPY_DOSSIER:
+            if (goal)
+              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
+            break;
+          case CONTEXT_MENU_SAVE_DOSSIER:
+            exportDossier(sessionID, goal);
+            break;
           case CONTEXT_MENU_CLEAR:
             setContextOpen(false);
             setHudSession(undefined);
@@ -5358,6 +5431,12 @@ var tui_default = Plugin.define({
                   },
                   onCopyReason: (reason) => copyToClipboard(reason, props.sessionID, "reason"),
                   onCopySummary: (summary) => copyToClipboard(summary, props.sessionID, "summary"),
+                  onCopyDossier: () => {
+                    const g = entries()[props.sessionID]?.goal;
+                    if (g)
+                      copyToClipboard(buildLoopDossier(g, Date.now()), props.sessionID, "dossier");
+                  },
+                  onSaveDossier: () => exportDossier(props.sessionID, entries()[props.sessionID]?.goal),
                   get pinned() {
                     return pinnedNow();
                   },

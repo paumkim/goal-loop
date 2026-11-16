@@ -828,6 +828,8 @@ describe("HUD card context menu (right-click)", () => {
     onCopyCondition?: (condition: string) => void
     onCopyReason?: (reason: string) => void
     onCopySummary?: (summary: string) => void
+    onCopyDossier?: () => void
+    onSaveDossier?: () => void
   }
 
   const renderCardHarness = async (goal: GoalSnapshot, spies: MenuSpies = {}) => {
@@ -847,6 +849,8 @@ describe("HUD card context menu (right-click)", () => {
           onCloseMenu={() => setOpen(false)}
           onCopyReason={spies.onCopyReason ? (r) => spies.onCopyReason?.(r) : undefined}
           onCopySummary={spies.onCopySummary ? (s) => spies.onCopySummary?.(s) : undefined}
+          onCopyDossier={spies.onCopyDossier ? () => spies.onCopyDossier?.() : undefined}
+          onSaveDossier={spies.onSaveDossier ? () => spies.onSaveDossier?.() : undefined}
         />
       )
     }
@@ -862,7 +866,7 @@ describe("HUD card context menu (right-click)", () => {
     await setup.renderOnce()
   }
 
-  test("right-click on the card toggles the menu; all four rows render, fixed in position", async () => {
+  test("right-click on the card toggles the menu; all six rows render, fixed in position", async () => {
     const setup = await renderCardHarness(loopedGoal(), { onCopyReason: () => {}, onCopySummary: () => {} })
     const closed = setup.captureCharFrame()
     expect(closed).not.toContain("copy evaluator reason")
@@ -872,6 +876,8 @@ describe("HUD card context menu (right-click)", () => {
     expect(opened).toContain("copy condition")
     expect(opened).toContain("copy evaluator reason")
     expect(opened).toContain("copy latest summary")
+    expect(opened).toContain("copy dossier")
+    expect(opened).toContain("save dossier file")
     expect(opened).toContain("clear goal")
     await rightClickCard(setup, opened)
     expect(setup.captureCharFrame()).not.toContain("copy evaluator reason")
@@ -904,6 +910,56 @@ describe("HUD card context menu (right-click)", () => {
     await setup.mockMouse.click(at!.x + 2, at!.y)
     await setup.renderOnce()
     expect(copied).toBe("Trail renders up to 24 verdicts.")
+    await setup.renderer.destroy()
+  })
+
+  test("copy dossier fires the dossier door and closes the menu", async () => {
+    let copied = 0
+    const setup = await renderCardHarness(loopedGoal(), { onCopyDossier: () => { copied += 1 }, onSaveDossier: () => {} })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const at = findIn(opened, "copy dossier")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe(1)
+    expect(setup.captureCharFrame()).not.toContain("copy dossier")
+    await setup.renderer.destroy()
+  })
+
+  test("save dossier file fires the file door and closes the menu", async () => {
+    let saved = 0
+    const setup = await renderCardHarness(loopedGoal(), { onCopyDossier: () => {}, onSaveDossier: () => { saved += 1 } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const at = findIn(opened, "save dossier file")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(saved).toBe(1)
+    expect(setup.captureCharFrame()).not.toContain("save dossier file")
+    await setup.renderer.destroy()
+  })
+
+  test("dossier rows stay inert unless the host wires both doors — a half-wired host traps nobody", async () => {
+    let copied = 0
+    let saved = 0
+    const setup = await renderCardHarness(loopedGoal(), { onCopyDossier: () => { copied += 1 } }) // save door unwired
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const copyAt = findIn(opened, "copy dossier")
+    const saveAt = findIn(opened, "save dossier file")
+    expect(copyAt).toBeDefined()
+    expect(saveAt).toBeDefined()
+    await setup.mockMouse.click(copyAt!.x + 2, copyAt!.y)
+    await setup.mockMouse.click(saveAt!.x + 2, saveAt!.y)
+    await setup.renderOnce()
+    expect(copied).toBe(0)
+    expect(saved).toBe(0)
+    expect(setup.captureCharFrame()).toContain("save dossier file") // the menu stays open; nothing fired
     await setup.renderer.destroy()
   })
 

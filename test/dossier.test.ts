@@ -53,6 +53,40 @@ const loopedGoal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => ({
   ...overrides,
 })
 
+describe("buildLoopDossier — the Re-anchor section", () => {
+  test("a record that re-anchored paints the count, says the count is all that is recorded, and never invents a history", () => {
+    const doc = buildLoopDossier(loopedGoal({ reanchorCount: 3 }), now)
+    expect(doc).toContain("## Re-anchor")
+    expect(doc).toContain("- Re-anchors armed: 3")
+    expect(doc).toContain("What is recorded: the count alone")
+    expect(doc).not.toContain("Re-anchors armed: undefined")
+  })
+
+  test("the section sits between Boundary compaction and Verify gate — the two plumbing chapters stay neighbors", () => {
+    const doc = buildLoopDossier(loopedGoal({ reanchorCount: 1 }), now)
+    const compact = doc.indexOf("## Boundary compaction")
+    const anchor = doc.indexOf("## Re-anchor")
+    const verify = doc.indexOf("## Verify gate")
+    expect(compact).toBeGreaterThanOrEqual(0)
+    expect(anchor).toBeGreaterThan(compact)
+    expect(verify).toBeGreaterThan(anchor)
+  })
+
+  test("absent, zero, negative and non-finite counts all render the honest absent line — never a number that was not recorded", () => {
+    for (const bad of [undefined, 0, -2, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const doc = buildLoopDossier(loopedGoal({ reanchorCount: bad }), now)
+      expect(doc).toContain("## Re-anchor")
+      expect(doc).toContain("No post-compaction re-anchors on this record.")
+      expect(doc).not.toContain("- Re-anchors armed:")
+    }
+  })
+
+  test("a fractional count renders verbatim — the record is quoted, never re-rounded", () => {
+    const doc = buildLoopDossier(loopedGoal({ reanchorCount: 2.5 }), now)
+    expect(doc).toContain("- Re-anchors armed: 2.5")
+  })
+})
+
 describe("buildLoopDossier", () => {
   test("renders the loop's spine: objective, armed state, iterations, verdicts, totals", () => {
     const doc = buildLoopDossier(loopedGoal(), now)
