@@ -2065,6 +2065,17 @@
       "submittedAt": "2026-11-16T14:23:17Z",
       "mergedAt": "2026-11-16T14:25:37Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-overflow-wheel": {
+      "agent": "orchestrator",
+      "paths": "src/status-dialog.tsx src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
+      "branch": "wt/tui-dialog-overflow-wheel",
+      "worktree": "worktrees/wt-tui-dialog-overflow-wheel",
+      "status": "done",
+      "createdAt": "2026-11-16T14:33:53Z",
+      "submittedAt": "2026-11-16T14:40:15Z",
+      "mergedAt": "2026-11-16T14:42:11Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
