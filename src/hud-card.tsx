@@ -119,9 +119,9 @@ export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
   Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
 
-// Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the two plugin chords.
-export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy"
-export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · c copy"
+// Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the three plugin chords.
+export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older"
+export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · c copy · x older"
 
 /** Copy button label: transient in-modal acknowledgment wins; otherwise full at ≥96 cells, compact below. */
 export const footerCopyLabel = (copied: boolean, roomy: boolean): string =>
@@ -136,7 +136,7 @@ export const footerPinLabel = (pinned: boolean, roomy: boolean): string =>
  * hint is longer than the cells the buttons leave behind (a broken-sentence hint reads as broken chrome),
  * so it degrades in two steps: full hint + full labels above 140 cells, short hint + full labels above 96,
  * short hint + compact labels below. The 80-column floor always fits. No tier repeats the Esc chord — it stays visible in the host
- * dialog chrome; the hint spends its cells on scrolling and the two plugin chords instead.
+ * dialog chrome; the hint spends its cells on scrolling and the three plugin chords instead.
  * `copied` flips the copy button's label to `✓ copied` (host toasts do not render above the modal).
  * The pin button keeps its object noun at the roomy tier across states (`pin condition` ↔ `unpin condition`),
  * so the mouse target does not shrink mid-toggle; compact tiers use `pin` ↔ `unpin`.

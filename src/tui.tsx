@@ -61,6 +61,8 @@ export default Plugin.define({
     const [now, setNow] = createSignal(Date.now())
     const [statusDialogOpen, setStatusDialogOpen] = createSignal(false)
     const [statusDialogSession, setStatusDialogSession] = createSignal<string | undefined>(undefined)
+    /** Loop-rail fold: controlled expand for the dialog's "N older iterations" row (keyboard parity with the click target). */
+    const [iterationsExpanded, setIterationsExpanded] = createSignal(false)
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
 
@@ -71,7 +73,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -110,6 +112,7 @@ export default Plugin.define({
       // and the /goal / palette `status` notice path, which bypasses openDashboard entirely.
       setContextOpen(false)
       setHudSession(undefined)
+      setIterationsExpanded(false)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       void refresh(sessionID).catch(() => {})
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
@@ -709,6 +712,14 @@ export default Plugin.define({
           bind: "p",
           enabled: () => statusDialogOpen(),
           run: () => { try { togglePin(statusDialogSession()) } catch {} },
+        },
+        {
+          id: "goal.status.history",
+          title: "Goal status: show or fold older iterations",
+          group: "Goal",
+          bind: "x",
+          enabled: () => statusDialogOpen(),
+          run: () => { try { setIterationsExpanded((v) => !v) } catch {} },
         },
         {
           id: "goal.status.copy",

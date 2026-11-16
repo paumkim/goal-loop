@@ -30,6 +30,10 @@ export const StatusDialogBody = (props: {
   onCopyReason?: (reason: string) => void
   /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line underlines on hover). */
   onCopySummary?: (summary: string, version: number) => void
+  /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
+  expanded?: () => boolean
+  /** Fired on fold-row activation. Pair with `expanded`. */
+  onToggleExpanded?: () => void
 }): JSX.Element => {
   const theme = () => props.theme
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
@@ -180,7 +184,7 @@ export const StatusDialogBody = (props: {
             })()}
           </Show>
           <Show when={goal().loopEnabled}>
-            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} />
+            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
           </Show>
           <Show when={!goal().loopEnabled}>
             <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} mono={mono()} />

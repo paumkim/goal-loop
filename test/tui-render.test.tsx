@@ -378,7 +378,7 @@ describe("DialogFooter (80-column floor)", () => {
 
   test("at 80 cells the short hint and compact labels render unclipped", async () => {
     const frame = await renderFooter(80)
-    expect(frame).toContain("up/down scroll · p pin · c copy")
+    expect(frame).toContain("up/down scroll · p pin · c copy · x older")
     expect(frame).toContain("[copy]")
     expect(frame).toContain("[pin]")
     expect(frame).toContain("[clear]")
@@ -538,7 +538,7 @@ describe("loop rail progressive disclosure", () => {
     const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame).toContain("2 older iterations — click to show")
+    expect(frame).toContain("2 older iterations — click or press x")
     expect(frame).toContain("v6")
     expect(frame).toContain("v3")
     expect(frame).not.toContain("v2 ")
@@ -955,6 +955,43 @@ describe("mouse-button discipline (left activates; right and middle never do)", 
     await setup.mockMouse.click(at!.x + 2, at!.y)
     await setup.renderOnce()
     expect(copied).toBe("Added an 18-cell block progress bar.")
+    await setup.renderer.destroy()
+  })
+})
+
+describe("loop rail fold — controlled expand (keyboard parity)", () => {
+  test("expanded controlled state renders the full rail without any click", async () => {
+    const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} expanded={() => true} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("show recent only")
+    expect(frame).toContain("v1 ")
+    expect(frame).toContain("Summary of iteration 1 work.")
+    expect(frame).not.toContain("older iteration")
+    await setup.renderer.destroy()
+  })
+
+  test("fold-row click in controlled mode fires the toggle callback and does not self-flip", async () => {
+    let toggles = 0
+    const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} expanded={() => false} onToggleExpanded={() => { toggles += 1 }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = findIn(setup.captureCharFrame(), "2 older iterations")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(toggles).toBe(1)
+    // Controlled false means the rail stays folded; the parent owns the flip.
+    expect(setup.captureCharFrame()).toContain("2 older iterations")
+    await setup.renderer.destroy()
+  })
+
+  test("uncontrolled mode still self-flips on click", async () => {
+    const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = findIn(setup.captureCharFrame(), "2 older iterations")
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("show recent only")
     await setup.renderer.destroy()
   })
 })
