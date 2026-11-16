@@ -50,8 +50,8 @@ import { dirname, join, relative } from "node:path";
 const WATCH_PATHS = ["docs", "src", "scripts", "README.md"];
 const LOG = ".docs-watch.log";
 const STATE = ".docs-watch-state.json";
-const CHANGE_START = "<!-- changes:start -->";
-const CHANGE_END = "<!-- changes:end -->";
+export const CHANGE_START = "<!-- changes:start -->";
+export const CHANGE_END = "<!-- changes:end -->";
 const LOG_MAX = 500;
 
 const git = (args: string[]): string =>
@@ -63,7 +63,7 @@ const git = (args: string[]): string =>
 
 const repoRoot = (): string => git(["rev-parse", "--show-toplevel"]);
 
-const esc = (s: string): string =>
+export const esc = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // Non-merge commits, with mechanical stamp-refresh commits excluded, keep the
@@ -152,10 +152,42 @@ const restampPages = (root: string): string[] => {
   return touched;
 };
 
+/** One changelog row: calendar date, commit subject, source tag. */
+export interface ChangelogRow {
+  readonly when: string;
+  readonly what: string;
+  readonly source: string;
+}
+
+/** Parse `%cd\t%s` git-log output into rows. Subjects may contain tabs (rest re-joined). */
+export function parseChangelogLog(out: string): ChangelogRow[] {
+  const rows: ChangelogRow[] = [];
+  for (const line of out.split("\n").filter(Boolean)) {
+    const [when, ...rest] = line.split("\t");
+    rows.push({ when: when ?? "", what: rest.join("\t"), source: "commit" });
+  }
+  return rows;
+}
+
+/** The committed table is newest-first; returns a sorted copy (input order is left alone). */
+export function sortRows(rows: ChangelogRow[]): ChangelogRow[] {
+  return [...rows].sort((a, b) => (a.when < b.when ? 1 : a.when > b.when ? -1 : 0));
+}
+
+/** Render rows to the HTML table body (one `<tr>` per row, rows newest-first). */
+export function renderRows(rows: ChangelogRow[]): string {
+  return sortRows(rows)
+    .map(
+      (r) =>
+        `<tr><td><code>${esc(r.when)}</code></td><td>${esc(r.what)}</td><td>${esc(r.source)}</td></tr>`,
+    )
+    .join("\n");
+}
+
 const changelogRows = (root: string): string => {
-  const rows: Array<{ when: string; what: string; source: string }> = [];
+  let out = "";
   try {
-    const out = git([
+    out = git([
       "log",
       "--format=%cd\t%s",
       STAMP_FORMAT,
@@ -167,27 +199,50 @@ const changelogRows = (root: string): string => {
       "src/",
       "scripts/",
     ]);
-    for (const line of out.split("\n").filter(Boolean)) {
-      const [when, ...rest] = line.split("\t");
-      rows.push({ when: when ?? "", what: rest.join("\t"), source: "commit" });
-    }
   } catch {
     /* not a git repo or no history: commit rows just stay empty */
   }
   // The HTML table is a pure function of git history so the committed page never
   // drifts. Working-tree (uncommitted) changes live in LOG and are shown by
   // `bun scripts/docs-watch.ts log`; they stay out of the committed HTML.
-  rows.sort((a, b) => (a.when < b.when ? 1 : a.when > b.when ? -1 : 0));
-  return rows
-    .map(
-      (r) =>
-        `<tr><td><code>${esc(r.when)}</code></td><td>${esc(r.what)}</td><td>${esc(r.source)}</td></tr>`,
-    )
-    .join("\n");
+  return renderRows(parseChangelogLog(out));
 };
 
-const stampOf = (html: string): string | undefined =>
+/** Extract the text inside the first `<span class="stamp">…</span>`, if any. */
+export const extractStamp = (html: string): string | undefined =>
   /(<span class="stamp">)([^<]*)(<\/span>)/.exec(html)?.[2];
+
+/** Per-page freshness verdict; undefined when the stamp matches the last commit touching the page. */
+export function stampVerdict(pageRel: string, html: string, expected: string): string | undefined {
+  const actual = extractStamp(html);
+  if (actual === undefined) return `${pageRel}: no <span class="stamp"> found`;
+  if (actual !== expected) return `${pageRel}: stamp "${actual}" trails last commit "${expected}"`;
+  return undefined;
+}
+
+/** The table rows between the changes markers, trimmed; undefined when the markers are missing or inverted. */
+export function sliceChangelogRows(html: string): string | undefined {
+  const start = html.indexOf(CHANGE_START);
+  const end = html.indexOf(CHANGE_END);
+  if (start === -1 || end === -1 || end < start) return undefined;
+  return html.slice(start + CHANGE_START.length, end).replace(/^\n+/, "").replace(/\n+$/, "");
+}
+
+/** Changelog freshness verdict; undefined when the committed rows match git history. */
+export function changelogVerdict(actual: string, expected: string): string | undefined {
+  return actual === expected
+    ? undefined
+    : "docs/changelog.html: changelog rows are stale (run `bun scripts/docs-watch.ts once`)";
+}
+
+/** The multi-line failure report: header, one `  - <failure>` per line, then the fix hint. */
+export function formatFailures(failures: readonly string[]): string {
+  return [
+    "docs freshness check failed:",
+    ...failures.map((failure) => `  - ${failure}`),
+    "fix: bun scripts/docs-watch.ts once   (then commit the result)",
+  ].join("\n");
+}
 
 /** Read-only: pages whose stamp trails the last commit touching them (or has no stamp). */
 const stalePages = (root: string): string[] => {
@@ -198,10 +253,8 @@ const stalePages = (root: string): string[] => {
     const pageRel = `docs/${name}`;
     const html = readFileSync(join(docsDir, name), "utf8");
     const expected = stampFor(pageRel);
-    const actual = stampOf(html);
-    if (actual === undefined) stale.push(`${pageRel}: no <span class="stamp"> found`);
-    else if (actual !== expected)
-      stale.push(`${pageRel}: stamp "${actual}" trails last commit "${expected}"`);
+    const verdict = stampVerdict(pageRel, html, expected);
+    if (verdict) stale.push(verdict);
   }
   return stale;
 };
@@ -211,15 +264,10 @@ const staleChangelog = (root: string): string | undefined => {
   const page = join(root, "docs", "changelog.html");
   if (!existsSync(page)) return "docs/changelog.html is missing";
   const html = readFileSync(page, "utf8");
-  const start = html.indexOf(CHANGE_START);
-  const end = html.indexOf(CHANGE_END);
-  if (start === -1 || end === -1 || end < start)
+  const actual = sliceChangelogRows(html);
+  if (actual === undefined)
     return "docs/changelog.html is missing the <!-- changes:start/end --> markers";
-  const actual = html.slice(start + CHANGE_START.length, end).replace(/^\n+/, "").replace(/\n+$/, "");
-  const expected = changelogRows(root);
-  return actual === expected
-    ? undefined
-    : "docs/changelog.html: changelog rows are stale (run `bun scripts/docs-watch.ts once`)";
+  return changelogVerdict(actual, changelogRows(root));
 };
 
 const check = (root: string): number => {
@@ -227,9 +275,7 @@ const check = (root: string): number => {
   const changelog = staleChangelog(root);
   if (changelog) stale.push(changelog);
   if (stale.length) {
-    console.error("docs freshness check failed:");
-    for (const line of stale) console.error(`  - ${line}`);
-    console.error("fix: bun scripts/docs-watch.ts once   (then commit the result)");
+    console.error(formatFailures(stale));
     return 1;
   }
   console.log("docs freshness check passed");
@@ -336,4 +382,4 @@ const main = (): void => {
   process.exit(2);
 };
 
-main();
+if (import.meta.main) main();
