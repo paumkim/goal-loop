@@ -139,16 +139,52 @@ export function paceEstimate(durations: readonly number[], max: number | undefin
  * Per-iteration verdict mix: assigns each verdict to the iteration whose `(from, to]` window contains
  * its timestamp. The first window opens at `setAt`, later windows at the previous entry's `endedAt`.
  * Zero-verdict iterations yield `undefined`.
+ *
+ * O(h + n): verdicts are bucketed in a single pass with a sliding window pointer (windows are
+ * contiguous and in `entries` array order, so a verdict belongs to the first window whose `endedAt`
+ * it does not precede). A verdict whose `at` exceeds the last window's `endedAt` belongs to no
+ * window — exactly as the filter-based read of the same rule. A non-monotone history falls back to
+ * the filter read, so pathological input can never paint a different frame than before.
+ *
+ * A single-slot identity memo (history ref, entries ref, setAt) keeps the property reads at one per
+ * verdict across the render loop's repeated invalidations; the cached array is shared, not copied.
  */
+let mixCache: { history: readonly VerdictEntry[]; entries: readonly LoopEntry[]; setAt: number; out: Array<VerdictCounts | undefined> } | undefined
+
 export function iterationVerdictMix(history: readonly VerdictEntry[], entries: readonly LoopEntry[], setAt: number): Array<VerdictCounts | undefined> {
-  const out: Array<VerdictCounts | undefined> = []
-  let start = setAt
-  for (const entry of entries) {
-    const end = entry.endedAt
-    const slice = history.filter((verdict) => verdict.at > start && verdict.at <= end)
-    out.push(slice.length === 0 ? undefined : verdictCounts(slice))
-    start = end
+  if (mixCache !== undefined && mixCache.history === history && mixCache.entries === entries && mixCache.setAt === setAt) return mixCache.out
+  const counts = entries.map(() => ({ met: 0, not_met: 0, impossible: 0, total: 0 }))
+  const ended = entries.map((entry) => entry.endedAt)
+  let window = 0
+  const span = entries.length
+  let previous = Number.NEGATIVE_INFINITY
+  let monotone = true
+  for (const verdict of history) {
+    const at = verdict.at
+    if (at < previous) { monotone = false; break }
+    previous = at
+    if (at <= setAt) continue
+    while (window < span) {
+      const end = ended[window]
+      if (end === undefined || at <= end) break
+      window += 1
+    }
+    if (window >= span) break
+    const bucket = counts[window]
+    if (!bucket) continue
+    if (verdict.verdict === "met") bucket.met += 1
+    else if (verdict.verdict === "impossible") bucket.impossible += 1
+    else bucket.not_met += 1
+    bucket.total += 1
   }
+  const out = monotone
+    ? counts.map((bucket) => (bucket.total === 0 ? undefined : bucket))
+    : entries.map((entry, index) => {
+        const from = index === 0 ? setAt : (entries[index - 1] as LoopEntry).endedAt
+        const slice = history.filter((verdict) => verdict.at > from && verdict.at <= entry.endedAt)
+        return slice.length === 0 ? undefined : verdictCounts(slice)
+      })
+  mixCache = { history, entries, setAt, out }
   return out
 }
 

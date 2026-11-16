@@ -211,6 +211,41 @@ describe("iterationVerdictMix", () => {
     expect(mixes[0]?.total).toBe(1)
     expect(mixes[1]).toBeUndefined()
   })
+
+  test("identity memo: same (history ref, entries ref, setAt) returns the identical array", () => {
+    const history = [{ ...verdict(1, "met"), at: 9_000 }]
+    const first = iterationVerdictMix(history, entries, setAt)
+    const second = iterationVerdictMix(history, entries, setAt)
+    expect(second).toBe(first)
+    const freshHistory = [{ ...verdict(1, "met"), at: 9_000 }]
+    const third = iterationVerdictMix(freshHistory, entries, setAt)
+    expect(third).not.toBe(first)
+    expect(third).toEqual(first)
+  })
+
+  test("scans the history once — O(h + n), not O(h × n)", () => {
+    const H = 400
+    const windows = 40
+    let reads = 0
+    const history = Array.from({ length: H }, (_, index) => {
+      const verdictEntry = { turn: index + 1, verdict: "met" as const, reason: "r", at: 0 }
+      Object.defineProperty(verdictEntry, "at", {
+        get() { reads += 1; return 2_000 + index * 10 },
+        enumerable: true,
+      })
+      return verdictEntry
+    })
+    const manyEntries = Array.from({ length: windows }, (_, index) => entry(index + 1, 10_000 + index * 10_000))
+    iterationVerdictMix(history, manyEntries, setAt)
+    expect(reads).toBeLessThanOrEqual(H + 4)
+  })
+
+  test("a non-monotone history falls back to filter semantics", () => {
+    const history = [{ ...verdict(1, "met"), at: 9_000 }, { ...verdict(2, "not_met"), at: 4_000 }, { ...verdict(3, "met"), at: 12_000 }]
+    const mixes = iterationVerdictMix(history, entries, setAt)
+    expect(mixes[0]).toEqual({ met: 1, not_met: 1, impossible: 0, total: 2 })
+    expect(mixes[1]).toEqual({ met: 1, not_met: 0, impossible: 0, total: 1 })
+  })
 })
 
 describe("verdictStreak", () => {
