@@ -2293,6 +2293,17 @@
       "submittedAt": "2026-11-16T10:21:12Z",
       "mergedAt": "2026-11-16T10:22:51Z",
       "mergedInto": "dev"
+    },
+    "iteration-96-record-in-reach": {
+      "agent": "orchestrator",
+      "paths": "src/core/reach-record.ts,src/status-dialog.tsx,src/tui.tsx,test/reach-record.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/iteration-96-record-in-reach",
+      "worktree": "worktrees/wt-iteration-96-record-in-reach",
+      "status": "done",
+      "createdAt": "2026-11-16T19:55:15Z",
+      "submittedAt": "2026-11-16T20:00:45Z",
+      "mergedAt": "2026-11-16T20:03:00Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
