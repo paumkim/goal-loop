@@ -22,6 +22,7 @@ import { gitAncestorProbe, reachRecord, reachReportMarkdown, reachSummaryLine, t
 import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type SignOutcome } from "./core/sign-record.ts"
 import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
 import { exportReview, reviewSummaryLine } from "./core/dossier-review.ts"
+import { exportSpendLedger, spendSummaryLine } from "./core/spend-ledger.ts"
 import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
@@ -699,6 +700,19 @@ export default Plugin.define({
         safeToast({ title: "review failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
       }
     }
+    // The spend story, one file: write one O_EXCL markdown spend report — one row per landed loop iteration (the harness's usage delta: cost, tokens in/out/reasoning, cache read/write, tool calls, sha), then totals over exactly the measured iterations, then an honesty footer. Partial measurement says so and never reads as $0.00; an unmeasured iteration renders —. This is the artifact for capacity retros and evaluator cost audits; the dossier remains the whole-record story.
+    const spendLedgerAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
+      if (!goal || !sessionID) return
+      try {
+        const result = exportSpendLedger(goal, Date.now(), process.cwd())
+        const summary = spendSummaryLine(result)
+        const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written"
+        const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success"
+        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
+      } catch (error) {
+        safeToast({ title: "spend report failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
     // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
     const sealRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SealOutcome | undefined => {
       if (!goal || !sessionID) return undefined
@@ -1249,6 +1263,20 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               reviewRecordAction(sessionID, goal)
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.spend",
+          title: "Goal: export the spend ledger (markdown report)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              spendLedgerAction(sessionID, goal)
             } catch {}
           },
         },
