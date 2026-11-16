@@ -357,9 +357,11 @@
       "branch": "wt/coordinator-merge-safety-tests",
       "createdAt": "2026-11-16T17:25:53Z",
       "paths": "scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,packages/coordinator/README.md",
-      "status": "submitted",
+      "status": "done",
       "submittedAt": "2026-11-16T17:47:59Z",
-      "worktree": "worktrees/wt-coordinator-merge-safety-tests"
+      "worktree": "worktrees/wt-coordinator-merge-safety-tests",
+      "mergedAt": "2026-11-16T22:31:01Z",
+      "mergedInto": "dev"
     },
     "coordinator-scratch-branch-order": {
       "agent": "inkling",
