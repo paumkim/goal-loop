@@ -71,7 +71,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} mono={reducedColor} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -364,12 +364,18 @@ export default Plugin.define({
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       statusCopiedTimer = setTimeout(() => setStatusCopied(false), 1600)
     }
-    const copyToClipboard = (text: string, sessionID?: string) => {
+    const copyLabel: Readonly<Record<"condition" | "reason" | "summary", { title: string; message: string }>> = {
+      condition: { title: "condition copied", message: "goal condition is on the clipboard" },
+      reason: { title: "reason copied", message: "the evaluator's reason is on the clipboard" },
+      summary: { title: "summary copied", message: "the iteration summary is on the clipboard" },
+    }
+    const copyToClipboard = (text: string, sessionID: string | undefined, what: "condition" | "reason" | "summary" = "condition") => {
       try {
         const ok = context.renderer.copyToClipboardOSC52(text)
+        const label = copyLabel[what]
         safeToast({
-          title: ok ? "condition copied" : "copy unavailable",
-          message: ok ? "goal condition is on the clipboard" : "the terminal refused OSC52 clipboard access",
+          title: ok ? label.title : "copy unavailable",
+          message: ok ? label.message : "the terminal refused OSC52 clipboard access",
           variant: ok ? "success" : "warning",
           duration: 3_000,
           sessionID,

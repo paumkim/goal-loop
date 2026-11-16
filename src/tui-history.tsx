@@ -7,7 +7,7 @@
  * RGBA, no absolute positioning. Pure layout math lives in `src/core/history.ts` (unit-tested).
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
-import { For, Show } from "solid-js"
+import { For, Show, createSignal } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
@@ -40,6 +40,33 @@ const label = (theme: HistoryTheme, text: string) => (
 const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorInput =>
   verdictAccentColor(theme, verdict, mono)
 
+/**
+ * One completed iteration's summary line. Click-to-copy when the caller wires `onCopy`:
+ * the summary is the payload a user most often wants verbatim (to paste into a prompt or
+ * an issue), so the whole line is the click target — underlined on hover, like the condition row.
+ */
+const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void }): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false)
+  const copy = () => {
+    if (!props.onCopy) return
+    try {
+      props.onCopy(props.text)
+    } catch {
+      // Best-effort.
+    }
+  }
+  return (
+    <box flexDirection="row" gap={2} onMouseUp={props.onCopy ? copy : undefined} onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
+      <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
+        │
+      </text>
+      <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined}>
+        {`│ ${truncate(props.text, SUMMARY_MAX)}`}
+      </text>
+    </box>
+  )
+}
+
 export const LoopSection = (props: {
   goal: GoalSnapshot
   theme: HistoryTheme
@@ -49,6 +76,8 @@ export const LoopSection = (props: {
   nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
+  /** When set, clicking a summary line copies that iteration's full summary. The line underlines on hover to advertise it. */
+  onCopySummary?: (summary: string, version: number) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -180,14 +209,7 @@ export const LoopSection = (props: {
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>
-              <box flexDirection="row" gap={2}>
-                <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
-                  │
-                </text>
-                <text wrapMode="word" fg={theme().text.faint} flexGrow={1}>
-                  {`│ ${truncate(entry.summary, SUMMARY_MAX)}`}
-                </text>
-              </box>
+              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => props.onCopySummary?.(text, entry.version) : undefined} />
             </Show>
           </box>
           )

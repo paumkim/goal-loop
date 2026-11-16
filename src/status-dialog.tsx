@@ -4,7 +4,7 @@
  * content: state line, wrapped condition/evaluator/spend rows, and the history sections. Everything is
  * presentational, rendered from the live snapshot passed in by the caller; theme tokens only.
  */
-import { Show } from "solid-js"
+import { Show, createSignal } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
@@ -26,6 +26,10 @@ export const StatusDialogBody = (props: {
   onCopyCondition?: (condition: string) => void
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
+  /** When set, clicking the evaluator/reason row copies the raw reason. The row underlines on hover to advertise it (same pattern as the condition row). */
+  onCopyReason?: (reason: string) => void
+  /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line underlines on hover). */
+  onCopySummary?: (summary: string, version: number) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -54,9 +58,18 @@ export const StatusDialogBody = (props: {
     const goal = g()
     return goal ? evaluatorHint(goal) : null
   }
+  const [reasonHovered, setReasonHovered] = createSignal(false)
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
+    } catch {
+      // Best-effort.
+    }
+  }
+  const copyReason = (reason: string) => {
+    if (!props.onCopyReason) return
+    try {
+      props.onCopyReason(reason)
     } catch {
       // Best-effort.
     }
@@ -81,7 +94,22 @@ export const StatusDialogBody = (props: {
               {goal().condition}
             </text>
           </box>
-          <Show when={goal().reason}>{(reason) => field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
+          {/* evaluator/reason — click to copy the raw text (host wires clipboard + toast via onCopyReason) */}
+          <Show when={goal().reason}>
+            {(reason) => (
+              <Show
+                when={props.onCopyReason}
+                fallback={field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}
+              >
+                <box flexDirection="row" gap={2} onMouseUp={() => copyReason(reason())} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
+                  {label(goal().status === "active" ? "evaluator" : "reason")}
+                  <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.UNDERLINE : undefined}>
+                    {reason()}
+                  </text>
+                </box>
+              </Show>
+            )}
+          </Show>
           {/* teaching empty state — freshly armed goal, gone after the first turn */}
           <Show when={hint()}>
             {(h) => (
@@ -128,7 +156,7 @@ export const StatusDialogBody = (props: {
             })()}
           </Show>
           <Show when={goal().loopEnabled}>
-            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} />
+            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} />
           </Show>
           <Show when={!goal().loopEnabled}>
             <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} mono={mono()} />
