@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=952 -->
+<!-- spec-check files=44 tests=957 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3251,7 +3251,7 @@ glyph family except this one. This workstream closes the family; it does not re-
 318. Dead code deleted: monochrome() (hud.ts) was a byte-identical duplicate of motionDisabled()
      with no call sites outside its own test block; deleted with the test. The block is gone, not
      re-pointed — motionDisabled already pins the same predicate table.
-319. Finding 8 (loopMaxLoops not isFinite-guarded in hud-card.tsx:315, hud.ts:124, hud.ts:196) verified
+319. Finding 8 (loopMaxLoops not isFinite-guarded in hud-card.tsx:315, hud.ts:173, hud.ts:232) verified
      MOOT at the source of truth: src/core/wire.ts validates loopMaxLoops with isFiniteNumber (typeof
      number && Number.isFinite), as it does for turns/elapsedMs — /Infinity can never arrive from the
      wire. No guards were added; nothing was weakened.
@@ -4296,3 +4296,53 @@ view, not a reorganization.
      node, not a second surface); `t` is keyboard parity for the strip, not a new
      advertisement surface (three-plugin-chords permanent decision); tabs add no
      hitbox anywhere else — the strip itself is hit-tested in the render tests.
+
+## Workstream DQ — the card's context menu gets its keyboard (2026-11-16)
+
+Interpretation: the bar's mouse-first ergonomics clause names a right-click context
+menu on the HUD for power actions, and the craft clause demands keyboard parity for
+everything the mouse can do. The menu itself shipped earlier (right-click the card;
+four rows in a fixed order: copy condition, copy evaluator reason, copy latest
+summary, clear goal — inert rows render faint and swallow the click). It remained
+the card's one mouse-only island: no key could open, navigate or activate it. This
+slice closes that gap without inventing a second menu or touching the footer.
+
+414. src/core/hud.ts — the menu's row model is now data, single-sourced:
+     contextMenuRows({ hasReason, hasSummary }) returns the four rows in their fixed
+     order with enabled predicates mirroring the mouse grammar (the reason row follows
+     goal.reason && its wiring, the summary row follows loopHistory's latest summary;
+     the clear row is the only danger row, always last). new pure nextMenuIndex(index,
+     delta, rows) wraps at both ends and skips disabled rows — the inert-row contract,
+     applied to arrow keys; an all-disabled (or out-of-range resting) index normalizes
+     and the loop terminates.
+415. src/hud-card.tsx — HudMenuRow gains selected?: boolean. A selected row paints
+     exactly like a hovered one (raised background, base label; bold under mono —
+     weight is the NO_COLOR contract, never an underline). The four rows now render
+     from contextMenuRows (same source the keyboard path reads) instead of hardcoded
+     JSX; new controlled menuSelected?: () => number prop, unwired defaults the
+     selection to the first row.
+416. src/tui.tsx — setup scope holds contextIndex (reset to 0 on every menu open);
+     new keymap layer (goal.hud.menu-up/down/activate, group Goal, enabled only while
+     the menu is open AND the dialog does not own the screen): ↑/↓ move the selection
+     (wrapping, skipping disabled rows), enter activates the selected row through the
+     same closures the mouse path uses (copies via copyToClipboard with the same
+     "reason"/"summary" tags; clear rides requestClearGoal after collapsing the card).
+     The dismiss layer now collapses an open menu before dismissing the card — one
+     Esc, one layer of chrome. Mouse paths are untouched; the pill's right-click still
+     opens the dashboard directly.
+417. Esc granularity: with the menu open, Esc closes the menu only; a second Esc
+     dismisses the card. Previously one Esc collapsed both.
+418. Tests: +3 unit (rows/order/enabled/danger; wrap-and-skip arrow navigation
+     including the all-disabled and out-of-range fallbacks) +2 interactive (a
+     controlled menuSelected paints that row base-fg with no underline while resting
+     rows keep muted/faint; the mono arm paints the selected row BOLD and inert rows
+     never light up). spec-check files=44 tests=957. SPEC ref re-pointed
+     (the two refs re-pointed intra-file: 124 → 173, 196 → 232 — same code, shifted
+     by the new block).
+419. Honest limits: ↑/↓/enter while the menu is open are not advertised in the footer
+     (permanent three-plugin-chords decision — the menu paints itself; p/c/x stay the
+     footer's whole budget). The keymap layer itself is not headlessly drivable here —
+     evidence for the paint path is test-render (captureSpans), evidence for
+     activation is the shared closures (each already covered by the mouse-path tests);
+     live TUI never claimed. Activation resets the selection to the first row and
+     collapses the menu, matching the mouse path exactly.

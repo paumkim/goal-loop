@@ -6,10 +6,10 @@
  */
 import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
-import { RGBA } from "@opentui/core"
+import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -834,6 +834,36 @@ describe("cardRowPlan under a ceiling (render)", () => {
   })
 })
 
+describe("contextMenuRows + nextMenuIndex (the keyboard arm's pure model)", () => {
+  test("the four rows paint in a fixed order; the reason and summary rows follow their payload, the clear row is the only danger", () => {
+    const rows = contextMenuRows({ hasReason: false, hasSummary: false })
+    expect(rows.map((row) => row.id)).toEqual(["copy-condition", "copy-reason", "copy-summary", "clear"])
+    expect(rows.map((row) => row.enabled)).toEqual([true, false, false, true])
+    expect(rows.map((row) => row.danger)).toEqual([false, false, false, true])
+    const wired = contextMenuRows({ hasReason: true, hasSummary: true })
+    expect(wired.map((row) => row.enabled)).toEqual([true, true, true, true])
+    expect(wired[3]!.id).toBe(CONTEXT_MENU_CLEAR) // the host's destructive row is always last
+  })
+
+  test("arrow selection wraps at both ends and skips disabled rows", () => {
+    const rows = contextMenuRows({ hasReason: false, hasSummary: false }) // 0 and 3 enabled
+    expect(nextMenuIndex(0, 1, rows)).toBe(3) // straight past the two disabled rows
+    expect(nextMenuIndex(3, 1, rows)).toBe(0) // wraps to the top
+    expect(nextMenuIndex(0, -1, rows)).toBe(3) // backwards past the guard rail
+    expect(nextMenuIndex(3, -1, rows)).toBe(0)
+    const wired = contextMenuRows({ hasReason: true, hasSummary: true })
+    expect(nextMenuIndex(0, 1, wired)).toBe(1) // no rows skipped when everything is wired
+    expect(nextMenuIndex(2, 1, wired)).toBe(3)
+  })
+
+  test("all-disabled payload selection stays put — the loop terminates", () => {
+    const disabled = [{ enabled: false }, { enabled: false }]
+    expect(nextMenuIndex(0, 1, disabled)).toBe(0)
+    expect(nextMenuIndex(1, -1, disabled)).toBe(1)
+    expect(nextMenuIndex(7, 1, disabled)).toBe(1) // out-of-range resting index normalizes too
+  })
+})
+
 describe("hudCardRows with the context menu", () => {
   test("the menu adds exactly four rows to the absolute-mount anchor; the default stays unchanged", () => {
     const base = hudCardRows(loopedGoal())
@@ -1241,6 +1271,35 @@ describe("per-turn spend in the why ledger", () => {
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
     expect(frame).not.toContain("$")
+    await setup.renderer.destroy()
+  })
+})
+
+describe("HudCard context menu — keyboard selection paints like hover", () => {
+  test("a controlled menuSelected paints exactly that row bold; leaving the menu unwired defaults the first row", async () => {
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal({ reason: "evaluator stuck" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} onCopyReason={() => {}} contextOpen={true} menuSelected={() => 1} />
+    ))
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const byText = (needle: string) => spans.find((span) => span.text === needle)
+    const reasonRow = byText("copy evaluator reason")
+    expect(reasonRow).toBeDefined()
+    // Color arm: the selected row paints base; the resting rows keep their resting hues (muted / faint) — never an underline.
+    expect((reasonRow!.fg as RGBA).equals(RGBA.fromHex("#e8e8e8"))).toBe(true)
+    expect((byText("copy condition")!.fg as RGBA).equals(RGBA.fromHex("#a0a0a0"))).toBe(true)
+    expect((byText("copy latest summary")!.fg as RGBA).equals(RGBA.fromHex("#6f6f6f"))).toBe(true) // disabled row stays faint — inert never lights up
+    expect((reasonRow!.attributes & TextAttributes.UNDERLINE) === 0).toBe(true)
+    await setup.renderer.destroy()
+  })
+
+  test("the clear row paints bold under the selection, hue stays the danger contract (mono keeps the word)", async () => {
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono={true} contextOpen={true} menuSelected={() => 3} />
+    ))
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const clearRow = spans.find((span) => span.text === "clear goal")
+    expect(clearRow).toBeDefined()
+    expect(clearRow!.attributes & TextAttributes.BOLD).not.toBe(0)
     await setup.renderer.destroy()
   })
 })

@@ -23,7 +23,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_CLEAR, type CompactMarkerTone } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -275,11 +275,12 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: bo
 }
 
 /** One context-menu row: same hover grammar as HudButton (raised background, brightened label; bold under mono), full card width, faint gutter keeping the LABEL column. Inert rows never light up and swallow the click silently — a disabled action is visibly disabled, never a trap. */
-const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; mono?: boolean; danger?: boolean; enabled?: boolean; onPress: () => void }): JSX.Element => {
+const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; mono?: boolean; danger?: boolean; enabled?: boolean; selected?: boolean; onPress: () => void }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const mono = () => props.mono === true
   const enabled = () => props.enabled !== false
-  const active = () => enabled() && hovered()
+  // The keyboard twin of hover: while the menu is open the keymap layer drives a selection index; a selected row paints exactly like a hovered one (raised background, bold label) — weight is the NO_COLOR contract, never a glyph or an underline.
+  const active = () => enabled() && (hovered() || props.selected === true)
   const fg = () =>
     !enabled() ? props.theme.text.faint : props.danger ? props.theme.text.feedback.warning.base : active() ? props.theme.text.base : props.theme.text.muted
   return (
@@ -330,6 +331,8 @@ export const HudCard = (props: {
   mono?: boolean
   /** Context menu (right-click the card) open state; controlled by the mount so the absolute anchor can grow with it. */
   contextOpen?: boolean
+  /** Controlled selection index for the open menu — the keyboard arm (↑/↓ move it, enter activates). Unwired defaults to the first row. */
+  menuSelected?: () => number
   /** Right-click anywhere on the card toggles the menu open/closed. */
   onToggleContext?: () => void
   /** Called after any menu action so the mount can collapse the menu. */
@@ -592,10 +595,20 @@ export const HudCard = (props: {
       {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 4 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
       <Show when={props.contextOpen}>
         <box flexDirection="column" marginTop={0}>
-          <HudMenuRow theme={theme()} mono={mono()} gutter="menu" text="copy condition" onPress={menuAction(copyCondition)} />
-          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="copy evaluator reason" enabled={Boolean(g().reason && props.onCopyReason)} onPress={menuAction(() => { const r = g().reason; if (r) props.onCopyReason?.(r) })} />
-          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="copy latest summary" enabled={Boolean(latestSummary() && props.onCopySummary)} onPress={menuAction(() => { const s = latestSummary(); if (s) props.onCopySummary?.(s) })} />
-          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="clear goal" danger onPress={menuAction(() => props.onClear())} />
+          {contextMenuRows({ hasReason: Boolean(g().reason && props.onCopyReason), hasSummary: Boolean(latestSummary() && props.onCopySummary) }).map((row, index) => {
+            const gutter = index === 0 ? "menu" : ""
+            const selected = () => (props.menuSelected?.() ?? 0) === index
+            switch (row.id) {
+              case CONTEXT_MENU_COPY_CONDITION:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(copyCondition)} />
+              case CONTEXT_MENU_COPY_REASON:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => { const r = g().reason; if (r) props.onCopyReason?.(r) })} />
+              case CONTEXT_MENU_COPY_SUMMARY:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => { const s = latestSummary(); if (s) props.onCopySummary?.(s) })} />
+              case CONTEXT_MENU_CLEAR:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} danger={row.danger} enabled={row.enabled} selected={selected()} onPress={menuAction(() => props.onClear())} />
+            }
+          })}
         </box>
       </Show>
     </box>

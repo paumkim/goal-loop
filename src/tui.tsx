@@ -18,7 +18,7 @@ import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
@@ -461,6 +461,48 @@ export default Plugin.define({
     const [statusCopied, setStatusCopied] = createSignal(false)
     // Right-click context menu on the HUD card: TUI-local view state like the pin and the card itself.
     const [contextOpen, setContextOpen] = createSignal(false)
+    // The keyboard arm of the open menu: ↑/↓ move a selection index over the same four rows the mouse paints (disabled rows are skipped — the inert-row contract), enter activates, esc collapses the menu before the card. Reset to the first row on every open.
+    const [contextIndex, setContextIndex] = createSignal(0)
+    const contextRowsFor = (sessionID: string | undefined) => {
+      try {
+        const goal = sessionID ? entries()[sessionID]?.goal : undefined
+        return contextMenuRows({ hasReason: Boolean(goal?.reason), hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary) })
+      } catch {
+        return contextMenuRows({ hasReason: false, hasSummary: false })
+      }
+    }
+    const activateContextMenu = (sessionID: string | undefined) => {
+      try {
+        if (!sessionID) return
+        const goal = entries()[sessionID]?.goal
+        const rows = contextRowsFor(sessionID)
+        const row = rows[contextIndex()] ?? rows[0]
+        if (!row || !row.enabled) return
+        switch (row.id) {
+          case CONTEXT_MENU_COPY_CONDITION:
+            if (goal?.condition) copyToClipboard(goal.condition, sessionID)
+            break
+          case CONTEXT_MENU_COPY_REASON:
+            if (goal?.reason) copyToClipboard(goal.reason, sessionID, "reason")
+            break
+          case CONTEXT_MENU_COPY_SUMMARY: {
+            const summary = goal?.loopHistory?.at(-1)?.summary
+            if (summary) copyToClipboard(summary, sessionID, "summary")
+            break
+          }
+          case CONTEXT_MENU_CLEAR:
+            setContextOpen(false)
+            setHudSession(undefined)
+            requestClearGoal(sessionID)
+            return
+        }
+        // Menu actions collapse the menu, mirroring the mouse path (menuAction in HudCard).
+        setContextOpen(false)
+        setContextIndex(0)
+      } catch {
+        // A dead snapshot must never take the key event down.
+      }
+    }
     // The dialog header's esc affordance hovers like every other clickable row: brightened + boldened. Setup-scope because the dialog closure is not a component.
     const [statusEscHovered, setStatusEscHovered] = createSignal(false)
     let statusCopiedTimer: ReturnType<typeof setTimeout> | undefined
@@ -698,8 +740,9 @@ export default Plugin.define({
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
                     contextOpen={contextOpen()}
                     maxRows={maxCardRows()}
-                    onToggleContext={() => setContextOpen((v) => !v)}
-                    onCloseMenu={() => setContextOpen(false)}
+                    onToggleContext={() => setContextOpen((v) => { const next = !v; if (next) setContextIndex(0); return next })}
+                    menuSelected={() => contextIndex()}
+                    onCloseMenu={() => { setContextOpen(false); setContextIndex(0) }}
                     onCopyReason={(reason) => copyToClipboard(reason, props.sessionID, "reason")}
                     onCopySummary={(summary) => copyToClipboard(summary, props.sessionID, "summary")}
                     pinned={pinnedNow()}
@@ -727,7 +770,42 @@ export default Plugin.define({
           group: "Goal",
           bind: "escape",
           enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
-          run: () => { try { setContextOpen(false); setHudSession(undefined) } catch {} },
+          run: () => { try { if (contextOpen()) { setContextOpen(false); setContextIndex(0) } else { setHudSession(undefined) } } catch {} },
+        },
+      ],
+    }))
+
+    // ↑/↓/enter over the card's context menu — the keyboard twin of right-click + left-click. Enabled
+    // only while the menu is open (and the dialog does not own the screen), so the keys never intercept
+    // prompt editing; esc rides the dismiss layer above, which collapses the menu before the card.
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 100,
+      enabled: () => getHudSession() !== undefined && !statusDialogOpen() && contextOpen(),
+      commands: [
+        {
+          id: "goal.hud.menu-up",
+          title: "Goal HUD menu: move up",
+          group: "Goal",
+          bind: "up",
+          enabled: () => contextOpen(),
+          run: () => { try { setContextIndex((v) => nextMenuIndex(v, -1, contextRowsFor(getHudSession()))) } catch {} },
+        },
+        {
+          id: "goal.hud.menu-down",
+          title: "Goal HUD menu: move down",
+          group: "Goal",
+          bind: "down",
+          enabled: () => contextOpen(),
+          run: () => { try { setContextIndex((v) => nextMenuIndex(v, 1, contextRowsFor(getHudSession()))) } catch {} },
+        },
+        {
+          id: "goal.hud.menu-activate",
+          title: "Goal HUD menu: activate the selected row",
+          group: "Goal",
+          bind: "enter",
+          enabled: () => contextOpen(),
+          run: () => activateContextMenu(getHudSession()),
         },
       ],
     }))
