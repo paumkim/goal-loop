@@ -13,7 +13,7 @@ import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
 
-// node_modules/ansi-regex/index.js
+// ../../node_modules/ansi-regex/index.js
 function ansiRegex({ onlyFirst = false } = {}) {
   const ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";
   const osc = `(?:(?:\\u001B\\]|\\u009D)[^\\u0007\\u001B\\u009C\\u009D]*${ST})`;
@@ -22,7 +22,7 @@ function ansiRegex({ onlyFirst = false } = {}) {
   return new RegExp(pattern, onlyFirst ? undefined : "g");
 }
 
-// node_modules/strip-ansi/index.js
+// ../../node_modules/strip-ansi/index.js
 var regex = ansiRegex();
 function stripAnsi(string) {
   if (typeof string !== "string") {
@@ -31,7 +31,7 @@ function stripAnsi(string) {
   return string.replace(regex, "");
 }
 
-// node_modules/get-east-asian-width/lookup-data.js
+// ../../node_modules/get-east-asian-width/lookup-data.js
 var ambiguousMinimalCodePoint = 161;
 var ambiguousMaximumCodePoint = 1114109;
 var ambiguousRanges = [161, 161, 164, 164, 167, 168, 170, 170, 173, 174, 176, 180, 182, 186, 188, 191, 198, 198, 208, 208, 215, 216, 222, 225, 230, 230, 232, 234, 236, 237, 240, 240, 242, 243, 247, 250, 252, 252, 254, 254, 257, 257, 273, 273, 275, 275, 283, 283, 294, 295, 299, 299, 305, 307, 312, 312, 319, 322, 324, 324, 328, 331, 333, 333, 338, 339, 358, 359, 363, 363, 462, 462, 464, 464, 466, 466, 468, 468, 470, 470, 472, 472, 474, 474, 476, 476, 593, 593, 609, 609, 708, 708, 711, 711, 713, 715, 717, 717, 720, 720, 728, 731, 733, 733, 735, 735, 768, 879, 913, 929, 931, 937, 945, 961, 963, 969, 1025, 1025, 1040, 1103, 1105, 1105, 8208, 8208, 8211, 8214, 8216, 8217, 8220, 8221, 8224, 8226, 8228, 8231, 8240, 8240, 8242, 8243, 8245, 8245, 8251, 8251, 8254, 8254, 8308, 8308, 8319, 8319, 8321, 8324, 8364, 8364, 8451, 8451, 8453, 8453, 8457, 8457, 8467, 8467, 8470, 8470, 8481, 8482, 8486, 8486, 8491, 8491, 8531, 8532, 8539, 8542, 8544, 8555, 8560, 8569, 8585, 8585, 8592, 8601, 8632, 8633, 8658, 8658, 8660, 8660, 8679, 8679, 8704, 8704, 8706, 8707, 8711, 8712, 8715, 8715, 8719, 8719, 8721, 8721, 8725, 8725, 8730, 8730, 8733, 8736, 8739, 8739, 8741, 8741, 8743, 8748, 8750, 8750, 8756, 8759, 8764, 8765, 8776, 8776, 8780, 8780, 8786, 8786, 8800, 8801, 8804, 8807, 8810, 8811, 8814, 8815, 8834, 8835, 8838, 8839, 8853, 8853, 8857, 8857, 8869, 8869, 8895, 8895, 8978, 8978, 9312, 9449, 9451, 9547, 9552, 9587, 9600, 9615, 9618, 9621, 9632, 9633, 9635, 9641, 9650, 9651, 9654, 9655, 9660, 9661, 9664, 9665, 9670, 9672, 9675, 9675, 9678, 9681, 9698, 9701, 9711, 9711, 9733, 9734, 9737, 9737, 9742, 9743, 9756, 9756, 9758, 9758, 9792, 9792, 9794, 9794, 9824, 9825, 9827, 9829, 9831, 9834, 9836, 9837, 9839, 9839, 9886, 9887, 9919, 9919, 9926, 9933, 9935, 9939, 9941, 9953, 9955, 9955, 9960, 9961, 9963, 9969, 9972, 9972, 9974, 9977, 9979, 9980, 9982, 9983, 10045, 10045, 10102, 10111, 11094, 11097, 12872, 12879, 57344, 63743, 65024, 65039, 65533, 65533, 127232, 127242, 127248, 127277, 127280, 127337, 127344, 127373, 127375, 127376, 127387, 127404, 917760, 917999, 983040, 1048573, 1048576, 1114109];
@@ -42,7 +42,7 @@ var wideMinimalCodePoint = 4352;
 var wideMaximumCodePoint = 262141;
 var wideRanges = [4352, 4447, 8986, 8987, 9001, 9002, 9193, 9196, 9200, 9200, 9203, 9203, 9725, 9726, 9748, 9749, 9776, 9783, 9800, 9811, 9855, 9855, 9866, 9871, 9875, 9875, 9889, 9889, 9898, 9899, 9917, 9918, 9924, 9925, 9934, 9934, 9940, 9940, 9962, 9962, 9970, 9971, 9973, 9973, 9978, 9978, 9981, 9981, 9989, 9989, 9994, 9995, 10024, 10024, 10060, 10060, 10062, 10062, 10067, 10069, 10071, 10071, 10133, 10135, 10160, 10160, 10175, 10175, 11035, 11036, 11088, 11088, 11093, 11093, 11904, 11929, 11931, 12019, 12032, 12245, 12272, 12287, 12289, 12350, 12353, 12438, 12441, 12543, 12549, 12591, 12593, 12686, 12688, 12773, 12783, 12830, 12832, 12871, 12880, 42124, 42128, 42182, 43360, 43388, 44032, 55203, 63744, 64255, 65040, 65049, 65072, 65106, 65108, 65126, 65128, 65131, 94176, 94180, 94192, 94198, 94208, 101594, 101631, 101664, 101760, 101874, 101888, 102801, 102816, 102866, 110576, 110579, 110581, 110587, 110589, 110590, 110592, 110888, 110898, 110898, 110928, 110930, 110933, 110933, 110948, 110952, 110960, 111355, 119552, 119638, 119648, 119670, 126980, 126980, 127183, 127183, 127374, 127374, 127377, 127386, 127406, 127406, 127488, 127490, 127504, 127547, 127552, 127560, 127568, 127569, 127584, 127589, 127744, 127776, 127789, 127797, 127799, 127868, 127870, 127891, 127904, 127946, 127951, 127955, 127968, 127984, 127988, 127988, 127992, 128062, 128064, 128064, 128066, 128252, 128255, 128317, 128331, 128334, 128336, 128359, 128378, 128378, 128405, 128406, 128420, 128420, 128507, 128591, 128640, 128709, 128716, 128716, 128720, 128722, 128725, 128729, 128732, 128735, 128747, 128748, 128756, 128764, 128986, 128986, 128992, 129003, 129008, 129008, 129292, 129338, 129340, 129349, 129351, 129535, 129648, 129660, 129664, 129734, 129736, 129736, 129740, 129757, 129759, 129771, 129775, 129786, 131072, 196605, 196608, 262141];
 
-// node_modules/get-east-asian-width/utilities.js
+// ../../node_modules/get-east-asian-width/utilities.js
 var isInRange = (ranges, codePoint) => {
   let low = 0;
   let high = Math.floor(ranges.length / 2) - 1;
@@ -60,7 +60,7 @@ var isInRange = (ranges, codePoint) => {
   return false;
 };
 
-// node_modules/get-east-asian-width/lookup.js
+// ../../node_modules/get-east-asian-width/lookup.js
 var commonCjkCodePoint = 19968;
 var [wideFastPathStart, wideFastPathEnd] = /* @__PURE__ */ findWideFastPathRange(wideRanges);
 function findWideFastPathRange(ranges) {
@@ -101,7 +101,7 @@ var isWide = (codePoint) => {
   return isInRange(wideRanges, codePoint);
 };
 
-// node_modules/get-east-asian-width/index.js
+// ../../node_modules/get-east-asian-width/index.js
 function validate(codePoint) {
   if (!Number.isSafeInteger(codePoint)) {
     throw new TypeError(`Expected a code point, got \`${typeof codePoint}\`.`);
@@ -115,12 +115,12 @@ function eastAsianWidth(codePoint, { ambiguousAsWide = false } = {}) {
   return 1;
 }
 
-// node_modules/emoji-regex/index.mjs
+// ../../node_modules/emoji-regex/index.mjs
 var emoji_regex_default = () => {
   return /[#*0-9]\uFE0F?\u20E3|[\xA9\xAE\u203C\u2049\u2122\u2139\u2194-\u2199\u21A9\u21AA\u231A\u231B\u2328\u23CF\u23ED-\u23EF\u23F1\u23F2\u23F8-\u23FA\u24C2\u25AA\u25AB\u25B6\u25C0\u25FB\u25FC\u25FE\u2600-\u2604\u260E\u2611\u2614\u2615\u2618\u2620\u2622\u2623\u2626\u262A\u262E\u262F\u2638-\u263A\u2640\u2642\u2648-\u2653\u265F\u2660\u2663\u2665\u2666\u2668\u267B\u267E\u267F\u2692\u2694-\u2697\u2699\u269B\u269C\u26A0\u26A7\u26AA\u26B0\u26B1\u26BD\u26BE\u26C4\u26C8\u26CF\u26D1\u26E9\u26F0-\u26F5\u26F7\u26F8\u26FA\u2702\u2708\u2709\u270F\u2712\u2714\u2716\u271D\u2721\u2733\u2734\u2744\u2747\u2757\u2763\u27A1\u2934\u2935\u2B05-\u2B07\u2B1B\u2B1C\u2B55\u3030\u303D\u3297\u3299]\uFE0F?|[\u261D\u270C\u270D](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\u270A\u270B](?:\uD83C[\uDFFB-\uDFFF])?|[\u23E9-\u23EC\u23F0\u23F3\u25FD\u2693\u26A1\u26AB\u26C5\u26CE\u26D4\u26EA\u26FD\u2705\u2728\u274C\u274E\u2753-\u2755\u2795-\u2797\u27B0\u27BF\u2B50]|\u26D3\uFE0F?(?:\u200D\uD83D\uDCA5)?|\u26F9(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\u2764\uFE0F?(?:\u200D(?:\uD83D\uDD25|\uD83E\uDE79))?|\uD83C(?:[\uDC04\uDD70\uDD71\uDD7E\uDD7F\uDE02\uDE37\uDF21\uDF24-\uDF2C\uDF36\uDF7D\uDF96\uDF97\uDF99-\uDF9B\uDF9E\uDF9F\uDFCD\uDFCE\uDFD4-\uDFDF\uDFF5\uDFF7]\uFE0F?|[\uDF85\uDFC2\uDFC7](?:\uD83C[\uDFFB-\uDFFF])?|[\uDFC4\uDFCA](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDFCB\uDFCC](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDCCF\uDD8E\uDD91-\uDD9A\uDE01\uDE1A\uDE2F\uDE32-\uDE36\uDE38-\uDE3A\uDE50\uDE51\uDF00-\uDF20\uDF2D-\uDF35\uDF37-\uDF43\uDF45-\uDF4A\uDF4C-\uDF7C\uDF7E-\uDF84\uDF86-\uDF93\uDFA0-\uDFC1\uDFC5\uDFC6\uDFC8\uDFC9\uDFCF-\uDFD3\uDFE0-\uDFF0\uDFF8-\uDFFF]|\uDDE6\uD83C[\uDDE8-\uDDEC\uDDEE\uDDF1\uDDF2\uDDF4\uDDF6-\uDDFA\uDDFC\uDDFD\uDDFF]|\uDDE7\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEF\uDDF1-\uDDF4\uDDF6-\uDDF9\uDDFB\uDDFC\uDDFE\uDDFF]|\uDDE8\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDEE\uDDF0-\uDDF7\uDDFA-\uDDFF]|\uDDE9\uD83C[\uDDEA\uDDEC\uDDEF\uDDF0\uDDF2\uDDF4\uDDFF]|\uDDEA\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDED\uDDF7-\uDDFA]|\uDDEB\uD83C[\uDDEE-\uDDF0\uDDF2\uDDF4\uDDF7]|\uDDEC\uD83C[\uDDE6\uDDE7\uDDE9-\uDDEE\uDDF1-\uDDF3\uDDF5-\uDDFA\uDDFC\uDDFE]|\uDDED\uD83C[\uDDF0\uDDF2\uDDF3\uDDF7\uDDF9\uDDFA]|\uDDEE\uD83C[\uDDE8-\uDDEA\uDDF1-\uDDF4\uDDF6-\uDDF9]|\uDDEF\uD83C[\uDDEA\uDDF2\uDDF4\uDDF5]|\uDDF0\uD83C[\uDDEA\uDDEC-\uDDEE\uDDF2\uDDF3\uDDF5\uDDF7\uDDFC\uDDFE\uDDFF]|\uDDF1\uD83C[\uDDE6-\uDDE8\uDDEE\uDDF0\uDDF7-\uDDFB\uDDFE]|\uDDF2\uD83C[\uDDE6\uDDE8-\uDDED\uDDF0-\uDDFF]|\uDDF3\uD83C[\uDDE6\uDDE8\uDDEA-\uDDEC\uDDEE\uDDF1\uDDF4\uDDF5\uDDF7\uDDFA\uDDFF]|\uDDF4\uD83C\uDDF2|\uDDF5\uD83C[\uDDE6\uDDEA-\uDDED\uDDF0-\uDDF3\uDDF7-\uDDF9\uDDFC\uDDFE]|\uDDF6\uD83C\uDDE6|\uDDF7\uD83C[\uDDEA\uDDF4\uDDF8\uDDFA\uDDFC]|\uDDF8\uD83C[\uDDE6-\uDDEA\uDDEC-\uDDF4\uDDF7-\uDDF9\uDDFB\uDDFD-\uDDFF]|\uDDF9\uD83C[\uDDE6\uDDE8\uDDE9\uDDEB-\uDDED\uDDEF-\uDDF4\uDDF7\uDDF9\uDDFB\uDDFC\uDDFF]|\uDDFA\uD83C[\uDDE6\uDDEC\uDDF2\uDDF3\uDDF8\uDDFE\uDDFF]|\uDDFB\uD83C[\uDDE6\uDDE8\uDDEA\uDDEC\uDDEE\uDDF3\uDDFA]|\uDDFC\uD83C[\uDDEB\uDDF8]|\uDDFD\uD83C\uDDF0|\uDDFE\uD83C[\uDDEA\uDDF9]|\uDDFF\uD83C[\uDDE6\uDDF2\uDDFC]|\uDF44(?:\u200D\uD83D\uDFEB)?|\uDF4B(?:\u200D\uD83D\uDFE9)?|\uDFC3(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDFF3\uFE0F?(?:\u200D(?:\u26A7\uFE0F?|\uD83C\uDF08))?|\uDFF4(?:\u200D\u2620\uFE0F?|\uDB40\uDC67\uDB40\uDC62\uDB40(?:\uDC65\uDB40\uDC6E\uDB40\uDC67|\uDC73\uDB40\uDC63\uDB40\uDC74|\uDC77\uDB40\uDC6C\uDB40\uDC73)\uDB40\uDC7F)?)|\uD83D(?:[\uDC3F\uDCFD\uDD49\uDD4A\uDD6F\uDD70\uDD73\uDD76-\uDD79\uDD87\uDD8A-\uDD8D\uDDA5\uDDA8\uDDB1\uDDB2\uDDBC\uDDC2-\uDDC4\uDDD1-\uDDD3\uDDDC-\uDDDE\uDDE1\uDDE3\uDDE8\uDDEF\uDDF3\uDDFA\uDECB\uDECD-\uDECF\uDEE0-\uDEE5\uDEE9\uDEF0\uDEF3]\uFE0F?|[\uDC42\uDC43\uDC46-\uDC50\uDC66\uDC67\uDC6B-\uDC6D\uDC72\uDC74-\uDC76\uDC78\uDC7C\uDC83\uDC85\uDC8F\uDC91\uDCAA\uDD7A\uDD95\uDD96\uDE4C\uDE4F\uDEC0\uDECC](?:\uD83C[\uDFFB-\uDFFF])?|[\uDC6E-\uDC71\uDC73\uDC77\uDC81\uDC82\uDC86\uDC87\uDE45-\uDE47\uDE4B\uDE4D\uDE4E\uDEA3\uDEB4\uDEB5](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD74\uDD90](?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?|[\uDC00-\uDC07\uDC09-\uDC14\uDC16-\uDC25\uDC27-\uDC3A\uDC3C-\uDC3E\uDC40\uDC44\uDC45\uDC51-\uDC65\uDC6A\uDC79-\uDC7B\uDC7D-\uDC80\uDC84\uDC88-\uDC8E\uDC90\uDC92-\uDCA9\uDCAB-\uDCFC\uDCFF-\uDD3D\uDD4B-\uDD4E\uDD50-\uDD67\uDDA4\uDDFB-\uDE2D\uDE2F-\uDE34\uDE37-\uDE41\uDE43\uDE44\uDE48-\uDE4A\uDE80-\uDEA2\uDEA4-\uDEB3\uDEB7-\uDEBF\uDEC1-\uDEC5\uDED0-\uDED2\uDED5-\uDED8\uDEDC-\uDEDF\uDEEB\uDEEC\uDEF4-\uDEFC\uDFE0-\uDFEB\uDFF0]|\uDC08(?:\u200D\u2B1B)?|\uDC15(?:\u200D\uD83E\uDDBA)?|\uDC26(?:\u200D(?:\u2B1B|\uD83D\uDD25))?|\uDC3B(?:\u200D\u2744\uFE0F?)?|\uDC41\uFE0F?(?:\u200D\uD83D\uDDE8\uFE0F?)?|\uDC68(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDC68\uDC69]\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?)|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFC-\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFD-\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFD\uDFFF]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?\uDC68\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDD1D\uDEEF]\u200D\uD83D\uDC68\uD83C[\uDFFB-\uDFFE]|[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3])))?))?|\uDC69(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:\uDC8B\u200D\uD83D)?[\uDC68\uDC69]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?|\uDC69\u200D\uD83D(?:\uDC66(?:\u200D\uD83D\uDC66)?|\uDC67(?:\u200D\uD83D[\uDC66\uDC67])?))|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFC-\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFD-\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFD\uDFFF]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D\uD83D(?:[\uDC68\uDC69]|\uDC8B\u200D\uD83D[\uDC68\uDC69])\uD83C[\uDFFB-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3]|\uDD1D\u200D\uD83D[\uDC68\uDC69]\uD83C[\uDFFB-\uDFFE]|\uDEEF\u200D\uD83D\uDC69\uD83C[\uDFFB-\uDFFE])))?))?|\uDD75(?:\uD83C[\uDFFB-\uDFFF]|\uFE0F)?(?:\u200D[\u2640\u2642]\uFE0F?)?|\uDE2E(?:\u200D\uD83D\uDCA8)?|\uDE35(?:\u200D\uD83D\uDCAB)?|\uDE36(?:\u200D\uD83C\uDF2B\uFE0F?)?|\uDE42(?:\u200D[\u2194\u2195]\uFE0F?)?|\uDEB6(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?)|\uD83E(?:[\uDD0C\uDD0F\uDD18-\uDD1F\uDD30-\uDD34\uDD36\uDD77\uDDB5\uDDB6\uDDBB\uDDD2\uDDD3\uDDD5\uDEC3-\uDEC5\uDEF0\uDEF2-\uDEF8](?:\uD83C[\uDFFB-\uDFFF])?|[\uDD26\uDD35\uDD37-\uDD39\uDD3C-\uDD3E\uDDB8\uDDB9\uDDCD\uDDCF\uDDD4\uDDD6-\uDDDD](?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDDDE\uDDDF](?:\u200D[\u2640\u2642]\uFE0F?)?|[\uDD0D\uDD0E\uDD10-\uDD17\uDD20-\uDD25\uDD27-\uDD2F\uDD3A\uDD3F-\uDD45\uDD47-\uDD76\uDD78-\uDDB4\uDDB7\uDDBA\uDDBC-\uDDCC\uDDD0\uDDE0-\uDDFF\uDE70-\uDE7C\uDE80-\uDE8A\uDE8E-\uDEC2\uDEC6\uDEC8\uDECD-\uDEDC\uDEDF-\uDEEA\uDEEF]|\uDDCE(?:\uD83C[\uDFFB-\uDFFF])?(?:\u200D(?:[\u2640\u2642]\uFE0F?(?:\u200D\u27A1\uFE0F?)?|\u27A1\uFE0F?))?|\uDDD1(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1|\uDDD1\u200D\uD83E\uDDD2(?:\u200D\uD83E\uDDD2)?|\uDDD2(?:\u200D\uD83E\uDDD2)?))|\uD83C(?:\uDFFB(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFC-\uDFFF])))?|\uDFFC(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFD-\uDFFF])))?|\uDFFD(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])))?|\uDFFE(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFD\uDFFF])))?|\uDFFF(?:\u200D(?:[\u2695\u2696\u2708]\uFE0F?|\u2764\uFE0F?\u200D(?:\uD83D\uDC8B\u200D)?\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE]|\uD83C[\uDF3E\uDF73\uDF7C\uDF84\uDF93\uDFA4\uDFA8\uDFEB\uDFED]|\uD83D(?:[\uDCBB\uDCBC\uDD27\uDD2C\uDE80\uDE92]|\uDC30\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE])|\uD83E(?:[\uDDAF\uDDBC\uDDBD](?:\u200D\u27A1\uFE0F?)?|[\uDDB0-\uDDB3\uDE70]|\uDD1D\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFF]|\uDEEF\u200D\uD83E\uDDD1\uD83C[\uDFFB-\uDFFE])))?))?|\uDEF1(?:\uD83C(?:\uDFFB(?:\u200D\uD83E\uDEF2\uD83C[\uDFFC-\uDFFF])?|\uDFFC(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFD-\uDFFF])?|\uDFFD(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB\uDFFC\uDFFE\uDFFF])?|\uDFFE(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFD\uDFFF])?|\uDFFF(?:\u200D\uD83E\uDEF2\uD83C[\uDFFB-\uDFFE])?))?)/g;
 };
 
-// node_modules/string-width/index.js
+// ../../node_modules/string-width/index.js
 var segmenter = new Intl.Segmenter;
 var defaultIgnorableCodePointRegex = /^\p{Default_Ignorable_Code_Point}$/u;
 function stringWidth(string, options = {}) {
@@ -1232,6 +1232,43 @@ import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { TextAttributes } from "@opentui/core";
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
+
+// src/core/attestation.ts
+var quoteSha = (sha) => {
+  if (typeof sha !== "string")
+    return;
+  const trimmed = sha.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 7) : undefined;
+};
+var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
+function iterationAttestation(entry, durationMs) {
+  const turns = nonNegative(entry.turns);
+  const tools = nonNegative(entry.toolCalls);
+  const parts = [`v${entry.version} \xB7 met`, `${turns} turn${turns === 1 ? "" : "s"}`, `${tools} tool${tools === 1 ? "" : "s"}`];
+  if (Number.isFinite(durationMs) && durationMs > 0)
+    parts.push(formatDuration(durationMs));
+  if (tools === 0)
+    parts.push("already satisfied at HEAD");
+  const sha = quoteSha(entry.sha);
+  if (sha)
+    parts.push(sha);
+  const cost = entry.spend?.cost;
+  if (cost !== undefined && Number.isFinite(cost) && cost > 0)
+    parts.push(formatCost(cost));
+  return parts.join(" \xB7 ");
+}
+function finalTallyLine(status, totals) {
+  const iterations = nonNegative(totals.iterations);
+  const turns = nonNegative(totals.turns);
+  const tools = nonNegative(totals.tools);
+  let line = `loop ${status} \xB7 ${iterations} iteration${iterations === 1 ? "" : "s"} \xB7 ${turns} turns \xB7 ${tools} tools \xB7 ${formatDurationCoarse(nonNegative(totals.spanMs))} wall`;
+  if (totals.spend) {
+    line += totals.spend.measured === iterations ? ` \xB7 ${formatCost(totals.spend.total)}` : ` \xB7 ${formatCost(totals.spend.total)} across ${totals.spend.measured}/${iterations} measured`;
+  }
+  return line;
+}
+
+// src/tui-history.tsx
 var SUMMARY_MAX = 400;
 var WHY_LIMIT = 3;
 var WHY_REASON_MAX = 400;
@@ -1327,6 +1364,40 @@ var LoopSection = (props) => {
     setLocalShowAll((v) => !v);
   };
   const [railHovered, setRailHovered] = createSignal(false);
+  const [attestHover, setAttestHover] = createSignal(null);
+  const [attestCopied, setAttestCopied] = createSignal(null);
+  const [tallyHover, setTallyHover] = createSignal(false);
+  const [tallyCopied, setTallyCopied] = createSignal(false);
+  let quoteTimer;
+  onCleanup(() => {
+    if (quoteTimer)
+      clearTimeout(quoteTimer);
+  });
+  const ackQuote = (arm) => {
+    arm();
+    if (quoteTimer)
+      clearTimeout(quoteTimer);
+    quoteTimer = setTimeout(() => {
+      setAttestCopied(null);
+      setTallyCopied(false);
+    }, 1600);
+  };
+  const copyAttestation = (entry, durationMs) => {
+    if (!props.onCopyAttestation)
+      return;
+    try {
+      props.onCopyAttestation(iterationAttestation(entry, durationMs));
+      ackQuote(() => setAttestCopied(entry.version));
+    } catch {}
+  };
+  const copyTally = (line) => {
+    if (!props.onCopyTally)
+      return;
+    try {
+      props.onCopyTally(line);
+      ackQuote(() => setTallyCopied(true));
+    } catch {}
+  };
   const hiddenCount = () => showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE);
   const visibleHistory = () => showAll() ? history() : history().slice(-RAIL_VISIBLE);
   const railOffset = () => Math.max(0, done() - visibleHistory().length);
@@ -1375,12 +1446,6 @@ var LoopSection = (props) => {
   const livePace = () => isTerminal() ? undefined : pace();
   const finished = () => history().length > 0 && (isTerminal() || capReached());
   const totals = () => loopTotals(history(), props.goal.setAt);
-  const tallySpend = () => {
-    const spend = totals().spend;
-    if (!spend)
-      return "";
-    return spend.measured === totals().iterations ? ` \xB7 ${formatCost(spend.total)}` : ` \xB7 ${formatCost(spend.total)} across ${spend.measured}/${totals().iterations} measured`;
-  };
   const finalGlyph = () => ascii() ? props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x" : props.goal.status === "achieved" ? "\u2713" : props.goal.status === "impossible" ? "\u2298" : "\u2717";
   const finalColor = () => mono() ? props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint : props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint;
   const nowColor = () => {
@@ -1443,15 +1508,15 @@ var LoopSection = (props) => {
         return livePace();
       },
       children: (estimate) => (() => {
-        var _el$22 = _$createElement("box"), _el$23 = _$createElement("text");
-        _$insertNode(_el$22, _el$23);
-        _$setProp(_el$22, "flexDirection", "row");
-        _$setProp(_el$22, "gap", 2);
-        _$insert(_el$22, () => label(theme(), "pace"), _el$23);
-        _$setProp(_el$23, "wrapMode", "none");
-        _$insert(_el$23, () => `~${formatDurationCoarse(estimate().perIteration)}/iteration \xB7 ~${formatDurationCoarse(estimate().remaining)} left at this pace`);
-        _$effect((_$p) => _$setProp(_el$23, "fg", theme().text.faint, _$p));
-        return _el$22;
+        var _el$23 = _$createElement("box"), _el$24 = _$createElement("text");
+        _$insertNode(_el$23, _el$24);
+        _$setProp(_el$23, "flexDirection", "row");
+        _$setProp(_el$23, "gap", 2);
+        _$insert(_el$23, () => label(theme(), "pace"), _el$24);
+        _$setProp(_el$24, "wrapMode", "none");
+        _$insert(_el$24, () => `~${formatDurationCoarse(estimate().perIteration)}/iteration \xB7 ~${formatDurationCoarse(estimate().remaining)} left at this pace`);
+        _$effect((_$p) => _$setProp(_el$24, "fg", theme().text.faint, _$p));
+        return _el$23;
       })()
     }), _el$11);
     _$insertNode(_el$11, _el$12);
@@ -1470,18 +1535,18 @@ var LoopSection = (props) => {
         const pending = () => c.landedAt === undefined;
         const age = () => formatDuration(nowMs() - (c.landedAt ?? c.requestedAt));
         return (() => {
-          var _el$24 = _$createElement("box"), _el$25 = _$createElement("text");
-          _$insertNode(_el$24, _el$25);
-          _$setProp(_el$24, "flexDirection", "row");
-          _$setProp(_el$24, "gap", 2);
-          _$insert(_el$24, () => label(theme(), "compact"), _el$25);
-          _$setProp(_el$25, "wrapMode", "none");
-          _$insert(_el$25, (() => {
+          var _el$25 = _$createElement("box"), _el$26 = _$createElement("text");
+          _$insertNode(_el$25, _el$26);
+          _$setProp(_el$25, "flexDirection", "row");
+          _$setProp(_el$25, "gap", 2);
+          _$insert(_el$25, () => label(theme(), "compact"), _el$26);
+          _$setProp(_el$26, "wrapMode", "none");
+          _$insert(_el$26, (() => {
             var _c$3 = _$memo(() => !!pending());
             return () => _c$3() ? `pending ${age()} \xB7 miss ${c.misses}/${COMPACT_MISS_CAP}${c.estimatedTokens !== undefined ? ` \xB7 ~${formatTokens(c.estimatedTokens)} at request` : ""}` : `landed ${age()} ago`;
           })());
-          _$effect((_$p) => _$setProp(_el$25, "fg", mono() ? theme().text.base : pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
-          return _el$24;
+          _$effect((_$p) => _$setProp(_el$26, "fg", mono() ? theme().text.base : pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
+          return _el$25;
         })();
       }
     }), null);
@@ -1490,27 +1555,27 @@ var LoopSection = (props) => {
         return spark();
       },
       children: (s) => (() => {
-        var _el$26 = _$createElement("box"), _el$27 = _$createElement("text"), _el$28 = _$createElement("text");
-        _$insertNode(_el$26, _el$27);
-        _$insertNode(_el$26, _el$28);
-        _$setProp(_el$26, "flexDirection", "row");
-        _$setProp(_el$26, "gap", 2);
-        _$insert(_el$26, () => label(theme(), "context"), _el$27);
-        _$setProp(_el$27, "wrapMode", "none");
-        _$setProp(_el$27, "flexShrink", 0);
-        _$insert(_el$27, () => s().bars);
+        var _el$27 = _$createElement("box"), _el$28 = _$createElement("text"), _el$29 = _$createElement("text");
+        _$insertNode(_el$27, _el$28);
+        _$insertNode(_el$27, _el$29);
+        _$setProp(_el$27, "flexDirection", "row");
+        _$setProp(_el$27, "gap", 2);
+        _$insert(_el$27, () => label(theme(), "context"), _el$28);
         _$setProp(_el$28, "wrapMode", "none");
-        _$insert(_el$28, () => `~${formatTokens(s().peak)} peak \xB7 arm sizes, oldest${ascii() ? "->" : "\u2192"}newest`);
+        _$setProp(_el$28, "flexShrink", 0);
+        _$insert(_el$28, () => s().bars);
+        _$setProp(_el$29, "wrapMode", "none");
+        _$insert(_el$29, () => `~${formatTokens(s().peak)} peak \xB7 arm sizes, oldest${ascii() ? "->" : "\u2192"}newest`);
         _$effect((_p$) => {
-          var _v$15 = theme().text.base, _v$16 = theme().text.faint;
-          _v$15 !== _p$.e && (_p$.e = _$setProp(_el$27, "fg", _v$15, _p$.e));
-          _v$16 !== _p$.t && (_p$.t = _$setProp(_el$28, "fg", _v$16, _p$.t));
+          var _v$19 = theme().text.base, _v$20 = theme().text.faint;
+          _v$19 !== _p$.e && (_p$.e = _$setProp(_el$28, "fg", _v$19, _p$.e));
+          _v$20 !== _p$.t && (_p$.t = _$setProp(_el$29, "fg", _v$20, _p$.t));
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$26;
+        return _el$27;
       })()
     }), null);
     _$insert(_el$5, _$createComponent(Show, {
@@ -1561,23 +1626,47 @@ var LoopSection = (props) => {
         const fullIndex = () => railOffset() + index();
         const zeroTools = entry.toolCalls === 0;
         const rowColor = zeroTools ? mono() ? theme().text.base : theme().text.muted : theme().text.base;
+        const attestDuration = durations()[fullIndex()] ?? 0;
+        const attestInteractive = props.onCopyAttestation !== undefined;
+        const attestHovered = attestHover() === entry.version;
         return (() => {
-          var _el$29 = _$createElement("box"), _el$30 = _$createElement("box"), _el$31 = _$createElement("text"), _el$32 = _$createElement("text");
-          _$insertNode(_el$29, _el$30);
-          _$setProp(_el$29, "flexDirection", "column");
+          var _el$30 = _$createElement("box"), _el$31 = _$createElement("box"), _el$32 = _$createElement("text"), _el$33 = _$createElement("text");
           _$insertNode(_el$30, _el$31);
-          _$insertNode(_el$30, _el$32);
-          _$setProp(_el$30, "flexDirection", "row");
-          _$setProp(_el$30, "gap", 2);
-          _$insert(_el$30, () => label(theme(), `v${entry.version}`), _el$31);
-          _$setProp(_el$31, "wrapMode", "none");
-          _$setProp(_el$31, "flexShrink", 0);
-          _$insert(_el$31, () => zeroTools ? ascii() ? "." : "\u25CB" : ascii() ? "+" : "\u2713");
-          _$setProp(_el$32, "wrapMode", "word");
-          _$setProp(_el$32, "flexGrow", 1);
-          _$setProp(_el$32, "fg", rowColor);
-          _$insert(_el$32, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`);
-          _$insert(_el$29, _$createComponent(Show, {
+          _$setProp(_el$30, "flexDirection", "column");
+          _$insertNode(_el$31, _el$32);
+          _$insertNode(_el$31, _el$33);
+          _$setProp(_el$31, "flexDirection", "row");
+          _$setProp(_el$31, "gap", 2);
+          _$setProp(_el$31, "onMouseUp", attestInteractive ? (event) => {
+            if (event.button !== 0)
+              return;
+            event.stopPropagation();
+            copyAttestation(entry, attestDuration);
+          } : undefined);
+          _$setProp(_el$31, "onMouseOver", attestInteractive ? () => setAttestHover(entry.version) : undefined);
+          _$setProp(_el$31, "onMouseOut", attestInteractive ? () => setAttestHover(null) : undefined);
+          _$insert(_el$31, () => label(theme(), `v${entry.version}`), _el$32);
+          _$setProp(_el$32, "wrapMode", "none");
+          _$setProp(_el$32, "flexShrink", 0);
+          _$insert(_el$32, () => zeroTools ? ascii() ? "." : "\u25CB" : ascii() ? "+" : "\u2713");
+          _$setProp(_el$33, "wrapMode", "word");
+          _$setProp(_el$33, "flexGrow", 1);
+          _$setProp(_el$33, "fg", rowColor);
+          _$insert(_el$33, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(attestDuration)}${zeroTools ? " \xB7 no tools \xB7 already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`);
+          _$insert(_el$31, _$createComponent(Show, {
+            get when() {
+              return attestCopied() === entry.version;
+            },
+            get children() {
+              var _el$34 = _$createElement("text");
+              _$setProp(_el$34, "wrapMode", "none");
+              _$setProp(_el$34, "flexShrink", 0);
+              _$insert(_el$34, () => ascii() ? "+ copied" : "\u2713 copied");
+              _$effect((_$p) => _$setProp(_el$34, "fg", theme().text.faint, _$p));
+              return _el$34;
+            }
+          }), null);
+          _$insert(_el$30, _$createComponent(Show, {
             get when() {
               return entry.summary.trim().length > 0;
             },
@@ -1597,11 +1686,19 @@ var LoopSection = (props) => {
               });
             }
           }), null);
-          _$effect((_$p) => _$setProp(_el$31, "fg", verdictEntryAccentColor(theme(), {
-            verdict: "met",
-            toolCalls: entry.toolCalls
-          }, mono()), _$p));
-          return _el$29;
+          _$effect((_p$) => {
+            var _v$21 = verdictEntryAccentColor(theme(), {
+              verdict: "met",
+              toolCalls: entry.toolCalls
+            }, mono()), _v$22 = attestHovered ? TextAttributes.BOLD : undefined;
+            _v$21 !== _p$.e && (_p$.e = _$setProp(_el$32, "fg", _v$21, _p$.e));
+            _v$22 !== _p$.t && (_p$.t = _$setProp(_el$33, "attributes", _v$22, _p$.t));
+            return _p$;
+          }, {
+            e: undefined,
+            t: undefined
+          });
+          return _el$30;
         })();
       }
     }), null);
@@ -1627,28 +1724,28 @@ var LoopSection = (props) => {
             return iterVerdict();
           },
           children: (entry) => (() => {
-            var _el$33 = _$createElement("box"), _el$34 = _$createElement("text"), _el$36 = _$createElement("text"), _el$37 = _$createElement("text");
-            _$insertNode(_el$33, _el$34);
-            _$insertNode(_el$33, _el$36);
-            _$insertNode(_el$33, _el$37);
-            _$setProp(_el$33, "flexDirection", "row");
-            _$setProp(_el$33, "gap", 1);
-            _$setProp(_el$33, "flexShrink", 0);
-            _$insertNode(_el$34, _$createTextNode(`\xB7 last`));
-            _$setProp(_el$34, "wrapMode", "none");
+            var _el$35 = _$createElement("box"), _el$36 = _$createElement("text"), _el$38 = _$createElement("text"), _el$39 = _$createElement("text");
+            _$insertNode(_el$35, _el$36);
+            _$insertNode(_el$35, _el$38);
+            _$insertNode(_el$35, _el$39);
+            _$setProp(_el$35, "flexDirection", "row");
+            _$setProp(_el$35, "gap", 1);
+            _$setProp(_el$35, "flexShrink", 0);
+            _$insertNode(_el$36, _$createTextNode(`\xB7 last`));
             _$setProp(_el$36, "wrapMode", "none");
-            _$insert(_el$36, () => verdictEntryGlyph(entry(), ascii()));
-            _$setProp(_el$37, "wrapMode", "none");
-            _$insert(_el$37, (() => {
+            _$setProp(_el$38, "wrapMode", "none");
+            _$insert(_el$38, () => verdictEntryGlyph(entry(), ascii()));
+            _$setProp(_el$39, "wrapMode", "none");
+            _$insert(_el$39, (() => {
               var _c$4 = _$memo(() => turnsSince() === 0);
               return () => _c$4() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
             })());
             _$effect((_p$) => {
-              var _v$17 = theme().text.muted, _v$18 = colorFor(theme(), entry(), mono()), _v$19 = TextAttributes.BOLD, _v$20 = theme().text.faint;
-              _v$17 !== _p$.e && (_p$.e = _$setProp(_el$34, "fg", _v$17, _p$.e));
-              _v$18 !== _p$.t && (_p$.t = _$setProp(_el$36, "fg", _v$18, _p$.t));
-              _v$19 !== _p$.a && (_p$.a = _$setProp(_el$36, "attributes", _v$19, _p$.a));
-              _v$20 !== _p$.o && (_p$.o = _$setProp(_el$37, "fg", _v$20, _p$.o));
+              var _v$23 = theme().text.muted, _v$24 = colorFor(theme(), entry(), mono()), _v$25 = TextAttributes.BOLD, _v$26 = theme().text.faint;
+              _v$23 !== _p$.e && (_p$.e = _$setProp(_el$36, "fg", _v$23, _p$.e));
+              _v$24 !== _p$.t && (_p$.t = _$setProp(_el$38, "fg", _v$24, _p$.t));
+              _v$25 !== _p$.a && (_p$.a = _$setProp(_el$38, "attributes", _v$25, _p$.a));
+              _v$26 !== _p$.o && (_p$.o = _$setProp(_el$39, "fg", _v$26, _p$.o));
               return _p$;
             }, {
               e: undefined,
@@ -1656,7 +1753,7 @@ var LoopSection = (props) => {
               a: undefined,
               o: undefined
             });
-            return _el$33;
+            return _el$35;
           })()
         }), null);
         _$effect((_p$) => {
@@ -1689,17 +1786,43 @@ var LoopSection = (props) => {
         _$insert(_el$20, finalGlyph);
         _$setProp(_el$21, "wrapMode", "word");
         _$setProp(_el$21, "flexGrow", 1);
-        _$insert(_el$21, () => `loop ${props.goal.status} \xB7 ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} \xB7 ${totals().turns} turns \xB7 ${totals().tools} tools \xB7 ${formatDurationCoarse(totals().spanMs)} wall${tallySpend()}`);
+        _$insert(_el$21, () => finalTallyLine(props.goal.status, totals()));
+        _$insert(_el$19, _$createComponent(Show, {
+          get when() {
+            return tallyCopied();
+          },
+          get children() {
+            var _el$22 = _$createElement("text");
+            _$setProp(_el$22, "wrapMode", "none");
+            _$setProp(_el$22, "flexShrink", 0);
+            _$insert(_el$22, () => ascii() ? "+ copied" : "\u2713 copied");
+            _$effect((_$p) => _$setProp(_el$22, "fg", theme().text.faint, _$p));
+            return _el$22;
+          }
+        }), null);
         _$effect((_p$) => {
-          var _v$1 = finalColor(), _v$10 = TextAttributes.BOLD, _v$11 = theme().text.base;
-          _v$1 !== _p$.e && (_p$.e = _$setProp(_el$20, "fg", _v$1, _p$.e));
-          _v$10 !== _p$.t && (_p$.t = _$setProp(_el$20, "attributes", _v$10, _p$.t));
-          _v$11 !== _p$.a && (_p$.a = _$setProp(_el$21, "fg", _v$11, _p$.a));
+          var _v$1 = props.onCopyTally ? (event) => {
+            if (event.button !== 0)
+              return;
+            event.stopPropagation();
+            copyTally(finalTallyLine(props.goal.status, totals()));
+          } : undefined, _v$10 = props.onCopyTally ? () => setTallyHover(true) : undefined, _v$11 = props.onCopyTally ? () => setTallyHover(false) : undefined, _v$12 = finalColor(), _v$13 = TextAttributes.BOLD, _v$14 = theme().text.base, _v$15 = tallyHover() ? TextAttributes.BOLD : undefined;
+          _v$1 !== _p$.e && (_p$.e = _$setProp(_el$19, "onMouseUp", _v$1, _p$.e));
+          _v$10 !== _p$.t && (_p$.t = _$setProp(_el$19, "onMouseOver", _v$10, _p$.t));
+          _v$11 !== _p$.a && (_p$.a = _$setProp(_el$19, "onMouseOut", _v$11, _p$.a));
+          _v$12 !== _p$.o && (_p$.o = _$setProp(_el$20, "fg", _v$12, _p$.o));
+          _v$13 !== _p$.i && (_p$.i = _$setProp(_el$20, "attributes", _v$13, _p$.i));
+          _v$14 !== _p$.n && (_p$.n = _$setProp(_el$21, "fg", _v$14, _p$.n));
+          _v$15 !== _p$.s && (_p$.s = _$setProp(_el$21, "attributes", _v$15, _p$.s));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
-          a: undefined
+          a: undefined,
+          o: undefined,
+          i: undefined,
+          n: undefined,
+          s: undefined
         });
         return _el$19;
       }
@@ -1721,10 +1844,10 @@ var LoopSection = (props) => {
       nowMs
     }), null);
     _$effect((_p$) => {
-      var _v$12 = theme().text.base, _v$13 = TextAttributes.BOLD, _v$14 = theme().text.base;
-      _v$12 !== _p$.e && (_p$.e = _$setProp(_el$7, "fg", _v$12, _p$.e));
-      _v$13 !== _p$.t && (_p$.t = _$setProp(_el$7, "attributes", _v$13, _p$.t));
-      _v$14 !== _p$.a && (_p$.a = _$setProp(_el$12, "fg", _v$14, _p$.a));
+      var _v$16 = theme().text.base, _v$17 = TextAttributes.BOLD, _v$18 = theme().text.base;
+      _v$16 !== _p$.e && (_p$.e = _$setProp(_el$7, "fg", _v$16, _p$.e));
+      _v$17 !== _p$.t && (_p$.t = _$setProp(_el$7, "attributes", _v$17, _p$.t));
+      _v$18 !== _p$.a && (_p$.a = _$setProp(_el$12, "fg", _v$18, _p$.a));
       return _p$;
     }, {
       e: undefined,
@@ -1774,55 +1897,55 @@ var WhyLedger = (props) => {
         children: (entry, index) => {
           const interactive = props.onCopyReason !== undefined;
           return (() => {
-            var _el$38 = _$createElement("box"), _el$39 = _$createElement("text"), _el$40 = _$createElement("text"), _el$41 = _$createElement("text");
-            _$insertNode(_el$38, _el$39);
-            _$insertNode(_el$38, _el$40);
-            _$insertNode(_el$38, _el$41);
-            _$setProp(_el$38, "flexDirection", "row");
-            _$setProp(_el$38, "gap", 2);
-            _$setProp(_el$38, "onMouseUp", interactive ? (event) => {
+            var _el$40 = _$createElement("box"), _el$41 = _$createElement("text"), _el$42 = _$createElement("text"), _el$43 = _$createElement("text");
+            _$insertNode(_el$40, _el$41);
+            _$insertNode(_el$40, _el$42);
+            _$insertNode(_el$40, _el$43);
+            _$setProp(_el$40, "flexDirection", "row");
+            _$setProp(_el$40, "gap", 2);
+            _$setProp(_el$40, "onMouseUp", interactive ? (event) => {
               if (event.button !== 0)
                 return;
               event.stopPropagation();
               copy(entry);
             } : undefined);
-            _$setProp(_el$38, "onMouseOver", interactive ? () => setHovered(entry.at) : undefined);
-            _$setProp(_el$38, "onMouseOut", interactive ? () => setHovered(null) : undefined);
-            _$insert(_el$38, () => label(theme(), index() === 0 ? "why" : ""), _el$39);
-            _$setProp(_el$39, "wrapMode", "none");
-            _$setProp(_el$39, "flexShrink", 0);
-            _$insert(_el$39, () => verdictEntryGlyph(entry, ascii()));
-            _$setProp(_el$40, "wrapMode", "none");
-            _$setProp(_el$40, "flexShrink", 0);
-            _$insert(_el$40, () => furniture(entry));
-            _$setProp(_el$41, "wrapMode", "word");
-            _$setProp(_el$41, "flexGrow", 1);
-            _$insert(_el$41, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"), null);
-            _$insert(_el$41, (() => {
+            _$setProp(_el$40, "onMouseOver", interactive ? () => setHovered(entry.at) : undefined);
+            _$setProp(_el$40, "onMouseOut", interactive ? () => setHovered(null) : undefined);
+            _$insert(_el$40, () => label(theme(), index() === 0 ? "why" : ""), _el$41);
+            _$setProp(_el$41, "wrapMode", "none");
+            _$setProp(_el$41, "flexShrink", 0);
+            _$insert(_el$41, () => verdictEntryGlyph(entry, ascii()));
+            _$setProp(_el$42, "wrapMode", "none");
+            _$setProp(_el$42, "flexShrink", 0);
+            _$insert(_el$42, () => furniture(entry));
+            _$setProp(_el$43, "wrapMode", "word");
+            _$setProp(_el$43, "flexGrow", 1);
+            _$insert(_el$43, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"), null);
+            _$insert(_el$43, (() => {
               var _c$5 = _$memo(() => copied() === entry.at);
               return () => _c$5() ? ascii() ? " + copied" : " \u2713 copied" : "";
             })(), null);
-            _$insert(_el$38, _$createComponent(Show, {
+            _$insert(_el$40, _$createComponent(Show, {
               get when() {
                 return interactive && hovered() === entry.at;
               },
               get children() {
-                var _el$42 = _$createElement("text");
-                _$insertNode(_el$42, _$createTextNode(`copy`));
-                _$setProp(_el$42, "wrapMode", "none");
-                _$setProp(_el$42, "flexShrink", 0);
-                _$effect((_$p) => _$setProp(_el$42, "fg", theme().text.faint, _$p));
-                return _el$42;
+                var _el$44 = _$createElement("text");
+                _$insertNode(_el$44, _$createTextNode(`copy`));
+                _$setProp(_el$44, "wrapMode", "none");
+                _$setProp(_el$44, "flexShrink", 0);
+                _$effect((_$p) => _$setProp(_el$44, "fg", theme().text.faint, _$p));
+                return _el$44;
               }
             }), null);
             _$effect((_p$) => {
-              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = furnitureWidth(), _v$25 = theme().text.base, _v$26 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
-              _v$21 !== _p$.e && (_p$.e = _$setProp(_el$39, "fg", _v$21, _p$.e));
-              _v$22 !== _p$.t && (_p$.t = _$setProp(_el$39, "attributes", _v$22, _p$.t));
-              _v$23 !== _p$.a && (_p$.a = _$setProp(_el$40, "fg", _v$23, _p$.a));
-              _v$24 !== _p$.o && (_p$.o = _$setProp(_el$40, "width", _v$24, _p$.o));
-              _v$25 !== _p$.i && (_p$.i = _$setProp(_el$41, "fg", _v$25, _p$.i));
-              _v$26 !== _p$.n && (_p$.n = _$setProp(_el$41, "attributes", _v$26, _p$.n));
+              var _v$27 = colorFor(theme(), entry, mono()), _v$28 = TextAttributes.BOLD, _v$29 = theme().text.muted, _v$30 = furnitureWidth(), _v$31 = theme().text.base, _v$32 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
+              _v$27 !== _p$.e && (_p$.e = _$setProp(_el$41, "fg", _v$27, _p$.e));
+              _v$28 !== _p$.t && (_p$.t = _$setProp(_el$41, "attributes", _v$28, _p$.t));
+              _v$29 !== _p$.a && (_p$.a = _$setProp(_el$42, "fg", _v$29, _p$.a));
+              _v$30 !== _p$.o && (_p$.o = _$setProp(_el$42, "width", _v$30, _p$.o));
+              _v$31 !== _p$.i && (_p$.i = _$setProp(_el$43, "fg", _v$31, _p$.i));
+              _v$32 !== _p$.n && (_p$.n = _$setProp(_el$43, "attributes", _v$32, _p$.n));
               return _p$;
             }, {
               e: undefined,
@@ -1832,7 +1955,7 @@ var WhyLedger = (props) => {
               i: undefined,
               n: undefined
             });
-            return _el$38;
+            return _el$40;
           })();
         }
       });
@@ -1869,66 +1992,66 @@ var VerdictTrail = (props) => {
       return trail().shown.length > 0;
     },
     get children() {
-      var _el$44 = _$createElement("box"), _el$45 = _$createElement("box"), _el$46 = _$createElement("box"), _el$47 = _$createElement("text"), _el$48 = _$createTextNode(` `), _el$49 = _$createTextNode(` of `), _el$50 = _$createTextNode(` verdict`);
-      _$insertNode(_el$44, _el$45);
-      _$setProp(_el$44, "flexDirection", "column");
-      _$setProp(_el$44, "gap", 1);
-      _$insertNode(_el$45, _el$46);
-      _$insertNode(_el$45, _el$47);
-      _$setProp(_el$45, "flexDirection", "row");
-      _$setProp(_el$45, "gap", 2);
-      _$insert(_el$45, () => label(props.theme, "trail"), _el$46);
-      _$setProp(_el$46, "flexDirection", "row");
-      _$setProp(_el$46, "flexShrink", 0);
-      _$insert(_el$46, _$createComponent(For, {
+      var _el$46 = _$createElement("box"), _el$47 = _$createElement("box"), _el$48 = _$createElement("box"), _el$49 = _$createElement("text"), _el$50 = _$createTextNode(` `), _el$51 = _$createTextNode(` of `), _el$52 = _$createTextNode(` verdict`);
+      _$insertNode(_el$46, _el$47);
+      _$setProp(_el$46, "flexDirection", "column");
+      _$setProp(_el$46, "gap", 1);
+      _$insertNode(_el$47, _el$48);
+      _$insertNode(_el$47, _el$49);
+      _$setProp(_el$47, "flexDirection", "row");
+      _$setProp(_el$47, "gap", 2);
+      _$insert(_el$47, () => label(props.theme, "trail"), _el$48);
+      _$setProp(_el$48, "flexDirection", "row");
+      _$setProp(_el$48, "flexShrink", 0);
+      _$insert(_el$48, _$createComponent(For, {
         get each() {
           return trail().shown;
         },
         children: (entry) => {
           const copyable = interactive() && copyHint(entry);
           return (() => {
-            var _el$51 = _$createElement("box"), _el$52 = _$createElement("text");
-            _$insertNode(_el$51, _el$52);
-            _$setProp(_el$51, "flexDirection", "row");
-            _$setProp(_el$51, "onMouseUp", copyable ? (event) => {
+            var _el$53 = _$createElement("box"), _el$54 = _$createElement("text");
+            _$insertNode(_el$53, _el$54);
+            _$setProp(_el$53, "flexDirection", "row");
+            _$setProp(_el$53, "onMouseUp", copyable ? (event) => {
               if (event.button !== 0)
                 return;
               event.stopPropagation();
               copyAt(entry);
             } : undefined);
-            _$setProp(_el$51, "onMouseOver", () => setHovered(entry.turn));
-            _$setProp(_el$51, "onMouseOut", () => setHovered(null));
-            _$setProp(_el$52, "wrapMode", "none");
-            _$insert(_el$52, () => verdictEntryGlyph(entry, ascii()));
+            _$setProp(_el$53, "onMouseOver", () => setHovered(entry.turn));
+            _$setProp(_el$53, "onMouseOut", () => setHovered(null));
+            _$setProp(_el$54, "wrapMode", "none");
+            _$insert(_el$54, () => verdictEntryGlyph(entry, ascii()));
             _$effect((_p$) => {
-              var _v$27 = colorFor(props.theme, entry, mono()), _v$28 = hovered() === entry.turn ? TextAttributes.BOLD : undefined;
-              _v$27 !== _p$.e && (_p$.e = _$setProp(_el$52, "fg", _v$27, _p$.e));
-              _v$28 !== _p$.t && (_p$.t = _$setProp(_el$52, "attributes", _v$28, _p$.t));
+              var _v$33 = colorFor(props.theme, entry, mono()), _v$34 = hovered() === entry.turn ? TextAttributes.BOLD : undefined;
+              _v$33 !== _p$.e && (_p$.e = _$setProp(_el$54, "fg", _v$33, _p$.e));
+              _v$34 !== _p$.t && (_p$.t = _$setProp(_el$54, "attributes", _v$34, _p$.t));
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$51;
+            return _el$53;
           })();
         }
       }));
-      _$insertNode(_el$47, _el$48);
-      _$insertNode(_el$47, _el$49);
-      _$insertNode(_el$47, _el$50);
-      _$setProp(_el$47, "wrapMode", "none");
-      _$setProp(_el$47, "flexShrink", 0);
-      _$insert(_el$47, () => trail().shown.length, _el$49);
-      _$insert(_el$47, () => trail().total, _el$50);
-      _$insert(_el$47, () => trail().total === 1 ? "" : "s", null);
-      _$insert(_el$47, () => {
+      _$insertNode(_el$49, _el$50);
+      _$insertNode(_el$49, _el$51);
+      _$insertNode(_el$49, _el$52);
+      _$setProp(_el$49, "wrapMode", "none");
+      _$setProp(_el$49, "flexShrink", 0);
+      _$insert(_el$49, () => trail().shown.length, _el$51);
+      _$insert(_el$49, () => trail().total, _el$52);
+      _$insert(_el$49, () => trail().total === 1 ? "" : "s", null);
+      _$insert(_el$49, () => {
         const h = hoveredEntry();
         if (!h)
           return "";
         const ack = copiedTurn() === h.turn ? ascii() ? " \xB7 + copied" : " \xB7 \u2713 copied" : "";
         return ` \xB7 turn ${h.turn}${ack}`;
       }, null);
-      _$insert(_el$44, _$createComponent(WhyLedger, {
+      _$insert(_el$46, _$createComponent(WhyLedger, {
         get theme() {
           return props.theme;
         },
@@ -1948,8 +2071,8 @@ var VerdictTrail = (props) => {
           return props.nowMs;
         }
       }), null);
-      _$effect((_$p) => _$setProp(_el$47, "fg", props.theme.text.muted, _$p));
-      return _el$44;
+      _$effect((_$p) => _$setProp(_el$49, "fg", props.theme.text.muted, _$p));
+      return _el$46;
     }
   });
 };
@@ -1975,56 +2098,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$53 = _$createElement("box"), _el$54 = _$createElement("box");
-    _$insertNode(_el$53, _el$54);
-    _$setProp(_el$53, "flexDirection", "column");
-    _$setProp(_el$53, "gap", 1);
-    _$setProp(_el$54, "flexDirection", "row");
-    _$setProp(_el$54, "gap", 2);
-    _$insert(_el$54, () => label(theme(), "history"), null);
-    _$insert(_el$54, _$createComponent(Show, {
+    var _el$55 = _$createElement("box"), _el$56 = _$createElement("box");
+    _$insertNode(_el$55, _el$56);
+    _$setProp(_el$55, "flexDirection", "column");
+    _$setProp(_el$55, "gap", 1);
+    _$setProp(_el$56, "flexDirection", "row");
+    _$setProp(_el$56, "gap", 2);
+    _$insert(_el$56, () => label(theme(), "history"), null);
+    _$insert(_el$56, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$55 = _$createElement("text"), _el$56 = _$createTextNode(`no verdicts yet \xB7 `), _el$57 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$55, _el$56);
-          _$insertNode(_el$55, _el$57);
-          _$setProp(_el$55, "wrapMode", "none");
-          _$insert(_el$55, elapsed, _el$57);
-          _$effect((_$p) => _$setProp(_el$55, "fg", theme().text.faint, _$p));
-          return _el$55;
+          var _el$57 = _$createElement("text"), _el$58 = _$createTextNode(`no verdicts yet \xB7 `), _el$59 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$57, _el$58);
+          _$insertNode(_el$57, _el$59);
+          _$setProp(_el$57, "wrapMode", "none");
+          _$insert(_el$57, elapsed, _el$59);
+          _$effect((_$p) => _$setProp(_el$57, "fg", theme().text.faint, _$p));
+          return _el$57;
         })();
       },
       children: (entry) => (() => {
-        var _el$58 = _$createElement("box"), _el$59 = _$createElement("text"), _el$60 = _$createElement("text");
-        _$insertNode(_el$58, _el$59);
-        _$insertNode(_el$58, _el$60);
-        _$setProp(_el$58, "flexDirection", "row");
-        _$setProp(_el$58, "gap", 2);
-        _$setProp(_el$58, "flexGrow", 1);
-        _$setProp(_el$59, "wrapMode", "none");
-        _$setProp(_el$59, "flexShrink", 0);
-        _$insert(_el$59, () => verdictEntryGlyph(entry(), ascii()));
-        _$setProp(_el$60, "wrapMode", "word");
+        var _el$60 = _$createElement("box"), _el$61 = _$createElement("text"), _el$62 = _$createElement("text");
+        _$insertNode(_el$60, _el$61);
+        _$insertNode(_el$60, _el$62);
+        _$setProp(_el$60, "flexDirection", "row");
+        _$setProp(_el$60, "gap", 2);
         _$setProp(_el$60, "flexGrow", 1);
-        _$insert(_el$60, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        _$setProp(_el$61, "wrapMode", "none");
+        _$setProp(_el$61, "flexShrink", 0);
+        _$insert(_el$61, () => verdictEntryGlyph(entry(), ascii()));
+        _$setProp(_el$62, "wrapMode", "word");
+        _$setProp(_el$62, "flexGrow", 1);
+        _$insert(_el$62, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$29 = colorFor(theme(), entry(), mono()), _v$30 = TextAttributes.BOLD, _v$31 = theme().text.base;
-          _v$29 !== _p$.e && (_p$.e = _$setProp(_el$59, "fg", _v$29, _p$.e));
-          _v$30 !== _p$.t && (_p$.t = _$setProp(_el$59, "attributes", _v$30, _p$.t));
-          _v$31 !== _p$.a && (_p$.a = _$setProp(_el$60, "fg", _v$31, _p$.a));
+          var _v$35 = colorFor(theme(), entry(), mono()), _v$36 = TextAttributes.BOLD, _v$37 = theme().text.base;
+          _v$35 !== _p$.e && (_p$.e = _$setProp(_el$61, "fg", _v$35, _p$.e));
+          _v$36 !== _p$.t && (_p$.t = _$setProp(_el$61, "attributes", _v$36, _p$.t));
+          _v$37 !== _p$.a && (_p$.a = _$setProp(_el$62, "fg", _v$37, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$58;
+        return _el$60;
       })()
     }), null);
-    _$insert(_el$53, _$createComponent(VerdictTrail, {
+    _$insert(_el$55, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -2040,7 +2163,7 @@ var HistoryBlock = (props) => {
       },
       nowMs
     }), null);
-    return _el$53;
+    return _el$55;
   })();
 };
 
@@ -2981,6 +3104,12 @@ var StatusDialogBody = (props) => {
                   },
                   get onCopyReason() {
                     return props.onCopyReason;
+                  },
+                  get onCopyAttestation() {
+                    return props.onCopyAttestation;
+                  },
+                  get onCopyTally() {
+                    return props.onCopyTally;
                   },
                   get expanded() {
                     return props.expanded;
@@ -4662,6 +4791,8 @@ var tui_default = Plugin.define({
         onCopyCondition: (condition) => copyToClipboard(condition, sessionID),
         onCopyReason: (reason) => copyToClipboard(reason, sessionID, "reason"),
         onCopySummary: (summary) => copyToClipboard(summary, sessionID, "summary"),
+        onCopyAttestation: (line) => copyToClipboard(line, sessionID, "attestation"),
+        onCopyTally: (line) => copyToClipboard(line, sessionID, "tally"),
         onCopyVerify: (tail) => copyToClipboard(tail, sessionID, "verify"),
         onCopyDossier: () => {
           const g = entries()[sessionID]?.goal;
@@ -5152,6 +5283,14 @@ var tui_default = Plugin.define({
       section: {
         title: "section copied",
         message: "the quoted dossier section is on the clipboard"
+      },
+      attestation: {
+        title: "attestation copied",
+        message: "the iteration attestation line is on the clipboard"
+      },
+      tally: {
+        title: "tally copied",
+        message: "the loop final tally line is on the clipboard"
       }
     };
     const copyToClipboard = (text, sessionID, what = "condition") => {

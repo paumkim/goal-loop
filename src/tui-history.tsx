@@ -13,7 +13,8 @@ import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
 import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
 import { verdictEntryAccentColor, motionDisabled } from "./core/hud.ts"
-import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
+import { finalTallyLine, iterationAttestation } from "./core/attestation.ts"
+import { COMPACT_MISS_CAP, type GoalSnapshot, type LoopEntry, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
 export interface HistoryTheme {
@@ -93,6 +94,10 @@ export const LoopSection = (props: {
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded` for controlled mode. */
   onToggleExpanded?: () => void
+  /** When set, clicking a rail iteration row copies that iteration's attestation line (the receipt: `v3 · met · 9 turns · 41 tools · … · sha · cost`). Hover boldens the row to advertise it. */
+  onCopyAttestation?: (line: string) => void
+  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. Hover boldens the row to advertise it. */
+  onCopyTally?: (line: string) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -125,6 +130,43 @@ export const LoopSection = (props: {
   const showAll = () => props.expanded?.() ?? localShowAll()
   const toggleShowAll = () => { if (props.onToggleExpanded) { props.onToggleExpanded(); return } setLocalShowAll((v) => !v) }
   const [railHovered, setRailHovered] = createSignal(false)
+  // The attestation/tally click targets: hover boldens the row (the NO_COLOR contract), a click copies the
+  // row's own quotable payload, and the acknowledgment rides the row for a beat — the grammar the summary
+  // copy established. Resting paint is byte-identical to the pre-click frame.
+  const [attestHover, setAttestHover] = createSignal<number | null>(null)
+  const [attestCopied, setAttestCopied] = createSignal<number | null>(null)
+  const [tallyHover, setTallyHover] = createSignal(false)
+  const [tallyCopied, setTallyCopied] = createSignal(false)
+  let quoteTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (quoteTimer) clearTimeout(quoteTimer)
+  })
+  const ackQuote = (arm: () => void) => {
+    arm()
+    if (quoteTimer) clearTimeout(quoteTimer)
+    quoteTimer = setTimeout(() => {
+      setAttestCopied(null)
+      setTallyCopied(false)
+    }, 1600)
+  }
+  const copyAttestation = (entry: LoopEntry, durationMs: number) => {
+    if (!props.onCopyAttestation) return
+    try {
+      props.onCopyAttestation(iterationAttestation(entry, durationMs))
+      ackQuote(() => setAttestCopied(entry.version))
+    } catch {
+      // Best-effort.
+    }
+  }
+  const copyTally = (line: string) => {
+    if (!props.onCopyTally) return
+    try {
+      props.onCopyTally(line)
+      ackQuote(() => setTallyCopied(true))
+    } catch {
+      // Best-effort.
+    }
+  }
   const hiddenCount = () => (showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE))
   const visibleHistory = () => (showAll() ? history() : history().slice(-RAIL_VISIBLE))
   const railOffset = () => Math.max(0, done() - visibleHistory().length)
@@ -171,12 +213,7 @@ export const LoopSection = (props: {
   const livePace = () => (isTerminal() ? undefined : pace())
   const finished = () => history().length > 0 && (isTerminal() || capReached())
   const totals = () => loopTotals(history(), props.goal.setAt)
-  // The loop's own ledger, summed: the cost of every measured iteration. Partial measurement is never presented as a complete total — the fraction is printed, or nothing is.
-  const tallySpend = () => {
-    const spend = totals().spend
-    if (!spend) return ""
-    return spend.measured === totals().iterations ? ` · ${formatCost(spend.total)}` : ` · ${formatCost(spend.total)} across ${spend.measured}/${totals().iterations} measured`
-  }
+  // The final tally line — paint and clipboard quote are the same string from the attestation module.
   const finalGlyph = () => ascii() ? (props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x") : (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
   const finalColor = () => mono()
     ? (props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint)
@@ -279,16 +316,22 @@ export const LoopSection = (props: {
           // satisfied-at-HEAD: met with zero tool calls — the evaluator found the condition already holding at HEAD. Blue accent (info.base); mono drops the hue and keeps the hollow ○.
           const zeroTools = entry.toolCalls === 0
           const rowColor = zeroTools ? (mono() ? theme().text.base : theme().text.muted) : theme().text.base
+          const attestDuration = durations()[fullIndex()] ?? 0
+          const attestInteractive = props.onCopyAttestation !== undefined
+          const attestHovered = attestHover() === entry.version
           return (
             <box flexDirection="column">
-              <box flexDirection="row" gap={2}>
+              <box flexDirection="row" gap={2} onMouseUp={attestInteractive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copyAttestation(entry, attestDuration) } : undefined} onMouseOver={attestInteractive ? () => setAttestHover(entry.version) : undefined} onMouseOut={attestInteractive ? () => setAttestHover(null) : undefined}>
                 {label(theme(), `v${entry.version}`)}
                 <text wrapMode="none" flexShrink={0} fg={verdictEntryAccentColor(theme(), { verdict: "met", toolCalls: entry.toolCalls }, mono())}>
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
-                <text wrapMode="word" flexGrow={1} fg={rowColor}>
-                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`}
+                <text wrapMode="word" flexGrow={1} fg={rowColor} attributes={attestHovered ? TextAttributes.BOLD : undefined}>
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(attestDuration)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`}
                 </text>
+                <Show when={attestCopied() === entry.version}>
+                  <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{ascii() ? "+ copied" : "✓ copied"}</text>
+                </Show>
               </box>
             <Show when={entry.summary.trim().length > 0}>
               <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} ascii={ascii} />
@@ -324,16 +367,19 @@ export const LoopSection = (props: {
         </Show>
       </box>
       </Show>
-      {/* final tally: only once the loop is over */}
+      {/* final tally: only once the loop is over — one click quotes the line whole; the paint and the copy are the same string (finalTallyLine) */}
       <Show when={finished()}>
-        <box flexDirection="row" gap={2}>
+        <box flexDirection="row" gap={2} onMouseUp={props.onCopyTally ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copyTally(finalTallyLine(props.goal.status, totals())) } : undefined} onMouseOver={props.onCopyTally ? () => setTallyHover(true) : undefined} onMouseOut={props.onCopyTally ? () => setTallyHover(false) : undefined}>
           {label(theme(), "final")}
           <text wrapMode="none" flexShrink={0} fg={finalColor()} attributes={TextAttributes.BOLD}>
             {finalGlyph()}
           </text>
-          <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
-            {`loop ${props.goal.status} · ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} · ${totals().turns} turns · ${totals().tools} tools · ${formatDurationCoarse(totals().spanMs)} wall${tallySpend()}`}
+          <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={tallyHover() ? TextAttributes.BOLD : undefined}>
+            {finalTallyLine(props.goal.status, totals())}
           </text>
+          <Show when={tallyCopied()}>
+            <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{ascii() ? "+ copied" : "✓ copied"}</text>
+          </Show>
         </box>
       </Show>
       {/* evaluator verdict trail */}
