@@ -2304,6 +2304,17 @@
       "submittedAt": "2026-11-16T20:00:45Z",
       "mergedAt": "2026-11-16T20:03:00Z",
       "mergedInto": "dev"
+    },
+    "iteration-97-record-under-seal": {
+      "agent": "orchestrator",
+      "paths": "src/core/sign-record.ts,src/status-dialog.tsx,src/tui.tsx,test/sign-record.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/iteration-97-record-under-seal",
+      "worktree": "worktrees/wt-iteration-97-record-under-seal",
+      "status": "done",
+      "createdAt": "2026-11-16T20:05:30Z",
+      "submittedAt": "2026-11-16T20:11:55Z",
+      "mergedAt": "2026-11-16T20:13:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
