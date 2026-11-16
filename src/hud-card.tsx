@@ -79,6 +79,8 @@ export interface CardRowPlan {
   readonly spend: boolean
   /** Whether the last-verdict row fits the budget. */
   readonly last: boolean
+  /** Whether the remediation row fits the budget. It drops last, after hint, spend and last — first to come back, last to go. */
+  readonly remediation: boolean
 }
 
 /**
@@ -86,30 +88,37 @@ export interface CardRowPlan {
  * so its cost is the greedy word wrap of the actual text, never a flat guess. Under `maxRows` — the
  * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
  * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the last
- * verdict. The remediation and the menu never drop; if even the irreducible core exceeds the ceiling,
- * the anchor clamps and the renderer clips the top rows rather than the dismiss affordance at the bottom.
+ * verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
+ * ceiling with the menu open (5 core rows + 4 menu rows > maxRows) the anchor still exceeds the ceiling;
+ * rows are deliberately left unclamped in that pathological case — the absolute box is anchored
+ * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
+ * Below maxRows = 9 the card always keeps enough rows to stay dismissible.
  */
 export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): CardRowPlan => {
   const remediation = remediationFor(goal)
+  const remediationWanted = Boolean(remediation)
   const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0
   const hintAvailable = Boolean(evaluatorHint(goal))
   const spendAvailable = Boolean(goal.spend)
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
-  const fit = (hint: boolean, spend: boolean, last: boolean): number =>
-    5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + remediationRows + (hint && hintAvailable ? 1 : 0) + menu
-  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable
-  let rows = fit(hint, spend, last)
-  if (rows <= maxRows) return { rows, hint, spend, last }
+  const fit = (hint: boolean, spend: boolean, last: boolean, fix: boolean): number =>
+    5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
+  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable, fix = remediationWanted
+  let rows = fit(hint, spend, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
   hint = false
-  rows = fit(hint, spend, last)
-  if (rows <= maxRows) return { rows, hint, spend, last }
+  rows = fit(hint, spend, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
   spend = false
-  rows = fit(hint, spend, last)
-  if (rows <= maxRows) return { rows, hint, spend, last }
+  rows = fit(hint, spend, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
   last = false
-  rows = fit(hint, spend, last)
-  return { rows, hint, spend, last }
+  rows = fit(hint, spend, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, last, remediation: fix }
+  fix = false
+  rows = fit(hint, spend, last, fix)
+  return { rows, hint, spend, last, remediation: fix }
 }
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
@@ -264,7 +273,7 @@ export const HudCard = (props: {
   /** Wired by the host; absent callback renders the summary row inert. */
   onCopySummary?: (summary: string) => void
   /** Viewport ceiling for the card's total rows (mirror of ClampedColumn's `height - 1`). The plan drops the
-   * teaching hint, then spend, then the last-verdict row to fit; remediation and menu never drop. Absent: unlimited. */
+   * teaching hint, then spend, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
   maxRows?: number
 }): JSX.Element => {
   const theme = () => props.theme
@@ -415,7 +424,7 @@ export const HudCard = (props: {
         )}
       </Show>
       {/* failure-first-class remediation — exactly what to do, never a vague warning */}
-      <Show when={remediation()}>
+      <Show when={plan().remediation && remediation()}>
         {(fix) => (
           <box flexDirection="row" gap={1}>
             <text wrapMode="none" flexShrink={0} width={LABEL} fg={fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono())}>

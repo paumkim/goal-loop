@@ -1626,46 +1626,61 @@ var CONTEXT_MENU_ROWS = 4;
 var REMEDIATION_WIDTH = 49;
 var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => {
   const remediation = remediationFor(goal);
+  const remediationWanted = Boolean(remediation);
   const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0;
   const hintAvailable = Boolean(evaluatorHint(goal));
   const spendAvailable = Boolean(goal.spend);
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
-  const fit = (hint, spend, last) => 5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + remediationRows + (hint && hintAvailable ? 1 : 0) + menu;
-  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable;
-  let rows = fit(hint, spend, last);
+  const fit = (hint, spend, last, fix) => 5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
+  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable, fix = remediationWanted;
+  let rows = fit(hint, spend, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
-      last
+      last,
+      remediation: fix
     };
   hint = false;
-  rows = fit(hint, spend, last);
+  rows = fit(hint, spend, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
-      last
+      last,
+      remediation: fix
     };
   spend = false;
-  rows = fit(hint, spend, last);
+  rows = fit(hint, spend, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
-      last
+      last,
+      remediation: fix
     };
   last = false;
-  rows = fit(hint, spend, last);
+  rows = fit(hint, spend, last, fix);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      last,
+      remediation: fix
+    };
+  fix = false;
+  rows = fit(hint, spend, last, fix);
   return {
     rows,
     hint,
     spend,
-    last
+    last,
+    remediation: fix
   };
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => cardRowPlan(goal, contextOpen, maxRows).rows;
@@ -2017,7 +2032,7 @@ var HudCard = (props) => {
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
       get when() {
-        return remediation();
+        return _$memo3(() => !!plan().remediation)() && remediation();
       },
       children: (fix) => (() => {
         var _el$34 = _$createElement3("box"), _el$35 = _$createElement3("text"), _el$37 = _$createElement3("text");

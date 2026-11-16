@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=806 -->
+<!-- spec-check files=43 tests=807 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2882,3 +2882,33 @@ by this workstream.
 Verification (all run in the worktree): bun test (806 pass), bun test --update-snapshots (diff
 review, three footer pins only), bun run compile, bun run check green, docs-watch refresh committed
 alongside, coordinator submit + merge-next, and bun run check on dev shown green at the end.
+## Workstream CR — the card row plan owns its ceiling end-to-end (2026-11-16)
+
+Interpretation of this iteration: audit finding 2 (pinned re-audit ses_e1c980f2fffeR6lPzktJKz2sQs,
+HEAD 811136f) — cardRowPlan never enforced maxRows; the "anchor clamps" doc text described
+behavior that did not exist. Closing the last gap between the plan and the painted rows.
+
+283. src/hud-card.tsx: cardRowPlan gains a final drop rung — remediation now falls after hint,
+     spend and last. CardRowPlan gains `readonly remediation: boolean` so the painter and the plan
+     agree exactly. The drop order is least-essential-first: teaching hint → spend → last verdict →
+     remediation. The context menu (4 rows) and the actions row still never drop, so below the
+     8-row floor with the menu open (5 core rows + 4 menu rows > maxRows) the anchor still
+     exceeds the ceiling — rows are deliberately left unclamped there; the absolute box is anchored
+     bottom-up at the dismiss affordance and terminal-edge clipping eats the title border, never
+     Esc. The stale "the anchor clamps and the renderer clips the top rows" doc line and the
+     "remediation and menu never drop" line were replaced with the true contract. HudCard's the
+     maxRows prop doc updated likewise.
+284. Painter: the remediation row renders only when plan().remediation is true — plan == painted
+     for every viewport outcome except the documented sub-9 menu-open floor above.
+285. Evidence: unit + render layers. test/tui-hud.test.tsx re-pinned to the ladder (remediation
+     drops at brutal ceilings; menu never drops at 9; render test "a brutal ceiling drops the
+     remediation — the actions row and esc always survive" plus "a ceiling with one row to
+     spare keeps the remediation"). Full check green: 807 tests. Snapshots untouched (no pinned
+     frame exercises a sub-ceiling card). Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=806 to files=43 tests=807. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (807 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.
