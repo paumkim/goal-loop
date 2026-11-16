@@ -12,7 +12,10 @@ to copy), the state row (live or terminal), the last verdict, failure-first-clas
 and clickable `details` / `pin` / `clear goal` / `esc` buttons; Esc dismisses. (c) The `/goal` detail view: a
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, and clickable `copy condition` / `pin condition` / `clear
-goal` footer buttons (`p` toggles the pin). The dialog renders a `context` row when the server can estimate the
+goal` footer buttons (`p` toggles the pin). The footer degrades in two steps so it never clips mid-word: above
+140 columns the full key hint plus full button labels; above 96 the short hint (`up/down scroll · p pin ·
+esc close`) with full labels; below that, compact button labels (`copy` / `pin` / `clear`) — the 80-column
+floor always fits. The dialog renders a `context` row when the server can estimate the
 prompt size: a 16-cell bar against the configured auto-compact threshold (`compactAtTokens`; the row shows the
 bare `~N tokens` estimate when the threshold is disabled or unavailable), `~N of M · P%` where P is unclamped —
 the warning tone at ≥80% of the threshold, so the dial the boundary compaction reads is visible before the
@@ -415,7 +418,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=665 -->
+<!-- spec-check files=43 tests=669 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

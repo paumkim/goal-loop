@@ -16,7 +16,7 @@ import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-j
 import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
-import { HudCard, HudButton, hudCardRows, pinBudget, type HudCardTheme } from "./hud-card.tsx"
+import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, isCompactHot } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -128,17 +128,17 @@ export default Plugin.define({
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
-            <box flexDirection="row" gap={1}>
-              <text fg={context.theme.text.faint} wrapMode="none">up/down scroll · pgup/pgdn page · home/end start/end · p pin condition · esc close</text>
-              <box flexGrow={1} />
-              <HudButton theme={context.theme as unknown as HudCardTheme} label="copy condition" onPress={() => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)} />
-              <HudButton theme={context.theme as unknown as HudCardTheme} label={isPinned(sessionID) ? "unpin" : "pin condition"} onPress={() => togglePin(sessionID)} />
-              <HudButton theme={context.theme as unknown as HudCardTheme} label="clear goal" onPress={() => {
+            <DialogFooter
+              theme={context.theme as unknown as HudCardTheme}
+              pinned={() => isPinned(sessionID)}
+              onCopy={() => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)}
+              onTogglePin={() => togglePin(sessionID)}
+              onClear={() => {
                 try {
                   void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
                 } catch {}
-              }} />
-            </box>
+              }}
+            />
           </ClampedColumn>
         ),
         () => {

@@ -15,6 +15,7 @@
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
+import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
@@ -67,6 +68,38 @@ export const hudCardRows = (goal: GoalSnapshot): number =>
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
   Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
+
+export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn page · home/end start/end · p pin condition · esc close"
+export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · esc close"
+
+/**
+ * The host dialog footer: the key hint plus the three mouse actions. The row clips mid-word when the
+ * hint is longer than the cells the buttons leave behind (a broken-sentence hint reads as broken chrome),
+ * so it degrades in two steps: full hint + full labels above 140 cells, short hint + full labels above 96,
+ * short hint + compact labels below. The 80-column floor always fits.
+ */
+export const DialogFooter = (props: {
+  theme: HudCardTheme
+  pinned: () => boolean
+  onCopy: () => void
+  onTogglePin: () => void
+  onClear: () => void
+}): JSX.Element => {
+  const dimensions = useTerminalDimensions()
+  const wide = () => dimensions().width >= 140
+  const roomy = () => dimensions().width >= 96
+  return (
+    <box flexDirection="row" gap={1}>
+      <text fg={props.theme.text.faint} wrapMode="none">
+        {wide() ? DIALOG_FOOTER_FULL_HINT : DIALOG_FOOTER_SHORT_HINT}
+      </text>
+      <box flexGrow={1} />
+      <HudButton theme={props.theme} label={roomy() ? "copy condition" : "copy"} onPress={props.onCopy} />
+      <HudButton theme={props.theme} label={props.pinned() ? "unpin" : roomy() ? "pin condition" : "pin"} onPress={props.onTogglePin} />
+      <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} onPress={props.onClear} />
+    </box>
+  )
+}
 
 /** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. */
 export const HudButton = (props: { theme: HudCardTheme; label: string; onPress: () => void }): JSX.Element => {
