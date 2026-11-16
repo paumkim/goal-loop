@@ -486,3 +486,11 @@ describe("uninstall restore: backup chronology (regression)", () => {
     rmSync(home, { recursive: true, force: true });
   });
 });
+
+describe("PLUGIN_SPEC pins the package version (regression)", () => {
+  test("PLUGIN_SPEC is github:paumkim/opencode-goalv2#v<package.json version>", () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(PLUGIN_SPEC).toBe(`github:paumkim/opencode-goalv2#v${pkg.version}`);
+  });
+});

@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=464 -->
+<!-- spec-check files=41 tests=465 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2045,3 +2045,9 @@ Known deferred: docs/config.html and docs/architecture.html contain line-referen
 198. `src/status-dialog.tsx` (StatusDialogBody) and `src/tui-history.tsx` (LoopSection, HistoryBlock, VerdictTrail) now have unit tests in `test/tui-render.test.tsx` (8 tests). They mount the components in @opentui/solid's `testRender` and assert on the captured character grid: loop caption/bar/objective/rail/now-row/trail, the final-tally row on a finished loop, paused stall/retries diagnostics, non-looped last-verdict/counts/trail, the fresh-goal "no verdicts yet" line, the fallback text for an undefined snapshot, and the StatusDialogBody looped-vs-non-looped branch selection (evaluator vs reason label, LoopSection vs HistoryBlock). Previously these components were only manually render-verified via `scripts/render-dialog.tsx` / `scripts/render-history.tsx`, which are not wired into `bun run check`.
 199. `test/bunfig.toml` scopes `[test] preload = ["@opentui/solid/preload"]` to the test directory — the same solid-js server→client build remap the render scripts use. Load-bearing: without it the render tests fail at import (verified by removing the file and re-running). No other test file imports solid-js, so the rest of the suite is unaffected.
 Marker bumped `files=41 tests=456` → `files=41 tests=464` (test-only addition; no shipped file changed).
+
+## Workstream BI — PLUGIN_SPEC pinned to package.json version (2026-11-15)
+
+200. `bin/opencode-goal.mjs` exports `PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v<version>"`; it previously had no test tying it to `package.json`, so a version bump that missed the constant would ship an installer pointing at a stale tag with no gate to catch it. New regression test in `test/cli-installer.test.ts` asserts `PLUGIN_SPEC` equals `github:paumkim/opencode-goalv2#v` + `pkg.version`, where `pkg` is read from `package.json` at test time (and asserts the version looks like semver). Mutation-verified: forcing `PLUGIN_SPEC` to `#v9.9.9` makes the test fail; reverting makes it pass.
+201. `package.json` version is 1.1.0 and `PLUGIN_SPEC` currently reads `#v1.1.0`, so no behavior change in this workstream — the gate is new, the value is unchanged.
+Marker bumped `files=41 tests=464` → `files=41 tests=465` (test-only addition; no shipped file changed).
