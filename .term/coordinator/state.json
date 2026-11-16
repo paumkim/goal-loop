@@ -2170,9 +2170,19 @@
       "paths": "src/core/dossier-outline.ts,src/status-dialog.tsx,src/tui.tsx,test/dossier-outline.test.ts,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/package-integrity.test.ts,SPEC.md,docs",
       "branch": "wt/tui-dossier-outline",
       "worktree": "worktrees/wt-tui-dossier-outline",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-16T16:57:10Z",
-      "submittedAt": "2026-11-16T17:08:29Z"
+      "submittedAt": "2026-11-16T17:08:29Z",
+      "mergedAt": "2026-11-16T17:22:10Z",
+      "mergedInto": "dev"
+    },
+    "reanchor-system-injection": {
+      "agent": "inkling",
+      "paths": "src/runtime/controller.ts,src/core/types.ts,src/core/wire.ts,src/hud-card.tsx,src/index.ts,test/loop.test.ts,test/tui-context-render.test.tsx,SPEC.md",
+      "branch": "wt/reanchor-system-injection",
+      "worktree": "worktrees/wt-reanchor-system-injection",
+      "status": "claimed",
+      "createdAt": "2026-11-16T17:19:56Z"
     }
   },
   "mergeLock": null
