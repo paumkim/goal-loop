@@ -17,3 +17,5 @@ jobs:
         run: bun run check
       - name: Pack smoke test
         run: npm pack --dry-run
+      - name: dist is in sync with src
+        run: bun run compile && git diff --exit-code -- dist/

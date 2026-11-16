@@ -64,3 +64,8 @@ GitHub specifier; uninstall migrates v1.1.0-installed configs), ships in the nex
 
 - `bun run check` green on the merged tree with these fixes: raw-prompt `maxConditionChars` enforcement (review finding 1), sanitized `invalidCount` echo (finding 3), readable empty-count warning (finding 5), per-iteration toast shows the effective cap (finding 2), legacy records render a real fallback max in `/goal` status (finding 4). Findings 6–8 remain open (documented as acceptable or folded into a hygiene iteration).
 - Fresh `bun run check` output must be attached to the release PR before step 6.
+
+## Dev carries ongoing improvements that are NOT for public release yet (maintainer decision 2026-11-16)
+
+- v1.1.0 remains the stable live artifact. Release steps (merge to main, tag, GitHub release, optional npm publish) are to be run only when the maintainer declares a major milestone.
+- PLUGIN_SPEC is derived from package.json in dev, so a future release never ships a stale install pin.

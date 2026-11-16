@@ -39,21 +39,15 @@
  *   - Only the `plugins` array (and, when empty, the array property) is
  *     edited; all unrelated keys, comments and formatting survive.
  *   - Uninstall removes exactly the entry install added. If the entry is missing
- *     but an install-time backup exists (the OLDEST backup whose parsed content
- *     provably lacks the plugin — i.e. the first install-time original), uninstall restores that pre-install config unchanged instead
- *     of printing a note — taking a safety backup of the current state first
- *     (the user chose --restore explicitly to get a plugin-containing backup back).
- *     If the config already matches the pre-install backup, uninstall is a clean
- *     no-op. Uninstall never auto-restores a backup that contains the plugin.
- *     If the config file
- *     was created by install and nothing but install's skeleton remains, the
- *     file is deleted. `uninstall --restore` copies the newest pre-install
- *     .bak back over the config instead (taking a fresh .bak of the current
- *     state first).
- *   - Uninstall never auto-restores a backup when merely the entry is missing:
- *     the backup is pre-install state and restoring it would silently revert
- *     any post-install edits the user made to unrelated keys. A note points at
- *     --restore instead.
+ *     but an install-time original exists (the OLDEST backup whose parsed
+ *     content provably lacks the plugin), uninstall restores that pre-install
+ *     config unchanged (taking a fresh safety backup of the current state
+ *     first), and is a clean no-op when the config already matches it.
+ *     Uninstall never auto-restores a backup containing the plugin. If the
+ *     config file was created by install and nothing but install's skeleton
+ *     remains, the file is deleted. `uninstall --restore` copies that same
+ *     pre-install backup back over the config on demand (also taking a fresh
+ *     safety backup of the current state first).
  *   - Never writes outside the selected scope.
  *
  * Zero dependencies; runs on any Node >=18 or Bun. ESM.
@@ -66,6 +60,7 @@ import {
   copyFileSync,
   unlinkSync,
   readdirSync,
+  renameSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -73,8 +68,16 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { realpathSync } from "node:fs";
 
+const PKG = (() => {
+  try {
+    return JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+
 export const PLUGIN_PACKAGE = "opencode-goalv2"; // legacy spec; kept for uninstall/status back-compat
-export const PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v1.1.0";
+export const PLUGIN_SPEC = `github:paumkim/opencode-goalv2#v${typeof PKG.version === "string" ? PKG.version : "unknown"}`;
 const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
 const SCHEMA_URL = "https://opencode.ai/config.json";
 
@@ -342,6 +345,13 @@ export function resolveScope(args, opts = {}) {
   return { scope: "global", dir, file: jsonc };
 }
 
+/** Write a file atomically: temp file in the same directory, then rename into place. */
+function writeFileAtomic(file, contents) {
+  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tmp, contents);
+  renameSync(tmp, file);
+}
+
 // ---------------------------------------------------------------------------
 // Backups
 // ---------------------------------------------------------------------------
@@ -431,7 +441,7 @@ function missingEntryOutcome(file, dryRun) {
   if (!existsSync(file)) out.push(`not installed (no config at ${file})`);
   else out.push(`not installed (${file}); nothing to do`);
   const baks = listBackups(file);
-  if (baks.length > 0) out.push(`note: backups exist (they contain the plugin entry); --restore puts ${baks[baks.length - 1]} back over the config`);
+  if (baks.length > 0) out.push(`note: backups exist (they contain the plugin entry); --restore puts the pre-install backup back over the config`);
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
 
@@ -450,7 +460,7 @@ export function install(args, opts = {}) {
   if (!existsSync(file)) {
     if (!dryRun) {
       mkdirSync(scope.dir === file ? "." : scopeDirOf(file), { recursive: true });
-      writeFileSync(file, skeleton());
+      writeFileAtomic(file, skeleton());
     }
     out.push(dryRun
       ? `dry-run: would create ${file} with ${PLUGIN_SPEC}`
@@ -465,7 +475,7 @@ export function install(args, opts = {}) {
   }
   if (!dryRun) {
     const bak = backupFile(file);
-    writeFileSync(file, result.text);
+    writeFileAtomic(file, result.text);
     out.push(`installed ${PLUGIN_SPEC} in ${file}; restart opencode (backup: ${bak})`);
   } else {
     out.push(`dry-run: would add ${PLUGIN_SPEC} to ${file}`);
@@ -486,17 +496,16 @@ export function uninstall(args, opts = {}) {
   const out = [];
 
   if (restore) {
-    const baks = listBackups(file);
-    if (baks.length === 0) return { code: 1, stdout: "", stderr: `opencode-goal: no backup found for ${file}\n` };
-    const newest = baks[baks.length - 1];
+    const candidate = preInstallBackup(file);
+    if (!candidate) return { code: 1, stdout: "", stderr: `opencode-goal: no pre-install (plugin-free) backup found for ${file}\n` };
     if (!dryRun) {
       if (existsSync(file)) backupFile(file); // keep a safety copy of the current state
       else mkdirSync(scopeDirOf(file), { recursive: true });
-      copyFileSync(newest, file);
+      copyFileSync(candidate, file); // the pre-install config, byte for byte
     }
     out.push(dryRun
-      ? `dry-run: would restore ${newest} over ${file}`
-      : `restored ${newest} over ${file}`);
+      ? `dry-run: would restore ${candidate} over ${file}`
+      : `restored ${candidate} over ${file}`);
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
 
@@ -511,7 +520,7 @@ export function uninstall(args, opts = {}) {
       unlinkSync(file);
       out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (created by install); restart opencode (backup: ${bak})`);
     } else {
-      writeFileSync(file, result.text);
+      writeFileAtomic(file, result.text);
       out.push(`removed ${PLUGIN_SPEC} from ${file}; restart opencode (backup: ${bak})`);
     }
   } else {
@@ -593,7 +602,7 @@ function usage() {
     "  --global    per-machine config (default): $XDG_CONFIG_HOME/opencode or ~/.config/opencode",
     "  --project   the current directory's project config (opencode.json[c] or .opencode/opencode.json[c])",
     "  --dry-run   print what would change; write nothing",
-    "  --restore   uninstall only: copy the newest pre-install .bak back over the config",
+    "  --restore   uninstall only: copy the pre-install .bak back over the config",
     "",
   ].join("\n");
 }
