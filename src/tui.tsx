@@ -16,6 +16,7 @@ import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
+import { exportLoopDossier } from "./core/dossier-export.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
@@ -98,7 +99,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onSaveDossier={() => { const g = entries()[sessionID]?.goal; exportDossier(sessionID, g) }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -533,6 +534,16 @@ export default Plugin.define({
         })
       } catch (error) {
         safeToast({ title: "copy failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
+    // The dossier-as-file path (`goal.dossier.export` palette command; the dialog's save row). One O_EXCL write into the host's cwd — never overwrites, suffixes on collision, the path comes back as a toast receipt; a failed write says so instead of failing silently.
+    const exportDossier = (sessionID: string | undefined, goal: GoalSnapshot | undefined) => {
+      if (!goal || !sessionID) return
+      try {
+        const result = exportLoopDossier(goal, Date.now(), process.cwd())
+        safeToast({ title: "dossier exported", message: result.path, variant: "success", duration: 5_000, sessionID })
+      } catch (error) {
+        safeToast({ title: "export failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
       }
     }
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
@@ -972,6 +983,20 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               if (goal && sessionID) copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier")
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.export",
+          title: "Goal: export loop dossier (markdown file)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              exportDossier(sessionID, goal)
             } catch {}
           },
         },

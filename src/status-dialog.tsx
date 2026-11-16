@@ -66,6 +66,8 @@ export const StatusDialogBody = (props: {
   onCopyVerify?: (tail: string) => void
   /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row boldens on hover. */
   onCopyDossier?: (dossier: string) => void
+  /** When set, the dossier view paints a save row under the copy row: the same document as a file, written once via O_EXCL by the host (`goal.dossier.export`) — never overwrites; the clicked row paints `✓ saved` (ascii `+ saved`) in place for the usual acknowledgment window. Unwired, the row does not paint (the document renders exactly as before). */
+  onSaveDossier?: () => void
   /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
@@ -195,10 +197,13 @@ export const StatusDialogBody = (props: {
     if (copiedTimer) clearTimeout(copiedTimer)
   })
   const copiedSuffix = (key: string) => (copied() === key ? (ascii ? " + copied" : " ✓ copied") : "")
+  // The save row acknowledges in the same in-modal grammar, with its own verb — "copied" would lie about the side effect.
+  const savedSuffix = (key: string) => (copied() === key ? (ascii ? " + saved" : " ✓ saved") : "")
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [dossierHovered, setDossierHovered] = createSignal(false)
+  const [saveHovered, setSaveHovered] = createSignal(false)
   const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
@@ -255,6 +260,16 @@ export const StatusDialogBody = (props: {
     try {
       props.onCopyDossier(text)
       acknowledge("dossier")
+    } catch {
+      // Best-effort.
+    }
+  }
+  // The save row's side effect lives in the host (one O_EXCL write, toasted there); the row acknowledgment only mirrors the copy row's optimistic grammar.
+  const saveDossier = () => {
+    if (!props.onSaveDossier) return
+    try {
+      props.onSaveDossier()
+      acknowledge("save")
     } catch {
       // Best-effort.
     }
@@ -496,6 +511,18 @@ export const StatusDialogBody = (props: {
                   </text>
                   <Show when={dossierHovered()}>
                     <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+                  </Show>
+                </box>
+              </Show>
+              {/* the save row — the record as a file, one click, O_EXCL on the host side. Same click grammar and hover affordance as the copy row; painted only when the host wires onSaveDossier. No chord, no footer furniture; the palette is the discovery surface */}
+              <Show when={props.onSaveDossier}>
+                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); saveDossier() }} onMouseOver={() => setSaveHovered(true)} onMouseOut={() => setSaveHovered(false)}>
+                  {label("save")}
+                  <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={saveHovered() ? TextAttributes.BOLD : undefined}>
+                    {`the whole record as a file${savedSuffix("save")}`}
+                  </text>
+                  <Show when={saveHovered()}>
+                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>save</text>
                   </Show>
                 </box>
               </Show>
