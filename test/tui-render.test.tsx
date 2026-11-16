@@ -149,3 +149,126 @@ describe("StatusDialogBody", () => {
     expect(frame).toContain("history")
   })
 })
+
+describe("LoopSection edge paths", () => {
+  test("fresh loop with no verdicts renders no trail row, caption 'v1 · 0 complete', and no pace row", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ history: [], loopHistory: [], loopIteration: 1, turns: 0 })} theme={theme} elapsedMs={() => 1000 * 30} nowMs={() => now} />)
+    expect(frame).toContain("v1 of at most 5 · 0 complete")
+    expect(frame).not.toContain("trail")
+    expect(frame).not.toContain("pace")
+  })
+
+  test("loop without a cap renders no 'of at most' in the caption and no pace row", async () => {
+    const { loopMaxLoops: _max, ...noCap } = loopedGoal()
+    const frame = await render(() => <LoopSection goal={noCap} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("v3 · 2 complete")
+    expect(frame).not.toContain("of at most")
+    expect(frame).not.toContain("pace")
+  })
+
+  test("a history longer than the trail window renders the '24 of 30 verdicts' caption", async () => {
+    const calls: VerdictEntry["verdict"][] = []
+    for (let index = 0; index < 30; index += 1) calls.push(index % 3 === 2 ? "not_met" : "met")
+    const frame = await render(() => <LoopSection goal={loopedGoal({ history: verdicts(calls) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("24 of 30 verdicts")
+  })
+
+  test("a rail summary longer than the cap is truncated with an ellipsis, not rendered in full", async () => {
+    const longSummary = `the quick brown fox ${"jumps over the lazy dog ".repeat(20)}end`
+    expect(longSummary.length).toBeGreaterThan(400)
+    const frame = await render(() => <LoopSection goal={loopedGoal({ loopHistory: [{ version: 1, condition: "c", summary: longSummary, reason: "met", turns: 3, toolCalls: 5, endedAt: now - 1000 * 60 * 5 }], loopIteration: 2 })} theme={theme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />)
+    expect(frame).not.toContain(longSummary)
+    expect(frame).toContain("…")
+  })
+
+  test("rail entries with a blank summary render no connector line", async () => {
+    const blank = [{ version: 1, condition: "c", summary: "   ", reason: "met", turns: 3, toolCalls: 5, endedAt: now - 1000 * 60 * 5 }]
+    const frame = await render(() => <LoopSection goal={loopedGoal({ loopHistory: blank, loopIteration: 2 })} theme={theme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />)
+    expect(frame).not.toContain("│")
+  })
+
+  test("a verdict inside the current iteration renders the 'last' suffix with 'this turn'", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ history: [{ turn: 4, verdict: "met", reason: "ok", at: now - 5_000 }], turns: 4 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("last")
+    expect(frame).toContain("this turn")
+  })
+
+  test("a current-iteration verdict older than the turn counter renders 'N turns since'", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ history: [{ turn: 3, verdict: "not_met", reason: "no", at: now - 5_000 }], turns: 5 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("2 turns since")
+  })
+
+  test("a verdict streak of two renders the streak suffix in the now row", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ history: verdicts(["met", "not_met", "not_met"]) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("2× not met in a row")
+  })
+
+  test("a cap reached with a non-terminal status still renders the final tally row", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ status: "active", loopMaxLoops: 2 })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
+    expect(frame).toContain("final")
+    expect(frame).toContain("loop active · 2 iterations")
+  })
+
+  test("an impossible loop renders the ⊘ glyph in the final tally", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ status: "impossible" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
+    expect(frame).toContain("loop impossible · 2 iterations")
+    expect(frame).toContain("⊘")
+  })
+
+  test("a cleared loop renders the ✗ glyph and 'loop cleared' in the final tally", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ status: "cleared" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
+    expect(frame).toContain("loop cleared · 2 iterations")
+    expect(frame).toContain("✗")
+  })
+
+  test("a failed loop renders 'loop failed' in the final tally", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ status: "failed" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
+    expect(frame).toContain("loop failed · 2 iterations")
+  })
+
+  test("a pending boundary compaction renders the pending age and the miss counter", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ loopCompact: { requestedAt: now - 1000 * 60 * 3, estimatedTokens: 182_000, iteration: 3, misses: 2 } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("compact")
+    expect(frame).toContain("pending")
+    expect(frame).toContain("miss 2/4")
+    expect(frame).toContain("~182k at request")
+  })
+
+  test("a landed boundary compaction renders the landed age and no miss counter", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ loopCompact: { requestedAt: now - 1000 * 60 * 5, landedAt: now - 1000 * 60, iteration: 3, misses: 0 } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("compact")
+    expect(frame).toContain("landed")
+    expect(frame).not.toContain("miss")
+  })
+})
+
+describe("HistoryBlock edge paths", () => {
+  test("impossible verdicts surface in the counts line", async () => {
+    const frame = await render(() => <HistoryBlock goal={plainGoal({ history: verdicts(["met", "not_met", "impossible"]), turns: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 41} />)
+    expect(frame).toContain("1 impossible")
+    expect(frame).toContain("⊘")
+  })
+
+  test("a trailing streak renders the streak suffix in the last-verdict line", async () => {
+    const frame = await render(() => <HistoryBlock goal={plainGoal({ history: verdicts(["not_met", "met", "met"]), turns: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 41} />)
+    expect(frame).toContain("2× met in a row")
+  })
+})
+
+describe("StatusDialogBody edge paths", () => {
+  test("an evaluating goal shows 'checking' in the state line", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ evaluating: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("checking")
+  })
+
+  test("a waiting goal shows 'waiting' in the state line", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ waiting: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("waiting")
+  })
+
+  test("a goal without a spend snapshot omits the spend row", async () => {
+    const { spend: _spend, ...noSpend } = loopedGoal()
+    const frame = await render(() => <StatusDialogBody goal={noSpend} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).not.toContain("spend")
+  })
+})
