@@ -1603,6 +1603,17 @@
       "submittedAt": "2026-11-16T08:50:06Z",
       "mergedAt": "2026-11-16T08:51:07Z",
       "mergedInto": "dev"
+    },
+    "tui-dashboard-disarm-card": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/tui-dashboard-disarm-card",
+      "worktree": "worktrees/wt-tui-dashboard-disarm-card",
+      "status": "done",
+      "createdAt": "2026-11-16T08:56:27Z",
+      "submittedAt": "2026-11-16T08:57:13Z",
+      "mergedAt": "2026-11-16T08:58:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
