@@ -1683,6 +1683,56 @@ describe("dossier tab (the whole record, in-screen — mouse-first)", () => {
     await setup.renderer.destroy()
   })
 
+  test("clicking the save row exports through the host — one click, the optimistic `✓ saved` acknowledgment", async () => {
+    let saved = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={() => {}} onSaveDossier={() => { saved += 1 }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const rowAt = findIn(setup.captureCharFrame(), "the whole record as a file")
+    expect(rowAt).toBeDefined()
+    await setup.mockMouse.click(rowAt!.x, rowAt!.y)
+    await setup.renderOnce()
+    expect(saved).toBe(1)
+    expect(setup.captureCharFrame()).toContain("✓ saved") // the in-modal acknowledgment, the save row's own verb
+    await setup.renderer.destroy()
+  })
+
+  test("right click on the save row is inert — no export on the power button", async () => {
+    let saved = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onSaveDossier={() => { saved += 1 }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const rowAt = findIn(setup.captureCharFrame(), "the whole record as a file")
+    expect(rowAt).toBeDefined()
+    await setup.mockMouse.click(rowAt!.x, rowAt!.y, 2)
+    await setup.renderOnce()
+    expect(saved).toBe(0)
+    await setup.renderer.destroy()
+  })
+
+  test("the save row does not paint when the host leaves it unwired — the document renders exactly as before", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("the whole record as markdown")
+    expect(frame).not.toContain("the whole record as a file")
+    await setup.renderer.destroy()
+  })
+
+  test("mono keeps the save row's words — weight carries the acknowledgment, hue never did", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono={true} onSaveDossier={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("the whole record as a file")
+    await setup.renderer.destroy()
+  })
+
   test("right click on the dossier tab is inert — the view never flips on the power button", async () => {
     const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()

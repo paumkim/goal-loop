@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=47 tests=1033 -->
+<!-- spec-check files=48 tests=1047 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4678,3 +4678,60 @@ dispatched; one-shot consume; count increments; plain/terminal/paused unaffected
 synthetic call cannot break the landing) and `test/tui-context-render.test.tsx` (the `⟲ N` token paints on the
 `now` row; the finite post-compaction size paints; absent at zero). marker bumped (tests=1011).
 Coordinator submit.
+
+## Workstream DX — the dossier, as a file the loop can hand over (2026-11-16)
+
+Interpretation: the dossier could be quoted to the clipboard and read in-screen, but it
+never left the process. The handoff case — paste the loop's whole story into an issue, a
+review, or a next-session prompt — deserved an artifact, not transcription. The palette
+command `goal.dossier.export` (no footer chord; the three chords stay p/c/x) writes the
+same Markdown `goal.dossier.copy` produces into a fresh file in the host's cwd, one click
+or one palette pick, with the filesystem itself guaranteeing no overwrite. The dossier view
+gains a mouse-first twin save row under the copy row, same click grammar, its own
+acknowledgment verb.
+
+444. src/core/dossier-export.ts — `exportLoopDossier(goal, nowMs, dir)`, the file half of
+     the dossier. Deterministic filename `goal-dossier-YYYYMMDD-HHMMSS.md` from the UTC
+     clock (a non-finite or unrepresentable clock stamps the epoch rather than throwing);
+     `attempt > 0` appends a numeric suffix (`-2`, `-3`, …). The bytes written are
+     `buildLoopDossier`'s output exactly — one builder, two doors, the clipboard and the
+     file never drift. The write is O_EXCL (`wx`); a collision retries with the next suffix
+     up to `MAX_EXPORT_ATTEMPTS` (100) instead of clobbering; a target that is not a
+     directory, or a directory that does not exist, throws the filesystem's own error — no
+     directories are created, moved, or removed. The result reports `{ path, bytes,
+     attempts }`. I/O is one synchronous `writeFileSync`, unit-tested against tmp dirs.
+445. Honesty invariants, all unit-tested: the file leaks no session id (the same rule as
+     the copy path, now on disk); content equals `buildLoopDossier` byte-for-byte; O_EXCL
+     is proven with stacked collisions (stem occupied → `-2`, two occupied → `-3`); a
+     pre-existing file at the target keeps its bytes; an unwritable or missing target
+     throws instead of resolving a path that does not exist.
+446. Palette wiring in src/tui.tsx: `goal.dossier.export`
+     ("Goal: export loop dossier (markdown file)", group Goal, palette-only — no key
+     chord, no footer furniture), enabled whenever a goal exists on the current session
+     (live or finished — same predicate as `goal.dossier.copy`). Both doors funnel into
+     one `exportDossier(sessionID, goal)` helper: the palette run and the dialog's save
+     row. One O_EXCL write into the host's cwd; the toast receipt carries the absolute
+     path on success (5 s) and the filesystem's own message on failure (error variant,
+     5 s). Nothing is written before the user explicitly picks the command or clicks the
+     row.
+447. Dialog wiring (the mouse-first twin): the dossier view paints a `save` row under the
+     copy row only when the host wires `onSaveDossier`. Left-click writes (button !== 0
+     inert, `stopPropagation`), hover boldens the row and paints a trailing `save` hint —
+     the copy row's grammar, reused not reinvented. The in-modal acknowledgment uses its
+     own verb: `✓ saved` (ascii `+ saved`) via a `savedSuffix` helper; "copied" would lie
+     about the side effect. NO_COLOR/mono carry the words, never hue. Unwired, the row
+     does not paint and the frame is byte-identical to before.
+448. Tests: +10 pure tests in test/dossier-export.test.ts (UTC stamp format and
+     determinism, epoch fallback for NaN/±Infinity/out-of-range clocks, byte-exact parity
+     with `buildLoopDossier`, session-id absence, O_EXCL non-overwrite with suffix retry,
+     stacked collisions landing on `-3`, the caller-directory-only rule, not-a-directory
+     throw, missing directory throw, attempt-ceiling sanity); +4 mouse render tests in
+     test/tui-render.test.tsx (click → exactly one host call + `✓ saved` ack, right-click
+     inert, row absent when unwired, mono keeps the row's words). package-integrity
+     re-pinned to 48 packed files (the new module ships). spec-check files=48 tests=1042.
+449. Honest limits: the export is the record's bytes, verbatim — never re-verified, never
+     reformatted, no elisions; the file is written only on explicit user action into the
+     host's cwd and nowhere else; nothing is ever overwritten (the filesystem enforces
+     it); there is no archive, no index, no auto-export on arm or land — one pick, one
+     file, one receipt. Live-TUI behaviour remains unverifiable from this seat; wiring is
+     verified at the source and the headless render layers only.

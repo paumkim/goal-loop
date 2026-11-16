@@ -796,6 +796,37 @@ function buildLoopDossier(goal, nowMs) {
 `);
 }
 
+// src/core/dossier-export.ts
+import { writeFileSync } from "fs";
+import { join, resolve } from "path";
+var MAX_EXPORT_ATTEMPTS = 100;
+var pad = (n) => String(n).padStart(2, "0");
+var dossierExportName = (nowMs, attempt = 0) => {
+  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  const stamp = `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` + `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`;
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-dossier-${stamp}${suffix}.md`;
+};
+function exportLoopDossier(goal, nowMs, dir) {
+  const content = buildLoopDossier(goal, nowMs);
+  const targetDir = resolve(dir);
+  const bytes = Buffer.byteLength(content, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join(targetDir, dossierExportName(nowMs, attempt));
+    try {
+      writeFileSync(path, content, { encoding: "utf8", flag: "wx" });
+      return { path, bytes, attempts: attempt + 1 };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+
 // src/status-dialog.tsx
 import { memo as _$memo2 } from "@opentui/solid";
 import { createComponent as _$createComponent2 } from "@opentui/solid";
@@ -2131,10 +2162,12 @@ var StatusDialogBody = (props) => {
       clearTimeout(copiedTimer);
   });
   const copiedSuffix = (key) => copied() === key ? ascii ? " + copied" : " \u2713 copied" : "";
+  const savedSuffix = (key) => copied() === key ? ascii ? " + saved" : " \u2713 saved" : "";
   const [reasonHovered, setReasonHovered] = createSignal2(false);
   const [conditionHovered, setConditionHovered] = createSignal2(false);
   const [verifyHovered, setVerifyHovered] = createSignal2(false);
   const [dossierHovered, setDossierHovered] = createSignal2(false);
+  const [saveHovered, setSaveHovered] = createSignal2(false);
   const [sectionHovered, setSectionHovered] = createSignal2(undefined);
   const [othersHovered, setOthersHovered] = createSignal2(null);
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal2(false);
@@ -2187,6 +2220,14 @@ var StatusDialogBody = (props) => {
     try {
       props.onCopyDossier(text);
       acknowledge("dossier");
+    } catch {}
+  };
+  const saveDossier = () => {
+    if (!props.onSaveDossier)
+      return;
+    try {
+      props.onSaveDossier();
+      acknowledge("save");
     } catch {}
   };
   const copySection = (entry) => {
@@ -2417,46 +2458,46 @@ var StatusDialogBody = (props) => {
                   return field(goal().status === "active" ? "evaluator" : "reason", reason(), true);
                 },
                 get children() {
-                  var _el$48 = _$createElement2("box"), _el$49 = _$createElement2("text");
-                  _$insertNode2(_el$48, _el$49);
-                  _$setProp2(_el$48, "flexDirection", "row");
-                  _$setProp2(_el$48, "gap", 2);
-                  _$setProp2(_el$48, "onMouseUp", (event) => {
+                  var _el$52 = _$createElement2("box"), _el$53 = _$createElement2("text");
+                  _$insertNode2(_el$52, _el$53);
+                  _$setProp2(_el$52, "flexDirection", "row");
+                  _$setProp2(_el$52, "gap", 2);
+                  _$setProp2(_el$52, "onMouseUp", (event) => {
                     if (event.button !== 0)
                       return;
                     event.stopPropagation();
                     copyReason(reason());
                   });
-                  _$setProp2(_el$48, "onMouseOver", () => setReasonHovered(true));
-                  _$setProp2(_el$48, "onMouseOut", () => setReasonHovered(false));
-                  _$insert2(_el$48, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$49);
-                  _$setProp2(_el$49, "wrapMode", "word");
-                  _$setProp2(_el$49, "flexGrow", 1);
-                  _$insert2(_el$49, reason, null);
-                  _$insert2(_el$49, () => copiedSuffix("reason"), null);
-                  _$insert2(_el$48, _$createComponent2(Show2, {
+                  _$setProp2(_el$52, "onMouseOver", () => setReasonHovered(true));
+                  _$setProp2(_el$52, "onMouseOut", () => setReasonHovered(false));
+                  _$insert2(_el$52, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$53);
+                  _$setProp2(_el$53, "wrapMode", "word");
+                  _$setProp2(_el$53, "flexGrow", 1);
+                  _$insert2(_el$53, reason, null);
+                  _$insert2(_el$53, () => copiedSuffix("reason"), null);
+                  _$insert2(_el$52, _$createComponent2(Show2, {
                     get when() {
                       return reasonHovered();
                     },
                     get children() {
-                      var _el$50 = _$createElement2("text");
-                      _$insertNode2(_el$50, _$createTextNode2(`copy`));
-                      _$setProp2(_el$50, "wrapMode", "none");
-                      _$setProp2(_el$50, "flexShrink", 0);
-                      _$effect2((_$p) => _$setProp2(_el$50, "fg", theme().text.faint, _$p));
-                      return _el$50;
+                      var _el$54 = _$createElement2("text");
+                      _$insertNode2(_el$54, _$createTextNode2(`copy`));
+                      _$setProp2(_el$54, "wrapMode", "none");
+                      _$setProp2(_el$54, "flexShrink", 0);
+                      _$effect2((_$p) => _$setProp2(_el$54, "fg", theme().text.faint, _$p));
+                      return _el$54;
                     }
                   }), null);
                   _$effect2((_p$) => {
-                    var _v$18 = theme().text.base, _v$19 = reasonHovered() ? TextAttributes2.BOLD : undefined;
-                    _v$18 !== _p$.e && (_p$.e = _$setProp2(_el$49, "fg", _v$18, _p$.e));
-                    _v$19 !== _p$.t && (_p$.t = _$setProp2(_el$49, "attributes", _v$19, _p$.t));
+                    var _v$20 = theme().text.base, _v$21 = reasonHovered() ? TextAttributes2.BOLD : undefined;
+                    _v$20 !== _p$.e && (_p$.e = _$setProp2(_el$53, "fg", _v$20, _p$.e));
+                    _v$21 !== _p$.t && (_p$.t = _$setProp2(_el$53, "attributes", _v$21, _p$.t));
                     return _p$;
                   }, {
                     e: undefined,
                     t: undefined
                   });
-                  return _el$48;
+                  return _el$52;
                 }
               })
             }), null);
@@ -2465,16 +2506,16 @@ var StatusDialogBody = (props) => {
                 return hint();
               },
               children: (h) => (() => {
-                var _el$52 = _$createElement2("box"), _el$53 = _$createElement2("text");
-                _$insertNode2(_el$52, _el$53);
-                _$setProp2(_el$52, "flexDirection", "row");
-                _$setProp2(_el$52, "gap", 2);
-                _$insert2(_el$52, () => label("hint"), _el$53);
-                _$setProp2(_el$53, "wrapMode", "word");
-                _$setProp2(_el$53, "flexGrow", 1);
-                _$insert2(_el$53, () => h().full);
-                _$effect2((_$p) => _$setProp2(_el$53, "fg", theme().text.muted, _$p));
-                return _el$52;
+                var _el$56 = _$createElement2("box"), _el$57 = _$createElement2("text");
+                _$insertNode2(_el$56, _el$57);
+                _$setProp2(_el$56, "flexDirection", "row");
+                _$setProp2(_el$56, "gap", 2);
+                _$insert2(_el$56, () => label("hint"), _el$57);
+                _$setProp2(_el$57, "wrapMode", "word");
+                _$setProp2(_el$57, "flexGrow", 1);
+                _$insert2(_el$57, () => h().full);
+                _$effect2((_$p) => _$setProp2(_el$57, "fg", theme().text.muted, _$p));
+                return _el$56;
               })()
             }), null);
             _$insert2(_el$35, _$createComponent2(Show2, {
@@ -2501,49 +2542,49 @@ var StatusDialogBody = (props) => {
                 const outcome = () => ok() ? "exit 0" : verify().timedOut ? "timed out" : `exit ${verify().code ?? "unknown"}`;
                 const glyphColor = () => mono() ? theme().text.base : ok() ? theme().text.feedback.info.base : theme().text.feedback.warning.base;
                 const inner = () => (() => {
-                  var _el$54 = _$createElement2("box"), _el$55 = _$createElement2("box"), _el$56 = _$createElement2("text"), _el$58 = _$createElement2("text"), _el$59 = _$createElement2("box"), _el$60 = _$createElement2("text"), _el$61 = _$createElement2("text");
-                  _$insertNode2(_el$54, _el$55);
-                  _$insertNode2(_el$54, _el$59);
-                  _$setProp2(_el$54, "flexDirection", "column");
-                  _$setProp2(_el$54, "flexGrow", 1);
-                  _$insertNode2(_el$55, _el$56);
-                  _$insertNode2(_el$55, _el$58);
-                  _$setProp2(_el$55, "flexDirection", "row");
-                  _$setProp2(_el$55, "gap", 1);
-                  _$insertNode2(_el$56, _$createTextNode2(`$`));
-                  _$setProp2(_el$56, "wrapMode", "none");
-                  _$setProp2(_el$58, "wrapMode", "word");
+                  var _el$58 = _$createElement2("box"), _el$59 = _$createElement2("box"), _el$60 = _$createElement2("text"), _el$62 = _$createElement2("text"), _el$63 = _$createElement2("box"), _el$64 = _$createElement2("text"), _el$65 = _$createElement2("text");
+                  _$insertNode2(_el$58, _el$59);
+                  _$insertNode2(_el$58, _el$63);
+                  _$setProp2(_el$58, "flexDirection", "column");
                   _$setProp2(_el$58, "flexGrow", 1);
-                  _$insert2(_el$58, () => verify().command, null);
-                  _$insert2(_el$58, () => copiedSuffix("verify"), null);
                   _$insertNode2(_el$59, _el$60);
-                  _$insertNode2(_el$59, _el$61);
+                  _$insertNode2(_el$59, _el$62);
                   _$setProp2(_el$59, "flexDirection", "row");
                   _$setProp2(_el$59, "gap", 1);
+                  _$insertNode2(_el$60, _$createTextNode2(`$`));
                   _$setProp2(_el$60, "wrapMode", "none");
-                  _$insert2(_el$60, glyph);
-                  _$setProp2(_el$61, "wrapMode", "none");
-                  _$setProp2(_el$61, "flexShrink", 0);
-                  _$insert2(_el$61, () => `${outcome()} \xB7 ${relativeTime(verify().at, props.nowMs())}`);
-                  _$insert2(_el$54, _$createComponent2(Show2, {
+                  _$setProp2(_el$62, "wrapMode", "word");
+                  _$setProp2(_el$62, "flexGrow", 1);
+                  _$insert2(_el$62, () => verify().command, null);
+                  _$insert2(_el$62, () => copiedSuffix("verify"), null);
+                  _$insertNode2(_el$63, _el$64);
+                  _$insertNode2(_el$63, _el$65);
+                  _$setProp2(_el$63, "flexDirection", "row");
+                  _$setProp2(_el$63, "gap", 1);
+                  _$setProp2(_el$64, "wrapMode", "none");
+                  _$insert2(_el$64, glyph);
+                  _$setProp2(_el$65, "wrapMode", "none");
+                  _$setProp2(_el$65, "flexShrink", 0);
+                  _$insert2(_el$65, () => `${outcome()} \xB7 ${relativeTime(verify().at, props.nowMs())}`);
+                  _$insert2(_el$58, _$createComponent2(Show2, {
                     get when() {
                       return verify().tail;
                     },
                     children: (t) => (() => {
-                      var _el$62 = _$createElement2("text");
-                      _$setProp2(_el$62, "wrapMode", "word");
-                      _$insert2(_el$62, t);
-                      _$effect2((_$p) => _$setProp2(_el$62, "fg", theme().text.faint, _$p));
-                      return _el$62;
+                      var _el$66 = _$createElement2("text");
+                      _$setProp2(_el$66, "wrapMode", "word");
+                      _$insert2(_el$66, t);
+                      _$effect2((_$p) => _$setProp2(_el$66, "fg", theme().text.faint, _$p));
+                      return _el$66;
                     })()
                   }), null);
                   _$effect2((_p$) => {
-                    var _v$20 = mono() ? theme().text.base : theme().text.faint, _v$21 = theme().text.base, _v$22 = verifyHovered() ? TextAttributes2.BOLD : undefined, _v$23 = glyphColor(), _v$24 = theme().text.muted;
-                    _v$20 !== _p$.e && (_p$.e = _$setProp2(_el$56, "fg", _v$20, _p$.e));
-                    _v$21 !== _p$.t && (_p$.t = _$setProp2(_el$58, "fg", _v$21, _p$.t));
-                    _v$22 !== _p$.a && (_p$.a = _$setProp2(_el$58, "attributes", _v$22, _p$.a));
-                    _v$23 !== _p$.o && (_p$.o = _$setProp2(_el$60, "fg", _v$23, _p$.o));
-                    _v$24 !== _p$.i && (_p$.i = _$setProp2(_el$61, "fg", _v$24, _p$.i));
+                    var _v$22 = mono() ? theme().text.base : theme().text.faint, _v$23 = theme().text.base, _v$24 = verifyHovered() ? TextAttributes2.BOLD : undefined, _v$25 = glyphColor(), _v$26 = theme().text.muted;
+                    _v$22 !== _p$.e && (_p$.e = _$setProp2(_el$60, "fg", _v$22, _p$.e));
+                    _v$23 !== _p$.t && (_p$.t = _$setProp2(_el$62, "fg", _v$23, _p$.t));
+                    _v$24 !== _p$.a && (_p$.a = _$setProp2(_el$62, "attributes", _v$24, _p$.a));
+                    _v$25 !== _p$.o && (_p$.o = _$setProp2(_el$64, "fg", _v$25, _p$.o));
+                    _v$26 !== _p$.i && (_p$.i = _$setProp2(_el$65, "fg", _v$26, _p$.i));
                     return _p$;
                   }, {
                     e: undefined,
@@ -2552,7 +2593,7 @@ var StatusDialogBody = (props) => {
                     o: undefined,
                     i: undefined
                   });
-                  return _el$54;
+                  return _el$58;
                 })();
                 return _$createComponent2(Show2, {
                   get when() {
@@ -2560,42 +2601,42 @@ var StatusDialogBody = (props) => {
                   },
                   get fallback() {
                     return (() => {
-                      var _el$66 = _$createElement2("box");
-                      _$setProp2(_el$66, "flexDirection", "row");
-                      _$setProp2(_el$66, "gap", 2);
-                      _$insert2(_el$66, () => label("verify"), null);
-                      _$insert2(_el$66, inner, null);
-                      return _el$66;
+                      var _el$70 = _$createElement2("box");
+                      _$setProp2(_el$70, "flexDirection", "row");
+                      _$setProp2(_el$70, "gap", 2);
+                      _$insert2(_el$70, () => label("verify"), null);
+                      _$insert2(_el$70, inner, null);
+                      return _el$70;
                     })();
                   },
                   get children() {
-                    var _el$63 = _$createElement2("box");
-                    _$setProp2(_el$63, "flexDirection", "row");
-                    _$setProp2(_el$63, "gap", 2);
-                    _$setProp2(_el$63, "onMouseUp", (event) => {
+                    var _el$67 = _$createElement2("box");
+                    _$setProp2(_el$67, "flexDirection", "row");
+                    _$setProp2(_el$67, "gap", 2);
+                    _$setProp2(_el$67, "onMouseUp", (event) => {
                       if (event.button !== 0)
                         return;
                       event.stopPropagation();
                       copyVerify(verify().tail ?? "", verify().command);
                     });
-                    _$setProp2(_el$63, "onMouseOver", () => setVerifyHovered(true));
-                    _$setProp2(_el$63, "onMouseOut", () => setVerifyHovered(false));
-                    _$insert2(_el$63, () => label("verify"), null);
-                    _$insert2(_el$63, inner, null);
-                    _$insert2(_el$63, _$createComponent2(Show2, {
+                    _$setProp2(_el$67, "onMouseOver", () => setVerifyHovered(true));
+                    _$setProp2(_el$67, "onMouseOut", () => setVerifyHovered(false));
+                    _$insert2(_el$67, () => label("verify"), null);
+                    _$insert2(_el$67, inner, null);
+                    _$insert2(_el$67, _$createComponent2(Show2, {
                       get when() {
                         return verifyHovered();
                       },
                       get children() {
-                        var _el$64 = _$createElement2("text");
-                        _$insertNode2(_el$64, _$createTextNode2(`copy`));
-                        _$setProp2(_el$64, "wrapMode", "none");
-                        _$setProp2(_el$64, "flexShrink", 0);
-                        _$effect2((_$p) => _$setProp2(_el$64, "fg", theme().text.faint, _$p));
-                        return _el$64;
+                        var _el$68 = _$createElement2("text");
+                        _$insertNode2(_el$68, _$createTextNode2(`copy`));
+                        _$setProp2(_el$68, "wrapMode", "none");
+                        _$setProp2(_el$68, "flexShrink", 0);
+                        _$effect2((_$p) => _$setProp2(_el$68, "fg", theme().text.faint, _$p));
+                        return _el$68;
                       }
                     }), null);
-                    return _el$63;
+                    return _el$67;
                   }
                 });
               }
@@ -2616,68 +2657,68 @@ var StatusDialogBody = (props) => {
                   const hot = () => meter().hot;
                   const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
                   return (() => {
-                    var _el$67 = _$createElement2("box");
-                    _$setProp2(_el$67, "flexDirection", "row");
-                    _$setProp2(_el$67, "gap", 2);
-                    _$insert2(_el$67, () => label("context"), null);
-                    _$insert2(_el$67, _$createComponent2(Show2, {
+                    var _el$71 = _$createElement2("box");
+                    _$setProp2(_el$71, "flexDirection", "row");
+                    _$setProp2(_el$71, "gap", 2);
+                    _$insert2(_el$71, () => label("context"), null);
+                    _$insert2(_el$71, _$createComponent2(Show2, {
                       get when() {
                         return goal().compactAtTokens !== undefined;
                       },
                       get fallback() {
                         return (() => {
-                          var _el$70 = _$createElement2("box"), _el$71 = _$createElement2("text");
-                          _$insertNode2(_el$70, _el$71);
-                          _$setProp2(_el$70, "flexDirection", "row");
-                          _$setProp2(_el$70, "gap", 1);
-                          _$setProp2(_el$71, "wrapMode", "none");
-                          _$insert2(_el$71, () => `~${formatTokens(goal().contextSize)} tokens`);
-                          _$insert2(_el$70, _$createComponent2(Show2, {
+                          var _el$74 = _$createElement2("box"), _el$75 = _$createElement2("text");
+                          _$insertNode2(_el$74, _el$75);
+                          _$setProp2(_el$74, "flexDirection", "row");
+                          _$setProp2(_el$74, "gap", 1);
+                          _$setProp2(_el$75, "wrapMode", "none");
+                          _$insert2(_el$75, () => `~${formatTokens(goal().contextSize)} tokens`);
+                          _$insert2(_el$74, _$createComponent2(Show2, {
                             get when() {
                               return compactMarkerNow();
                             },
                             children: (m) => (() => {
-                              var _el$72 = _$createElement2("text");
-                              _$setProp2(_el$72, "wrapMode", "none");
-                              _$setProp2(_el$72, "flexShrink", 0);
-                              _$insert2(_el$72, () => `\xB7 ${m().text}`);
-                              _$effect2((_$p) => _$setProp2(_el$72, "fg", compactMarkerFg(m().tone), _$p));
-                              return _el$72;
+                              var _el$76 = _$createElement2("text");
+                              _$setProp2(_el$76, "wrapMode", "none");
+                              _$setProp2(_el$76, "flexShrink", 0);
+                              _$insert2(_el$76, () => `\xB7 ${m().text}`);
+                              _$effect2((_$p) => _$setProp2(_el$76, "fg", compactMarkerFg(m().tone), _$p));
+                              return _el$76;
                             })()
                           }), null);
-                          _$effect2((_$p) => _$setProp2(_el$71, "fg", theme().text.muted, _$p));
-                          return _el$70;
+                          _$effect2((_$p) => _$setProp2(_el$75, "fg", theme().text.muted, _$p));
+                          return _el$74;
                         })();
                       },
                       get children() {
                         return [(() => {
-                          var _el$68 = _$createElement2("text");
-                          _$setProp2(_el$68, "wrapMode", "none");
-                          _$insert2(_el$68, () => meter().text);
-                          _$effect2((_$p) => _$setProp2(_el$68, "fg", fg(), _$p));
-                          return _el$68;
+                          var _el$72 = _$createElement2("text");
+                          _$setProp2(_el$72, "wrapMode", "none");
+                          _$insert2(_el$72, () => meter().text);
+                          _$effect2((_$p) => _$setProp2(_el$72, "fg", fg(), _$p));
+                          return _el$72;
                         })(), (() => {
-                          var _el$69 = _$createElement2("text");
-                          _$setProp2(_el$69, "wrapMode", "none");
-                          _$insert2(_el$69, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
-                          _$effect2((_$p) => _$setProp2(_el$69, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
-                          return _el$69;
+                          var _el$73 = _$createElement2("text");
+                          _$setProp2(_el$73, "wrapMode", "none");
+                          _$insert2(_el$73, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
+                          _$effect2((_$p) => _$setProp2(_el$73, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
+                          return _el$73;
                         })(), _$createComponent2(Show2, {
                           get when() {
                             return compactMarkerNow();
                           },
                           children: (m) => (() => {
-                            var _el$73 = _$createElement2("text");
-                            _$setProp2(_el$73, "wrapMode", "none");
-                            _$setProp2(_el$73, "flexShrink", 0);
-                            _$insert2(_el$73, () => `\xB7 ${m().text}`);
-                            _$effect2((_$p) => _$setProp2(_el$73, "fg", compactMarkerFg(m().tone), _$p));
-                            return _el$73;
+                            var _el$77 = _$createElement2("text");
+                            _$setProp2(_el$77, "wrapMode", "none");
+                            _$setProp2(_el$77, "flexShrink", 0);
+                            _$insert2(_el$77, () => `\xB7 ${m().text}`);
+                            _$effect2((_$p) => _$setProp2(_el$77, "fg", compactMarkerFg(m().tone), _$p));
+                            return _el$77;
                           })()
                         })];
                       }
                     }), null);
-                    return _el$67;
+                    return _el$71;
                   })();
                 })();
               }
@@ -2713,8 +2754,8 @@ var StatusDialogBody = (props) => {
             return dossier();
           },
           get children() {
-            var _el$40 = _$createElement2("box"), _el$45 = _$createElement2("box"), _el$47 = _$createElement2("box");
-            _$insertNode2(_el$40, _el$45);
+            var _el$40 = _$createElement2("box"), _el$49 = _$createElement2("box"), _el$51 = _$createElement2("box");
+            _$insertNode2(_el$40, _el$49);
             _$setProp2(_el$40, "flexDirection", "column");
             _$setProp2(_el$40, "gap", 1);
             _$insert2(_el$40, _$createComponent2(Show2, {
@@ -2723,16 +2764,16 @@ var StatusDialogBody = (props) => {
               },
               get fallback() {
                 return (() => {
-                  var _el$74 = _$createElement2("box"), _el$75 = _$createElement2("text");
-                  _$insertNode2(_el$74, _el$75);
-                  _$setProp2(_el$74, "flexDirection", "row");
-                  _$setProp2(_el$74, "gap", 2);
-                  _$insert2(_el$74, () => label("dossier"), _el$75);
-                  _$insertNode2(_el$75, _$createTextNode2(`the whole record as markdown`));
-                  _$setProp2(_el$75, "wrapMode", "word");
-                  _$setProp2(_el$75, "flexGrow", 1);
-                  _$effect2((_$p) => _$setProp2(_el$75, "fg", theme().text.muted, _$p));
-                  return _el$74;
+                  var _el$78 = _$createElement2("box"), _el$79 = _$createElement2("text");
+                  _$insertNode2(_el$78, _el$79);
+                  _$setProp2(_el$78, "flexDirection", "row");
+                  _$setProp2(_el$78, "gap", 2);
+                  _$insert2(_el$78, () => label("dossier"), _el$79);
+                  _$insertNode2(_el$79, _$createTextNode2(`the whole record as markdown`));
+                  _$setProp2(_el$79, "wrapMode", "word");
+                  _$setProp2(_el$79, "flexGrow", 1);
+                  _$effect2((_$p) => _$setProp2(_el$79, "fg", theme().text.muted, _$p));
+                  return _el$78;
                 })();
               },
               get children() {
@@ -2776,21 +2817,67 @@ var StatusDialogBody = (props) => {
                 });
                 return _el$41;
               }
-            }), _el$45);
-            _$insertNode2(_el$45, _el$47);
-            _$setProp2(_el$45, "flexDirection", "row");
-            _$setProp2(_el$45, "gap", 2);
-            _$insert2(_el$45, _$createComponent2(Show2, {
+            }), _el$49);
+            _$insert2(_el$40, _$createComponent2(Show2, {
+              get when() {
+                return props.onSaveDossier;
+              },
+              get children() {
+                var _el$45 = _$createElement2("box"), _el$46 = _$createElement2("text");
+                _$insertNode2(_el$45, _el$46);
+                _$setProp2(_el$45, "flexDirection", "row");
+                _$setProp2(_el$45, "gap", 2);
+                _$setProp2(_el$45, "onMouseUp", (event) => {
+                  if (event.button !== 0)
+                    return;
+                  event.stopPropagation();
+                  saveDossier();
+                });
+                _$setProp2(_el$45, "onMouseOver", () => setSaveHovered(true));
+                _$setProp2(_el$45, "onMouseOut", () => setSaveHovered(false));
+                _$insert2(_el$45, () => label("save"), _el$46);
+                _$setProp2(_el$46, "wrapMode", "word");
+                _$setProp2(_el$46, "flexGrow", 1);
+                _$insert2(_el$46, () => `the whole record as a file${savedSuffix("save")}`);
+                _$insert2(_el$45, _$createComponent2(Show2, {
+                  get when() {
+                    return saveHovered();
+                  },
+                  get children() {
+                    var _el$47 = _$createElement2("text");
+                    _$insertNode2(_el$47, _$createTextNode2(`save`));
+                    _$setProp2(_el$47, "wrapMode", "none");
+                    _$setProp2(_el$47, "flexShrink", 0);
+                    _$effect2((_$p) => _$setProp2(_el$47, "fg", theme().text.faint, _$p));
+                    return _el$47;
+                  }
+                }), null);
+                _$effect2((_p$) => {
+                  var _v$13 = theme().text.base, _v$14 = saveHovered() ? TextAttributes2.BOLD : undefined;
+                  _v$13 !== _p$.e && (_p$.e = _$setProp2(_el$46, "fg", _v$13, _p$.e));
+                  _v$14 !== _p$.t && (_p$.t = _$setProp2(_el$46, "attributes", _v$14, _p$.t));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined
+                });
+                return _el$45;
+              }
+            }), _el$49);
+            _$insertNode2(_el$49, _el$51);
+            _$setProp2(_el$49, "flexDirection", "row");
+            _$setProp2(_el$49, "gap", 2);
+            _$insert2(_el$49, _$createComponent2(Show2, {
               get when() {
                 return props.onCopyDossierSection;
               },
               get children() {
-                var _el$46 = _$createElement2("box");
-                _$setProp2(_el$46, "flexDirection", "column");
-                _$setProp2(_el$46, "gap", 0);
-                _$setProp2(_el$46, "flexShrink", 0);
-                _$setProp2(_el$46, "width", 14);
-                _$insert2(_el$46, _$createComponent2(For2, {
+                var _el$50 = _$createElement2("box");
+                _$setProp2(_el$50, "flexDirection", "column");
+                _$setProp2(_el$50, "gap", 0);
+                _$setProp2(_el$50, "flexShrink", 0);
+                _$setProp2(_el$50, "width", 14);
+                _$insert2(_el$50, _$createComponent2(For2, {
                   get each() {
                     return outline();
                   },
@@ -2798,44 +2885,44 @@ var StatusDialogBody = (props) => {
                     const active = () => copied() === `section:${entry.id}`;
                     const hovered = () => sectionHovered() === entry.id;
                     return (() => {
-                      var _el$77 = _$createElement2("box"), _el$78 = _$createElement2("text");
-                      _$insertNode2(_el$77, _el$78);
-                      _$setProp2(_el$77, "flexDirection", "row");
-                      _$setProp2(_el$77, "gap", 1);
-                      _$setProp2(_el$77, "flexShrink", 0);
-                      _$setProp2(_el$77, "width", 14);
-                      _$setProp2(_el$77, "onMouseUp", (event) => {
+                      var _el$81 = _$createElement2("box"), _el$82 = _$createElement2("text");
+                      _$insertNode2(_el$81, _el$82);
+                      _$setProp2(_el$81, "flexDirection", "row");
+                      _$setProp2(_el$81, "gap", 1);
+                      _$setProp2(_el$81, "flexShrink", 0);
+                      _$setProp2(_el$81, "width", 14);
+                      _$setProp2(_el$81, "onMouseUp", (event) => {
                         if (event.button !== 0)
                           return;
                         event.stopPropagation();
                         copySection(entry);
                       });
-                      _$setProp2(_el$77, "onMouseOver", () => setSectionHovered(entry.id));
-                      _$setProp2(_el$77, "onMouseOut", () => setSectionHovered(undefined));
-                      _$setProp2(_el$78, "wrapMode", "none");
-                      _$insert2(_el$78, (() => {
+                      _$setProp2(_el$81, "onMouseOver", () => setSectionHovered(entry.id));
+                      _$setProp2(_el$81, "onMouseOut", () => setSectionHovered(undefined));
+                      _$setProp2(_el$82, "wrapMode", "none");
+                      _$insert2(_el$82, (() => {
                         var _c$2 = _$memo2(() => !!active());
                         return () => _c$2() ? ascii ? "+ copied" : "\u2713 copied" : entry.label;
                       })());
                       _$effect2((_p$) => {
-                        var _v$25 = hovered() || active() ? theme().text.base : theme().text.faint, _v$26 = hovered() || active() ? TextAttributes2.BOLD : undefined;
-                        _v$25 !== _p$.e && (_p$.e = _$setProp2(_el$78, "fg", _v$25, _p$.e));
-                        _v$26 !== _p$.t && (_p$.t = _$setProp2(_el$78, "attributes", _v$26, _p$.t));
+                        var _v$27 = hovered() || active() ? theme().text.base : theme().text.faint, _v$28 = hovered() || active() ? TextAttributes2.BOLD : undefined;
+                        _v$27 !== _p$.e && (_p$.e = _$setProp2(_el$82, "fg", _v$27, _p$.e));
+                        _v$28 !== _p$.t && (_p$.t = _$setProp2(_el$82, "attributes", _v$28, _p$.t));
                         return _p$;
                       }, {
                         e: undefined,
                         t: undefined
                       });
-                      return _el$77;
+                      return _el$81;
                     })();
                   }
                 }));
-                return _el$46;
+                return _el$50;
               }
-            }), _el$47);
-            _$setProp2(_el$47, "flexDirection", "column");
-            _$setProp2(_el$47, "gap", 0);
-            _$insert2(_el$47, _$createComponent2(For2, {
+            }), _el$51);
+            _$setProp2(_el$51, "flexDirection", "column");
+            _$setProp2(_el$51, "gap", 0);
+            _$insert2(_el$51, _$createComponent2(For2, {
               get each() {
                 return dossierRows();
               },
@@ -2923,16 +3010,16 @@ var StatusDialogBody = (props) => {
                 return othersLive();
               },
               children: (rows) => (() => {
-                var _el$79 = _$createElement2("box"), _el$80 = _$createElement2("box"), _el$81 = _$createElement2("text");
-                _$insertNode2(_el$79, _el$80);
-                _$setProp2(_el$79, "flexDirection", "column");
-                _$insertNode2(_el$80, _el$81);
-                _$setProp2(_el$80, "flexDirection", "row");
-                _$setProp2(_el$80, "gap", 2);
-                _$insert2(_el$80, () => label("elsewhere"), _el$81);
-                _$setProp2(_el$81, "wrapMode", "none");
-                _$insert2(_el$81, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 hover a row to open its transcript" : ""}`);
-                _$insert2(_el$79, _$createComponent2(For2, {
+                var _el$83 = _$createElement2("box"), _el$84 = _$createElement2("box"), _el$85 = _$createElement2("text");
+                _$insertNode2(_el$83, _el$84);
+                _$setProp2(_el$83, "flexDirection", "column");
+                _$insertNode2(_el$84, _el$85);
+                _$setProp2(_el$84, "flexDirection", "row");
+                _$setProp2(_el$84, "gap", 2);
+                _$insert2(_el$84, () => label("elsewhere"), _el$85);
+                _$setProp2(_el$85, "wrapMode", "none");
+                _$insert2(_el$85, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 hover a row to open its transcript" : ""}`);
+                _$insert2(_el$83, _$createComponent2(For2, {
                   get each() {
                     return _$memo2(() => !!othersExpanded())() ? rows() : rows().slice(0, OTHERS_VISIBLE);
                   },
@@ -2941,14 +3028,14 @@ var StatusDialogBody = (props) => {
                     const hovered = () => othersHovered() === other.sessionID;
                     const digit = () => index() < FOREIGN_ROWS_VISIBLE ? index() + 1 : undefined;
                     return (() => {
-                      var _el$85 = _$createElement2("box"), _el$86 = _$createElement2("text"), _el$87 = _$createElement2("text"), _el$88 = _$createElement2("text"), _el$89 = _$createElement2("text");
-                      _$insertNode2(_el$85, _el$86);
-                      _$insertNode2(_el$85, _el$87);
-                      _$insertNode2(_el$85, _el$88);
-                      _$insertNode2(_el$85, _el$89);
-                      _$setProp2(_el$85, "flexDirection", "row");
-                      _$setProp2(_el$85, "gap", 2);
-                      _$setProp2(_el$85, "onMouseUp", jump ? (event) => {
+                      var _el$89 = _$createElement2("box"), _el$90 = _$createElement2("text"), _el$91 = _$createElement2("text"), _el$92 = _$createElement2("text"), _el$93 = _$createElement2("text");
+                      _$insertNode2(_el$89, _el$90);
+                      _$insertNode2(_el$89, _el$91);
+                      _$insertNode2(_el$89, _el$92);
+                      _$insertNode2(_el$89, _el$93);
+                      _$setProp2(_el$89, "flexDirection", "row");
+                      _$setProp2(_el$89, "gap", 2);
+                      _$setProp2(_el$89, "onMouseUp", jump ? (event) => {
                         if (event.button !== 0)
                           return;
                         event.stopPropagation();
@@ -2956,58 +3043,58 @@ var StatusDialogBody = (props) => {
                           jump(other.sessionID);
                         } catch {}
                       } : undefined);
-                      _$setProp2(_el$85, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
-                      _$setProp2(_el$85, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
-                      _$insert2(_el$85, (() => {
+                      _$setProp2(_el$89, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
+                      _$setProp2(_el$89, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
+                      _$insert2(_el$89, (() => {
                         var _c$4 = _$memo2(() => !!(jump && digit() !== undefined));
                         return () => _c$4() ? (() => {
-                          var _el$91 = _$createElement2("text");
-                          _$setProp2(_el$91, "wrapMode", "none");
-                          _$setProp2(_el$91, "flexShrink", 0);
-                          _$setProp2(_el$91, "width", LABEL);
-                          _$insert2(_el$91, digit);
-                          _$effect2((_$p) => _$setProp2(_el$91, "fg", theme().text.faint, _$p));
-                          return _el$91;
+                          var _el$95 = _$createElement2("text");
+                          _$setProp2(_el$95, "wrapMode", "none");
+                          _$setProp2(_el$95, "flexShrink", 0);
+                          _$setProp2(_el$95, "width", LABEL);
+                          _$insert2(_el$95, digit);
+                          _$effect2((_$p) => _$setProp2(_el$95, "fg", theme().text.faint, _$p));
+                          return _el$95;
                         })() : label("");
-                      })(), _el$86);
-                      _$setProp2(_el$86, "wrapMode", "none");
-                      _$setProp2(_el$86, "flexShrink", 0);
-                      _$insert2(_el$86, (() => {
+                      })(), _el$90);
+                      _$setProp2(_el$90, "wrapMode", "none");
+                      _$setProp2(_el$90, "flexShrink", 0);
+                      _$insert2(_el$90, (() => {
                         var _c$5 = _$memo2(() => !!mono());
                         return () => _c$5() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
                       })());
-                      _$setProp2(_el$87, "wrapMode", "none");
-                      _$setProp2(_el$87, "flexShrink", 0);
-                      _$insert2(_el$87, () => sessionTag(other.sessionID));
-                      _$setProp2(_el$88, "wrapMode", "none");
-                      _$setProp2(_el$88, "flexShrink", 0);
-                      _$insert2(_el$88, (() => {
+                      _$setProp2(_el$91, "wrapMode", "none");
+                      _$setProp2(_el$91, "flexShrink", 0);
+                      _$insert2(_el$91, () => sessionTag(other.sessionID));
+                      _$setProp2(_el$92, "wrapMode", "none");
+                      _$setProp2(_el$92, "flexShrink", 0);
+                      _$insert2(_el$92, (() => {
                         var _c$6 = _$memo2(() => !!other.loopEnabled);
                         return () => _c$6() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
                       })());
-                      _$setProp2(_el$89, "wrapMode", "none");
-                      _$setProp2(_el$89, "flexGrow", 1);
-                      _$insert2(_el$89, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
-                      _$insert2(_el$85, _$createComponent2(Show2, {
+                      _$setProp2(_el$93, "wrapMode", "none");
+                      _$setProp2(_el$93, "flexGrow", 1);
+                      _$insert2(_el$93, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
+                      _$insert2(_el$89, _$createComponent2(Show2, {
                         get when() {
                           return jump !== undefined && hovered();
                         },
                         get children() {
-                          var _el$90 = _$createElement2("text");
-                          _$setProp2(_el$90, "wrapMode", "none");
-                          _$setProp2(_el$90, "flexShrink", 0);
-                          _$insert2(_el$90, ascii ? "-> transcript" : "\u2192 transcript");
-                          _$effect2((_$p) => _$setProp2(_el$90, "fg", theme().text.faint, _$p));
-                          return _el$90;
+                          var _el$94 = _$createElement2("text");
+                          _$setProp2(_el$94, "wrapMode", "none");
+                          _$setProp2(_el$94, "flexShrink", 0);
+                          _$insert2(_el$94, ascii ? "-> transcript" : "\u2192 transcript");
+                          _$effect2((_$p) => _$setProp2(_el$94, "fg", theme().text.faint, _$p));
+                          return _el$94;
                         }
                       }), null);
                       _$effect2((_p$) => {
-                        var _v$29 = stateAccentColor(theme(), other.status, false, mono()), _v$30 = theme().text.muted, _v$31 = theme().text.faint, _v$32 = theme().text.muted, _v$33 = jump !== undefined && hovered() ? TextAttributes2.BOLD : undefined;
-                        _v$29 !== _p$.e && (_p$.e = _$setProp2(_el$86, "fg", _v$29, _p$.e));
-                        _v$30 !== _p$.t && (_p$.t = _$setProp2(_el$87, "fg", _v$30, _p$.t));
-                        _v$31 !== _p$.a && (_p$.a = _$setProp2(_el$88, "fg", _v$31, _p$.a));
-                        _v$32 !== _p$.o && (_p$.o = _$setProp2(_el$89, "fg", _v$32, _p$.o));
-                        _v$33 !== _p$.i && (_p$.i = _$setProp2(_el$89, "attributes", _v$33, _p$.i));
+                        var _v$31 = stateAccentColor(theme(), other.status, false, mono()), _v$32 = theme().text.muted, _v$33 = theme().text.faint, _v$34 = theme().text.muted, _v$35 = jump !== undefined && hovered() ? TextAttributes2.BOLD : undefined;
+                        _v$31 !== _p$.e && (_p$.e = _$setProp2(_el$90, "fg", _v$31, _p$.e));
+                        _v$32 !== _p$.t && (_p$.t = _$setProp2(_el$91, "fg", _v$32, _p$.t));
+                        _v$33 !== _p$.a && (_p$.a = _$setProp2(_el$92, "fg", _v$33, _p$.a));
+                        _v$34 !== _p$.o && (_p$.o = _$setProp2(_el$93, "fg", _v$34, _p$.o));
+                        _v$35 !== _p$.i && (_p$.i = _$setProp2(_el$93, "attributes", _v$35, _p$.i));
                         return _p$;
                       }, {
                         e: undefined,
@@ -3016,71 +3103,71 @@ var StatusDialogBody = (props) => {
                         o: undefined,
                         i: undefined
                       });
-                      return _el$85;
+                      return _el$89;
                     })();
                   }
                 }), null);
-                _$insert2(_el$79, _$createComponent2(Show2, {
+                _$insert2(_el$83, _$createComponent2(Show2, {
                   get when() {
                     return rows().length > OTHERS_VISIBLE;
                   },
                   get children() {
-                    var _el$82 = _$createElement2("box"), _el$83 = _$createElement2("text");
-                    _$insertNode2(_el$82, _el$83);
-                    _$setProp2(_el$82, "flexDirection", "row");
-                    _$setProp2(_el$82, "gap", 2);
-                    _$setProp2(_el$82, "onMouseUp", (event) => {
+                    var _el$86 = _$createElement2("box"), _el$87 = _$createElement2("text");
+                    _$insertNode2(_el$86, _el$87);
+                    _$setProp2(_el$86, "flexDirection", "row");
+                    _$setProp2(_el$86, "gap", 2);
+                    _$setProp2(_el$86, "onMouseUp", (event) => {
                       if (event.button !== 0)
                         return;
                       event.stopPropagation();
                       toggleOthersExpanded();
                     });
-                    _$setProp2(_el$82, "onMouseOver", () => setFoldHovered(true));
-                    _$setProp2(_el$82, "onMouseOut", () => setFoldHovered(false));
-                    _$insert2(_el$82, () => label(""), _el$83);
-                    _$setProp2(_el$83, "wrapMode", "none");
-                    _$insert2(_el$83, (() => {
+                    _$setProp2(_el$86, "onMouseOver", () => setFoldHovered(true));
+                    _$setProp2(_el$86, "onMouseOut", () => setFoldHovered(false));
+                    _$insert2(_el$86, () => label(""), _el$87);
+                    _$setProp2(_el$87, "wrapMode", "none");
+                    _$insert2(_el$87, (() => {
                       var _c$3 = _$memo2(() => !!othersExpanded());
                       return () => _c$3() ? `fold to ${FOREIGN_ROWS_VISIBLE}` : `+${rows().length - OTHERS_VISIBLE} more`;
                     })());
-                    _$insert2(_el$82, _$createComponent2(Show2, {
+                    _$insert2(_el$86, _$createComponent2(Show2, {
                       get when() {
                         return foldHovered();
                       },
                       get children() {
-                        var _el$84 = _$createElement2("text");
-                        _$setProp2(_el$84, "wrapMode", "none");
-                        _$setProp2(_el$84, "flexShrink", 0);
-                        _$insert2(_el$84, () => props.onToggleExpandedOthers ? "click \xB7 m" : "click");
-                        _$effect2((_$p) => _$setProp2(_el$84, "fg", theme().text.faint, _$p));
-                        return _el$84;
+                        var _el$88 = _$createElement2("text");
+                        _$setProp2(_el$88, "wrapMode", "none");
+                        _$setProp2(_el$88, "flexShrink", 0);
+                        _$insert2(_el$88, () => props.onToggleExpandedOthers ? "click \xB7 m" : "click");
+                        _$effect2((_$p) => _$setProp2(_el$88, "fg", theme().text.faint, _$p));
+                        return _el$88;
                       }
                     }), null);
                     _$effect2((_p$) => {
-                      var _v$27 = foldHovered() ? theme().text.base : theme().text.muted, _v$28 = foldHovered() && mono() ? TextAttributes2.BOLD : undefined;
-                      _v$27 !== _p$.e && (_p$.e = _$setProp2(_el$83, "fg", _v$27, _p$.e));
-                      _v$28 !== _p$.t && (_p$.t = _$setProp2(_el$83, "attributes", _v$28, _p$.t));
+                      var _v$29 = foldHovered() ? theme().text.base : theme().text.muted, _v$30 = foldHovered() && mono() ? TextAttributes2.BOLD : undefined;
+                      _v$29 !== _p$.e && (_p$.e = _$setProp2(_el$87, "fg", _v$29, _p$.e));
+                      _v$30 !== _p$.t && (_p$.t = _$setProp2(_el$87, "attributes", _v$30, _p$.t));
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined
                     });
-                    return _el$82;
+                    return _el$86;
                   }
                 }), null);
-                _$effect2((_$p) => _$setProp2(_el$81, "fg", theme().text.faint, _$p));
-                return _el$79;
+                _$effect2((_$p) => _$setProp2(_el$85, "fg", theme().text.faint, _$p));
+                return _el$83;
               })()
             });
           }
         }), null);
         _$effect2((_p$) => {
-          var _v$13 = theme().text.faint, _v$14 = theme().text.faint, _v$15 = stateColor(), _v$16 = TextAttributes2.BOLD, _v$17 = theme().text.muted;
-          _v$13 !== _p$.e && (_p$.e = _$setProp2(_el$26, "fg", _v$13, _p$.e));
-          _v$14 !== _p$.t && (_p$.t = _$setProp2(_el$28, "fg", _v$14, _p$.t));
-          _v$15 !== _p$.a && (_p$.a = _$setProp2(_el$31, "fg", _v$15, _p$.a));
-          _v$16 !== _p$.o && (_p$.o = _$setProp2(_el$31, "attributes", _v$16, _p$.o));
-          _v$17 !== _p$.i && (_p$.i = _$setProp2(_el$32, "fg", _v$17, _p$.i));
+          var _v$15 = theme().text.faint, _v$16 = theme().text.faint, _v$17 = stateColor(), _v$18 = TextAttributes2.BOLD, _v$19 = theme().text.muted;
+          _v$15 !== _p$.e && (_p$.e = _$setProp2(_el$26, "fg", _v$15, _p$.e));
+          _v$16 !== _p$.t && (_p$.t = _$setProp2(_el$28, "fg", _v$16, _p$.t));
+          _v$17 !== _p$.a && (_p$.a = _$setProp2(_el$31, "fg", _v$17, _p$.a));
+          _v$18 !== _p$.o && (_p$.o = _$setProp2(_el$31, "attributes", _v$18, _p$.o));
+          _v$19 !== _p$.i && (_p$.i = _$setProp2(_el$32, "fg", _v$19, _p$.i));
           return _p$;
         }, {
           e: undefined,
@@ -4511,6 +4598,10 @@ var tui_default = Plugin.define({
           if (g)
             copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier");
         },
+        onSaveDossier: () => {
+          const g = entries()[sessionID]?.goal;
+          exportDossier(sessionID, g);
+        },
         onCopyDossierSection: (label, raw) => copyToClipboard(raw, sessionID, "section"),
         onViewTranscript: (target) => {
           try {
@@ -5001,6 +5092,28 @@ var tui_default = Plugin.define({
         });
       }
     };
+    const exportDossier = (sessionID, goal) => {
+      if (!goal || !sessionID)
+        return;
+      try {
+        const result = exportLoopDossier(goal, Date.now(), process.cwd());
+        safeToast({
+          title: "dossier exported",
+          message: result.path,
+          variant: "success",
+          duration: 5000,
+          sessionID
+        });
+      } catch (error) {
+        safeToast({
+          title: "export failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
+      }
+    };
     const requestClearGoal = (sessionID) => {
       if (!sessionID)
         return;
@@ -5478,6 +5591,19 @@ var tui_default = Plugin.define({
             const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
             if (goal && sessionID)
               copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.export",
+        title: "Goal: export loop dossier (markdown file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            exportDossier(sessionID, goal);
           } catch {}
         }
       }, {
