@@ -5,17 +5,18 @@
  * Mechanism (verified against the installed opencode v2.3.0 binary and the v2
  * plugin docs, 2026-11-15):
  *   OpenCode v2 discovers configured plugins from the `plugins` array in its
- *   config file — `"plugins": ["opencode-goalv2"]`. npm package plugins
- *   are installed automatically at startup with Bun and cached in
- *   ~/.cache/opencode/node_modules; server AND TUI entrypoints of the package
- *   are loaded from the one config entry (verified in a live smoke run: the
- *   plugin lists under both Server (`opencode-goal`) and TUI
- *   (`opencode-goal.tui`)). A `<config>/plugins/*.ts` directory of direct
- *   files also auto-loads, but it cannot express the npm package reference and
- *   would not track releases, so this CLI edits the `plugins` array instead.
- *   `opencode plugin add` wraps the same config edit but attaches to the
- *   background service and offers no backup/restore, so we do the edit
- *   ourselves, surgically, on the config file.
+ *   config file — `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`.
+ *   Git package specifiers resolve from the remote via Bun and are cached in
+ *   ~/.cache/opencode/npm/git-opencode-goalv2-<hash>/ ; the GitHub release is the
+ *   canonical distribution channel for this package. A `<config>/plugins/*.ts`
+ *   directory of direct files also auto-loads, but it cannot express this
+ *   reference and would not track releases, so this CLI edits the `plugins`
+ *   array instead. `opencode plugin add` wraps the same config edit but
+ *   attaches to the background service and offers no backup/restore, so we do
+ *   the edit ourselves, surgically, on the config file.
+ *   Back-compat: PLUGIN_PACKAGE ("opencode-goalv2") is what the v1.1.0 installer
+ *   wrote. Uninstall and status match both specifiers, so an
+ *   install made by the old version uninstalls cleanly.
  *
  * Config discovery (mirrors the installed binary, v2.3.0):
  *   --global (default): <$XDG_CONFIG_HOME>/opencode/ when set, else
@@ -72,7 +73,9 @@ import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { realpathSync } from "node:fs";
 
-export const PLUGIN_PACKAGE = "opencode-goalv2";
+export const PLUGIN_PACKAGE = "opencode-goalv2"; // legacy spec; kept for uninstall/status back-compat
+export const PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v1.1.0";
+const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
 const SCHEMA_URL = "https://opencode.ai/config.json";
 
 const VERSION = (() => {
@@ -221,20 +224,24 @@ function findPluginsProperty(root) {
   return root.properties.find((p) => p.key === "plugins") ?? null;
 }
 
-function elementMatchesPackage(el, pkg) {
-  if (el.type === "string") return el.value === pkg;
+function elementMatchesSpec(el, spec) {
+  if (el.type === "string") return el.value === spec;
   if (el.type === "object") {
     const p = el.properties.find((pr) => pr.key === "package");
-    return p?.value?.type === "string" && p.value.value === pkg;
+    return p?.value?.type === "string" && p.value.value === spec;
   }
   return false;
+}
+
+function matchesPluginEntry(el) {
+  return SPECS.some((spec) => elementMatchesSpec(el, spec));
 }
 
 /** Insert (or detect) the plugin in the config text. Returns { text, already, created }. */
 export function addPluginText(text) {
   const root = parseJsonc(text);
   const prop = findPluginsProperty(root);
-  const entry = `"${PLUGIN_PACKAGE}"`;
+  const entry = `"${PLUGIN_SPEC}"`;
   if (!prop) {
     const insert = `  "plugins": [\n    ${entry}\n  ],\n  `;
     if (root.properties.length === 0) {
@@ -245,7 +252,7 @@ export function addPluginText(text) {
   }
   const arr = prop.value;
   if (arr.type !== "array") throw new CliError(`"plugins" is not an array; not touching it`);
-  if (arr.elements.some((el) => elementMatchesPackage(el, PLUGIN_PACKAGE))) return { text, already: true };
+  if (arr.elements.some(matchesPluginEntry)) return { text, already: true };
   if (arr.elements.length === 0) {
     return { text: text.slice(0, arr.start + 1) + `\n    ${entry}\n  ` + text.slice(arr.end - 1), already: false };
   }
@@ -282,7 +289,7 @@ export function removePluginText(text) {
     const prop = findPluginsProperty(root);
     if (!prop || prop.value.type !== "array") break;
     const arr = prop.value;
-    const el = arr.elements.find((e) => elementMatchesPackage(e, PLUGIN_PACKAGE));
+    const el = arr.elements.find(matchesPluginEntry);
     if (!el) break;
     removed = true;
     current = removeSpanWithComma(current, el.start, el.end);
@@ -377,7 +384,7 @@ function backupPluginFree(bak) {
     const prop = findPluginsProperty(root);
     if (!prop) return true; // parsed, no plugins key at all
     if (prop.value.type !== "array") return true; // parsed, no resolvable plugin element
-    return !prop.value.elements.some((el) => elementMatchesPackage(el, PLUGIN_PACKAGE));
+    return !prop.value.elements.some(matchesPluginEntry);
   } catch {
     return null; // unparseable backup — never restore from it
   }
@@ -433,7 +440,7 @@ function missingEntryOutcome(file, dryRun) {
 // ---------------------------------------------------------------------------
 
 const skeleton = () =>
-  `{\n  "$schema": "${SCHEMA_URL}",\n  "plugins": [\n    "${PLUGIN_PACKAGE}"\n  ]\n}\n`;
+  `{\n  "$schema": "${SCHEMA_URL}",\n  "plugins": [\n    "${PLUGIN_SPEC}"\n  ]\n}\n`;
 
 export function install(args, opts = {}) {
   const dryRun = args.includes("--dry-run");
@@ -446,8 +453,8 @@ export function install(args, opts = {}) {
       writeFileSync(file, skeleton());
     }
     out.push(dryRun
-      ? `dry-run: would create ${file} with ${PLUGIN_PACKAGE}`
-      : `installed ${PLUGIN_PACKAGE} in ${file} (created); restart opencode`);
+      ? `dry-run: would create ${file} with ${PLUGIN_SPEC}`
+      : `installed ${PLUGIN_SPEC} in ${file} (created); restart opencode`);
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
   const text = readFileSync(file, "utf8");
@@ -459,9 +466,9 @@ export function install(args, opts = {}) {
   if (!dryRun) {
     const bak = backupFile(file);
     writeFileSync(file, result.text);
-    out.push(`installed ${PLUGIN_PACKAGE} in ${file}; restart opencode (backup: ${bak})`);
+    out.push(`installed ${PLUGIN_SPEC} in ${file}; restart opencode (backup: ${bak})`);
   } else {
-    out.push(`dry-run: would add ${PLUGIN_PACKAGE} to ${file}`);
+    out.push(`dry-run: would add ${PLUGIN_SPEC} to ${file}`);
   }
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
@@ -502,13 +509,13 @@ export function uninstall(args, opts = {}) {
     const bak = backupFile(file);
     if (result.emptyRoot || result.skeletonRoot) {
       unlinkSync(file);
-      out.push(`removed ${PLUGIN_PACKAGE}; deleted ${file} (created by install); restart opencode (backup: ${bak})`);
+      out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (created by install); restart opencode (backup: ${bak})`);
     } else {
       writeFileSync(file, result.text);
-      out.push(`removed ${PLUGIN_PACKAGE} from ${file}; restart opencode (backup: ${bak})`);
+      out.push(`removed ${PLUGIN_SPEC} from ${file}; restart opencode (backup: ${bak})`);
     }
   } else {
-    out.push(`dry-run: would remove ${PLUGIN_PACKAGE} from ${file}`);
+    out.push(`dry-run: would remove ${PLUGIN_SPEC} from ${file}`);
   }
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
@@ -523,7 +530,7 @@ export function status(args, opts = {}) {
       const root = parseJsonc(readFileSync(file, "utf8"));
       const prop = findPluginsProperty(root);
       if (prop?.value?.type === "array") {
-        installed = prop.value.elements.some((el) => elementMatchesPackage(el, PLUGIN_PACKAGE));
+        installed = prop.value.elements.some(matchesPluginEntry);
       }
     } catch (err) {
       if (err instanceof CliError) return { code: 1, stdout: "", stderr: `opencode-goal: cannot parse ${file}: ${err.message}\n` };
@@ -532,7 +539,7 @@ export function status(args, opts = {}) {
   } else {
     out.push(`config:   (does not exist)`);
   }
-  out.push(installed ? `installed: yes (${PLUGIN_PACKAGE})` : "not installed");
+  out.push(installed ? `installed: yes (${PLUGIN_SPEC})` : "not installed");
   try {
     const v = spawnSync("opencode", ["--version"], { encoding: "utf8", timeout: 5000 });
     if (v.status === 0 && v.stdout) out.push(`opencode: ${v.stdout.trim()}`);
