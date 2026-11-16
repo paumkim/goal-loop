@@ -2032,6 +2032,17 @@
       "submittedAt": "2026-11-16T13:38:41Z",
       "mergedAt": "2026-11-16T13:39:15Z",
       "mergedInto": "dev"
+    },
+    "tui-verify-tail-dashboard": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts src/runtime/controller.ts src/status-dialog.tsx src/tui.tsx scripts/render-dialog.tsx test/tui-snapshots.test.tsx test/verify.test.ts SPEC.md docs/changelog.html",
+      "branch": "wt/tui-verify-tail-dashboard",
+      "worktree": "worktrees/wt-tui-verify-tail-dashboard",
+      "status": "done",
+      "createdAt": "2026-11-16T13:45:44Z",
+      "submittedAt": "2026-11-16T13:52:26Z",
+      "mergedAt": "2026-11-16T13:55:16Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
