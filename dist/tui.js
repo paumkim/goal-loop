@@ -1503,7 +1503,7 @@ var StatusDialogBody = (props) => {
         }
       }), null);
       _$effect2((_p$) => {
-        var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = props.onCopyCondition ? TextAttributes2.UNDERLINE : undefined;
+        var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.UNDERLINE : undefined;
         _v$ !== _p$.e && (_p$.e = _$setProp2(_el$7, "fg", _v$, _p$.e));
         _v$2 !== _p$.t && (_p$.t = _$setProp2(_el$7, "attributes", _v$2, _p$.t));
         _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$8, "fg", _v$3, _p$.a));
