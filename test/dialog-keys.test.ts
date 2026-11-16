@@ -124,6 +124,65 @@ describe("dialogStatusCommands", () => {
     expect(deps.calls.toggleExpanded).toBe(2)
   })
 
+  test("with the elsewhere jump wired, the four digit chords join after the reason chord — and only then", () => {
+    const jumps: string[] = []
+    const wired = spyDeps({
+      transcriptFor: (row) => ["ses_a", "ses_b"][row - 1],
+      openTranscript: (id) => {
+        jumps.push(id)
+      },
+    })
+    const commands = dialogStatusCommands(wired)
+    expect(commands.map((command) => [command.id, command.bind])).toEqual([
+      ["goal.status.pin", "p"],
+      ["goal.status.history", "x"],
+      ["goal.status.copy", "c"],
+      ["goal.status.copy-evaluator-reason", "r"],
+      ["goal.status.transcript-1", "1"],
+      ["goal.status.transcript-2", "2"],
+      ["goal.status.transcript-3", "3"],
+      ["goal.status.transcript-4", "4"],
+      ["goal.status.scroll-up", "up"],
+      ["goal.status.scroll-down", "down"],
+      ["goal.status.page-up", "pageup"],
+      ["goal.status.page-down", "pagedown"],
+      ["goal.status.home", "home"],
+      ["goal.status.end", "end"],
+    ])
+  })
+
+  test("the digit chords mirror the open gate and the painted row count: row 3 and 4 are dead when only two foreign goals are live", () => {
+    const jumps: string[] = []
+    const wired = spyDeps({
+      transcriptFor: (row) => ["ses_a", "ses_b"][row - 1],
+      openTranscript: (id) => {
+        jumps.push(id)
+      },
+    })
+    const commands = byId(wired)
+    expect(commands["goal.status.transcript-1"]!.enabled()).toBe(true)
+    expect(commands["goal.status.transcript-2"]!.enabled()).toBe(true)
+    expect(commands["goal.status.transcript-3"]!.enabled()).toBe(false)
+    expect(commands["goal.status.transcript-4"]!.enabled()).toBe(false)
+    const closed = spyDeps({ open: () => false, transcriptFor: () => "ses_a", openTranscript: () => {} })
+    for (const command of dialogStatusCommands(closed)) expect(command.enabled()).toBe(false)
+    // running a disabled chord through the modal's own dispatch still respects the absent row
+    commands["goal.status.transcript-3"]!.run()
+    expect(jumps).toEqual([])
+    commands["goal.status.transcript-2"]!.run()
+    expect(jumps).toEqual(["ses_b"])
+  })
+
+  test("a throwing jump route never escapes the key event — same swallow posture as every chord", () => {
+    const deps = spyDeps({
+      transcriptFor: () => "ses_a",
+      openTranscript: () => {
+        throw new Error("router detached")
+      },
+    })
+    expect(() => byId(deps)["goal.status.transcript-1"]!.run()).not.toThrow()
+  })
+
   test("a throwing dependency never escapes a key event — the modal owns the failure, silently", () => {
     const deps = spyDeps({
       togglePin: () => {

@@ -5,6 +5,10 @@
  * `context.keymap.layer({ mode: "global", priority: 100, ... })`; this module imports nothing from
  * @opentui on purpose. The structural command shape matches the host's KeymapCommand contract —
  * the site that consumes it type-checks against the real one, so drift fails the build.
+ *
+ * When the host also wires `transcriptFor` + `openTranscript` (the elsewhere block's jump route),
+ * four digit chords join the factory — `1`..`4` open the transcript of the matching elsewhere row.
+ * Keyboard parity for the mouse affordance the dialog paints; absent wiring, no digits exist.
  */
 
 /** Cells one arrow key scrolls the dialog body. */
@@ -45,10 +49,14 @@ export interface DialogStatusDeps {
   readonly scrollBy: (cells: number) => void
   /** Jump the dialog body to an absolute cell offset. */
   readonly scrollTo: (cell: number) => void
+  /** The sessionID of elsewhere row `index` (1-based, paint order), or undefined when no such row is painted. Wired together with openTranscript; either alone yields no digit chords. */
+  readonly transcriptFor?: (index: number) => string | undefined
+  /** Open the transcript route for `sessionID`. */
+  readonly openTranscript?: (sessionID: string) => void
 }
 
 /**
- * The ten dialog commands, in footer-reading order (pin, fold, copies, then the scroll ladder).
+ * The ten core commands, in footer-reading order (pin, fold, copies, the digit chords when wired, then the scroll ladder). Fourteen with the jump wired.
  * Every handler swallows its errors: a dead snapshot or a detached scrollbox must never throw out
  * of a key event — host modal chrome owns the interaction, the plugin owns nothing here.
  */
@@ -110,6 +118,24 @@ export const dialogStatusCommands = (deps: DialogStatusDeps): readonly DialogSta
         } catch {}
       },
     },
+    ...(deps.transcriptFor && deps.openTranscript
+      ? [1, 2, 3, 4].map(
+          (row): DialogStatusCommand => ({
+            id: `goal.status.transcript-${row}`,
+            title: `Goal status: open transcript of other session ${row}`,
+            group: "Goal",
+            bind: String(row),
+            enabled: () => deps.open() && Boolean(deps.transcriptFor?.(row)),
+            run: () => {
+              // Same swallow posture as every chord here — a detached host or a stale row must never throw out of a key event.
+              try {
+                const id = deps.transcriptFor?.(row)
+                if (id) deps.openTranscript?.(id)
+              } catch {}
+            },
+          }),
+        )
+      : []),
     {
       id: "goal.status.scroll-up",
       title: "Goal status: scroll up",

@@ -1333,6 +1333,31 @@ describe("elsewhere block (other sessions holding live goals)", () => {
     expect(frame).not.toContain("ses_3333333333") // achieved is terminal, never listed
   })
 
+  test("with the jump route wired, elsewhere rows paint a faint digit gutter (the chord to press); unwired rows paint no digit", async () => {
+    const wired = await testRender(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} onViewTranscript={() => {}} />
+    ), { width: 112, height: 44 })
+    await wired.renderOnce()
+    const wiredFrame = wired.captureCharFrame()
+    const wiredRow1 = wiredFrame.split("\n").find((line) => line.includes("brisk-falcon"))
+    const wiredRow2 = wiredFrame.split("\n").find((line) => line.includes("quiet-otter"))
+    expect(wiredRow1).toBeDefined()
+    expect(wiredRow2).toBeDefined()
+    expect(wiredRow1!.trimStart().startsWith("1")).toBe(true)
+    expect(wiredRow2!.trimStart().startsWith("2")).toBe(true)
+    await wired.renderer.destroy()
+    const plain = await testRender(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} />
+    ), { width: 112, height: 44 })
+    await plain.renderOnce()
+    const plainFrame = plain.captureCharFrame()
+    const plainRow1 = plainFrame.split("\n").find((line) => line.includes("brisk-falcon"))
+    expect(plainRow1).toBeDefined()
+    expect(plainRow1!.trimStart().startsWith("1")).toBe(false)
+    expect(plainRow1!.trimStart().startsWith("2")).toBe(false)
+    await plain.renderer.destroy()
+  })
+
   test("a left-click on an elsewhere row asks the host to open that session's transcript route", async () => {
     const jumps: string[] = []
     const setup = await testRender(() => (
