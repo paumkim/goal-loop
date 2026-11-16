@@ -1570,6 +1570,17 @@
       "submittedAt": "2026-11-16T08:32:46Z",
       "mergedAt": "2026-11-16T08:33:12Z",
       "mergedInto": "dev"
+    },
+    "tui-snapshot-holes": {
+      "agent": "orchestrator",
+      "paths": "test/tui-snapshots.test.tsx,SPEC.md",
+      "branch": "wt/tui-snapshot-holes",
+      "worktree": "worktrees/wt-tui-snapshot-holes",
+      "status": "done",
+      "createdAt": "2026-11-16T08:34:34Z",
+      "submittedAt": "2026-11-16T08:36:59Z",
+      "mergedAt": "2026-11-16T08:37:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
