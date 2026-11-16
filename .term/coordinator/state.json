@@ -1405,6 +1405,17 @@
       "submittedAt": "2026-11-16T06:57:59Z",
       "mergedAt": "2026-11-16T06:58:24Z",
       "mergedInto": "dev"
+    },
+    "tui-footer-coherence": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-footer-coherence",
+      "worktree": "worktrees/wt-tui-footer-coherence",
+      "status": "done",
+      "createdAt": "2026-11-16T07:01:28Z",
+      "submittedAt": "2026-11-16T07:06:55Z",
+      "mergedAt": "2026-11-16T07:07:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
