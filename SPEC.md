@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=886 -->
+<!-- spec-check files=43 tests=892 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3845,3 +3845,35 @@ two re-pins), bun run compile, bun run check green incl. spec-check (43/886). Ev
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: none — a
 larger "terminal the pill already goes silent on; cleared loops show the final tally only when
 history exists" is the settled grammar, unchanged.
+
+## Workstream CT — the spend line never clips its cost (2026-11-16)
+
+Interpretation of this iteration: the error-mode audit of painted frames showed the HUD card's
+spend row (`wrapMode="none"`, no budget) painting past its cell at small widths — at a 52-cell
+card (terminal ≤ ~68, the clamp floor) the line painted `· $` and clipped `$0.90` mid-figure. The
+exact number this arc spent four iterations making real. The objective's floor is 80 columns,
+where the line fits, but a split pane is not an exotic surface and the clip is never acceptable
+for a currency figure. `formatSpend` also had zero direct tests anywhere in the suite.
+
+368. src/core/format.ts — formatSpend gains `maxWidth?: number` (cells, stringWidth; default
+     Infinity = byte-identical full line for the dialog and all existing callers). A degradation
+     ladder applies only when the line exceeds the budget: cached drops first, then out, then in.
+     The cost is the anchor — always kept whole, never clipped mid-figure, never dropped. If the
+     budget is smaller than the cost token itself the cost is returned anyway (overflow, never a
+     torn figure); with cost absent the same ladder degrades the token volume.
+369. src/hud-card.tsx — new exported spendWidth(width) = max(5, floor(width) − 15) (border 2,
+     padding 2, LABEL 10, gap 1; the spendWidth idiom mirrors conditionWidth's accounting). The
+     spend row passes it to formatSpend. The 80-column floor (budget 65, line 41 cells) and the
+     dialog render the byte-identical full line; the change is visible only where the figure was
+     previously torn.
+370. Tests: core.test.ts +5 (the formatSpend suite — full line, absent cost, cached→out→in
+     ladder order, the anchor at budgets 5/3/0, degraded output never exceeding the budget while a
+     droppable figure remains); tui-hud.test.tsx +1 (card at width 52 paints "2.22M in", drops
+     "cached", keeps "$0.90" whole; the default-width card keeps the full line). Spec-check marker
+     files=43 tests=886 -> 892.
+
+Verification (all run in the worktree): bun test (892 pass, 0 fail), bun run compile, bun run
+check green incl. spec-check (43/892), rendered-frame eyeball at terminals 52/64/80 (cost whole
+at every width). Evidence is source + test-render layers; live TUI remains unverifiable.
+Follow-ups NOT done in this slice: budget-aware degradation for the status-dialog spend row
+(modal has room; same helper is ready if a future narrow surface needs it).
