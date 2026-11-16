@@ -7,7 +7,7 @@
  * RGBA, no absolute positioning. Pure layout math lives in `src/core/history.ts` (unit-tested).
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
-import { For, Show, createSignal, onCleanup } from "solid-js"
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
@@ -130,7 +130,8 @@ export const LoopSection = (props: {
   const shares = () => durationShares(durations())
   const shareSuffix = (index: number) => (shares()[index] === undefined ? "" : ` · ${shares()[index]}% of wall`)
   const pace = () => paceEstimate(durations(), max())
-  const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
+  // Scoped memo (solid-js) keyed on the same snapshot refs the render invalidates on — replaces the module-global single-slot cache; lifetime is this mount, not the process.
+  const mixes = createMemo(() => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt))
   const spark = () => contextSparkline(history(), ascii())
   const mixSuffix = (index: number) => {
     const mix = mixes()[index]

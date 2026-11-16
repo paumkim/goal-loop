@@ -3126,3 +3126,29 @@ by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (822 pass, spec-check ok),
 coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CZ — the verdict-mix memo lives in the component, not the module (2026-11-17)
+
+Interpretation of this iteration: audit finding A3 (fresh pinned re-audit at dev HEAD fdd6544,
+ses_e1c980f2fffeR6lPzktJKz2sQs) — the CW identity memo was a module-global single slot: the
+completed loop's verdict arrays leaked for the plugin's process lifetime, the slot thrashed between
+any two live readers, and the identity-key invalidated on every reactive rebuild anyway — built for
+the render hot path, yet nearly useless there, while still retaining memory.
+
+307. src/core/history.ts: iterationVerdictMix is pure again — the module-global mixCache is gone.
+     The O(h + n) sliding-window algorithm and the non-monotone filter fallback are unchanged.
+308. src/tui-history.tsx: LoopSection holds the result in a scoped solid-js createMemo keyed on the
+     reactive snapshot reads (props.goal.history, the loopHistory slice memo, props.goal.setAt).
+     Cache lifetime is the mount, invalidation rides the same signal the render already tracks, and
+     the allocation never outlives the dialog that reads it.
+309. Evidence: unit layer (test/history.test.ts): the module-global identity pin (toBe) is
+     converted to a determinism pin (toEqual across calls and across fresh history refs); the
+     O(h + n) getter-counter proxy and the non-monotone fallback test are untouched and green.
+     Render layer: the existing LoopSection suite and the two reduced-color frames render green
+     unchanged. Marker unchanged at files=43 tests=822 (one test converted, none added).
+     Live TUI remains unverifiable (dead provider).
+
+Marker unchanged: files=43 tests=822. No version bump, no tag, no push; v1.1.0 remains the live
+public artifact; all work is local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (822 pass, spec-check ok),
+coordinator submit + merge-next, bun run check on dev shown green at the end.
