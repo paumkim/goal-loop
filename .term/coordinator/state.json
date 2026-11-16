@@ -1955,6 +1955,17 @@
       "submittedAt": "2026-11-16T12:49:35Z",
       "mergedAt": "2026-11-16T12:51:12.000Z",
       "mergedInto": "dev"
+    },
+    "tui-finished-loop-now-row": {
+      "agent": "orchestrator",
+      "paths": "src/tui-history.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx.snap SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-finished-loop-now-row",
+      "worktree": "worktrees/wt-tui-finished-loop-now-row",
+      "status": "done",
+      "createdAt": "2026-11-16T12:54:14Z",
+      "submittedAt": "2026-11-16T12:55:51Z",
+      "mergedAt": "2026-11-16T12:56:26.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
