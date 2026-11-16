@@ -33,7 +33,15 @@ export const isCompactHot = (goal: GoalSnapshot): boolean => {
 }
 
 const stateWord = (goal: GoalSnapshot): string =>
-  goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active"
+  goal.status === "paused"
+    ? "paused"
+    : goal.evaluating
+      ? "checking"
+      : goal.waiting
+        ? "waiting"
+        : isRetryStuck(goal)
+          ? "stuck"
+          : "active"
 
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
 export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
