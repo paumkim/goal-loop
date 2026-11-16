@@ -168,6 +168,12 @@ export function loopContinuation(
     ``,
     ...TREE_TRUTH,
     ``,
+    `Before working, audit the armed condition against CURRENT HEAD:`,
+    `(i) enumerate what the condition requires — files, tests, gates, docs;`,
+    `(ii) check each requirement against the tree at current HEAD using only fresh command output produced this turn — never summaries;`,
+    `(iii) if every requirement already holds, respond exactly: Already satisfied at HEAD <sha>. Evidence: <fresh command output>. No new work is produced by this iteration. — and stop; do not redo or fake the work.`,
+    `If something is missing, proceed and show evidence.`,
+    ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
@@ -282,6 +288,11 @@ const RULES = [
   `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
   `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
   `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
+  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the`,
+  `work landed and gates green): judge met, and state exactly that in the reason — "Already satisfied at HEAD`,
+  `<sha>. No new work is produced by this iteration." Do not credit narration of effort, and do not produce`,
+  `theater (re-verification-only turns still satisfy the condition, but a planner that re-proposes an identical`,
+  `or materially equivalent condition must not be armed; the loop completes).`,
 ]
 
 /**
@@ -447,6 +458,8 @@ const NEXT_GOAL_ASK = [
   `Reply with EXACTLY ONE of these, and nothing else:`,
   `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
   `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `Before proposing, audit the candidate against CURRENT HEAD via the completed history above: enumerate what it would require, and only propose a condition whose required work is ABSENT at HEAD.`,
+  `If every meaningful improvement under the objective is already complete, reply LOOP_COMPLETE. Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored).`,
   `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
 ]
 

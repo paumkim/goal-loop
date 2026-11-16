@@ -962,6 +962,22 @@ describe("loop prompts", () => {
     expect(text).toContain("machine-consumable")
   })
 
+  test("next-goal planner is pinned to audit the candidate against CURRENT HEAD (ABSENT at HEAD)", () => {
+    const text = Prompt.nextGoalInSession({ objective: "o", history: [entry], latestSummary: "s" })
+    expect(text).toContain("LOOP_COMPLETE")
+    expect(text).toContain("ABSENT at HEAD")
+  })
+
+  test("loopContinuation requires the already-satisfied audit before working", () => {
+    const text = Prompt.loopContinuation({ iteration: 3, maxLoops: 5, condition: "next thing", previousSummary: "prev summary", reason: "r" }, { required: false, branch: "dev", reason: "t" })
+    expect(text).toContain("Already satisfied at HEAD")
+  })
+
+  test("the evaluator rubric states the already-satisfied-at-HEAD verdict wording", () => {
+    const text = Prompt.evaluateInSession("do it", { turn: 2, elapsedMs: 1000 }, { required: false, branch: "dev", reason: "t" })
+    expect(text).toContain("Already satisfied at HEAD")
+  })
+
   test("next-goal generator carries the LOOP_COMPLETE contract", () => {
     for (const text of [
       Prompt.nextGoalInSession({ objective: "o", history: [entry], latestSummary: "s" }),
@@ -1307,6 +1323,42 @@ describe("/goal-loop failure modes", () => {
     expect(record.loopHistory).toHaveLength(1)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
     expect(h.notices.some((n) => n.kind === "achieved" && n.title === "Loop complete")).toBe(true)
+  })
+
+  test("a planner that re-proposes a near-duplicate of a completed condition ends the loop cleanly", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("tighten the widget")
+    await h.turn() // arms v2 = "tighten the widget"
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("tighten the widgets in the widget suite") // token containment 1.0 vs the completed v2 condition
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "achieved" && n.title === "Loop complete")).toBe(true)
+  })
+
+  test("a planner's genuinely new proposal still arms v3", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("tighten the widget")
+    await h.turn() // arms v2 = "tighten the widget"
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("rewrite the installer checksum validation") // near-zero overlap with the completed work
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.condition).toBe("rewrite the installer checksum validation")
+    expect(record.loopIteration).toBe(3)
+    expect(record.status).toBe("active")
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(1)
   })
 
   test("a planner's punctuation-drifted repeat of a completed condition ends the loop cleanly (a5)", async () => {
