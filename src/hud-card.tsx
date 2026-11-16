@@ -227,7 +227,7 @@ export const HudCard = (props: {
     return typeof max === "number" && max > 0 ? `/${max}` : ""
   }
   const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1)
-  const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "")
+  const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops, mono()) : "")
   const title = () =>
     looped() ? `${GOAL_GLYPH} /goal-loop · v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`
   // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first. Under mono the border override or faint — chrome never carries the signal.

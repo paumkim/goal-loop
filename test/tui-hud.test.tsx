@@ -91,6 +91,15 @@ describe("pillModel", () => {
     expect(pill.tone).toBe("armed")
   })
 
+  test("ascii mode demotes the pips and leaves the rest of the label untouched", () => {
+    const pill = pillModel(loopedGoal(), 1000 * 60 * 12, true)
+    expect(pill.text).toContain("##")
+    expect(pill.text).not.toContain("●")
+    expect(pill.text).not.toContain("○")
+    expect(pill.text).toContain("loop · v3/5")
+    expect(pill.tone).toBe("armed")
+  })
+
   test("evaluating goal renders the checking state and evaluating tone", () => {
     const pill = pillModel(loopedGoal({ evaluating: true }), 1000 * 60 * 12)
     expect(pill.text).toContain("checking")

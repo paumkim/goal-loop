@@ -158,6 +158,13 @@ describe("renderPips", () => {
   test("zero done renders all empty", () => {
     expect(renderPips(0, 3)).toBe("○○○")
   })
+
+  test("ascii swaps the pair for # and - under NO_COLOR / TERM=dumb", () => {
+    expect(renderPips(2, 5, true)).toBe("##---")
+    expect(renderPips(0, 3, true)).toBe("---")
+    expect(renderPips(5, 5, true)).toBe("#####")
+    expect(renderPips(2, 5)).toBe("●●○○○") // default stays Unicode
+  })
 })
 
 describe("paceEstimate", () => {
