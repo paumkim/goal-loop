@@ -81,7 +81,9 @@ const isLoopCompact = (value: unknown): value is LoopCompactState =>
   isFiniteNumber(value.misses) &&
   (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) &&
   (value.landedAt === undefined || isFiniteNumber(value.landedAt)) &&
-  (value.missesCountedAtEvent === undefined || isBoolean(value.missesCountedAtEvent))
+  (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) &&
+  (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) &&
+  (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned))
 
 /**
  * Structural check for the read model our own server emits over RPC. Optional additive fields (loop state,

@@ -81,7 +81,13 @@ export interface LoopEntry {
 export const COMPACT_MISS_CAP = 4
 
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
-/** Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage. */
+/**
+ * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
+ *
+ * Landing signals, strongest first: a `session.compaction.ended` event (authoritative — the host compacted),
+ * or a >=10% context-size drop observed against `estimatedTokens` at an arm. An unknown/unestimable size is
+ * never a landing and never a miss: it ticks `unmeasurableTicks` until the host shows us a number again.
+ */
 export interface LoopCompactState {
   /** When the plugin asked the host to compact (ms since epoch). */
   readonly requestedAt: number
@@ -91,10 +97,14 @@ export interface LoopCompactState {
   readonly iteration: number
   /** Set when the compaction was observed to land (compaction-ended event, or the context-size drop). */
   landedAt?: number
-  /** Consecutive observations in which a pending request did not land. Two force a re-request; at COMPACT_MISS_CAP (4) requests suspend until a landing is observed. */
+  /** Consecutive measurable observations in which a pending request did not land. At COMPACT_MISS_CAP (4) a final backstop warning fires; re-requests drop to a trickle every 3rd arm. The 4-miss cap is never the only signal. */
   misses: number
-  /** Set when the latest miss was counted by the compaction-ended event path; the next arm-time settle skips it once, so one physical no-op compaction is never counted twice. */
-  missesCountedAtEvent?: boolean
+  /** Consecutive arms in which the context size was unestimable. Never a miss. The first tick forces one re-request past cooldown; repeated ticks mark `stalenessUnknown`. */
+  unmeasurableTicks?: number
+  /** Set after repeated unmeasurable arms: the landing cannot be ruled out or in. While set, the request is never suspended — at most one forced re-request per 2 arms. */
+  stalenessUnknown?: boolean
+  /** Set once the host-unwilling warning (2 measurable arms without a landing) has fired for this pending request; the warning fires at most once. */
+  unwillingWarned?: boolean
 }
 
 export interface GoalRecord {

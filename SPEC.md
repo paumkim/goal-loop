@@ -388,7 +388,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=580 -->
+<!-- spec-check files=41 tests=595 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2126,3 +2126,62 @@ Marker bumped `files=41 tests=563` → `files=41 tests=574` (test-only addition;
 
 224. The audit fixes land on dev while the live release stays v1.1.0 (maintainer decision 2026-11-16: version bump only after a major milestone; work continues locally). PLUGIN_SPEC is now derived from package.json at load time (installer, skeleton, and tests agree by construction; previously the bin hard-coded the v1.1.0 specifier, so a future release cut without touching the bin would have pinned a stale tag). The --restore command now copies the install-time original (the OLDEST backup whose parsed content provably lacks the plugin) instead of the newest backup overall (which could re-add the plugin), matching the documented header contract and the missing-entry auto-restore path; a one-line error and exit 1 when no plugin-free backup exists. Config writes are atomic (temp file plus rename, same directory) so a crash mid-write cannot leave a truncated config. CI gained a dist-in-sync gate (compile, then git diff --exit-code -- dist/). The root opencode.json (machine-absolute path, forced coordinator) is no longer tracked — opencode.json.example carries the template and opencode.json is gitignored; .gitignore also covers the test/pkg temp dirs.
 225. README and docs/install.html keep the v1.1.0 install-route literals (they describe the shipped artifact and are pinned to package.json by test/plugin-json.test.ts), with the installer notes clarifying that the source tree now derives its specifier from package.json; the --restore documentation now describes the fixed contract (pre-install backup back over the config, fresh safety backup first). One new test pins the --restore convergence contract: the drifted newest plugin-free backup must never beat the install-time original. Marker bumped files=41 tests=579 → files=41 tests=580. No shipped-file set changes; the tarball stays at 41 files. npm publish remains a maintainer decision (see RELEASE-CHECKLIST.md).
+
+## Workstream BV — compaction landing detection + evaluator hardening (2026-11-16)
+
+226. Compaction landing detection rebuilt around an explicit lifecycle. At every arm — before any other
+     bookkeeping — a fresh context estimate is compared against the request-time size recorded on the pending
+     request (`LoopCompactState`); a drop of at least 10% (was: only drops of at least 40% counted) lands the
+     request: the pending state is cleared to its landed form, misses reset to zero, fresh boundary requests
+     are re-enabled, one success notice fires, and a live loop re-anchors. The `session.compaction.ended`
+     event is now authoritative: it lands a pending request regardless of what the size estimate says (an
+     unestimable or coincidentally large context cannot miss), logs the landing, and queues the re-anchor
+     immediately as a `resume: false` queued steer — not only at the next arm. A landed compaction is never
+     silent.
+227. Unmeasurable is not failed and not landed. Consecutive arms whose context cannot be measured tick
+     `unmeasurableTicks` on the request instead of incrementing `misses`. The first unmeasurable arm forces
+     one re-request past the cooldown; repeated unmeasurable arms mark the request `staleness unknown` (one
+     warning, ever) and re-request at most every 2nd arm — never a full suspension while the armed iteration
+     is below maxLoops. A measurable arm with no drop counts a miss as before, but the miss ladder is rebuilt:
+     at 2 misses the plugin emits the one host-unwilling warning — "compaction did not land; loop is running
+     hot; consider /compact manually" — re-requests continue as a trickle every 3rd arm, and the 4-miss cap
+     remains only as a backstop with one final warning at the crossing. Permanent silence is gone; the loop
+     keeps running throughout.
+228. No boundary compaction for plain (non-loop) goals stays in place (A-4, Workstream AJ); a pin test proves
+     restore with a plain record arms no `loopCompact` at all. Restore, the arm-time settle and the
+     compaction-ended event all flow through the same landing/reset bookkeeping (`landPending`), so a landing
+     resets miss counters on every path.
+229. Evaluator hardening, three surfaces. (a) `evaluator.verifyCommand` is surfaced as the deterministic
+     guarantee: the README evaluator section and options table, and `docs/config.html` with a dedicated callout
+     and row, all state that a dev loop armed without it runs without that guarantee; the default stays `""`
+     (no behavior change). (b) New opt-in `evaluator.consensus: 2` (default `1`, no global flip): two
+     independent judges — the session evaluator and the independent model — must both rule `met`; any
+     disagreement, a dead second judge, or a missing independent model fails closed to `not_met` with the
+     disagreement named in the reason string. It doubles evaluator cost and is documented as per-repo/per-loop
+     opt-in. (c) A `met` verdict on a turn with zero harness-counted tool calls whose condition names
+     production of a thing (test/file/merge/commit/create/implement/write/fix/build/refactor) is rejected as
+     `not_met` with the reason "no evidence of work toward the condition, only state inspection". The
+     "Already satisfied at HEAD" met is exempt — that verdict is the already-satisfied landing, and rejecting
+     it would strand the loop on a completed condition (the v18 near-duplicate arming gate remains the escape).
+230. Acceptance tests added in `test/loop.test.ts` ("compaction landing detection + evaluator hardening —
+     acceptance") and `test/evaluator.test.ts` (consensus suite): a never-landing request yields the warning
+     within 2 arms; a >=10% drop lands with success notice, cleared pending, misses reset; under-10% does not
+     land; an unmeasurable context never lands and never reaches a terminal suspension across 8 arms; the
+     ended-compaction event lands the request, logs it, and queues the re-anchor with `resume: false`; restore
+     with a plain record arms no `loopCompact`; a zero-tool-call producing-condition turn is rejected as
+     not_met naming the reason; the already-satisfied met is exempt; consensus disagreement and second-judge
+     failure fail closed with the disagreement named; consensus 1 keeps single-judge behavior. Existing tests
+     pinning the old miss ladder were rewritten to the new semantics; the ≥10% watermark is a heuristic and
+     remains instrument-first-tune-second; `/goal clear` remains the escape hatch.
+
+Files touched: `src/core/constants.ts` (drop factor 0.6 to 0.9), `src/core/types.ts` (`LoopCompactState`:
+`unmeasurableTicks`, `stalenessUnknown`, `unwillingWarned`; `missesCountedAtEvent` removed — the ended event is
+now authoritative and single-counts by construction), `src/core/wire.ts`, `src/core/config.ts` (`evaluator.consensus`),
+`src/runtime/controller.ts` (settle ladder, `landPending`, ended-event authoritative landing, zero-tool
+met-rejection), `src/runtime/evaluator.ts` (consensus), `src/core/format.ts` untouched, `test/*`, `README.md`,
+`docs/config.html`, `docs/runtime.html`, `docs/architecture.html` (line refs), `SPEC.md`. Marker bumped
+files=41 tests=580 to files=41 tests=595. No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev.
+
+Verification (all run in the worktree): `cd test && bun test` (595 pass), `bun run check` green, coordinator
+submit + merge-next, and `bun run check` on dev shown green at the end.

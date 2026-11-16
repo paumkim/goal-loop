@@ -66,6 +66,12 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   // Test hook: when set, every synthetic call throws (simulates the host rejecting the dispatch).
   const syntheticFail: { error?: Error } = {}
   const notices: Notice[] = []
+  const logs: Array<{ level: string; message: string }> = []
+  const testLog = {
+    info: (message: unknown) => void logs.push({ level: "info", message: String(message) }),
+    warn: (message: unknown) => void logs.push({ level: "warn", message: String(message) }),
+    error: (message: unknown) => void logs.push({ level: "error", message: String(message) }),
+  }
   const work = { subagents: 0, shells: 0 }
   const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean } }> = []
   let compactOutcome: BoundaryCompactResult = { requested: true, estimatedTokens: 250_000 }
@@ -76,7 +82,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     directory: DIR,
     commit,
     clock,
-    log: silentLog,
+    log: testLog,
     newId: (() => {
       let n = 0
       return () => `goal_${++n}`
@@ -136,6 +142,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   return {
     clock,
     calls,
+    notices,
+    logs,
     verdicts,
     summaries,
     nextGoals,
@@ -144,7 +152,6 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     gate,
     syntheticGate,
     setWork: (next: BackgroundWork) => Object.assign(work, next),
-    notices,
     compactCalls,
     setCompactOutcome: (outcome: BoundaryCompactResult) => void (compactOutcome = outcome),
     setSyntheticError: (error?: Error) => void (syntheticFail.error = error),
@@ -538,7 +545,7 @@ describe("/goal-loop", () => {
     expect(record.loopCompact).toMatchObject({ iteration: 4, misses: 2 })
     expect(h.compactCalls).toHaveLength(2)
     expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
-    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /not landed/i.test(n.message))).toBe(true)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /did not land/i.test(n.message))).toBe(true)
   })
 
   test("a busy deferral counts as a miss but is never forced through", async () => {
@@ -658,24 +665,22 @@ describe("/goal-loop", () => {
     expect(reanchor.text).toContain("Do not wait for a user message.")
   })
 
-  test("a no-op compaction counts as a miss, not a landing", async () => {
+  test("an ended-compaction event is authoritative: it lands a pending request even with no size drop", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))
     h.summaries.push("s1")
     h.nextGoals.push("v2 condition")
     await h.turn(1)
-    // No drop: the context is still at the ~estimated size.
+    // No drop (context still at the ~estimated size), but the host reported compaction ended: landed.
     await h.controller.onCompactionLanded(SID)
-    let record = h.controller.get(SID)!
-    expect(record.loopCompact!.landedAt).toBeUndefined()
-    expect(record.loopCompact!.misses).toBe(1)
-    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(false)
-    expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
-    await h.controller.onCompactionLanded(SID)
-    record = h.controller.get(SID)!
-    expect(record.loopCompact!.misses).toBe(2)
-    expect(record.loopCompact!.landedAt).toBeUndefined()
-    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && n.title === "Compaction pending")).toBe(true)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeNumber()
+    expect(record.loopCompact!.misses).toBe(0)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(true)
+    // The landing re-anchors the live loop immediately (queued, resume: false).
+    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
+    expect(reanchor).toBeDefined()
+    expect(reanchor!.resume).toBe(false)
   })
 
   test("an evidence-based landing records and re-anchors", async () => {
@@ -694,50 +699,47 @@ describe("/goal-loop", () => {
     expect(reanchor.text).toContain('iteration="2"')
   })
 
-  test("a no-op landing pushes the miss count to 2 and the next arm force re-requests", async () => {
+  test("two arms with no landing and no drop push the miss count to 2 and the second force re-requests", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
     h.summaries.push("s1")
     h.nextGoals.push("v2 condition")
     await h.turn(1)
-    await h.controller.onCompactionLanded(SID)
-    await h.controller.onCompactionLanded(SID)
-    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(2)
     h.verdicts.push(met("v2 done"))
     h.summaries.push("s2")
     h.nextGoals.push("v3 condition")
-    await h.turn(1)
-    expect(h.compactCalls).toHaveLength(2)
-    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
-  })
-
-  test("one no-op ended event plus one arm counts exactly one miss (a1)", async () => {
-    await h.setLoop("objective")
-    h.verdicts.push(met("v1 done"))
-    h.summaries.push("s1")
-    h.nextGoals.push("v2 condition")
-    await h.turn(1)
-    // No-op compaction reported via the ended event: one miss, counted at the event.
-    await h.controller.onCompactionLanded(SID)
+    await h.turn(1) // miss 1: silent
     expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
-    // The arm observes the same unlanded request; it must not count a second miss.
-    h.verdicts.push(met("v2 done"))
-    h.summaries.push("s2")
-    h.nextGoals.push("v3 condition")
-    await h.turn(1)
-    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
-    expect(h.compactCalls).toHaveLength(1)
-    // The flag was consumed by that arm; a still-unlanded request counts normally at the next one.
     h.verdicts.push(met("v3 done"))
     h.summaries.push("s3")
     h.nextGoals.push("v4 condition")
-    await h.turn(1)
+    await h.turn(1) // miss 2: one warning, then forced re-request
     expect(h.controller.get(SID)!.loopCompact!.misses).toBe(2)
     expect(h.compactCalls).toHaveLength(2)
     expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
   })
 
-  test("an unestimable context counts as a miss, not a landing", async () => {
+  test("an ended-event landing resets the record; the next arm starts from a clean slate with a fresh request", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    await h.controller.onCompactionLanded(SID) // authoritative landing
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    // The landed record is not pending; the next arm requests a fresh boundary compaction (not forced).
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.compactCalls).toHaveLength(2)
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID })
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    expect(h.controller.get(SID)!.loopCompact!.iteration).toBe(3)
+  })
+
+  test("an ended-compaction event lands even when the context size is unestimable", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))
     h.summaries.push("s1")
@@ -746,11 +748,11 @@ describe("/goal-loop", () => {
     h.setContextSize(undefined)
     await h.controller.onCompactionLanded(SID)
     const record = h.controller.get(SID)!
-    expect(record.loopCompact!.landedAt).toBeUndefined()
-    expect(record.loopCompact!.misses).toBe(1)
+    expect(record.loopCompact!.landedAt).toBeNumber()
+    expect(record.loopCompact!.misses).toBe(0)
   })
 
-  test("forced re-requests stop at the 4-miss cap; one final warning, then silence", async () => {
+  test("a pending request that never lands: one warning at 2 arms, trickle every 3rd arm, cap is backstop only", async () => {
     const h4 = harness({ maxLoops: 50 })
     await h4.setLoop("improve the parser")
     let n = 0
@@ -764,38 +766,55 @@ describe("/goal-loop", () => {
     expect(h4.compactCalls).toEqual([{ sessionID: SID }])
     await arm() // miss 1: silent skip, no request
     expect(h4.compactCalls).toHaveLength(1)
-    await arm() // miss 2: forced re-request
+    await arm() // miss 2: ONE warning (exact text), forced re-request
     expect(h4.compactCalls).toHaveLength(2)
     expect(h4.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
-    expect(h4.notices.filter((n2) => n2.kind === "compact" && n2.title === "Compaction pending")).toHaveLength(1)
-    await arm() // miss 3: forced re-request
+    const hostUnwilling = h4.notices.filter((n2) => n2.kind === "compact" && n2.level === "warning" && n2.message === "compaction did not land; loop is running hot; consider /compact manually")
+    expect(hostUnwilling).toHaveLength(1)
+    await arm() // miss 3: trickle (3 % 3 === 0), no new warning
     expect(h4.compactCalls).toHaveLength(3)
     expect(h4.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
-    await arm() // miss 4: cap — no host request, one final warning
+    expect(h4.notices.filter((n2) => n2.message === "compaction did not land; loop is running hot; consider /compact manually")).toHaveLength(1)
+    await arm() // miss 4: backstop final warning, no request (4 % 3 !== 0)
     expect(h4.compactCalls).toHaveLength(3)
-    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
-    await arm() // miss 5: suspended and silent
+    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing" && /trickle every 3rd arm/.test(n2.message))).toHaveLength(1)
+    await arm() // miss 5: silent, no request
     expect(h4.compactCalls).toHaveLength(3)
-    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
-    expect(h4.notices.filter((n2) => n2.title === "Compaction pending")).toHaveLength(2)
+    await arm() // miss 6: trickle re-request — never permanent silence
+    expect(h4.compactCalls).toHaveLength(4)
+    expect(h4.compactCalls[3]).toEqual({ sessionID: SID, opts: { force: true } })
     expect(h4.controller.get(SID)?.status).toBe("active")
   })
 
-  test("compaction-ended misses respect the 4-miss cap with one final warning", async () => {
-    await h.setLoop("improve the parser")
-    h.verdicts.push(met("v1 done"))
-    h.summaries.push("s1")
-    h.nextGoals.push("v2 condition")
-    await h.turn(1)
-    await h.controller.onCompactionLanded(SID) // miss 1
-    await h.controller.onCompactionLanded(SID) // miss 2: pending warning
-    await h.controller.onCompactionLanded(SID) // miss 3: pending warning
-    await h.controller.onCompactionLanded(SID) // miss 4: final warning
-    await h.controller.onCompactionLanded(SID) // miss 5: silent
-    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(5)
-    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeUndefined()
-    expect(h.notices.filter((n2) => n2.title === "Compaction not landing")).toHaveLength(1)
-    expect(h.notices.filter((n2) => n2.title === "Compaction pending")).toHaveLength(2)
+  test("repeated unmeasurable arms never reach the 4-miss terminal state: staleness unknown, trickle every 2 arms", async () => {
+    const h7 = harness({ maxLoops: 50 })
+    await h7.setLoop("improve the parser")
+    let n = 0
+    const arm = async () => {
+      h7.verdicts.push(met("step done"))
+      h7.summaries.push("s")
+      h7.nextGoals.push(`iter-${++n}`)
+      await h7.turn(1)
+    }
+    h7.setContextSize(undefined) // the host cannot show us a number at all
+    await arm() // fresh boundary request (estimate unknown at request time)
+    expect(h7.compactCalls).toEqual([{ sessionID: SID }])
+    await arm() // unmeasurable tick 1: one forced re-request past cooldown, misses untouched
+    expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    expect(h7.compactCalls).toHaveLength(2)
+    expect(h7.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    await arm() // tick 2: staleness unknown (one warning), forced re-request (2 % 2 === 0)
+    expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    expect(h7.controller.get(SID)!.loopCompact!.stalenessUnknown).toBe(true)
+    expect(h7.compactCalls).toHaveLength(3)
+    await arm() // tick 3: no re-request (odd tick under unknown staleness)
+    expect(h7.compactCalls).toHaveLength(3)
+    expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    await arm() // tick 4: re-request again — never a terminal suspension
+    expect(h7.compactCalls).toHaveLength(4)
+    expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
+    const landingUnknown = h7.notices.filter((n2) => n2.kind === "compact" && n2.level === "warning" && n2.title === "Compaction landing unknown")
+    expect(landingUnknown).toHaveLength(1) // one transition warning, not one per arm
   })
 
   test("a landing clears the suspension: a fresh request resumes on a later arm", async () => {
@@ -1697,5 +1716,135 @@ describe("goal-loop command syntax (/goal-loop-<N>)", () => {
     await h.controller.armFromPrompt({ sessionID: SID, condition: "fix it", maxLoops: 42 })
     const set = h.notices.findLast((n) => n.kind === "set")!
     expect(set.message).toBe('iteration="1" max="42" · fix it')
+  })
+})
+
+describe("compaction landing detection + evaluator hardening — acceptance", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("(i) a pending request that never lands yields the one warning within 2 arms — not silence", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"), met("v2 done"))
+    h.summaries.push("s1", "s2")
+    h.nextGoals.push("v2 condition", "v3 condition")
+    await h.turn(1) // request made; no landing observed yet
+    await h.turn(1) // miss 1: silent count, no warning yet
+    expect(h.notices.filter((n) => n.message === "compaction did not land; loop is running hot; consider /compact manually")).toHaveLength(0)
+    h.verdicts.push(met("v3 done"))
+    h.summaries.push("s3")
+    h.nextGoals.push("v4 condition")
+    await h.turn(1) // miss 2: the warning must fire now
+    const hostUnwilling = h.notices.filter((n) => n.kind === "compact" && n.level === "warning" && n.message === "compaction did not land; loop is running hot; consider /compact manually")
+    expect(hostUnwilling).toHaveLength(1)
+  })
+
+  test("(ii) a drop of exactly 10% lands: success notice, pending cleared, misses reset, fresh requests re-enabled", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1) // pending: estimatedTokens 250_000
+    h.setContextSize(225_000) // exactly 10% below the estimate
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.loopCompact!.landedAt).toBeNumber() // pending cleared (landed form)
+    expect(record.loopCompact!.misses).toBe(0)
+    expect(record.loopCompact!.stalenessUnknown).toBeUndefined()
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success" && /dropped to ~225000 tokens/.test(n.message))).toBe(true)
+    // Fresh requests re-enabled: the next arm requests from scratch, not a forced re-request.
+    h.verdicts.push(met("v3 done"))
+    h.summaries.push("s3")
+    h.nextGoals.push("v4 condition")
+    h.setContextSize(250_000)
+    await h.turn(1)
+    expect(h.compactCalls[h.compactCalls.length - 1]).toEqual({ sessionID: SID })
+  })
+
+  test("(ii-b) a drop under 10% is not a landing", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1) // pending: estimatedTokens 250_000
+    h.setContextSize(237_500) // 5% below the estimate
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("v3 condition")
+    await h.turn(1)
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeUndefined()
+    expect(h.controller.get(SID)!.loopCompact!.misses).toBe(1)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(false)
+  })
+
+  test("(iii) estimateContext === undefined never lands by silence and never reaches the 4-miss terminal state", async () => {
+    const hu = harness({ maxLoops: 50 })
+    await hu.setLoop("objective")
+    let n = 0
+    hu.setContextSize(undefined)
+    for (let i = 0; i < 8; i++) {
+      hu.verdicts.push(met("step done"))
+      hu.summaries.push("s")
+      hu.nextGoals.push(`iter-${++n}`)
+      await hu.turn(1)
+      const pending = hu.controller.get(SID)!.loopCompact!
+      expect(pending.landedAt).toBeUndefined() // never a landing-by-silence
+      expect(pending.misses).toBe(0) // never counted as a miss, at any point
+    }
+    // And the loop is still active with no terminal suspension.
+    expect(hu.controller.get(SID)?.status).toBe("active")
+  })
+
+  test("(iv) an ended-compaction event mid-turn logs the landing and queues the re-anchor steer (resume: false)", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    h.setContextSize(undefined) // size unknown — the event alone must be able to land it
+    await h.controller.onCompactionLanded(SID)
+    expect(h.logs.some((l) => l.level === "info" && /compaction landed/i.test(l.message))).toBe(true)
+    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
+    expect(reanchor).toBeDefined()
+    expect(reanchor!.delivery).toBe("queue")
+    expect(reanchor!.resume).toBe(false)
+    expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
+  })
+
+  test("(v) restore() with a plain (non-loop) record arms no loopCompact", async () => {
+    await h.setGoal("all tests pass")
+    await h.controller.dispose()
+    const h2 = harness({}, h.storage)
+    const restored = await h2.controller.restore() // default: boundary compact fan-out armed loops only
+    expect(restored).toBe(1)
+    expect(h2.compactCalls).toHaveLength(0)
+    expect(h2.controller.get(SID)!.loopCompact).toBeUndefined()
+  })
+
+  test("(vii) a zero-tool-call producing-condition turn is rejected as not_met with the named reason", async () => {
+    await h.setLoop("add a failing test for the parser")
+    h.verdicts.push(met("parser work is done")) // evaluator over-claims; zero tool calls this turn
+    await h.turn(0)
+    const record = h.controller.get(SID)!
+    expect(record.verdict).toBe("not_met")
+    expect(record.reason).toContain("no evidence of work toward the condition, only state inspection")
+    expect(record.condition).toBe("add a failing test for the parser") // the loop did not advance
+    expect(record.loopIteration).toBe(1)
+  })
+
+  test("(vii-b) the already-satisfied-at-HEAD met is exempt from the zero-tool rejection", async () => {
+    await h.setLoop("add a failing test for the parser")
+    h.verdicts.push(met("Already satisfied at HEAD deadbee. No new work is produced by this iteration."))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(0) // zero tool calls, but the met is the already-satisfied landing
+    const record = h.controller.get(SID)!
+    expect(record.loopIteration).toBe(2) // the loop advanced
+    expect(record.condition).toBe("v2 condition")
   })
 })

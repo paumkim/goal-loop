@@ -14,6 +14,8 @@ export interface GoalConfig {
     readonly verifyCommand: string
     /** Wall-clock budget for one verification run. */
     readonly verifyTimeoutMs: number
+    /** Second-opinion gate: `2` requires two independent verdicts (session evaluator + independent model) both rule `met`; any disagreement or second-opinion failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; doubles evaluator cost when enabled. */
+    readonly consensus: 1 | 2
   }
   /** Hard turn cap; 0 disables the cap — the default; set explicitly as a hard safety limit. Conditions can still carry their own natural-language limit. */
   readonly maxTurns: number
@@ -46,6 +48,7 @@ export const DEFAULTS = {
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,
+  consensus: 1,
   maxTurns: 0,
   stallTurns: 0,
   checkinMinutes: 30,
@@ -119,6 +122,7 @@ export function resolveConfig(
       timeoutMs: int(evaluator.timeoutMs, DEFAULTS.timeoutMs, 5_000),
       verifyCommand: str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, ""),
       verifyTimeoutMs: int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000),
+      consensus: int(evaluator.consensus, DEFAULTS.consensus, 1, 2) as 1 | 2,
     },
     maxTurns: int(env.OPENCODE_GOAL_MAX_TURNS ?? options.maxTurns, DEFAULTS.maxTurns, 0),
     stallTurns: int(options.stallTurns, DEFAULTS.stallTurns, 0),
