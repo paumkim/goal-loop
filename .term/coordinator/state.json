@@ -1317,6 +1317,17 @@
       "submittedAt": "2026-11-16T06:09:21Z",
       "mergedAt": "2026-11-16T06:09:36Z",
       "mergedInto": "dev"
+    },
+    "tui-evaluator-hint": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/hud-card.tsx,src/status-dialog.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-evaluator-hint",
+      "worktree": "worktrees/wt-tui-evaluator-hint",
+      "status": "done",
+      "createdAt": "2026-11-16T06:12:10Z",
+      "submittedAt": "2026-11-16T06:19:40Z",
+      "mergedAt": "2026-11-16T06:19:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
