@@ -2236,6 +2236,17 @@
       "status": "submitted",
       "createdAt": "2026-11-16T18:03:15Z",
       "submittedAt": "2026-11-16T18:03:15Z"
+    },
+    "iteration-92-scrollbar-chrome": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/scrollbar.ts,test/scrollbar.test.tsx,test/package-integrity.test.ts,SPEC.md,dist/tui.js,docs/changelog.html",
+      "branch": "wt/iteration-92-scrollbar-chrome",
+      "worktree": "worktrees/wt-iteration-92-scrollbar-chrome",
+      "status": "done",
+      "createdAt": "2026-11-16T18:12:21Z",
+      "submittedAt": "2026-11-16T18:18:39Z",
+      "mergedAt": "2026-11-16T18:21:23Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
