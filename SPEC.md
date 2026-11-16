@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=48 tests=1047 -->
+<!-- spec-check files=48 tests=1071 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4735,3 +4735,90 @@ acknowledgment verb.
      it); there is no archive, no index, no auto-export on arm or land — one pick, one
      file, one receipt. Live-TUI behaviour remains unverifiable from this seat; wiring is
      verified at the source and the headless render layers only.
+
+## Workstream DZ — parallel-work safety: the merge pipeline can no longer destroy work (2026-11-16)
+
+Status: current. Incident: an external merge pipeline merged a submitted branch into dev and
+force-removed the linked worktree while it held uncommitted redesign work (new test file, SPEC
+marker bump, controller/types/wire/hud-card/index.ts edits, loop.test.ts rewrites). All of it was
+lost except by luck of surviving in an agent's context. This workstream closes that incident
+class in `packages/coordinator/bin/coordinator` and `scripts/spec-check.ts`, and ships the
+protocol page `docs/parallel-work.md`.
+
+Interpretation:
+- Uncommitted bytes are the highest-priority asset in the pipeline. Any path that deletes a
+  worktree (merge-next's cleanup; nothing else deletes worktrees) must first make those bytes
+  recoverable: stash them into a named ref `refs/coordinator/saved/<slug>-<ts>` (a stash commit,
+  kept also in `refs/stash`) and print the recovery commands. It never deletes a non-empty tree
+  blindly; only the sanctioned `.term/coordinator/state.json` dirt is exempt.
+- Merge work never happens in the main checkout. The trial merge moves into a dedicated
+  `worktrees/wt-merge-check-<slug>-<ts>` worktree on branch `merge-check-<slug>-<ts>`; the main
+  checkout must be on `dev` and tracked-clean at the start of any merge step, is verified again
+  before the final step, and only ever receives a fast-forward of `dev`. `--review` stops before
+  the fast-forward and prints the exact recovery command; on any failure dev is untouched and the
+  error prints the exact recovery command.
+- Lease-scoped paths become enforced, not advisory. `submit` (and `submit --force`, which logs
+  the override into the lease record) checks every commit on `wt/<slug>` since the merge-base
+  with `dev` against the claimed paths plus the configured shared scopes (`sharedPaths` in
+  config.json; default `.term/coordinator/state.json` and `docs/changelog.html`); `**`-suffixed scopes match by prefix on
+  segment boundaries, bare paths match exactly or as a directory prefix.
+- Shared-counter determinism: the marker `<!-- spec-check files=N tests=N -->` is re-counted by
+  the pipeline itself. `scripts/spec-check.ts --write` probes reality (npm pack file count, bun
+  test pass count), rewrites the marker, and exits non-zero on a red suite (never writes a green
+  claim over red). merge-next runs it in the merge worktree after the trial merge and commits the
+  re-count on the scratch branch, so no agent hand-bumps and no merged tree fails the gate on a
+  stale marker. `COORDINATOR_SKIP_SPEC_WRITE=1` disables.
+- The changelog is pipeline-owned the same way: after the marker step, merge-next runs
+  `bun scripts/docs-watch.ts once` in the merge worktree and commits any change on the scratch
+  branch (`COORDINATOR_SKIP_DOCS_WATCH=1` disables), so parallel agents never race
+  docs/changelog.html and the docs freshness gate passes on the merged tree.
+- Preflight, not post-mortem: after the trial merge and before the gate runs, merge-next prints
+  the files the merge touches and every non-done lease whose claimed paths overlap them (they
+  will need a rebase onto dev), states the marker re-count it is about to make, and aborts early
+  with the offending lease list. A red `bun test` in the merged tree is reported before the full
+  gate runs.
+- Merge locking that survives crashes: the mkdir lock records its holder (lease slug, scratch
+  branch, pid, start time) in `.merge-lock-file`; stale-lock reclamation prints exactly what it
+  reclaimed instead of silently deleting a live competitor's merge.
+- Visibility: `status --json` gains per-lease `worktreePath`, `uncommitted` (count), and
+  `mergeInProgress`; new `queue` view lists submitted leases FIFO with position, wait time and a
+  rough ETA (mean of past merge durations); new `doctor` command checks main-checkout branch and
+  cleanliness, dangling worktrees (done leases whose worktree still exists, live leases whose
+  worktree is missing), dangling node_modules symlinks, SPEC marker vs reality, and merge-lock
+  health; exits 1 on any FAIL.
+- Branch hygiene: claim and the merge worktree ensure a usable `node_modules` (own install or a
+  checked symlink to the main checkout's — verified target; dangling symlinks are replaced, never
+  left behind). The main checkout never leaves `dev` during a merge.
+- End-to-end: `test/coordinator-merge-safety.test.ts` simulates two agents claiming overlapping
+  scopes with conflicting edits to shared files and asserts: no merge proceeds on a red gate,
+  uncommitted bytes never vanish, the loser gets a clear rebase path, the winner lands on dev
+  green.
+
+Acceptance criteria:
+1. merge-next never force-removes a dirty worktree without preserving its bytes in a named ref,
+   and says so (hard test: untracked new file + modified tracked file in a submitted lease's
+   worktree → merge → bytes recoverable via `git stash apply refs/coordinator/saved/<slug>-<ts>`).
+2. Any merge failure leaves dev byte-identical and prints an exact recovery command; `--review`
+   leaves the green scratch branch for inspection and prints the fast-forward command.
+3. A commit touching files outside the claimed paths fails `submit`; the shared scopes pass;
+   `submit --force` succeeds and records the override in the lease.
+4. The merged tree's SPEC marker is re-counted and committed by merge-next itself before the
+   gate; a fixture with a stale marker merges green with no agent bump; the changelog is
+   regenerated on the merged tree the same way (fixture: a fake docs-watch in the merged tree
+   leaves its row on dev; a failing docs-watch aborts the merge with dev untouched).
+5. Main checkout stays on dev throughout a merge (test: the check script dirties the worktree —
+   the merge still lands and dev is never left behind).
+6. Stale merge-lock reclamation prints the reclaimed holder; lock file carries slug/branch/pid.
+7. `status --json` carries the per-lease dirty state; `queue` orders submitted leases FIFO with
+   an ETA; `doctor` fails on a dirty main checkout and on a dangling worktree.
+8. The two-agent overlapping-scope scenario passes end-to-end.
+
+Verification: `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts` — 31 pass, 0 fail
+(21 new merge-safety tests + the rewritten fast-forward-failure test + the 10 pre-existing merge-next
+tests). Full suite: 1049 pass, 0 fail. The two-agent overlapping-scope scenario is the acceptance
+artifact (test/coordinator-merge-safety.test.ts, "two agents, overlapping scopes, conflicting edits"):
+no red merge lands, dev stays untouched on the conflict and on the red gate, the loser rebases with the
+printed path, the winner lands green, and the loser's uncommitted bytes are recoverable from
+`refs/coordinator/saved/<slug>-<ts>` after the merge pipeline removes its worktree. spec-check files=47
+tests=1049.
+
