@@ -946,6 +946,25 @@
       "submittedAt": "2026-11-16T00:09:39Z",
       "mergedAt": "2026-11-16T00:09:58Z",
       "mergedInto": "dev"
+    },
+    "github-single-channel": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs,RELEASE-CHECKLIST.md",
+      "branch": "wt/github-single-channel",
+      "worktree": "worktrees/wt-github-single-channel",
+      "status": "claimed",
+      "createdAt": "2026-11-16T00:30:51Z"
+    },
+    "installer-github-spec": {
+      "agent": "orchestrator",
+      "paths": "bin,test/cli-installer.test.ts,SPEC.md,README.md,docs,RELEASE-CHECKLIST.md",
+      "branch": "wt/installer-github-spec",
+      "worktree": "worktrees/wt-installer-github-spec",
+      "status": "done",
+      "createdAt": "2026-11-16T00:33:26Z",
+      "submittedAt": "2026-11-16T00:42:23Z",
+      "mergedAt": "2026-11-16T00:42:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
