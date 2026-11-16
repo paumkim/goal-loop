@@ -104,6 +104,22 @@ const backoffMs = (base: number, growth: number, exponent: number) => Math.min(b
 const PAUSE_RETRY_MS = 15 * 60_000
 /** Backoff for a failed synthetic-continue dispatch. */
 const CONTINUE_RETRY_MS = 60_000
+/** Token sets of a normalized string, deduplicated; input must already be normalized (lowercase, one space per separator run). */
+const tokensOf = (normalized: string): Set<string> => new Set(normalized.split(" ").filter(Boolean))
+/**
+ * Near-duplicate test between two normalized token sets: containment (|A ∩ B| / min(|A|, |B|)) >= 0.7
+ * or Jaccard >= 0.6. Empty token sets never match. Only meaningful for the loop planner gate, where the
+ * history is bounded (HISTORY <= 20), so the O(n) scan over the completed set stays trivial.
+ */
+const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
+  if (a.size === 0 || b.size === 0) return false
+  let intersection = 0
+  for (const token of a) if (b.has(token)) intersection += 1
+  const containment = intersection / Math.min(a.size, b.size)
+  const union = a.size + b.size - intersection
+  const jaccard = union === 0 ? 0 : intersection / union
+  return containment >= 0.7 || jaccard >= 0.6
+}
 
 type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" | (string & {})
 
@@ -892,6 +908,19 @@ export class GoalController {
     if (completed.has(normalize(condition))) {
       log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
       return endClean(`Loop complete: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; nothing new to plan.`)
+    }
+    // Near-duplicate gate: a planner proposing work that materially overlaps an already-completed condition
+    // would burn the iteration on a no-op. Token containment >= 0.7 or Jaccard >= 0.6 is a near-duplicate.
+    const candidateTokens = tokensOf(normalize(condition))
+    if (candidateTokens.size > 0) {
+      for (const entry of completed) {
+        const entryTokens = tokensOf(entry)
+        if (entryTokens.size === 0) continue
+        if (isNearDuplicate(candidateTokens, entryTokens)) {
+          log.warn("loop next-goal generator offered a near-duplicate of an already-completed condition", { sessionID, iteration })
+          return endClean(`Loop complete: the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); nothing new to plan.`)
+        }
+      }
     }
 
     const nextIteration = iteration + 1

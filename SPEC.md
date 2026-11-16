@@ -232,12 +232,14 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     trim/cap) and `test/store.test.ts` (`sameDirectory` normalization, `loadLive` directory
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
-    `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:301`, `facts` `:326`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1092`, `prompts.ts:201`). References were
-    re-synced against HEAD on 2026-11-16 (`docs/config.html`, `docs/architecture.html`, `docs/index.html`,
-    `docs/core.html`, `docs/runtime.html`, `docs/install.html`) after source moved past the 2026-11-15
-    sync; the 2026-11-15 values (64/82/263/288, `controller.ts:461`) are superseded and recorded in git
-    history. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:312`, `facts` `:337`,
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1121`, `prompts.ts:207`). References were
+    re-synced against HEAD twice on 2026-11-16 (`docs/config.html`, `docs/architecture.html`,
+    `docs/index.html`, `docs/core.html`, `docs/runtime.html`, `docs/install.html`): first for the
+    line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
+    `CONTINUE_RETRY_MS` and the gate in the loop-advance path and shifted every later anchor (controller
+    +16, after the loop-advance insertion +29 in total; prompts +6/+5/+2). The 2026-11-15 values
+    (64/82/263/288, `controller.ts:461`) are superseded and recorded in git history. Note the caveat, discovered the hard way: `docs:check` verifies only page
     stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
     points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
     source moves. The README coordinator section documents the `.gitignore` auto-append and the
@@ -386,7 +388,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=574 -->
+<!-- spec-check files=41 tests=579 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2114,3 +2116,8 @@ Marker bumped `files=41 tests=556` → `files=41 tests=563` (test-only addition;
 220. New `test/ci-workflow.test.ts` (11 tests) pins `.github/workflows/check.yml` — the gate documented in README.md and Workstream D criterion 21 — with structural line-based assertions, no YAML-parser dependency. It asserts: a named workflow exists; `on.push.branches` is exactly `[dev, main]` and `pull_request` is present; the `check` job runs on `ubuntu-latest`; `actions/checkout@v4` precedes `oven-sh/setup-bun@v2`; installation is `bun install --frozen-lockfile`; the gate step is the same `bun run check` as local development; an `npm pack --dry-run` smoke test follows it; the step order is install -> check -> pack; and the file carries no publish secrets (`secrets.*`, `NPM_TOKEN`, `npm publish`, `--access public`, `NODE_AUTH_TOKEN`) and no credentials of any kind (password/token/authorization).
 221. Mutation-verified both ways: defrosting the install (`bun install` without `--frozen-lockfile`) fails the frozen-install and step-order tests; injecting an `NPM_TOKEN`/`secrets.` reference fails the no-secrets and no-credentials tests; reverting passes. The documented CI gate can no longer drift from the workflow silently.
 Marker bumped `files=41 tests=563` → `files=41 tests=574` (test-only addition; no shipped file changed).
+
+## Workstream BT — loop re-arm guard (2026-11-16)
+
+222. /goal-loop no longer burns iterations on already-completed work. Three surfaces changed: the planner prompt (NEXT_GOAL_ASK) now requires the proposed condition's work be ABSENT at HEAD (else LOOP_COMPLETE); the arming synthetic prompt (loopContinuation) requires enumerating the condition's requirements and auditing them against current HEAD with fresh output this turn, and if all hold, reporting "Already satisfied at HEAD <sha>. No new work is produced by this iteration." without redoing; the evaluator rubric states a condition already satisfied at HEAD before the turn began is met with that exact wording in the reason. Deterministic gate: after the existing exact (normalized) repeat check in the loop advance path, a near-duplicate proposal — token containment >= 0.7 or Jaccard >= 0.6 against the objective, the current condition, or any completed history entry — ends the loop cleanly as achieved with reason matching /already-completed/i, before arming.
+223. The near-duplicate gate is tested end-to-end: near-duplicate proposals end the loop cleanly with a Loop complete notice and no further arming steer; genuinely new proposals still arm the next iteration; the three prompt surfaces pin the new audit wording. Marker bumped files=41 tests=574 → files=41 tests=579.
