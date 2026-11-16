@@ -14,7 +14,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
+import { DialogFooter, HudCard, type HudCardTheme } from "../src/hud-card.tsx"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, VerdictEntry } from "../src/core/types.ts"
@@ -227,6 +227,68 @@ describe("full-frame snapshots (waiting and remediation states)", () => {
       () => <LoopSection goal={idle} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />,
       100,
       30,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+})
+describe("full-frame snapshots (chrome tiers and reduced-color frames)", () => {
+  test("HudCard · context menu open — all four rows live", async () => {
+    const snapshot = await frame(
+      () => <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} onCopyReason={() => {}} onCopySummary={() => {}} contextOpen onToggleContext={() => {}} onCloseMenu={() => {}} />,
+      80,
+      30,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("HudCard · mono (NO_COLOR / TERM=dumb — weight and glyphs carry meaning)", async () => {
+    const snapshot = await frame(
+      () => <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono />,
+      80,
+      24,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("LoopSection · ASCII frame (NO_COLOR / TERM=dumb — bars and sparkline demote)", async () => {
+    const previous = process.env.NO_COLOR
+    process.env.NO_COLOR = "1"
+    try {
+      const snapshot = await frame(
+        () => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopySummary={() => {}} />,
+        100,
+        46,
+      )
+      expect(snapshot).toMatchSnapshot()
+    } finally {
+      if (previous === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = previous
+    }
+  })
+
+  test("DialogFooter · 80 columns (short hint · compact labels)", async () => {
+    const snapshot = await frame(
+      () => <DialogFooter theme={theme} pinned={() => false} copied={() => false} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      80,
+      3,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("DialogFooter · 96 columns (short hint · full labels)", async () => {
+    const snapshot = await frame(
+      () => <DialogFooter theme={theme} pinned={() => false} copied={() => false} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      96,
+      3,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("DialogFooter · 140 columns (full hint · full labels)", async () => {
+    const snapshot = await frame(
+      () => <DialogFooter theme={theme} pinned={() => false} copied={() => false} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      140,
+      3,
     )
     expect(snapshot).toMatchSnapshot()
   })
