@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=48 tests=1069 -->
+<!-- spec-check files=48 tests=1071 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4768,6 +4768,10 @@ Interpretation:
   claim over red). merge-next runs it in the merge worktree after the trial merge and commits the
   re-count on the scratch branch, so no agent hand-bumps and no merged tree fails the gate on a
   stale marker. `COORDINATOR_SKIP_SPEC_WRITE=1` disables.
+- The changelog is pipeline-owned the same way: after the marker step, merge-next runs
+  `bun scripts/docs-watch.ts once` in the merge worktree and commits any change on the scratch
+  branch (`COORDINATOR_SKIP_DOCS_WATCH=1` disables), so parallel agents never race
+  docs/changelog.html and the docs freshness gate passes on the merged tree.
 - Preflight, not post-mortem: after the trial merge and before the gate runs, merge-next prints
   the files the merge touches and every non-done lease whose claimed paths overlap them (they
   will need a rebase onto dev), states the marker re-count it is about to make, and aborts early
@@ -4799,7 +4803,9 @@ Acceptance criteria:
 3. A commit touching files outside the claimed paths fails `submit`; the shared scopes pass;
    `submit --force` succeeds and records the override in the lease.
 4. The merged tree's SPEC marker is re-counted and committed by merge-next itself before the
-   gate; a fixture with a stale marker merges green with no agent bump.
+   gate; a fixture with a stale marker merges green with no agent bump; the changelog is
+   regenerated on the merged tree the same way (fixture: a fake docs-watch in the merged tree
+   leaves its row on dev; a failing docs-watch aborts the merge with dev untouched).
 5. Main checkout stays on dev throughout a merge (test: the check script dirties the worktree —
    the merge still lands and dev is never left behind).
 6. Stale merge-lock reclamation prints the reclaimed holder; lock file carries slug/branch/pid.
