@@ -65,6 +65,22 @@ const loopedGoal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => ({
   ...overrides,
 })
 
+const bigLoopGoal = (): GoalSnapshot => loopedGoal({
+  turns: 33,
+  loopIteration: 7,
+  loopMaxLoops: 8,
+  history: verdicts(["met", "not_met", "met", "met", "met", "met"]),
+  loopHistory: [1, 2, 3, 4, 5, 6].map((version) => ({
+    version,
+    condition: `objective pass ${version}`,
+    summary: `Summary of iteration ${version} work.`,
+    reason: "met",
+    turns: 5,
+    toolCalls: 9,
+    endedAt: now - 1000 * 60 * (60 - version * 5),
+  })),
+})
+
 const plainGoal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => {
   const { loopEnabled: _a, loopIteration: _b, loopObjective: _c, loopMaxLoops: _d, loopHistory: _e, loopNotProgress: _f, ...rest } = loopedGoal()
   return { ...rest, id: "goal_plain", ...overrides }
@@ -488,6 +504,44 @@ describe("copy-to-clipboard affordances (mouse)", () => {
     const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()
     expect(setup.captureCharFrame()).toContain("Added an 18-cell block progress bar.")
+    await setup.renderer.destroy()
+  })
+})
+
+describe("loop rail progressive disclosure", () => {
+  test("beyond four completed iterations, the two oldest fold behind a click target", async () => {
+    const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("2 older iterations — click to show")
+    expect(frame).toContain("v6")
+    expect(frame).toContain("v3")
+    expect(frame).not.toContain("v2 ")
+    expect(frame).not.toContain("v1 ")
+    expect(frame).not.toContain("Summary of iteration 1 work.")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking the fold row expands the full rail and flips the row to show recent only", async () => {
+    const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "2 older iterations")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    const expanded = setup.captureCharFrame()
+    expect(expanded).toContain("show recent only")
+    expect(expanded).toContain("v1 ")
+    expect(expanded).toContain("Summary of iteration 1 work.")
+    expect(expanded).toContain("v6")
+    await setup.renderer.destroy()
+  })
+
+  test("at four or fewer completed iterations no fold row appears", async () => {
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).not.toContain("older iteration")
     await setup.renderer.destroy()
   })
 })

@@ -450,7 +450,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=719 -->
+<!-- spec-check files=43 tests=722 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -530,7 +530,11 @@ snapshot fields (no RPC, schema, storage or controller changes).
     on a `│`-prefixed line in `text.faint`, indented under the rail. The rail row and the final tally row
     word-wrap instead of clipping, so the trailing segments (verdict mix, `ended …`, `% of wall`) stay
     visible at the 80-column floor. Theme tokens only; no borders, no
-    hardcoded RGBA, no absolute positioning.
+    hardcoded RGBA, no absolute positioning. Progressive disclosure caps the rail at the last 4 completed
+    iterations: older ones fold behind one faint clickable row (`… N older iteration(s) — click to show`,
+    underlined on hover in the shared copy-target grammar, indices remapped so durations/verdict-mix/wall
+    shares stay exact); clicking it expands the full rail and flips the row to `show recent only`. At 4 or
+    fewer completed iterations the fold row never renders.
 53. A progress bar sits above the rail: `█` filled (feedback.info.base) vs `░` empty (text.faint),
     fixed 18 cells, filled = round(completed / loopMaxLoops × 18), clamped to [0, 18]; caption
     `v<current> of at most <max> · <done> complete`. When `loopMaxLoops` is absent the bar renders

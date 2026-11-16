@@ -30,6 +30,8 @@ export interface HistoryTheme {
 }
 
 const SUMMARY_MAX = 400
+/** Completed-iteration rows kept visible without expanding; older ones fold behind one click. */
+const RAIL_VISIBLE = 4
 
 const label = (theme: HistoryTheme, text: string) => (
   <text fg={theme.text.faint} flexShrink={0} width={LABEL}>
@@ -102,6 +104,12 @@ export const LoopSection = (props: {
   }
   const history = () => props.goal.loopHistory ?? []
   const done = () => history().length
+  // Progressive disclosure: at most RAIL_VISIBLE completed iterations render; the rest fold behind one click.
+  const [showAll, setShowAll] = createSignal(false)
+  const [railHovered, setRailHovered] = createSignal(false)
+  const hiddenCount = () => (showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE))
+  const visibleHistory = () => (showAll() ? history() : history().slice(-RAIL_VISIBLE))
+  const railOffset = () => Math.max(0, done() - visibleHistory().length)
   const max = () => props.goal.loopMaxLoops
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
   const bar = () => renderBar(done(), max())
@@ -211,9 +219,20 @@ export const LoopSection = (props: {
           )
         }}
       </Show>
-      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced */}
-      <For each={history()}>
+      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced. Older iterations fold behind one click so a long loop never buries the live row. */}
+      <Show when={done() > RAIL_VISIBLE}>
+        <box flexDirection="row" gap={2} onMouseUp={() => setShowAll((v) => !v)} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
+          <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
+            …
+          </text>
+          <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.UNDERLINE : undefined}>
+            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} — click to show`}
+          </text>
+        </box>
+      </Show>
+      <For each={visibleHistory()}>
         {(entry, index) => {
+          const fullIndex = () => railOffset() + index()
           const zeroTools = entry.toolCalls === 0
           const rowColor = zeroTools ? theme().text.faint : theme().text.base
           return (
@@ -224,7 +243,7 @@ export const LoopSection = (props: {
                   {zeroTools ? "○" : "✓"}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
-                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`}
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}`}
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>
