@@ -90,6 +90,8 @@ interface Runtime {
   stallNotified?: boolean
   /** One-shot: the "paused at turn cap" courtesy warning already fired for this freeze. */
   capFreezeNotified?: boolean
+  /** Cumulative usage snapshot captured when the current loop iteration was armed (arm / advance). Runtime-local like iterationToolCalls; a restored runtime drops it, so the next recorded iteration carries no spend — never estimated. */
+  armUsage?: UsageSnapshot
 }
 
 const HISTORY = 20
@@ -319,7 +321,8 @@ export class GoalController {
     const previous = this.live(sessionID)
     if (previous) this.finish(previous, "cleared", "Replaced by a new goal.")
     const now = this.deps.clock.now()
-    const baseline = (await this.deps.session.usage(sessionID).catch(() => undefined)) ?? EMPTY_USAGE
+    const measured = await this.deps.session.usage(sessionID).catch(() => undefined)
+    const baseline = measured ?? EMPTY_USAGE
     const loop = input.loop
     // Per-run override only: this never touches config.maxLoops, so a later /goal-loop-<N> applies to that run alone.
     const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
@@ -344,6 +347,10 @@ export class GoalController {
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
+    if (loop && measured) {
+      const runtime = this.runtimes.get(sessionID)
+      if (runtime) runtime.armUsage = measured
+    }
     // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
     const loopLabel = loop ? "Loop" : "Goal"
@@ -793,6 +800,9 @@ export class GoalController {
   ): Promise<void> {
     const { config, clock, log } = this.deps
     const sessionID = record.sessionID
+    // Cumulative usage at the advance (met verdict). The delta against armUsage is this iteration's
+    // spend; one extra usage() call per advance, same posture as the context estimate. Best-effort.
+    const advanceUsage = await this.deps.session.usage(sessionID).catch(() => undefined)
     const iteration = record.loopIteration ?? 1
     const maxLoops = record.loopMaxLoops ?? config.maxLoops
     const objective = record.loopObjective ?? record.condition
@@ -815,6 +825,10 @@ export class GoalController {
         return undefined
       }
     })()
+    // Spend attribution: the diff between the arm-time cumulative and the advance-time cumulative is
+    // this iteration's cost. Absent when the arm never saw a stamp (restored runtime) or the advance
+    // could not measure — never estimated, never fabricated. Clamped at zero per field (diffUsage).
+    const armDelta = advanceUsage && runtime.armUsage ? diffUsage(advanceUsage, runtime.armUsage) : undefined
     const makeEntry = (summary: string): LoopEntry => ({
       version: iteration,
       condition: record.condition,
@@ -823,6 +837,7 @@ export class GoalController {
       turns: turn,
       toolCalls: iterationTools,
       endedAt: clock.now(),
+      ...(armDelta !== undefined ? { spend: armDelta } : {}),
       ...(armedEstimate !== undefined ? { contextTokens: armedEstimate } : {}),
       ...(headAtAdvance !== undefined ? { sha: headAtAdvance } : {}),
     })
@@ -979,6 +994,7 @@ export class GoalController {
     this.clearDeferred(runtime)
     runtime.iterationToolCalls = 0
     runtime.iterationDeferred = false
+    runtime.armUsage = advanceUsage
     // Single durable write: the achieved history and the armed iteration land together or not at all.
     // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)

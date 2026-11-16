@@ -989,3 +989,28 @@ describe("hudArmEnabled", () => {
     expect(hudArmEnabled(false, true)).toBe(false)
   })
 })
+
+describe("per-iteration spend attribution in the rail", () => {
+  const historyTheme: HistoryTheme = theme
+
+  test("a completed iteration paints its arm-to-advance cost in the row", async () => {
+    const goal = loopedGoal({
+      loopHistory: [{ version: 1, condition: "c", summary: "s", reason: "met", turns: 3, toolCalls: 7, endedAt: now - 1000 * 60 * 5, spend: { cost: 0.42, input: 1200, output: 300, reasoning: 0, cacheRead: 0, cacheWrite: 0 } }],
+      loopIteration: 2,
+    })
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("$0.42")
+    await setup.renderer.destroy()
+  })
+
+  test("an iteration without spend paints no cost tag", async () => {
+    const goal = loopedGoal()
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("$")
+    await setup.renderer.destroy()
+  })
+})

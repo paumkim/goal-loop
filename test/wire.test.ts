@@ -92,6 +92,15 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(91000) })).toBeUndefined()
   })
 
+  test("accepts an additive LoopEntry spend delta and rejects broken values when present", () => {
+    const spend = { cost: 0.42, input: 1000, output: 200, reasoning: 50, cacheRead: 800, cacheWrite: 10 }
+    const entry = (value?: unknown) => [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 1, toolCalls: 2, endedAt: 800, ...(value === undefined ? {} : { spend: value }) }]
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(spend) })?.loopHistory?.[0]?.spend).toEqual(spend)
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(undefined) })?.loopHistory?.[0]?.spend).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry({ ...spend, cost: Number.NaN }) })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry("0.42") })).toBeUndefined()
+  })
+
   test("accepts an additive LoopEntry contextTokens and rejects broken values when present", () => {
     const entry = (contextTokens?: unknown) => [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 1, toolCalls: 2, endedAt: 800, ...(contextTokens === undefined ? {} : { contextTokens }) }]
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(91_000) })?.loopHistory?.[0]?.contextTokens).toBe(91_000)

@@ -10,7 +10,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
-import { formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
+import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
 import { verdictAccentColor, motionDisabled } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
@@ -144,6 +144,8 @@ export const LoopSection = (props: {
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
   const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.slice(0, 7)}` : "")
+  // Per-iteration spend attribution: the server stamps the arm→advance usage delta on each completed entry. Render the cost only — the rail row is tight. Omitted when the arm or the advance could not measure.
+  const spendSuffix = (entry: { spend?: { readonly cost: number } }) => (entry.spend && entry.spend.cost > 0 ? ` · ${formatCost(entry.spend.cost)}` : "")
   const paused = () => props.goal.status === "paused"
   const stateWord = () => {
     const s = props.goal.status
@@ -279,7 +281,7 @@ export const LoopSection = (props: {
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
-                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`}
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`}
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>

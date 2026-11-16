@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=852 -->
+<!-- spec-check files=43 tests=857 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3554,3 +3554,39 @@ the wire does not carry — documented here rather than faked.
 Verification (all run in the worktree): bun test (105 pass in tui-hud.test.tsx, 21 pass in
 tui-snapshots.test.tsx, full suite in bun run check), bun run compile, bun run check end-to-end
 green incl. spec-check (43/852), docs-watch companion + changelog grep before submit.
+
+## Workstream CK — per-iteration spend attribution: the rail names what each iteration cost (2026-11-16)
+
+Interpretation of this iteration: the HUD could say what the goal spent in total, but not what each
+loop iteration spent — the number a user needs to decide whether the loop is worth its cap. The
+server already diffs cumulative usage against the goal baseline for goal-level spend; the same
+diff works per iteration if an arm-time snapshot is kept on the runtime. This slice stamps it.
+
+342. src/core/types.ts — LoopEntry gains `readonly spend?: UsageSnapshot`: the arm→advance usage
+     delta attributed to that iteration alone. src/runtime/controller.ts — Runtime carries
+     armUsage (runtime-local, like iterationToolCalls; a restored runtime drops it). arm()
+     stamps armUsage with the MEASURED cumulative usage at loop arm (an unmeasured arm stamps
+     nothing); loopAdvance() fetches the cumulative usage once at the advance (best-effort, same
+     posture as the context estimate), stamps the entry with diffUsage(advance, arm) and re-arms
+     armUsage for the next iteration. A met iteration whose arm or advance could not measure
+     records no spend — absent, never estimated, never fabricated.
+343. src/core/wire.ts — isLoopEntry validates the additive spend snapshot when present (cost /
+     input / output / reasoning / cacheRead / cacheWrite must be finite numbers). src/core/format.ts
+     exports formatCost (was private). src/tui-history.tsx — the loop rail row appends
+     ` · $x.xx` (formatCost, only when cost > 0) after the sha; omitted otherwise. TUI carries
+     the cost only — the rail row is tight.
+344. Tests: loop.test.ts gains the setUsage harness hook and two cases (an entry is stamped with
+     the arm→advance delta, each iteration measured from its own arm, and an entry records no
+     spend when the advance cannot measure usage); wire.test.ts gains the spend accept/reject case;
+     tui-hud.test.tsx gains two rail-row cases (cost painted when stamped, no $ when absent).
+     docs/architecture.html's controller.ts line-399 anchor re-numbers to line 406 (armFromPrompt
+     grew by seven lines) — carried in the docs: refresh companion, the one docs/ edit this slice
+     forces.
+     Spec-check marker files=43 tests=852 -> 857.
+
+Verification (all run in the worktree): bun test (857 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/857) and the docs
+line-reference guard, docs-watch companion + changelog grep before submit. Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
+measured card width, the satisfied-at-HEAD tone in the verdict trail (needs a toolCalls field on
+VerdictEntry, server-side), per-turn spend in the why ledger.
