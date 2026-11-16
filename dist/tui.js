@@ -251,12 +251,18 @@ import { TextAttributes as TextAttributes2 } from "@opentui/core";
 // src/core/history.ts
 var BAR_CELLS = 18;
 var LABEL = 10;
-function renderBar(done, max, cells = BAR_CELLS) {
+var BAR_FILLED = "\u2588";
+var BAR_EMPTY = "\u2591";
+var BAR_FILLED_ASCII = "#";
+var BAR_EMPTY_ASCII = "-";
+function renderBar(done, max, cells = BAR_CELLS, ascii = false) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
   const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round(safeDone / safeMax * width)));
-  return { filled, text: "\u2588".repeat(filled) + "\u2591".repeat(width - filled) };
+  const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
+  const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
+  return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) };
 }
 function barCaption(current, max, done) {
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
@@ -410,8 +416,11 @@ function durationShares(durations) {
   return durations.map((span) => Math.round(Math.max(0, Number.isFinite(span) ? span : 0) / total * 100));
 }
 var SPARK_GLYPHS = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"];
+var SPARK_GLYPHS_ASCII = [".", ":", "-", "=", "+", "*", "#", "@"];
+var SPARK_GAP_ASCII = " ";
+var SPARK_TRUNC_ASCII = ">";
 var SPARK_MAX_CELLS = 16;
-function contextSparkline(entries) {
+function contextSparkline(entries, ascii = false) {
   const estimates = entries.map((entry) => typeof entry.contextTokens === "number" && Number.isFinite(entry.contextTokens) && entry.contextTokens >= 0 ? entry.contextTokens : undefined);
   const present = estimates.filter((value) => value !== undefined);
   if (present.length === 0)
@@ -427,29 +436,34 @@ function contextSparkline(entries) {
   }
   const window = estimates.slice(-SPARK_MAX_CELLS);
   const truncated = window.length < estimates.length;
+  const ramp = ascii ? SPARK_GLYPHS_ASCII : SPARK_GLYPHS;
+  const gap = ascii ? SPARK_GAP_ASCII : "\xB7";
+  const truncatedMarker = ascii ? SPARK_TRUNC_ASCII : "\u2026";
   const bars = window.map((value) => {
     if (value === undefined)
-      return "\xB7";
+      return gap;
     if (peak === 0)
-      return SPARK_GLYPHS[0];
-    return SPARK_GLYPHS[Math.min(7, Math.floor(value / peak * 8))];
+      return ramp[0];
+    return ramp[Math.min(7, Math.floor(value / peak * 8))];
   }).join("");
-  return { bars: (truncated ? "\u2026" : "") + bars, peak, latest, shown: present.length, truncated };
+  return { bars: (truncated ? truncatedMarker : "") + bars, peak, latest, shown: present.length, truncated };
 }
 var CONTEXT_BAR_CELLS = 16;
 var CONTEXT_HOT_RATIO = 0.8;
-function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS) {
+function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) {
   const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0;
   const width = Math.max(1, Math.floor(cells));
   const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0;
+  const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
+  const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
   if (!hasCapacity)
-    return { filled: 0, text: "\u2591".repeat(width), pct: undefined, hot: false, over: false };
+    return { filled: 0, text: emptyGlyph.repeat(width), pct: undefined, hot: false, over: false };
   const ratio = safeSize / capacity;
   const pct = Math.round(ratio * 100);
   const filled = Math.min(width, Math.max(0, Math.round(ratio * width)));
   return {
     filled,
-    text: "\u2588".repeat(filled) + "\u2591".repeat(width - filled),
+    text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled),
     pct,
     hot: ratio >= CONTEXT_HOT_RATIO,
     over: ratio >= 1
@@ -661,6 +675,7 @@ var RailSummary = (props) => {
 var LoopSection = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
+  const ascii = motionDisabled(process.env);
   const [copiedVersion, setCopiedVersion] = createSignal(null);
   let copiedTimer;
   onCleanup(() => {
@@ -687,13 +702,15 @@ var LoopSection = (props) => {
   const railOffset = () => Math.max(0, done() - visibleHistory().length);
   const max = () => props.goal.loopMaxLoops;
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1);
-  const bar = () => renderBar(done(), max());
+  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii);
+  const filledBarText = () => bar().text.slice(0, bar().filled);
+  const emptyBarText = () => bar().text.slice(bar().filled);
   const durations = () => iterationDurations(history(), props.goal.setAt);
   const shares = () => durationShares(durations());
   const shareSuffix = (index) => shares()[index] === undefined ? "" : ` \xB7 ${shares()[index]}% of wall`;
   const pace = () => paceEstimate(durations(), max());
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt);
-  const spark = () => contextSparkline(history());
+  const spark = () => contextSparkline(history(), ascii);
   const mixSuffix = (index) => {
     const mix = mixes()[index];
     return mix ? ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}` : "";
@@ -767,7 +784,7 @@ var LoopSection = (props) => {
       get children() {
         var _el$10 = _$createElement("text");
         _$setProp(_el$10, "wrapMode", "none");
-        _$insert(_el$10, () => "\u2588".repeat(bar().filled));
+        _$insert(_el$10, filledBarText);
         _$effect((_$p) => _$setProp(_el$10, "fg", mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
         return _el$10;
       }
@@ -779,7 +796,7 @@ var LoopSection = (props) => {
       get children() {
         var _el$11 = _$createElement("text");
         _$setProp(_el$11, "wrapMode", "none");
-        _$insert(_el$11, () => "\u2591".repeat(BAR_CELLS - bar().filled));
+        _$insert(_el$11, emptyBarText);
         _$effect((_$p) => _$setProp(_el$11, "fg", theme().text.faint, _$p));
         return _el$11;
       }
@@ -1180,6 +1197,7 @@ var HistoryBlock = (props) => {
 // src/status-dialog.tsx
 var StatusDialogBody = (props) => {
   const theme = () => props.theme;
+  const ascii = motionDisabled(process.env);
   const mono = () => props.mono === true;
   const label = (text) => (() => {
     var _el$ = _$createElement2("text");
@@ -1394,7 +1412,7 @@ var StatusDialogBody = (props) => {
         },
         get children() {
           return (() => {
-            const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens);
+            const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens, CONTEXT_BAR_CELLS, ascii);
             const hot = () => meter().hot;
             const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
             return (() => {

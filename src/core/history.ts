@@ -9,13 +9,22 @@ export const BAR_CELLS = 18
 /** Width of the label column in the goal surfaces (detail dialog rows, history rail). */
 export const LABEL = 10
 
-/** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. */
-export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS): { filled: number; text: string } {
+/** Unicode bar pair — the default everywhere UTF-8 renders. */
+export const BAR_FILLED = "█"
+export const BAR_EMPTY = "░"
+/** ASCII bar pair — selected under NO_COLOR / TERM=dumb (the same predicate as reduced motion), where eighth-block glyphs are not guaranteed to exist. */
+export const BAR_FILLED_ASCII = "#"
+export const BAR_EMPTY_ASCII = "-"
+
+/** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. `ascii` swaps the pair for the same swap the sparkline does. */
+export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS, ascii: boolean = false): { filled: number; text: string } {
   const width = Math.max(1, Math.floor(cells))
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
   const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round((safeDone / safeMax) * width)))
-  return { filled, text: "█".repeat(filled) + "░".repeat(width - filled) }
+  const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED
+  const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY
+  return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) }
 }
 
 /** Caption under/near the bar, e.g. `v3 of at most 5 · 2 complete`. */
@@ -209,6 +218,12 @@ export function durationShares(durations: readonly number[]): number[] {
 }
 
 const SPARK_GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const
+/** ASCII level ramp for dumb terminals — ascending ink density, the same shape as eighth-blocks without the font requirement. */
+export const SPARK_GLYPHS_ASCII = [".", ":", "-", "=", "+", "*", "#", "@"] as const
+/** Gap in the sparkline: an unmeasurable arm renders as a void (space) in ASCII mode, `·` otherwise. */
+export const SPARK_GAP_ASCII = " "
+/** Truncation lead-in for the sparkline: `>` in ASCII mode, `…` otherwise. */
+export const SPARK_TRUNC_ASCII = ">"
 /** Bars the per-iteration context sparkline renders; older estimates fall off the left behind a leading … marker. */
 export const SPARK_MAX_CELLS = 16
 
@@ -230,7 +245,7 @@ export interface ContextSpark {
  * zero; a present-but-tiny estimate still renders `▁` (present data is not a gap). Entries without a
  * finite estimate render `·`. Returns undefined when NO entry carries an estimate — the caller omits the row.
  */
-export function contextSparkline(entries: readonly { readonly contextTokens?: number }[]): ContextSpark | undefined {
+export function contextSparkline(entries: readonly { readonly contextTokens?: number }[], ascii: boolean = false): ContextSpark | undefined {
   const estimates = entries.map((entry) =>
     typeof entry.contextTokens === "number" && Number.isFinite(entry.contextTokens) && entry.contextTokens >= 0 ? entry.contextTokens : undefined,
   )
@@ -247,14 +262,17 @@ export function contextSparkline(entries: readonly { readonly contextTokens?: nu
   }
   const window = estimates.slice(-SPARK_MAX_CELLS)
   const truncated = window.length < estimates.length
+  const ramp = ascii ? SPARK_GLYPHS_ASCII : SPARK_GLYPHS
+  const gap = ascii ? SPARK_GAP_ASCII : "·"
+  const truncatedMarker = ascii ? SPARK_TRUNC_ASCII : "…"
   const bars = window
     .map((value) => {
-      if (value === undefined) return "·"
-      if (peak === 0) return SPARK_GLYPHS[0]
-      return SPARK_GLYPHS[Math.min(7, Math.floor((value / peak) * 8))]!
+      if (value === undefined) return gap
+      if (peak === 0) return ramp[0]!
+      return ramp[Math.min(7, Math.floor((value / peak) * 8))]!
     })
     .join("")
-  return { bars: (truncated ? "…" : "") + bars, peak, latest, shown: present.length, truncated }
+  return { bars: (truncated ? truncatedMarker : "") + bars, peak, latest, shown: present.length, truncated }
 }
 
 export const CONTEXT_BAR_CELLS = 16
@@ -267,7 +285,7 @@ export const CONTEXT_HOT_RATIO = 0.8
  * threshold is disabled, so the caller renders the bare token count without a bar. `pct` is the
  * raw ratio × 100 and may exceed 100 when the estimate is past the threshold — honest over the neat.
  */
-export function contextMeter(size: number, capacity: number | undefined, cells: number = CONTEXT_BAR_CELLS): {
+export function contextMeter(size: number, capacity: number | undefined, cells: number = CONTEXT_BAR_CELLS, ascii: boolean = false): {
   filled: number
   text: string
   pct: number | undefined
@@ -277,13 +295,15 @@ export function contextMeter(size: number, capacity: number | undefined, cells: 
   const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0
   const width = Math.max(1, Math.floor(cells))
   const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0
-  if (!hasCapacity) return { filled: 0, text: "░".repeat(width), pct: undefined, hot: false, over: false }
+  const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED
+  const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY
+  if (!hasCapacity) return { filled: 0, text: emptyGlyph.repeat(width), pct: undefined, hot: false, over: false }
   const ratio = safeSize / (capacity as number)
   const pct = Math.round(ratio * 100)
   const filled = Math.min(width, Math.max(0, Math.round(ratio * width)))
   return {
     filled,
-    text: "█".repeat(filled) + "░".repeat(width - filled),
+    text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled),
     pct,
     hot: ratio >= CONTEXT_HOT_RATIO,
     over: ratio >= 1,

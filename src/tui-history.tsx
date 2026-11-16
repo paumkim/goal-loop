@@ -11,7 +11,7 @@ import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
-import { verdictAccentColor } from "./core/hud.ts"
+import { verdictAccentColor, motionDisabled } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
@@ -84,6 +84,8 @@ export const LoopSection = (props: {
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
+  // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb — the same predicate as reduced motion): bar and sparkline glyphs become ink-density ASCII, never broken boxes. Evaluated once per mount.
+  const ascii = motionDisabled(process.env)
   // In-modal acknowledgment: host toasts do not render above the /goal dialog, so a summary copy
   // flips a transient `✓ copied` on the line itself (same grammar as the dialog's footer button).
   const [copiedVersion, setCopiedVersion] = createSignal<number | null>(null)
@@ -112,13 +114,15 @@ export const LoopSection = (props: {
   const railOffset = () => Math.max(0, done() - visibleHistory().length)
   const max = () => props.goal.loopMaxLoops
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
-  const bar = () => renderBar(done(), max())
+  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii)
+  const filledBarText = () => bar().text.slice(0, bar().filled)
+  const emptyBarText = () => bar().text.slice(bar().filled)
   const durations = () => iterationDurations(history(), props.goal.setAt)
   const shares = () => durationShares(durations())
   const shareSuffix = (index: number) => (shares()[index] === undefined ? "" : ` · ${shares()[index]}% of wall`)
   const pace = () => paceEstimate(durations(), max())
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
-  const spark = () => contextSparkline(history())
+  const spark = () => contextSparkline(history(), ascii)
   const mixSuffix = (index: number) => {
     const mix = mixes()[index]
     return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
@@ -174,12 +178,12 @@ export const LoopSection = (props: {
         <box flexDirection="row" flexShrink={0}>
         <Show when={bar().filled > 0}>
           <text wrapMode="none" fg={mono() ? theme().text.base : theme().text.feedback.info.base}>
-            {"█".repeat(bar().filled)}
+            {filledBarText()}
           </text>
         </Show>
         <Show when={BAR_CELLS - bar().filled > 0}>
           <text wrapMode="none" fg={theme().text.faint}>
-            {"░".repeat(BAR_CELLS - bar().filled)}
+            {emptyBarText()}
           </text>
         </Show>
         </box>
