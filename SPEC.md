@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,7 +5129,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5194,7 +5194,7 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
 
@@ -5267,7 +5267,7 @@ line, the object carries a verifiable mark. None substitutes for another.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream EG — the dossier, sealed: the proofs ride the file (2026-11-16)
 
@@ -5416,7 +5416,7 @@ what it cannot prove. Plain `goal.dossier.seal` and `goal.dossier.export` are un
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=55 tests=1235.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
 
 ## Workstream EI — the review, in one file: every question git can answer (2026-11-16)
 
@@ -5479,4 +5479,61 @@ error — information is not accusation.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=56 tests=1253.
-<!-- spec-check files=57 tests=1270 -->
+<!-- spec-check files=58 tests=1287 -->
+
+## Workstream EJ — the spend ledger, one file (2026-11-16)
+
+Interpretation of the mouse-first clause: the dossier family says what the loop did — review asks
+git three questions, attest re-checks a seal, the record's own bytes ship in three flavors — but
+no artifact answers what the loop cost. This iteration writes the cost story:
+`goal.dossier.spend` (palette only: no chord, no footer furniture) writes ONE O_EXCL markdown
+spend report — one row per landed iteration carrying the harness's usage delta (cost, tokens
+in/out/reasoning, cache read/write, tool calls, landing sha), then totals over exactly the
+measured iterations, then an honesty footer. Exact figures only; no rounding anywhere — the
+report is a receipt, not a summary.
+
+499. src/core/spend-ledger.ts — new pure module, no JSX, no theme. `spendLedgerName(nowMs,
+     attempt?)` stamps `goal-spend-ledger-<YYYYMMDD-HHMMSS>[-n].md` (a non-finite clock stamps
+     the epoch; deterministic). `buildSpendLedger(goal, nowMs)` renders the title (loop vs plain
+     record), a self-describing generated-stamp line, the quoted objective (or condition), then
+     `## Per-iteration spend (N landed iterations)` — iteration · ended (ISO) · spend (formatCost)
+     · in · out · reasoning · cache read · cache write · tools · sha — one row per landed
+     `LoopEntry` — then `## Totals` (iterations recorded, turns, tool calls, spend across
+     measured iterations with the M-of-N partial qualifier, token and cache sums over the measured
+     iterations only), then the `---` honesty footer. The one measurement rule the module and its
+     totals share: an iteration counts as measured only when its full usage snapshot is present
+     and every field is finite and >= 0 — a partial or corrupt snapshot degrades the whole
+     iteration to unmeasured rather than fabricating the missing cells. Exact figures only —
+     formatTokens stays out of it. `exportSpendLedger(goal, nowMs, dir)` writes O_EXCL with
+     `MAX_EXPORT_ATTEMPTS` collision retries, never overwrites, and throws with the
+     filesystem's own message — the target is always the existing caller-named directory.
+     `spendSummaryLine` is the toast's chrome-free one-liner (no landed iterations / nothing
+     measured (0 of N) / M of N partial / complete).
+500. src/tui.tsx — `spendLedgerAction` + palette command `goal.dossier.spend`
+     ("Goal: export the spend ledger (markdown report)"). Writes into `process.cwd()`; toasts
+     `spend ledger written` (success) / `spend ledger written (partial)` / `nothing to report`
+     (warning for the partial, no-measurements and zero-iteration arms — information is not an
+     error); write failures toast error with the filesystem's own message. Enabled when a goal
+     is live, like the sealed twin. No footer chord, no dialog row, the palette is the surface.
+501. Tests: +17 unit (spend-ledger.test.ts: `spendLedgerName` stem/suffix/epoch and its
+     independence from the dossier/review/sealed stems; exact-figure rows with the ISO stamp;
+     totals summing measured iterations with the M-of-N partial qualifier and the "not inventing
+     numbers" line; an unmeasured row renders dashes and never $0.00; a non-finite field degrades
+     its whole iteration to unmeasured; an empty record and a non-loop record render honest
+     sentences, no fabricated figures or tables; nothing-measured never claims $0.00; the session
+     id never appears; free text rides the quote helper and cannot forge structure; a zero-cost
+     measurement still counts and renders $0; byte-for-byte determinism; `exportSpendLedger`
+     writes one new file (path/bytes/attempts), the written bytes match a fresh build of the same
+     clock, a pre-existing stem survives and suffixes `-2`, a missing directory throws; every
+     `spendSummaryLine` arm) + re-pinned pack count 58. Tests: 1287 pass, 0 fail (51 files).
+502. Honest limits: the figures are the record's own usage deltas as attributed by the harness
+     (arm → advance); cost is the host's reported usage, not a re-price; nothing was estimated,
+     sampled, probed, or re-verified — generating the ledger re-checks nothing; an unmeasured
+     iteration renders — and its figures are excluded from every total, never summed as 0;
+     partial measurement is reported as partial; absence never reads as $0.00 (a true zero-cost
+     measurement does, and renders $0); the record's free text is quoted and the session id is
+     omitted; headless test-renderer layer, live TUI unverifiable.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=57 tests=1270.
+<!-- spec-check files=58 tests=1287 -->
