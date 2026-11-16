@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=544 -->
+<!-- spec-check files=41 tests=551 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2090,3 +2090,9 @@ Marker bumped `files=41 tests=526` → `files=41 tests=537` (test-only addition;
 212. New `test/package-integrity.test.ts` (7 tests) pins `package.json` to the tarball npm would really publish: every `files` entry exists on disk; every `exports` target exists; `bin/opencode-goal.mjs` exists and carries the executable bit; `npm pack --dry-run --json` lists only shipped-file-on-disk paths, contains `LICENSE`/`README.md`/`package.json`/the entrypoints/`dist/tui.js`/`packages/coordinator/*`, and zero forbidden artefacts (test/, scripts/, .github/, .term/, worktrees/, node_modules/, `*.test.ts[x]`, `opencode.json[c]`); the real `npm pack` file list is byte-identical to the dry-run list; `RELEASE-CHECKLIST.md`/`CHANGELOG*` are absent; and the extracted tarball loads through the exact `bun run check:tui` path (`scripts/tui-load-check.ts <extracted>/package/tui.ts` prints `ok: loaded TUI plugin`). Packs use `--ignore-scripts` (prepublishOnly must not re-run the suite mid-test) and temp dirs inside the repo are removed in `afterEach`.
 213. No source behavior changed; the work is test-only. Mutation-verified: adding `"test"` to `files` fails the leak test; reverting passes. This closes the loop on spec-check's tarball coverage — the counts are pinned by spec-check, the contents now pinned here.
 Marker bumped `files=41 tests=537` → `files=41 tests=544` (test-only addition; no shipped file changed).
+
+## Workstream BP — docs JSON examples pinned to PLUGIN_SPEC (2026-11-16)
+
+214. New `test/plugin-json.test.ts` (7 tests) pins every JSON example in `README.md` and `docs/install.html` to reality: both files contain a JSON options block, both parse (README fences are paired by a line state machine because closing bare fences are indistinguishable from openings lexically; HTML uses `<pre><code>`/`<code>` with entity unescaping); the README block parses to `{ plugins: [{ package: PLUGIN_SPEC }] }`; every fence/block naming a specifier contains `PLUGIN_SPEC` verbatim; every occurrence of the `github:paumkim/opencode-goalv2#…` specifier anywhere in either file equals `PLUGIN_SPEC` (README ≥2, install.html ≥4); and `PLUGIN_SPEC` equals `github:paumkim/opencode-goalv2#v` + `package.json` version.
+215. No source behavior changed; the work is test-only. Mutation-verified: rewriting one specifier occurrence in install.html to `#v9.9.9` fails the specifier-pins test; reverting passes. Docs that instruct the user to paste the example into `opencode.json` now cannot rot silently against the installer.
+Marker bumped `files=41 tests=544` → `files=41 tests=551` (test-only addition; no shipped file changed).
