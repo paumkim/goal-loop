@@ -1845,6 +1845,17 @@
       "submittedAt": "2026-11-16T11:33:36Z",
       "mergedAt": "2026-11-16T11:34:12.000Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-elsewhere": {
+      "agent": "orchestrator",
+      "paths": "src/core/wire.ts src/status-dialog.tsx src/tui.tsx test/tui-render.test.tsx SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-dialog-elsewhere",
+      "worktree": "worktrees/wt-tui-dialog-elsewhere",
+      "status": "done",
+      "createdAt": "2026-11-16T11:38:55Z",
+      "submittedAt": "2026-11-16T11:45:51Z",
+      "mergedAt": "2026-11-16T11:47:16.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
