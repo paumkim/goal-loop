@@ -8,6 +8,7 @@ import { Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend } from "./core/format.ts"
+import { remediationFor } from "./core/hud.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
@@ -20,6 +21,8 @@ export const StatusDialogBody = (props: {
   elapsedMs: () => number
   /** Reference clock for relative timestamps. */
   nowMs: () => number
+  /** When set, clicking the condition row copies the full condition via this callback (host wires clipboard + toast). */
+  onCopyCondition?: (condition: string) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const label = (text: string) => (
@@ -42,6 +45,17 @@ export const StatusDialogBody = (props: {
         ? theme().text.feedback.info.base
         : theme().text.muted
   const g = () => props.goal
+  const remediation = () => {
+    const goal = g()
+    return goal ? remediationFor(goal) : undefined
+  }
+  const copyCondition = (condition: string) => {
+    try {
+      props.onCopyCondition?.(condition)
+    } catch {
+      // Best-effort.
+    }
+  }
   return (
     <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
       {(goal) => (
@@ -55,8 +69,25 @@ export const StatusDialogBody = (props: {
               {goal().evaluating ? " · checking" : goal().waiting ? " · waiting" : ""}
             </text>
           </box>
-          {field("goal", goal().condition, true)}
+          {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
+          <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)}>
+            {label("goal")}
+            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={props.onCopyCondition ? TextAttributes.UNDERLINE : undefined}>
+              {goal().condition}
+            </text>
+          </box>
           <Show when={goal().reason}>{(reason) => field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
+          {/* failure is a first-class screen: exact remediation, never a vague warning */}
+          <Show when={remediation()}>
+            {(fix) => (
+              <box flexDirection="row" gap={2}>
+                {label("fix")}
+                <text wrapMode="word" flexGrow={1} fg={fix().tone === "error" ? (theme().text.feedback.error?.base ?? theme().text.feedback.warning.base) : theme().text.feedback.warning.base}>
+                  {fix().text}
+                </text>
+              </box>
+            )}
+          </Show>
           <Show when={goal().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
           <Show when={goal().loopEnabled}>
             <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} />

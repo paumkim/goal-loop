@@ -13,10 +13,11 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, Show } from "solid-js"
-import { formatDurationCoarse, GOAL_GLYPH } from "./core/format.ts"
-import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { GOAL_GLYPH } from "./core/format.ts"
+import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
-import { renderPips } from "./core/history.ts"
+import { HudCard, HudButton, hudCardRows, type HudCardTheme } from "./hud-card.tsx"
+import { pillModel } from "./core/hud.ts"
 import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -70,7 +71,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -127,7 +128,16 @@ export default Plugin.define({
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
-            <text fg={context.theme.text.faint}>up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+            <box flexDirection="row" gap={1}>
+              <text fg={context.theme.text.faint} wrapMode="none">up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+              <box flexGrow={1} />
+              <HudButton theme={context.theme as unknown as HudCardTheme} label="copy condition" onPress={() => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)} />
+              <HudButton theme={context.theme as unknown as HudCardTheme} label="clear goal" onPress={() => {
+                try {
+                  void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
+                } catch {}
+              }} />
+            </box>
           </ClampedColumn>
         ),
         () => {
@@ -261,21 +271,40 @@ export default Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
     }, TICK_MS)
 
-    // Compact indicator painted on the empty left side of the host's jump-to-latest row, the full-width
-    // 1-row strip directly above the input prompt. The host renders that row with
-    // `justifyContent="flex-end"` (the pill hugs the right edge) inside a `flexShrink={0}` wrapper whose
-    // top edge sits directly under it, and mounts `session.composer.top` inside that wrapper as the first
-    // contribution. Every opentui box is `position: relative` by default, so a 1-row absolute box with
-    // `top={-1}` anchored to our slot's parent wraps across the jump row itself: zero added rows, zero
-    // layout shift, pill untouched on the right. The default `overflow: visible` lets the negative top paint
-    // outside the wrapper, and the wrapper paints after the jump row, so the text lands on top of it.
-    // The host publishes no slot for the jump row, so this reuses the documented `session.composer.top`
-    // claim; layout and sizing of the row itself stay with the host. The slot's input carries no `mode`,
-    // so the indicator no longer hides in shell mode. Click dispatches `goal.status`, the same convention
-    // the old `prompt.footer` segment used to open the detail dialog.
+    // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
+    // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. Left click
+    // toggles the compact HUD card (level b — bordered floating panel above the jump row); right click
+    // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). The card is
+    // dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.
+    const [getHudSession, setHudSession] = createSignal<string | undefined>(undefined)
+    const copyToClipboard = (text: string, sessionID?: string) => {
+      try {
+        const ok = context.renderer.copyToClipboardOSC52(text)
+        safeToast({
+          title: ok ? "condition copied" : "copy unavailable",
+          message: ok ? "goal condition is on the clipboard" : "the terminal refused OSC52 clipboard access",
+          variant: ok ? "success" : "warning",
+          duration: 3_000,
+          sessionID,
+        })
+      } catch (error) {
+        safeToast({ title: "copy failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
+    const openDashboard = (sessionID: string | undefined) => {
+      if (!sessionID) return
+      try {
+        const g = entries()[sessionID]?.goal
+        setHudSession(undefined)
+        showStatusDialog(sessionID, g?.condition ?? "goal")
+      } catch {
+        // Dialog reporting handles its own errors.
+      }
+    }
     context.ui.slot({
       append: "session.composer.top",
       render: (props) => {
+        const [hovered, setHovered] = createSignal(false)
         const goal = createMemo(() => {
           try {
             return live(props.sessionID)
@@ -283,44 +312,108 @@ export default Plugin.define({
             return undefined
           }
         })
-        const label = createMemo(() => {
+        const elapsed = () => {
           try {
             const g = goal()
-            if (!g || !props.sessionID) return ""
-            const entry = entries()[props.sessionID]
-            const elapsed = elapsedOf(g, entry?.receivedAt, now())
-            const state = g.status === "paused" ? "paused" : g.evaluating ? "checking" : g.waiting ? "waiting" : "active"
-            const turns = g.turns > 0 ? ` · ${g.turns} turn${g.turns === 1 ? "" : "s"}` : ""
-            if (g.loopEnabled) {
-              const cap = typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? `/${g.loopMaxLoops}` : ""
-              const pips = renderPips(g.loopHistory?.length ?? 0, g.loopMaxLoops)
-              const compactPending = g.loopCompact && !g.loopCompact.landedAt ? g.loopCompact : undefined
-              const compacting = compactPending ? ` · compact pending${compactPending.misses > 0 ? ` (${compactPending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
-              return `${GOAL_GLYPH} loop · v${g.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}`
-            }
-            return `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`
+            if (!g || !props.sessionID) return 0
+            return elapsedOf(g, entries()[props.sessionID]?.receivedAt, now())
           } catch {
-            return ""
+            return 0
           }
-        })
-        const color = () => {
+        }
+        const pill = () => {
           try {
-            return goal()?.status === "paused" ? context.theme.text.feedback.warning.base : goal()?.evaluating ? context.theme.text.feedback.info.base : context.theme.text.muted
+            const g = goal()
+            return g ? pillModel(g, elapsed()) : undefined
           } catch {
-            return context.theme.text.muted
+            return undefined
           }
+        }
+        const color = () => {
+          const tone = pill()?.tone
+          if (tone === "paused" || tone === "hot") return context.theme.text.feedback.warning.base
+          if (tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
+          return context.theme.text.muted
+        }
+        const cardFor = () => {
+          const g = goal()
+          return g && getHudSession() === props.sessionID ? g : undefined
+        }
+        const cardRows = () => {
+          const g = cardFor()
+          return g ? hudCardRows(g) : 0
+        }
+        const toggleHud = () => {
+          try {
+            setHudSession((current) => (props.sessionID && current === props.sessionID ? undefined : props.sessionID))
+          } catch {}
         }
         return (
           <Show when={goal()}>
-            <box position="absolute" top={-1} left={0} height={1} paddingLeft={1} flexDirection="row" onMouseUp={() => { try { if (props.sessionID) context.keymap.dispatch("goal.status") } catch {} }}>
-              <text fg={color()} wrapMode="none">
-                {label()}
+            <box
+              position="absolute"
+              top={-1}
+              left={0}
+              height={1}
+              paddingLeft={1}
+              flexDirection="row"
+              onMouseOver={() => setHovered(true)}
+              onMouseOut={() => setHovered(false)}
+              onMouseUp={(event) => {
+                try {
+                  if (!props.sessionID) return
+                  // Right click opens the dashboard directly; everything else toggles the card.
+                  if (event.button === 2) openDashboard(props.sessionID)
+                  else toggleHud()
+                } catch {}
+              }}
+            >
+              <text fg={color()} wrapMode="none" attributes={hovered() ? TextAttributes.UNDERLINE : undefined}>
+                {pill()?.text ?? ""}
               </text>
             </box>
+            <Show when={cardFor()}>
+              {(g) => (
+                <box position="absolute" top={-cardRows()} left={0} height={cardRows()} zIndex={10}>
+                  <HudCard
+                    goal={g()}
+                    theme={context.theme as unknown as HudCardTheme}
+                    elapsedMs={elapsed}
+                    onClose={() => setHudSession(undefined)}
+                    onDetails={() => openDashboard(props.sessionID)}
+                    onClear={() => {
+                      try {
+                        if (props.sessionID) void rpc.clear({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})
+                      } catch {}
+                      setHudSession(undefined)
+                    }}
+                    onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
+                  />
+                </box>
+              )}
+            </Show>
           </Show>
         )
       },
     })
+
+    // Esc dismisses the compact HUD card. Same posture as the dialog scroll layer: only enabled
+    // while the card is open, so it never intercepts prompt editing; the host's modal layers own Esc otherwise.
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 100,
+      enabled: () => getHudSession() !== undefined,
+      commands: [
+        {
+          id: "goal.hud.dismiss",
+          title: "Goal HUD: dismiss",
+          group: "Goal",
+          bind: "escape",
+          enabled: () => getHudSession() !== undefined,
+          run: () => { try { setHudSession(undefined) } catch {} },
+        },
+      ],
+    }))
 
     // Scrolling keys for the status dialog. Plain arrow keys are safe here: the commands are only
     // enabled while the dialog is open, so they never intercept prompt editing. Closing the dialog is

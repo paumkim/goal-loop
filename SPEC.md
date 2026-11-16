@@ -1,11 +1,17 @@
 # SPEC — current behavior of opencode-goal
 
-Status: current as of v1.1.0. The TUI indicator renders natively: a compact segment painted on the
-empty left side of the host's jump-to-latest row (the 1-row strip directly above the input prompt, claimed through the host's
-`session.composer.top` slot with a zero-flow absolute box), state transitions surface as
-host toasts, and the `/goal` detail view is a host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal,
-xlarge centered sizing) built from theme tokens only (see `src/tui.tsx`). The only exception to "host-owned
-layout" is that one 1-row absolute box; no custom chrome, no custom colors.
+Status: current as of v1.1.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
+a compact segment painted on the empty left side of the host's jump-to-latest row (the 1-row strip directly
+above the input prompt, claimed through the host's `session.composer.top` slot with a zero-flow absolute box);
+left click toggles the card, right click opens the detail view. (b) A compact HUD card: a bordered floating
+panel painted above the jump row (absolute box, theme tokens only) with the condition (click to copy), the live
+state row, the last verdict, failure-first-class remediation when the loop is hot or failed, and clickable
+`details` / `clear goal` / `esc` buttons; Esc dismisses. (c) The `/goal` detail view: a host dialog
+(`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a clickable
+condition row, the same remediation block, and clickable `copy condition` / `clear goal` footer buttons.
+State transitions surface as host toasts (see `src/tui.tsx`, `src/hud-card.tsx`, `src/core/hud.ts`). The
+exceptions to "host-owned layout" are the two absolute boxes (pill, card) of the slot claim; toasts, dialog
+chrome and sizing stay the host's.
 The project `opencode.json` points at the local checkout.
 
 This file is the acceptance spec for the plugin as it ships today. The how and why live in README.md and
@@ -388,7 +394,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=595 -->
+<!-- spec-check files=43 tests=615 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

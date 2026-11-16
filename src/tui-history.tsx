@@ -22,6 +22,8 @@ export interface HistoryTheme {
     readonly feedback: {
       readonly info: { readonly base: ColorInput }
       readonly warning: { readonly base: ColorInput }
+      /** Present on the real theme; optional so minimal test themes still fit. Falls back to warning. */
+      readonly error?: { readonly base: ColorInput }
     }
   }
 }
@@ -154,19 +156,22 @@ export const LoopSection = (props: {
           )
         }}
       </Show>
-      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector */}
+      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced */}
       <For each={history()}>
-        {(entry, index) => (
-          <box flexDirection="column">
-            <box flexDirection="row" gap={2}>
-              {label(theme(), `v${entry.version}`)}
-              <text wrapMode="none" flexShrink={0} fg={theme().text.feedback.info.base}>
-                ✓
-              </text>
-              <text wrapMode="none" fg={theme().text.base}>
-                {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`}
-              </text>
-            </box>
+        {(entry, index) => {
+          const zeroTools = entry.toolCalls === 0
+          const rowColor = zeroTools ? theme().text.faint : theme().text.base
+          return (
+            <box flexDirection="column">
+              <box flexDirection="row" gap={2}>
+                {label(theme(), `v${entry.version}`)}
+                <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : theme().text.feedback.info.base}>
+                  {zeroTools ? "○" : "✓"}
+                </text>
+                <text wrapMode="none" fg={rowColor}>
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`}
+                </text>
+              </box>
             <Show when={entry.summary.trim().length > 0}>
               <box flexDirection="row" gap={2}>
                 <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
@@ -178,7 +183,8 @@ export const LoopSection = (props: {
               </box>
             </Show>
           </box>
-        )}
+          )
+        }}
       </For>
       {/* the running iteration closes the rail */}
       <box flexDirection="row" gap={2}>
