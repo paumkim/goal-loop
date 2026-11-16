@@ -250,7 +250,20 @@ function truncate(text, max, ellipsis = "\u2026") {
   const flat = text.replace(/\s+/g, " ").trim();
   if (stringWidth(flat) <= max)
     return flat;
-  const budget = max - stringWidth(ellipsis);
+  const ellipsisWidth = stringWidth(ellipsis);
+  if (ellipsisWidth >= max) {
+    let fitted = "";
+    let used = 0;
+    for (const { segment } of segmenter2.segment(ellipsis)) {
+      const w = stringWidth(segment);
+      if (used + w > max)
+        break;
+      fitted += segment;
+      used += w;
+    }
+    return fitted;
+  }
+  const budget = max - ellipsisWidth;
   let out = "";
   let used = 0;
   for (const { segment } of segmenter2.segment(flat)) {

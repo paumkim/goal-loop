@@ -287,6 +287,10 @@ describe("truncate", () => {
   test("max of 1 yields just the ellipsis; max of 0 yields empty", () => {
     expect(truncate("hello", 1)).toBe("…")
     expect(truncate("hello", 0)).toBe("")
+    // an ellipsis wider than the cap itself degrades to whole graphemes of the ellipsis — never past max
+    expect(truncate("hello", 2, "...")).toBe("..")
+    expect(truncate("hello", 1, "...")).toBe(".")
+    expect(stringWidth(truncate("hello", 2, "..."))).toBeLessThanOrEqual(2)
   })
 
   test("whitespace collapses before measuring", () => {
