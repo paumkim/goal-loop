@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=50 tests=1110 -->
+<!-- spec-check files=51 tests=1134 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,4 +4990,74 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=50 tests=1110 -->
+<!-- spec-check files=51 tests=1134 -->
+
+## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
+
+Interpretation of the mouse-first clause: the dossier paints the whole record, but a reader who
+knows the one word they need still scans a wall of text for it — the one tool every long record
+needs was missing. This iteration adds a find spotlight to the dossier tab: a `find` row, the
+same click grammar as the copy and save rows, toggles an inline bar (input, running count, a
+close button); matching lines paint as segmented text with the matches bold — the NO_COLOR
+contract keeps the signal in weight, never hue — non-matching lines demote to faint; blank query
+paints the document exactly as ever; leaving the dossier tab closes and resets the bar so a
+stale query can never greet the next visit. No chord, no palette, no footer furniture — the row
+is the discovery surface, the way the dossier's other doors are.
+
+466. src/core/find.ts — new pure module, no I/O, no JSX, no theme. `findMatches(texts, query)`
+     is a literal, case-insensitive substring scan per line — the query is never reinterpreted
+     as a pattern; a blank query matches nothing (it is not "match everything"). `countMatches`
+     counts real occurrences, non-overlapping, left to right — "3 matches" means three places
+     the record says the word, not three matching lines. `segmentLine` splits one line into
+     segments that always tile the original text in order; when case folding preserves string
+     length it certifies exact offsets, and when it does not (ß→ss, İ→i̇) the honest fallback
+     paints a containing line as one whole match instead of misaligning a highlight — the copy
+     is never dressed up with guessed offsets. `matchLabel` gives the count its words: "1
+     match" / "N matches" / "no matches" — never a bare numeral. Unit-tested in
+     test/find.test.ts.
+467. src/status-dialog.tsx — the dossier view grows the find row between the save row and the
+     outline rail: same hover affordance, same left-click grammar, `stopPropagation` on the
+     power button only; the bar mounts one row below it (an inline `<input>` with a
+     `type to find...` placeholder, a running `N matches`/`no matches` label, a `close`
+     button); opening focuses the input via a ref, closing unmounts the bar and resets the
+     query (the reset makes a stale query impossible by construction); leaving the dossier tab
+     force-closes and resets the bar. Matching lines paint segmented — matches ride `<strong>`
+     (weight, the NO_COLOR contract) — non-matching lines demote to faint wholesale; un-searched
+     paint is byte-identical to before. The mono arm holds (weight alone carries the
+     highlight); the 80-column floor and Unicode-safe glyphs are untouched.
+468. Two paint-level defects the headless renderer forced into the open, fixed honestly.
+     (a) opentui's hit grid awards every cell to the last render pass over it — not to layout
+     order — and the dossier rows mounted after the find row in that order, their single-line
+     word-wrap text rects measuring two rows tall and claiming the find row's cells; a left
+     click on `find in the record` landed on the inert copy row and died. The find row now
+     sorts last in the claim order (`zIndex={1}`) so it wins its own row's cells;
+     (b) the find arms were computed at row creation — fg, attributes and children were
+     creation-time constants, so the count label advanced while the document never repainted:
+     a split-brain "the feature is on" with a static record. Every expression in the row now
+     reads the find signals, so the same `<text>` tracks the query — un-searched, dimmed and
+     segmented paint are one element's reactive props, and the row always repaints as the bar
+     fills. The copy and save rows were converted from `<Show>` to plain conditionals in the
+     same pass (eager mount, same visual) to remove the lazy-mount ordering from this class of
+     bug. The outline rail and the save acknowledgment keep their existing mount behavior —
+     they overlap nothing.
+469. Tests: +18 unit (find.test.ts: literal scan, case insensitivity, blank-query silence,
+     occurrence counting, segment tiling incl. fold-length drift across ß/İ/µ, count/label
+     words) + 6 interactive (tui-render.test.tsx: the row paints, the toggle opens and closes
+     and resets, typing filters and bolds the matches (weight asserted via captureSpans), a
+     zero-occurrence query demotes the document to faint and says `no matches`, the close
+     button clears and unmounts, leaving the dossier tab resets, the mono arm holds the
+     highlight). Two dossier full-frame snapshots re-recorded — the find row is new chrome by
+     design, added to the dossier frames, byte-identical elsewhere. Package integrity
+     re-pinned: the pack grows by one shipped file (50 → 51); the `paths.length` pin moves in
+     the same commit. Tests: 1134 pass, 0 fail (44 files).
+470. Honest limits: matching is a literal substring scan — no regex, no fuzzy match, no
+     whole-word mode; the case-fold-length-drift arm paints a whole containing line as one
+     match rather than a misaligned highlight; the count counts occurrences in the rendered
+     document, not in the copy payload; verification is at the headless test-renderer layer
+     (hit-test coordinates, captured spans) — live-TUI behaviour remains unverifiable. The
+     inert unwired rows stay inert; the bar does not auto-scroll the record — the spotlight
+     finds, the scrollbox scrolls.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
+<!-- spec-check files=51 tests=1134 -->

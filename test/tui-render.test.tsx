@@ -2014,3 +2014,147 @@ describe("verdict trail as a control (mouse — the timeline scrubs, not just re
     await setup.renderer.destroy()
   })
 })
+
+/** Locate the first occurrence of `needle` in the painted frame — row index is the y cell, column is the x cell. */
+const findRow = (frame: string, needle: string): { x: number; y: number } | undefined => {
+  const lines = frame.split("\n")
+  for (let y = 0; y < lines.length; y++) {
+    const x = lines[y]!.indexOf(needle)
+    if (x !== -1) return { x, y }
+  }
+  return undefined
+}
+
+describe("StatusDialogBody — find in the record (the dossier spotlight)", () => {
+  const dossierProps = () => ({ goal: loopedGoal(), fallback: "fb", theme, elapsedMs: () => 1000 * 60 * 12, nowMs: () => now, view: () => "dossier" as const })
+
+  test("the dossier tab paints a find row; the bar is closed and resets on toggle", async () => {
+    const setup = await testRender(() => <StatusDialogBody {...dossierProps()} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("find in the record")
+    expect(frame).not.toContain("type to find")
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    const opened = setup.captureCharFrame()
+    expect(opened).toContain("hide find")
+    expect(opened).toContain("type to find...")
+    expect(opened).toContain("no matches")
+    // one click while open hides the bar and clears the query
+    const hideAt = findRow(opened, "hide find")!
+    await setup.mockMouse.click(hideAt.x + 2, hideAt.y)
+    await setup.renderOnce()
+    const closed = setup.captureCharFrame()
+    expect(closed).toContain("find in the record")
+    expect(closed).not.toContain("type to find")
+    expect(closed).not.toContain("no matches")
+    await setup.renderer.destroy()
+  })
+
+  test("typing into the open bar filters the document and boldens the matches (count rides the same query)", async () => {
+    const setup = await testRender(() => <StatusDialogBody {...dossierProps()} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    await setup.mockInput.typeText("iteration", 5)
+    await setup.renderOnce()
+    const filtered = setup.captureCharFrame()
+    expect(filtered).not.toContain("type to find")
+    expect(filtered).toMatch(/[1-9]\d* matches/)
+    // the matches paint bold; weight is the NO_COLOR contract for the highlight
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const emphatized = spans.filter((span) => span.text === "iteration" && (span.attributes & TextAttributes.BOLD) !== 0)
+    expect(emphatized.length).toBeGreaterThan(0)
+    await setup.renderer.destroy()
+  })
+
+  test("a query with no occurrences demotes the whole document to faint and says so", async () => {
+    const setup = await testRender(() => <StatusDialogBody {...dossierProps()} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    await setup.mockInput.typeText("zzz-no-such-token", 5)
+    await setup.renderOnce()
+    const filtered = setup.captureCharFrame()
+    expect(filtered).toContain("no matches")
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const title = spans.find((span) => span.text === "Goal loop dossier")
+    expect(title).toBeDefined()
+    expect((title!.fg as RGBA).equals(RGBA.fromHex("#6f6f6f"))).toBe(true)
+    await setup.renderer.destroy()
+  })
+
+  test("the close button clears the query and unmounts the bar", async () => {
+    const setup = await testRender(() => <StatusDialogBody {...dossierProps()} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    await setup.mockInput.typeText("iteration", 5)
+    await setup.renderOnce()
+    const opened = setup.captureCharFrame()
+    expect(opened).toMatch(/[1-9]\d* matches/)
+    const closeAt = findRow(opened, "close")!
+    await setup.mockMouse.click(closeAt.x + 1, closeAt.y)
+    await setup.renderOnce()
+    const closed = setup.captureCharFrame()
+    expect(closed).toContain("find in the record")
+    expect(closed).not.toContain("no matches")
+    expect(closed).not.toMatch(/[1-9]\d* matches/)
+    await setup.renderer.destroy()
+  })
+
+  test("leaving the dossier tab unmounts and resets the bar; coming back greets a fresh row", async () => {
+    const Stateful = () => {
+      const [view, setView] = createSignal<"overview" | "ledger" | "dossier">("dossier")
+      return <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => view()} onViewChange={(v) => setView(v)} />
+    }
+    const setup = await testRender(() => <Stateful />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    await setup.mockInput.typeText("iteration", 5)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toMatch(/[1-9]\d* matches/)
+    // leave to the ledger tab — the find bar must not ride the record over there
+    const ledgerAt = findRow(setup.captureCharFrame(), "ledger")!
+    await setup.mockMouse.click(ledgerAt.x + 1, ledgerAt.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame).not.toContain("type to find")
+    expect(frame).not.toContain("no matches")
+    // back to the dossier — the row is there, closed, query reset
+    const dossierAt = findRow(frame, "dossier")!
+    await setup.mockMouse.click(dossierAt.x + 1, dossierAt.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame).toContain("find in the record")
+    expect(frame).not.toContain("type to find")
+    await setup.renderer.destroy()
+  })
+
+  test("the find arm holds under mono (weight alone carries the highlight)", async () => {
+    const setup = await testRender(() => <StatusDialogBody {...dossierProps()} mono={true} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findRow(frame, "find in the record")!
+    await setup.mockMouse.click(at.x + 2, at.y)
+    await setup.renderOnce()
+    await setup.mockInput.typeText("iteration", 5)
+    await setup.renderOnce()
+    const filtered = setup.captureCharFrame()
+    expect(filtered).toMatch(/[1-9]\d* matches/)
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const emphatized = spans.filter((span) => span.text === "iteration" && (span.attributes & TextAttributes.BOLD) !== 0)
+    expect(emphatized.length).toBeGreaterThan(0)
+    await setup.renderer.destroy()
+  })
+})

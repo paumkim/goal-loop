@@ -4,10 +4,11 @@
  * content: state line, wrapped condition/evaluator/spend rows, and the history sections. Everything is
  * presentational, rendered from the live snapshot passed in by the caller; theme tokens only.
  */
-import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { TextAttributes } from "@opentui/core"
+import { TextAttributes, type InputRenderable, type ColorInput } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
+import { findMatches, countMatches, segmentLine, matchLabel } from "./core/find.ts"
 import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
@@ -141,6 +142,27 @@ export const StatusDialogBody = (props: {
   const dossierRows = createMemo(() => (dossierText() === undefined ? [] : dossierLines(dossierText()!)))
   // The dossier outline rail: one chip per `## ` section of the rendered document. Only painted when the host wires onCopyDossierSection.
   const outline = createMemo(() => (dossierText() === undefined ? [] : dossierOutline(dossierText()!)))
+  // Find-in-record — the dossier tab's live spotlight. Mouse-first: a `find` row toggles the find bar (an inline input, a running count, and a close button); closing unmounts the bar and resets the query, so a stale query can never ride a hidden bar. While the query is non-blank, matching lines paint as segmented text (matches bold in the feedback tone — weight is the NO_COLOR contract) and non-matching lines demote to faint. A blank query paints the document exactly as it ever did. No auto-scroll, no guessed offsets — the record scrolls under the host's scrollbox and the spotlight does the finding.
+  const [findOpen, setFindOpen] = createSignal(false)
+  const [findQuery, setFindQuery] = createSignal("")
+  const [findRef, setFindRef] = createSignal<InputRenderable | undefined>(undefined)
+  const [findHovered, setFindHovered] = createSignal(false)
+  const [findCloseHovered, setFindCloseHovered] = createSignal(false)
+  const findQueryNow = () => (findOpen() ? findQuery() : "")
+  // Per-line match flags and the running occurrence count, computed from the same classified lines the paint consumes — the count can never disagree with the highlight.
+  const findLineMatch = createMemo(() => findMatches(dossierRows().map((line) => line.text), findQueryNow()))
+  const findCount = createMemo(() => countMatches(dossierRows().map((line) => line.text), findQueryNow()))
+  // Focus the input whenever the bar opens — typing lands immediately, no click first. Unfocused when closed; the bar is unmounted on close anyway.
+  createEffect(() => {
+    if (findOpen()) findRef()?.focus()
+  })
+  // Leaving the dossier tab always closes and resets the find bar — a stale query can never greet the next visit.
+  createEffect(() => {
+    if (!dossier()) {
+      setFindOpen(false)
+      setFindQuery("")
+    }
+  })
   // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter.
   const loopPosition = (goal: GoalSnapshot): string => {
     if (!goal.loopEnabled) return ""
@@ -288,46 +310,59 @@ export const StatusDialogBody = (props: {
       // Best-effort.
     }
   }
-  // The dossier view's paint grammar: weight and tone carry meaning, never hue alone; the words are the NO_COLOR contract. Structural markers were lifted by the classifier — what paints here is the record.
-  const dossierRow = (line: { kind: DossierLineKind; text: string }): JSX.Element => {
+  // The find bar's toggle and close — one mouse grammar, both directions. Closing unmounts the bar and resets the query so a stale query can never ride a hidden bar. No chord, no footer furniture; the row is the discovery surface.
+  const toggleFind = () => {
+    if (findOpen()) {
+      setFindQuery("")
+      setFindOpen(false)
+      return
+    }
+    setFindOpen(true)
+  }
+  const closeFind = () => {
+    setFindQuery("")
+    setFindOpen(false)
+  }
+  // The dossier view's paint grammar: weight and tone carry meaning, never hue alone; the words are the NO_COLOR contract. Structural markers were lifted by the classifier — what paints here is the record. With a non-blank find query, a matching line paints as segmented text (matches bold in the feedback tone — the NO_COLOR contract is the weight) and a non-matching line demotes to faint wholesale; blank query is byte-identical to the un-searched paint.
+  const dossierRow = (line: { kind: DossierLineKind; text: string }, index: number): JSX.Element => {
+    const active = () => findQueryNow().trim().length > 0
+    const matchLine = () => active() && (findLineMatch()[index] ?? false)
+    const dimmed = () => active() && !matchLine()
+    // One text run, finding-aware: the un-searched paint (fg/weight unchanged), the dimmed paint (faint, no weight), or the segmented paint (non-match segments keep their tone, matches ride bold + feedback). The bullet gutter stays faint in every arm.
+    const run = (fg: ColorInput, bold: boolean, wrap: "word" | "none", grow?: true): JSX.Element => {
+      const normal = bold ? TextAttributes.BOLD : undefined
+      return (
+        <text
+          wrapMode={wrap}
+          flexShrink={0}
+          flexGrow={grow ? 1 : 0}
+          fg={active() && dimmed() ? theme().text.faint : fg}
+          attributes={active() && dimmed() ? undefined : normal}
+        >
+          {active() && matchLine()
+            ? segmentLine(line.text, findQueryNow()).map((segment) =>
+                segment.match ? <strong>{segment.text}</strong> : segment.text,
+              )
+            : line.text}
+        </text>
+      )
+    }
     switch (line.kind) {
       case "title":
-        return (
-          <text wrapMode="word" flexShrink={0} fg={theme().text.base} attributes={TextAttributes.BOLD}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.base, true, "word")
       case "section":
-        return (
-          <text wrapMode="word" flexShrink={0} fg={theme().text.base} attributes={TextAttributes.BOLD}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.base, true, "word")
       case "quote":
-        return (
-          <text wrapMode="word" flexShrink={0} fg={theme().text.faint}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.faint, false, "word")
       case "fence":
-        return (
-          <text wrapMode="word" flexShrink={0} fg={theme().text.faint}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.faint, false, "word")
       case "table":
-        return (
-          <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.muted, false, "none")
       case "bullet":
         return (
           <box flexDirection="row" gap={1} flexShrink={0}>
             <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{"·"}</text>
-            <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
-              {line.text}
-            </text>
+            {run(theme().text.base, false, "word", true)}
           </box>
         )
       case "blank":
@@ -338,11 +373,7 @@ export const StatusDialogBody = (props: {
         )
       case "body":
       default:
-        return (
-          <text wrapMode="word" flexShrink={0} fg={theme().text.base}>
-            {line.text}
-          </text>
-        )
+        return run(theme().text.base, false, "word")
     }
   }
   return (
@@ -497,37 +528,58 @@ export const StatusDialogBody = (props: {
           {/* the dossier — the whole record as rendered Markdown: the copy row rides the same click grammar as the other rows, then the document itself, line for line, structural markers lifted into weight/tone. Everything the other views paint scatters as chrome; this is the record, whole. The scrollbox (host-owned) gives the wheel/keys their say. */}
           <Show when={dossier()}>
             <box flexDirection="column" gap={1}>
-              <Show
-                when={props.onCopyDossier}
-                fallback={
+              {props.onCopyDossier
+                ? (
+                  <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyDossier() }} onMouseOver={() => setDossierHovered(true)} onMouseOut={() => setDossierHovered(false)}>
+                    {label("dossier")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={dossierHovered() ? TextAttributes.BOLD : undefined}>
+                      {`the whole record as markdown${copiedSuffix("dossier")}`}
+                    </text>
+                    <Show when={dossierHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+                    </Show>
+                  </box>
+                )
+                : (
                   <box flexDirection="row" gap={2}>
                     {label("dossier")}
                     <text wrapMode="word" flexGrow={1} fg={theme().text.muted}>
                       {"the whole record as markdown"}
                     </text>
                   </box>
-                }
-              >
-                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyDossier() }} onMouseOver={() => setDossierHovered(true)} onMouseOut={() => setDossierHovered(false)}>
-                  {label("dossier")}
-                  <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={dossierHovered() ? TextAttributes.BOLD : undefined}>
-                    {`the whole record as markdown${copiedSuffix("dossier")}`}
-                  </text>
-                  <Show when={dossierHovered()}>
-                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
-                  </Show>
-                </box>
-              </Show>
+                )}
               {/* the save row — the record as a file, one click, O_EXCL on the host side. Same click grammar and hover affordance as the copy row; painted only when the host wires onSaveDossier. No chord, no footer furniture; the palette is the discovery surface */}
-              <Show when={props.onSaveDossier}>
-                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); saveDossier() }} onMouseOver={() => setSaveHovered(true)} onMouseOut={() => setSaveHovered(false)}>
-                  {label("save")}
-                  <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={saveHovered() ? TextAttributes.BOLD : undefined}>
-                    {`the whole record as a file${savedSuffix("save")}`}
+              {props.onSaveDossier
+                ? (
+                  <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); saveDossier() }} onMouseOver={() => setSaveHovered(true)} onMouseOut={() => setSaveHovered(false)}>
+                    {label("save")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={saveHovered() ? TextAttributes.BOLD : undefined}>
+                      {`the whole record as a file${savedSuffix("save")}`}
+                    </text>
+                    <Show when={saveHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>save</text>
+                    </Show>
+                  </box>
+                )
+                : null}
+              {/* the find row — the dossier's live spotlight. One click opens the bar (an inline input, a running count, and a close button); one click closes it and resets the query. Mouse-first, no chord — the row is the discovery surface */}
+              {/* zIndex 1 — the sibling dossier rows above mount after this one in the hit grid's claim order and their text rects spill one cell past their painted line, shadowing this row's cells. The hit grid awards a cell to the last render pass over it, so this row sorts last on purpose */}
+              <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleFind() }} onMouseOver={() => setFindHovered(true)} onMouseOut={() => setFindHovered(false)}>
+                {label("find")}
+                <text wrapMode="word" flexGrow={1} fg={findOpen() || findHovered() ? theme().text.base : theme().text.faint} attributes={findHovered() ? TextAttributes.BOLD : undefined}>
+                  {findOpen() ? "hide find" : "find in the record"}
+                </text>
+              </box>
+              <Show when={findOpen()}>
+                <box flexDirection="row" gap={2}>
+                  {label("query")}
+                  <input ref={(el) => setFindRef(el)} flexGrow={1} placeholder="type to find..." onInput={(value: string) => setFindQuery(value)} />
+                  <text wrapMode="none" flexShrink={0} fg={findCount() > 0 ? theme().text.base : theme().text.faint} attributes={findCount() > 0 ? TextAttributes.BOLD : undefined}>
+                    {matchLabel(findCount())}
                   </text>
-                  <Show when={saveHovered()}>
-                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>save</text>
-                  </Show>
+                  <box flexDirection="row" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); closeFind() }} onMouseOver={() => setFindCloseHovered(true)} onMouseOut={() => setFindCloseHovered(false)}>
+                    <text wrapMode="none" fg={findCloseHovered() ? theme().text.base : theme().text.faint} attributes={findCloseHovered() ? TextAttributes.BOLD : undefined}>close</text>
+                  </box>
                 </box>
               </Show>
               <box flexDirection="row" gap={2}>
@@ -548,7 +600,7 @@ export const StatusDialogBody = (props: {
                   </box>
                 </Show>
                 <box flexDirection="column" gap={0}>
-                  <For each={dossierRows()}>{(line) => dossierRow(line)}</For>
+                  <For each={dossierRows()}>{(line, i) => dossierRow(line, i())}</For>
                 </box>
               </box>
             </box>
