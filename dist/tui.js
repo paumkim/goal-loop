@@ -1248,6 +1248,187 @@ function sealAckSegment(seal, ascii) {
   return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
 }
 
+// src/core/dossier-attest.ts
+var ANSWERS = new Set(["yes", "no", "unknown"]);
+var cellAnswer = (raw) => {
+  const flat = raw.trim().toLowerCase();
+  return ANSWERS.has(flat) ? flat : "unknown";
+};
+var splitRow = (line) => {
+  const cells = line.split("|").map((cell) => cell.trim());
+  if (cells.length >= 2 && cells[0] === "" && cells[cells.length - 1] === "")
+    cells.shift(), cells.pop();
+  if (cells.length < 5)
+    return null;
+  return cells;
+};
+var SHA_RE = /^[0-9a-f]{4,64}$/i;
+function parseAttestationAppendix(markdown) {
+  const lines = markdown.split(`
+`);
+  const heading = lines.findIndex((line) => line.startsWith("## Attestation"));
+  if (heading === -1)
+    return { kind: "unsealed" };
+  const section = [];
+  for (let index = heading + 1;index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line.startsWith("## "))
+      break;
+    section.push(line);
+  }
+  const body = section.join(`
+`);
+  const stamp = /at ([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.Z+-]+):/.exec(body)?.[1];
+  const directory = /against `([^`]+)`, at/.exec(body)?.[1];
+  const gap = section.some((line) => line.includes("The record quotes no sha"));
+  const rows = [];
+  let malformed = 0;
+  for (const line of section) {
+    if (!line.startsWith("|"))
+      continue;
+    const cells = splitRow(line);
+    if (!cells) {
+      malformed += 1;
+      continue;
+    }
+    const first = cells[0].toLowerCase();
+    if (first === "sha" || /^-+$/.test(first))
+      continue;
+    const sha = cells[0];
+    if (!SHA_RE.test(sha)) {
+      malformed += 1;
+      continue;
+    }
+    const iterations = (cells[1].match(/\d+/g) ?? []).map(Number);
+    rows.push({
+      sha,
+      iterations,
+      exists: cellAnswer(cells[2]),
+      onThisLine: cellAnswer(cells[3]),
+      underSeal: cellAnswer(cells[4])
+    });
+  }
+  if (rows.length === 0 && !gap)
+    return { kind: "unparsable" };
+  return { kind: "sealed", stamp, directory, rows, gap, malformed };
+}
+var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
+var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var shasAsGoal = (rows) => ({
+  loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
+});
+function attestSealedDossier(markdown, directory, probes = {}) {
+  const parsed = parseAttestationAppendix(markdown);
+  if (parsed.kind !== "sealed")
+    return parsed;
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const synthetic = shasAsGoal(parsed.rows);
+  const verification = verifyRecord(synthetic, verifyProbe);
+  const reach = reachRecord(synthetic, reachProbe);
+  const sign = signRecord(synthetic, signProbe);
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
+  const rows = parsed.rows.map((row) => {
+    const now = {
+      exists: verifyCell2(verifyBySha.get(row.sha) ?? "unknown"),
+      onThisLine: reachCell2(reachBySha.get(row.sha) ?? "unknown"),
+      underSeal: signCell2(signBySha.get(row.sha) ?? "unknown")
+    };
+    const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
+    const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
+    const flipped = [];
+    if (wasClean) {
+      if (now.exists === "no")
+        flipped.push("exists");
+      if (now.onThisLine === "no")
+        flipped.push("on this line");
+      if (now.underSeal === "no")
+        flipped.push("under seal");
+    }
+    const nowClean = now.exists === "yes" && now.onThisLine === "yes" && now.underSeal === "yes";
+    const verdict = !wasClean ? "was-not-clean" : flipped.length > 0 ? "regressed" : nowClean ? "held" : "unknown";
+    return { sha: row.sha, shortSha: shortSha(row.sha), iterations: row.iterations, seal, now, verdict, flipped };
+  });
+  const sealedClean = rows.filter((row) => row.seal.exists === "yes" && row.seal.onThisLine === "yes" && row.seal.underSeal === "yes").length;
+  const held = rows.filter((row) => row.verdict === "held").length;
+  const regressed = rows.filter((row) => row.verdict === "regressed").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const wasNotClean = rows.length - sealedClean;
+  return {
+    kind: "attested",
+    rows,
+    unique: rows.length,
+    sealedClean,
+    held,
+    regressed,
+    unknown,
+    wasNotClean,
+    stamp: parsed.stamp,
+    sealDirectory: parsed.directory,
+    malformed: parsed.malformed
+  };
+}
+function attestSummaryLine(attestation) {
+  if (attestation.unique === 0)
+    return "sealed dossier quotes no shas to attest";
+  if (attestation.sealedClean === 0)
+    return `nothing held: no sha was clean at seal time (${attestation.unique} quoted)`;
+  if (attestation.regressed > 0)
+    return `attestation drifted: ${attestation.regressed} of ${attestation.sealedClean} sealed-clean shas regressed since sealing`;
+  if (attestation.unknown > 0)
+    return `attestation unverifiable: ${attestation.held} held, ${attestation.unknown} of ${attestation.sealedClean} could not answer`;
+  return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
+}
+function attestationReportMarkdown(result, nowMs, directory, fileName) {
+  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const lines = [
+    "# /goal-loop sealed dossier attestation",
+    "",
+    `- Generated: ${stamp}`,
+    `- Repository: ${directory}`,
+    `- File re-attested: ${fileName}`,
+    result.stamp !== undefined ? `- Sealed at: ${result.stamp}${result.sealDirectory !== undefined ? ` against ${result.sealDirectory}` : ""}` : "- Sealed at: unknown (the appendix does not carry a stamp this parser can read)",
+    `- Shas named by the appendix: ${result.unique} unique`,
+    "",
+    "| sha | sealed (exists \xB7 line \xB7 seal) | now (exists \xB7 line \xB7 seal) | verdict |",
+    "| --- | --- | --- | --- |"
+  ];
+  for (const row of result.rows) {
+    const sealCell = `${row.seal.exists} \xB7 ${row.seal.onThisLine} \xB7 ${row.seal.underSeal}`;
+    const nowCell = `${row.now.exists} \xB7 ${row.now.onThisLine} \xB7 ${row.now.underSeal}`;
+    const verdictCell = row.verdict === "regressed" ? `regressed (${row.flipped.join(", ")})` : row.verdict;
+    lines.push(`| ${row.shortSha} | ${sealCell} | ${nowCell} | ${verdictCell} |`);
+  }
+  if (result.rows.length === 0)
+    lines.push("| \u2014 | \u2014 | \u2014 | \u2014 |");
+  lines.push("", `- Held: ${result.held} \xB7 regressed: ${result.regressed} \xB7 unknown: ${result.unknown} \xB7 was not clean at seal time: ${result.wasNotClean}`, result.malformed > 0 ? `- ${result.malformed} table-looking row(s) could not be read and are excluded from every count` : "- Every table row parsed", "", "This report re-probes the shas the file names \u2014 existence in the object store, membership of this line of history, and git's signature check \u2014 against the repository at the directory named above, right now. It cannot audit the bytes around the table: an editor who rewrites appendix cells can make the file claim anything, and this report detects divergence between seal-time answers and fresh ones, not tampering with the file itself. A verdict of `regressed` means git answered yes at seal time and no right now on the named question; `unknown` means git could not answer and is counted as neither; `was-not-clean` is a sha that never qualified. Existence is not ancestry, ancestry is not the seal. The strongest thing this document can say is `held`, and it says only that three `git` processes answered yes to three questions, now.", "");
+  return lines.join(`
+`);
+}
+var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
+function selectNewestSealedDossier(entries) {
+  let best;
+  for (const entry of entries) {
+    const match = SEALED_NAME_RE.exec(entry.name);
+    if (!match)
+      continue;
+    const stamp = `${match[1]}-${match[2]}`;
+    const attempt = match[3] !== undefined ? Number(match[3]) : 1;
+    if (!best || stamp > best.stamp || stamp === best.stamp && attempt > best.attempt || stamp === best.stamp && attempt === best.attempt && entry.mtimeMs > best.mtimeMs) {
+      best = { name: entry.name, stamp, attempt, mtimeMs: entry.mtimeMs };
+    }
+  }
+  return best?.name;
+}
+
+// src/tui.tsx
+import { readFileSync, readdirSync, statSync } from "fs";
+import { join as join3 } from "path";
+
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
 import { createComponent as _$createComponent2 } from "@opentui/solid";
@@ -6243,6 +6424,106 @@ var tui_default = Plugin.define({
         return;
       }
     };
+    const attestSealedDossierAction = (sessionID) => {
+      try {
+        const directory = process.cwd();
+        let candidates;
+        try {
+          candidates = readdirSync(directory).map((name) => {
+            try {
+              return {
+                name,
+                mtimeMs: statSync(join3(directory, name)).mtimeMs
+              };
+            } catch {
+              return {
+                name,
+                mtimeMs: 0
+              };
+            }
+          });
+        } catch (error) {
+          safeToast({
+            title: "attest failed",
+            message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
+            variant: "error",
+            duration: 5000,
+            sessionID
+          });
+          return;
+        }
+        const newest = selectNewestSealedDossier(candidates);
+        if (!newest) {
+          safeToast({
+            title: "no sealed dossier",
+            message: `no goal-dossier-sealed-*.md in ${directory} \u2014 seal one first with goal.dossier.seal`,
+            variant: "warning",
+            duration: 6000,
+            sessionID
+          });
+          return;
+        }
+        let markdown;
+        try {
+          markdown = readFileSync(join3(directory, newest), "utf8");
+        } catch (error) {
+          safeToast({
+            title: "attest failed",
+            message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
+            variant: "error",
+            duration: 5000,
+            sessionID
+          });
+          return;
+        }
+        const result = attestSealedDossier(markdown, directory);
+        if (result.kind === "unsealed") {
+          safeToast({
+            title: "not a sealed dossier",
+            message: `${newest} carries no attestation appendix`,
+            variant: "warning",
+            duration: 6000,
+            sessionID
+          });
+          return;
+        }
+        if (result.kind === "unparsable") {
+          safeToast({
+            title: "attestation unreadable",
+            message: `${newest}: the appendix heading is present but no row parses`,
+            variant: "warning",
+            duration: 6000,
+            sessionID
+          });
+          return;
+        }
+        const report = attestationReportMarkdown(result, Date.now(), directory, newest);
+        let copied = false;
+        try {
+          copied = context.renderer.copyToClipboardOSC52(report);
+        } catch {
+          copied = false;
+        }
+        const summary = attestSummaryLine(result);
+        const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds";
+        const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success";
+        safeToast({
+          title,
+          message: copied ? summary : `${summary} \xB7 clipboard unavailable`,
+          variant,
+          duration: 6000,
+          sessionID
+        });
+      } catch (error) {
+        safeToast({
+          title: "attest failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
+      }
+    };
     const sealRecordAction = (sessionID, goal) => {
       if (!goal || !sessionID)
         return;
@@ -6818,6 +7099,17 @@ var tui_default = Plugin.define({
             const sessionID = currentSession();
             const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
             sealRecordAction(sessionID, goal);
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.attest",
+        title: "Goal: attest a sealed dossier against HEAD (drift report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            attestSealedDossierAction(currentSession());
           } catch {}
         }
       }, {
