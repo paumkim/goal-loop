@@ -1174,6 +1174,17 @@
       "submittedAt": "2026-11-16T03:04:54Z",
       "mergedAt": "2026-11-16T03:05:14Z",
       "mergedInto": "dev"
+    },
+    "release-prep-1-2-0": {
+      "agent": "opencode",
+      "paths": "package.json,bin/opencode-goal.mjs,README.md,RELEASE-CHECKLIST.md,docs,AGENTS.md,opencode.json,opencode.json.example,.github/workflows/check.yml,.gitignore,test/cli-installer.test.ts,SPEC.md",
+      "branch": "wt/release-prep-1-2-0",
+      "worktree": "worktrees/wt-release-prep-1-2-0",
+      "status": "done",
+      "createdAt": "2026-11-16T03:16:10Z",
+      "submittedAt": "2026-11-16T03:24:55Z",
+      "mergedAt": "2026-11-16T03:25:08Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
