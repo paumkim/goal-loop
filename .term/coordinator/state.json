@@ -1977,6 +1977,17 @@
       "submittedAt": "2026-11-16T13:02:36Z",
       "mergedAt": "2026-11-16T13:03:51.000Z",
       "mergedInto": "dev"
+    },
+    "tui-frame-matrix": {
+      "agent": "orchestrator",
+      "paths": "scripts/render-dialog.tsx scripts/render-card.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
+      "branch": "wt/tui-frame-matrix",
+      "worktree": "worktrees/wt-tui-frame-matrix",
+      "status": "done",
+      "createdAt": "2026-11-16T13:09:50Z",
+      "submittedAt": "2026-11-16T13:13:02Z",
+      "mergedAt": "2026-11-16T13:13:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
