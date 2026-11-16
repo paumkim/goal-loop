@@ -216,7 +216,7 @@ describe("full-frame snapshots (waiting and remediation states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
-  test("LoopSection · zero-tool iterations render the muted row (state inspection, no work produced)", async () => {
+  test("LoopSection · a zero-tool met iteration renders the already-satisfied-at-HEAD row", async () => {
     const idle = loopedGoal({
       loopHistory: [
         { version: 1, condition: "add a progress bar", summary: "Inspection only — nothing to build.", reason: "not_met", turns: 2, toolCalls: 0, endedAt: now - 1000 * 60 * 27 },

@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=851 -->
+<!-- spec-check files=43 tests=852 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3520,3 +3520,37 @@ bun run compile, bun run check end-to-end green incl. spec-check (43/851), docs-
 changelog grep before submit. Evidence is source + render layers only; live TUI remains
 unverifiable. Follow-ups NOT done in this slice: the measured card width, per-iteration spend
 attribution, the already-satisfied-at-HEAD blue tone.
+
+## Workstream CJ — satisfied-at-HEAD: a zero-tool met iteration paints blue, not gray (2026-11-16)
+
+Interpretation of this iteration: the loop rail painted every completed iteration with zero tool
+calls in the faint muted bucket under the tag "inspection only" — but zero tool calls means NO
+inspection happened either; the evaluator found the condition already satisfied at HEAD and the
+iteration advanced without work. The design bar asks for a third ledger distinction:
+work produced / already-satisfied-at-HEAD (blue) / zero-tool muted. This slice repaints that row
+to the palette's info/blue accent (the host maps info to cyan, tokyonight's info is a blue; the
+plugin's narrowed theme subset carries text.feedback.info.base only) and relabels the tag. The
+yellow state-inspection lane stays unimplementable without a per-iteration change-detect signal
+the wire does not carry — documented here rather than faked.
+
+340. src/tui-history.tsx iteration rail: a met iteration with toolCalls === 0 paints the hollow
+     glyph (. mono / ○ color — shape carries the zero-work signal) in text.feedback.info.base,
+     the row text paints text.muted (color) / text.base (mono), and the row tag reads
+     "no tools · already satisfied at HEAD" (was "inspection only"). Work-produced rows
+     (toolCalls > 0) keep the solid check and the base row tone; the two classes stay
+     distinguishable by glyph shape, row tone and the tag in every arm. The verdict trail and
+     the why ledger carry turn-level verdicts only (no toolCalls on VerdictEntry), so the
+     classification lands on the iteration rail only; the trail keeps verdict-accent glyphs.
+     REDUCED-COLOR arm: mono drops the hue entirely — the ./○ shape, the muted->base text and
+     the tag string carry the signal; the new mono test pins all three.
+341. Tests: the existing zero-tool rail test is re-pinned in place (same test count), the
+     snapshot test is renamed to the satisfied-at-HEAD wording and re-pinned under TZ=UTC
+     (suffix wrap re-flows one line; no other frame drifts), and one new mono-arm test is added
+     (tui-hud.test.tsx) — spec-check marker files=43 tests=851 -> 852. Evidence is source +
+     test-render layers; no live TUI claim. Follow-ups NOT done in this slice: per-iteration
+     spend attribution, the measured card width, the blue tone in the verdict trail (needs a
+     toolCalls field on VerdictEntry, server-side).
+
+Verification (all run in the worktree): bun test (105 pass in tui-hud.test.tsx, 21 pass in
+tui-snapshots.test.tsx, full suite in bun run check), bun run compile, bun run check end-to-end
+green incl. spec-check (43/852), docs-watch companion + changelog grep before submit.

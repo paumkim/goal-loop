@@ -1049,7 +1049,7 @@ var LoopSection = (props) => {
       children: (entry, index) => {
         const fullIndex = () => railOffset() + index();
         const zeroTools = entry.toolCalls === 0;
-        const rowColor = zeroTools ? theme().text.faint : theme().text.base;
+        const rowColor = zeroTools ? mono() ? theme().text.base : theme().text.muted : theme().text.base;
         return (() => {
           var _el$29 = _$createElement("box"), _el$30 = _$createElement("box"), _el$31 = _$createElement("text"), _el$32 = _$createElement("text");
           _$insertNode(_el$29, _el$30);
@@ -1065,7 +1065,7 @@ var LoopSection = (props) => {
           _$setProp(_el$32, "wrapMode", "word");
           _$setProp(_el$32, "flexGrow", 1);
           _$setProp(_el$32, "fg", rowColor);
-          _$insert(_el$32, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`);
+          _$insert(_el$32, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`);
           _$insert(_el$29, _$createComponent(Show, {
             get when() {
               return entry.summary.trim().length > 0;
@@ -1086,7 +1086,7 @@ var LoopSection = (props) => {
               });
             }
           }), null);
-          _$effect((_$p) => _$setProp(_el$31, "fg", zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
+          _$effect((_$p) => _$setProp(_el$31, "fg", mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
           return _el$29;
         })();
       }
