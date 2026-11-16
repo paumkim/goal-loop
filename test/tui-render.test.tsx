@@ -292,6 +292,17 @@ describe("LoopSection edge paths", () => {
     expect(frame).toContain("loop active · 2 iterations")
   })
 
+  test("a finished loop retires its live row — no 'now' above the final tally; an active loop still paints it", async () => {
+    const live = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(live).toContain("now")
+    expect(live).toContain("v3 · active · 4 turns")
+    const done = await render(() => <LoopSection goal={loopedGoal({ status: "achieved" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
+    expect(done).toContain("final")
+    expect(done).toContain("loop achieved")
+    expect(done).not.toContain("now")
+    expect(done).not.toContain("this turn")
+  })
+
   test("an impossible loop renders the ⊘ glyph in the final tally", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ status: "impossible" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
     expect(frame).toContain("loop impossible · 2 iterations")
