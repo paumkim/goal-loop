@@ -1053,6 +1053,17 @@
       "submittedAt": "2026-11-16T01:42:47Z",
       "mergedAt": "2026-11-16T01:42:57Z",
       "mergedInto": "dev"
+    },
+    "docs-line-refs-2": {
+      "agent": "opencode",
+      "paths": "docs",
+      "branch": "wt/docs-line-refs-2",
+      "worktree": "worktrees/wt-docs-line-refs-2",
+      "status": "done",
+      "createdAt": "2026-11-16T01:47:41Z",
+      "submittedAt": "2026-11-16T01:48:45Z",
+      "mergedAt": "2026-11-16T01:48:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
