@@ -8,7 +8,10 @@
  *     files  `npm pack --dry-run --json` — the exact file count of the published tarball
  *     tests  `bun test` (run from `test/`) — the number of passing tests at the current HEAD
  *   Exits 1 and lists every mismatch when a claim trails reality. Exits 0 otherwise.
- *   Never writes anything. Wired into `bun run check` and CI.
+ *   Never writes anything, except with `--write`: the merge pipeline
+ *   (`coordinator merge-next`) calls it on the merged tree to re-count the
+ *   marker itself (`--write`); it refuses to write over a red suite or a failed probe.
+ *   Plain mode is wired into `bun run check` and CI.
  *
  * What it does not do
  *   - It does not judge whether the tests or the package are *good* — only that the counts
@@ -25,7 +28,7 @@
  * same commit. The gate fails otherwise — that is the point.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
@@ -90,12 +93,25 @@ export function formatFailures(failures: readonly string[]): string {
   return ["spec-check: SPEC.md claims do not match reality:", ...failures.map((failure) => `  - ${failure}`)].join("\n");
 }
 
+/**
+ * Rewrite the marker inside the SPEC text to `counts`. Pure. Throws when the marker
+ * is absent or malformed — a --write pass never invents a marker, it only re-counts.
+ */
+export function writeMarker(spec: string, counts: SpecCounts): string {
+  const pattern = /<!--\s*spec-check\s+files=\d+\s+tests=\d+\s*-->/;
+  if (!pattern.test(spec)) {
+    throw new Error(NO_MARKER_ERROR);
+  }
+  return spec.replace(pattern, `<!-- spec-check files=${counts.files} tests=${counts.tests} -->`);
+}
+
 /** The single-line success report. */
 export function formatOk(claimed: SpecCounts): string {
   return `spec-check: ok (${claimed.files} files, ${claimed.tests} tests match SPEC.md)`;
 }
 
 function main(): void {
+  const write = process.argv.slice(2).includes("--write");
   const spec = readFileSync(SPEC, "utf8");
   const claimed = parseMarker(spec);
   if (!claimed) {
@@ -123,6 +139,27 @@ function main(): void {
   const tests = match ? Number(match[1]) : undefined;
 
   const failures = diagnose(claimed, { files, testsGreen: run.status === 0, tests }, probeErrors);
+
+  if (write) {
+    // --write: never convict, always heal. But never heal over a red suite or a failed probe.
+    if (run.status !== 0) {
+      console.error(formatFailures([BUN_RED_ERROR, ...probeErrors]));
+      process.exit(1);
+    }
+    if (files === undefined || tests === undefined) {
+      console.error(formatFailures(probeErrors.length > 0 ? probeErrors : ["probe failed; SPEC.md left untouched"]));
+      process.exit(1);
+    }
+    const next = { files, tests };
+    const updated = writeMarker(spec, next);
+    if (updated === spec) {
+      console.log(`spec-check: marker already accurate (${files} files, ${tests} tests); SPEC.md untouched`);
+      return;
+    }
+    writeFileSync(SPEC, updated);
+    console.log(`spec-check: SPEC.md marker re-counted (${claimed.files}/${claimed.tests} -> ${files}/${tests})`);
+    return;
+  }
 
   if (failures.length > 0) {
     console.error(formatFailures(failures));

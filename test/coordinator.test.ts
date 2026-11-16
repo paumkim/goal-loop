@@ -101,21 +101,35 @@ describe("coordinator merge-next", () => {
     expect(fileOnDev("FILE").status).not.toBe(0)
   })
 
-  test("a post-green checkout failure keeps HEAD on the scratch branch and tells the operator how to finish", () => {
-    // The merged result's `check` dirties a file the wt branch adds, so `git checkout dev` must refuse.
-    setup("echo dirty >> FILE")
+  test("a fast-forward failure leaves dev untouched, keeps the verified scratch branch, and prints the recovery command", () => {
+    // The verify-then-fast-forward split is explicit: when the fast-forward cannot happen,
+    // the merged result stays on merge-check-* and dev never moves. Simulated deterministically
+    // with the documented COORDINATOR_TEST_FF_FAIL hook (the old "check dirties a file" scenario
+    // cannot strand the main checkout anymore — the gate runs in a dedicated merge worktree).
+    setup("true")
     claimCommitSubmit("stuck", { FILE: "from-wt\n" }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(dir, ["merge-next"])
+    const result = spawnSync(SCRIPT, ["merge-next"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...GIT_ENV, COORDINATOR_TEST_FF_FAIL: "1" },
+    })
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain("cannot checkout dev")
+    expect(result.stderr).toContain("cannot fast-forward dev")
     expect(result.stderr).toContain("recovery:")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
-    // HEAD must not be detached; it stays on the scratch branch holding the verified-green merge.
-    const head = git(dir, ["branch", "--show-current"]).trim()
-    expect(head).toMatch(/^merge-check-stuck-/)
-    expect(git(dir, ["branch", "--list", "merge-check-*"]).trim()).toMatch(/^\*?\s*merge-check-stuck-/)
+    // HEAD never left dev (merge work happens in a dedicated worktree now).
+    expect(git(dir, ["branch", "--show-current"]).trim()).toBe("dev")
+    // The verified-green merged result is kept on the scratch branch for manual recovery.
+    expect(git(dir, ["branch", "--list", "--format=%(refname:short)", "merge-check-stuck-*"]).trim()).toMatch(/^merge-check-stuck-/)
     expect(lease("stuck").status).toBe("submitted")
+    // finishing by hand works: fast-forward dev, then merge-done records the lease
+    const scratch = git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-stuck-*"]).trim()
+    git(dir, ["merge", "--ff-only", scratch])
+    const done = run(dir, ["merge-done", "stuck"])
+    expect(done.status).toBe(0)
+    expect(lease("stuck").status).toBe("done")
+    expect(fileOnDev("FILE").stdout.trim()).toBe("from-wt")
   })
 
   test("the merge-check prune keeps fresh scratch branches and drops stale ones", () => {
