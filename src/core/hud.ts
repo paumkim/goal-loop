@@ -87,12 +87,23 @@ export const TERMINAL_ACK_MS = 45_000
 export const ACK_FLASH_MS = 1_700
 
 /**
- * The pill's pulse interval runs while any of the three transient conditions is live: the evaluator is
- * thinking, the compaction request is running hot, or the just-achieved flash window is open. Extracted
- * so the contract — a flash alone drives the pulse — is pinned in unit tests. Pure.
+ * How long the landing acknowledgment rides the ambient pill after a boundary compaction is observed to
+ * land (`loopCompact.pending → landed`): the pill appends ` · landed ✓`, reads in the info tone and
+ * flips bold on the same 850ms cadence, then goes static. Deliberately longer than the met flash —
+ * a background win worth catching, not a celebration. Suppressed under reduced motion like every pulse.
  */
-export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly hot?: boolean; readonly flashing?: boolean }): boolean =>
-  args.evaluating === true || args.hot === true || args.flashing === true
+export const LANDING_ACK_MS = 3_000
+
+export const LANDING_SUFFIX = " · landed \u2713"
+
+/**
+ * The pill's pulse interval runs while any of the transient conditions is live: the evaluator is
+ * thinking, the compaction request is running hot, the just-achieved flash window is open, or the
+ * boundary compaction is observed to have landed (the landing acknowledgment window). Extracted so the
+ * contract — one of these alone drives the pulse — is pinned in unit tests. Pure.
+ */
+export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly hot?: boolean; readonly flashing?: boolean; readonly landing?: boolean }): boolean =>
+  args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true
 
 /**
  * The completion moment: when a goal goes live→terminal the ambient pill would otherwise blink out
