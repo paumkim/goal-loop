@@ -2025,6 +2025,90 @@ const findRow = (frame: string, needle: string): { x: number; y: number } | unde
   return undefined
 }
 
+describe("StatusDialogBody — the record, on trial (the verify row)", () => {
+  const dossierAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "dossier")
+  const verifyRowAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "the shas the record quotes, checked")
+
+  test("the dossier tab paints a verify row; one click runs the host sweep and paints the outcome in place", async () => {
+    let sweeps = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={() => {}} onVerifyDossier={() => { sweeps += 1; return { unique: 2, present: 2, missing: 0, unknown: 0 } }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const row = verifyRowAt(frame)
+    expect(row).toBeDefined()
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(sweeps).toBe(1)
+    expect(setup.captureCharFrame()).toContain("✓ 2/2 resolve")
+    await setup.renderer.destroy()
+  })
+
+  test("mono demotes the pass glyph to + — the counts never demote", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono={true} onVerifyDossier={() => ({ unique: 6, present: 6, missing: 0, unknown: 0 })} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = verifyRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("+ 6/6 resolve")
+    await setup.renderer.destroy()
+  })
+
+  test("a missing sha paints the unresolvable arm, not the pass", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onVerifyDossier={() => ({ unique: 4, present: 2, missing: 2, unknown: 0 })} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = verifyRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("✗ 2 of 4 unresolvable")
+    await setup.renderer.destroy()
+  })
+
+  test("right click on the verify row is inert — the power button runs nothing", async () => {
+    let sweeps = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onVerifyDossier={() => { sweeps += 1; return { unique: 2, present: 2, missing: 0, unknown: 0 } }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = verifyRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y, 2)
+    await setup.renderOnce()
+    expect(sweeps).toBe(0)
+    await setup.renderer.destroy()
+  })
+
+  test("the verify row does not paint when the host leaves it unwired — the document renders exactly as before", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("Goal loop dossier")
+    expect(frame).not.toContain("the shas the record quotes, checked")
+    await setup.renderer.destroy()
+  })
+
+  test("a host that returns undefined runs the click but paints no ack — the row never claims a sweep that did not happen", async () => {
+    let sweeps = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onVerifyDossier={() => { sweeps += 1; return undefined }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = verifyRowAt(setup.captureCharFrame())
+    expect(row).toBeDefined()
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(sweeps).toBe(1)
+    expect(setup.captureCharFrame()).not.toContain("resolve")
+    await setup.renderer.destroy()
+  })
+})
+
 describe("StatusDialogBody — find in the record (the dossier spotlight)", () => {
   const dossierProps = () => ({ goal: loopedGoal(), fallback: "fb", theme, elapsedMs: () => 1000 * 60 * 12, nowMs: () => now, view: () => "dossier" as const })
 

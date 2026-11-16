@@ -17,6 +17,7 @@ import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-j
 import { goalGlyph } from "./core/format.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { exportLoopDossier } from "./core/dossier-export.ts"
+import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine, type VerifyOutcome } from "./core/verify-record.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
@@ -100,7 +101,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyAttestation={(line) => copyToClipboard(line, sessionID, "attestation")} onCopyTally={(line) => copyToClipboard(line, sessionID, "tally")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onSaveDossier={() => { const g = entries()[sessionID]?.goal; exportDossier(sessionID, g) }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyAttestation={(line) => copyToClipboard(line, sessionID, "attestation")} onCopyTally={(line) => copyToClipboard(line, sessionID, "tally")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onSaveDossier={() => { const g = entries()[sessionID]?.goal; exportDossier(sessionID, g) }} onVerifyDossier={() => { const g = entries()[sessionID]?.goal; return verifyRecordAction(sessionID, g) }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -556,6 +557,29 @@ export default Plugin.define({
         safeToast({ title: "export failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
       }
     }
+    // The record, on trial: sweep every sha the ledger quotes against the repository at the host's cwd, copy the Markdown verification report, toast the outcome. The dialog row paints the same counts through its in-place ack. Unknown is never folded into missing; a sweep that cannot probe (no git, not a repository) comes back all-unknown and says so.
+    const verifyRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): VerifyOutcome | undefined => {
+      if (!goal || !sessionID) return undefined
+      try {
+        const directory = process.cwd()
+        const verification = verifyRecord(goal, gitCatFileProbe(directory))
+        const report = verifyReportMarkdown(goal, verification, Date.now(), directory)
+        let copied = false
+        try {
+          copied = context.renderer.copyToClipboardOSC52(report)
+        } catch {
+          copied = false
+        }
+        const summary = verifySummaryLine(verification)
+        const title = verification.missing > 0 ? "record does not verify" : verification.unknown > 0 ? "record unverifiable" : verification.unique === 0 ? "nothing to verify" : "record verified"
+        const variant = verification.missing > 0 ? "error" : verification.unknown > 0 ? "warning" : "success"
+        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
+        return verification
+      } catch (error) {
+        safeToast({ title: "verify failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        return undefined
+      }
+    }
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
     // history (the dialog's [clear goal], the card footer button, the danger row in the context menu,
     // and both palette commands). Every clear path funnels through the host's native confirm dialog;
@@ -1009,6 +1033,20 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               exportDossier(sessionID, goal)
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.verify",
+          title: "Goal: verify the record (shas + markdown report)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              verifyRecordAction(sessionID, goal)
             } catch {}
           },
         },

@@ -15,6 +15,7 @@ import type { GoalSnapshot } from "./core/types.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
 import { dossierOutline, type DossierOutlineEntry } from "./core/dossier-outline.ts"
+import { verifyAckSegment, type VerifyOutcome } from "./core/verify-record.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
@@ -73,6 +74,8 @@ export const StatusDialogBody = (props: {
   onCopyDossier?: (dossier: string) => void
   /** When set, the dossier view paints a save row under the copy row: the same document as a file, written once via O_EXCL by the host (`goal.dossier.export`) — never overwrites; the clicked row paints `✓ saved` (ascii `+ saved`) in place for the usual acknowledgment window. Unwired, the row does not paint (the document renders exactly as before). */
   onSaveDossier?: () => void
+  /** When set, the dossier view paints a verify row under the save row: one click re-checks every sha the record quotes against the repository at the host's cwd and copies the Markdown verification report (palette twin: `goal.dossier.verify`). The clicked row paints the outcome in place for the usual acknowledgment window (`✓ 6/6 resolve` / ascii `+ 6/6 resolve`). The host returns the outcome counts; a host that returns undefined paints no ack — the click is acknowledged only when the record was actually swept. Unwired, the row does not paint (the document renders exactly as before). */
+  onVerifyDossier?: () => VerifyOutcome | undefined
   /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
@@ -225,11 +228,19 @@ export const StatusDialogBody = (props: {
   const copiedSuffix = (key: string) => (copied() === key ? (ascii ? " + copied" : " ✓ copied") : "")
   // The save row acknowledges in the same in-modal grammar, with its own verb — "copied" would lie about the side effect.
   const savedSuffix = (key: string) => (copied() === key ? (ascii ? " + saved" : " ✓ saved") : "")
+  // The verify row's ack carries the sweep's truth, not just a verb — the counts are all the host returns.
+  const [verifyAck, setVerifyAck] = createSignal<string | null>(null)
+  let verifyTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (verifyTimer) clearTimeout(verifyTimer)
+  })
+  const verifySuffix = () => verifyAck() ?? ""
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [dossierHovered, setDossierHovered] = createSignal(false)
   const [saveHovered, setSaveHovered] = createSignal(false)
+  const [verifyDossierHovered, setVerifyDossierHovered] = createSignal(false)
   const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
@@ -296,6 +307,20 @@ export const StatusDialogBody = (props: {
     try {
       props.onSaveDossier()
       acknowledge("save")
+    } catch {
+      // Best-effort.
+    }
+  }
+  // The verify row's side effect lives in the host (one probe per quoted sha + a report copy, toasted there); the row paints only the outcome the host reports back. A host that returns undefined ran nothing the UI can attest to — no ack.
+  const verifyDossier = () => {
+    if (!props.onVerifyDossier) return
+    try {
+      const outcome = props.onVerifyDossier()
+      if (outcome) {
+        setVerifyAck(verifyAckSegment(outcome, ascii))
+        if (verifyTimer) clearTimeout(verifyTimer)
+        verifyTimer = setTimeout(() => setVerifyAck(null), 2400)
+      }
     } catch {
       // Best-effort.
     }
@@ -558,6 +583,20 @@ export const StatusDialogBody = (props: {
                     </text>
                     <Show when={saveHovered()}>
                       <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>save</text>
+                    </Show>
+                  </box>
+                )
+                : null}
+              {/* the verify row — the record, on trial. One click re-checks every sha the ledger quotes against the repository at the host's cwd and copies the Markdown verification report (palette twin `goal.dossier.verify`). zIndex 1 for the same reason as the find row: the hit grid awards a cell to the last render pass over it. Painted only when the host wires onVerifyDossier. No chord, no footer furniture; the palette is the discovery surface */}
+              {props.onVerifyDossier
+                ? (
+                  <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); verifyDossier() }} onMouseOver={() => setVerifyDossierHovered(true)} onMouseOut={() => setVerifyDossierHovered(false)}>
+                    {label("verify")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={verifyDossierHovered() ? TextAttributes.BOLD : undefined}>
+                      {`the shas the record quotes, checked${verifySuffix()}`}
+                    </text>
+                    <Show when={verifyDossierHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>verify</text>
                     </Show>
                   </box>
                 )
