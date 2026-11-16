@@ -212,15 +212,13 @@ describe("iterationVerdictMix", () => {
     expect(mixes[1]).toBeUndefined()
   })
 
-  test("identity memo: same (history ref, entries ref, setAt) returns the identical array", () => {
+  test("deterministic across calls — memoization is the caller's concern (LoopSection createMemo)", () => {
     const history = [{ ...verdict(1, "met"), at: 9_000 }]
     const first = iterationVerdictMix(history, entries, setAt)
     const second = iterationVerdictMix(history, entries, setAt)
-    expect(second).toBe(first)
+    expect(second).toEqual(first)
     const freshHistory = [{ ...verdict(1, "met"), at: 9_000 }]
-    const third = iterationVerdictMix(freshHistory, entries, setAt)
-    expect(third).not.toBe(first)
-    expect(third).toEqual(first)
+    expect(iterationVerdictMix(freshHistory, entries, setAt)).toEqual(first)
   })
 
   test("scans the history once — O(h + n), not O(h × n)", () => {

@@ -12,7 +12,7 @@ import { createElement as _$createElement4 } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
-import { createMemo, createSignal as createSignal4, createEffect, onCleanup as onCleanup3, Show as Show4 } from "solid-js";
+import { createMemo as createMemo2, createSignal as createSignal4, createEffect, onCleanup as onCleanup3, Show as Show4 } from "solid-js";
 
 // ../../node_modules/ansi-regex/index.js
 function ansiRegex({ onlyFirst = false } = {}) {
@@ -365,10 +365,7 @@ function paceEstimate(durations, max) {
   const perIteration = durations.reduce((sum, span) => sum + span, 0) / durations.length;
   return { perIteration, remaining: perIteration * left };
 }
-var mixCache;
 function iterationVerdictMix(history, entries, setAt) {
-  if (mixCache !== undefined && mixCache.history === history && mixCache.entries === entries && mixCache.setAt === setAt)
-    return mixCache.out;
   const counts = entries.map(() => ({ met: 0, not_met: 0, impossible: 0, total: 0 }));
   const ended = entries.map((entry) => entry.endedAt);
   let window = 0;
@@ -408,7 +405,6 @@ function iterationVerdictMix(history, entries, setAt) {
     const slice = history.filter((verdict) => verdict.at > from && verdict.at <= entry.endedAt);
     return slice.length === 0 ? undefined : verdictCounts(slice);
   });
-  mixCache = { history, entries, setAt, out };
   return out;
 }
 function verdictStreak(history) {
@@ -708,7 +704,7 @@ import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { TextAttributes } from "@opentui/core";
-import { For, Show, createSignal, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 var SUMMARY_MAX = 400;
 var RAIL_VISIBLE = 4;
 var label = (theme, text) => (() => {
@@ -814,7 +810,7 @@ var LoopSection = (props) => {
   const shares = () => durationShares(durations());
   const shareSuffix = (index) => shares()[index] === undefined ? "" : ` \xB7 ${shares()[index]}% of wall`;
   const pace = () => paceEstimate(durations(), max());
-  const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt);
+  const mixes = createMemo(() => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt));
   const spark = () => contextSparkline(history(), ascii());
   const mixSuffix = (index) => {
     const mix = mixes()[index];
@@ -3043,7 +3039,7 @@ var tui_default = Plugin.define({
       append: "session.composer.top",
       render: (props) => {
         const [hovered, setHovered] = createSignal4(false);
-        const goal = createMemo(() => {
+        const goal = createMemo2(() => {
           try {
             return live(props.sessionID);
           } catch {
