@@ -43,7 +43,7 @@ the warning tone at ≥80% of the threshold, so the dial the boundary compaction
 loop runs hot. The estimate rides only the `get` RPC (like `spend`); `changed` event snapshots carry the last
 known value forward (`preserveContextSize`) instead of flickering the row to unknown. An amber shimmer marks
 the ambient pill while a boundary compaction request is running hot (≥2 misses) in addition to its amber tone —
-a bold flip on a slow tick, never while idle, and off entirely under reduced motion. The same first-class
+a bold flip on a slow tick, never while idle, and off entirely under reduced motion. Every hard cap on rendered text (the pill's appended condition, the card's 42-cell condition, rail summaries, history lines) truncates by terminal cells between graphemes — CJK costs 2 cells, an emoji 2, a combining mark 0 — never by code unit, so a boundary never leaks half an emoji or splits a flag; the ellipsis always fits the budget and never leaves a dangling space. The same first-class
 treatment covers a goal whose turns all keep failing: `retries` (automatic turns retried since the last success)
 reaching 3 swaps the ambient pill's state word `active` → `stuck` and appends `· retry N` in the same amber
 warning family; the HUD card mirrors it (the `now` row reads `stuck` in amber and the card border joins the
@@ -448,7 +448,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=706 -->
+<!-- spec-check files=43 tests=713 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

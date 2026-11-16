@@ -79,7 +79,8 @@
     "@opentui/solid": "0.5.17",
     "@types/bun": "1.4.0",
     "solid-js": "1.9.15",
-    "typescript": "5.8.2"
+    "typescript": "5.8.2",
+    "string-width": "7.2.0"
   },
   "publishConfig": {
     "access": "public"
