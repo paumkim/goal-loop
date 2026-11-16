@@ -4,6 +4,7 @@
  * imports of the CLI module.
  */
 export const PLUGIN_PACKAGE: string;
+export const PLUGIN_SPEC: string;
 
 export interface ScopeResolution {
   scope: "global" | "project";

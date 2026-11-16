@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import {
   PLUGIN_PACKAGE,
+  PLUGIN_SPEC,
   resolveScope,
   install,
   uninstall,
@@ -100,7 +101,7 @@ describe("install", () => {
     expect(r.code).toBe(0);
     const file = join(home, ".config", "opencode", "opencode.jsonc");
     const text = readFileSync(file, "utf8");
-    expect(text).toContain(PLUGIN_PACKAGE);
+    expect(text).toContain(PLUGIN_SPEC);
     expect(text).toContain("$schema");
     expect(r.stdout).toContain("restart opencode");
     rmSync(home, { recursive: true, force: true });
@@ -113,8 +114,8 @@ describe("install", () => {
     expect(r.code).toBe(0);
     const text = readFileSync(file, "utf8");
     expect(text).toContain('"model": "test/model"');
-    expect(text).toContain(PLUGIN_PACKAGE);
-    expect(JSON.parse(text).plugins).toEqual([PLUGIN_PACKAGE]);
+    expect(text).toContain(PLUGIN_SPEC);
+    expect(JSON.parse(text).plugins).toEqual([PLUGIN_SPEC]);
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -130,7 +131,7 @@ describe("install", () => {
     const text = readFileSync(file, "utf8");
     expect(text).toContain("// user comment");
     expect(text).toContain("some-other-plugin");
-    expect(text).toContain(PLUGIN_PACKAGE);
+    expect(text).toContain(PLUGIN_SPEC);
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -163,12 +164,27 @@ describe("install", () => {
     const file = writeGlobalConfig(
       home,
       "opencode.jsonc",
-      `{\n  "plugins": [\n    { "package": "${PLUGIN_PACKAGE}", "options": {} }\n  ]\n}\n`,
+      `{\n  "plugins": [\n    { "package": "${PLUGIN_SPEC}", "options": {} }\n  ]\n}\n`,
     );
     const r = install([], { env: envFor(home), cwd: home });
     expect(r.code).toBe(0);
     expect(r.stdout.toLowerCase()).toContain("already installed");
     expect(readFileSync(file, "utf8")).toContain('"options": {}');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("back-compat: uninstall removes the legacy bare spec installed by v1.1.0", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(
+      home,
+      "opencode.jsonc",
+      `{\n  "model": "test/model",\n  "plugins": [\n    "${PLUGIN_PACKAGE}"\n  ]\n}\n`,
+    );
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).not.toContain(PLUGIN_PACKAGE);
+    expect(text).toContain('"model": "test/model"');
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -202,6 +218,7 @@ describe("uninstall", () => {
     const r = uninstall([], { env: envFor(home), cwd: home });
     expect(r.code).toBe(0);
     const text = readFileSync(file, "utf8");
+    expect(text).not.toContain(PLUGIN_SPEC);
     expect(text).not.toContain(PLUGIN_PACKAGE);
     expect(text).toContain('"model": "test/model"');
     rmSync(home, { recursive: true, force: true });

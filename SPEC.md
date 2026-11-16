@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=451 -->
+<!-- spec-check files=41 tests=452 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2026,3 +2026,9 @@ Followed docs/install.html exactly in scratch (dirs /tmp/opencode/gh-route1.oiRP
 191. **Route 1 — `opencode plugin add github:paumkim/opencode-goalv2#v1.1.0`:** exit 0; wrote `plugins: ["github:paumkim/opencode-goalv2#v1.1.0"]` to the scratch global `opencode.json`; opencode fetched the tag into the scratch cache (`git-opencode-goalv2-167a66a78541`). Standalone TUI `/plugins` (empty project) lists **TUI: opencode-goal.tui** and **Server: opencode-goal @ aff3a49**. Removal: `opencode plugin remove github:paumkim/opencode-goalv2#v1.1.0` → `plugins: []`, exit 0; re-remove → `not configured`, exit 0; relaunched TUI shows `No items available`. E2E against the git-cached copy (`E2E_PLUGIN=<cache path> bun run e2e`): server up 127.0.0.1:4779, `/goal` registered in ~1s, 1 turn, `session.execution.succeeded`, NOTICE success, `history: ["1:met"]`, spend cost 0 (in 13749 / out 535), both files confirmed on disk, exit 0.
 192. **Route 2 — release URL + `opencode-goal install`:** `npm i -g --prefix <scratch> https://github.com/.../opencode-goalv2-1.1.0.tgz` → `opencode-goal 1.1.0`; `opencode-goal install` → created config with `plugins: ["opencode-goalv2"]`. **But** with a fresh scratch XDG_CACHE_HOME the TUI `/plugins` shows **`opencode-goalv2 … failed`** — the bare specifier resolves only from the npm registry (or a pre-seeded cache), and the package is not published yet (`npm whoami` = ENEEDAUTH; user publishes). The docs claimed "No npm account or registry access needed" and "until then use one of the two routes above" — false for route 2's plugin resolution. Docs fixed to match verified reality (README.md, docs/install.html): route 1 documented as the registry-free GitHub route with its `opencode plugin remove` counterpart; route 2 marked registry-dependent until publish; `opencode-goal uninstall` clarified as touching only CLI-installer-added entries.
 193. **Marker unchanged** (files=41 tests=451) — docs/SPEC-only workstream, no shipped files or tests changed. Note: tag `v1.1.0` predates the v4-proof bookkeeping (aff3a49); shipped code at the tag is identical to dev for src/, bin/, test/.
+
+## Workstream BF — installer registers the GitHub specifier (2026-11-16)
+
+194. `bin/opencode-goal.mjs` exports `PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v1.1.0"` and writes that into the `plugins` array instead of the bare `"opencode-goalv2"` (Workstream BE route-2 finding: the bare specifier resolved only against npmjs.org and showed as `failed` in `/plugins` on fresh machines). The GitHub release is the distribution channel for this package; the specifier resolves at startup from GitHub (verified end-to-end, Workstream BE route 1 and its e2e).
+195. Back-compat: `uninstall` and `status` match both specifiers, so configs installed by the v1.1.0 installer uninstall cleanly. Installer-written configs now assert `PLUGIN_SPEC`; new regression test pins legacy bare-spec uninstall. Also fixes a comment-terminator bug (`-*/` inside the header mechanism comment closed the block comment) caught by `bun test test/cli-installer.test.ts`.
+Marker bumped `files=41 tests=451` → `files=41 tests=452`.
