@@ -1581,6 +1581,17 @@
       "submittedAt": "2026-11-16T08:36:59Z",
       "mergedAt": "2026-11-16T08:37:15Z",
       "mergedInto": "dev"
+    },
+    "tui-card-fit": {
+      "agent": "orchestrator",
+      "paths": "src/core/format.ts,src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,test/format.test.ts,SPEC.md,dist",
+      "branch": "wt/tui-card-fit",
+      "worktree": "worktrees/wt-tui-card-fit",
+      "status": "done",
+      "createdAt": "2026-11-16T08:42:29Z",
+      "submittedAt": "2026-11-16T08:46:40Z",
+      "mergedAt": "2026-11-16T08:47:16Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
