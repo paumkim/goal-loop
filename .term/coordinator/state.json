@@ -2247,6 +2247,17 @@
       "submittedAt": "2026-11-16T18:18:39Z",
       "mergedAt": "2026-11-16T18:21:23Z",
       "mergedInto": "dev"
+    },
+    "iteration-93-quotable-tallies": {
+      "agent": "orchestrator",
+      "paths": "src/core/attestation.ts,src/tui-history.tsx,src/status-dialog.tsx,src/tui.tsx,test/attestation.test.ts,test/tui-hud.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/iteration-93-quotable-tallies",
+      "worktree": "worktrees/wt-iteration-93-quotable-tallies",
+      "status": "done",
+      "createdAt": "2026-11-16T18:28:45Z",
+      "submittedAt": "2026-11-16T18:37:55Z",
+      "mergedAt": "2026-11-16T18:40:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
