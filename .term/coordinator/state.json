@@ -2181,8 +2181,36 @@
       "paths": "src/runtime/controller.ts,src/core/types.ts,src/core/wire.ts,src/hud-card.tsx,src/index.ts,test/loop.test.ts,test/tui-context-render.test.tsx,SPEC.md",
       "branch": "wt/reanchor-system-injection",
       "worktree": "worktrees/wt-reanchor-system-injection",
+      "status": "done",
+      "createdAt": "2026-11-16T17:19:56Z",
+      "submittedAt": "2026-11-16T17:27:46Z",
+      "mergedAt": "2026-11-16T17:39:55Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-merge-safety": {
+      "agent": "inkling",
+      "paths": "packages/coordinator/**,docs/parallel-work.md,SPEC.md,scripts/spec-check.ts,test/coordinator-merge-safety.test.ts",
+      "branch": "wt/coordinator-merge-safety",
+      "worktree": "worktrees/wt-coordinator-merge-safety",
       "status": "claimed",
-      "createdAt": "2026-11-16T17:19:56Z"
+      "createdAt": "2026-11-16T17:26:32Z"
+    },
+    "coordinator-merge-safety-tests": {
+      "agent": "inkling",
+      "paths": "scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,packages/coordinator/README.md",
+      "branch": "wt/coordinator-merge-safety-tests",
+      "worktree": "worktrees/wt-coordinator-merge-safety-tests",
+      "status": "claimed",
+      "createdAt": "2026-11-16T17:25:53Z"
+    },
+    "tui-dossier-export": {
+      "agent": "orchestrator",
+      "paths": "src/core/dossier-export.ts,src/tui.tsx,src/status-dialog.tsx,test/dossier-export.test.ts,test/tui-render.test.tsx,SPEC.md,docs",
+      "branch": "wt/tui-dossier-export",
+      "worktree": "worktrees/wt-tui-dossier-export",
+      "status": "submitted",
+      "createdAt": "2026-11-16T17:25:55Z",
+      "submittedAt": "2026-11-16T17:34:29Z"
     }
   },
   "mergeLock": null
