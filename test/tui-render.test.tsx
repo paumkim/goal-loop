@@ -1018,3 +1018,81 @@ describe("loop rail fold — controlled expand (keyboard parity)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("why ledger (the evaluator's most recent reasons, inline)", () => {
+  const ledgerGoal = (history: VerdictEntry[]): GoalSnapshot =>
+    loopedGoal({ loopEnabled: false, loopHistory: undefined, loopIteration: undefined, loopMaxLoops: undefined, history, status: "active" } as Partial<GoalSnapshot>)
+  const ledgerHistory: VerdictEntry[] = [
+    { turn: 1, verdict: "met", reason: "wired the progress bar", at: now - 1000 * 60 * 30 },
+    { turn: 2, verdict: "not_met", reason: "typecheck still fails on the CLI flag", at: now - 1000 * 60 * 20 },
+    { turn: 3, verdict: "met", reason: "all green including the flag path", at: now - 1000 * 60 * 10 },
+    { turn: 4, verdict: "not_met", reason: "", at: now - 1000 * 60 * 5 },
+    { turn: 5, verdict: "met", reason: "the full acceptance suite passes", at: now - 1000 * 60 * 2 },
+  ]
+
+  test("paints at most three non-empty rows, newest last — glyph, verdict, turn, relative time, reason", async () => {
+    const setup = await testRender(
+      () => <HistoryBlock goal={ledgerGoal(ledgerHistory)} theme={theme} elapsedMs={() => 1000 * 60 * 30} nowMs={() => now} />,
+      { width: 112, height: 30 },
+    )
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("why")
+    expect(frame).toContain("typecheck still fails on the CLI flag")
+    expect(frame).toContain("all green including the flag path")
+    expect(frame).toContain("the full acceptance suite passes")
+    expect(frame).toContain("turn 2 · 20m ago")
+    expect(frame).toContain("turn 3 · 10m ago")
+    expect(frame).toContain("turn 5 · 2m ago")
+    // the oldest verdicts and the one-empty-reason entry stay out
+    expect(frame).not.toContain("wired the progress bar")
+    expect(frame).not.toContain("turn 4")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking a why row copies the raw reason — the row flips ✓ copied in place", async () => {
+    const calls: string[] = []
+    const setup = await testRender(
+      () => <HistoryBlock goal={ledgerGoal(ledgerHistory)} theme={theme} elapsedMs={() => 1000 * 60 * 30} nowMs={() => now} onCopyReason={(reason) => calls.push(reason)} />,
+      { width: 112, height: 30 },
+    )
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("✓ copied")
+    const at = findIn(frame, "typecheck still fails on the CLI flag")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(calls).toEqual(["typecheck still fails on the CLI flag"])
+    expect(setup.captureCharFrame().split("\n")[at!.y]!).toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("why rows render unchanged without onCopyReason — clicks are inert", async () => {
+    const setup = await testRender(
+      () => <HistoryBlock goal={ledgerGoal(ledgerHistory)} theme={theme} elapsedMs={() => 1000 * 60 * 30} nowMs={() => now} />,
+      { width: 112, height: 30 },
+    )
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "the full acceptance suite passes")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame().split("\n")[at!.y]!).not.toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("an empty transcript of reasons degrades to no why rows — and the trail still paints", async () => {
+    const emptied = ledgerHistory.map((entry) => ({ ...entry, reason: "" }))
+    const setup = await testRender(
+      () => <HistoryBlock goal={ledgerGoal(emptied)} theme={theme} elapsedMs={() => 1000 * 60 * 30} nowMs={() => now} onCopyReason={() => {}} />,
+      { width: 112, height: 30 },
+    )
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("why")
+    expect(frame).toContain("trail")
+    await setup.renderer.destroy()
+  })
+})

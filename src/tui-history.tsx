@@ -30,6 +30,8 @@ export interface HistoryTheme {
 }
 
 const SUMMARY_MAX = 400
+const WHY_LIMIT = 3
+const WHY_REASON_MAX = 400
 /** Completed-iteration rows kept visible without expanding; older ones fold behind one click. */
 const RAIL_VISIBLE = 4
 
@@ -82,6 +84,8 @@ export const LoopSection = (props: {
   mono?: boolean
   /** When set, clicking a summary line copies that iteration's full summary. The line underlines on hover to advertise it. */
   onCopySummary?: (summary: string, version: number) => void
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason underlines on hover to advertise it. */
+  onCopyReason?: (reason: string) => void
   /** Controlled expand state for the iteration rail's fold row (the status dialog drives this from its keymap layer so keyboard users can expand). Uncontrolled when absent. */
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded` for controlled mode. */
@@ -321,27 +325,99 @@ export const LoopSection = (props: {
         </box>
       </Show>
       {/* evaluator verdict trail */}
-      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} ascii={ascii} />
+      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} />
     </box>
   )
 }
 
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
-const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean; ascii?: () => boolean }): JSX.Element => {
+/**
+ * The why ledger: at most the three most recent verdicts whose reason text is non-empty,
+ * oldest first (the trail's own direction). One row per verdict — glyph, verdict word,
+ * turn, relative time, reason — the evaluator's *why* at a glance, without scrolling the
+ * dialog to the last evaluator row. Click-to-copy when the caller wires onCopyReason;
+ * hover underlines the reason (the affordance grammar shared with the condition/summary/
+ * reason rows). The copied acknowledgment rides the row for a beat, like every other row.
+ */
+const WhyLedger = (props: {
+  theme: HistoryTheme
+  history: readonly VerdictEntry[]
+  mono?: boolean
+  ascii?: () => boolean
+  onCopyReason?: (reason: string) => void
+  nowMs?: () => number
+}): JSX.Element => {
+  const theme = () => props.theme
+  const mono = () => props.mono === true
+  const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
+  const [hovered, setHovered] = createSignal<number | null>(null)
+  const [copied, setCopied] = createSignal<number | null>(null)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const copy = (entry: VerdictEntry) => {
+    if (!props.onCopyReason) return
+    try {
+      props.onCopyReason(entry.reason)
+      setCopied(entry.at)
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setCopied(null), 1600)
+    } catch {
+      // Best-effort.
+    }
+  }
+  onCleanup(() => {
+    if (timer) clearTimeout(timer)
+  })
+  const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT)
+  const now = () => props.nowMs?.() ?? Date.now()
+  return (
+    <Show when={rows().length > 0}>
+      <For each={rows()}>
+        {(entry, index) => {
+          const interactive = props.onCopyReason !== undefined
+          return (
+            <box flexDirection="row" gap={2} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
+              {label(theme(), index() === 0 ? "why" : "")}
+              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry.verdict, mono())} attributes={TextAttributes.BOLD}>
+                {verdictGlyph(entry.verdict, ascii())}
+              </text>
+              <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+                {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}`}
+              </text>
+              <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.UNDERLINE : undefined}>
+                {truncate(entry.reason, WHY_REASON_MAX)}
+                {copied() === entry.at ? (ascii() ? " + copied" : " ✓ copied") : ""}
+              </text>
+              <Show when={interactive && hovered() === entry.at}>
+                <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
+                  copy
+                </text>
+              </Show>
+            </box>
+          )
+        }}
+      </For>
+    </Show>
+  )
+}
+
+const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean; ascii?: () => boolean; onCopyReason?: (reason: string) => void; nowMs?: () => number }): JSX.Element => {
   const mono = () => props.mono === true
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const trail = () => trailWindow(props.history, 24)
   return (
     <Show when={trail().shown.length > 0}>
-      <box flexDirection="row" gap={2}>
-        {label(props.theme, "trail")}
-        <box flexDirection="row" flexShrink={0}>
-          <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict, ascii())}</text>}</For>
+      <box flexDirection="column" gap={1}>
+        <box flexDirection="row" gap={2}>
+          {label(props.theme, "trail")}
+          <box flexDirection="row" flexShrink={0}>
+            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict, ascii())}</text>}</For>
+          </box>
+          <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
+            {" "}
+            {trail().shown.length} of {trail().total} verdict{trail().total === 1 ? "" : "s"}
+          </text>
         </box>
-        <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
-          {" "}
-          {trail().shown.length} of {trail().total} verdict{trail().total === 1 ? "" : "s"}
-        </text>
+        <WhyLedger theme={props.theme} history={props.history} mono={props.mono} ascii={props.ascii} onCopyReason={props.onCopyReason} nowMs={props.nowMs} />
       </box>
     </Show>
   )
@@ -357,11 +433,16 @@ export const HistoryBlock = (props: {
   theme: HistoryTheme
   /** Live extrapolated elapsed time in ms. Getter form so it stays reactive. */
   elapsedMs: () => number
+  /** Reference clock for the relative-time labels in the why ledger. Getter form so it stays reactive; defaults to Date.now(). */
+  nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason underlines on hover to advertise it. */
+  onCopyReason?: (reason: string) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
+  const nowMs = () => props.nowMs?.() ?? Date.now()
   const ascii = () => motionDisabled(process.env) || mono()
   const history = () => props.goal.history ?? []
   const counts = () => verdictCounts(history())
@@ -402,7 +483,7 @@ export const HistoryBlock = (props: {
           )}
         </Show>
       </box>
-      <VerdictTrail theme={theme()} history={history()} mono={mono()} ascii={ascii} />
+      <VerdictTrail theme={theme()} history={history()} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} />
     </box>
   )
 }
