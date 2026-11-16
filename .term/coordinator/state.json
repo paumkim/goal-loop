@@ -1251,6 +1251,17 @@
       "submittedAt": "2026-11-16T05:19:39Z",
       "mergedAt": "2026-11-16T05:20:02Z",
       "mergedInto": "dev"
+    },
+    "tui-retry-narrative": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-retry-narrative",
+      "worktree": "worktrees/wt-tui-retry-narrative",
+      "status": "done",
+      "createdAt": "2026-11-16T05:23:14Z",
+      "submittedAt": "2026-11-16T05:24:57Z",
+      "mergedAt": "2026-11-16T05:25:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
