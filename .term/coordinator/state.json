@@ -1614,6 +1614,17 @@
       "submittedAt": "2026-11-16T08:57:13Z",
       "mergedAt": "2026-11-16T08:58:28Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-arm-card": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-dialog-arm-card",
+      "worktree": "worktrees/wt-tui-dialog-arm-card",
+      "status": "done",
+      "createdAt": "2026-11-16T09:01:37Z",
+      "submittedAt": "2026-11-16T09:03:11Z",
+      "mergedAt": "2026-11-16T09:05:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
