@@ -13,7 +13,13 @@ to copy), the state row (live or terminal), the spend row when the server can es
 flow plus outflow plus cost), the last verdict, failure-first-class remediation when the loop is hot or failed,
 and — for a freshly armed goal, before the first turn lands — one teaching line (`hint  the evaluator reads
 only the transcript`): the evaluator never runs commands or reads files, so the condition must be provable from
-the conversation; the row disappears forever after turn 1. (c) The `/goal` detail view: a
+the conversation; the row disappears forever after turn 1. The card also answers right-click: anywhere on it
+toggles an in-card context menu (four fixed rows, appended below the permanent actions row so the absolute-mount
+anchor grows with it — `hudCardRows(goal, contextOpen)`): `copy condition`, `copy evaluator reason` (inert and
+faint when the snapshot carries no `reason`), `copy latest summary` (inert when no `loopHistory` entry exists),
+and `clear goal` (warning tone). Menu rows share the button hover grammar (raised background, underline under
+mono); inert rows never light up and swallow the click; any action collapses the menu; Esc or another
+right-click toggles it shut. (c) The `/goal` detail view: a
 
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, the same teaching line (`hint  the evaluator reads only the
@@ -452,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=725 -->
+<!-- spec-check files=43 tests=732 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
