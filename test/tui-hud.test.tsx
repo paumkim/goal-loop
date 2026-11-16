@@ -240,6 +240,19 @@ describe("remediationFor paused", () => {
   })
 })
 
+describe("remediationFor failed", () => {
+  test("a failed goal with a classifier label names the cause, not just the state", () => {
+    const fix = remediationFor(loopedGoal({ status: "failed", failureLabel: "authentication failure" }))
+    expect(fix?.tone).toBe("error")
+    expect(fix?.text).toBe("authentication failure — /goal clear to reset")
+  })
+
+  test("a failed record persisted before failureLabel falls back to the generic remedy", () => {
+    const fix = remediationFor(loopedGoal({ status: "failed" }))
+    expect(fix?.text).toBe("goal failed — /goal clear to reset")
+  })
+})
+
 describe("pinSuffix", () => {
   test("returns empty when the condition budget is below PIN_MIN_WIDTH or not finite", () => {
     expect(pinSuffix("condition", 11)).toBe("")

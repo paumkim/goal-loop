@@ -58,7 +58,7 @@ field existed restore without it), and the `fix` row names the exact exit — `t
 clear or set a new goal — a message will not extend it` at the turn cap, `no tool use for N turns · send
 a message to resume, or /goal clear` for the stall guard, `interrupted · send a message to resume` for a
 user abort; legacy paused records without a cause fall back to `paused · send a message to resume, or
-/goal clear`. A paused goal outranks a stuck retry loop in the remediation order. When a goal goes live→terminal (achieved / impossible / failed, never
+/goal clear`. A failed goal gets the same treatment: the record carries the classifier's short `failureLabel` (set only at the fatal-failure site, additive and absent on legacy records), and the `fix` row names the cause — `authentication failure — /goal clear to reset` — instead of a bare state word; legacy failed records fall back to `goal failed — /goal clear to reset`. A paused goal outranks a stuck retry loop in the remediation order. When a goal goes live→terminal (achieved / impossible / failed, never
 `cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
 (`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
 wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
@@ -450,7 +450,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=716 -->
+<!-- spec-check files=43 tests=719 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

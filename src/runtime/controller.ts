@@ -1092,6 +1092,7 @@ export class GoalController {
   private handleFailure(record: GoalRecord, runtime: Runtime, failure: ReturnType<typeof classifyFailure>) {
     if (failure.kind === "fatal") {
       const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
+      record.failureLabel = failure.label
       this.finish(record, "failed", reason)
       const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt })
       this.notify(record.sessionID, "failed", "error", "Goal failed", `${story} · ${reason}`)

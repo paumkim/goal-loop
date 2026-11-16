@@ -100,6 +100,7 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (!isGoalStatus(value.status)) return false
   if (value.reason !== undefined && !isString(value.reason)) return false
   if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause)) return false
+  if (value.failureLabel !== undefined && !isString(value.failureLabel)) return false
   if (value.verdict !== undefined && !isVerdict(value.verdict)) return false
   if (!isFiniteNumber(value.setAt) || !isFiniteNumber(value.startedAt)) return false
   if (value.endedAt !== undefined && !isFiniteNumber(value.endedAt)) return false

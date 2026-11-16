@@ -516,7 +516,8 @@ var fixAccentColor = (theme, tone, mono) => {
 };
 var remediationFor = (goal) => {
   if (goal.status === "failed") {
-    return { tone: "error", text: `goal failed \u2014 /goal clear to reset` };
+    const label = goal.failureLabel;
+    return { tone: "error", text: label ? `${label} \u2014 /goal clear to reset` : `goal failed \u2014 /goal clear to reset` };
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible \xB7 rephrase the condition, else /goal clear` };
@@ -1931,6 +1932,8 @@ var isGoalSnapshot = (value) => {
   if (value.reason !== undefined && !isString(value.reason))
     return false;
   if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause))
+    return false;
+  if (value.failureLabel !== undefined && !isString(value.failureLabel))
     return false;
   if (value.verdict !== undefined && !isVerdict(value.verdict))
     return false;
