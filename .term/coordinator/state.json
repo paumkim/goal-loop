@@ -1119,6 +1119,17 @@
       "submittedAt": "2026-11-16T02:34:17Z",
       "mergedAt": "2026-11-16T02:34:42Z",
       "mergedInto": "dev"
+    },
+    "plugin-json-docs": {
+      "agent": "opencode",
+      "paths": "test/plugin-json.test.ts,SPEC.md",
+      "branch": "wt/plugin-json-docs",
+      "worktree": "worktrees/wt-plugin-json-docs",
+      "status": "done",
+      "createdAt": "2026-11-16T02:38:49Z",
+      "submittedAt": "2026-11-16T02:42:59Z",
+      "mergedAt": "2026-11-16T02:43:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
