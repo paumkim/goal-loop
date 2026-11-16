@@ -4,7 +4,7 @@
  * content: state line, wrapped condition/evaluator/spend rows, and the history sections. Everything is
  * presentational, rendered from the live snapshot passed in by the caller; theme tokens only.
  */
-import { Show, createSignal } from "solid-js"
+import { Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
@@ -58,10 +58,24 @@ export const StatusDialogBody = (props: {
     const goal = g()
     return goal ? evaluatorHint(goal) : null
   }
+  // Host toasts do not render above the modal, so row copies acknowledge in place: a transient
+  // `✓ copied` suffix on the row that was clicked (same grammar as the footer's copy button).
+  const [copied, setCopied] = createSignal<string | null>(null)
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+  const acknowledge = (key: string) => {
+    setCopied(key)
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => setCopied(null), 1600)
+  }
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
+  const copiedSuffix = (key: string) => (copied() === key ? " ✓ copied" : "")
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
+      acknowledge("condition")
     } catch {
       // Best-effort.
     }
@@ -70,6 +84,7 @@ export const StatusDialogBody = (props: {
     if (!props.onCopyReason) return
     try {
       props.onCopyReason(reason)
+      acknowledge("reason")
     } catch {
       // Best-effort.
     }
@@ -91,7 +106,7 @@ export const StatusDialogBody = (props: {
           <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)}>
             {label("goal")}
             <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={props.onCopyCondition ? TextAttributes.UNDERLINE : undefined}>
-              {goal().condition}
+              {goal().condition}{copiedSuffix("condition")}
             </text>
           </box>
           {/* evaluator/reason — click to copy the raw text (host wires clipboard + toast via onCopyReason) */}
@@ -104,7 +119,7 @@ export const StatusDialogBody = (props: {
                 <box flexDirection="row" gap={2} onMouseUp={() => copyReason(reason())} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
                   {label(goal().status === "active" ? "evaluator" : "reason")}
                   <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.UNDERLINE : undefined}>
-                    {reason()}
+                    {reason()}{copiedSuffix("reason")}
                   </text>
                 </box>
               </Show>

@@ -7,7 +7,7 @@
  * RGBA, no absolute positioning. Pure layout math lives in `src/core/history.ts` (unit-tested).
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
-import { For, Show, createSignal } from "solid-js"
+import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
@@ -45,7 +45,7 @@ const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorIn
  * the summary is the payload a user most often wants verbatim (to paste into a prompt or
  * an issue), so the whole line is the click target — underlined on hover, like the condition row.
  */
-const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void }): JSX.Element => {
+const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const copy = () => {
     if (!props.onCopy) return
@@ -62,6 +62,7 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
       </text>
       <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined}>
         {`│ ${truncate(props.text, SUMMARY_MAX)}`}
+        {props.copied?.() ? " ✓ copied" : ""}
       </text>
     </box>
   )
@@ -81,6 +82,24 @@ export const LoopSection = (props: {
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
+  // In-modal acknowledgment: host toasts do not render above the /goal dialog, so a summary copy
+  // flips a transient `✓ copied` on the line itself (same grammar as the dialog's footer button).
+  const [copiedVersion, setCopiedVersion] = createSignal<number | null>(null)
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
+  const copySummary = (summary: string, version: number) => {
+    if (!props.onCopySummary) return
+    try {
+      props.onCopySummary(summary, version)
+      setCopiedVersion(version)
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => setCopiedVersion(null), 1600)
+    } catch {
+      // Best-effort.
+    }
+  }
   const history = () => props.goal.loopHistory ?? []
   const done = () => history().length
   const max = () => props.goal.loopMaxLoops
@@ -209,7 +228,7 @@ export const LoopSection = (props: {
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>
-              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => props.onCopySummary?.(text, entry.version) : undefined} />
+              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} />
             </Show>
           </box>
           )
