@@ -2499,6 +2499,8 @@ var tui_default = Plugin.define({
     const showStatusDialogInner = (sessionID, fallback) => {
       setScrollRef(undefined);
       setStatusEscHovered(false);
+      setContextOpen(false);
+      setHudSession(undefined);
       refresh(sessionID).catch(() => {});
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
@@ -2906,7 +2908,6 @@ var tui_default = Plugin.define({
         return;
       try {
         const g = entries()[sessionID]?.goal;
-        setHudSession(undefined);
         showStatusDialog(sessionID, g?.condition ?? "goal");
       } catch {}
     };

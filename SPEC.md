@@ -2788,3 +2788,33 @@ this workstream.
 Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (91 pass),
 bun run check green, coordinator submit + merge-next, and bun run check on dev shown green at the
 end.
+
+## Workstream CO — one door out of the card: the status dialog disarms it (2026-11-16)
+
+Interpretation of this iteration: craft and information hierarchy — the modal is the deepest zoom
+level; it must be the only thing speaking. Re-examination after the ranked audit (its listed findings,
+verified line-by-line at the current tree, were all already closed — the useful remainder was a
+state-consistency hole in the dialog path).
+
+274. src/tui.tsx (showStatusDialogInner): opening the status dialog now unconditionally disarms the
+     compact HUD card — setContextOpen(false) + setHudSession(undefined) at the choke point every
+     caller passes through. Before this, only openDashboard() disarmed the card; the /goal command
+     and the palette `Goal: show status` / `Goal loop: show status` reach the dialog through
+     rpc.status → host notice → onNoticeInner status branch → showStatusDialog, bypassing
+     openDashboard entirely. The card therefore stayed painted behind the modal and the
+     priority-100 HUD Esc layer stayed armed alongside the host modal layer, making Esc behavior
+     ambiguous behind the dialog. The fix covers the notice path, openDashboard, and any future
+     caller; openDashboard's redundant inline resets were removed (the choke point owns them).
+275. Failure paths unchanged: if a reset or the dialog body throws, the host's error toast reports
+     it exactly as before; the reset itself cannot fail (plain signal sets). Visibility: bug class,
+     not data loss; the user-facing defect was a dialog opening over a redundant, focus-competing card.
+276. Evidence: source-layer. The slot mount and the setup-scope closures cannot mount headlessly, so
+     no headless test pins this (the same ceiling as all mount-wiring evidence in this codebase); the
+     behavior itself is a two-signal reset verified by reading every caller in src/tui.tsx. No new
+     tests; the marker stays at files=43 tests=802. Live TUI remains unverifiable (dead provider).
+
+No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev.
+No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check green (802 tests, spec-check
+ok), coordinator submit + merge-next, and bun run check on dev shown green at the end.
