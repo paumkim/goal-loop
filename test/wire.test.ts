@@ -259,3 +259,21 @@ describe("zero-work verdict entries", () => {
     expect(parseGoalSnapshot(withTools("0"))).toBeUndefined()
   })
 })
+
+describe("per-turn spend on verdict entries", () => {
+  const spendSnapshot = (spend?: unknown) => ({
+    ...snapshot(),
+    history: [{ turn: 1, verdict: "not_met" as const, reason: "not yet", at: 900, ...(spend === undefined ? {} : { spend }) }],
+  })
+  const fullSpend = { cost: 0.42, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+
+  test("an additive VerdictEntry spend is accepted when present", () => {
+    expect(parseGoalSnapshot(spendSnapshot(fullSpend as never))?.history[0]?.spend?.cost).toBe(0.42)
+  })
+
+  test("a broken or partial spend is rejected", () => {
+    expect(parseGoalSnapshot(spendSnapshot("0.42"))).toBeUndefined()
+    expect(parseGoalSnapshot(spendSnapshot({ cost: Number.NaN, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 }))).toBeUndefined()
+    expect(parseGoalSnapshot(spendSnapshot({ cost: 1 }))).toBeUndefined()
+  })
+})

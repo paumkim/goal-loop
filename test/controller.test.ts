@@ -206,6 +206,33 @@ describe("GoalController", () => {
     expect(h.requests[0]).toMatchObject({ turn: 1, elapsedMs: 90_000, spend: { cost: 2, input: 500, output: 50 } })
   })
 
+  test("verdict entries carry the per-turn spend delta — arm-seeded, then against the previous reading", async () => {
+    h = harness()
+    await h.set()
+    h.setUsage({ cost: 3, input: 600, output: 60, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    h.verdicts.push(notMet("first"))
+    await h.turn()
+    h.setUsage({ cost: 6, input: 900, output: 90, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    h.verdicts.push(met("done"))
+    await h.turn()
+    const goal = h.controller.get(SID)!
+    // Turn 1 diffs against the arm-time reading (the default fixture: cost 1, input 100).
+    expect(goal.history[0]?.spend).toMatchObject({ cost: 2, input: 500, output: 50 })
+    // Turn 2 diffs against turn 1 — not against the arm — never cumulative-since-set.
+    expect(goal.history[1]?.spend).toMatchObject({ cost: 3, input: 300, output: 30 })
+  })
+
+  test("a verdict entry records no spend when the host cannot measure it", async () => {
+    h = harness()
+    await h.set()
+    h.setUsageFn(async () => {
+      throw new Error("usage unavailable")
+    })
+    h.verdicts.push(notMet("no numbers this turn"))
+    await h.turn()
+    expect(h.controller.get(SID)?.history[0]?.spend).toBeUndefined()
+  })
+
   test("impossible clears the goal", async () => {
     await h.set()
     h.verdicts.push({ verdict: "impossible", reason: "the API does not exist" })

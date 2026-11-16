@@ -70,7 +70,8 @@ const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isVerdict(value.verdict) &&
   isString(value.reason) &&
   isFiniteNumber(value.at) &&
-  (value.toolCalls === undefined || isFiniteNumber(value.toolCalls))
+  (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) &&
+  (value.spend === undefined || isUsageSnapshot(value.spend))
 
 const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&

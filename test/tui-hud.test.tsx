@@ -1102,3 +1102,30 @@ describe("cardWidth — the fluid card", () => {
     await fixed.renderer.destroy()
   })
 })
+
+describe("per-turn spend in the why ledger", () => {
+  const spend = (cost: number) => ({ cost, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+
+  test("each verdict row paints its own turn's cost beside the timing furniture", async () => {
+    const goal = loopedGoal({
+      history: [
+        { turn: 1, verdict: "not_met", reason: "not yet", at: now - 1000 * 60 * 9, toolCalls: 4, spend: spend(0.31) },
+        { turn: 2, verdict: "met", reason: "already held at HEAD", at: now - 1000 * 60 * 3, toolCalls: 0, spend: spend(0.42) },
+      ],
+    })
+    const setup = await testRender(() => <LoopSection goal={goal} theme={theme as unknown as HistoryTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("$0.31")
+    expect(frame).toContain("$0.42")
+    await setup.renderer.destroy()
+  })
+
+  test("a verdict from a record without spend paints no cost at all", async () => {
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme as unknown as HistoryTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("$")
+    await setup.renderer.destroy()
+  })
+})

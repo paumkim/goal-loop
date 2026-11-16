@@ -847,7 +847,6 @@ var LoopSection = (props) => {
   };
   const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`;
   const shaSuffix = (entry) => entry.sha ? ` \xB7 ${entry.sha.slice(0, 7)}` : "";
-  const spendSuffix = (entry) => entry.spend && entry.spend.cost > 0 ? ` \xB7 ${formatCost(entry.spend.cost)}` : "";
   const paused = () => props.goal.status === "paused";
   const stateWord = () => {
     const s = props.goal.status;
@@ -1212,6 +1211,7 @@ var LoopSection = (props) => {
     return _el$5;
   })();
 };
+var spendSuffix = (entry) => entry.spend && entry.spend.cost > 0 ? ` \xB7 ${formatCost(entry.spend.cost)}` : "";
 var WhyLedger = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
@@ -1268,7 +1268,7 @@ var WhyLedger = (props) => {
             _$insert(_el$39, () => verdictEntryGlyph(entry, ascii()));
             _$setProp(_el$40, "wrapMode", "none");
             _$setProp(_el$40, "flexShrink", 0);
-            _$insert(_el$40, () => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}`);
+            _$insert(_el$40, () => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${spendSuffix(entry)}`);
             _$setProp(_el$41, "wrapMode", "word");
             _$setProp(_el$41, "flexGrow", 1);
             _$insert(_el$41, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"), null);
@@ -2880,7 +2880,7 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls));
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
 var isGoalSnapshot = (value) => {
