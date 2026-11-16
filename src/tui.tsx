@@ -23,6 +23,7 @@ import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type Sig
 import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
 import { exportReview, reviewSummaryLine } from "./core/dossier-review.ts"
 import { exportSpendLedger, spendSummaryLine } from "./core/spend-ledger.ts"
+import { exportDossierIndex, dossierIndexSummaryLine } from "./core/dossier-index.ts"
 import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
@@ -728,6 +729,18 @@ export default Plugin.define({
         return undefined
       }
     }
+    // The inventory, one file: scan the host's cwd for the dossier family's exported artifacts (goal-dossier-*.md, goal-dossier-review-*.md, goal-dossier-sealed-*.md, goal-spend-ledger-*.md, and previous goal-dossier-index-*.md files) and write ONE O_EXCL markdown index — file name, kind, bytes (UTF-8), sha256 — then totals, then an honesty footer. The index inventories; it does not verify. A previous index is listed as kind index; the index being written never lists itself. Enabled always: it reads files, not the record.
+    const dossierIndexAction = (sessionID: string | undefined) => {
+      try {
+        const result = exportDossierIndex(Date.now(), process.cwd())
+        const summary = dossierIndexSummaryLine(result)
+        const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written"
+        const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success"
+        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
+      } catch (error) {
+        safeToast({ title: "index failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
     // history (the dialog's [clear goal], the card footer button, the danger row in the context menu,
     // and both palette commands). Every clear path funnels through the host's native confirm dialog;
@@ -1277,6 +1290,18 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               spendLedgerAction(sessionID, goal)
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.index",
+          title: "Goal: index the exported dossier artifacts (markdown)",
+          group: "Goal",
+          palette: true,
+          enabled: () => true,
+          run: () => {
+            try {
+              dossierIndexAction(currentSession())
             } catch {}
           },
         },

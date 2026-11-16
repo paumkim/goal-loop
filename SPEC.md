@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,7 +5129,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5194,7 +5194,7 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
 
@@ -5267,7 +5267,7 @@ line, the object carries a verifiable mark. None substitutes for another.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EG — the dossier, sealed: the proofs ride the file (2026-11-16)
 
@@ -5416,7 +5416,7 @@ what it cannot prove. Plain `goal.dossier.seal` and `goal.dossier.export` are un
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=55 tests=1235.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EI — the review, in one file: every question git can answer (2026-11-16)
 
@@ -5479,7 +5479,7 @@ error — information is not accusation.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=56 tests=1253.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
 
 ## Workstream EJ — the spend ledger, one file (2026-11-16)
 
@@ -5534,6 +5534,68 @@ report is a receipt, not a summary.
      measurement does, and renders $0); the record's free text is quoted and the session id is
      omitted; headless test-renderer layer, live TUI unverifiable.
 
+## Workstream EK — the inventory, one file: what the dossier family left behind (2026-11-16)
+
+Interpretation of the mouse-first clause: the dossier family can now export five artifacts into
+the host's cwd (dossier, review, sealed, spend ledger — and its own indices), but no artifact
+answers which of those files are actually there, what kind they are, or whether the bytes that
+left the process are the bytes that were read. This iteration writes the inventory:
+`goal.dossier.index` (palette only: no chord, no footer furniture) scans the host's cwd for the
+family's exported artifacts and writes ONE O_EXCL markdown index — file name, kind, bytes
+(UTF-8), sha256 — then totals, then an honesty footer.
+
+503. src/core/dossier-index.ts — new pure builder, no JSX, no theme (the I/O lives at the
+     edges: readdirSync/readFileSync for the scan, one O_EXCL writeFileSync for the output).
+     `dossierIndexName(nowMs, attempt?)` stamps `goal-dossier-index-<YYYYMMDD-HHMMSS>[-n].md`
+     (a non-finite clock stamps the epoch; deterministic). `dossierArtifactKind(name)`
+     classifies exactly five families — `goal-dossier-<stamp>[-n].md` → dossier,
+     `goal-dossier-review-<stamp>[-n].md` → review, `goal-dossier-sealed-<stamp>[-n].md` →
+     sealed, `goal-spend-ledger-<stamp>[-n].md` → spend ledger,
+     `goal-dossier-index-<stamp>[-n].md` → index — anchored, case-sensitive, requiring the
+     exporters' own stamp shape with 1-based `-n` suffixes, `.md` only; anything else returns
+     undefined. `scanDossierArtifacts(dir)` reads only regular files directly in the named
+     directory (no recursion, no directories), measures the bytes it read, hashes them with
+     sha256, counts matching files that cannot be read in `skipped` (counted, never listed,
+     never guessed), and sorts by name for a deterministic document.
+     `buildDossierIndex(entries, nowMs, skipped?)` renders the title, a self-describing
+     generated-stamp line (the directory path is omitted on purpose), `## Artifacts (N files,
+     M bytes)` with one row per artifact — file (inline-code fenced) · kind · bytes · sha256 —
+     the skipped-count note when present, then the `---` honesty footer.
+     `exportDossierIndex(nowMs, dir)` writes O_EXCL with `MAX_EXPORT_ATTEMPTS` collision
+     retries, never overwrites, never lists the index being written (the scan happens before
+     the write; a previous index IS listed as kind index), and throws with the filesystem's
+     own message — the target is always the existing caller-named directory.
+     `dossierIndexSummaryLine` is the toast's chrome-free one-liner (no artifacts / complete /
+     with unreadable count).
+504. src/tui.tsx — `dossierIndexAction` + palette command `goal.dossier.index`
+     ("Goal: index the exported dossier artifacts (markdown)"). Writes into `process.cwd()`;
+     toasts `dossier index written` (success) / `dossier index written with gaps` / no
+     artifacts found (warning for the gaps and zero-artifact arms — information is not an
+     error); write failures toast error with the filesystem's own message. The index reads
+     files, not the record, so it is enabled always (like the attest door), needs no goal, and
+     no live session. No footer chord, no dialog row, the palette is the surface.
+505. Tests: +20 unit (dossier-index.test.ts: `dossierIndexName` stem/suffix/epoch; the kind
+     classifier across all five families with and without suffixes, and its rejection of the
+     near-misses — short stamps, zero or leading-zero suffixes, wrong case, wrong extension,
+     foreign stems; the builder's exact rows, sorted-by-name order, the None sentence for an
+     empty scan, the skipped-count note and its non-negative-integer guard, byte-for-byte
+     determinism, the inventory-not-verification footer, the absence of any directory path;
+     `scanDossierArtifacts` over a real temp dir — regular files read and hashed (bytes and
+     digests asserted against hard-coded sha256 fixtures), non-artifacts ignored, an
+     artifact-shaped directory ignored, an empty directory scans clean;
+     `exportDossierIndex` writes one new file (path/bytes/attempts/artifacts/artifactBytes),
+     rows match the on-disk artifacts, a pre-existing stem survives and suffixes `-2`, a
+     previous index is listed as kind index while the index being written never is, the
+     written file is itself classified as an artifact, a missing directory throws; every
+     `dossierIndexSummaryLine` arm) + re-pinned pack count 59. Tests: 1307 pass, 0 fail (52 files).
+506. Honest limits: the index inventories, it does not verify — sha256 rows are digests of the
+     bytes read at generation time and say nothing about the present; unreadable matches are
+     counted in `skipped` and named in the document, never listed with guessed bytes or a
+     zeroed digest; the directory path is omitted from the document on purpose; the scan is
+     one level deep, never recursive; files that are not artifacts are ignored silently on
+     purpose (the classifier is the boundary, not a heuristic); the exporter never lists the
+     index it is writing; headless test-renderer layer, live TUI unverifiable.
+
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=57 tests=1270.
-<!-- spec-check files=58 tests=1287 -->
+<!-- spec-check files=59 tests=1307 -->
