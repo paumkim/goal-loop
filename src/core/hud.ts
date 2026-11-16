@@ -225,6 +225,8 @@ export interface NeutralTheme<C> {
       readonly info: { readonly base: C }
       readonly warning: { readonly base: C }
       readonly error?: { readonly base: C }
+      /** Present on many host themes; optional so minimal test themes fit. Falls back to info (the prior paint). */
+      readonly success?: { readonly base: C }
     }
   }
 }
@@ -258,6 +260,24 @@ export const verdictAccentColor = <C>(theme: NeutralTheme<C>, verdict: string, m
   if (verdict === "met") return mono ? theme.text.base : theme.text.feedback.info.base
   if (verdict === "impossible") return mono ? theme.text.base : theme.text.feedback.warning.base
   return theme.text.faint
+}
+
+/**
+ * Work-ledger accent for one recorded verdict — the three-way grammar of the loop ledger:
+ * work produced (green, `success`, falling back to info), already satisfied at HEAD (blue,
+ * info — the same hue CJ/CL paint the hollow glyph with), and state inspection only
+ * (yellow/amber, warning — a zero-tool turn that still has not met). Mono drops the hue and
+ * defers to verdictAccentColor's mono path: the glyph shape carries the signal, as everywhere
+ * else. A met verdict with work paints success only when the theme exposes it; hosts without a
+ * success token paint exactly the pre-existing info blue.
+ */
+export const verdictEntryAccentColor = <C>(theme: NeutralTheme<C>, entry: { verdict: string; toolCalls?: number }, mono: boolean): C => {
+  if (mono) return verdictAccentColor(theme, entry.verdict, true)
+  if (entry.verdict === "impossible") return theme.text.feedback.warning.base
+  // Only a measured worked turn paints green; a met from before toolCalls existed (unknown) keeps the prior info paint — the ledger never claims work it cannot see.
+  if (entry.verdict === "met") return entry.toolCalls === undefined || entry.toolCalls === 0 ? theme.text.feedback.info.base : (theme.text.feedback.success?.base ?? theme.text.feedback.info.base)
+  if (entry.verdict === "not_met" && entry.toolCalls === 0) return theme.text.feedback.warning.base
+  return verdictAccentColor(theme, entry.verdict, false)
 }
 
 /** Remediation (`fix`) row accent. Mono: `base` — the remedy is exact either way, the tone never is. */

@@ -663,6 +663,17 @@ var verdictAccentColor = (theme, verdict, mono) => {
     return mono ? theme.text.base : theme.text.feedback.warning.base;
   return theme.text.faint;
 };
+var verdictEntryAccentColor = (theme, entry, mono) => {
+  if (mono)
+    return verdictAccentColor(theme, entry.verdict, true);
+  if (entry.verdict === "impossible")
+    return theme.text.feedback.warning.base;
+  if (entry.verdict === "met")
+    return entry.toolCalls === undefined || entry.toolCalls === 0 ? theme.text.feedback.info.base : theme.text.feedback.success?.base ?? theme.text.feedback.info.base;
+  if (entry.verdict === "not_met" && entry.toolCalls === 0)
+    return theme.text.feedback.warning.base;
+  return verdictAccentColor(theme, entry.verdict, false);
+};
 var fixAccentColor = (theme, tone, mono) => {
   if (mono)
     return theme.text.base;
@@ -742,7 +753,7 @@ var label = (theme, text) => (() => {
   _$effect((_$p) => _$setProp(_el$, "fg", theme.text.faint, _$p));
   return _el$;
 })();
-var colorFor = (theme, verdict, mono) => verdictAccentColor(theme, verdict, mono);
+var colorFor = (theme, entry, mono) => verdictEntryAccentColor(theme, entry, mono);
 var RailSummary = (props) => {
   const ascii = () => props.ascii?.() === true || motionDisabled(process.env);
   const [hovered, setHovered] = createSignal(false);
@@ -1091,7 +1102,10 @@ var LoopSection = (props) => {
               });
             }
           }), null);
-          _$effect((_$p) => _$setProp(_el$31, "fg", mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
+          _$effect((_$p) => _$setProp(_el$31, "fg", verdictEntryAccentColor(theme(), {
+            verdict: "met",
+            toolCalls: entry.toolCalls
+          }, mono()), _$p));
           return _el$29;
         })();
       }
@@ -1129,7 +1143,7 @@ var LoopSection = (props) => {
           return () => _c$4() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
         })());
         _$effect((_p$) => {
-          var _v$17 = theme().text.muted, _v$18 = colorFor(theme(), entry().verdict, mono()), _v$19 = TextAttributes.BOLD, _v$20 = theme().text.faint;
+          var _v$17 = theme().text.muted, _v$18 = colorFor(theme(), entry(), mono()), _v$19 = TextAttributes.BOLD, _v$20 = theme().text.faint;
           _v$17 !== _p$.e && (_p$.e = _$setProp(_el$34, "fg", _v$17, _p$.e));
           _v$18 !== _p$.t && (_p$.t = _$setProp(_el$36, "fg", _v$18, _p$.t));
           _v$19 !== _p$.a && (_p$.a = _$setProp(_el$36, "attributes", _v$19, _p$.a));
@@ -1290,7 +1304,7 @@ var WhyLedger = (props) => {
               }
             }), null);
             _$effect((_p$) => {
-              var _v$21 = colorFor(theme(), entry.verdict, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base, _v$25 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
+              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base, _v$25 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
               _v$21 !== _p$.e && (_p$.e = _$setProp(_el$39, "fg", _v$21, _p$.e));
               _v$22 !== _p$.t && (_p$.t = _$setProp(_el$39, "attributes", _v$22, _p$.t));
               _v$23 !== _p$.a && (_p$.a = _$setProp(_el$40, "fg", _v$23, _p$.a));
@@ -1339,7 +1353,7 @@ var VerdictTrail = (props) => {
           var _el$51 = _$createElement("text");
           _$setProp(_el$51, "wrapMode", "none");
           _$insert(_el$51, () => verdictEntryGlyph(entry, ascii()));
-          _$effect((_$p) => _$setProp(_el$51, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
+          _$effect((_$p) => _$setProp(_el$51, "fg", colorFor(props.theme, entry, mono()), _$p));
           return _el$51;
         })()
       }));
@@ -1434,7 +1448,7 @@ var HistoryBlock = (props) => {
         _$setProp(_el$59, "flexGrow", 1);
         _$insert(_el$59, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$26 = colorFor(theme(), entry().verdict, mono()), _v$27 = TextAttributes.BOLD, _v$28 = theme().text.base;
+          var _v$26 = colorFor(theme(), entry(), mono()), _v$27 = TextAttributes.BOLD, _v$28 = theme().text.base;
           _v$26 !== _p$.e && (_p$.e = _$setProp(_el$58, "fg", _v$26, _p$.e));
           _v$27 !== _p$.t && (_p$.t = _$setProp(_el$58, "attributes", _v$27, _p$.t));
           _v$28 !== _p$.a && (_p$.a = _$setProp(_el$59, "fg", _v$28, _p$.a));
@@ -1944,7 +1958,7 @@ import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { createSignal as createSignal3, Show as Show3 } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
-var verdictColor = (theme, verdict, mono) => verdictAccentColor(theme, verdict, mono);
+var verdictColor = (theme, entry, mono) => verdictEntryAccentColor(theme, entry, mono);
 var Hint = (props) => (() => {
   var _el$ = _$createElement3("text");
   _$setProp3(_el$, "wrapMode", "none");
@@ -2481,7 +2495,7 @@ var HudCard = (props) => {
         _$setProp3(_el$42, "wrapMode", "none");
         _$insert3(_el$42, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
-          var _v$27 = theme().text.faint, _v$28 = verdictColor(theme(), entry().verdict, mono()), _v$29 = TextAttributes3.BOLD, _v$30 = theme().text.muted;
+          var _v$27 = theme().text.faint, _v$28 = verdictColor(theme(), entry(), mono()), _v$29 = TextAttributes3.BOLD, _v$30 = theme().text.muted;
           _v$27 !== _p$.e && (_p$.e = _$setProp3(_el$39, "fg", _v$27, _p$.e));
           _v$28 !== _p$.t && (_p$.t = _$setProp3(_el$41, "fg", _v$28, _p$.t));
           _v$29 !== _p$.a && (_p$.a = _$setProp3(_el$41, "attributes", _v$29, _p$.a));

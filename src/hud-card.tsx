@@ -23,7 +23,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -37,6 +37,8 @@ export interface HudCardTheme {
       readonly warning: { readonly base: ColorInput }
       /** Present on the real theme; optional so minimal test themes still fit. Falls back to warning. */
       readonly error?: { readonly base: ColorInput }
+      /** Present on many host themes; optional so minimal test themes fit. Falls back to info (the prior paint). */
+      readonly success?: { readonly base: ColorInput }
     }
   }
   readonly border?: { readonly base: ColorInput }
@@ -57,8 +59,8 @@ const stateWord = (goal: GoalSnapshot): string =>
             ? "stuck"
             : "active"
       : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
-const verdictColor = (theme: HudCardTheme, verdict: Verdict, mono: boolean): ColorInput =>
-  verdictAccentColor(theme, verdict, mono)
+const verdictColor = (theme: HudCardTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
+  verdictEntryAccentColor(theme, entry, mono)
 
 const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
   <text wrapMode="none" fg={props.theme.text.faint}>
@@ -514,7 +516,7 @@ export const HudCard = (props: {
             <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
               last
             </text>
-            <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
+            <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry(), mono())} attributes={TextAttributes.BOLD}>
               {verdictEntryGlyph(entry(), ascii())}
             </text>
             <text wrapMode="none" fg={theme().text.muted}>

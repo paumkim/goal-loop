@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -461,6 +461,28 @@ describe("accent mappers (reduced color)", () => {
     expect(fixAccentColor(theme, "error", true)).toBe(theme.text.base)
     expect(fixAccentColor(theme, "error", false)).toBe(theme.text.feedback.error!.base)
     expect(fixAccentColor(theme, "warning", false)).toBe(theme.text.feedback.warning.base)
+  })
+  test("verdictEntryAccentColor paints the three-way work ledger", () => {
+    const withSuccess = { ...theme, text: { ...theme.text, feedback: { ...theme.text.feedback, success: { base: RGBA.fromHex("#3fb950") } } } } as HudCardTheme
+    // work produced: green on hosts exposing success, the pre-existing info blue everywhere else
+    expect(verdictEntryAccentColor(withSuccess, { verdict: "met", toolCalls: 3 }, false)).toBe(withSuccess.text.feedback.success!.base)
+    expect(verdictEntryAccentColor(theme, { verdict: "met", toolCalls: 3 }, false)).toBe(theme.text.feedback.info.base)
+    // already satisfied at HEAD: blue in both themes
+    expect(verdictEntryAccentColor(withSuccess, { verdict: "met", toolCalls: 0 }, false)).toBe(theme.text.feedback.info.base)
+    expect(verdictEntryAccentColor(theme, { verdict: "met", toolCalls: 0 }, false)).toBe(theme.text.feedback.info.base)
+    // state inspection only: amber for a zero-tool not_met; a worked not_met stays faint
+    expect(verdictEntryAccentColor(theme, { verdict: "not_met", toolCalls: 0 }, false)).toBe(theme.text.feedback.warning.base)
+    expect(verdictEntryAccentColor(theme, { verdict: "not_met", toolCalls: 7 }, false)).toBe(theme.text.faint)
+    // impossible keeps the amber family at zero tools; absent toolCalls reads as "unknown" — the pre-toolCalls path, never fabricated as work or inspection
+    expect(verdictEntryAccentColor(theme, { verdict: "impossible", toolCalls: 0 }, false)).toBe(theme.text.feedback.warning.base)
+    expect(verdictEntryAccentColor(withSuccess, { verdict: "met" }, false)).toBe(withSuccess.text.feedback.info.base)
+  })
+
+  test("verdictEntryAccentColor under mono drops the hue — the glyph shape carries the signal", () => {
+    expect(verdictEntryAccentColor(theme, { verdict: "met", toolCalls: 0 }, true)).toBe(theme.text.base)
+    expect(verdictEntryAccentColor(theme, { verdict: "met", toolCalls: 9 }, true)).toBe(theme.text.base)
+    expect(verdictEntryAccentColor(theme, { verdict: "not_met", toolCalls: 0 }, true)).toBe(theme.text.faint)
+    expect(verdictEntryAccentColor(theme, { verdict: "impossible", toolCalls: 0 }, true)).toBe(theme.text.base)
   })
 })
 
