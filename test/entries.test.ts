@@ -92,3 +92,40 @@ describe("preserveContextSize", () => {
     expect(preserveContextSize(withCtx(-10), snap("active"))?.contextSize).toBeUndefined()
   })
 })
+
+describe("preserveContextSize across a compaction landing", () => {
+  const withCtx = (contextSize: number | undefined): GoalSnapshot => ({ ...snap("active"), contextSize }) as unknown as GoalSnapshot
+  const withCompact = (landedAt: number | undefined, base: GoalSnapshot): GoalSnapshot =>
+    ({ ...base, loopCompact: { requestedAt: 1, iteration: 2, misses: 0, ...(landedAt !== undefined ? { landedAt } : {}) } }) as unknown as GoalSnapshot
+
+  test("a pending→landed flip drops the cached pre-compaction total", () => {
+    const prev = withCompact(undefined, withCtx(185_000))
+    const next = withCompact(2, snap("active"))
+    expect(preserveContextSize(prev, next)?.contextSize).toBeUndefined()
+  })
+
+  test("a fresh landing event with no prior pending still drops the cache", () => {
+    // First snapshot observed after the TUI (re)starts can already carry landedAt; dropping the
+    // cache costs nothing when there is nothing worth carrying from a replaced context.
+    const next = withCompact(2, snap("active"))
+    expect(preserveContextSize(withCtx(185_000), next)?.contextSize).toBeUndefined()
+  })
+
+  test("a re-delivered landed record keeps the carried (post-landing) value", () => {
+    const prev = withCompact(2, withCtx(9_500))
+    const next = withCompact(2, snap("active"))
+    expect(preserveContextSize(prev, next)?.contextSize).toBe(9_500)
+  })
+
+  test("an unchanged pending still carries the total forward (no landing, no invalidation)", () => {
+    const prev = withCompact(undefined, withCtx(185_000))
+    const next = withCompact(undefined, snap("active"))
+    expect(preserveContextSize(prev, next)?.contextSize).toBe(185_000)
+  })
+
+  test("a snapshot carrying its own estimate wins over the invalidation", () => {
+    const prev = withCompact(undefined, withCtx(185_000))
+    const next = withCompact(2, withCtx(9_500))
+    expect(preserveContextSize(prev, next)?.contextSize).toBe(9_500)
+  })
+})

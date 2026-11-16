@@ -59,10 +59,23 @@ export function pruneSnapshotEntries(
  * When an event snapshot arrives without one, carry the cached value forward so the dialog's context
  * meter does not flicker to `unknown` on every background tick. Returns the same reference when there
  * is nothing to carry (keeps the hot path allocation-free).
+ *
+ * A pending→landed `loopCompact.landedAt` flip invalidates the cached total: it described the
+ * pre-compaction context, which the host just replaced. The carried number is dropped instead of
+ * painted as current; the meter renders nothing until the server sends the post-compaction count
+ * (the estimate of the first assistant step after the landing).
  */
 export function preserveContextSize(previous: GoalSnapshot | null | undefined, next: GoalSnapshot | null): GoalSnapshot | null {
   if (next === null) return next
   if (next.contextSize !== undefined) return next
+  if (compactionJustLanded(previous, next)) return next
   const carried = previous?.contextSize
   return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next
+}
+
+/** True when `next` shows a boundary compaction landed that `previous` had pending (or unnoticed). */
+function compactionJustLanded(previous: GoalSnapshot | null | undefined, next: GoalSnapshot): boolean {
+  const landed = next.loopCompact?.landedAt
+  if (landed === undefined) return false
+  return previous?.loopCompact?.landedAt !== landed
 }

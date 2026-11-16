@@ -3609,8 +3609,16 @@ function preserveContextSize(previous, next) {
     return next;
   if (next.contextSize !== undefined)
     return next;
+  if (compactionJustLanded(previous, next))
+    return next;
   const carried = previous?.contextSize;
   return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next;
+}
+function compactionJustLanded(previous, next) {
+  const landed = next.loopCompact?.landedAt;
+  if (landed === undefined)
+    return false;
+  return previous?.loopCompact?.landedAt !== landed;
 }
 
 // src/rpc.ts
