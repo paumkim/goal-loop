@@ -11,7 +11,10 @@
  * Keyboard parity for the mouse affordance the dialog paints; absent wiring, no digits exist.
  * When the host additionally wires `foreignMoreVisible` + `toggleForeignMore` (the elsewhere overflow
  * fold), the `m` chord joins after the digits — it flips the same controlled flag the click-to-expand
- * fold row flips. Absent wiring, no chord exists.
+ * fold row flips. Absent wiring, no chord exists. The `t` chord (overview ↔ ledger view tab) joins
+ * after `m` when the host wires `toggleView` — the keyboard twin of the tab strip. Absent wiring, no
+ * chord exists. None of the three is advertised in the footer (the three plugin chords stay p/c/x);
+ * they ride the same grammar as `r`.
  */
 
 /** Cells one arrow key scrolls the dialog body. */
@@ -60,10 +63,12 @@ export interface DialogStatusDeps {
   readonly foreignMoreVisible?: () => boolean
   /** Flip the elsewhere overflow fold (the same controlled flag the fold row flips). */
   readonly toggleForeignMore?: () => void
+  /** Flip the dialog's view tab (overview ↔ ledger) — the keyboard twin of the strip. Single dep; the host wires it whenever the strip is live. */
+  readonly toggleView?: () => void
 }
 
 /**
- * The ten core commands, in footer-reading order (pin, fold, copies, the digit chords and the `m` fold chord when wired, then the scroll ladder). Fifteen with both wired.
+ * The ten core commands, in footer-reading order (pin, fold, copies, the digit chords and the `m` fold chord and the `t` view chord when wired, then the scroll ladder). Sixteen with both wired plus the view chord.
  * Every handler swallows its errors: a dead snapshot or a detached scrollbox must never throw out
  * of a key event — host modal chrome owns the interaction, the plugin owns nothing here.
  */
@@ -155,6 +160,23 @@ export const dialogStatusCommands = (deps: DialogStatusDeps): readonly DialogSta
               // Same swallow posture as every chord here.
               try {
                 deps.toggleForeignMore?.()
+              } catch {}
+            },
+          } satisfies DialogStatusCommand,
+        ]
+      : []),
+    ...(deps.toggleView
+      ? [
+          {
+            id: "goal.status.view-toggle",
+            title: "Goal status: switch between the overview and the iteration ledger",
+            group: "Goal",
+            bind: "t",
+            enabled,
+            run: () => {
+              // Same swallow posture as every chord here.
+              try {
+                deps.toggleView?.()
               } catch {}
             },
           } satisfies DialogStatusCommand,

@@ -243,6 +243,31 @@ describe("dialogStatusCommands", () => {
     expect(() => byId(deps)["goal.status.elsewhere-more"]!.run()).not.toThrow()
   })
 
+  test("the `t` chord joins when the host wires toggleView — id, bind, group, footer-omission contract", () => {
+    const withView = dialogStatusCommands(spyDeps({ toggleView: () => {} }))
+    expect(withView.map((command) => [command.id, command.bind]).slice(0, 5)).toEqual([
+      ["goal.status.pin", "p"],
+      ["goal.status.history", "x"],
+      ["goal.status.copy", "c"],
+      ["goal.status.copy-evaluator-reason", "r"],
+      ["goal.status.view-toggle", "t"],
+    ])
+    expect(withView.find((command) => command.id === "goal.status.view-toggle")!.group).toBe("Goal")
+    expect(dialogStatusCommands(spyDeps()).some((command) => command.id === "goal.status.view-toggle")).toBe(false) // absent wiring, absent chord
+  })
+
+  test("the `t` chord flips the wired view — and a throwing host never escapes the key event", () => {
+    let toggles = 0
+    const wired = spyDeps({ toggleView: () => { toggles += 1 } })
+    const command = dialogStatusCommands(wired).find((entry) => entry.id === "goal.status.view-toggle")!
+    expect(command.enabled()).toBe(true)
+    command.run()
+    expect(toggles).toBe(1)
+    const throwing = spyDeps({ toggleView: () => { throw new Error("host detached") } })
+    expect(() => dialogStatusCommands(throwing).find((entry) => entry.id === "goal.status.view-toggle")!.run()).not.toThrow()
+    expect(dialogStatusCommands(spyDeps({ open: () => false, toggleView: () => {} })).find((entry) => entry.id === "goal.status.view-toggle")!.enabled()).toBe(false) // the dialog-open gate rides like every chord
+  })
+
   test("a throwing jump route never escapes the key event — same swallow posture as every chord", () => {
     const deps = spyDeps({
       transcriptFor: () => "ses_a",

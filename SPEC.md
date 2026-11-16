@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=942 -->
+<!-- spec-check files=44 tests=952 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4245,3 +4245,54 @@ the dial both zoom levels already paint, as a trailing clause after the tokens r
      claim an outcome that did not happen — an unmeasurable context is never a miss. The
      indicator is informational, not interactive (no hitbox); the failure-first remediation
      remains the authoritative remedy at misses >= 2.
+
+## Workstream DP — the full dashboard grows tabs (2026-11-16)
+
+Interpretation: the bar's mouse-first ergonomics clause names clickable tabs as one
+of the seven asks; until now the dialog was a single stack, every fold working, but
+no view switch existed. This slice adds two tabs to the dialog body. The design
+constraint came from the bar itself: level (c) is defined as condition + iteration
+history + verdict timeline with per-turn reasons + context meter with landed/missed
+markers + verifyCommand output tail — so tabs can never hide that list behind a
+click on first open. The default tab is therefore the full dashboard exactly as it
+painted before (plus the strip and one state-row suffix); the second tab is a focus
+view, not a reorganization.
+
+408. src/status-dialog.tsx — the body gains a two-tab strip (overview · ledger) as its
+     first row. overview (default) paints everything it painted before: condition,
+     evaluator/reason, remediation, verify tail, spend, context meter (with the DO
+     compaction marker), the loop rail / history block, the elsewhere block. ledger is
+     the focus view — the strip, the state row and the history block, nothing else;
+     the elsewhere block is overview-only. The strip mirrors the fold grammar: left
+     click switches (right/middle inert), hovered and active tabs paint base+bold
+     (weight is the NO_COLOR contract; never an underline), mono/ascii arms keep the
+     plain words. Uncontrolled-local fallback when the host does not wire view/
+     onViewChange (the elsewhere-fold pattern); controlled when both are wired.
+409. src/status-dialog.tsx — the state row gains the loop position for looped goals
+     (` · vN/N`, uncapped ` · vN` when loopMaxLoops is absent/invalid; non-looped
+     goals paint nothing) via a pure loopPosition helper — the one line the dialog
+     always paints, so the position never leaves any view.
+410. src/tui.tsx — setup scope holds dialogView (overview default); the body gets
+     view/onViewChange, and the keymap gains the `t` chord (goal.status.view-toggle,
+     group Goal, gated on dialog-open, swallowed errors) wired to the same signal —
+     the strip and the keyboard ride one flag, the m-chord pattern. The footer does
+     NOT advertise `t`: the footer keeps the three plugin chords (p/c/x); the strip
+     is its own advertisement, the same contract as the `r` chord.
+411. src/core/dialog-keys.ts — deps gain toggleView?: () => void; the chord joins
+     after the elsewhere-fold chord when wired, absent otherwise; module doc and
+     counts updated. +2 unit (joins with wiring / absent without; toggles the wired
+     view; a throwing host never escapes; the dialog-open gate rides).
+412. Tests: +5 interactive (click ledger focuses the rail — state row and armed
+     line never leave, condition/spend drop, click back restores; right-click inert;
+     controlled wiring flips the same signal the `t` chord flips; mono arm switches;
+     unwired fresh loop switches without throwing). +1 full-frame snapshot
+     (ledger tab). All dialog snapshots re-recorded: each frame gains the strip row
+     and looped frames gain the state-row position suffix; layout otherwise
+     byte-identical. The two render tests asserting the default body content were
+     reworked into overview/ledger pairs. spec-check files=44 tests=952.
+413. Honest limits: the view is TUI-local chrome — reopening the dialog defaults to
+     overview (like the pin, a view preference, not persisted record state); the
+     ledger tab duplicates the history block by design (a focus view costs one extra
+     node, not a second surface); `t` is keyboard parity for the strip, not a new
+     advertisement surface (three-plugin-chords permanent decision); tabs add no
+     hitbox anywhere else — the strip itself is hit-tested in the render tests.

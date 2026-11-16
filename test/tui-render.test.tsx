@@ -214,22 +214,36 @@ describe("StatusDialogBody", () => {
     expect(frame).toContain("no cached goal snapshot")
   })
 
-  test("active looped goal shows the evaluator label and the loop section, not the history block", async () => {
+  test("active looped goal, overview tab: the full dashboard — state at a glance plus everything the bar's level (c) names", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("active")
     expect(frame).toContain("evaluator")
     expect(frame).toContain("ship the release notes")
     expect(frame).toContain("spend")
-    expect(frame).toContain("objective") // LoopSection
-    expect(frame).not.toContain("history\n") // HistoryBlock header absent for looped goals
+    expect(frame).toContain("v3/5") // the loop position rides the state row — winning is one glance away
+    expect(frame).toContain("objective") // LoopSection — the history stays on the default dashboard
   })
 
-  test("non-looped goal with reason shows the reason label and the history block", async () => {
+  test("active looped goal, ledger tab: the focus view — strip, the state row and the history, nothing else", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />)
+    expect(frame).toContain("objective") // LoopSection
+    expect(frame).toContain("v3") // the live row
+    expect(frame).not.toContain("ship the release notes") // the condition rides the overview
+    expect(frame).not.toContain("spend") // the spend row rides the overview
+  })
+
+  test("non-looped goal, overview tab: the full dashboard — the reason and the history block ride it", async () => {
     const frame = await render(() => <StatusDialogBody goal={plainGoal({ status: "paused", reason: "two consecutive iterations without tool use" })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("paused")
-    expect(frame).toContain("reason")
     expect(frame).toContain("two consecutive iterations without tool use")
     expect(frame).toContain("history")
+  })
+
+  test("non-looped goal, ledger tab: the history block rides it, the reason does not", async () => {
+    const frame = await render(() => <StatusDialogBody goal={plainGoal({ status: "paused", reason: "two consecutive iterations without tool use" })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />)
+    expect(frame).toContain("paused")
+    expect(frame).toContain("history")
+    expect(frame).not.toContain("two consecutive iterations without tool use") // the reason row rides the overview tab
   })
 })
 
@@ -1530,5 +1544,78 @@ describe("elsewhere block (other sessions holding live goals)", () => {
       <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />
     ))
     expect(absent).not.toContain("elsewhere")
+  })
+})
+
+describe("view tabs (overview · ledger)", () => {
+  test("clicking the ledger tab focuses the history — the overview rows drop, the rail stays; clicking back restores everything", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const overview = setup.captureCharFrame()
+    expect(overview).toContain("ship the release notes")
+    expect(overview).toContain("objective")
+    const at = findIn(overview, "ledger")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    const focused = setup.captureCharFrame()
+    expect(focused).not.toContain("ship the release notes") // the condition rides the overview
+    expect(focused).not.toContain("spend") // the spend row rides the overview
+    expect(focused).toContain("objective") // the rail stays — it is the point of the view
+    expect(focused).toContain("v3/5") // the state row stays — the armed line never leaves
+    const back = findIn(focused, "overview")
+    await setup.mockMouse.click(back!.x, back!.y)
+    await setup.renderOnce()
+    const restored = setup.captureCharFrame()
+    expect(restored).toContain("ship the release notes")
+    expect(restored).toContain("spend")
+    await setup.renderer.destroy()
+  })
+
+  test("right click on a tab is inert — the view never flips on the power button", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "ledger")
+    await setup.mockMouse.click(at!.x, at!.y, 2)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("ship the release notes") // still the overview
+    await setup.renderer.destroy()
+  })
+
+  test("clicking a tab with the host wiring flips the controlled view — the strip and the t chord ride one signal", async () => {
+    const state = { view: "overview" as "overview" | "ledger" }
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => state.view} onViewChange={(v) => { state.view = v }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "ledger")
+    await setup.mockMouse.click(at!.x, at!.y)
+    expect(state.view).toBe("ledger")
+    await setup.mockMouse.click(findIn(setup.captureCharFrame(), "overview")!.x, findIn(setup.captureCharFrame(), "overview")!.y)
+    expect(state.view).toBe("overview")
+    await setup.renderer.destroy()
+  })
+
+  test("the strip switches under mono too — the words are the contract, the hue was never it", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono={true} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "ledger")
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    const focused = setup.captureCharFrame()
+    expect(focused).not.toContain("ship the release notes")
+    expect(focused).toContain("objective")
+    await setup.renderer.destroy()
+  })
+
+  test("a fresh loop with no host wiring flips to an empty ledger without throwing — the strip is chrome, not a command", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal({ history: [], loopHistory: [], loopIteration: 1, turns: 0 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 30} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = findIn(setup.captureCharFrame(), "ledger")
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("v1/5") // the armed line never leaves
+    await setup.renderer.destroy()
   })
 })

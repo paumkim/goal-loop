@@ -55,6 +55,10 @@ export const StatusDialogBody = (props: {
   onToggleExpandedOthers?: () => void
   /** When set and returning true, renders a faint "snapshot unavailable" line above the body — the dialog opened from fallback/stale cache because the live get-RPC failed. */
   noticeStale?: () => boolean
+  /** The dialog's view tab: `overview` paints the goal's state at a glance; `ledger` the iteration history at full length. Uncontrolled when absent (local state, like the elsewhere fold). Pair with onViewChange for the host-controlled arm. */
+  view?: () => "overview" | "ledger"
+  /** Fired on tab activation. Pair with `view`. */
+  onViewChange?: (view: "overview" | "ledger") => void
   /** Other sessions in this directory holding live goals (active/paused), excluding the session under dialog. Read-only awareness; the host owns session switching. Omitted/empty renders no rows. */
   others?: readonly GoalSnapshot[]
   /** Maps a session ID to its dialog-safe label (the mount passes the session slug when the host knows it). Falls back to the id suffix. */
@@ -64,6 +68,45 @@ export const StatusDialogBody = (props: {
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
   const ascii = motionDisabled(process.env) || props.mono === true
   const mono = () => props.mono === true
+  // View tabs — `overview` (default; the goal's state at a glance) | `ledger` (the iteration history at full length). TUI-local view state: the host wires view/onViewChange and the `t` chord flips the same signal; unwired, the strip works on local state (the elsewhere-fold pattern). Right/middle clicks are inert; the active tab paints base+bold — weight is the NO_COLOR contract.
+  const [localView, setLocalView] = createSignal<"overview" | "ledger">("overview")
+  const view = () => props.view?.() ?? localView()
+  const setView = (next: "overview" | "ledger") => {
+    const host = props.onViewChange
+    if (host) {
+      try {
+        host(next)
+      } catch {
+        // The host detached — the strip is chrome, not a command.
+      }
+    } else {
+      setLocalView(next)
+    }
+  }
+  const [viewHovered, setViewHovered] = createSignal<"overview" | "ledger" | undefined>(undefined)
+  const viewTab = (name: "overview" | "ledger") => (
+    <box
+      flexDirection="row"
+      onMouseUp={(event) => {
+        if (event.button !== 0) return
+        event.stopPropagation()
+        if (view() !== name) setView(name)
+      }}
+      onMouseOver={() => setViewHovered(name)}
+      onMouseOut={() => setViewHovered(undefined)}
+    >
+      <text wrapMode="none" fg={view() === name || viewHovered() === name ? theme().text.base : theme().text.faint} attributes={view() === name || viewHovered() === name ? TextAttributes.BOLD : undefined}>
+        {name}
+      </text>
+    </box>
+  )
+  const ledger = () => view() === "ledger"
+  // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter.
+  const loopPosition = (goal: GoalSnapshot): string => {
+    if (!goal.loopEnabled) return ""
+    const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
+    return ` · v${goal.loopIteration ?? 1}${cap}`
+  }
   const label = (text: string) => (
     <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
       {text}
@@ -178,15 +221,24 @@ export const StatusDialogBody = (props: {
       <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
         {(goal) => (
         <box flexDirection="column" gap={1} paddingRight={3}>
+          {/* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */}
+          <box flexDirection="row" gap={1}>
+            {viewTab("overview")}
+            <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
+            {viewTab("ledger")}
+          </box>
           <box flexDirection="row" gap={2}>
             <text fg={stateColor()} attributes={TextAttributes.BOLD}>
               {goal().status}
             </text>
             <text fg={theme().text.muted}>
               {formatDurationCoarse(props.elapsedMs())} · {goal().turns} turn{goal().turns === 1 ? "" : "s"}
+              {loopPosition(goal())}
               {goal().evaluating ? " · checking" : goal().waiting ? " · waiting" : ""}
             </text>
           </box>
+          <Show when={!ledger()}>
+            <box flexDirection="column" gap={1}>
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
@@ -313,13 +365,17 @@ export const StatusDialogBody = (props: {
               )
             })()}
           </Show>
+            </box>
+          </Show>
+          {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else */}
           <Show when={goal().loopEnabled}>
             <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
           </Show>
           <Show when={!goal().loopEnabled}>
             <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
           </Show>
-          {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers */}
+          {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers. Overview only; the ledger is a history-focus view */}
+          <Show when={!ledger()}>
           <Show when={othersLive()}>
             {(rows) => (
               <box flexDirection="column">
@@ -382,6 +438,7 @@ export const StatusDialogBody = (props: {
                 </Show>
               </box>
             )}
+          </Show>
           </Show>
         </box>
         )}
