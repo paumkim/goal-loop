@@ -324,16 +324,16 @@ describe("retry watch", () => {
 
 
 describe("DialogFooter (80-column floor)", () => {
-  const renderFooter = (width: number, pinned = false) =>
+  const renderFooter = (width: number, pinned = false, copied = false) =>
     render(
-      () => <DialogFooter theme={theme} pinned={() => pinned} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      () => <DialogFooter theme={theme} pinned={() => pinned} copied={() => copied} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
       width,
       3,
     )
 
   test("at 80 cells the short hint and compact labels render unclipped", async () => {
     const frame = await renderFooter(80)
-    expect(frame).toContain("up/down scroll · p pin · esc close")
+    expect(frame).toContain("up/down scroll · p pin · c copy")
     expect(frame).toContain("[copy]")
     expect(frame).toContain("[pin]")
     expect(frame).toContain("[clear]")
@@ -347,6 +347,14 @@ describe("DialogFooter (80-column floor)", () => {
     expect(frame).toContain("[pin condition]")
     expect(frame).toContain("[clear goal]")
     expect(frame).not.toContain("pgup")
+  })
+
+  test("the copy button acknowledges in-modal with ✓ copied at every width tier", async () => {
+    for (const width of [80, 120]) {
+      const frame = await renderFooter(width, false, true)
+      expect(frame).toContain("[✓ copied]")
+      expect(frame).not.toContain("[copy]")
+    }
   })
 
   test("at 140 cells the full key hint returns", async () => {
