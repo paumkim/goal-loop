@@ -32,6 +32,28 @@ describe("render script smoke tests", () => {
     expect(gridChars(result.stdout)).toBeGreaterThan(200)
   }, 30_000)
 
+  test("render-card.tsx exits 0 and prints the three card frames (whole-cost contract at the clamp floor)", () => {
+    const result = run("scripts/render-card.tsx")
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("=== card · active loop")
+    expect(result.stdout).toContain("=== card · achieved ===")
+    expect(result.stdout).toContain("=== card · width 52")
+    // the CT contract: the dollar figure stays whole at the 52-cell clamp floor
+    expect(result.stdout).toContain("$0.90")
+    expect(gridChars(result.stdout)).toBeGreaterThan(200)
+  }, 30_000)
+
+  test("render-dialog.tsx --width=80 prints the real compact-tier footer, not a hand-painted line", () => {
+    const result = run("scripts/render-dialog.tsx", ["--width=80"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("[copy]")
+    expect(result.stdout).not.toContain("[copy condition]")
+    expect(result.stdout).toContain("up/down scroll · p pin · c copy · x older")
+    expect(result.stdout).not.toContain("esc close")
+  }, 30_000)
+
   test("render-dialog.tsx --buggy exits 0 and prints the buggy-configuration frame", () => {
     const result = run("scripts/render-dialog.tsx", ["--buggy"])
     expect(result.error).toBeUndefined()

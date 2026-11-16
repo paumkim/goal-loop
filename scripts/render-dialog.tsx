@@ -3,23 +3,31 @@
  * StatusDialogBody) with the paused-loop snapshot from the bug report. Not shipped (scripts/ is not in
  * package.json `files`).
  *
- *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy]
+ *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--pinned] [--copied] [--achieved]
  *
  * --buggy reproduces the pre-fix configuration (shared scrollbarOptions visible: true, forced horizontal track);
  * the default prints the fixed configuration (auto scrollbar visibility, scrollX off, 3-cell body gutter).
+ * --width pins the frame width (default 150) — the host hands the width through, so the floor and the
+ * footer tier boundaries can be eyeballed (80 = short hint + compact labels, ~100 = short hint + noun
+ * labels, >= ~140 = full key hint). --pinned paints the pin button flipped, --copied paints the copy
+ * button acknowledged. The footer is the real DialogFooter, never a hand-painted line.
  */
 import { RGBA, TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
+import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const buggy = process.argv.includes("--buggy")
 const height = Number(process.argv.find(a => a.startsWith("--height="))?.slice(9) ?? 46)
-const width = 150
+const width = Number(process.argv.find(a => a.startsWith("--width="))?.slice(8) ?? 150)
+const pinned = process.argv.includes("--pinned")
+const copied = process.argv.includes("--copied")
+const achieved = process.argv.includes("--achieved")
 const now = Date.now()
 
-const theme: HistoryTheme = {
+const theme: HistoryTheme & HudCardTheme = {
   text: {
     base: RGBA.fromHex("#e8e8e8"),
     muted: RGBA.fromHex("#a0a0a0"),
@@ -27,8 +35,11 @@ const theme: HistoryTheme = {
     feedback: {
       info: { base: RGBA.fromHex("#6cb6ff") },
       warning: { base: RGBA.fromHex("#e0af3c") },
+      error: { base: RGBA.fromHex("#ff6c6c") },
     },
   },
+  border: { base: RGBA.fromHex("#3f3f3f") },
+  background: { raised: { high: RGBA.fromHex("#161616") } },
 }
 
 const verdicts = [
@@ -42,9 +53,10 @@ const goal: GoalSnapshot = {
   directory: "/tmp/dialog",
   condition:
     "keep the terminal tui display of the goal plugin beautiful and legible as it shows the goal histories, with no rough edges, no inconsistent scrolling, and consistent spacing across every section of the dialog",
-  status: "paused",
-  reason:
-    "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.",
+  status: achieved ? "achieved" : "paused",
+  reason: achieved
+    ? undefined
+    : "Loop paused: two consecutive iterations without tool use. Send a message to resume, or /goal-loop clear.",
   setAt: now - 1000 * 60 * 40,
   startedAt: now - 1000 * 60 * 40,
   turns: 1,
@@ -116,9 +128,14 @@ const setup = await testRender(
       >
         <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} />
       </scrollbox>
-      <text fg={theme.text.faint} flexShrink={0}>
-        up/down scroll · pgup/pgdn page · home/end start/end · esc close
-      </text>
+      <DialogFooter
+        theme={theme}
+        pinned={() => pinned}
+        copied={() => copied}
+        onCopy={() => {}}
+        onTogglePin={() => {}}
+        onClear={() => {}}
+      />
     </box>
   ),
   { width, height },
