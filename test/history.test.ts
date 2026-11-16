@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, CONTEXT_BAR_CELLS, contextMeter, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -346,5 +346,46 @@ describe("durationShares", () => {
 
   test("non-finite spans degrade to zero", () => {
     expect(durationShares([Number.NaN, 8_000])).toEqual([0, 100])
+  })
+})
+
+describe("contextMeter", () => {
+  test("renders a proportionate fill against the threshold", () => {
+    const meter = contextMeter(75_000, 150_000)
+    expect(meter.filled).toBe(8)
+    expect(meter.pct).toBe(50)
+    expect(meter.hot).toBe(false)
+    expect(meter.over).toBe(false)
+    expect(meter.text).toBe("█".repeat(8) + "░".repeat(CONTEXT_BAR_CELLS - 8))
+  })
+
+  test("clamps to a full bar past the threshold; pct stays honest above 100", () => {
+    const meter = contextMeter(180_000, 150_000)
+    expect(meter.filled).toBe(CONTEXT_BAR_CELLS)
+    expect(meter.pct).toBe(120)
+    expect(meter.hot).toBe(true)
+    expect(meter.over).toBe(true)
+  })
+
+  test("the hot band begins at 80% of the threshold", () => {
+    expect(contextMeter(119_000, 150_000).hot).toBe(false)
+    expect(contextMeter(120_000, 150_000).hot).toBe(true)
+  })
+
+  test("zero or disabled capacity yields no bar and no pct", () => {
+    for (const capacity of [undefined, 0, -1, Number.NaN]) {
+      const meter = contextMeter(95_000, capacity)
+      expect(meter.filled).toBe(0)
+      expect(meter.pct).toBeUndefined()
+      expect(meter.hot).toBe(false)
+      expect(meter.text).toBe("░".repeat(CONTEXT_BAR_CELLS))
+    }
+  })
+
+  test("non-finite size degrades to an empty bar, never NaN", () => {
+    const meter = contextMeter(Number.NaN, 150_000)
+    expect(meter.filled).toBe(0)
+    expect(meter.pct).toBe(0)
+    expect(meter.hot).toBe(false)
   })
 })

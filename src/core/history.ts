@@ -207,3 +207,36 @@ export function durationShares(durations: readonly number[]): number[] {
   if (total <= 0) return durations.map(() => 0)
   return durations.map((span) => Math.round((Math.max(0, Number.isFinite(span) ? span : 0) / total) * 100))
 }
+
+export const CONTEXT_BAR_CELLS = 16
+/** Fill ratio at/past which the context meter renders in the warning tone. Matches the boundary-compaction arming signal (the loop needs headroom before the threshold is reached). */
+export const CONTEXT_HOT_RATIO = 0.8
+
+/**
+ * The context-size meter behind the status dialog: the estimated prompt size as a share of the
+ * plugin's auto-compact threshold. Never divides by zero; `capacity <= 0` or absent means the
+ * threshold is disabled, so the caller renders the bare token count without a bar. `pct` is the
+ * raw ratio × 100 and may exceed 100 when the estimate is past the threshold — honest over the neat.
+ */
+export function contextMeter(size: number, capacity: number | undefined, cells: number = CONTEXT_BAR_CELLS): {
+  filled: number
+  text: string
+  pct: number | undefined
+  hot: boolean
+  over: boolean
+} {
+  const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0
+  const width = Math.max(1, Math.floor(cells))
+  const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0
+  if (!hasCapacity) return { filled: 0, text: "░".repeat(width), pct: undefined, hot: false, over: false }
+  const ratio = safeSize / (capacity as number)
+  const pct = Math.round(ratio * 100)
+  const filled = Math.min(width, Math.max(0, Math.round(ratio * width)))
+  return {
+    filled,
+    text: "█".repeat(filled) + "░".repeat(width - filled),
+    pct,
+    hot: ratio >= CONTEXT_HOT_RATIO,
+    over: ratio >= 1,
+  }
+}

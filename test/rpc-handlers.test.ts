@@ -148,3 +148,39 @@ describe("goal RPC handlers", () => {
     expect(typeof cleared).toBe("boolean")
   })
 })
+
+describe("contextSize over RPC", () => {
+  test("get passes the controller-provided estimate into snapshot; a missing implementation passes none", async () => {
+    const calls: Array<[string, unknown, unknown]> = []
+    const withCtx: Stub = {
+      ...stub({ restored: true }),
+      contextSize: async () => 95_000,
+      snapshot: ((sessionID: string, spend: UsageSnapshot | undefined, contextSize?: number) => {
+        calls.push([sessionID, spend, contextSize])
+        return { ...snapshot(), ...(contextSize !== undefined ? { contextSize } : {}) }
+      }) as Stub["snapshot"],
+    }
+    const handlers = createRpcHandlers({ controller: withCtx, log: silentLog })
+    const out = await handlers.get({ sessionID: "ses_test" })
+    expect(calls[0]?.[2]).toBe(95_000)
+    expect(out.goal?.contextSize).toBe(95_000)
+
+    const bare = stub({ restored: true })
+    const handlers2 = createRpcHandlers({ controller: bare, log: silentLog })
+    const out2 = await handlers2.get({ sessionID: "ses_test" })
+    expect(out2.goal?.contextSize).toBeUndefined()
+  })
+
+  test("a failing context estimate still yields the snapshot (never a 500)", async () => {
+    const failing: Stub = {
+      ...stub({ restored: true }),
+      contextSize: async () => {
+        throw new Error("context read exploded")
+      },
+    }
+    const handlers = createRpcHandlers({ controller: failing, log: silentLog })
+    const out = await handlers.get({ sessionID: "ses_test" })
+    expect(out.goal?.sessionID).toBe("ses_test")
+    expect(out.goal?.contextSize).toBeUndefined()
+  })
+})

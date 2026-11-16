@@ -169,16 +169,21 @@ export class GoalController {
     return record?.status === "active" ? record.condition : undefined
   }
 
-  snapshot(sessionID: string, spend?: UsageSnapshot): GoalSnapshot | null {
+  snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null {
     const record = this.goals.get(sessionID)
     if (!record) return null
     const runtime = this.runtimes.get(sessionID)
+    // The auto-compact threshold is constant per session, so it rides every snapshot — cheap, and it lets
+    // the dialog render the context meter without knowing anything about the server's configuration.
+    const compactAtTokens = this.deps.config.compactAtTokens
     return {
       ...structuredClone(record),
       elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt,
       evaluating: runtime?.evaluating ?? false,
       waiting: runtime?.deferredSince !== undefined,
       ...(spend ? { spend } : {}),
+      ...(typeof compactAtTokens === "number" && compactAtTokens > 0 ? { compactAtTokens } : {}),
+      ...(contextSize !== undefined && Number.isFinite(contextSize) && contextSize >= 0 ? { contextSize } : {}),
     }
   }
 
@@ -275,6 +280,14 @@ export class GoalController {
     if (record.final) return diffUsage(record.final, record.baseline)
     const usage = await this.deps.session.usage(sessionID).catch(() => undefined)
     return usage && diffUsage(usage, record.baseline)
+  }
+
+  /** Absolute estimated prompt tokens; undefined when unestimable. Pure passthrough — never estimated on the hot path. */
+  async contextSize(sessionID: string): Promise<number | undefined> {
+    if (!this.goals.has(sessionID)) return undefined
+    if (!this.deps.estimateContext) return undefined
+    const size = await this.deps.estimateContext(sessionID).catch(() => undefined)
+    return size !== undefined && Number.isFinite(size) && size >= 0 ? size : undefined
   }
 
   // ---------------------------------------------------------------- commands

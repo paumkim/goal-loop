@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -60,5 +60,35 @@ describe("pruneSnapshotEntries", () => {
 
   test("default cap is the exported ENTRY_CAP", () => {
     expect(ENTRY_CAP).toBeGreaterThan(0)
+  })
+})
+
+describe("preserveContextSize", () => {
+  const withCtx = (contextSize: number | undefined): GoalSnapshot => ({ ...snap("active"), contextSize }) as unknown as GoalSnapshot
+
+  test("carries the cached estimate forward when an event snapshot drops it", () => {
+    const merged = preserveContextSize(withCtx(95_000), snap("active"))
+    expect(merged?.contextSize).toBe(95_000)
+  })
+
+  test("an event snapshot carrying its own estimate wins over the cache", () => {
+    const merged = preserveContextSize(withCtx(95_000), withCtx(120_000))
+    expect(merged?.contextSize).toBe(120_000)
+  })
+
+  test("returns the next reference untouched when there is nothing to carry", () => {
+    const next = snap("active")
+    expect(preserveContextSize(undefined, next)).toBe(next)
+    expect(preserveContextSize(withCtx(undefined), next)).toBe(next)
+    expect(preserveContextSize(null, next)).toBe(next)
+  })
+
+  test("null stays null (session cleared)", () => {
+    expect(preserveContextSize(withCtx(95_000), null)).toBeNull()
+  })
+
+  test("a cached estimate that is not a finite non-negative number is ignored", () => {
+    expect(preserveContextSize(withCtx(Number.NaN), snap("active"))?.contextSize).toBeUndefined()
+    expect(preserveContextSize(withCtx(-10), snap("active"))?.contextSize).toBeUndefined()
   })
 })

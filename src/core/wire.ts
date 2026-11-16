@@ -105,6 +105,8 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (!Array.isArray(value.history) || !value.history.every(isVerdictEntry)) return false
   if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting)) return false
   if (value.spend !== undefined && !isUsageSnapshot(value.spend)) return false
+  if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize)) return false
+  if (value.compactAtTokens !== undefined && !isFiniteNumber(value.compactAtTokens)) return false
   if (value.loopEnabled !== undefined && !isBoolean(value.loopEnabled)) return false
   if (value.loopIteration !== undefined && !isFiniteNumber(value.loopIteration)) return false
   if (value.loopObjective !== undefined && !isString(value.loopObjective)) return false

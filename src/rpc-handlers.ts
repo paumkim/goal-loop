@@ -7,8 +7,10 @@ import type { Logger } from "./runtime/ports.ts"
 export interface RpcGoalController {
   restoreOne(sessionID: string): Promise<boolean>
   restore(options?: { boundaryCompact?: boolean }): Promise<number>
-  snapshot(sessionID: string, spend?: UsageSnapshot): GoalSnapshot | null
+  snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null
   spend(sessionID: string): Promise<UsageSnapshot | undefined>
+  /** Absolute estimated prompt tokens; implementations without a context estimate simply omit it. */
+  contextSize?(sessionID: string): Promise<number | undefined>
   list(): GoalSnapshot[]
   status(sessionID: string): Promise<void>
   clear(sessionID: string): boolean
@@ -35,7 +37,9 @@ export function createRpcHandlers(deps: { controller: RpcGoalController; log: Lo
       // Read-through: after a plugin reload the in-memory map can miss a live goal that storage still holds.
       await controller.restoreOne(sessionID).catch((error) => warn("restore-one", error))
       const spend = await controller.spend(sessionID).catch(() => undefined)
-      return { goal: controller.snapshot(sessionID, spend) }
+      // Optional so lightweight implementations of the controller surface keep working.
+      const contextSize = await controller.contextSize?.(sessionID).catch(() => undefined)
+      return { goal: controller.snapshot(sessionID, spend, contextSize) }
     } catch (error) {
       warn("get", error)
       return { goal: null }

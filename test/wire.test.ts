@@ -183,3 +183,22 @@ describe("parseNotice", () => {
     expect(parseNotice({ ...notice(), message: null })).toBeUndefined()
   })
 })
+
+describe("contextSize / compactAtTokens", () => {
+  test("pass through the snapshot parser unchanged", () => {
+    const parsed = parseGoalSnapshot({ ...snapshot(), contextSize: 95_000, compactAtTokens: 150_000 })
+    expect(parsed?.contextSize).toBe(95_000)
+    expect(parsed?.compactAtTokens).toBe(150_000)
+  })
+
+  test("absent fields stay absent", () => {
+    const parsed = parseGoalSnapshot(snapshot())
+    expect(parsed?.contextSize).toBeUndefined()
+    expect(parsed?.compactAtTokens).toBeUndefined()
+  })
+
+  test("non-numeric values are rejected", () => {
+    expect(parseGoalSnapshot({ ...snapshot(), contextSize: "95k" })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), compactAtTokens: true })).toBeUndefined()
+  })
+})

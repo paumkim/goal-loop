@@ -670,3 +670,30 @@ describe("GoalController async holes", () => {
     expect(saveCalls).toBe(1)
   })
 })
+
+describe("context meter snapshot fields", () => {
+  test("snapshot carries compactAtTokens when the auto-compact threshold is enabled; omits it when disabled", async () => {
+    const withThreshold = harness({ compactAtTokens: 150_000 })
+    await withThreshold.set()
+    expect(withThreshold.controller.snapshot(SID)?.compactAtTokens).toBe(150_000)
+
+    const without = harness()
+    await without.set()
+    expect(without.controller.snapshot(SID)?.compactAtTokens).toBeUndefined()
+  })
+
+  test("snapshot attaches a caller-provided context estimate; non-finite or negative estimates are dropped", async () => {
+    const h = harness()
+    await h.set()
+    expect(h.controller.snapshot(SID, undefined, 95_000)?.contextSize).toBe(95_000)
+    expect(h.controller.snapshot(SID, undefined, Number.NaN)?.contextSize).toBeUndefined()
+    expect(h.controller.snapshot(SID, undefined, -1)?.contextSize).toBeUndefined()
+    expect(h.controller.snapshot(SID)?.contextSize).toBeUndefined()
+  })
+
+  test("contextSize() returns undefined when the estimateContext dependency is absent (never fabricates a number)", async () => {
+    const h = harness()
+    await h.set()
+    expect(await h.controller.contextSize(SID)).toBeUndefined()
+  })
+})
