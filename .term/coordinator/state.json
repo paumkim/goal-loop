@@ -2054,6 +2054,17 @@
       "submittedAt": "2026-11-16T14:08:46Z",
       "mergedAt": "2026-11-16T14:11:17Z",
       "mergedInto": "dev"
+    },
+    "tui-elsewhere-key-parity": {
+      "agent": "orchestrator",
+      "paths": "src/core/dialog-keys.ts src/status-dialog.tsx src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx SPEC.md docs/changelog.html",
+      "branch": "wt/tui-elsewhere-key-parity",
+      "worktree": "worktrees/wt-tui-elsewhere-key-parity",
+      "status": "done",
+      "createdAt": "2026-11-16T14:18:23Z",
+      "submittedAt": "2026-11-16T14:23:17Z",
+      "mergedAt": "2026-11-16T14:25:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
