@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -181,6 +181,45 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal({ retries: 5, status: "paused" }), 1000 * 60 * 12)
     expect(pill.tone).toBe("paused")
     expect(pill.text).toContain("· retry 5")
+  })
+})
+
+describe("compactMarker", () => {
+  test("absent when no compact was ever requested", () => {
+    expect(compactMarker(undefined)).toBeUndefined()
+    expect(compactMarker(undefined, true)).toBeUndefined()
+  })
+  test("pending while the request is armed and no observation has landed", () => {
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0 })).toEqual({ text: "pending", tone: "pending" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0, unmeasurableTicks: 0 })).toEqual({ text: "pending", tone: "pending" })
+  })
+  test("missed carries the count — and demotes to ASCII in the ascii arm", () => {
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 1 })).toEqual({ text: "missed ×1", tone: "missed" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 3 })).toEqual({ text: "missed ×3", tone: "missed" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 3 }, true)).toEqual({ text: "missed x3", tone: "missed" })
+  })
+  test("a landing beats any miss count — landedAt is authoritative", () => {
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 4, landedAt: now })).toEqual({ text: "landed ✓", tone: "landed" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0, landedAt: now }, true)).toEqual({ text: "landed", tone: "landed" })
+  })
+  test("stalenessUnknown outranks the tick count — the landing can be ruled in or out neither", () => {
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0, stalenessUnknown: true, unmeasurableTicks: 4 })).toEqual({ text: "unknown", tone: "unknown" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 1, stalenessUnknown: true })).toEqual({ text: "unknown", tone: "unknown" })
+  })
+  test("unmeasurable ticks alone carry the unknown tone — never a miss", () => {
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0, unmeasurableTicks: 2 })).toEqual({ text: "unmeasurable", tone: "unknown" })
+    expect(compactMarker({ requestedAt: now, iteration: 3, misses: 0, unmeasurableTicks: 1 }, true)).toEqual({ text: "unmeasurable", tone: "unknown" })
+  })
+  test("the ascii arm never spends a glyph", () => {
+    for (const c of [
+      { requestedAt: now, iteration: 3, misses: 0 } as const,
+      { requestedAt: now, iteration: 3, misses: 2 } as const,
+      { requestedAt: now, iteration: 3, misses: 0, landedAt: now } as const,
+      { requestedAt: now, iteration: 3, misses: 0, stalenessUnknown: true } as const,
+    ]) {
+      const m = compactMarker(c, true)!
+      expect(m.text).toMatch(/^[a-z0-9 ]+$/)
+    }
   })
 })
 

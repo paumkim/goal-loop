@@ -23,7 +23,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -476,6 +476,17 @@ export const HudCard = (props: {
           const hot = () => meter().hot
           const barFg = () => (mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
           const trailFg = () => (mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted)
+          // The boundary-compaction outcome of the latest request this goal made, at a glance — the
+          // compaction-landed indicator. Informational; at misses >= 2 the failure-first remediation rides
+          // the same card. mono keeps the words, drops the hue; ascii demotions already live in the text.
+          const marker = () => compactMarker(g().loopCompact, ascii())
+          const markerFg = (tone: CompactMarkerTone) => {
+            if (mono()) return theme().text.muted
+            const fb = theme().text.feedback
+            if (tone === "landed") return (fb.success ?? fb.info).base
+            if (tone === "missed") return fb.warning.base
+            return theme().text.faint
+          }
           return (
             <Show
               when={g().compactAtTokens !== undefined}
@@ -485,6 +496,7 @@ export const HudCard = (props: {
                     context
                   </text>
                   <text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(size())} tokens`}</text>
+                  <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={markerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
                 </box>
               }
             >
@@ -494,6 +506,7 @@ export const HudCard = (props: {
                 </text>
                 <text wrapMode="none" flexShrink={0} fg={barFg()}>{meter().text}</text>
                 <text wrapMode="none" fg={trailFg()}>{`~${formatTokens(size())} of ${formatTokens(g().compactAtTokens as number)} · ${meter().pct}%`}</text>
+                <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={markerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
               </box>
             </Show>
           )

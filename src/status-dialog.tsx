@@ -8,7 +8,7 @@ import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
-import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
+import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
@@ -123,6 +123,15 @@ export const StatusDialogBody = (props: {
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
+  // The boundary-compaction marker (compaction-landed indicator on the dial the boundary compaction reads). mono drops the hue, ascii demotions live in the text.
+  const compactMarkerNow = () => compactMarker(g()?.loopCompact, ascii)
+  const compactMarkerFg = (tone: CompactMarkerTone) => {
+    if (mono()) return theme().text.muted
+    const fb = theme().text.feedback
+    if (tone === "landed") return (fb.success ?? fb.info).base
+    if (tone === "missed") return fb.warning.base
+    return theme().text.faint
+  }
   const [foldHovered, setFoldHovered] = createSignal(false)
   // Controlled when the caller passes `expandedOthers` (the dialog keymap drives it so the `m` chord
   // and the fold row flip the same flag); local state otherwise. Same contract as the rail's fold.
@@ -287,12 +296,18 @@ export const StatusDialogBody = (props: {
                   {label("context")}
                   <Show
                     when={goal().compactAtTokens !== undefined}
-                    fallback={<text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(goal().contextSize as number)} tokens`}</text>}
+                    fallback={
+                      <box flexDirection="row" gap={1}>
+                        <text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(goal().contextSize as number)} tokens`}</text>
+                        <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
+                      </box>
+                    }
                   >
                     <text wrapMode="none" fg={fg()}>{meter().text}</text>
                     <text wrapMode="none" fg={mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted}>
                       {`~${formatTokens(goal().contextSize as number)} of ${formatTokens(goal().compactAtTokens as number)} · ${meter().pct}%`}
                     </text>
+                    <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
                   </Show>
                 </box>
               )
