@@ -638,11 +638,37 @@ describe("hudCardRows viewport ceiling (maxRows) — optional rows drop until th
   })
 
   test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
-    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, last: false, remediation: false })
-    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 5, hint: false, spend: false, last: false, remediation: false })
-    expect(cardRowPlan(hot())).toEqual({ rows: 7, hint: false, spend: false, last: false, remediation: true })
+    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, context: false, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, context: false, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, last: false, remediation: false })
+    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 5, hint: false, spend: false, context: false, last: false, remediation: false })
+    expect(cardRowPlan(hot())).toEqual({ rows: 7, hint: false, spend: false, context: false, last: false, remediation: true })
+  })
+})
+
+describe("hudCardRows context meter row", () => {
+  const metered = () =>
+    loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
+
+  test("grows by exactly one row when the snapshot carries a context estimate", () => {
+    // hinted() shape (5 + spend 1 + hint 1 = 7) plus the context row = 8; without spend = 7
+    expect(hudCardRows(metered())).toBe(8)
+    const { spend: _s, ...noSpend } = metered()
+    expect(hudCardRows(noSpend as GoalSnapshot)).toBe(7) // hint 1 + context 1
+    const { contextSize: _c, ...noContext } = metered()
+    expect(hudCardRows(noContext as GoalSnapshot)).toBe(7) // unchanged from the pre-context plan
+  })
+
+  test("under a ceiling the context row drops after spend and before the last-verdict row", () => {
+    const goal = metered()
+    expect(hudCardRows(goal, false, 7)).toBe(7) // hint gone; spend and context kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint and spend gone; context kept
+    expect(hudCardRows(goal, false, 5)).toBe(5) // hint, spend and context gone: the irreducible core
+    // a verdicts-bearing goal: context drops before last does
+    const withLast = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
+    expect(hudCardRows(withLast)).toBe(7) // 5 + context 1 + last 1
+    expect(hudCardRows(withLast, false, 6)).toBe(6) // context gone, last kept
+    expect(cardRowPlan(withLast, false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, last: true, remediation: false })
   })
 })
 

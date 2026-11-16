@@ -1862,55 +1862,72 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0;
   const hintAvailable = Boolean(evaluatorHint(goal));
   const spendAvailable = Boolean(goal.spend);
+  const contextAvailable = goal.contextSize !== undefined;
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
-  const fit = (hint, spend, last, fix) => 5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
-  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable, fix = remediationWanted;
-  let rows = fit(hint, spend, last, fix);
+  const fit = (hint, spend, context, last, fix) => 5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
+  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, last = lastAvailable, fix = remediationWanted;
+  let rows = fit(hint, spend, context, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
+      context,
       last,
       remediation: fix
     };
   hint = false;
-  rows = fit(hint, spend, last, fix);
+  rows = fit(hint, spend, context, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
+      context,
       last,
       remediation: fix
     };
   spend = false;
-  rows = fit(hint, spend, last, fix);
+  rows = fit(hint, spend, context, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
+      context,
+      last,
+      remediation: fix
+    };
+  context = false;
+  rows = fit(hint, spend, context, last, fix);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      context,
       last,
       remediation: fix
     };
   last = false;
-  rows = fit(hint, spend, last, fix);
+  rows = fit(hint, spend, context, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
+      context,
       last,
       remediation: fix
     };
   fix = false;
-  rows = fit(hint, spend, last, fix);
+  rows = fit(hint, spend, context, last, fix);
   return {
     rows,
     hint,
     spend,
+    context,
     last,
     remediation: fix
   };
@@ -2212,31 +2229,104 @@ var HudCard = (props) => {
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
       get when() {
+        return _$memo3(() => !!plan().context)() && g().contextSize !== undefined;
+      },
+      get children() {
+        return (() => {
+          const size = () => g().contextSize;
+          const meter = () => contextMeter(size(), g().compactAtTokens, CONTEXT_BAR_CELLS, ascii());
+          const hot = () => meter().hot;
+          const barFg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
+          const trailFg = () => mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted;
+          return _$createComponent3(Show3, {
+            get when() {
+              return g().compactAtTokens !== undefined;
+            },
+            get fallback() {
+              return (() => {
+                var _el$30 = _$createElement3("box"), _el$31 = _$createElement3("text"), _el$33 = _$createElement3("text");
+                _$insertNode3(_el$30, _el$31);
+                _$insertNode3(_el$30, _el$33);
+                _$setProp3(_el$30, "flexDirection", "row");
+                _$setProp3(_el$30, "gap", 1);
+                _$insertNode3(_el$31, _$createTextNode3(`context`));
+                _$setProp3(_el$31, "wrapMode", "none");
+                _$setProp3(_el$31, "flexShrink", 0);
+                _$setProp3(_el$31, "width", LABEL);
+                _$setProp3(_el$33, "wrapMode", "none");
+                _$insert3(_el$33, () => `~${formatTokens(size())} tokens`);
+                _$effect3((_p$) => {
+                  var _v$23 = theme().text.faint, _v$24 = theme().text.muted;
+                  _v$23 !== _p$.e && (_p$.e = _$setProp3(_el$31, "fg", _v$23, _p$.e));
+                  _v$24 !== _p$.t && (_p$.t = _$setProp3(_el$33, "fg", _v$24, _p$.t));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined
+                });
+                return _el$30;
+              })();
+            },
+            get children() {
+              var _el$25 = _$createElement3("box"), _el$26 = _$createElement3("text"), _el$28 = _$createElement3("text"), _el$29 = _$createElement3("text");
+              _$insertNode3(_el$25, _el$26);
+              _$insertNode3(_el$25, _el$28);
+              _$insertNode3(_el$25, _el$29);
+              _$setProp3(_el$25, "flexDirection", "row");
+              _$setProp3(_el$25, "gap", 1);
+              _$insertNode3(_el$26, _$createTextNode3(`context`));
+              _$setProp3(_el$26, "wrapMode", "none");
+              _$setProp3(_el$26, "flexShrink", 0);
+              _$setProp3(_el$26, "width", LABEL);
+              _$setProp3(_el$28, "wrapMode", "none");
+              _$setProp3(_el$28, "flexShrink", 0);
+              _$insert3(_el$28, () => meter().text);
+              _$setProp3(_el$29, "wrapMode", "none");
+              _$insert3(_el$29, () => `~${formatTokens(size())} of ${formatTokens(g().compactAtTokens)} \xB7 ${meter().pct}%`);
+              _$effect3((_p$) => {
+                var _v$20 = theme().text.faint, _v$21 = barFg(), _v$22 = trailFg();
+                _v$20 !== _p$.e && (_p$.e = _$setProp3(_el$26, "fg", _v$20, _p$.e));
+                _v$21 !== _p$.t && (_p$.t = _$setProp3(_el$28, "fg", _v$21, _p$.t));
+                _v$22 !== _p$.a && (_p$.a = _$setProp3(_el$29, "fg", _v$22, _p$.a));
+                return _p$;
+              }, {
+                e: undefined,
+                t: undefined,
+                a: undefined
+              });
+              return _el$25;
+            }
+          });
+        })();
+      }
+    }), _el$18);
+    _$insert3(_el$0, _$createComponent3(Show3, {
+      get when() {
         return hint();
       },
       children: (h) => (() => {
-        var _el$25 = _$createElement3("box"), _el$26 = _$createElement3("text"), _el$28 = _$createElement3("text");
-        _$insertNode3(_el$25, _el$26);
-        _$insertNode3(_el$25, _el$28);
-        _$setProp3(_el$25, "flexDirection", "row");
-        _$setProp3(_el$25, "gap", 1);
-        _$insertNode3(_el$26, _$createTextNode3(`hint`));
-        _$setProp3(_el$26, "wrapMode", "none");
-        _$setProp3(_el$26, "flexShrink", 0);
-        _$setProp3(_el$26, "width", LABEL);
-        _$setProp3(_el$28, "wrapMode", "none");
-        _$setProp3(_el$28, "flexGrow", 1);
-        _$insert3(_el$28, () => h().card);
+        var _el$34 = _$createElement3("box"), _el$35 = _$createElement3("text"), _el$37 = _$createElement3("text");
+        _$insertNode3(_el$34, _el$35);
+        _$insertNode3(_el$34, _el$37);
+        _$setProp3(_el$34, "flexDirection", "row");
+        _$setProp3(_el$34, "gap", 1);
+        _$insertNode3(_el$35, _$createTextNode3(`hint`));
+        _$setProp3(_el$35, "wrapMode", "none");
+        _$setProp3(_el$35, "flexShrink", 0);
+        _$setProp3(_el$35, "width", LABEL);
+        _$setProp3(_el$37, "wrapMode", "none");
+        _$setProp3(_el$37, "flexGrow", 1);
+        _$insert3(_el$37, () => h().card);
         _$effect3((_p$) => {
-          var _v$20 = theme().text.faint, _v$21 = theme().text.muted;
-          _v$20 !== _p$.e && (_p$.e = _$setProp3(_el$26, "fg", _v$20, _p$.e));
-          _v$21 !== _p$.t && (_p$.t = _$setProp3(_el$28, "fg", _v$21, _p$.t));
+          var _v$25 = theme().text.faint, _v$26 = theme().text.muted;
+          _v$25 !== _p$.e && (_p$.e = _$setProp3(_el$35, "fg", _v$25, _p$.e));
+          _v$26 !== _p$.t && (_p$.t = _$setProp3(_el$37, "fg", _v$26, _p$.t));
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$25;
+        return _el$34;
       })()
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
@@ -2244,27 +2334,27 @@ var HudCard = (props) => {
         return _$memo3(() => !!plan().last)() && last();
       },
       children: (entry) => (() => {
-        var _el$29 = _$createElement3("box"), _el$30 = _$createElement3("text"), _el$32 = _$createElement3("text"), _el$33 = _$createElement3("text");
-        _$insertNode3(_el$29, _el$30);
-        _$insertNode3(_el$29, _el$32);
-        _$insertNode3(_el$29, _el$33);
-        _$setProp3(_el$29, "flexDirection", "row");
-        _$setProp3(_el$29, "gap", 1);
-        _$insertNode3(_el$30, _$createTextNode3(`last`));
-        _$setProp3(_el$30, "wrapMode", "none");
-        _$setProp3(_el$30, "flexShrink", 0);
-        _$setProp3(_el$30, "width", LABEL);
-        _$setProp3(_el$32, "wrapMode", "none");
-        _$setProp3(_el$32, "flexShrink", 0);
-        _$insert3(_el$32, () => verdictGlyph(entry().verdict, mono()));
-        _$setProp3(_el$33, "wrapMode", "none");
-        _$insert3(_el$33, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
+        var _el$38 = _$createElement3("box"), _el$39 = _$createElement3("text"), _el$41 = _$createElement3("text"), _el$42 = _$createElement3("text");
+        _$insertNode3(_el$38, _el$39);
+        _$insertNode3(_el$38, _el$41);
+        _$insertNode3(_el$38, _el$42);
+        _$setProp3(_el$38, "flexDirection", "row");
+        _$setProp3(_el$38, "gap", 1);
+        _$insertNode3(_el$39, _$createTextNode3(`last`));
+        _$setProp3(_el$39, "wrapMode", "none");
+        _$setProp3(_el$39, "flexShrink", 0);
+        _$setProp3(_el$39, "width", LABEL);
+        _$setProp3(_el$41, "wrapMode", "none");
+        _$setProp3(_el$41, "flexShrink", 0);
+        _$insert3(_el$41, () => verdictGlyph(entry().verdict, mono()));
+        _$setProp3(_el$42, "wrapMode", "none");
+        _$insert3(_el$42, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
-          var _v$22 = theme().text.faint, _v$23 = verdictColor(theme(), entry().verdict, mono()), _v$24 = TextAttributes3.BOLD, _v$25 = theme().text.muted;
-          _v$22 !== _p$.e && (_p$.e = _$setProp3(_el$30, "fg", _v$22, _p$.e));
-          _v$23 !== _p$.t && (_p$.t = _$setProp3(_el$32, "fg", _v$23, _p$.t));
-          _v$24 !== _p$.a && (_p$.a = _$setProp3(_el$32, "attributes", _v$24, _p$.a));
-          _v$25 !== _p$.o && (_p$.o = _$setProp3(_el$33, "fg", _v$25, _p$.o));
+          var _v$27 = theme().text.faint, _v$28 = verdictColor(theme(), entry().verdict, mono()), _v$29 = TextAttributes3.BOLD, _v$30 = theme().text.muted;
+          _v$27 !== _p$.e && (_p$.e = _$setProp3(_el$39, "fg", _v$27, _p$.e));
+          _v$28 !== _p$.t && (_p$.t = _$setProp3(_el$41, "fg", _v$28, _p$.t));
+          _v$29 !== _p$.a && (_p$.a = _$setProp3(_el$41, "attributes", _v$29, _p$.a));
+          _v$30 !== _p$.o && (_p$.o = _$setProp3(_el$42, "fg", _v$30, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -2272,7 +2362,7 @@ var HudCard = (props) => {
           a: undefined,
           o: undefined
         });
-        return _el$29;
+        return _el$38;
       })()
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
@@ -2280,28 +2370,28 @@ var HudCard = (props) => {
         return _$memo3(() => !!plan().remediation)() && remediation();
       },
       children: (fix) => (() => {
-        var _el$34 = _$createElement3("box"), _el$35 = _$createElement3("text"), _el$37 = _$createElement3("text");
-        _$insertNode3(_el$34, _el$35);
-        _$insertNode3(_el$34, _el$37);
-        _$setProp3(_el$34, "flexDirection", "row");
-        _$setProp3(_el$34, "gap", 1);
-        _$insertNode3(_el$35, _$createTextNode3(`fix`));
-        _$setProp3(_el$35, "wrapMode", "none");
-        _$setProp3(_el$35, "flexShrink", 0);
-        _$setProp3(_el$35, "width", LABEL);
-        _$setProp3(_el$37, "wrapMode", "word");
-        _$setProp3(_el$37, "flexGrow", 1);
-        _$insert3(_el$37, () => fix().text);
+        var _el$43 = _$createElement3("box"), _el$44 = _$createElement3("text"), _el$46 = _$createElement3("text");
+        _$insertNode3(_el$43, _el$44);
+        _$insertNode3(_el$43, _el$46);
+        _$setProp3(_el$43, "flexDirection", "row");
+        _$setProp3(_el$43, "gap", 1);
+        _$insertNode3(_el$44, _$createTextNode3(`fix`));
+        _$setProp3(_el$44, "wrapMode", "none");
+        _$setProp3(_el$44, "flexShrink", 0);
+        _$setProp3(_el$44, "width", LABEL);
+        _$setProp3(_el$46, "wrapMode", "word");
+        _$setProp3(_el$46, "flexGrow", 1);
+        _$insert3(_el$46, () => fix().text);
         _$effect3((_p$) => {
-          var _v$26 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$27 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
-          _v$26 !== _p$.e && (_p$.e = _$setProp3(_el$35, "fg", _v$26, _p$.e));
-          _v$27 !== _p$.t && (_p$.t = _$setProp3(_el$37, "fg", _v$27, _p$.t));
+          var _v$31 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$32 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
+          _v$31 !== _p$.e && (_p$.e = _$setProp3(_el$44, "fg", _v$31, _p$.e));
+          _v$32 !== _p$.t && (_p$.t = _$setProp3(_el$46, "fg", _v$32, _p$.t));
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$34;
+        return _el$43;
       })()
     }), _el$18);
     _$insertNode3(_el$18, _el$19);

@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=832 -->
+<!-- spec-check files=43 tests=840 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3405,3 +3405,37 @@ green incl. spec-check (43/832), docs-watch companion + changelog grep before su
 source + render layers only; live TUI remains unverifiable. Follow-ups NOT done in this slice:
 other hover affordances that rely on color alone in the color arm, the C1 card why-row, the card
 context meter row, the measured card width.
+
+## Workstream DK — the compact card carries the context gauge (2026-11-16)
+
+Interpretation of this iteration: the armed condition names a context-size meter as part of the
+ambient information hierarchy, but until now the estimate lived only in the full dashboard overlay
+(status-dialog.tsx). The compact card — the level-b surface the eye actually lands on at a glance —
+showed condition, state, spend and verdict but not how full the window is. This slice paints the
+same gauge on the card.
+
+334. The compact HUD card (src/hud-card.tsx) paints a `context` row directly under the spend row,
+     reusing `contextMeter` + `CONTEXT_BAR_CELLS` from src/core/history.ts (the identical computation
+     the dashboard overlay reads, so the two surfaces never disagree): LABEL column (10 cells),
+     the 16-cell bar, then `~<size> of <threshold> · <pct>%` (`~<size> tokens`, no bar, when the
+     auto-compact threshold is disabled). Hot band (ratio >= CONTEXT_HOT_RATIO = 0.8) paints the
+     warning tone on bar and trailing copy; mono drops chromatic accents to text.base / text.muted
+     and the ASCII arm paints `#`/`-` via the existing `ascii()` gate. Omitted entirely when the
+     server cannot estimate (`contextSize` absent — same contract as the overlay row).
+335. The context row joins `cardRowPlan` as a droppable optional rung, placed after spend and before
+     the last-verdict row: under a viewport ceiling the drop order is now teaching hint -> spend ->
+     context -> last -> remediation (the final rung). `CardRowPlan` carries a new `context: boolean`
+     field; `hudCardRows` arithmetic and the mount anchor flow through unchanged (the mount never
+     reads the field set — it reads `rows`). Pinning tests in test/tui-hud.test.tsx (two new
+     functions: the one-row growth with spend/hint/no-verdict fixtures, and the ceiling drop order,
+     ending in the `cardRowPlan` shape match) and test/tui-render.test.tsx (six new functions: bar +
+     honest ratio, the hot band, the mono ASCII arm, the bare estimate without a threshold, the
+     omitted row without an estimate, and the painted drop order under a ceiling — context kept after
+     hint+spend drop, context dropped before the last-verdict row survives). No snapshot drift
+     (snapshot fixtures carry no contextSize). Spec-check marker files=43 tests=832 -> 840.
+
+Verification (all run in the worktree): bun test (840 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/840), docs-watch companion +
+changelog grep before submit. Evidence is source + render layers only; live TUI remains unverifiable.
+Follow-ups NOT done in this slice: the C1 card why-row, the measured card width, per-iteration
+spend attribution, cross-session overview.
