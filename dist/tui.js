@@ -239,6 +239,25 @@ function durationShares(durations) {
     return durations.map(() => 0);
   return durations.map((span) => Math.round(Math.max(0, Number.isFinite(span) ? span : 0) / total * 100));
 }
+var CONTEXT_BAR_CELLS = 16;
+var CONTEXT_HOT_RATIO = 0.8;
+function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS) {
+  const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0;
+  const width = Math.max(1, Math.floor(cells));
+  const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0;
+  if (!hasCapacity)
+    return { filled: 0, text: "\u2591".repeat(width), pct: undefined, hot: false, over: false };
+  const ratio = safeSize / capacity;
+  const pct = Math.round(ratio * 100);
+  const filled = Math.min(width, Math.max(0, Math.round(ratio * width)));
+  return {
+    filled,
+    text: "\u2588".repeat(filled) + "\u2591".repeat(width - filled),
+    pct,
+    hot: ratio >= CONTEXT_HOT_RATIO,
+    over: ratio >= 1
+  };
+}
 
 // src/core/hud.ts
 var isCompactHot = (goal) => {
@@ -866,6 +885,54 @@ var StatusDialogBody = (props) => {
       }), null);
       _$insert2(_el$5, _$createComponent2(Show2, {
         get when() {
+          return goal().contextSize !== undefined;
+        },
+        get children() {
+          return (() => {
+            const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens);
+            const hot = () => meter().hot;
+            const fg = () => hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
+            return (() => {
+              var _el$13 = _$createElement2("box");
+              _$setProp2(_el$13, "flexDirection", "row");
+              _$setProp2(_el$13, "gap", 2);
+              _$insert2(_el$13, () => label("context"), null);
+              _$insert2(_el$13, _$createComponent2(Show2, {
+                get when() {
+                  return goal().compactAtTokens !== undefined;
+                },
+                get fallback() {
+                  return (() => {
+                    var _el$16 = _$createElement2("text");
+                    _$setProp2(_el$16, "wrapMode", "none");
+                    _$insert2(_el$16, () => `~${formatTokens(goal().contextSize)} tokens`);
+                    _$effect2((_$p) => _$setProp2(_el$16, "fg", theme().text.muted, _$p));
+                    return _el$16;
+                  })();
+                },
+                get children() {
+                  return [(() => {
+                    var _el$14 = _$createElement2("text");
+                    _$setProp2(_el$14, "wrapMode", "none");
+                    _$insert2(_el$14, () => meter().text);
+                    _$effect2((_$p) => _$setProp2(_el$14, "fg", fg(), _$p));
+                    return _el$14;
+                  })(), (() => {
+                    var _el$15 = _$createElement2("text");
+                    _$setProp2(_el$15, "wrapMode", "none");
+                    _$insert2(_el$15, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
+                    _$effect2((_$p) => _$setProp2(_el$15, "fg", hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
+                    return _el$15;
+                  })()];
+                }
+              }), null);
+              return _el$13;
+            })();
+          })();
+        }
+      }), null);
+      _$insert2(_el$5, _$createComponent2(Show2, {
+        get when() {
           return goal().loopEnabled;
         },
         get children() {
@@ -1257,6 +1324,14 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
+function preserveContextSize(previous, next) {
+  if (next === null)
+    return next;
+  if (next.contextSize !== undefined)
+    return next;
+  const carried = previous?.contextSize;
+  return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next;
+}
 
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
@@ -1370,6 +1445,10 @@ var isGoalSnapshot = (value) => {
   if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
     return false;
   if (value.spend !== undefined && !isUsageSnapshot(value.spend))
+    return false;
+  if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize))
+    return false;
+  if (value.compactAtTokens !== undefined && !isFiniteNumber(value.compactAtTokens))
     return false;
   if (value.loopEnabled !== undefined && !isBoolean(value.loopEnabled))
     return false;
@@ -1667,14 +1746,15 @@ var tui_default = Plugin.define({
           dropTerminal(sessionID);
         }
       } catch {}
+      const mergedGoal = preserveContextSize(entries()[sessionID]?.goal, goal);
       return setEntries((previous) => {
         const existing = previous[sessionID];
-        if (existing && goalsEqual(existing.goal, goal))
+        if (existing && goalsEqual(existing.goal, mergedGoal))
           return previous;
         const next = {
           ...previous,
           [sessionID]: {
-            goal,
+            goal: mergedGoal,
             receivedAt: Date.now()
           }
         };
@@ -1872,8 +1952,12 @@ var tui_default = Plugin.define({
           const g = goal();
           return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text;
         };
+        const animated = () => {
+          const g = goal();
+          return Boolean(g && (g.evaluating === true || isCompactHot(g)));
+        };
         createEffect(() => {
-          if (goal()?.evaluating === true && motionOk) {
+          if (animated() && motionOk) {
             const timer = setInterval(() => setPulse((value) => !value), 850);
             onCleanup(() => clearInterval(timer));
             return;
@@ -1882,7 +1966,7 @@ var tui_default = Plugin.define({
         });
         const pillAttrs = () => {
           const underline = hovered() ? TextAttributes4.UNDERLINE : 0;
-          const bold = goal()?.evaluating === true && pulse() && motionOk ? TextAttributes4.BOLD : 0;
+          const bold = animated() && pulse() && motionOk ? TextAttributes4.BOLD : 0;
           const attrs = underline | bold;
           return attrs === 0 ? undefined : attrs;
         };

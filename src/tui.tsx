@@ -17,8 +17,8 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, HudButton, hudCardRows, pinBudget, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS } from "./core/hud.ts"
-import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, isCompactHot } from "./core/hud.ts"
+import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
 
@@ -212,11 +212,13 @@ export default Plugin.define({
       } catch {
         // The acknowledgment is chrome; a failed probe must not break snapshot intake.
       }
+      // The `get` RPC pull carries the context estimate; `changed` events usually do not — carry it forward.
+      const mergedGoal = preserveContextSize(entries()[sessionID]?.goal, goal)
       return setEntries((previous) => {
         const existing = previous[sessionID]
         // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.
-        if (existing && goalsEqual(existing.goal, goal)) return previous
-        const next = { ...previous, [sessionID]: { goal, receivedAt: Date.now() } }
+        if (existing && goalsEqual(existing.goal, mergedGoal)) return previous
+        const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: Date.now() } }
         // Drop null entries (unless a dialog is rendering that session) and cap the map.
         return pruneSnapshotEntries(next, statusDialogSession())
       })
@@ -423,10 +425,15 @@ export default Plugin.define({
           // truncated to whatever cells remain after the state prefix.
           return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text
         }
-        // Soft pulse while the evaluator is thinking: bold flips on a slow tick, only while `evaluating`;
-        // reduced-motion/NO_COLOR/TERM=dumb gets a static pill (motionOk stays false).
+        // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
+        // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced
+        // motion/NO_COLOR/TERM=dumb gets a static pill (motionOk stays false).
+        const animated = () => {
+          const g = goal()
+          return Boolean(g && (g.evaluating === true || isCompactHot(g)))
+        }
         createEffect(() => {
-          if (goal()?.evaluating === true && motionOk) {
+          if (animated() && motionOk) {
             const timer = setInterval(() => setPulse((value) => !value), 850)
             onCleanup(() => clearInterval(timer))
             return
@@ -435,7 +442,7 @@ export default Plugin.define({
         })
         const pillAttrs = () => {
           const underline = hovered() ? TextAttributes.UNDERLINE : 0
-          const bold = goal()?.evaluating === true && pulse() && motionOk ? TextAttributes.BOLD : 0
+          const bold = animated() && pulse() && motionOk ? TextAttributes.BOLD : 0
           const attrs = underline | bold
           return attrs === 0 ? undefined : attrs
         }

@@ -53,3 +53,16 @@ export function pruneSnapshotEntries(
   }
   return changed ? out : entries
 }
+
+/**
+ * The `get` RPC carries the last-known context estimate; `changed` event snapshots usually do not.
+ * When an event snapshot arrives without one, carry the cached value forward so the dialog's context
+ * meter does not flicker to `unknown` on every background tick. Returns the same reference when there
+ * is nothing to carry (keeps the hot path allocation-free).
+ */
+export function preserveContextSize(previous: GoalSnapshot | null | undefined, next: GoalSnapshot | null): GoalSnapshot | null {
+  if (next === null) return next
+  if (next.contextSize !== undefined) return next
+  const carried = previous?.contextSize
+  return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next
+}

@@ -158,6 +158,13 @@ export interface GoalSnapshot extends GoalRecord {
   /** Background work is holding evaluation back. */
   readonly waiting: boolean
   readonly spend?: UsageSnapshot
+  /**
+   * Estimated prompt tokens, present when the server could compute them (the `get` RPC does; `changed`
+   * event snapshots may not, and the TUI carries the last known value forward). Absent = unknown, never 0.
+   */
+  readonly contextSize?: number
+  /** The configured auto-compact threshold this estimate should be read against; absent when disabled (`compactAtTokens <= 0`). */
+  readonly compactAtTokens?: number
 }
 
 export interface ModelRef {

@@ -7,8 +7,9 @@
 import { Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
-import { formatDurationCoarse, formatSpend } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
 import { remediationFor } from "./core/hud.ts"
+import { contextMeter } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
@@ -89,6 +90,28 @@ export const StatusDialogBody = (props: {
             )}
           </Show>
           <Show when={goal().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
+          {/* context estimate vs the auto-compact threshold — the dial the boundary compaction reads; omitted entirely when the server could not estimate */}
+          <Show when={goal().contextSize !== undefined}>
+            {(() => {
+              const meter = () => contextMeter(goal().contextSize as number, goal().compactAtTokens)
+              const hot = () => meter().hot
+              const fg = () => hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base
+              return (
+                <box flexDirection="row" gap={2}>
+                  {label("context")}
+                  <Show
+                    when={goal().compactAtTokens !== undefined}
+                    fallback={<text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(goal().contextSize as number)} tokens`}</text>}
+                  >
+                    <text wrapMode="none" fg={fg()}>{meter().text}</text>
+                    <text wrapMode="none" fg={hot() ? theme().text.feedback.warning.base : theme().text.muted}>
+                      {`~${formatTokens(goal().contextSize as number)} of ${formatTokens(goal().compactAtTokens as number)} · ${meter().pct}%`}
+                    </text>
+                  </Show>
+                </box>
+              )
+            })()}
+          </Show>
           <Show when={goal().loopEnabled}>
             <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} />
           </Show>

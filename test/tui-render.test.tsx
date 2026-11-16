@@ -272,3 +272,30 @@ describe("StatusDialogBody edge paths", () => {
     expect(frame).not.toContain("spend")
   })
 })
+
+describe("context meter row", () => {
+  test("renders the bar and the honest ratio against the auto-compact threshold", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("context")
+    expect(frame).toContain("~95k of 150k")
+    expect(frame).toContain("63%")
+    expect(frame).toContain("█".repeat(10))
+  })
+
+  test("the hot band (≥80% of threshold) renders the warning copy", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 140_000, compactAtTokens: 150_000 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("93%")
+    expect(frame).toContain("█".repeat(15))
+  })
+
+  test("a snapshot without a threshold renders the bare estimate, no bar", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 95_000, compactAtTokens: undefined })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("~95k tokens")
+    expect(frame).not.toContain("of 150k")
+  })
+
+  test("a snapshot without an estimate omits the row entirely", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).not.toContain("context")
+  })
+})
