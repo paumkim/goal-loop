@@ -2076,6 +2076,17 @@
       "submittedAt": "2026-11-16T14:40:15Z",
       "mergedAt": "2026-11-16T14:42:11Z",
       "mergedInto": "dev"
+    },
+    "tui-compaction-landed-marker": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts src/hud-card.tsx src/status-dialog.tsx test/tui-hud.test.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
+      "branch": "wt/tui-compaction-landed-marker",
+      "worktree": "worktrees/wt-tui-compaction-landed-marker",
+      "status": "done",
+      "createdAt": "2026-11-16T14:45:03Z",
+      "submittedAt": "2026-11-16T14:56:07Z",
+      "mergedAt": "2026-11-16T14:58:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
