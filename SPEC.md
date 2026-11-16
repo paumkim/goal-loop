@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=876 -->
+<!-- spec-check files=43 tests=878 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3702,3 +3702,34 @@ Verification (all run in the worktree): bun test (876 pass, 0 fail), bun run com
 bun run check end-to-end green incl. spec-check (43/876) and the docs line-reference guard.
 Evidence is source + test-render layers; live TUI remains unverifiable. Follow-ups NOT done in
 this slice: per-iteration spend in the final tally, spend in the trail.
+
+## Workstream CO — the three-way work ledger, hue arm: work produced green, state inspection amber, satisfied-at-HEAD blue (2026-11-16)
+
+Interpretation of this iteration: CJ/CL took satisfied-at-HEAD to the glyph (hollow shape) and the
+rail (blue info), but the objective's narrative-legibility grammar — work produced (green),
+state inspection only (yellow), already-satisfied-at-HEAD (blue) — was still only two-thirds in
+place. met painted info everywhere and not_met painted faint everywhere; a zero-tool not_met turn
+(the loop inspecting state and making no progress) was indistinguishable from a worked not_met.
+
+354. src/core/hud.ts — NeutralTheme gains an optional `success?: { readonly base: C }` (mirrors
+     optional error; hosts without it paint exactly the pre-existing info). New exported
+     verdictEntryAccentColor(theme, entry, mono): met with measured toolCalls > 0 paints
+     success (green) falling back to info; met with toolCalls 0 OR absent paints info — the
+     ledger never claims work it cannot see; not_met with measured 0 paints warning (amber);
+     worked not_met stays faint; impossible stays warning; mono defers to verdictAccentColor's
+     mono path entirely — hue dropped, glyph shape carries the signal.
+355. Readers switch to the entry-aware accent: src/tui-history.tsx colorFor now takes the
+     VerdictEntry (verdict trail glyphs, why-ledger verdict glyphs, both last-verdict cells);
+     the loop rail's met glyph paints the entry accent (worked = success/fallback info,
+     zero-tool = info). src/hud-card.tsx verdictColor takes the entry for the card's
+     last-verdict row. HistoryTheme and HudCardTheme gain the optional success token. Why-ledger
+     furniture stays muted; met stays blue at zero tools — only MEASURED worked mets move to
+     green; the trail/mono/ASCII arms are unchanged in shape.
+356. Tests: tui-hud.test.tsx accent mappers +2 (three-way paint incl. absent-success fallback,
+     unknown-toolCalls met keeps info, zero-tool not_met amber, worked not_met faint; mono drops
+     the hue to the verdictAccentColor mono path). Spec-check marker files=43 tests=876 -> 878.
+
+Verification (all run in the worktree): bun test (878 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/878). Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: applying
+the ledger hue to the pill's landing flash.

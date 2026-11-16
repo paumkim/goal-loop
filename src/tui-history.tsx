@@ -11,7 +11,7 @@ import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
 import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
-import { verdictAccentColor, motionDisabled } from "./core/hud.ts"
+import { verdictEntryAccentColor, motionDisabled } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
@@ -25,6 +25,8 @@ export interface HistoryTheme {
       readonly warning: { readonly base: ColorInput }
       /** Present on the real theme; optional so minimal test themes still fit. Falls back to warning. */
       readonly error?: { readonly base: ColorInput }
+      /** Present on many host themes; optional so minimal test themes fit. Falls back to info (the prior paint). */
+      readonly success?: { readonly base: ColorInput }
     }
   }
 }
@@ -41,8 +43,8 @@ const label = (theme: HistoryTheme, text: string) => (
   </text>
 )
 
-const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorInput =>
-  verdictAccentColor(theme, verdict, mono)
+const colorFor = (theme: HistoryTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
+  verdictEntryAccentColor(theme, entry, mono)
 
 /**
  * One completed iteration's summary line. Click-to-copy when the caller wires `onCopy`:
@@ -275,7 +277,7 @@ export const LoopSection = (props: {
             <box flexDirection="column">
               <box flexDirection="row" gap={2}>
                 {label(theme(), `v${entry.version}`)}
-                <text wrapMode="none" flexShrink={0} fg={mono() ? theme().text.base : theme().text.feedback.info.base}>
+                <text wrapMode="none" flexShrink={0} fg={verdictEntryAccentColor(theme(), { verdict: "met", toolCalls: entry.toolCalls }, mono())}>
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
@@ -304,7 +306,7 @@ export const LoopSection = (props: {
               <text wrapMode="none" fg={theme().text.muted}>
                 · last
               </text>
-              <text wrapMode="none" fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
+              <text wrapMode="none" fg={colorFor(theme(), entry(), mono())} attributes={TextAttributes.BOLD}>
                 {verdictEntryGlyph(entry(), ascii())}
               </text>
               <text wrapMode="none" fg={theme().text.faint}>
@@ -382,7 +384,7 @@ const WhyLedger = (props: {
           return (
             <box flexDirection="row" gap={2} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
               {label(theme(), index() === 0 ? "why" : "")}
-              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry.verdict, mono())} attributes={TextAttributes.BOLD}>
+              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry, mono())} attributes={TextAttributes.BOLD}>
                 {verdictEntryGlyph(entry, ascii())}
               </text>
               <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
@@ -415,7 +417,7 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
         <box flexDirection="row" gap={2}>
           {label(props.theme, "trail")}
           <box flexDirection="row" flexShrink={0}>
-            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictEntryGlyph(entry, ascii())}</text>}</For>
+            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry, mono())}>{verdictEntryGlyph(entry, ascii())}</text>}</For>
           </box>
           <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
             {" "}
@@ -478,7 +480,7 @@ export const HistoryBlock = (props: {
         >
           {(entry) => (
             <box flexDirection="row" gap={2} flexGrow={1}>
-              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
+              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry(), mono())} attributes={TextAttributes.BOLD}>
                 {verdictEntryGlyph(entry(), ascii())}
               </text>
               <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
