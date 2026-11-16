@@ -3189,3 +3189,33 @@ were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check
 ok), coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream DB — keyboard parity: the evaluator reason gets its chord (2026-11-17)
+
+Interpretation of this iteration: DA shipped mouse affordances for copying verdict reasons
+(the evaluator row and the why-ledger rows) but no keyboard path — the dialog keymap layer
+carried only p (pin), c (copy condition), x (older iterations) and the scroll chords. The
+dialog is a mouse-first surface that must still honor the keyboard-parity bar; the palette
+already discovers host chords, so a chord here is undiscoverable only to the idle.
+
+313. src/tui.tsx: a new dialog-keymap command goal.status.copy-evaluator-reason binds "r"
+     (enabled only while the status dialog is open, like its siblings) to the same payload
+     the evaluator/reason row copies: entries()[s]?.goal?.reason, the host's clipboard
+     wiring with the "reason" label, and the shared in-modal flash (statusCopied — the
+     footer's copy button flips to ✓ copied for a beat, since host toasts do not render
+     above the modal). No-ops silently when the reason is absent, mirroring c. The per-row
+     why-ledger reasons stay mouse-only by design: they are the same session's history, the
+     evaluator row carries the latest payload, and one chord cannot name five rows —
+     keyboard users get the highest-value one; the mouse gets the rest.
+314. The footer hints are deliberately unchanged: extending DIALOG_FOOTER_SHORT_HINT would
+     push the 80-column row past its measured budget; the full hint would hide r below the
+     width tier where it is advertised. Both hints stay cell-exact; discovery is the command
+     palette, exactly as for c/p/x. Source-verified only — keymap layers mount in the
+     plugin's slot context, not headlessly; the render-corpus tests pin the row itself.
+
+Marker unchanged: files=43 tests=826 (no new test functions; keymap layers are source-verified
+with the live TUI unverifiable — dead provider). No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check
+ok), coordinator submit + merge-next, bun run check on dev shown green at the end.
