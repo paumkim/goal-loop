@@ -1867,6 +1867,17 @@
       "submittedAt": "2026-11-16T11:53:32Z",
       "mergedAt": "2026-11-16T11:54:05.000Z",
       "mergedInto": "dev"
+    },
+    "tui-loop-spend-attribution": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts src/core/format.ts src/core/wire.ts src/runtime/controller.ts src/tui-history.tsx test/loop.test.ts test/wire.test.ts test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html docs/architecture.html",
+      "branch": "wt/tui-loop-spend-attribution",
+      "worktree": "worktrees/wt-tui-loop-spend-attribution",
+      "status": "done",
+      "createdAt": "2026-11-16T11:57:19Z",
+      "submittedAt": "2026-11-16T12:04:00Z",
+      "mergedAt": "2026-11-16T12:05:41.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
