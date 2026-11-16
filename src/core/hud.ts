@@ -8,8 +8,18 @@ import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
-/** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. `achieved`/`impossible`/`failed` are terminal acknowledgment tones (see `terminalPill`). */
-export type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "achieved" | "impossible" | "failed"
+/**
+ * Automatic retries since the last successful turn before the pill calls out the distress. One or two are
+ * transient (provider hiccups, rate-limit windows); at this count the goal is almost certainly stuck — nothing
+ * has executed — and the surface says so, the same way two compaction misses say so.
+ */
+export const RETRY_HOT_THRESHOLD = 3
+
+/** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. `retrying` means every turn keeps failing — amber, the "nothing is executing" state. `achieved`/`impossible`/`failed` are terminal acknowledgment tones (see `terminalPill`). */
+export type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying" | "achieved" | "impossible" | "failed"
+
+/** Every turn keeps failing at the retry threshold or beyond: the goal is stuck, not merely slow. */
+export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RETRY_HOT_THRESHOLD
 
 export interface PillModel {
   readonly text: string
@@ -29,16 +39,28 @@ const stateWord = (goal: GoalSnapshot): string =>
 export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
   const state = stateWord(goal)
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
+  const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
+  // Paused outranks the retry counter (a pause IS the rate-limit story); a stuck-retrying goal outranks a hot compaction — nothing executes at all, so the compaction is not the urgent part.
   const tone: HudTone =
-    goal.status === "paused" ? "paused" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed"
+    goal.status === "paused"
+      ? "paused"
+      : isRetryStuck(goal)
+        ? "retrying"
+        : isCompactHot(goal)
+          ? "hot"
+          : goal.evaluating
+            ? "evaluating"
+            : goal.waiting
+              ? "waiting"
+              : "armed"
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops)
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined
     const compacting = pending ? ` · compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
-    return { text: `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}`, tone }
+    return { text: `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone }
   }
-  return { text: `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`, tone }
+  return { text: `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}${retrying}`, tone }
 }
 
 /**
@@ -106,7 +128,8 @@ export interface Remediation {
 /**
  * Failure is a first-class screen: when the loop is hot, the goal is stuck failed or judged impossible,
  * say exactly what to do — never a vague warning. Returns undefined when everything is nominal.
- * Order matters: an unrecoverable failure outranks an impossible verdict, which outranks a hot compaction request, which outranks a verdict streak.
+ * Order matters: an unrecoverable failure outranks an impossible verdict, which outranks a stuck retry loop
+ * (nothing executes at all), which outranks a hot compaction request, which outranks a verdict streak.
  */
 // Remediation strings stay short: the HUD card wraps them at ~49 columns (two rows are budgeted in
 // hudCardRows), the dialog has more room but shows the same line. One exact action, no hedging.
@@ -116,6 +139,9 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible · rephrase the condition, else /goal clear` }
+  }
+  if (isRetryStuck(goal)) {
+    return { tone: "warning", text: `${goal.retries} failed turns in a row · check provider quota or settings · else /goal clear` }
   }
   const pending = goal.loopCompact && goal.loopCompact.landedAt === undefined ? goal.loopCompact : undefined
   if (pending && pending.misses >= 2) {

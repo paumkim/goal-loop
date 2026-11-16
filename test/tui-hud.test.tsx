@@ -117,6 +117,24 @@ describe("pillModel", () => {
     expect(pill.text).toContain("goal active")
     expect(pill.text).not.toContain("loop")
   })
+
+  test("a goal stuck at 3 failed turns renders the retry counter with the retrying tone", () => {
+    const pill = pillModel(loopedGoal({ retries: 3 }), 1000 * 60 * 12)
+    expect(pill.text).toContain("· retry 3")
+    expect(pill.tone).toBe("retrying")
+  })
+
+  test("two retries are not stuck yet", () => {
+    const pill = pillModel(loopedGoal({ retries: 2 }), 1000 * 60 * 12)
+    expect(pill.text).not.toContain("retry")
+    expect(pill.tone).toBe("armed")
+  })
+
+  test("paused outranks a stuck retry loop (the pause IS the rate-limit story)", () => {
+    const pill = pillModel(loopedGoal({ retries: 5, status: "paused" }), 1000 * 60 * 12)
+    expect(pill.tone).toBe("paused")
+    expect(pill.text).toContain("· retry 5")
+  })
 })
 
 describe("isCompactHot", () => {
@@ -164,6 +182,28 @@ describe("remediationFor", () => {
   test("an unrecoverable failure outranks a hot compaction", () => {
     const fix = remediationFor(loopedGoal({ status: "failed", loopCompact: { requestedAt: now, iteration: 3, misses: 3 } }))
     expect(fix?.tone).toBe("error")
+  })
+
+  test("3 failed turns in a row render the check-provider remediation", () => {
+    const fix = remediationFor(loopedGoal({ retries: 4 }))
+    expect(fix?.tone).toBe("warning")
+    expect(fix?.text).toContain("4 failed turns in a row")
+    expect(fix?.text).toContain("provider")
+    expect(fix?.text).toContain("/goal clear")
+  })
+
+  test("two failed turns are not remediation-worthy yet", () => {
+    expect(remediationFor(loopedGoal({ retries: 2 }))).toBeUndefined()
+  })
+
+  test("an impossible verdict outranks a stuck retry loop", () => {
+    const fix = remediationFor(loopedGoal({ status: "impossible", retries: 5 }))
+    expect(fix?.text).toContain("rephrase")
+  })
+
+  test("a stuck retry loop outranks a hot compaction", () => {
+    const fix = remediationFor(loopedGoal({ retries: 3, loopCompact: { requestedAt: now, iteration: 3, misses: 3 } }))
+    expect(fix?.text).toContain("failed turns")
   })
 })
 

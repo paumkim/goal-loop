@@ -260,6 +260,8 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS) {
 }
 
 // src/core/hud.ts
+var RETRY_HOT_THRESHOLD = 3;
+var isRetryStuck = (goal) => goal.retries >= RETRY_HOT_THRESHOLD;
 var isCompactHot = (goal) => {
   const pending = goal.loopCompact;
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
@@ -268,15 +270,16 @@ var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating 
 var pillModel = (goal, elapsed) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
-  const tone = goal.status === "paused" ? "paused" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
+  const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
+  const tone = goal.status === "paused" ? "paused" : isRetryStuck(goal) ? "retrying" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops);
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined;
     const compacting = pending ? ` \xB7 compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : "";
-    return { text: `${GOAL_GLYPH} loop \xB7 v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}`, tone };
+    return { text: `${GOAL_GLYPH} loop \xB7 v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} \xB7 ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${compacting}${retrying}`, tone };
   }
-  return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`, tone };
+  return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${retrying}`, tone };
 };
 var TERMINAL_ACK_MS = 45000;
 var terminalPill = (goal, elapsed) => {
@@ -311,6 +314,9 @@ var remediationFor = (goal) => {
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible \xB7 rephrase the condition, else /goal clear` };
+  }
+  if (isRetryStuck(goal)) {
+    return { tone: "warning", text: `${goal.retries} failed turns in a row \xB7 check provider quota or settings \xB7 else /goal clear` };
   }
   const pending = goal.loopCompact && goal.loopCompact.landedAt === undefined ? goal.loopCompact : undefined;
   if (pending && pending.misses >= 2) {
@@ -1972,7 +1978,7 @@ var tui_default = Plugin.define({
         };
         const color = () => {
           const tone = pill()?.tone;
-          if (tone === "paused" || tone === "hot" || tone === "impossible")
+          if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible")
             return context.theme.text.feedback.warning.base;
           if (tone === "failed")
             return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base;
