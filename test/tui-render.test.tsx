@@ -491,3 +491,50 @@ describe("copy-to-clipboard affordances (mouse)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("in-modal copy acknowledgment (rows flip ✓ copied)", () => {
+  test("clicking the evaluator row flips the row to ✓ copied — no toast required", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    expect(frame).not.toContain("✓ copied")
+    const at = findIn(frame, "Evaluator: docs build still fails")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    const line = frame.split("\n")[at!.y]!
+    expect(line).toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking the condition row flips the row to ✓ copied", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyCondition={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    expect(frame).not.toContain("✓ copied")
+    const at = findIn(frame, "ship the release notes")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    const line = frame.split("\n")[at!.y]!
+    expect(line).toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking an iteration summary line flips that line to ✓ copied", async () => {
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopySummary={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    expect(frame).not.toContain("✓ copied")
+    const at = findIn(frame, "Added an 18-cell block progress bar.")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    const line = frame.split("\n")[at!.y]!
+    expect(line).toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+})

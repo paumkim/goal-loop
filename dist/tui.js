@@ -12,7 +12,7 @@ import { createElement as _$createElement4 } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
-import { createMemo, createSignal as createSignal4, createEffect, onCleanup, Show as Show4 } from "solid-js";
+import { createMemo, createSignal as createSignal4, createEffect, onCleanup as onCleanup3, Show as Show4 } from "solid-js";
 
 // src/core/types.ts
 var LIVE_STATUSES = new Set(["active", "paused"]);
@@ -75,7 +75,7 @@ import { effect as _$effect2 } from "@opentui/solid";
 import { insert as _$insert2 } from "@opentui/solid";
 import { setProp as _$setProp2 } from "@opentui/solid";
 import { createElement as _$createElement2 } from "@opentui/solid";
-import { Show as Show2, createSignal as createSignal2 } from "solid-js";
+import { Show as Show2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
 import { TextAttributes as TextAttributes2 } from "@opentui/core";
 
 // src/core/history.ts
@@ -395,8 +395,8 @@ var evaluatorHint = (goal) => {
 };
 
 // src/tui-history.tsx
-import { memo as _$memo } from "@opentui/solid";
 import { createComponent as _$createComponent } from "@opentui/solid";
+import { memo as _$memo } from "@opentui/solid";
 import { createTextNode as _$createTextNode } from "@opentui/solid";
 import { insertNode as _$insertNode } from "@opentui/solid";
 import { effect as _$effect } from "@opentui/solid";
@@ -404,7 +404,7 @@ import { insert as _$insert } from "@opentui/solid";
 import { setProp as _$setProp } from "@opentui/solid";
 import { createElement as _$createElement } from "@opentui/solid";
 import { TextAttributes } from "@opentui/core";
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onCleanup } from "solid-js";
 var SUMMARY_MAX = 400;
 var label = (theme, text) => (() => {
   var _el$ = _$createElement("text");
@@ -437,7 +437,8 @@ var RailSummary = (props) => {
     _$setProp(_el$3, "width", LABEL);
     _$setProp(_el$5, "wrapMode", "word");
     _$setProp(_el$5, "flexGrow", 1);
-    _$insert(_el$5, () => `\u2502 ${truncate(props.text, SUMMARY_MAX)}`);
+    _$insert(_el$5, () => `\u2502 ${truncate(props.text, SUMMARY_MAX)}`, null);
+    _$insert(_el$5, () => props.copied?.() ? " \u2713 copied" : "", null);
     _$effect((_p$) => {
       var _v$ = props.onCopy ? copy : undefined, _v$2 = props.theme.text.faint, _v$3 = props.theme.text.faint, _v$4 = props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined;
       _v$ !== _p$.e && (_p$.e = _$setProp(_el$2, "onMouseUp", _v$, _p$.e));
@@ -457,6 +458,23 @@ var RailSummary = (props) => {
 var LoopSection = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
+  const [copiedVersion, setCopiedVersion] = createSignal(null);
+  let copiedTimer;
+  onCleanup(() => {
+    if (copiedTimer)
+      clearTimeout(copiedTimer);
+  });
+  const copySummary = (summary, version) => {
+    if (!props.onCopySummary)
+      return;
+    try {
+      props.onCopySummary(summary, version);
+      setCopiedVersion(version);
+      if (copiedTimer)
+        clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopiedVersion(null), 1600);
+    } catch {}
+  };
   const history = () => props.goal.loopHistory ?? [];
   const done = () => history().length;
   const max = () => props.goal.loopMaxLoops;
@@ -640,8 +658,9 @@ var LoopSection = (props) => {
                   return entry.summary;
                 },
                 get onCopy() {
-                  return props.onCopySummary ? (text) => props.onCopySummary?.(text, entry.version) : undefined;
-                }
+                  return props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined;
+                },
+                copied: () => copiedVersion() === entry.version
               });
             }
           }), null);
@@ -919,10 +938,24 @@ var StatusDialogBody = (props) => {
     const goal = g();
     return goal ? evaluatorHint(goal) : null;
   };
+  const [copied, setCopied] = createSignal2(null);
+  let copiedTimer;
+  const acknowledge = (key) => {
+    setCopied(key);
+    if (copiedTimer)
+      clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => setCopied(null), 1600);
+  };
+  onCleanup2(() => {
+    if (copiedTimer)
+      clearTimeout(copiedTimer);
+  });
+  const copiedSuffix = (key) => copied() === key ? " \u2713 copied" : "";
   const [reasonHovered, setReasonHovered] = createSignal2(false);
   const copyCondition = (condition) => {
     try {
       props.onCopyCondition?.(condition);
+      acknowledge("condition");
     } catch {}
   };
   const copyReason = (reason) => {
@@ -930,6 +963,7 @@ var StatusDialogBody = (props) => {
       return;
     try {
       props.onCopyReason(reason);
+      acknowledge("reason");
     } catch {}
   };
   return _$createComponent2(Show2, {
@@ -973,7 +1007,8 @@ var StatusDialogBody = (props) => {
       _$insert2(_el$1, () => label("goal"), _el$10);
       _$setProp2(_el$10, "wrapMode", "word");
       _$setProp2(_el$10, "flexGrow", 1);
-      _$insert2(_el$10, () => goal().condition);
+      _$insert2(_el$10, () => goal().condition, null);
+      _$insert2(_el$10, () => copiedSuffix("condition"), null);
       _$insert2(_el$5, _$createComponent2(Show2, {
         get when() {
           return goal().reason;
@@ -996,7 +1031,8 @@ var StatusDialogBody = (props) => {
             _$insert2(_el$11, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$12);
             _$setProp2(_el$12, "wrapMode", "word");
             _$setProp2(_el$12, "flexGrow", 1);
-            _$insert2(_el$12, reason);
+            _$insert2(_el$12, reason, null);
+            _$insert2(_el$12, () => copiedSuffix("reason"), null);
             _$effect2((_p$) => {
               var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.UNDERLINE : undefined;
               _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$12, "fg", _v$6, _p$.e));
@@ -2235,7 +2271,7 @@ var tui_default = Plugin.define({
         createEffect(() => {
           if (animated() && motionOk) {
             const timer = setInterval(() => setPulse((value) => !value), 850);
-            onCleanup(() => clearInterval(timer));
+            onCleanup3(() => clearInterval(timer));
             return;
           }
           setPulse(false);

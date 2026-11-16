@@ -16,11 +16,14 @@ the conversation; the row disappears forever after turn 1. (c) The `/goal` detai
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, the same teaching line (`hint  the evaluator reads only the
 transcript — it cannot run commands; prove the condition with visible output`) while the goal is fresh, two more
-one-click copy affordances (each underlines on hover, like the condition row, and acknowledges with the host's
-`reason copied` / `summary copied` toast): the `evaluator`/`reason` row copies the raw evaluator text, and an
+one-click copy affordances (each underlines on hover, like the condition row): the `evaluator`/`reason` row
+copies the raw evaluator text, and an
 iteration summary line in the loop rail copies that iteration's full (untruncated) summary — the two texts a user
 most wants verbatim when pasting into a follow-up prompt; both are omitted (rendered plain) when the caller does
-not wire the callbacks, and clickable `copy condition` / `pin condition` / `clear
+not wire the callbacks. Copying from inside the dialog acknowledges in place — host toasts do not render above
+the modal, so each row (condition, evaluator/reason, summary) flips a transient `✓ copied` suffix for ~1.6s
+on the clicked line, the same grammar as the footer's copy button (the host clipboard/OSC52 call still fires; the
+host toast, where visible, still fires). Clickable `copy condition` / `pin condition` / `clear
 goal` footer buttons (`p` toggles the pin, `c` copies the condition — host toasts do not render above the
 modal, so the copy button acknowledges with a transient `✓ copied` label instead). The footer degrades in two
 steps so it never clips mid-word: above
@@ -445,7 +448,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=703 -->
+<!-- spec-check files=43 tests=706 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
