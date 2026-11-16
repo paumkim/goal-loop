@@ -17,7 +17,7 @@ import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-j
 import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
-import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
+import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -638,7 +638,7 @@ export default Plugin.define({
         const maxCardRows = () => Math.max(8, dimensions().height - 2)
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g, contextOpen(), maxCardRows()) : 0
+          return g ? hudCardRows(g, contextOpen(), maxCardRows(), cardWidth(dimensions().width)) : 0
         }
         const toggleHud = () => {
           try {

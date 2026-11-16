@@ -1943,7 +1943,6 @@ import { createElement as _$createElement3 } from "@opentui/solid";
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { createSignal as createSignal3, Show as Show3 } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
-var CONDITION_MAX = 42;
 var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
 var verdictColor = (theme, verdict, mono) => verdictAccentColor(theme, verdict, mono);
 var Hint = (props) => (() => {
@@ -1954,11 +1953,20 @@ var Hint = (props) => (() => {
   return _el$;
 })();
 var CONTEXT_MENU_ROWS = 4;
-var REMEDIATION_WIDTH = 49;
-var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => {
+var CARD_WIDTH_MIN = 52;
+var CARD_WIDTH_MAX = 88;
+var cardWidth = (terminalWidth) => {
+  if (Number.isNaN(terminalWidth))
+    return 64;
+  const fitted = Math.floor(terminalWidth) - 16;
+  return Math.max(CARD_WIDTH_MIN, Math.min(CARD_WIDTH_MAX, fitted));
+};
+var remediationWidth = (width) => Math.max(24, Math.floor(width) - 15);
+var conditionWidth = (width) => Math.max(20, Math.floor(width) - 22);
+var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => {
   const remediation = remediationFor(goal);
   const remediationWanted = Boolean(remediation);
-  const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0;
+  const remediationRows = remediation ? wrapLines(remediation.text, remediationWidth(width)) : 0;
   const hintAvailable = Boolean(evaluatorHint(goal));
   const spendAvailable = Boolean(goal.spend);
   const contextAvailable = goal.contextSize !== undefined;
@@ -2050,7 +2058,7 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
     remediation: fix
   };
 };
-var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => cardRowPlan(goal, contextOpen, maxRows).rows;
+var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => cardRowPlan(goal, contextOpen, maxRows, width).rows;
 var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
@@ -2216,6 +2224,9 @@ var HudCard = (props) => {
   const mono = () => props.mono === true;
   const ascii = () => motionDisabled(process.env) || mono();
   const g = () => props.goal;
+  const dimensions = useTerminalDimensions();
+  const width = () => props.width ?? cardWidth(dimensions().width);
+  const conditionCells = () => conditionWidth(width());
   const [conditionHovered, setConditionHovered] = createSignal3(false);
   const [whyHovered, setWhyHovered] = createSignal3(false);
   const looped = () => Boolean(g().loopEnabled);
@@ -2292,7 +2303,7 @@ var HudCard = (props) => {
     _$setProp3(_el$10, "width", LABEL);
     _$setProp3(_el$12, "wrapMode", "none");
     _$setProp3(_el$12, "flexGrow", 1);
-    _$insert3(_el$12, () => truncate(g().condition, CONDITION_MAX, ascii() ? "..." : "\u2026"));
+    _$insert3(_el$12, () => truncate(g().condition, conditionCells(), ascii() ? "..." : "\u2026"));
     _$insert3(_el$1, _$createComponent3(Show3, {
       get when() {
         return conditionHovered();
@@ -2504,7 +2515,7 @@ var HudCard = (props) => {
             _$setProp3(_el$44, "width", LABEL);
             _$setProp3(_el$46, "wrapMode", "none");
             _$setProp3(_el$46, "flexGrow", 1);
-            _$insert3(_el$46, () => truncate(whyReason(), CONDITION_MAX, ascii() ? "..." : "\u2026"));
+            _$insert3(_el$46, () => truncate(whyReason(), conditionCells(), ascii() ? "..." : "\u2026"));
             _$insert3(_el$43, _$createComponent3(Show3, {
               get when() {
                 return _$memo3(() => !!whyHovered())() && copyable();
@@ -2713,7 +2724,7 @@ var HudCard = (props) => {
       }
     }), null);
     _$effect3((_p$) => {
-      var _v$8 = props.width ?? 64, _v$9 = borderColor(), _v$0 = theme().background?.raised?.high, _v$1 = ` ${title()} `, _v$10 = stateColor(), _v$11 = theme().text.faint, _v$12 = theme().text.base, _v$13 = conditionHovered() ? TextAttributes3.BOLD : undefined, _v$14 = theme().text.faint, _v$15 = stateColor(), _v$16 = TextAttributes3.BOLD, _v$17 = theme().text.muted;
+      var _v$8 = width(), _v$9 = borderColor(), _v$0 = theme().background?.raised?.high, _v$1 = ` ${title()} `, _v$10 = stateColor(), _v$11 = theme().text.faint, _v$12 = theme().text.base, _v$13 = conditionHovered() ? TextAttributes3.BOLD : undefined, _v$14 = theme().text.faint, _v$15 = stateColor(), _v$16 = TextAttributes3.BOLD, _v$17 = theme().text.muted;
       _v$8 !== _p$.e && (_p$.e = _$setProp3(_el$0, "width", _v$8, _p$.e));
       _v$9 !== _p$.t && (_p$.t = _$setProp3(_el$0, "borderColor", _v$9, _p$.t));
       _v$0 !== _p$.a && (_p$.a = _$setProp3(_el$0, "backgroundColor", _v$0, _p$.a));
@@ -3601,7 +3612,7 @@ var tui_default = Plugin.define({
         const maxCardRows = () => Math.max(8, dimensions().height - 2);
         const cardRows = () => {
           const g = cardFor();
-          return g ? hudCardRows(g, contextOpen(), maxCardRows()) : 0;
+          return g ? hudCardRows(g, contextOpen(), maxCardRows(), cardWidth(dimensions().width)) : 0;
         };
         const toggleHud = () => {
           try {

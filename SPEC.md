@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=867 -->
+<!-- spec-check files=43 tests=870 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3628,3 +3628,39 @@ bun run compile, bun run check end-to-end green incl. spec-check (43/867) and th
 line-reference guard, docs-watch companion + changelog grep before submit. Evidence is source +
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
 measured card width, per-turn spend in the why ledger.
+
+## Workstream CM — the card measures the terminal: fluid width, 64 cells exactly at the 80-column floor (2026-11-16)
+
+Interpretation of this iteration: the HUD card was the one surface still hard-pinned to its
+64-cell design number — the pill, the footer tier and the context menu all measure the terminal,
+but the card asked no questions. On wide terminals users got a narrow panel in a dead gutter; on
+terminals below 80 columns the card never compressed. The axis pushed here is responsiveness.
+
+348. src/hud-card.tsx — new exported CARD_WIDTH_MIN (52) / CARD_WIDTH_MAX (88) and
+     cardWidth(terminalWidth): floor(t) − 16, clamped to [52, 88]; NaN yields the conservative
+     64-cell default; ±Infinity clamp to an edge; the 80-column floor reproduces the 64-cell
+     design exactly (80 − 16 = 64), and every existing 80-column snapshot stays byte-stable.
+     The HudCard root width becomes `props.width ?? cardWidth(dimensions().width)` — the
+     explicit prop override is preserved for callers that pin. The REMEDIATION_WIDTH constant
+     is gone: new exported remediationWidth(width) = max(24, width − 15) and conditionWidth(width)
+     = max(20, width − 22) derive the wrap/truncate budgets from the resolved card width
+     (border 2, padding 2, LABEL 10, gap 1, right hint slot 7). The condition and why-reason
+     truncates use conditionWidth of the RESOLVED width; REMEDIATION_WIDTH's SPEC mention at
+     line 2726 stands as the record of the 64-cell design at that commit.
+349. height arithmetic is width-honest now: cardRowPlan/hudCardRows accept a trailing
+     `width = 64` argument and wrap the remediation with remediationWidth(width), so the
+     absolute mount's anchor (tui.tsx) matches the painted height on fluid widths.
+     src/tui.tsx threads cardWidth(dimensions().width) into hudCardRows for the mount anchor.
+350. Tests: tui-hud.test.tsx gains a cardWidth describe (3 cases: predicate pins including the
+     80→64 contract and NaN/Infinity, hudCardRows remediation wrap shrinks with width — the
+     88-cell hot remediation fixture needs fewer rows at 88 cells than at 52 — and a 120-column
+     render showing the condition past the 42-cell default budget plus the width={64} override
+     truncating). tui-render.test.tsx's why-row ellipsis case now pins width 80 render
+     explicitly (the budget it asserts is the 64-cell design's) — a re-pin, not a new test.
+     Spec-check marker files=43 tests=867 -> 870.
+
+Verification (all run in the worktree): bun test (870 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/870) and the docs
+line-reference guard. Evidence is source + test-render layers; live TUI remains unverifiable.
+Follow-ups NOT done in this slice: the pinned-pill width budget, a live check on an actual
+120-column terminal.
