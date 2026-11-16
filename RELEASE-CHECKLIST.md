@@ -1,8 +1,38 @@
-# Release checklist — @el4cteo/opencode-goal 1.1.0
+# Release checklist — opencode-goalv2 1.1.0
 
-Status as of 2026-11-15: the `/goal-loop-<N>` feature (Workstream AY, merge f26a758) and the cli-installer
-work (Workstream AZ, merge 9cb0678) are on `dev` only. Nothing below has been done yet. Do not merge your own
-lease into `dev`; this checklist runs after `dev` is green and a release is explicitly approved.
+Status as of 2026-11-16. Mostly done. The one remaining step is step 7 (`npm publish`), blocked on a
+publish-capable npm token (see step 7). The release ships from `aff3a49` (the merge of the docs release
+lease into `dev`), deliberately tagged in git as `v1.1.0` and published as a GitHub release; `dev` has since
+moved past it (proof session merged `3011b6a`) and is not the content of the 1.1.0 artifact.
+
+What is shipped and verified:
+
+- `v1.1.0` tag on `aff3a49` pushed to `origin`; GitHub release `paumkim/opencode-goalv2/releases/tag/v1.1.0`
+  carries `opencode-goalv2-1.1.0.tgz` (bundle of 41 files, `shasum 908fb7ce85f8c4555c842648b48583e5682d818e`).
+- The tarball installs and runs: anonymous download md5-identical to the packed artifact; `npm i -g` into a
+  scratch prefix; `opencode-goal --version` prints `opencode-goal 1.1.0`; `install --dry-run` works in a scratch scope.
+- `bun run e2e` against a detached export of the release tree: goal set and achieved in 1 turn,
+  evaluator-verified (`status: achieved`).
+- GitHub install route documented and verified: `opencode plugin add github:paumkim/opencode-goalv2#v1.1.0`
+  (scratch config) — registers the specifier in the global config.
+- npm-registry journey rehearsed end-to-end with the published upstream package (`@el4cteo/opencode-goal@1.0.1`)
+  in a scratch config + cold `XDG_CACHE_HOME`: `opencode plugin add` resolved it from npmjs.org into
+  `<cache>/opencode/npm/@el4cteo/opencode-goal@latest/<hash>/node_modules/...`, and a fresh standalone
+  `opencode serve` loaded it per location
+  (`loading plugin id=@el4cteo/opencode-goal entrypoint=file:///<cache>/opencode/npm/@el4cteo/opencode-goal@latest/.../index.ts`).
+  The machinery `opencode-goalv2` will use once it is on the registry is proven working on this machine.
+- `npm publish --access public --dry-run` from the `v1.1.0` checkout: green (prepublishOnly compile+test pass,
+  41 files) and prints `+ opencode-goalv2@1.1.0` (dry-run). `npm view opencode-goalv2` returns 404 (name free).
+- `npm whoami` on this machine now prints `paukim` (user ran `npm login` on 2026-11-16).
+
+Still pending:
+
+- Step 7 `npm publish` — a real `npm publish` attempt on 2026-11-16 failed with `403 E403 ... requires
+  two-factor authentication or a granular access token with bypass 2fa`. The session token from `npm login`
+  cannot publish. Either run `npm publish --access public --otp=<authenticator code>` in the repo root, or
+  create a granular access token at npmjs.com with the `publish` permission on `opencode-goalv2` (or `*`) and
+  "bypass 2fa" enabled, install it in `~/.npmrc` as `//registry.npmjs.org/:_authToken=<token>`, and re-run
+  `npm publish --access public`. Until then the package is not on the registry.
 
 ## What is on dev, not released (evidence)
 
@@ -22,9 +52,9 @@ lease into `dev`; this checklist runs after `dev` is green and a release is expl
 4. **SPEC.md honesty gate**: run `npm pack --dry-run --json` (must list the new/changed shipped files; today 41) and update the `<!-- spec-check files=N tests=N -->` marker in the same commit. `bun run check` must stay green (it runs `spec-check`).
 5. **Commit** on `wt/release-1.1.0`, `coordinator submit`. Coordinator merge-next lands it on `dev` (do not self-merge).
 6. **Land on `main`**: only via the sanctioned path for this repo (open a `dev` → `main` merge through the coordinator/owner's process). Tag `v1.1.0` on the merge commit on `main`. Push `main` and the tag to `origin`.
-7. **Publish**: `npm publish` (prepublishOnly runs compile + test). Verify `npm view @el4cteo/opencode-goal version` prints `1.1.0` and `npm view @el4cteo/opencode-goal dist-tags` points `latest` at it. Whoever publishes needs npm 2FA/rights for `@el4cteo/opencode-goal` — confirm before starting; if the fork cannot publish under `@el4cteo`, stop and resolve ownership with the maintainer (alternative: publish the fork's own scope, but that is a product decision, not a default).
-8. **Verify the GitHub install path**: after `main` and `v1.1.0` are pushed, run from a scratch directory `opencode plugin add github:paumkim/opencode-goalv2@v1.1.0` (or the ref documented in `docs/install.html`) and confirm the installed ref contains `parseGoalLoopDirective` (e.g. `grep -r "goal-loop-188" node_modules/... | head`), and that `/goal-loop-3 test objective` arms a loop with `max="3"`. Note: `docs/install.html:12` currently advertises `opencode plugin add github:EL4CTEO/opencode-goal` (the upstream repo) — decide which repo the release ships from and make the docs match reality.
-9. **Smoke-test the published package**: `npm i -g @el4cteo/opencode-goal@1.1.0` in a scratch prefix, `opencode-goal status`, `opencode-goal install --dry-run`, then one real `/goal-loop-2` cycle under a probe session (`OPENCODE_GOAL_PROBE=1` for anything touching live plugin storage).
+7. **Publish** — PENDING, blocked on npm 2FA. Attempt on 2026-11-16 failed with `403 E403` (session token from `npm login` has no publish grant). Unblock one of two ways: (a) `npm publish --access public --otp=<code from your authenticator>`; (b) create a granular access token on npmjs.com with publish permission on `opencode-goalv2` and bypass 2fa, then `npm publish --access public`. Verify afterwards: `npm view opencode-goalv2 version` prints `1.1.0`, `npm view opencode-goalv2 dist-tags` points `latest` at it, then run the registry install journey check (step 8 analog with the new package). Note for the fork: this checklist's publish under `@el4cteo/opencode-goal` is superseded — the package ships as unscoped `opencode-goalv2` (the name every artifact now uses).
+8. **Verify the GitHub install path** — DONE 2026-11-16 (scratch config; specifier registered). Originally: after `main` and `v1.1.0` are pushed, run from a scratch directory `opencode plugin add github:paumkim/opencode-goalv2@v1.1.0` (or the ref documented in `docs/install.html`) and confirm the installed ref contains `parseGoalLoopDirective` (e.g. `grep -r "goal-loop-188" node_modules/... | head`), and that `/goal-loop-3 test objective` arms a loop with `max="3"`. Note: `docs/install.html:12` currently advertises `opencode plugin add github:EL4CTEO/opencode-goal` (the upstream repo) — decide which repo the release ships from and make the docs match reality.
+9. **Smoke-test the published package** — registry install path rehearsed with `@el4cteo/opencode-goal@1.0.1` (plugin add → cache layout → `opencode serve` loads it). Re-run against `opencode-goalv2@1.1.0` after step 7. Originally: `npm i -g @el4cteo/opencode-goal@1.1.0` in a scratch prefix, `opencode-goal status`, `opencode-goal install --dry-run`, then one real `/goal-loop-2` cycle under a probe session (`OPENCODE_GOAL_PROBE=1` for anything touching live plugin storage).
 10. **Verify the npm tarball** contains the feature and installer: `npm pack @el4cteo/opencode-goal@1.1.0` → `tar tzf` lists `src/core/parse.ts` with `parseGoalLoopDirective` (grep after extract) and `bin/opencode-goal.mjs`.
 11. **Do not** rebuild or replace the installed binary at `~/.opencode/bin/opencode`; `opencode plugin add` paths above are config-level only.
 12. **Close the loop**: mark the release lease done, update SPEC.md release notes, and record the tag/provenance in the changelog.
