@@ -16,7 +16,7 @@ import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
-import { StatusDialogBody } from "./status-dialog.tsx"
+import { StatusDialogBody, foreignLiveRows } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
@@ -752,6 +752,14 @@ export default Plugin.define({
         reason: () => {
           const sessionID = statusDialogSession()
           return sessionID ? entries()[sessionID]?.goal?.reason : undefined
+        },
+        transcriptFor: (row) => foreignLiveRows(others(), statusDialogSession())[row - 1]?.sessionID,
+        openTranscript: (sessionID) => {
+          try {
+            context.ui.router.navigate({ type: "session", sessionID })
+          } catch {
+            // The host detached — the chord is chrome, not a command.
+          }
         },
         copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
         flashCopied: flashStatusCopied,

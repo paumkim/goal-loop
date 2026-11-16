@@ -1528,6 +1528,8 @@ var HistoryBlock = (props) => {
 };
 
 // src/status-dialog.tsx
+var FOREIGN_ROWS_VISIBLE = 4;
+var foreignLiveRows = (others, ownSessionID) => (others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== ownSessionID);
 var StatusDialogBody = (props) => {
   const theme = () => props.theme;
   const ascii = motionDisabled(process.env) || props.mono === true;
@@ -1554,7 +1556,7 @@ var StatusDialogBody = (props) => {
   })();
   const stateColor = () => props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted;
   const g = () => props.goal;
-  const OTHERS_VISIBLE = 4;
+  const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE;
   const OTHERS_CONDITION_MAX = 34;
   const OTHERS_TAG_MAX = 12;
   const sessionTag = (sessionID) => {
@@ -1562,8 +1564,7 @@ var StatusDialogBody = (props) => {
     return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}\u2026` : label;
   };
   const othersLive = () => {
-    const own = g()?.sessionID;
-    const rows = (props.others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== own);
+    const rows = foreignLiveRows(props.others, g()?.sessionID);
     return rows.length > 0 ? rows : undefined;
   };
   const remediation = () => {
@@ -2025,9 +2026,10 @@ var StatusDialogBody = (props) => {
               get each() {
                 return rows().slice(0, OTHERS_VISIBLE);
               },
-              children: (other) => {
+              children: (other, index) => {
                 const jump = props.onViewTranscript;
                 const hovered = () => othersHovered() === other.sessionID;
+                const digit = () => index() + 1;
                 return (() => {
                   var _el$46 = _$createElement2("box"), _el$47 = _$createElement2("text"), _el$48 = _$createElement2("text"), _el$49 = _$createElement2("text"), _el$50 = _$createElement2("text");
                   _$insertNode2(_el$46, _el$47);
@@ -2046,7 +2048,15 @@ var StatusDialogBody = (props) => {
                   } : undefined);
                   _$setProp2(_el$46, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
                   _$setProp2(_el$46, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
-                  _$insert2(_el$46, () => label(""), _el$47);
+                  _$insert2(_el$46, () => jump ? (() => {
+                    var _el$52 = _$createElement2("text");
+                    _$setProp2(_el$52, "wrapMode", "none");
+                    _$setProp2(_el$52, "flexShrink", 0);
+                    _$setProp2(_el$52, "width", LABEL);
+                    _$insert2(_el$52, digit);
+                    _$effect2((_$p) => _$setProp2(_el$52, "fg", theme().text.faint, _$p));
+                    return _el$52;
+                  })() : label(""), _el$47);
                   _$setProp2(_el$47, "wrapMode", "none");
                   _$setProp2(_el$47, "flexShrink", 0);
                   _$insert2(_el$47, (() => {
@@ -3122,6 +3132,20 @@ var dialogStatusCommands = (deps) => {
         } catch {}
       }
     },
+    ...deps.transcriptFor && deps.openTranscript ? [1, 2, 3, 4].map((row) => ({
+      id: `goal.status.transcript-${row}`,
+      title: `Goal status: open transcript of other session ${row}`,
+      group: "Goal",
+      bind: String(row),
+      enabled: () => deps.open() && Boolean(deps.transcriptFor?.(row)),
+      run: () => {
+        try {
+          const id = deps.transcriptFor?.(row);
+          if (id)
+            deps.openTranscript?.(id);
+        } catch {}
+      }
+    })) : [],
     {
       id: "goal.status.scroll-up",
       title: "Goal status: scroll up",
@@ -4119,6 +4143,15 @@ var tui_default = Plugin.define({
         reason: () => {
           const sessionID = statusDialogSession();
           return sessionID ? entries()[sessionID]?.goal?.reason : undefined;
+        },
+        transcriptFor: (row) => foreignLiveRows(others(), statusDialogSession())[row - 1]?.sessionID,
+        openTranscript: (sessionID) => {
+          try {
+            context.ui.router.navigate({
+              type: "session",
+              sessionID
+            });
+          } catch {}
         },
         copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
         flashCopied: flashStatusCopied,

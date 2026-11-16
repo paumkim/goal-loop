@@ -14,6 +14,17 @@ import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
+/** Other rows the elsewhere block paints — the dust settles at four; beyond that the block gains a `+N more` line. */
+export const FOREIGN_ROWS_VISIBLE = 4
+
+/**
+ * The foreign live goals: active or paused, never the dialog's own session, terminal states never listed.
+ * One predicate for both consumers — the dialog paints it, the dialog keymap arms its digit chords from it —
+ * so a row on screen and the key that jumps to it can never disagree.
+ */
+export const foreignLiveRows = (others: readonly GoalSnapshot[] | undefined, ownSessionID: string | undefined): readonly GoalSnapshot[] =>
+  (others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== ownSessionID)
+
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined
   fallback: string
@@ -70,7 +81,7 @@ export const StatusDialogBody = (props: {
   // onViewTranscript a left-click asks the host's router to open that session's transcript route and
   // the condition boldens on hover (keyboard focus stays with the host prompt). Live means the same
   // predicate the controller and the store use (active | paused) — failed/cleared are terminal, never listed.
-  const OTHERS_VISIBLE = 4
+  const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE
   const OTHERS_CONDITION_MAX = 34
   const OTHERS_TAG_MAX = 12
   const sessionTag = (sessionID: string): string => {
@@ -78,8 +89,7 @@ export const StatusDialogBody = (props: {
     return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}…` : label
   }
   const othersLive = () => {
-    const own = g()?.sessionID
-    const rows = (props.others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== own)
+    const rows = foreignLiveRows(props.others, g()?.sessionID)
     return rows.length > 0 ? rows : undefined
   }
   const remediation = () => {
@@ -288,12 +298,20 @@ export const StatusDialogBody = (props: {
                   </text>
                 </box>
                 <For each={rows().slice(0, OTHERS_VISIBLE)}>
-                  {(other) => {
+                  {(other, index) => {
                     const jump = props.onViewTranscript
                     const hovered = () => othersHovered() === other.sessionID
+                    const digit = () => index() + 1
                     return (
                     <box flexDirection="row" gap={2} onMouseUp={jump ? (event) => { if (event.button !== 0) return; event.stopPropagation(); try { jump(other.sessionID) } catch { /* the host discarded the navigation — nothing to undo */ } } : undefined} onMouseOver={jump ? () => setOthersHovered(other.sessionID) : undefined} onMouseOut={jump ? () => setOthersHovered(null) : undefined}>
-                      {label("")}
+                      {jump ? (
+                        // The keyboard twin: while the chord route is wired, digits 1-4 in the dialog keymap jump to this row's transcript — the digit says so. Absent when unwired (paint identical to before).
+                        <text wrapMode="none" flexShrink={0} fg={theme().text.faint} width={LABEL}>
+                          {digit()}
+                        </text>
+                      ) : (
+                        label("")
+                      )}
                       <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, false, mono())}>
                         {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
                       </text>

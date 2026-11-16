@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=918 -->
+<!-- spec-check files=44 tests=922 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4106,3 +4106,48 @@ nowhere. Both are additive, no behavior change, no new engine contract.
      a permanent tag costs ~14 cells at the 80-col floor); no transcript jump for the own
      session (it navigates to the route you are already on — noise); the pill carries no sha
      (level (c) only, by design).
+
+
+## Workstream DM — the elsewhere transcript jump gains its keyboard twin (2026-11-16)
+
+Interpretation: the design bar's mouse-first clause ships DL's "view transcript" jump for the
+mouse (left-click an elsewhere row asks the host's router to open that session's route); the
+same bar's craft clause demands keyboard parity for everything the mouse can do — and the DL jump
+had none. A power user who never touches the mouse could not follow another session's work from
+the status dialog. This slice closes that clause for the jump, without touching the host's prompt
+and without new paint when the route is unwired.
+
+394. src/core/dialog-keys.ts — when the host wires `transcriptFor` (1-based elsewhere row →
+     sessionID) together with `openTranscript`, the pure factory emits four digit chords after
+     the reason chord and before the scroll ladder: `1`..`4` → `goal.status.transcript-N`,
+     group Goal, titles "Goal status: open transcript of other session N". Each chord gates on
+     the dialog-open gate AND the row existing (`transcriptFor(N) !== undefined`); a disabled
+     chord runs as a no-op; a throwing `transcriptFor`/`openTranscript` never escapes the key
+     event (same swallow posture as every chord in the factory). Unwired, the factory emits
+     exactly the ten advertised commands — zero drift (the pre-existing pins hold).
+     `run` opens with the same swallow.
+395. src/status-dialog.tsx — when `onViewTranscript` is wired, each elsewhere row paints a faint
+     digit `1`..`4` where the inert label column was (same 10-cell LABEL width, so the glyph
+     column never shifts between wired/unwired paints); the digits advertise the chord. Shared
+     `foreignLiveRows(others, ownSessionID)` (exported, single source) is the predicate the
+     dialog paints AND the keymap arms from — an on-screen row and the key that jumps to it
+     can never disagree. `FOREIGN_ROWS_VISIBLE` exported alongside it. Unwired: byte-identical
+     paint (empty label column, no digits).
+396. src/tui.tsx — the dialog keymap wires `transcriptFor` (via the same foreignLiveRows the
+     dialog paints, sliced nothing — `[row - 1]` of the first four placed rows) and
+     `openTranscript` (ui.router.navigate, own try/catch). No footer change — the footer spends
+     its cells on the scroll ladder and the three plugin chords by design; the digit lives on
+     the row it addresses.
+397. Evidence: bun test 922/922. +3 unit (dialog-keys: digit chords appear after `r` exactly when
+     wired, ids/binds in paint order; digit enabled mirrors the open gate and row count (rows 3-4
+     dead when only two foreign goals are live; disabled chord is a no-op run); a throwing jump
+     route never escapes). +1 interactive (wired rows paint digit gutters 1/2; the same rows
+     unwired paint none, trimmed line never starts with the digit). Render frames verified with
+     `--width=100 --height=92`: wired elsewhere row paints `1` in the label column lining up with
+     the LABEL gutter. Snapshot drift: none. The footer's Esc grammar (host modal owns Esc) is
+     unchanged; focus rings stay absent by design (Tab belongs to the host); the pill's chord is
+     palette-only. Live TUI unverifiable — never claimed; evidence layers: source + test-render.
+     Follow-ups NOT done: wheel-scroll mouse pin for the dialog scrollbox (opentui core handles
+     the wheel natively; no test yet); the footer hint omits the pre-existing `r` chord (kept out
+     of this slice); digits beyond 4 fold into the `+N more` line with no key route (paint order
+     is the contract).
