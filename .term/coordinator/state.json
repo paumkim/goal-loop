@@ -2189,19 +2189,23 @@
     },
     "coordinator-merge-safety": {
       "agent": "inkling",
-      "paths": "packages/coordinator/**,docs/parallel-work.md,SPEC.md,scripts/spec-check.ts,test/coordinator-merge-safety.test.ts",
+      "paths": "packages/coordinator/**,docs/parallel-work.md,SPEC.md,scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,test/coordinator.test.ts",
       "branch": "wt/coordinator-merge-safety",
       "worktree": "worktrees/wt-coordinator-merge-safety",
-      "status": "claimed",
-      "createdAt": "2026-11-16T17:26:32Z"
+      "status": "done",
+      "createdAt": "2026-11-16T17:47:38Z",
+      "submittedAt": "2026-11-16T17:47:59Z",
+      "mergedAt": "2026-11-16T18:00:52Z",
+      "mergedInto": "dev"
     },
     "coordinator-merge-safety-tests": {
       "agent": "inkling",
       "paths": "scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,packages/coordinator/README.md",
       "branch": "wt/coordinator-merge-safety-tests",
       "worktree": "worktrees/wt-coordinator-merge-safety-tests",
-      "status": "claimed",
-      "createdAt": "2026-11-16T17:25:53Z"
+      "status": "submitted",
+      "createdAt": "2026-11-16T17:25:53Z",
+      "submittedAt": "2026-11-16T17:47:59Z"
     },
     "tui-dossier-export": {
       "agent": "orchestrator",
@@ -2213,6 +2217,14 @@
       "submittedAt": "2026-11-16T17:34:29Z",
       "mergedAt": "2026-11-16T17:45:53Z",
       "mergedInto": "dev"
+    },
+    "tui-card-dossier-doors": {
+      "agent": "orchestrator",
+      "paths": "src/**,test/**,SPEC.md",
+      "branch": "wt/tui-card-dossier-doors",
+      "worktree": "worktrees/wt-tui-card-dossier-doors",
+      "status": "claimed",
+      "createdAt": "2026-11-16T17:52:35Z"
     }
   },
   "mergeLock": null
