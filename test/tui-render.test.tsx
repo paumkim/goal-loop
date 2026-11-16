@@ -299,3 +299,17 @@ describe("context meter row", () => {
     expect(frame).not.toContain("context")
   })
 })
+
+describe("retry watch", () => {
+  test("a goal stuck at 3 failed turns renders the exact remediation in the dialog fix row", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ retries: 3 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("fix")
+    expect(frame).toContain("3 failed turns in a row")
+    expect(frame).toContain("/goal clear")
+  })
+
+  test("a nominal goal renders no fix row", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).not.toContain("fix")
+  })
+})

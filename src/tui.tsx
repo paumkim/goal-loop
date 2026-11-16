@@ -448,7 +448,7 @@ export default Plugin.define({
         }
         const color = () => {
           const tone = pill()?.tone
-          if (tone === "paused" || tone === "hot" || tone === "impossible") return context.theme.text.feedback.warning.base
+          if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible") return context.theme.text.feedback.warning.base
           if (tone === "failed") return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
           if (tone === "achieved" || tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
           return context.theme.text.muted
