@@ -1493,6 +1493,17 @@
       "submittedAt": "2026-11-16T07:58:59Z",
       "mergedAt": "2026-11-16T08:00:13Z",
       "mergedInto": "dev"
+    },
+    "tui-snapshot-remediation": {
+      "agent": "orchestrator",
+      "paths": "test/tui-snapshots.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md",
+      "branch": "wt/tui-snapshot-remediation",
+      "worktree": "worktrees/wt-tui-snapshot-remediation",
+      "status": "done",
+      "createdAt": "2026-11-16T08:02:24Z",
+      "submittedAt": "2026-11-16T08:03:08Z",
+      "mergedAt": "2026-11-16T08:03:23Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
