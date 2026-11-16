@@ -21,6 +21,9 @@ import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine,
 import { gitAncestorProbe, reachRecord, reachReportMarkdown, reachSummaryLine, type ReachOutcome } from "./core/reach-record.ts"
 import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type SignOutcome } from "./core/sign-record.ts"
 import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
+import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
+import { readFileSync, readdirSync, statSync } from "node:fs"
+import { join } from "node:path"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
@@ -629,6 +632,59 @@ export default Plugin.define({
         return undefined
       }
     }
+    // The sealed dossier, on trial again: re-probe every sha named in the newest `goal-dossier-sealed-*.md` in the host's cwd against the repository here, copy the Markdown drift report, toast the outcome. This answers what the counterparty holding the file asks later: is what the file attested still true. Drift means git flipped a yes to a no since sealing — an error is never the right variant for that (the repository moved, or the seal was made elsewhere; that is information, not misconduct). No file, an unsealed file, and an unparsable appendix are named as such; `unknown` is never folded into `regressed`.
+    const attestSealedDossierAction = (sessionID: string | undefined) => {
+      try {
+        const directory = process.cwd()
+        let candidates: { name: string; mtimeMs: number }[]
+        try {
+          candidates = readdirSync(directory).map((name) => {
+            try {
+              return { name, mtimeMs: statSync(join(directory, name)).mtimeMs }
+            } catch {
+              return { name, mtimeMs: 0 }
+            }
+          })
+        } catch (error) {
+          safeToast({ title: "attest failed", message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
+          return
+        }
+        const newest = selectNewestSealedDossier(candidates)
+        if (!newest) {
+          safeToast({ title: "no sealed dossier", message: `no goal-dossier-sealed-*.md in ${directory} — seal one first with goal.dossier.seal`, variant: "warning", duration: 6_000, sessionID })
+          return
+        }
+        let markdown: string
+        try {
+          markdown = readFileSync(join(directory, newest), "utf8")
+        } catch (error) {
+          safeToast({ title: "attest failed", message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
+          return
+        }
+        const result = attestSealedDossier(markdown, directory)
+        if (result.kind === "unsealed") {
+          safeToast({ title: "not a sealed dossier", message: `${newest} carries no attestation appendix`, variant: "warning", duration: 6_000, sessionID })
+          return
+        }
+        if (result.kind === "unparsable") {
+          safeToast({ title: "attestation unreadable", message: `${newest}: the appendix heading is present but no row parses`, variant: "warning", duration: 6_000, sessionID })
+          return
+        }
+        const report = attestationReportMarkdown(result, Date.now(), directory, newest)
+        let copied = false
+        try {
+          copied = context.renderer.copyToClipboardOSC52(report)
+        } catch {
+          copied = false
+        }
+        const summary = attestSummaryLine(result)
+        const title = result.regressed > 0 ? "attestation drifted" : result.unknown > 0 ? "attestation unverifiable" : result.unique === 0 ? "nothing to attest" : "attestation holds"
+        const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success"
+        safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
+      } catch (error) {
+        safeToast({ title: "attest failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
     // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
     const sealRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SealOutcome | undefined => {
       if (!goal || !sessionID) return undefined
@@ -1153,6 +1209,18 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               sealRecordAction(sessionID, goal)
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.attest",
+          title: "Goal: attest a sealed dossier against HEAD (drift report)",
+          group: "Goal",
+          palette: true,
+          enabled: () => true,
+          run: () => {
+            try {
+              attestSealedDossierAction(currentSession())
             } catch {}
           },
         },
