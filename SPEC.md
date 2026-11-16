@@ -2386,3 +2386,38 @@ artifact; all work is local on dev. No docs line references were touched by this
 
 Verification (all run in the worktree): `bun run compile`, `bun run check` green (749 tests),
 coordinator submit + merge-next, and `bun run check` on dev shown green at the end.
+
+## Workstream BZ — palette parity for the mouse-only card actions (2026-11-16)
+
+Interpretation of this iteration: the brief's craft axis asks for keyboard parity for everything the
+mouse can do. An audit of every hit-tested mouse affordance against the palette found five actions
+that only the mouse could reach — clicking the pill toggled the HUD card, the card and context menu
+exposed pin/clear/copy actions, and the condition/reason/summary copy rows — while the palette only
+carried goal.status, goal.clear, goal.loop.status/clear. A keyboard-only user could not summon the
+card, toggle the pin outside the dialog, or copy any of the three texts without first opening the
+dialog and relying on in-dialog chords.
+
+241. Five palette commands added to the Goal group in src/tui.tsx (palette: true, no key binds —
+     the palette is the keyboard-parity surface; binding new chords risks stealing keys):
+     - goal.hud.toggle — "Goal HUD: toggle card" — same effect as clicking the pill (setHudSession
+       toggle for the current session; the context menu is collapsed).
+     - goal.pin.toggle — "Goal: toggle pinned condition" — togglePin for the current session.
+     - goal.condition.copy — "Goal: copy condition" — OSC52 copy of the live/terminal snapshot's
+       condition for the current session.
+     - goal.reason.copy — "Goal: copy evaluator reason" — enabled only when a reason is present.
+     - goal.summary.copy — "Goal: copy latest loop summary" — enabled only when the loop history
+       carries a latest summary.
+     All five resolve the goal through the same live(sessionID) ?? entries()[sessionID]?.goal chain the
+     existing palette commands use, copy through the same copyToClipboard path (host toast on success/
+     refusal, never silent), and are no-ops when their precondition is absent (enabled() false).
+242. Evidence is source-layer. The keymap layers are constructed inline inside the plugin's setup
+     closure and executed by the host — there is no headless harness for the host's keymap/palette
+     dispatch, and the existing palette commands ship without unit tests for the same reason. No test
+     files were touched, so the spec-check marker stays files=43 tests=749. The enabled() predicates
+     mirror the adjacent goal.status/goal.clear commands, whose wiring is exercised live by the host.
+
+Marker unchanged (files=43 tests=749). No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check green (749 tests),
+coordinator submit + merge-next, and bun run check on dev shown green at the end.

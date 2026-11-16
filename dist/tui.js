@@ -3107,6 +3107,73 @@ var tui_default = Plugin.define({
             }, at(sessionID)).catch(() => {});
         }
       }, {
+        id: "goal.hud.toggle",
+        title: "Goal HUD: toggle card",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            setContextOpen(false);
+            setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);
+          } catch {}
+        }
+      }, {
+        id: "goal.pin.toggle",
+        title: "Goal: toggle pinned condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            togglePin(currentSession());
+          } catch {}
+        }
+      }, {
+        id: "goal.condition.copy",
+        title: "Goal: copy condition",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal?.condition),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.condition && sessionID)
+              copyToClipboard(goal.condition, sessionID);
+          } catch {}
+        }
+      }, {
+        id: "goal.reason.copy",
+        title: "Goal: copy evaluator reason",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.reason),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal?.reason && sessionID)
+              copyToClipboard(goal.reason, sessionID, "reason");
+          } catch {}
+        }
+      }, {
+        id: "goal.summary.copy",
+        title: "Goal: copy latest loop summary",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean((live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal)?.loopHistory?.at(-1)?.summary),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            const summary = goal?.loopHistory?.at(-1)?.summary;
+            if (summary && sessionID)
+              copyToClipboard(summary, sessionID, "summary");
+          } catch {}
+        }
+      }, {
         id: "goal.loop.clear",
         title: "Goal loop: clear",
         group: "Goal",
