@@ -1669,6 +1669,17 @@
       "submittedAt": "2026-11-16T09:25:02Z",
       "mergedAt": "2026-11-16T09:25:26Z",
       "mergedInto": "dev"
+    },
+    "tui-verdict-glyph-ascii": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/hud-card.tsx,src/tui-history.tsx,src/tui.tsx,test/history.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-verdict-glyph-ascii",
+      "worktree": "worktrees/wt-tui-verdict-glyph-ascii",
+      "status": "done",
+      "createdAt": "2026-11-16T09:28:58Z",
+      "submittedAt": "2026-11-16T09:33:12Z",
+      "mergedAt": "2026-11-16T09:33:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
