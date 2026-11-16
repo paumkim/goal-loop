@@ -965,6 +965,17 @@
       "submittedAt": "2026-11-16T00:42:23Z",
       "mergedAt": "2026-11-16T00:42:45Z",
       "mergedInto": "dev"
+    },
+    "github-docs-nit": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs",
+      "branch": "wt/github-docs-nit",
+      "worktree": "worktrees/wt-github-docs-nit",
+      "status": "done",
+      "createdAt": "2026-11-16T00:43:10Z",
+      "submittedAt": "2026-11-16T00:44:14Z",
+      "mergedAt": "2026-11-16T00:44:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
