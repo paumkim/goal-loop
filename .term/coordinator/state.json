@@ -198,7 +198,16 @@
       "mergedAt": "2026-11-15T21:01:57Z",
       "mergedInto": "dev"
     },
-    "tui-card-dossier-doors": "done",
+    "tui-card-dossier-doors": {
+      "agent": "orchestrator",
+      "paths": "src/**",
+      "branch": "wt/tui-card-dossier-doors",
+      "worktree": "worktrees/wt-tui-card-dossier-doors",
+      "status": "done",
+      "createdAt": "2026-11-16T17:52:35Z",
+      "mergedAt": "2026-11-16T18:06:56Z",
+      "mergedInto": "dev"
+    },
     "tui-compaction-landed-marker": {
       "agent": "orchestrator",
       "paths": "src/core/hud.ts src/hud-card.tsx src/status-dialog.tsx test/tui-hud.test.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
