@@ -239,6 +239,36 @@ describe("GoalController", () => {
     expect(h.changes.length).toBeGreaterThan(1)
   })
 
+  test("pause causes persist on the record and clear on resume", async () => {
+    h = harness({ stallTurns: 2 })
+    await h.set()
+    h.verdicts.push(notMet(), notMet())
+    await h.turn(0)
+    await h.turn(0)
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.pauseCause).toBe("stall")
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.pauseCause).toBeUndefined()
+
+    h = harness({ maxTurns: 1 })
+    await h.set()
+    h.verdicts.push(notMet())
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.pauseCause).toBe("cap")
+  })
+
+  test("user interrupt records the user cause; resume clears it", async () => {
+    await h.set()
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionInterrupted(SID, "user")
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    expect(h.controller.get(SID)?.pauseCause).toBe("user")
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.pauseCause).toBeUndefined()
+  })
+
   test("hard turn limit pauses", async () => {
     h = harness({ maxTurns: 2 })
     await h.set()

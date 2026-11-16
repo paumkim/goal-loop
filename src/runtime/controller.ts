@@ -17,7 +17,7 @@ import {
   type LoopCompactState,
   type Notice,
   type NoticeKind,
-  type NoticeLevel,
+  type NoticeLevel, type PauseCause, // may not become its own line: docs cite controller.ts:68 for the epoch field
   type UsageSnapshot,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
@@ -470,6 +470,7 @@ export class GoalController {
       this.clearDeferred(runtime)
       record.status = "active"
       record.reason = undefined
+      record.pauseCause = undefined
       record.stall = 0
       record.retries = 0
       // A resumed /goal-loop starts the not-progress count fresh, so a benign zero-tool iteration cannot instantly re-pause it.
@@ -523,7 +524,7 @@ export class GoalController {
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
     this.clearDeferred(runtime)
-    if (reason === "user") return this.pause(record, "Interrupted.")
+    if (reason === "user") return this.pause(record, "Interrupted.", "user")
     if (reason === "inactivity") {
       runtime.awaitingExecution = true
       return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
@@ -712,7 +713,7 @@ export class GoalController {
       return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
-      return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`)
+      return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`, "cap")
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && record.loopEnabled && !runtime.capNotified) {
       // Armed loops never pause at the turn cap: one notice, then the loop keeps running.
@@ -720,7 +721,7 @@ export class GoalController {
       this.notify(sessionID, "loop", "warning", "Turn cap passed — loop keeps running", `Reached the ${config.maxTurns}-turn safety limit; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
     }
     if (stall >= config.stallTurns && config.stallTurns > 0 && !record.loopEnabled) {
-      return this.pause(record, `No progress: ${stall} turns in a row without tool use.`)
+      return this.pause(record, `No progress: ${stall} turns in a row without tool use.`, "stall")
     }
     if (stall >= config.stallTurns && config.stallTurns > 0 && record.loopEnabled && !runtime.stallNotified) {
       // Armed loops never pause at the stall guard: one notice, then the loop keeps running.
@@ -1183,12 +1184,13 @@ export class GoalController {
    * Non-loop callers may ignore it (fire-and-forget, as before); loop call sites await it so a restart
    * cannot restore the pre-pause state.
    */
-  private pause(record: GoalRecord, reason: string): Promise<void> {
+  private pause(record: GoalRecord, reason: string, cause: PauseCause): Promise<void> {
     const runtime = this.runtime(record.sessionID)
     this.invalidate(runtime)
     this.clearDeferred(runtime)
     record.status = "paused"
     record.reason = reason
+    record.pauseCause = cause
     const saved = this.commit(record)
     const atCap = this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns
     this.notify(
@@ -1210,6 +1212,7 @@ export class GoalController {
    * The final spend snapshot still resolves in the background and re-saves the record.
    */
   private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string): Promise<void> {
+    record.pauseCause = undefined
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
