@@ -794,6 +794,17 @@
       "submittedAt": "2026-11-16T00:42:23Z",
       "worktree": "worktrees/wt-installer-github-spec"
     },
+    "iteration-100-review-dossier": {
+      "agent": "inkling",
+      "branch": "wt/iteration-100-review-dossier",
+      "createdAt": "2026-11-16T20:44:36Z",
+      "mergedAt": "2026-11-16T20:51:11Z",
+      "mergedInto": "dev",
+      "paths": "src/core/dossier-review.ts,test/dossier-review.test.ts,src/tui.tsx,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
+      "status": "done",
+      "submittedAt": "2026-11-16T20:49:34Z",
+      "worktree": "worktrees/wt-iteration-100-review-dossier"
+    },
     "iteration-92-scrollbar-chrome": {
       "agent": "orchestrator",
       "branch": "wt/iteration-92-scrollbar-chrome",
