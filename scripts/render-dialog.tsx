@@ -10,12 +10,15 @@
  * --width pins the frame width (default 150) — the host hands the width through, so the floor and the
  * footer tier boundaries can be eyeballed (80 = short hint + compact labels, ~100 = short hint + noun
  * labels, >= ~140 = full key hint). --pinned paints the pin button flipped, --copied paints the copy
- * button acknowledged. The footer is the real DialogFooter, never a hand-painted line.
+ * button acknowledged, --mono prints under reduced color (NO_COLOR set) with ASCII glyphs.
+ * The footer is the real DialogFooter, never a hand-painted line.
  */
 import { RGBA, TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
+import { goalGlyph } from "../src/core/format.ts"
+import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
@@ -25,6 +28,8 @@ const width = Number(process.argv.find(a => a.startsWith("--width="))?.slice(8) 
 const pinned = process.argv.includes("--pinned")
 const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")
+const mono = process.argv.includes("--mono")
+if (mono) process.env.NO_COLOR = "1"
 const now = Date.now()
 
 const theme: HistoryTheme & HudCardTheme = {
@@ -113,7 +118,7 @@ const setup = await testRender(
     <box width={width} height={height} flexDirection="column" paddingLeft={3} paddingRight={3} paddingBottom={1} paddingTop={0} gap={1}>
       <box flexDirection="row" justifyContent="space-between" gap={2} flexShrink={0}>
         <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
-          ◎ /goal · loop
+          {goalGlyph(motionDisabled(process.env))} /goal · loop
         </text>
         <text fg={theme.text.muted} flexShrink={0}>
           esc
@@ -126,12 +131,13 @@ const setup = await testRender(
           ? { scrollbarOptions: { visible: true }, contentOptions: { minHeight: 0 } }
           : { scrollX: false, contentOptions: { minHeight: 0 } })}
       >
-        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} />
+        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} />
       </scrollbox>
       <DialogFooter
         theme={theme}
         pinned={() => pinned}
         copied={() => copied}
+        mono={mono}
         onCopy={() => {}}
         onTogglePin={() => {}}
         onClear={() => {}}
