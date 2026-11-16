@@ -2208,9 +2208,11 @@
       "paths": "src/core/dossier-export.ts,src/tui.tsx,src/status-dialog.tsx,test/dossier-export.test.ts,test/tui-render.test.tsx,SPEC.md,docs",
       "branch": "wt/tui-dossier-export",
       "worktree": "worktrees/wt-tui-dossier-export",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-16T17:25:55Z",
-      "submittedAt": "2026-11-16T17:34:29Z"
+      "submittedAt": "2026-11-16T17:34:29Z",
+      "mergedAt": "2026-11-16T17:45:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
