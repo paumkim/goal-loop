@@ -149,7 +149,7 @@ export default Plugin.define({
                 onMouseOver={() => setStatusEscHovered(true)}
                 onMouseOut={() => setStatusEscHovered(false)}
               >
-                <text fg={statusEscHovered() ? context.theme.text.base : context.theme.text.muted} attributes={statusEscHovered() ? TextAttributes.UNDERLINE : undefined}>esc</text>
+                <text fg={statusEscHovered() ? context.theme.text.base : context.theme.text.muted} attributes={statusEscHovered() ? TextAttributes.BOLD : undefined}>esc</text>
               </box>
             </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
@@ -438,7 +438,7 @@ export default Plugin.define({
     const [statusCopied, setStatusCopied] = createSignal(false)
     // Right-click context menu on the HUD card: TUI-local view state like the pin and the card itself.
     const [contextOpen, setContextOpen] = createSignal(false)
-    // The dialog header's esc affordance hovers like every other clickable row: brightened + underlined. Setup-scope because the dialog closure is not a component.
+    // The dialog header's esc affordance hovers like every other clickable row: brightened + boldened. Setup-scope because the dialog closure is not a component.
     const [statusEscHovered, setStatusEscHovered] = createSignal(false)
     let statusCopiedTimer: ReturnType<typeof setTimeout> | undefined
     const flashStatusCopied = () => {
@@ -596,9 +596,9 @@ export default Plugin.define({
           setPulse(false)
         })
         const pillAttrs = () => {
-          const underline = hovered() ? TextAttributes.UNDERLINE : 0
+          const hoverBold = hovered() ? TextAttributes.BOLD : 0
           const bold = animated() && pulse() && motionOk ? TextAttributes.BOLD : 0
-          const attrs = underline | bold
+          const attrs = hoverBold | bold
           return attrs === 0 ? undefined : attrs
         }
         const color = () => {

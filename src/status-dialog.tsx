@@ -26,9 +26,9 @@ export const StatusDialogBody = (props: {
   onCopyCondition?: (condition: string) => void
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking the evaluator/reason row copies the raw reason. The row underlines on hover to advertise it (same pattern as the condition row). */
+  /** When set, clicking the evaluator/reason row copies the raw reason. The row boldens on hover to advertise it (same pattern as the condition row). */
   onCopyReason?: (reason: string) => void
-  /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line underlines on hover). */
+  /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line boldens on hover). */
   onCopySummary?: (summary: string, version: number) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
   expanded?: () => boolean
@@ -118,7 +118,7 @@ export const StatusDialogBody = (props: {
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
-            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={conditionHovered() ? TextAttributes.UNDERLINE : undefined}>
+            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={conditionHovered() ? TextAttributes.BOLD : undefined}>
               {goal().condition}{copiedSuffix("condition")}
             </text>
             <Show when={conditionHovered()}>
@@ -134,7 +134,7 @@ export const StatusDialogBody = (props: {
               >
                 <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyReason(reason()) }} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
                   {label(goal().status === "active" ? "evaluator" : "reason")}
-                  <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.UNDERLINE : undefined}>
+                  <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.BOLD : undefined}>
                     {reason()}{copiedSuffix("reason")}
                   </text>
                   <Show when={reasonHovered()}>

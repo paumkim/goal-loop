@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=831 -->
+<!-- spec-check files=43 tests=832 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3375,3 +3375,33 @@ green incl. spec-check (43/831), docs-watch companion + changelog grep before su
 + render + loop-advance layers only; live TUI remains unverifiable. Follow-ups NOT done in this slice:
 already-satisfied-at-HEAD blue tone (met + zero tools), per-iteration cost attribution, cross-session
 overview, the C1 card why-row, the card context meter row, the measured card width.
+## Workstream DJ — hover never underlines: weight and brightness carry the affordance (2026-11-16)
+
+Interpretation of this iteration: the user reviewed the live TUI and rejected the hover grammar
+("i don't like how you make mouse hover. underline the text") with a screenshot of the ambient pill.
+Every one of the TUI's ten hover sites painted TextAttributes.UNDERLINE on mouse-over — the pill,
+the dialog condition/reason rows, the card condition row, the rail summaries, the why-ledger rows,
+the rail fold row, the two mono-only buttons, and the dialog esc affordance. This slice removes
+underline from the hover grammar entirely.
+
+332. `TextAttributes.UNDERLINE` no longer appears anywhere in src/ (grep -rin "underline" src/
+     returns nothing). Hover is
+     now carried by the two signals the theme already uses elsewhere: a brightened foreground
+     (faint/muted -> text.base, unchanged) and TextAttributes.BOLD — a weight, not a color, so it
+     survives NO_COLOR / TERM=dumb unchanged. Sites swept: ambient pill (tui.tsx, hover bold unioned
+     with the evaluating/hot pulse bold), dialog condition & reason rows, card condition row,
+     rail summaries, rail fold row, why-ledger rows, dialog esc affordance (tui.tsx), and the two
+     mono-gated sites (HudButton, HudMenuRow) which now bold under mono while the color arm keeps
+     its raised-background swap (unchanged).
+333. The shared hover grammar is pinned by a new render test ("hover grammar: weight, never
+     underline (NO_COLOR-safe)" in test/tui-render.test.tsx): it hovers the condition row with the
+     mock mouse and asserts zero UNDERLINE bits set on any span in the frame — resting, hovered,
+     and after mouse-out — plus BOLD on the hovered condition span and its absence at rest.
+     Render-layer evidence only; live TUI remains unverifiable. Spec-check marker files=43
+     tests=831 -> 832. No snapshot drift (hover is never painted in snapshot fixtures).
+
+Verification (all in the worktree): bun test (832 pass), bun run compile, bun run check end-to-end
+green incl. spec-check (43/832), docs-watch companion + changelog grep before submit. Evidence is
+source + render layers only; live TUI remains unverifiable. Follow-ups NOT done in this slice:
+other hover affordances that rely on color alone in the color arm, the C1 card why-row, the card
+context meter row, the measured card width.

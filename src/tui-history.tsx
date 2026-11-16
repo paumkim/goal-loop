@@ -47,7 +47,7 @@ const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorIn
 /**
  * One completed iteration's summary line. Click-to-copy when the caller wires `onCopy`:
  * the summary is the payload a user most often wants verbatim (to paste into a prompt or
- * an issue), so the whole line is the click target — underlined on hover, like the condition row.
+ * an issue), so the whole line is the click target — boldened on hover, like the condition row.
  */
 const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean; ascii?: () => boolean }): JSX.Element => {
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
@@ -65,7 +65,7 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
       <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
         {ascii() ? "|" : "│"}
       </text>
-      <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined}>
+      <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.BOLD : undefined}>
         {`${ascii() ? "|" : "│"} ${truncate(props.text, SUMMARY_MAX, ascii() ? "..." : "\u2026")}`}
         {props.copied?.() ? (ascii() ? " + copied" : " ✓ copied") : ""}
       </text>
@@ -82,9 +82,9 @@ export const LoopSection = (props: {
   nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking a summary line copies that iteration's full summary. The line underlines on hover to advertise it. */
+  /** When set, clicking a summary line copies that iteration's full summary. The line boldens on hover to advertise it. */
   onCopySummary?: (summary: string, version: number) => void
-  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason underlines on hover to advertise it. */
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason boldens on hover to advertise it. */
   onCopyReason?: (reason: string) => void
   /** Controlled expand state for the iteration rail's fold row (the status dialog drives this from its keymap layer so keyboard users can expand). Uncontrolled when absent. */
   expanded?: () => boolean
@@ -260,7 +260,7 @@ export const LoopSection = (props: {
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             {ascii() ? "..." : "…"}
           </text>
-          <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.UNDERLINE : undefined}>
+          <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.BOLD : undefined}>
             {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`}
           </text>
         </box>
@@ -337,7 +337,7 @@ export const LoopSection = (props: {
  * oldest first (the trail's own direction). One row per verdict — glyph, verdict word,
  * turn, relative time, reason — the evaluator's *why* at a glance, without scrolling the
  * dialog to the last evaluator row. Click-to-copy when the caller wires onCopyReason;
- * hover underlines the reason (the affordance grammar shared with the condition/summary/
+ * hover boldens the reason (the affordance grammar shared with the condition/summary/
  * reason rows). The copied acknowledgment rides the row for a beat, like every other row.
  */
 const WhyLedger = (props: {
@@ -384,7 +384,7 @@ const WhyLedger = (props: {
               <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
                 {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}`}
               </text>
-              <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.UNDERLINE : undefined}>
+              <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined}>
                 {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
                 {copied() === entry.at ? (ascii() ? " + copied" : " ✓ copied") : ""}
               </text>
@@ -438,7 +438,7 @@ export const HistoryBlock = (props: {
   nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason underlines on hover to advertise it. */
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason boldens on hover to advertise it. */
   onCopyReason?: (reason: string) => void
 }): JSX.Element => {
   const theme = () => props.theme
