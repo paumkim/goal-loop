@@ -4505,9 +4505,9 @@ Acceptance criteria:
   which the fixed estimator produces as soon as a post-compaction assistant exists.
 - After a simulated compaction (compaction message + fresh assistant with usage) the estimate is the fresh
   count — finite and below the pre-compaction one — proven by unit test; the carry-forward drop is proven by
-  unit test; a HUD-card render test proves the finite post-compaction size paints, not "unknown".
+  unit test in `test/entries.test.ts`.
 - The notice text, the pill, footer chords (p/c/x), slots and layout are untouched; no redesign.
-- Verified at test-render/snapshot layer only (headless `testRender` + `captureCharFrame`); no live-TUI claim.
+- Verified at the unit layer only (`bun test`); no render/frame claim and no live-TUI claim.
 
 Verification: `bun run check` green; new unit tests in `test/context-size.test.ts` and `test/entries.test.ts`;
 marker bumped (tests=989). Coordinator submit.
