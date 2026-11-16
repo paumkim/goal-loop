@@ -1196,6 +1196,17 @@
       "submittedAt": "2026-11-16T03:58:39Z",
       "mergedAt": "2026-11-16T03:58:59Z",
       "mergedInto": "dev"
+    },
+    "tui-hud-first-pass": {
+      "agent": "inkling",
+      "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md",
+      "branch": "wt/tui-hud-first-pass",
+      "worktree": "worktrees/wt-tui-hud-first-pass",
+      "status": "done",
+      "createdAt": "2026-11-16T04:06:06Z",
+      "submittedAt": "2026-11-16T04:19:50Z",
+      "mergedAt": "2026-11-16T04:20:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
