@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=53 tests=1181 -->
+<!-- spec-check files=54 tests=1203 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=53 tests=1181 -->
+<!-- spec-check files=54 tests=1203 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=53 tests=1181 -->
+<!-- spec-check files=54 tests=1203 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,7 +5129,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=53 tests=1181 -->
+<!-- spec-check files=54 tests=1203 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5194,4 +5194,77 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=53 tests=1181 -->
+<!-- spec-check files=54 tests=1203 -->
+
+## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
+
+Interpretation of the mouse-first clause: EC asked the record whether the shas it quotes still
+resolve in the object store — existence. ED asked whether they belong to this history — ancestry.
+The question that remains is the seal: does git verify a signature on the commit the record
+attests? Most commits are unsigned, and git decides against the keys and trust configured at the
+probed directory — so the question is not "is this author honest" but "does the receipt carry a
+checkable mark". This iteration adds the signature pass: a `sign` row in the dossier view (one
+click, the same grammar as copy/save/verify/reach) and a palette twin `goal.dossier.sign` — one
+`git cat-file -e` (the signature question has no subject without an object to judge) and one
+`git verify-commit` per quoted sha, the outcome painted in place, the Markdown signature report on
+the clipboard. No chord, no footer furniture; the palette and the row are the discovery surfaces.
+EC, ED and EF are the three halves of “is this real?” — the object exists, the object is on this
+line, the object carries a verifiable mark. None substitutes for another.
+
+481. src/core/sign-record.ts — new pure module, no JSX, no theme; the probe is injected, and the
+     mention extraction is imported from verify-record.ts (`recordShaMentions`), never reimplemented.
+     `signRecord(goal, probe)` sweeps the quoted shas; the probe contract is three-valued
+     (`true` git verified / `false` git answered and the signature did not verify / `"unknown"` git
+     could not answer) and a probe that throws degrades one row to `unknown` instead of sinking the
+     sweep. `gitSignProbe(cwd)` is the real probe: one `git -C <dir> cat-file -e <sha>` per sha
+     first — an unresolvable object reads `unknown`, categorically not `unverified`, because
+     `verify-commit` cannot tell “not verified” from “not found” from its exit status alone — then one
+     `git -C <dir> verify-commit <sha>`; numeric exit 0 → verified, any numeric exit → `unverified`
+     (unsigned, expired key, untrusted key, bad signature — one bucket by design and by doc), a
+     spawn failure or timeout → `unknown`, never folded into `unverified`. `signReportMarkdown`
+     renders the report: generation stamp, the probed directory, the one-line condition, one table
+     row per unique sha (sha · quoting iterations · yes/no/unknown), the verified/not-under-seal/
+     unknown counts, and an honesty footer stating what `not under seal` does not imply (most commits
+     are unsigned and git’s thresholds differ across machines and time; never proof of forgery) and
+     that an unresolvable object reads `unknown`, never `not under seal`; a record with no quoted shas
+     paints a GAP row, never an empty table dressed as a pass. `signSummaryLine` is the chrome-free
+     one-liner for the toast; `signAckSegment` is the compact in-row acknowledgement
+     (`✓ N/N signed` / ascii `+ N/N signed`, the unverified arm `✗`→`-`, the unknown arm `!`) — a
+     record with no quoted shas says so rather than painting a pass.
+482. src/status-dialog.tsx — the dossier view grows the sign row between the reach row and the
+     find row: same hover affordance, same left-click grammar, `stopPropagation` and `zIndex={1}`
+     (the hit-grid claim order the find row established). The clicked row paints the outcome via
+     `signAckSegment` for the usual acknowledgment window; a host returning `undefined` paints no ack —
+     the row never claims a sweep that did not happen. Unwired, the row does not paint; the
+     document renders exactly as before.
+483. src/tui.tsx — `signRecordAction` runs the sweep against `process.cwd()` (the same directory the
+     export row writes into), copies the Markdown report via OSC52, and toasts the outcome —
+     `record under seal` (success) / `record not under seal` (warning) / `record unverifiable`
+     (warning) / `nothing to attest` (success). Not signed is a warning, never an error: git’s own
+     rules decide against the keys trusted at the probed directory, and most commits are unsigned —
+     information is not accusation. Both failure-leaning outcomes keep unknown categorically out of
+     the not-under-seal bucket. Palette command `goal.dossier.sign`
+     ("Goal: verify the record’s signatures (shas + markdown report)") with the same action; no footer chord.
+     `StatusDialogBody` wires `onSignDossier` next to `onReachDossier` (one instantiation site).
+484. Tests: +16 unit (sign-record.test.ts: all-under-seal and mixed sweeps, throwing probe → per-row
+     unknown, unanswerable probe → all-unknown, non-hex sha reaches the probe, empty record, report
+     contents (stamp/directory/table/counts/honesty footer/GAP row), staleness pair, summary-line and
+     ack-segment arms incl. ascii) + 6 interactive (tui-render.test.tsx: the row paints and a click runs
+     the host sweep and paints `✓ 2/2 signed`, mono demotes to `+ 6/6 signed`, an unverified sha paints
+     the unverified arm, right click inert, unwired row absent, host returning undefined paints no ack).
+     Tests: 1203 pass, 0 fail (47 files).
+485. Honest limits: the signature check is only as strong as the key and trust configured at the
+     probed directory — `verified` means git’s configured rules accepted the signature, nothing more;
+     an unsigned commit, an expired or untrusted key, and a bad signature are one bucket by design, and
+     none is proof of forgery; an unresolvable object reads `unknown`, never `unverified`; unknown
+     means git could not answer and is never counted as `no`; the probe requires a git binary and a
+     repository at the probed cwd — outside one, every row reads `unknown` and the report says so — no
+     fallback invents a signature; verification is per-sha at the commit level only (no author-key
+     inventory, no signature-format inspection, no chain-of-trust documentation); signature verification
+     is at the headless test-renderer layer — live-TUI behaviour remains unverifiable. The dossier bytes
+     themselves are unchanged — the signature report is a separate artifact, and the export path still
+     writes exactly the document.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
+<!-- spec-check files=54 tests=1203 -->

@@ -17,6 +17,7 @@ import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
 import { dossierOutline, type DossierOutlineEntry } from "./core/dossier-outline.ts"
 import { verifyAckSegment, type VerifyOutcome } from "./core/verify-record.ts"
 import { reachAckSegment, type ReachOutcome } from "./core/reach-record.ts"
+import { signAckSegment, type SignOutcome } from "./core/sign-record.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
@@ -79,6 +80,8 @@ export const StatusDialogBody = (props: {
   onVerifyDossier?: () => VerifyOutcome | undefined
   /** When set, the dossier view paints a reach row under the verify row: one click asks whether every sha the record quotes is an ancestor of HEAD at the host's cwd and copies the Markdown ancestry report (palette twin: `goal.dossier.reach`). The clicked row paints the outcome in place for the usual acknowledgment window (`✓ 6/6 on this line` / ascii `+ 6/6 on this line`). The host returns the outcome counts; a host that returns undefined paints no ack — the click is acknowledged only when the ancestry sweep actually ran. Unwired, the row does not paint (the document renders exactly as before). */
   onReachDossier?: () => ReachOutcome | undefined
+  /** When set, the dossier view paints a sign row under the reach row: one click asks whether git verifies a signature on every sha the record quotes, at the host's cwd, and copies the Markdown signature report (palette twin: `goal.dossier.sign`). The clicked row paints the outcome in place for the usual acknowledgment window (`✓ 6/6 signed` / ascii `+ 6/6 signed`). The host returns the outcome counts; a host that returns undefined paints no ack — the click is acknowledged only when the signature sweep actually ran. Unwired, the row does not paint (the document renders exactly as before). */
+  onSignDossier?: () => SignOutcome | undefined
   /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
@@ -245,6 +248,13 @@ export const StatusDialogBody = (props: {
     if (reachTimer) clearTimeout(reachTimer)
   })
   const reachSuffix = () => reachAck() ?? ""
+  // The sign row's ack carries the signature sweep's truth, not just a verb — same contract as the verify and reach rows, one question further behind the seal.
+  const [signAck, setSignAck] = createSignal<string | null>(null)
+  let signTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (signTimer) clearTimeout(signTimer)
+  })
+  const signSuffix = () => signAck() ?? ""
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
@@ -252,6 +262,7 @@ export const StatusDialogBody = (props: {
   const [saveHovered, setSaveHovered] = createSignal(false)
   const [verifyDossierHovered, setVerifyDossierHovered] = createSignal(false)
   const [reachDossierHovered, setReachDossierHovered] = createSignal(false)
+  const [signDossierHovered, setSignDossierHovered] = createSignal(false)
   const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
@@ -345,6 +356,20 @@ export const StatusDialogBody = (props: {
         setReachAck(reachAckSegment(outcome, ascii))
         if (reachTimer) clearTimeout(reachTimer)
         reachTimer = setTimeout(() => setReachAck(null), 2400)
+      }
+    } catch {
+      // Best-effort.
+    }
+  }
+  // The sign row's side effect lives in the host (one probe pair per quoted sha + a report copy, toasted there); the row paints only the outcome the host reports back. A host that returns undefined ran nothing the UI can attest to — no ack.
+  const signDossier = () => {
+    if (!props.onSignDossier) return
+    try {
+      const outcome = props.onSignDossier()
+      if (outcome) {
+        setSignAck(signAckSegment(outcome, ascii))
+        if (signTimer) clearTimeout(signTimer)
+        signTimer = setTimeout(() => setSignAck(null), 2400)
       }
     } catch {
       // Best-effort.
@@ -636,6 +661,20 @@ export const StatusDialogBody = (props: {
                     </text>
                     <Show when={reachDossierHovered()}>
                       <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>reach</text>
+                    </Show>
+                  </box>
+                )
+                : null}
+              {/* the sign row — the record, under seal. One click asks whether git verifies a signature on every sha the ledger quotes at the host's cwd and copies the Markdown signature report (palette twin `goal.dossier.sign`). zIndex 1 for the same reason as the reach row. Painted only when the host wires onSignDossier. No chord, no footer furniture; the palette is the discovery surface */}
+              {props.onSignDossier
+                ? (
+                  <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); signDossier() }} onMouseOver={() => setSignDossierHovered(true)} onMouseOut={() => setSignDossierHovered(false)}>
+                    {label("sign")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={signDossierHovered() ? TextAttributes.BOLD : undefined}>
+                      {`the shas the record quotes, signed${signSuffix()}`}
+                    </text>
+                    <Show when={signDossierHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>sign</text>
                     </Show>
                   </box>
                 )
