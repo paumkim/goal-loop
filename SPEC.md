@@ -4815,7 +4815,9 @@ Acceptance criteria:
 
 Verification: `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts` — 31 pass, 0 fail
 (21 new merge-safety tests + the rewritten fast-forward-failure test + the 10 pre-existing merge-next
-tests). Full suite: 1049 pass, 0 fail. The two-agent overlapping-scope scenario is the acceptance
+tests). Full suite green at the merged HEAD (marker re-counted by the pipeline: 48/1071 at the DZ
+merge; the scratch-order fixup takes it to 1072 and the next merge-next re-counts it itself). The
+two-agent overlapping-scope scenario is the acceptance
 artifact (test/coordinator-merge-safety.test.ts, "two agents, overlapping scopes, conflicting edits"):
 no red merge lands, dev stays untouched on the conflict and on the red gate, the loser rebases with the
 printed path, the winner lands green, and the loser's uncommitted bytes are recoverable from
