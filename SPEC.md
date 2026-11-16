@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=905 -->
+<!-- spec-check files=44 tests=906 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3979,3 +3979,30 @@ frame matrix grew this fifth axis.
 Verification (all run in the worktree): bun test (905 pass, 0 fail), bun run check green incl.
 spec-check (44/905), frames above. Evidence is source + test-render layers; live TUI remains
 unverifiable. Follow-ups NOT done in this slice: none.
+
+
+## Workstream CX — the failure-first contract gets frames, not just predicates (2026-11-16)
+
+Interpretation of this iteration: the design bar's "failure is a first-class screen" promise lived
+only in predicate tests (remediationFor's five branches) — the one surface a stranger watches
+(the card, at a glance) had never rendered a hot, stuck, or failed state, so the exact-remedy row
+(`fix`) had never been eyeballed end-to-end and its two-line wrap at 64 cells was untested.
+
+383. scripts/render-card.tsx — three new always-on frames after the existing four:
+     running-hot (active goal, loopCompact pending 2/4 misses, no landedAt), stuck on retries
+     (retries = RETRY_HOT_THRESHOLD = 3), and failed (status "failed" + failureLabel
+     "provider error"). Frames compose with --mono unchanged.
+384. Frame evidence (all exit 0): hot paints the remediation wrapped to two rows at remediationWidth
+     ("compact pending 2/4 · send a message for a safe point · else set evaluator.verifyCommand"),
+     the meter stays warning-toned (source-pinned via borderAccentColor/hot arms); stuck flips the
+     now-word to `stuck` and wraps "3 failed turns in a row · check provider quota or settings ·
+     else /goal clear"; failed paints "failed 31 turns" and "provider error - /goal clear to reset".
+     The `fix` label row wraps via the same greedy word wrap cardRowPlan budgets.
+385. Tests: render-scripts.test.ts +1 (the failure-first arm pin: hot/stuck/failed headings, the
+     exact remedy strings, the flipped state words). spec-check marker files=44 tests=905 -> 906.
+
+Verification (all run in the worktree): bun test (906 pass, 0 fail), bun run check green incl.
+spec-check (44/906). Evidence is source + test-render layers; live TUI remains unverifiable.
+Follow-ups NOT done in this slice: none. The impossible/paused arms share remediationFor and are
+predicate-tested; they were not framed because their rows are the same wrap path at the same
+width.
