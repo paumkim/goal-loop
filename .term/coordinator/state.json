@@ -1625,6 +1625,17 @@
       "submittedAt": "2026-11-16T09:03:11Z",
       "mergedAt": "2026-11-16T09:05:37Z",
       "mergedInto": "dev"
+    },
+    "tui-rail-expand-keyboard": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/status-dialog.tsx,src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-rail-expand-keyboard",
+      "worktree": "worktrees/wt-tui-rail-expand-keyboard",
+      "status": "done",
+      "createdAt": "2026-11-16T09:09:35Z",
+      "submittedAt": "2026-11-16T09:14:07Z",
+      "mergedAt": "2026-11-16T09:14:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
