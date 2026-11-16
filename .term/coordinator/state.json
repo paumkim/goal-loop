@@ -1207,6 +1207,17 @@
       "submittedAt": "2026-11-16T04:19:50Z",
       "mergedAt": "2026-11-16T04:20:13Z",
       "mergedInto": "dev"
+    },
+    "tui-pin-condition": {
+      "agent": "tui",
+      "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md",
+      "branch": "wt/tui-pin-condition",
+      "worktree": "worktrees/wt-tui-pin-condition",
+      "status": "done",
+      "createdAt": "2026-11-16T04:23:38Z",
+      "submittedAt": "2026-11-16T04:34:26Z",
+      "mergedAt": "2026-11-16T04:34:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
