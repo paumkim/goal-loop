@@ -447,6 +447,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
   })
 })
 
+describe("scratch-branch cleanup (merge-next)", () => {
   test("a green merge leaves no merge-check-* scratch branch behind (worktree is removed first)", () => {
     setup("true")
     claimCommitSubmit("scratch-cleanup", { f: "x\n" }, "2026-11-02T10:00:00+00:00")
@@ -455,6 +456,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
     expect(git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()).toBe("")
     expect(readdirSync(join(dir, "worktrees")).filter((f) => f.startsWith("wt-merge-check-"))).toEqual([])
   })
+})
 
 describe("two agents, overlapping scopes, conflicting edits (requirement 8)", () => {
   test("no red merge, no lost bytes, loser gets a rebase path, winner lands green", () => {
