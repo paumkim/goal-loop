@@ -1933,6 +1933,17 @@
       "submittedAt": "2026-11-16T12:38:11Z",
       "mergedAt": "2026-11-16T12:38:42.000Z",
       "mergedInto": "dev"
+    },
+    "tui-ack-ledger-hue": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts src/tui.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-ack-ledger-hue",
+      "worktree": "worktrees/wt-tui-ack-ledger-hue",
+      "status": "done",
+      "createdAt": "2026-11-16T12:41:12Z",
+      "submittedAt": "2026-11-16T12:42:15Z",
+      "mergedAt": "2026-11-16T12:42:53.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
