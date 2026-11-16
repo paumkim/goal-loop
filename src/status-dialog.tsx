@@ -72,6 +72,7 @@ export const StatusDialogBody = (props: {
   })
   const copiedSuffix = (key: string) => (copied() === key ? " ✓ copied" : "")
   const [reasonHovered, setReasonHovered] = createSignal(false)
+  const [conditionHovered, setConditionHovered] = createSignal(false)
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
@@ -103,11 +104,14 @@ export const StatusDialogBody = (props: {
             </text>
           </box>
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
-          <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)}>
+          <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
             <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={props.onCopyCondition ? TextAttributes.UNDERLINE : undefined}>
               {goal().condition}{copiedSuffix("condition")}
             </text>
+            <Show when={conditionHovered()}>
+              <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+            </Show>
           </box>
           {/* evaluator/reason — click to copy the raw text (host wires clipboard + toast via onCopyReason) */}
           <Show when={goal().reason}>
@@ -121,6 +125,9 @@ export const StatusDialogBody = (props: {
                   <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.UNDERLINE : undefined}>
                     {reason()}{copiedSuffix("reason")}
                   </text>
+                  <Show when={reasonHovered()}>
+                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+                  </Show>
                 </box>
               </Show>
             )}

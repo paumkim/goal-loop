@@ -479,6 +479,8 @@ var pillModel = (goal, elapsed) => {
   return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}${retrying}`, tone };
 };
 var TERMINAL_ACK_MS = 45000;
+var ACK_FLASH_MS = 1700;
+var pillMotionNeeded = (args) => args.evaluating === true || args.hot === true || args.flashing === true;
 var terminalPill = (goal, elapsed) => {
   const tone = goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined;
   if (!tone)
@@ -1221,6 +1223,7 @@ var StatusDialogBody = (props) => {
   });
   const copiedSuffix = (key) => copied() === key ? " \u2713 copied" : "";
   const [reasonHovered, setReasonHovered] = createSignal2(false);
+  const [conditionHovered, setConditionHovered] = createSignal2(false);
   const copyCondition = (condition) => {
     try {
       props.onCopyCondition?.(condition);
@@ -1273,11 +1276,26 @@ var StatusDialogBody = (props) => {
       _$setProp2(_el$1, "flexDirection", "row");
       _$setProp2(_el$1, "gap", 2);
       _$setProp2(_el$1, "onMouseUp", () => copyCondition(goal().condition));
+      _$setProp2(_el$1, "onMouseOver", () => setConditionHovered(true));
+      _$setProp2(_el$1, "onMouseOut", () => setConditionHovered(false));
       _$insert2(_el$1, () => label("goal"), _el$10);
       _$setProp2(_el$10, "wrapMode", "word");
       _$setProp2(_el$10, "flexGrow", 1);
       _$insert2(_el$10, () => goal().condition, null);
       _$insert2(_el$10, () => copiedSuffix("condition"), null);
+      _$insert2(_el$1, _$createComponent2(Show2, {
+        get when() {
+          return conditionHovered();
+        },
+        get children() {
+          var _el$11 = _$createElement2("text");
+          _$insertNode2(_el$11, _$createTextNode2(`copy`));
+          _$setProp2(_el$11, "wrapMode", "none");
+          _$setProp2(_el$11, "flexShrink", 0);
+          _$effect2((_$p) => _$setProp2(_el$11, "fg", theme().text.faint, _$p));
+          return _el$11;
+        }
+      }), null);
       _$insert2(_el$5, _$createComponent2(Show2, {
         get when() {
           return goal().reason;
@@ -1290,28 +1308,41 @@ var StatusDialogBody = (props) => {
             return field(goal().status === "active" ? "evaluator" : "reason", reason(), true);
           },
           get children() {
-            var _el$11 = _$createElement2("box"), _el$12 = _$createElement2("text");
-            _$insertNode2(_el$11, _el$12);
-            _$setProp2(_el$11, "flexDirection", "row");
-            _$setProp2(_el$11, "gap", 2);
-            _$setProp2(_el$11, "onMouseUp", () => copyReason(reason()));
-            _$setProp2(_el$11, "onMouseOver", () => setReasonHovered(true));
-            _$setProp2(_el$11, "onMouseOut", () => setReasonHovered(false));
-            _$insert2(_el$11, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$12);
-            _$setProp2(_el$12, "wrapMode", "word");
-            _$setProp2(_el$12, "flexGrow", 1);
-            _$insert2(_el$12, reason, null);
-            _$insert2(_el$12, () => copiedSuffix("reason"), null);
+            var _el$13 = _$createElement2("box"), _el$14 = _$createElement2("text");
+            _$insertNode2(_el$13, _el$14);
+            _$setProp2(_el$13, "flexDirection", "row");
+            _$setProp2(_el$13, "gap", 2);
+            _$setProp2(_el$13, "onMouseUp", () => copyReason(reason()));
+            _$setProp2(_el$13, "onMouseOver", () => setReasonHovered(true));
+            _$setProp2(_el$13, "onMouseOut", () => setReasonHovered(false));
+            _$insert2(_el$13, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$14);
+            _$setProp2(_el$14, "wrapMode", "word");
+            _$setProp2(_el$14, "flexGrow", 1);
+            _$insert2(_el$14, reason, null);
+            _$insert2(_el$14, () => copiedSuffix("reason"), null);
+            _$insert2(_el$13, _$createComponent2(Show2, {
+              get when() {
+                return reasonHovered();
+              },
+              get children() {
+                var _el$15 = _$createElement2("text");
+                _$insertNode2(_el$15, _$createTextNode2(`copy`));
+                _$setProp2(_el$15, "wrapMode", "none");
+                _$setProp2(_el$15, "flexShrink", 0);
+                _$effect2((_$p) => _$setProp2(_el$15, "fg", theme().text.faint, _$p));
+                return _el$15;
+              }
+            }), null);
             _$effect2((_p$) => {
               var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.UNDERLINE : undefined;
-              _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$12, "fg", _v$6, _p$.e));
-              _v$7 !== _p$.t && (_p$.t = _$setProp2(_el$12, "attributes", _v$7, _p$.t));
+              _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$14, "fg", _v$6, _p$.e));
+              _v$7 !== _p$.t && (_p$.t = _$setProp2(_el$14, "attributes", _v$7, _p$.t));
               return _p$;
             }, {
               e: undefined,
               t: undefined
             });
-            return _el$11;
+            return _el$13;
           }
         })
       }), null);
@@ -1320,16 +1351,16 @@ var StatusDialogBody = (props) => {
           return hint();
         },
         children: (h) => (() => {
-          var _el$13 = _$createElement2("box"), _el$14 = _$createElement2("text");
-          _$insertNode2(_el$13, _el$14);
-          _$setProp2(_el$13, "flexDirection", "row");
-          _$setProp2(_el$13, "gap", 2);
-          _$insert2(_el$13, () => label("hint"), _el$14);
-          _$setProp2(_el$14, "wrapMode", "word");
-          _$setProp2(_el$14, "flexGrow", 1);
-          _$insert2(_el$14, () => h().full);
-          _$effect2((_$p) => _$setProp2(_el$14, "fg", theme().text.muted, _$p));
-          return _el$13;
+          var _el$17 = _$createElement2("box"), _el$18 = _$createElement2("text");
+          _$insertNode2(_el$17, _el$18);
+          _$setProp2(_el$17, "flexDirection", "row");
+          _$setProp2(_el$17, "gap", 2);
+          _$insert2(_el$17, () => label("hint"), _el$18);
+          _$setProp2(_el$18, "wrapMode", "word");
+          _$setProp2(_el$18, "flexGrow", 1);
+          _$insert2(_el$18, () => h().full);
+          _$effect2((_$p) => _$setProp2(_el$18, "fg", theme().text.muted, _$p));
+          return _el$17;
         })()
       }), null);
       _$insert2(_el$5, _$createComponent2(Show2, {
@@ -1337,16 +1368,16 @@ var StatusDialogBody = (props) => {
           return remediation();
         },
         children: (fix) => (() => {
-          var _el$15 = _$createElement2("box"), _el$16 = _$createElement2("text");
-          _$insertNode2(_el$15, _el$16);
-          _$setProp2(_el$15, "flexDirection", "row");
-          _$setProp2(_el$15, "gap", 2);
-          _$insert2(_el$15, () => label("fix"), _el$16);
-          _$setProp2(_el$16, "wrapMode", "word");
-          _$setProp2(_el$16, "flexGrow", 1);
-          _$insert2(_el$16, () => fix().text);
-          _$effect2((_$p) => _$setProp2(_el$16, "fg", fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _$p));
-          return _el$15;
+          var _el$19 = _$createElement2("box"), _el$20 = _$createElement2("text");
+          _$insertNode2(_el$19, _el$20);
+          _$setProp2(_el$19, "flexDirection", "row");
+          _$setProp2(_el$19, "gap", 2);
+          _$insert2(_el$19, () => label("fix"), _el$20);
+          _$setProp2(_el$20, "wrapMode", "word");
+          _$setProp2(_el$20, "flexGrow", 1);
+          _$insert2(_el$20, () => fix().text);
+          _$effect2((_$p) => _$setProp2(_el$20, "fg", fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _$p));
+          return _el$19;
         })()
       }), null);
       _$insert2(_el$5, _$createComponent2(Show2, {
@@ -1365,40 +1396,40 @@ var StatusDialogBody = (props) => {
             const hot = () => meter().hot;
             const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
             return (() => {
-              var _el$17 = _$createElement2("box");
-              _$setProp2(_el$17, "flexDirection", "row");
-              _$setProp2(_el$17, "gap", 2);
-              _$insert2(_el$17, () => label("context"), null);
-              _$insert2(_el$17, _$createComponent2(Show2, {
+              var _el$21 = _$createElement2("box");
+              _$setProp2(_el$21, "flexDirection", "row");
+              _$setProp2(_el$21, "gap", 2);
+              _$insert2(_el$21, () => label("context"), null);
+              _$insert2(_el$21, _$createComponent2(Show2, {
                 get when() {
                   return goal().compactAtTokens !== undefined;
                 },
                 get fallback() {
                   return (() => {
-                    var _el$20 = _$createElement2("text");
-                    _$setProp2(_el$20, "wrapMode", "none");
-                    _$insert2(_el$20, () => `~${formatTokens(goal().contextSize)} tokens`);
-                    _$effect2((_$p) => _$setProp2(_el$20, "fg", theme().text.muted, _$p));
-                    return _el$20;
+                    var _el$24 = _$createElement2("text");
+                    _$setProp2(_el$24, "wrapMode", "none");
+                    _$insert2(_el$24, () => `~${formatTokens(goal().contextSize)} tokens`);
+                    _$effect2((_$p) => _$setProp2(_el$24, "fg", theme().text.muted, _$p));
+                    return _el$24;
                   })();
                 },
                 get children() {
                   return [(() => {
-                    var _el$18 = _$createElement2("text");
-                    _$setProp2(_el$18, "wrapMode", "none");
-                    _$insert2(_el$18, () => meter().text);
-                    _$effect2((_$p) => _$setProp2(_el$18, "fg", fg(), _$p));
-                    return _el$18;
+                    var _el$22 = _$createElement2("text");
+                    _$setProp2(_el$22, "wrapMode", "none");
+                    _$insert2(_el$22, () => meter().text);
+                    _$effect2((_$p) => _$setProp2(_el$22, "fg", fg(), _$p));
+                    return _el$22;
                   })(), (() => {
-                    var _el$19 = _$createElement2("text");
-                    _$setProp2(_el$19, "wrapMode", "none");
-                    _$insert2(_el$19, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
-                    _$effect2((_$p) => _$setProp2(_el$19, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
-                    return _el$19;
+                    var _el$23 = _$createElement2("text");
+                    _$setProp2(_el$23, "wrapMode", "none");
+                    _$insert2(_el$23, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
+                    _$effect2((_$p) => _$setProp2(_el$23, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
+                    return _el$23;
                   })()];
                 }
               }), null);
-              return _el$17;
+              return _el$21;
             })();
           })();
         }
@@ -2327,6 +2358,7 @@ var tui_default = Plugin.define({
     };
     const showStatusDialogInner = (sessionID, fallback) => {
       setScrollRef(undefined);
+      setStatusEscHovered(false);
       refresh(sessionID).catch(() => {});
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
@@ -2357,17 +2389,21 @@ var tui_default = Plugin.define({
             _$setProp4(_el$5, "paddingLeft", 1);
             _$setProp4(_el$5, "paddingRight", 1);
             _$setProp4(_el$5, "onMouseUp", () => closeStatusDialog());
+            _$setProp4(_el$5, "onMouseOver", () => setStatusEscHovered(true));
+            _$setProp4(_el$5, "onMouseOut", () => setStatusEscHovered(false));
             _$insertNode4(_el$6, _$createTextNode4(`esc`));
             _$effect4((_p$) => {
-              var _v$ = TextAttributes4.BOLD, _v$2 = context.theme.text.base, _v$3 = context.theme.text.muted;
+              var _v$ = TextAttributes4.BOLD, _v$2 = context.theme.text.base, _v$3 = statusEscHovered() ? context.theme.text.base : context.theme.text.muted, _v$4 = statusEscHovered() ? TextAttributes4.UNDERLINE : undefined;
               _v$ !== _p$.e && (_p$.e = _$setProp4(_el$3, "attributes", _v$, _p$.e));
               _v$2 !== _p$.t && (_p$.t = _$setProp4(_el$3, "fg", _v$2, _p$.t));
               _v$3 !== _p$.a && (_p$.a = _$setProp4(_el$6, "fg", _v$3, _p$.a));
+              _v$4 !== _p$.o && (_p$.o = _$setProp4(_el$6, "attributes", _v$4, _p$.o));
               return _p$;
             }, {
               e: undefined,
               t: undefined,
-              a: undefined
+              a: undefined,
+              o: undefined
             });
             return _el$2;
           })(), (() => {
@@ -2421,6 +2457,7 @@ var tui_default = Plugin.define({
       } : undefined;
     };
     const [terminalAcks, setTerminalAcks] = createSignal4({});
+    const [flashing, setFlashing] = createSignal4(new Set);
     const terminalTimers = new Set;
     const noteTerminal = (sessionID, goal) => {
       const ack = {
@@ -2431,6 +2468,20 @@ var tui_default = Plugin.define({
         ...previous,
         [sessionID]: ack
       }));
+      if (goal.status === "achieved") {
+        setFlashing((previous) => new Set(previous).add(sessionID));
+        const flashTimer = setTimeout(() => {
+          terminalTimers.delete(flashTimer);
+          setFlashing((previous) => {
+            if (!previous.has(sessionID))
+              return previous;
+            const next = new Set(previous);
+            next.delete(sessionID);
+            return next;
+          });
+        }, ACK_FLASH_MS);
+        terminalTimers.add(flashTimer);
+      }
       const timer = setTimeout(() => {
         terminalTimers.delete(timer);
         setTerminalAcks((previous) => {
@@ -2445,15 +2496,24 @@ var tui_default = Plugin.define({
       }, TERMINAL_ACK_MS);
       terminalTimers.add(timer);
     };
-    const dropTerminal = (sessionID) => setTerminalAcks((previous) => {
-      if (!previous[sessionID])
-        return previous;
-      const next = {
-        ...previous
-      };
-      delete next[sessionID];
-      return next;
-    });
+    const dropTerminal = (sessionID) => {
+      setTerminalAcks((previous) => {
+        if (!previous[sessionID])
+          return previous;
+        const next = {
+          ...previous
+        };
+        delete next[sessionID];
+        return next;
+      });
+      setFlashing((previous) => {
+        if (!previous.has(sessionID))
+          return previous;
+        const next = new Set(previous);
+        next.delete(sessionID);
+        return next;
+      });
+    };
     const refresh = (sessionID) => rpc.get({
       sessionID
     }, at(sessionID)).then((result) => {
@@ -2600,6 +2660,7 @@ var tui_default = Plugin.define({
     const [getHudSession, setHudSession] = createSignal4(undefined);
     const [statusCopied, setStatusCopied] = createSignal4(false);
     const [contextOpen, setContextOpen] = createSignal4(false);
+    const [statusEscHovered, setStatusEscHovered] = createSignal4(false);
     let statusCopiedTimer;
     const flashStatusCopied = () => {
       setStatusCopied(true);
@@ -2704,7 +2765,11 @@ var tui_default = Plugin.define({
         };
         const animated = () => {
           const g = goal();
-          return Boolean(g && (g.evaluating === true || isCompactHot(g)));
+          return pillMotionNeeded({
+            evaluating: g?.evaluating === true,
+            hot: g !== undefined && isCompactHot(g),
+            flashing: props.sessionID !== undefined && flashing().has(props.sessionID)
+          });
         };
         createEffect(() => {
           if (animated() && motionOk) {
@@ -2775,9 +2840,9 @@ var tui_default = Plugin.define({
               _$setProp4(_el$0, "wrapMode", "none");
               _$insert4(_el$0, pillText);
               _$effect4((_p$) => {
-                var _v$4 = color(), _v$5 = pillAttrs();
-                _v$4 !== _p$.e && (_p$.e = _$setProp4(_el$0, "fg", _v$4, _p$.e));
-                _v$5 !== _p$.t && (_p$.t = _$setProp4(_el$0, "attributes", _v$5, _p$.t));
+                var _v$5 = color(), _v$6 = pillAttrs();
+                _v$5 !== _p$.e && (_p$.e = _$setProp4(_el$0, "fg", _v$5, _p$.e));
+                _v$6 !== _p$.t && (_p$.t = _$setProp4(_el$0, "attributes", _v$6, _p$.t));
                 return _p$;
               }, {
                 e: undefined,
@@ -2834,9 +2899,9 @@ var tui_default = Plugin.define({
                   onTogglePin: () => togglePin(props.sessionID)
                 }));
                 _$effect4((_p$) => {
-                  var _v$6 = -cardRows(), _v$7 = cardRows();
-                  _v$6 !== _p$.e && (_p$.e = _$setProp4(_el$1, "top", _v$6, _p$.e));
-                  _v$7 !== _p$.t && (_p$.t = _$setProp4(_el$1, "height", _v$7, _p$.t));
+                  var _v$7 = -cardRows(), _v$8 = cardRows();
+                  _v$7 !== _p$.e && (_p$.e = _$setProp4(_el$1, "top", _v$7, _p$.e));
+                  _v$8 !== _p$.t && (_p$.t = _$setProp4(_el$1, "height", _v$8, _p$.t));
                   return _p$;
                 }, {
                   e: undefined,
@@ -3030,6 +3095,7 @@ var tui_default = Plugin.define({
       setTerminalAcks({});
       offChanged();
       offNotice();
+      setFlashing(new Set);
       setStatusDialogOpen(false);
       setStatusDialogSession(undefined);
       setScrollRef(undefined);

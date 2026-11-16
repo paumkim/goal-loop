@@ -78,6 +78,23 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
 export const TERMINAL_ACK_MS = 45_000
 
 /**
+ * How long the check-flash rides the terminal acknowledgment pill after a goal lands `achieved`:
+ * the bold attribute flips on the same slow cadence as the evaluating pulse, then the flash ends and
+ * the pill goes static for the rest of the ack window. Motion, not information — it exists so the eye
+ * catches the completion moment where the user was already watching. Suppressed under reduced motion
+ * (NO_COLOR / TERM=dumb) like every other pulse.
+ */
+export const ACK_FLASH_MS = 1_700
+
+/**
+ * The pill's pulse interval runs while any of the three transient conditions is live: the evaluator is
+ * thinking, the compaction request is running hot, or the just-achieved flash window is open. Extracted
+ * so the contract — a flash alone drives the pulse — is pinned in unit tests. Pure.
+ */
+export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly hot?: boolean; readonly flashing?: boolean }): boolean =>
+  args.evaluating === true || args.hot === true || args.flashing === true
+
+/**
  * The completion moment: when a goal goes live→terminal the ambient pill would otherwise blink out
  * with no residual signal where the user was watching. Rendered for `TERMINAL_ACK_MS` after the
  * transition (wired in tui.tsx from the snapshot path). `cleared` and still-live statuses return

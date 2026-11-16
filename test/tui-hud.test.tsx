@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
@@ -284,6 +284,27 @@ describe("pinSuffix", () => {
 describe("pinBudget", () => {
   test("subtracts the pill text, the pin prefix and one cell of breathing room", () => {
     expect(pinBudget(80, 40)).toBe(80 - 40 - " · pin: ".length - 1)
+  })
+})
+
+describe("pillMotionNeeded", () => {
+  test("all quiet is static — an armed, idle goal never pulses", () => {
+    expect(pillMotionNeeded({})).toBe(false)
+    expect(pillMotionNeeded({ evaluating: false, hot: false, flashing: false })).toBe(false)
+  })
+
+  test("the just-achieved flash alone drives the pulse — the flash rides the same cadence as the evaluating shimmer", () => {
+    expect(pillMotionNeeded({ flashing: true })).toBe(true)
+  })
+
+  test("evaluating and a hot compaction drive the pulse independently", () => {
+    expect(pillMotionNeeded({ evaluating: true })).toBe(true)
+    expect(pillMotionNeeded({ hot: true })).toBe(true)
+  })
+
+  test("the flash window is a short, deliberate burst — sensible and bounded", () => {
+    expect(ACK_FLASH_MS).toBeGreaterThan(0)
+    expect(ACK_FLASH_MS).toBeLessThan(TERMINAL_ACK_MS)
   })
 })
 
