@@ -1460,6 +1460,17 @@
       "submittedAt": "2026-11-16T07:43:39Z",
       "mergedAt": "2026-11-16T07:45:09Z",
       "mergedInto": "dev"
+    },
+    "tui-keyboard-parity": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/tui-keyboard-parity",
+      "worktree": "worktrees/wt-tui-keyboard-parity",
+      "status": "done",
+      "createdAt": "2026-11-16T07:46:54Z",
+      "submittedAt": "2026-11-16T07:47:39Z",
+      "mergedAt": "2026-11-16T07:48:09Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
