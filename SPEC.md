@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=46 tests=992 -->
+<!-- spec-check files=46 tests=1006 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4528,3 +4528,44 @@ doors, and they ride the one controlled signal the other views use.
      ladder are the host's, unchanged. No new chord, no footer furniture, no focus
      stealing; the dossier tab is reachable by mouse (everyone) and by `t` (the
      keyboard twin), and nowhere else.
+## Workstream DW — the context size re-resolves after a compaction (2026-11-16)
+
+Status: current. Input: a live-session screenshot (reported
+`~/Pictures/Screenshots/Screenshot_20261116_102454.png`, 2026-11-16 10:24) whose visible text is exactly
+`◎ goal-loop · re-anchor after compaction` (line 1) and `◎ loop · v1/5 ○○○○○ · active · 1m · compact pending`
+(line 2); the string `context size unknown` does NOT appear on screen — it is the boundary-compact notice
+(`src/runtime/compactor.ts`, `"context size unknown; compacting at the loop boundary"`) that fires on the same
+path, one arm before the request.
+
+Interpretation (the bug, as located by grep):
+1. `estimateContextTokens` (`src/core/context-size.ts`) walked from the end and returned `undefined` the moment
+   the LAST assistant message lacked usable `tokens`, instead of reading past it; and it never told the
+   post-compaction window from the pre-compaction one, so a stale pre-compaction total could masquerade as the
+   current context.
+2. After the host compacts, `ctx.session.context` returns only messages at/after the last completed compaction
+   (the `compaction` message first, then whatever ran since). Until a post-compaction assistant step lands
+   there is no count — honest `undefined` — but the loop's arm-time settle then marks the pending request
+   unmeasurable, force re-requests on the trickle, the host answers with no-op compactions whose ended events
+   each enqueue the "goal-loop · re-anchor after compaction" synthetic message, and the pill keeps showing
+   `compact pending`. Once a post-compaction assistant does land, the old estimator returned it correctly, yet
+   the TUI's anti-flicker carry-forward (`preserveContextSize`) would keep the PRE-compaction total alive
+   forever whenever a snapshot arrived without the field — the stale total the user kept seeing.
+3. `preserveContextSize` (`src/core/entries.ts`) carried `previous.contextSize` forward with no invalidation
+   across a detected landing, so the card/dialog could never fall back to the fresh post-compaction count.
+
+Acceptance criteria:
+- `estimateContextTokens` reads only the post-compaction window (messages after the last `status: "completed"`
+  compaction message) when one is present; assistant messages without usable token figures are skipped, not
+  fatal; no assistant inside the window → `undefined` (never fabricated, never the pre-compaction total).
+- `preserveContextSize` no longer carries the cached total across a pending→landed `loopCompact.landedAt`
+  flip; the next snapshot without the field drops it (renders nothing) until the server sends a fresh count —
+  which the fixed estimator produces as soon as a post-compaction assistant exists.
+- After a simulated compaction (compaction message + fresh assistant with usage) the estimate is the fresh
+  count — finite and below the pre-compaction one — proven by unit test; the carry-forward drop is proven by
+  unit test in `test/entries.test.ts`.
+- The notice text, the pill, footer chords (p/c/x), slots and layout are untouched; no redesign.
+- Verified at the unit layer only (`bun test`); no render/frame claim and no live-TUI claim.
+
+Verification: `bun run check` green; new unit tests in `test/context-size.test.ts` and `test/entries.test.ts`;
+marker bumped (tests=989). Coordinator submit.
+
