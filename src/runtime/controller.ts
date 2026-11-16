@@ -801,6 +801,11 @@ export class GoalController {
     const now = clock.now()
     const iterationTools = runtime.iterationToolCalls
     const notProgress = iterationTools === 0 && !runtime.iterationDeferred ? (record.loopNotProgress ?? 0) + 1 : 0
+    // Stamp the arm-time context estimate (measured when this iteration was armed, tagged with its number by the boundary-compaction settle/restore writes) onto the entry. Only a matching iteration tag with a finite estimate qualifies; anything else stays absent — the row renders the gap honestly.
+    const armedEstimate =
+      record.loopCompact && record.loopCompact.iteration === iteration && typeof record.loopCompact.estimatedTokens === "number" && Number.isFinite(record.loopCompact.estimatedTokens)
+        ? record.loopCompact.estimatedTokens
+        : undefined
     const makeEntry = (summary: string): LoopEntry => ({
       version: iteration,
       condition: record.condition,
@@ -809,6 +814,7 @@ export class GoalController {
       turns: turn,
       toolCalls: iterationTools,
       endedAt: clock.now(),
+      ...(armedEstimate !== undefined ? { contextTokens: armedEstimate } : {}),
     })
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
     // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop

@@ -208,6 +208,55 @@ export function durationShares(durations: readonly number[]): number[] {
   return durations.map((span) => Math.round((Math.max(0, Number.isFinite(span) ? span : 0) / total) * 100))
 }
 
+const SPARK_GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const
+/** Bars the per-iteration context sparkline renders; older estimates fall off the left behind a leading … marker. */
+export const SPARK_MAX_CELLS = 16
+
+export interface ContextSpark {
+  /** One glyph per recent entry, oldest → newest; `·` marks an entry whose arm could not measure the context. A leading `…` marks truncation past SPARK_MAX_CELLS. */
+  readonly bars: string
+  /** Highest estimate across ALL completed iterations (not just the visible window). */
+  readonly peak: number
+  /** Newest estimate present anywhere in the history. */
+  readonly latest: number
+  /** How many entries carry a finite estimate (gaps excluded). */
+  readonly shown: number
+  readonly truncated: boolean
+}
+
+/**
+ * Per-iteration context timeline behind the loop dialog: each bar is the context size estimated at the
+ * arm of that iteration (the boundary-compaction estimate tagged with the iteration). Never divides by
+ * zero; a present-but-tiny estimate still renders `▁` (present data is not a gap). Entries without a
+ * finite estimate render `·`. Returns undefined when NO entry carries an estimate — the caller omits the row.
+ */
+export function contextSparkline(entries: readonly { readonly contextTokens?: number }[]): ContextSpark | undefined {
+  const estimates = entries.map((entry) =>
+    typeof entry.contextTokens === "number" && Number.isFinite(entry.contextTokens) && entry.contextTokens >= 0 ? entry.contextTokens : undefined,
+  )
+  const present = estimates.filter((value): value is number => value !== undefined)
+  if (present.length === 0) return undefined
+  const peak = Math.max(...present)
+  let latest = 0
+  for (let index = estimates.length - 1; index >= 0; index -= 1) {
+    const value = estimates[index]
+    if (value !== undefined) {
+      latest = value
+      break
+    }
+  }
+  const window = estimates.slice(-SPARK_MAX_CELLS)
+  const truncated = window.length < estimates.length
+  const bars = window
+    .map((value) => {
+      if (value === undefined) return "·"
+      if (peak === 0) return SPARK_GLYPHS[0]
+      return SPARK_GLYPHS[Math.min(7, Math.floor((value / peak) * 8))]!
+    })
+    .join("")
+  return { bars: (truncated ? "…" : "") + bars, peak, latest, shown: present.length, truncated }
+}
+
 export const CONTEXT_BAR_CELLS = 16
 /** Fill ratio at/past which the context meter renders in the warning tone. Matches the boundary-compaction arming signal (the loop needs headroom before the threshold is reached). */
 export const CONTEXT_HOT_RATIO = 0.8

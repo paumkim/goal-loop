@@ -175,6 +175,33 @@ describe("/goal-loop", () => {
     h = harness()
   })
 
+  test("an entry is stamped with the context size measured at its arm; v1 has none", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"), met("fuzz done"))
+    h.summaries.push("parser rewritten and tests green", "fuzz done")
+    h.nextGoals.push("add fuzz coverage for the parser", "add property tests")
+    h.setCompactOutcome({ requested: true, estimatedTokens: 91_000 })
+    await h.turn()
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.loopHistory).toHaveLength(2)
+    expect(record.loopHistory![0]!.contextTokens).toBeUndefined()
+    expect(record.loopHistory![1]!.contextTokens).toBe(91_000)
+  })
+
+  test("an unmeasurable arm stamps nothing — the entry records the gap honestly", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"), met("fuzz done"))
+    h.summaries.push("parser rewritten and tests green", "fuzz done")
+    h.nextGoals.push("add fuzz coverage for the parser", "add property tests")
+    h.setCompactOutcome({ requested: true }) // no estimatedTokens — the host could not measure the context
+    await h.turn()
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.loopHistory).toHaveLength(2)
+    expect(record.loopHistory!.every((entry) => entry.contextTokens === undefined)).toBe(true)
+  })
+
   test("met → summarize → v2 armed under the same /goal rules", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))

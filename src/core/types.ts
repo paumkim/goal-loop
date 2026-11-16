@@ -75,6 +75,8 @@ export interface LoopEntry {
   readonly turns: number
   readonly toolCalls: number
   readonly endedAt: number
+  /** Estimated context size measured at the arm of this iteration (the boundary-compaction estimate tagged with this iteration). Absent when the arm could not measure the context — never estimated, never fabricated. */
+  readonly contextTokens?: number
 }
 
 /** Consecutive unlanded boundary compactions after which the plugin suspends further requests until a landing is observed. 2 misses arm a forced re-request; 4 suspends. Lives here so core formatters can display it. */

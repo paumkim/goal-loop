@@ -85,6 +85,14 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot(snapshot())?.loopHistory).toBeUndefined()
   })
 
+  test("accepts an additive LoopEntry contextTokens and rejects broken values when present", () => {
+    const entry = (contextTokens?: unknown) => [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 1, toolCalls: 2, endedAt: 800, ...(contextTokens === undefined ? {} : { contextTokens }) }]
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(91_000) })?.loopHistory?.[0]?.contextTokens).toBe(91_000)
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(undefined) })?.loopHistory?.[0]?.contextTokens).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(Number.NaN) })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry("91000") })).toBeUndefined()
+  })
+
   test("rejects each broken required field", () => {
     const cases: Array<[string, Record<string, unknown>]> = [
       ["not a record", {}],
