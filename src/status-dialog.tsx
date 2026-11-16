@@ -25,6 +25,24 @@ export const FOREIGN_ROWS_VISIBLE = 4
 export const foreignLiveRows = (others: readonly GoalSnapshot[] | undefined, ownSessionID: string | undefined): readonly GoalSnapshot[] =>
   (others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== ownSessionID)
 
+/**
+ * The failure-first row, extracted so the overview and the ledger tab paint the identical row from
+ * one source. Painted only when a remedy exists (callers gate on it); exact remediation, never a
+ * vague warning. On the overview it rides inside the dashboard column between the hint and the verify
+ * gate; on the ledger it is the one row the focus view keeps — a failed, capped or hot loop is never
+ * opened onto a tab without its remedy.
+ */
+const FixRow = (props: { theme: HistoryTheme; mono: () => boolean; fix: { readonly text: string; readonly tone: "warning" | "error" } }): JSX.Element => (
+  <box flexDirection="row" gap={2}>
+    <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
+      fix
+    </text>
+    <text wrapMode="word" flexGrow={1} fg={fixAccentColor(props.theme, props.fix.tone === "error" ? "error" : "warning", props.mono())}>
+      {props.fix.text}
+    </text>
+  </box>
+)
+
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined
   fallback: string
@@ -279,17 +297,8 @@ export const StatusDialogBody = (props: {
               </box>
             )}
           </Show>
-          {/* failure is a first-class screen: exact remediation, never a vague warning */}
-          <Show when={remediation()}>
-            {(fix) => (
-              <box flexDirection="row" gap={2}>
-                {label("fix")}
-                <text wrapMode="word" flexGrow={1} fg={fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono())}>
-                  {fix().text}
-                </text>
-              </box>
-            )}
-          </Show>
+          {/* failure is a first-class screen — exact remediation, never a vague warning; painted only when a remedy exists (a nominal goal keeps the dashboard lean) */}
+          <Show when={remediation()}>{(fix) => <FixRow theme={theme()} mono={mono} fix={fix()} />}</Show>
           {/* verification gate — the last `evaluator.verifyCommand` run and the output it produced; the met verdict was held to this command. Click to copy the tail (host wires clipboard + toast via onCopyVerify) */}
           <Show when={goal().lastVerify}>
             {(verify) => {
@@ -367,6 +376,8 @@ export const StatusDialogBody = (props: {
           </Show>
             </box>
           </Show>
+          {/* failure is a first-class screen on the ledger too — the fix row is the one row the focus view keeps; exact remediation, never a vague warning, painted only when a remedy exists */}
+          <Show when={ledger() && remediation()}>{(fix) => <FixRow theme={theme()} mono={mono} fix={fix()} />}</Show>
           {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else */}
           <Show when={goal().loopEnabled}>
             <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />

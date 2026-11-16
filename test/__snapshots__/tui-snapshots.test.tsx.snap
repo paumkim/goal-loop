@@ -270,6 +270,102 @@ why         ✓  met · turn 3 · 3m ago      done
 "
 `;
 
+exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab (the history focus view — strip, the state row, the rail, nothing else) 1`] = `
+"overview · ledger                                                                                   
+                                                                                                    
+active  12m · 4 turns · v3/5                                                                        
+                                                                                                    
+loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+pace        ~15m/iteration · ~45m left at this pace                                                 
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · active · 4 turns · 12m elapsed                             · last ✗ this turn   
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+why         ✓  met · turn 3 · 3m ago      done                                                      
+                                                                                                    
+            ✓  met · turn 4 · 2m ago      done                                                      
+                                                                                                    
+            ✗  not met · turn 5 · 1m ago  not yet                                                   
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab failure-first (a hot loop never hides its remedy — the fix row rides the focus view) 1`] = `
+"overview · ledger                                                                                   
+                                                                                                    
+active  12m · 4 turns · v3/5                                                                        
+                                                                                                    
+fix         compact pending 2/4 · send a message for a safe point · else set evaluator.             
+            verifyCommand                                                                           
+                                                                                                    
+loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+pace        ~15m/iteration · ~45m left at this pace                                                 
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+compact     pending 0s · miss 2/4                                                                   
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · active · 4 turns · 12m elapsed                             · last ✗ this turn   
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+why         ✓  met · turn 3 · 3m ago      done                                                      
+                                                                                                    
+            ✓  met · turn 4 · 2m ago      done                                                      
+                                                                                                    
+            ✗  not met · turn 5 · 1m ago  not yet                                                   
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
 exports[`full-frame snapshots (named layout states) StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy) 1`] = `
 "overview · ledger                                                                                   
                                                                                                     
@@ -769,53 +865,5 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFoot
 "up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older                          [copy condition]   [pin condition]   [clear goal] 
                                                                                                                                             
                                                                                                                                             
-"
-`;
-
-exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab (the history focus view — strip, the state row, the rail, nothing else) 1`] = `
-"overview · ledger                                                                                   
-                                                                                                    
-active  12m · 4 turns · v3/5                                                                        
-                                                                                                    
-loop        v3 of at most 5 · 2 complete                                                            
-                                                                                                    
-            ███████░░░░░░░░░░░                                                                      
-                                                                                                    
-pace        ~15m/iteration · ~45m left at this pace                                                 
-                                                                                                    
-objective   make every loop iteration visible at a glance                                           
-                                                                                                    
-v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
-│           │ Added an 18-cell block progress bar.                                                  
-                                                                                                    
-v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
-│           │ Trail renders up to 24 verdicts.                                                      
-                                                                                                    
-now         ◎  v3 · active · 4 turns · 12m elapsed                             · last ✗ this turn   
-                                                                                                    
-trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-                                                                                                    
-why         ✓  met · turn 3 · 3m ago      done                                                      
-                                                                                                    
-            ✓  met · turn 4 · 2m ago      done                                                      
-                                                                                                    
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
 "
 `;

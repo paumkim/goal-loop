@@ -245,6 +245,25 @@ describe("StatusDialogBody", () => {
     expect(frame).toContain("history")
     expect(frame).not.toContain("two consecutive iterations without tool use") // the reason row rides the overview tab
   })
+
+  test("hot loop, ledger tab: the failure-first remediation rides the focus view — the one row it keeps", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 2 } })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />)
+    expect(frame).toContain("fix")
+    expect(frame).toContain("compact pending 2/4")
+    expect(frame).toContain("evaluator.verifyCommand")
+    expect(frame).not.toContain("ship the release notes") // the condition stays overview-only — the fix row is the one exception
+  })
+
+  test("hot loop, overview tab: the remediation still rides the full dashboard (regression guard)", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 2 } })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("fix")
+    expect(frame).toContain("compact pending 2/4")
+  })
+
+  test("nominal loop, ledger tab: no remediation exists, so the focus view stays lean", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />)
+    expect(frame).not.toContain("fix")
+  })
 })
 
 describe("LoopSection edge paths", () => {

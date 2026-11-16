@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=957 -->
+<!-- spec-check files=44 tests=961 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4346,3 +4346,34 @@ slice closes that gap without inventing a second menu or touching the footer.
      activation is the shared closures (each already covered by the mouse-path tests);
      live TUI never claimed. Activation resets the selection to the first row and
      collapses the menu, matching the mouse path exactly.
+
+## Workstream DR — the focus view never hides the failure-first screen (2026-11-16)
+
+Interpretation: the bar's failure clause demands the exact remediation — never a vague
+warning — and the progressive-disclosure clause makes the ledger tab a first-class zoom
+level. DP shipped the tab with the strip, the state row and the history block and nothing
+else, which left a real hole: a failed, capped, stalled or compaction-hot loop sitting on
+the ledger — the focus view an operator explicitly reaches for — showed the state word
+and no remedy at all. The bar does not gate its failure-first promise on the default tab.
+
+420. src/status-dialog.tsx — the remediation row is extracted to a module-scope
+     `FixRow` (one source for both tabs; same label gutter, same hue logic via
+     fixAccentColor, mono keeps the words and drops the hue). The overview keeps the
+     row exactly where it always was — between the hint and the verify gate — so the
+     overview frame is byte-identical to before. The ledger paints the same row, only
+     when a remedy exists, right after the state column closes and above the history:
+     strip → state row → fix → rail. Nothing else rides the focus view (the hint stays
+     overview-only as onboarding, the verify tail stays overview-only as gate evidence,
+     elsewhere stays overview-only as awareness).
+421. A nominal loop keeps the ledger lean: no remediation exists, so no fix row paints
+     and the armed happy path is untouched.
+422. Tests: +3 interactive (hot loop, ledger tab — the exact remedy rides the frame;
+     hot loop, overview tab — regression guard; nominal loop, ledger tab — no fix row
+     paints) +1 snapshot frame (ledger tab failure-first: a hot loop never hides its
+     remedy). The three overview remediation frames and the freshly-armed frame verified
+     byte-identical to before the change (snapshot diff inspected entry-by-entry, not
+     re-recorded blindly). spec-check files=44 tests=961.
+423. Honest limits: the ledger's fix row is not a new affordance — it paints the same
+     exact text the overview and the card already paint; there is nothing new to click
+     (the row stays informational by design, matching the card's compaction markers and
+     the elsewhere rows' read-only posture). The `t` chord and the strip are unchanged.
