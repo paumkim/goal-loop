@@ -240,7 +240,7 @@ describe("LoopSection edge paths", () => {
 
   test("a verdict streak of two renders the streak suffix in the now row", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ history: verdicts(["met", "not_met", "not_met"]) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
-    expect(frame).toContain("2× not met in a row")
+    expect(frame).toContain("2x not met in a row")
   })
 
   test("a cap reached with a non-terminal status still renders the final tally row", async () => {
@@ -291,14 +291,14 @@ describe("HistoryBlock edge paths", () => {
 
   test("a trailing streak renders the streak suffix in the last-verdict line", async () => {
     const frame = await render(() => <HistoryBlock goal={plainGoal({ history: verdicts(["not_met", "met", "met"]), turns: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 41} />)
-    expect(frame).toContain("2× met in a row")
+    expect(frame).toContain("2x met in a row")
   })
 })
 
 describe("StatusDialogBody snapshot staleness", () => {
   test("noticeStale paints a faint snapshot-unavailable line above stale chrome", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} noticeStale={() => true} />)
-    expect(frame).toContain("snapshot unavailable — showing last known state")
+    expect(frame).toContain("snapshot unavailable - showing last known state")
   })
 
   test("default and explicit false noticeStale paints nothing", async () => {
@@ -561,7 +561,7 @@ describe("loop rail progressive disclosure", () => {
     const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame).toContain("2 older iterations — click or press x")
+    expect(frame).toContain("2 older iterations - click or press x")
     expect(frame).toContain("v6")
     expect(frame).toContain("v3")
     expect(frame).not.toContain("v2 ")
@@ -1080,6 +1080,27 @@ describe("why ledger (the evaluator's most recent reasons, inline)", () => {
     await setup.mockMouse.click(at!.x + 4, at!.y)
     await setup.renderOnce()
     expect(setup.captureCharFrame().split("\n")[at!.y]!).not.toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("under mono the copied ack demotes to + copied and no ✓ leaks onto a dumb surface", async () => {
+    const calls: string[] = []
+    const setup = await testRender(
+      () => <HistoryBlock goal={ledgerGoal(ledgerHistory)} theme={theme} elapsedMs={() => 1000 * 60 * 30} nowMs={() => now} onCopyReason={(reason) => calls.push(reason)} mono />,
+      { width: 112, height: 30 },
+    )
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).not.toContain("✓")
+    expect(frame).toContain("why")
+    const at = findIn(frame, "the full acceptance suite passes")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(calls).toEqual(["the full acceptance suite passes"])
+    const row = setup.captureCharFrame().split("\n")[at!.y]!
+    expect(row).toContain("+ copied")
+    expect(row).not.toContain("✓ copied")
     await setup.renderer.destroy()
   })
 

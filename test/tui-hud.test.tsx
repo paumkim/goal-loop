@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -218,7 +218,7 @@ describe("remediationFor", () => {
   test("a 3x not_met streak renders the verifyCommand suggestion", () => {
     const fix = remediationFor(loopedGoal({ history: verdicts(["met", "not_met", "not_met", "not_met"]) }))
     expect(fix?.tone).toBe("warning")
-    expect(fix?.text).toContain("3× not_met in a row")
+    expect(fix?.text).toContain("3x not_met in a row")
     expect(fix?.text).toContain("evaluator.verifyCommand")
   })
 
@@ -290,12 +290,12 @@ describe("remediationFor failed", () => {
   test("a failed goal with a classifier label names the cause, not just the state", () => {
     const fix = remediationFor(loopedGoal({ status: "failed", failureLabel: "authentication failure" }))
     expect(fix?.tone).toBe("error")
-    expect(fix?.text).toBe("authentication failure — /goal clear to reset")
+    expect(fix?.text).toBe("authentication failure - /goal clear to reset")
   })
 
   test("a failed record persisted before failureLabel falls back to the generic remedy", () => {
     const fix = remediationFor(loopedGoal({ status: "failed" }))
-    expect(fix?.text).toBe("goal failed — /goal clear to reset")
+    expect(fix?.text).toBe("goal failed - /goal clear to reset")
   })
 })
 
@@ -311,6 +311,9 @@ describe("pinSuffix", () => {
     const suffix = pinSuffix("some very long condition that goes on and on", budget)
     expect(suffix.startsWith(" · pin: ")).toBe(true)
     expect(suffix.length).toBeLessThanOrEqual(" · pin: ".length + budget)
+    const asciiSuffix = pinSuffix("some very long condition that goes on and on", budget, true)
+    expect(asciiSuffix.endsWith("...")).toBe(true)
+    expect(asciiSuffix.length).toBeLessThanOrEqual(" · pin: ".length + budget)
   })
 
   test("short condition renders whole without truncation", () => {
@@ -410,16 +413,6 @@ describe("motionDisabled", () => {
     expect(motionDisabled({ TERM: "dumb" })).toBe(true)
     expect(motionDisabled({ TERM: "xterm-256color" })).toBe(false)
     expect(motionDisabled({})).toBe(false)
-  })
-})
-
-describe("monochrome", () => {
-  test("NO_COLOR and TERM=dumb both drop chromatic accents; default terminals keep them", () => {
-    expect(monochrome({ NO_COLOR: "" })).toBe(true)
-    expect(monochrome({ NO_COLOR: "1" })).toBe(true)
-    expect(monochrome({ TERM: "dumb" })).toBe(true)
-    expect(monochrome({ TERM: "xterm-256color", NO_COLOR: undefined })).toBe(false)
-    expect(monochrome({})).toBe(false)
   })
 })
 
