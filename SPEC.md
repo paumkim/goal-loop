@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=827 -->
+<!-- spec-check files=43 tests=831 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3340,3 +3340,38 @@ notify/toast text, LLM-facing prompts, model-authored reasons) which DE and this
 Verification (all run in the worktree): bun run compile, bun test tui-snapshots (21 pass), bun run
 check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev shown
 green at the end. Evidence is source + render layers only; live TUI remains unverifiable.
+## Workstream DI — the loop's ledger names the commit each iteration landed on (2026-11-16)
+
+Interpretation of this iteration: the armed goal asks the ledger to show, per iteration, the commit sha
+("per iteration a row — iteration #, tool-call count, verdict, one-line reason, time, commit sha"). The
+iteration rail (tui-history.tsx) painted version, verdict, turns, tools, duration, verdict mix, ended
+time and % of wall, but nothing anchored a finished iteration to the codebase state it produced. This
+slice stamps the sha HEAD had landed on when the iteration was recorded, carries it additively on the
+record and the wire, and paints it on the rail row.
+
+329. `LoopEntry` gains an additive `readonly sha?: string`. The loop-advance path (the only place entries
+     are built, `makeEntry` in src/runtime/controller.ts) reads HEAD once per advance via the new pure
+     `headSha(gitDir)` in src/core/git.ts and stamps it; outside a repository, on an unreadable HEAD, or
+     when ref resolution fails, the field stays absent — the ledger never guesses. `headSha` resolves a
+     detached HEAD to its hex, an attached HEAD to the loose ref and then `packed-refs`/commondir, and
+     never throws (PREVIEW: the function is package-internal, no new public surface). The wire parser
+     (`isLoopEntry` in src/core/wire.ts) accepts an optional string `sha` and rejects non-strings —
+     additive tolerance, no version bump, legacy records unchanged.
+330. The iteration rail row appends ` · <7-char sha>` only when a stamp is present (same text node as the
+     existing ended/share suffixes; wraps, never clips; byte-identical frames for unstamped entries).
+     Rendered statically — the armed condition asks for the sha to be *shown*; the row already carries
+     non-interactive suffixes, so no new unmarked interactivity is introduced.
+331. Tests: one new `headSha` case in test/git.test.ts (loose/packed/detached/missing/unreadable, never
+     throws), one new wire acceptance/rejection case in test/wire.test.ts, one new end-to-end stamp case
+     in test/loop.test.ts (entry recorded inside a fake repository carries the loose-ref sha), one new
+     render case in test/tui-render.test.tsx (the rail paints the stamped short sha; unstamped frames
+     do not). Spec-check marker files=43 tests=827 -> 831. One subtlety: src/runtime/controller.ts gained
+     its import merged onto an existing import line so the docs-line-refs contract (docs/index.html and
+     docs/runtime.html anchor src/runtime/controller.ts:68 at a non-blank line) held without touching
+     the off-limits docs/.
+
+Verification (all run in the worktree): bun test (831 pass), bun run compile, bun run check end-to-end
+green incl. spec-check (43/831), docs-watch companion + changelog grep before submit. Evidence is source
++ render + loop-advance layers only; live TUI remains unverifiable. Follow-ups NOT done in this slice:
+already-satisfied-at-HEAD blue tone (met + zero tools), per-iteration cost attribution, cross-session
+overview, the C1 card why-row, the card context meter row, the measured card width.

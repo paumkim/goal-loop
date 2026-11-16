@@ -22,7 +22,7 @@ import {
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
-import { sameDirectory, type GoalStore } from "./store.ts"
+import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"
 
 /**
  * Minimum gap between two re-anchor synthetics queued for the same session. A compaction can land for several
@@ -806,6 +806,15 @@ export class GoalController {
       record.loopCompact && record.loopCompact.iteration === iteration && typeof record.loopCompact.estimatedTokens === "number" && Number.isFinite(record.loopCompact.estimatedTokens)
         ? record.loopCompact.estimatedTokens
         : undefined
+    // Stamp the commit HEAD had landed on when this iteration was recorded. Read once per advance; outside a repository (or on any read failure) the field stays absent — the ledger never fabricates a sha.
+    const headAtAdvance = (() => {
+      try {
+        const repo = record.directory ? findRepository(record.directory) : undefined
+        return repo ? headSha(repo.gitDir) : undefined
+      } catch {
+        return undefined
+      }
+    })()
     const makeEntry = (summary: string): LoopEntry => ({
       version: iteration,
       condition: record.condition,
@@ -815,6 +824,7 @@ export class GoalController {
       toolCalls: iterationTools,
       endedAt: clock.now(),
       ...(armedEstimate !== undefined ? { contextTokens: armedEstimate } : {}),
+      ...(headAtAdvance !== undefined ? { sha: headAtAdvance } : {}),
     })
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
     // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop

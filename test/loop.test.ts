@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { resolveConfig } from "../src/core/config.ts"
 import * as Prompt from "../src/core/prompts.ts"
 import type { CommitPolicy, GoalSnapshot, LoopEntry, Notice, UsageSnapshot } from "../src/core/types.ts"
@@ -79,7 +82,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
     config: resolveConfig(options),
-    directory: DIR,
+    directory: typeof options.directory === "string" ? options.directory : DIR,
     commit,
     clock,
     log: testLog,
@@ -187,6 +190,22 @@ describe("/goal-loop", () => {
     expect(record.loopHistory).toHaveLength(2)
     expect(record.loopHistory![0]!.contextTokens).toBeUndefined()
     expect(record.loopHistory![1]!.contextTokens).toBe(91_000)
+  })
+
+  test("an entry is stamped with the sha HEAD had landed on when the iteration was recorded", async () => {
+    const root = mkdtempSync(join(tmpdir(), "goal-loop-repo-"))
+    process.on("exit", () => rmSync(root, { recursive: true, force: true }))
+    const git = join(root, ".git")
+    mkdirSync(join(git, "refs", "heads"), { recursive: true })
+    writeFileSync(join(git, "refs", "heads", "dev"), "a".repeat(40) + "\n")
+    writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
+    const repoHarness = harness({ directory: root })
+    await repoHarness.setLoop("improve the parser")
+    repoHarness.verdicts.push(met("parser done"))
+    repoHarness.summaries.push("parser rewritten and tests green")
+    repoHarness.nextGoals.push("add fuzz coverage for the parser")
+    await repoHarness.turn()
+    expect(repoHarness.controller.get(SID)!.loopHistory![0]!.sha).toBe("a".repeat(40))
   })
 
   test("an unmeasurable arm stamps nothing — the entry records the gap honestly", async () => {
