@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=488 -->
+<!-- spec-check files=41 tests=505 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2063,3 +2063,10 @@ Marker bumped `files=41 tests=465` → `files=41 tests=484` (test-only addition;
 204. New `test/render-scripts.test.ts` (4 tests) spawns `scripts/render-dialog.tsx` (default and `--buggy`) and `scripts/render-history.tsx` (default and `--empty`) exactly the way their header comments invoke them — `bun --preload @opentui/solid/preload scripts/<name>.tsx [flags]`, cwd = repo root — and asserts exit 0, the expected frame header(s) on stdout, and more than 200 non-whitespace characters (100 for the single-frame `--empty` mode) as a proxy for "the grid actually painted". Previously the scripts were verified only by manual invocation; a flag rename or a broken import would have rotted them silently outside `bun run check`. The smoke test imports no Solid code itself, so the suite's preload scoping is unaffected.
 205. No source behavior changed; the work is test-only. The subprocess assertions pin the scripts' contract (exit 0, non-empty grid, frame markers) rather than their visual output, which the 27-case `tui-render.test.tsx` suite already covers via component-level assertions.
 Marker bumped `files=41 tests=484` → `files=41 tests=488` (test-only addition; no shipped file changed).
+
+## Workstream BL — unit tests for the spec-check gate itself (2026-11-15)
+
+206. `scripts/spec-check.ts` now exports the pure helpers behind its gate — `parseMarker` (strict-order marker extraction; flexible whitespace now tolerated), `diagnose` (claimed-vs-actual mismatch diagnosis, empty on pass; carried-through probe errors listed verbatim and first; a red `bun test` is always a failure), `formatFailures`, `formatOk`, and the `NO_MARKER_ERROR`/`BUN_RED_ERROR` strings. The I/O moved into `main()`, which runs only under `import.meta.main`, so importing the module in the suite has no side effects (no npm/bun subprocesses). Gate semantics preserved: unparseable reporter output with a green run still reports `-1 passing tests` as a failure; a `bun test` exit ≠ 0 is always a failure; the npm probe failure path still reports only the probe error line.
+207. New `test/spec-check.test.ts` (17 tests) pins those helpers: marker parsing (mid-document, whitespace variants, absent/malformed/wrong-order/duplicate markers), diagnosis (pass, files/tests mismatch messages byte-exact, both at once, probe-error passthrough order, red suite, unparseable reporter, unparseable npm output as mismatch), and the report formatters. Previously the gate was itself untested — its marker regex or mismatch messages could drift without a single test noticing.
+One deliberate, documented spec widening: the marker regex now tolerates flexible whitespace between tokens (`<!--\s*spec-check\s+files=…`); the canonical marker SPEC writes is unchanged.
+Marker bumped `files=41 tests=488` → `files=41 tests=505` (test-only addition; the gate script is not shipped in the tarball, so `files` is unchanged).
