@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=778 -->
+<!-- spec-check files=43 tests=784 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2680,4 +2680,31 @@ No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (79 pass),
 bun run check green (778 tests), coordinator submit + merge-next, and bun run check on dev shown
+green at the end.
+
+## Workstream CL — the riskiest chrome gets named snapshots (2026-11-16)
+
+Interpretation of this iteration: craft details; the design bar's snapshot-every-named-state clause.
+The audit found the two surfaces with zero frame-level pinning: the card's context menu (the only
+clickable action surface with destructive rows) and the dialog footer's width-tier boundaries. Both
+now carry byte-for-byte snapshots; regressions land loudly.
+
+264. test/tui-snapshots.test.tsx gains six named snapshots: the HudCard with its 4-row context menu
+     open (all action rows visible, fixed anchor verified by the frame), the mono card (weight and
+     glyphs carry meaning — pips already demote via Workstream CI), the LoopSection frame under
+     NO_COLOR (bar and sparkline render as #/- ASCII ink-density, verified by env-gated mount), and
+     DialogFooter at the three width tiers it implements (80 columns: short hint + compact labels;
+     96: short hint + full labels; 140: full hint + full labels). Snapshot count 14 → 20.
+265. The reason-row-inert menu variant was deliberately NOT snapshotted: char frames carry no
+     color/attribute state, so the live and inert reason rows are byte-identical — a snapshot would
+     pin nothing. That contract is pinned at the render layer instead (tui-render.test.tsx: "inert
+     rows", "clicks are inert", and the mouse-button discipline block). Menu row count, alignment
+     and fixed anchor ARE pinned by the open-menu snapshot.
+266. Marker bumped files=43 tests=778 to files=43 tests=784. No version bump, no tag, no push;
+     v1.1.0 remains the live public artifact; all work is local on dev. No docs line references were
+     touched by this workstream. The ASCII snapshot sets and restores process.env.NO_COLOR around a
+     single mount; no global env pollution.
+
+Verification (all run in the worktree): bun test tui-snapshots.test.tsx (20 pass, 6 added),
+bun run check green (784 tests), coordinator submit + merge-next, and bun run check on dev shown
 green at the end.
