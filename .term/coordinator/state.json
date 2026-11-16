@@ -1163,6 +1163,17 @@
       "submittedAt": "2026-11-16T02:55:46Z",
       "mergedAt": "2026-11-16T02:55:59Z",
       "mergedInto": "dev"
+    },
+    "evaluator-rearm-guard": {
+      "agent": "opencode",
+      "paths": "src/core/prompts.ts,src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/evaluator-rearm-guard",
+      "worktree": "worktrees/wt-evaluator-rearm-guard",
+      "status": "done",
+      "createdAt": "2026-11-16T02:57:27Z",
+      "submittedAt": "2026-11-16T03:04:54Z",
+      "mergedAt": "2026-11-16T03:05:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
