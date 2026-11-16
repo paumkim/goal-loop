@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=906 -->
+<!-- spec-check files=44 tests=907 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4006,3 +4006,29 @@ spec-check (44/906). Evidence is source + test-render layers; live TUI remains u
 Follow-ups NOT done in this slice: none. The impossible/paused arms share remediationFor and are
 predicate-tested; they were not framed because their rows are the same wrap path at the same
 width.
+
+
+## Workstream CY — the first impression and the terminal verdict get frames (2026-11-16)
+
+Interpretation of this iteration: the card's state matrix was missing the two states a stranger
+sees at the extremes — the freshly armed card (zero turns, the teaching row that sets the
+evaluator contract before any turn exists) and the judged-impossible card (the terminal verdict
+that tells the user to rephrase or clear). Both were predicate-pinned paths (evaluatorHint /
+remediationFor) with no rendered evidence.
+
+386. scripts/render-card.tsx — two new always-on frames after the failure-first three:
+     freshly armed (turns 0, empty history, no spend/context — the hint row paints
+     EVALUATOR_HINT_CARD) and judged impossible (status "impossible" —
+     stateAccentColor flips the now-word, remediationFor paints the rephrase/clear row).
+     Both compose with --mono unchanged.
+387. Frame evidence (all exit 0): freshly armed paints `hint the evaluator reads only the
+     transcript` with no spend/context rows (absent data, never fabricated); impossible paints
+     `now impossible 31 turns` and wraps `fix judged impossible · rephrase the condition, else
+     /goal clear` to two rows.
+388. Tests: render-scripts.test.ts +1 (the first-impression pin: both headings, the flipped state
+     words, the hint copy, the impossible remedy). spec-check marker files=44 tests=906 -> 907.
+
+Verification (all run in the worktree): bun test (907 pass, 0 fail), bun run check green incl.
+spec-check (44/907). Evidence is source + test-render layers; live TUI remains unverifiable.
+Follow-ups NOT done in this slice: none. The pill (level a) remains documented as inline-only
+(pinned by pillModel unit tests; extraction would manufacture evidence, not find defects).
