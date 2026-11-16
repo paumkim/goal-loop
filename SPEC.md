@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=526 -->
+<!-- spec-check files=41 tests=537 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2078,3 +2078,9 @@ Marker bumped `files=41 tests=488` → `files=41 tests=505` (test-only addition;
 208. `scripts/docs-watch.ts` now exports its pure machinery: `esc`, `parseChangelogLog` (`%cd\t%s` git-log lines into rows; subjects may contain tabs), `sortRows` (newest-first, non-mutating), `renderRows` (escaped `<tr>` table body), `extractStamp`, `stampVerdict` (per-page verdict: missing stamp or trailing stamp), `sliceChangelogRows` (trimmed section between the changes markers; undefined when a marker is missing or inverted), `changelogVerdict`, `formatFailures`, and the `CHANGE_START`/`CHANGE_END` markers. The I/O stays in the gate entry points, which call the same helpers as before, so the committed-page output is byte-identical. `main()` now runs only under `import.meta.main` — importing the module in the suite has no side effects (no git subprocess, no file rewrites).
 209. New `test/docs-watch-helpers.test.ts` (21 tests) pins those helpers: marker escaping (& ordering, no double-escaping), `%cd\t%s` parsing (including tab-containing subjects), row sort/copy semantics, row rendering with HTML escaping, stamp extraction, the three stamp/changelog verdicts (fresh/stale/missing/inverted), and the failure report format. The pre-existing integration suite `test/docs-watch.test.ts` (3 spawn-based tests in a mkdtemp git repo) is unchanged and passes against the refactored script, pinning the byte-identical committed-page behavior. Previously the gate's pure core was untested; a regex or marker edit here could have silently passed stale docs.
 Marker bumped `files=41 tests=505` → `files=41 tests=526` (test-only addition; the watcher is not shipped in the tarball, so `files` is unchanged).
+
+## Workstream BN — config defaults pinned to docs (README + config.html) (2026-11-16)
+
+210. New `test/config-defaults.test.ts` (11 tests) pins the option defaults documented in `README.md` and `docs/config.html` to the code. It parses both options tables directly from disk (README `| `option` | default |` rows; config.html `<tr><td><code>option</code>…` rows) and asserts: every `DEFAULTS` key is documented in BOTH tables; every documented value equals the code default (normalized: `` `true```/`false`, numeric strings, `unlimited` → `Number.MAX_SAFE_INTEGER`, `—`/`session model` → undefined, `""` → `""`); both tables document the identical option set; `resolveConfig({}, {})` resolves `DEFAULTS` to itself; `evaluator.mode` documents `auto` while resolving to `session` without a model; `requireCommit` ships `true`/enabled; `model`/`evaluator.model` ship unset; `coordinator` ships `auto`. Mutation-verified: forcing `DEFAULTS.maxLoops` to 6 fails the test; reverting passes.
+211. No source behavior changed; the work is test-only. The maps live in the test, so adding an option to either table without a code default (or vice versa) fails loudly by name rather than silently drifting — the exact hazard that left the documented and actual defaults free to diverge (e.g. `verifyCommand`, `coordinator`).
+Marker bumped `files=41 tests=526` → `files=41 tests=537` (test-only addition; no shipped file changed).
