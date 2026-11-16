@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
@@ -487,5 +487,41 @@ describe("wrapLines", () => {
   test("the width cap is terminal cells, not code units — CJK counts two", () => {
     // 30 CJK glyphs = 60 cells; at 49 cells per line that is two lines, never one
     expect(wrapLines("床".repeat(30), 49)).toBe(2)
+  })
+})
+
+describe("formatSpend", () => {
+  const spend = { ...EMPTY_USAGE, input: 1_480_000, output: 2_100, cacheRead: 739_000, cost: 0.9 }
+
+  test("the full line renders tokens, cached volume and cost", () => {
+    expect(formatSpend(spend)).toBe("2.22M in \u00B7 2.1k out \u00B7 739k cached \u00B7 $0.90")
+  })
+
+  test("an absent cost renders tokens only — no fabricated $ figure", () => {
+    const noCost = { ...EMPTY_USAGE, input: 120_000, output: 8_400 }
+    expect(formatSpend(noCost)).toBe("120k in \u00B7 8.4k out")
+  })
+
+  test("a tight budget drops cached first, then out — the cost is the anchor", () => {
+    // 37 cells is the clamp-floor card's spend budget (width 52 - border 2 - padding 2 - LABEL 10 - gap 1)
+    expect(formatSpend(spend, 37)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
+    // 28-cell budget forces out as well
+    expect(formatSpend(spend, 28)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
+    expect(formatSpend(spend, 26)).toBe("2.22M in \u00B7 $0.90")
+    // 16 cells keeps tokens + anchor exactly (16 cells, fits)
+    expect(formatSpend(spend, 16)).toBe("2.22M in \u00B7 $0.90")
+    expect(formatSpend(spend, 15)).toBe("$0.90")
+  })
+
+  test("the cost is never dropped and never clipped mid-figure — even at a budget smaller than the cost", () => {
+    expect(formatSpend(spend, 5)).toBe("$0.90")
+    expect(formatSpend(spend, 3)).toBe("$0.90")
+    expect(formatSpend(spend, 0)).toBe("$0.90")
+  })
+
+  test("with a budget the degraded output never exceeds it while a figure remains to drop", () => {
+    for (const budget of [26, 30, 37, 41, 56]) {
+      expect(stringWidth(formatSpend(spend, budget))).toBeLessThanOrEqual(budget)
+    }
   })
 })

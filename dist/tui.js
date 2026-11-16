@@ -236,13 +236,21 @@ function formatCost(usd) {
     return "$0";
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;
 }
-function formatSpend(spend) {
+function formatSpend(spend, maxWidth = Number.POSITIVE_INFINITY) {
+  const cost = spend.cost > 0 ? formatCost(spend.cost) : undefined;
   const parts = [`${formatTokens(spend.input + spend.cacheRead + spend.cacheWrite)} in`, `${formatTokens(spend.output + spend.reasoning)} out`];
   if (spend.cacheRead > 0)
     parts.push(`${formatTokens(spend.cacheRead)} cached`);
-  if (spend.cost > 0)
-    parts.push(formatCost(spend.cost));
-  return parts.join(" \xB7 ");
+  const join = (tokens) => [...tokens, ...cost ? [cost] : []].join(" \xB7 ");
+  let tokens = parts;
+  let out = join(tokens);
+  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+    tokens = tokens.slice(0, -1);
+    out = join(tokens);
+  }
+  if (tokens.length === 0)
+    return cost ?? parts[0] ?? "";
+  return out;
 }
 function truncate(text, max, ellipsis = "\u2026") {
   if (max <= 0)
@@ -2014,6 +2022,7 @@ var cardWidth = (terminalWidth) => {
   return Math.max(CARD_WIDTH_MIN, Math.min(CARD_WIDTH_MAX, fitted));
 };
 var remediationWidth = (width) => Math.max(24, Math.floor(width) - 15);
+var spendWidth = (width) => Math.max(5, Math.floor(width) - 15);
 var conditionWidth = (width) => Math.max(20, Math.floor(width) - 22);
 var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => {
   const remediation = remediationFor(goal);
@@ -2397,7 +2406,7 @@ var HudCard = (props) => {
         _$setProp3(_el$22, "flexShrink", 0);
         _$setProp3(_el$22, "width", LABEL);
         _$setProp3(_el$24, "wrapMode", "none");
-        _$insert3(_el$24, () => formatSpend(spend()));
+        _$insert3(_el$24, () => formatSpend(spend(), spendWidth(width())));
         _$effect3((_p$) => {
           var _v$18 = theme().text.faint, _v$19 = theme().text.muted;
           _v$18 !== _p$.e && (_p$.e = _$setProp3(_el$22, "fg", _v$18, _p$.e));

@@ -97,11 +97,25 @@ export function diffUsage(current: UsageSnapshot, baseline: UsageSnapshot): Usag
   }
 }
 
-export function formatSpend(spend: UsageSnapshot): string {
+/**
+ * The spend line. With `maxWidth` (terminal cells), a degradation ladder applies when the content
+ * does not fit: the least decision-relevant segment drops first — cached, then out, then in — and
+ * the cost is the anchor, always kept whole and never clipped mid-figure. With no `maxWidth` the
+ * full line renders (the dialog's modal has room). An absent cost simply drops from the anchor.
+ */
+export function formatSpend(spend: UsageSnapshot, maxWidth: number = Number.POSITIVE_INFINITY): string {
+  const cost = spend.cost > 0 ? formatCost(spend.cost) : undefined
   const parts = [`${formatTokens(spend.input + spend.cacheRead + spend.cacheWrite)} in`, `${formatTokens(spend.output + spend.reasoning)} out`]
   if (spend.cacheRead > 0) parts.push(`${formatTokens(spend.cacheRead)} cached`)
-  if (spend.cost > 0) parts.push(formatCost(spend.cost))
-  return parts.join(" \u00B7 ")
+  const join = (tokens: string[]) => [...tokens, ...(cost ? [cost] : [])].join(" \u00B7 ")
+  let tokens = parts
+  let out = join(tokens)
+  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+    tokens = tokens.slice(0, -1)
+    out = join(tokens)
+  }
+  if (tokens.length === 0) return cost ?? parts[0] ?? ""
+  return out
 }
 
 const STATUS_LABEL: Record<GoalStatus, string> = {

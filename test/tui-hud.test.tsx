@@ -869,6 +869,21 @@ describe("HudCard", () => {
     await setup.renderer.destroy()
   })
 
+  test("the spend row never clips its cost at the clamp-floor width — cached drops, the cost stays whole", async () => {
+    const spend = { cost: 0.9, input: 1_480_000, output: 2_100, reasoning: 0, cacheRead: 739_000, cacheWrite: 0 }
+    const narrow = await render(() => (
+      <HudCard goal={loopedGoal({ spend })} theme={theme} elapsedMs={() => 1000 * 60 * 42} nowMs={() => now} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} width={52} />
+    ), 52, 12)
+    expect(narrow.frame).toContain("2.22M in")
+    expect(narrow.frame).toContain("$0.90")
+    expect(narrow.frame).not.toContain("cached")
+    const wide = await render(() => (
+      <HudCard goal={loopedGoal({ spend })} theme={theme} elapsedMs={() => 1000 * 60 * 42} nowMs={() => now} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ), 80, 12)
+    expect(wide.frame).toContain("739k cached")
+    expect(wide.frame).toContain("$0.90")
+  })
+
   test("a snapshot without spend renders no spend row — the row is a promise, not a placeholder", async () => {
     const { frame, setup } = await render(() => (
       <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
