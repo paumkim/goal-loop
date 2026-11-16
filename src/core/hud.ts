@@ -136,7 +136,8 @@ export interface Remediation {
 /**
  * Failure is a first-class screen: when the loop is hot, the goal is stuck failed or judged impossible,
  * say exactly what to do — never a vague warning. Returns undefined when everything is nominal.
- * Order matters: an unrecoverable failure outranks an impossible verdict, which outranks a stuck retry loop
+ * Order matters: an unrecoverable failure outranks an impossible verdict, which outranks a paused goal
+ * (the remedy depends on the persisted `pauseCause`), which outranks a stuck retry loop
  * (nothing executes at all), which outranks a hot compaction request, which outranks a verdict streak.
  */
 // Remediation strings stay short: the HUD card wraps them at ~49 columns (two rows are budgeted in
@@ -147,6 +148,14 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible · rephrase the condition, else /goal clear` }
+  }
+  // A paused goal stopped executing for exactly one of three reasons; the record carries which one, so the remedy is exact rather than generic (records persisted before pauseCause existed fall through to the catch-all line).
+  if (goal.status === "paused") {
+    const cause = goal.pauseCause
+    if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal — a message will not extend it` }
+    if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns · send a message to resume, or /goal clear` }
+    if (cause === "user") return { tone: "warning", text: `interrupted · send a message to resume` }
+    return { tone: "warning", text: `paused · send a message to resume, or /goal clear` }
   }
   if (isRetryStuck(goal)) {
     return { tone: "warning", text: `${goal.retries} failed turns in a row · check provider quota or settings · else /goal clear` }

@@ -68,6 +68,13 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot(loopedSnapshot())?.loopIteration).toBe(2)
   })
 
+  test("accepts a persisted pauseCause (cap / stall / user) and tolerates its absence", () => {
+    for (const cause of ["cap", "stall", "user"] as const) {
+      expect(parseGoalSnapshot({ ...snapshot(), status: "paused", pauseCause: cause })?.pauseCause).toBe(cause)
+    }
+    expect(parseGoalSnapshot(snapshot())?.pauseCause).toBeUndefined()
+  })
+
   test("accepts omitted optional fields (legacy records)", () => {
     expect(parseGoalSnapshot(snapshot())?.reason).toBeUndefined()
     expect(parseGoalSnapshot(snapshot())?.loopHistory).toBeUndefined()
@@ -106,6 +113,8 @@ describe("parseGoalSnapshot", () => {
       ["loopCompact without misses", broken((d) => void (d.loopCompact = { requestedAt: 1, iteration: 1 }))],
       ["spend with a string output", broken((d) => void (d.spend = { cost: 0, input: 0, output: "0", reasoning: 0, cacheRead: 0, cacheWrite: 0 }))],
       ["unknown reason type", broken((d) => void (d.reason = 42))],
+      ["unknown pauseCause", broken((d) => void (d.pauseCause = "forever"))],
+      ["non-string pauseCause", broken((d) => void (d.pauseCause = 3))],
       ["unknown verdict", broken((d) => void (d.verdict = "sure"))],
     ]
     for (const [, value] of cases) expect(parseGoalSnapshot(value)).toBeUndefined()

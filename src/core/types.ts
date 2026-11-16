@@ -107,6 +107,9 @@ export interface LoopCompactState {
   unwillingWarned?: boolean
 }
 
+/** Why the goal paused. Machine-readable so the HUD can render the exact remedy instead of a generic hint; absent on records persisted before this field existed (restore falls back to the generic line). */
+export type PauseCause = "cap" | "stall" | "user"
+
 export interface GoalRecord {
   readonly version: 1
   readonly id: string
@@ -126,6 +129,8 @@ export interface GoalRecord {
   turns: number
   /** Consecutive evaluated turns without tool use. */
   stall: number
+  /** Why the goal is paused; set when entering the paused status, cleared on resume/finish. Absent outside paused records and on pre-pauseCause persisted records. */
+  pauseCause?: PauseCause
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */

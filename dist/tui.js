@@ -315,6 +315,16 @@ var remediationFor = (goal) => {
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible \xB7 rephrase the condition, else /goal clear` };
   }
+  if (goal.status === "paused") {
+    const cause = goal.pauseCause;
+    if (cause === "cap")
+      return { tone: "warning", text: `turn cap reached \xB7 /goal clear or set a new goal \u2014 a message will not extend it` };
+    if (cause === "stall")
+      return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
+    if (cause === "user")
+      return { tone: "warning", text: `interrupted \xB7 send a message to resume` };
+    return { tone: "warning", text: `paused \xB7 send a message to resume, or /goal clear` };
+  }
   if (isRetryStuck(goal)) {
     return { tone: "warning", text: `${goal.retries} failed turns in a row \xB7 check provider quota or settings \xB7 else /goal clear` };
   }
@@ -1463,6 +1473,8 @@ var isString = (value) => typeof value === "string";
 var isBoolean = (value) => typeof value === "boolean";
 var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
+var PAUSE_CAUSES = new Set(["cap", "stall", "user"]);
+var isPauseCause = (value) => isString(value) && PAUSE_CAUSES.has(value);
 var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
 var VERDICTS = new Set(["met", "not_met", "impossible"]);
 var isVerdict = (value) => isString(value) && VERDICTS.has(value);
@@ -1498,6 +1510,8 @@ var isGoalSnapshot = (value) => {
   if (!isGoalStatus(value.status))
     return false;
   if (value.reason !== undefined && !isString(value.reason))
+    return false;
+  if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause))
     return false;
   if (value.verdict !== undefined && !isVerdict(value.verdict))
     return false;

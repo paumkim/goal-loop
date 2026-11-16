@@ -316,6 +316,19 @@ describe("retry watch", () => {
     expect(frame).toContain("/goal clear")
   })
 
+  test("a cap-paused goal renders the exact cap remedy in the dialog fix row", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ status: "paused", pauseCause: "cap", reason: "Reached the 20-turn safety limit." })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("fix")
+    expect(frame).toContain("turn cap reached")
+    expect(frame).toContain("will not extend")
+  })
+
+  test("a stall-paused goal renders the nudge remedy in the dialog fix row", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ status: "paused", pauseCause: "stall", stall: 3 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("no tool use for 3 turns")
+    expect(frame).toContain("message to resume")
+  })
+
   test("a nominal goal renders no fix row", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).not.toContain("fix")

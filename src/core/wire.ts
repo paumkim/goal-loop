@@ -8,6 +8,7 @@
 import type {
   GoalSnapshot,
   GoalStatus,
+  PauseCause,
   LoopCompactState,
   LoopEntry,
   Notice,
@@ -27,6 +28,8 @@ const isBoolean = (value: unknown): value is boolean => typeof value === "boolea
 const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
 const GOAL_STATUSES: ReadonlySet<string> = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"])
+const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user"])
+const isPauseCause = (value: unknown): value is PauseCause => isString(value) && PAUSE_CAUSES.has(value)
 const isGoalStatus = (value: unknown): value is GoalStatus => isString(value) && GOAL_STATUSES.has(value)
 
 const VERDICTS: ReadonlySet<string> = new Set(["met", "not_met", "impossible"])
@@ -96,6 +99,7 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (!isString(value.id) || value.id === "" || !isString(value.sessionID) || value.sessionID === "" || !isString(value.directory) || !isString(value.condition)) return false
   if (!isGoalStatus(value.status)) return false
   if (value.reason !== undefined && !isString(value.reason)) return false
+  if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause)) return false
   if (value.verdict !== undefined && !isVerdict(value.verdict)) return false
   if (!isFiniteNumber(value.setAt) || !isFiniteNumber(value.startedAt)) return false
   if (value.endedAt !== undefined && !isFiniteNumber(value.endedAt)) return false

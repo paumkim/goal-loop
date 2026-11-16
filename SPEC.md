@@ -33,7 +33,14 @@ reaching 3 swaps the ambient pill's state word `active` → `stuck` and appends 
 warning family; the HUD card mirrors it (the `now` row reads `stuck` in amber and the card border joins the
 amber family, exactly like a hot compaction), and the `fix` row names
 the exact exits (`check provider quota or settings · else /goal clear`) on the card and in the dialog — a
-stuck-retrying goal outranks a hot compaction in the remediation order, because nothing executes at all. When a goal goes live→terminal (achieved / impossible / failed, never
+stuck-retrying goal outranks a hot compaction in the remediation order, because nothing executes at all.
+A paused goal is the same class of screen: the record carries a machine-readable `pauseCause` (`cap` /
+`stall` / `user`, set at the pause site, cleared on resume and on finish; records persisted before the
+field existed restore without it), and the `fix` row names the exact exit — `turn cap reached · /goal
+clear or set a new goal — a message will not extend it` at the turn cap, `no tool use for N turns · send
+a message to resume, or /goal clear` for the stall guard, `interrupted · send a message to resume` for a
+user abort; legacy paused records without a cause fall back to `paused · send a message to resume, or
+/goal clear`. A paused goal outranks a stuck retry loop in the remediation order. When a goal goes live→terminal (achieved / impossible / failed, never
 `cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
 (`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
 wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
@@ -423,7 +430,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=673 -->
+<!-- spec-check files=43 tests=683 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

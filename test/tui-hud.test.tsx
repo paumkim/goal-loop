@@ -208,6 +208,38 @@ describe("remediationFor", () => {
   })
 })
 
+describe("remediationFor paused", () => {
+  test("a cap-paused goal gets the cap remedy, never a resume hint", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "cap" }))
+    expect(fix?.tone).toBe("warning")
+    expect(fix?.text).toContain("turn cap reached")
+    expect(fix?.text).toContain("will not extend it")
+    expect(fix?.text).not.toContain("message to resume")
+  })
+
+  test("a stall-paused goal gets the nudge remedy with the stall count", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "stall", stall: 4 }))
+    expect(fix?.tone).toBe("warning")
+    expect(fix?.text).toContain("no tool use for 4 turns")
+    expect(fix?.text).toContain("send a message to resume")
+  })
+
+  test("a user-interrupted pause gets the resume remedy", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "user" }))
+    expect(fix?.text).toBe("interrupted · send a message to resume")
+  })
+
+  test("a paused record persisted before pauseCause falls back to the generic remedy", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused" }))
+    expect(fix?.text).toBe("paused · send a message to resume, or /goal clear")
+  })
+
+  test("a paused goal outranks a stuck retry loop", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "user", retries: 6 }))
+    expect(fix?.text).toContain("interrupted")
+  })
+})
+
 describe("pinSuffix", () => {
   test("returns empty when the condition budget is below PIN_MIN_WIDTH or not finite", () => {
     expect(pinSuffix("condition", 11)).toBe("")
@@ -292,6 +324,7 @@ describe("hudCardRows", () => {
   test("grows by one row for the last-verdict line and one for the remediation", () => {
     expect(hudCardRows(loopedGoal())).toBe(6)
     expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(8)
+    expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(8)
     const { history: _h, ...noHistory } = loopedGoal()
     expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
   })
