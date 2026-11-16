@@ -1328,6 +1328,17 @@
       "submittedAt": "2026-11-16T06:19:40Z",
       "mergedAt": "2026-11-16T06:19:55Z",
       "mergedInto": "dev"
+    },
+    "tui-outcome-story": {
+      "agent": "orchestrator",
+      "paths": "src/core/format.ts,src/runtime/controller.ts,test/core.test.ts,test/controller.test.ts,SPEC.md,dist",
+      "branch": "wt/tui-outcome-story",
+      "worktree": "worktrees/wt-tui-outcome-story",
+      "status": "done",
+      "createdAt": "2026-11-16T06:21:56Z",
+      "submittedAt": "2026-11-16T06:24:13Z",
+      "mergedAt": "2026-11-16T06:24:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
