@@ -876,6 +876,17 @@
       "submittedAt": "2026-11-16T20:26:44Z",
       "worktree": "worktrees/wt-iteration-98-sealed-dossier"
     },
+    "iteration-99-attest-sealed-dossier": {
+      "agent": "orchestrator",
+      "branch": "wt/iteration-99-attest-sealed-dossier",
+      "createdAt": "2026-11-16T20:34:28Z",
+      "mergedAt": "2026-11-16T20:41:34Z",
+      "mergedInto": "dev",
+      "paths": "src/core/dossier-attest.ts,src/tui.tsx,test/dossier-attest.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
+      "status": "done",
+      "submittedAt": "2026-11-16T20:39:54Z",
+      "worktree": "worktrees/wt-iteration-99-attest-sealed-dossier"
+    },
     "loop-compact-coalesce": {
       "agent": "orchestrator",
       "branch": "wt/loop-compact-coalesce",
