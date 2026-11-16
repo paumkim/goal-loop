@@ -1152,6 +1152,17 @@
       "submittedAt": "2026-11-16T02:52:47Z",
       "mergedAt": "2026-11-16T02:53:00Z",
       "mergedInto": "dev"
+    },
+    "ci-workflow-test": {
+      "agent": "opencode",
+      "paths": "test/ci-workflow.test.ts,SPEC.md",
+      "branch": "wt/ci-workflow-test",
+      "worktree": "worktrees/wt-ci-workflow-test",
+      "status": "done",
+      "createdAt": "2026-11-16T02:54:52Z",
+      "submittedAt": "2026-11-16T02:55:46Z",
+      "mergedAt": "2026-11-16T02:55:59Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
