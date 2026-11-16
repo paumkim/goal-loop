@@ -3320,3 +3320,23 @@ exists to enforce. DE had threaded the parameter; nothing yet bounded the ellips
 Verification (all run in the worktree): bun run compile, bun test test/core.test.ts (86 pass),
 bun run check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev
 shown green at the end. Evidence is source + predicate layers only; live TUI remains unverifiable.
+## Workstream DH — the last unconditional painted em-dash leaves the reduced-color surface (2026-11-16)
+
+Interpretation of this iteration: a full painted-glyph enumeration at 49e625c (every non-ASCII char in
+src/, comments excluded, each triaged against an ascii()/motionDisabled arm) found exactly one remaining
+unconditional chrome leak — an em-dash in EVALUATOR_HINT_FULL, the dialog's teaching-row copy. It had
+been visible in the DE enumeration output and was missed then; this slice closes it. Everything else
+enumerated routes through an ascii arm already (BAR/PIP arms, spark gap/truncation, verdict glyphs, the
+pill caret, copied suffixes, the rail connector/caption/fold label, truncations, the card's copied ack),
+is an U+00B7 middle dot (documented tolerated, clause 317), or is plain-text surface (formatStatus,
+notify/toast text, LLM-facing prompts, model-authored reasons) which DE and this audit both leave alone.
+
+328. EVALUATOR_HINT_FULL paints " - " (ASCII hyphen) instead of U+2014 — unconditional, width-1,
+     information-preserving (DE doctrine). Marker unchanged: no test function added or removed; the
+     string is pinned by identity (toBe(EVALUATOR_HINT_FULL)), and the one named frame carrying the
+     text (StatusDialogBody · freshly armed) was re-pinned PROGRAMMATICALLY (TZ=UTC), touching exactly
+     the hint row. Marker files=43 tests=827 UNCHANGED.
+
+Verification (all run in the worktree): bun run compile, bun test tui-snapshots (21 pass), bun run
+check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev shown
+green at the end. Evidence is source + render layers only; live TUI remains unverifiable.

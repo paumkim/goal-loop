@@ -183,7 +183,7 @@ exports[`full-frame snapshots (named layout states) StatusDialogBody · freshly 
                                                                                                     
 goal        ship the release notes                                                                  
                                                                                                     
-hint        the evaluator reads only the transcript — it cannot run commands; prove the condition   
+hint        the evaluator reads only the transcript - it cannot run commands; prove the condition   
             with visible output                                                                     
                                                                                                     
 loop        v1 of at most 5 · 0 complete                                                            
