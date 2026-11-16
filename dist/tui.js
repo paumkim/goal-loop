@@ -363,15 +363,50 @@ function paceEstimate(durations, max) {
   const perIteration = durations.reduce((sum, span) => sum + span, 0) / durations.length;
   return { perIteration, remaining: perIteration * left };
 }
+var mixCache;
 function iterationVerdictMix(history, entries, setAt) {
-  const out = [];
-  let start = setAt;
-  for (const entry of entries) {
-    const end = entry.endedAt;
-    const slice = history.filter((verdict) => verdict.at > start && verdict.at <= end);
-    out.push(slice.length === 0 ? undefined : verdictCounts(slice));
-    start = end;
+  if (mixCache !== undefined && mixCache.history === history && mixCache.entries === entries && mixCache.setAt === setAt)
+    return mixCache.out;
+  const counts = entries.map(() => ({ met: 0, not_met: 0, impossible: 0, total: 0 }));
+  const ended = entries.map((entry) => entry.endedAt);
+  let window = 0;
+  const span = entries.length;
+  let previous = Number.NEGATIVE_INFINITY;
+  let monotone = true;
+  for (const verdict of history) {
+    const at = verdict.at;
+    if (at < previous) {
+      monotone = false;
+      break;
+    }
+    previous = at;
+    if (at <= setAt)
+      continue;
+    while (window < span) {
+      const end = ended[window];
+      if (end === undefined || at <= end)
+        break;
+      window += 1;
+    }
+    if (window >= span)
+      break;
+    const bucket = counts[window];
+    if (!bucket)
+      continue;
+    if (verdict.verdict === "met")
+      bucket.met += 1;
+    else if (verdict.verdict === "impossible")
+      bucket.impossible += 1;
+    else
+      bucket.not_met += 1;
+    bucket.total += 1;
   }
+  const out = monotone ? counts.map((bucket) => bucket.total === 0 ? undefined : bucket) : entries.map((entry, index) => {
+    const from = index === 0 ? setAt : entries[index - 1].endedAt;
+    const slice = history.filter((verdict) => verdict.at > from && verdict.at <= entry.endedAt);
+    return slice.length === 0 ? undefined : verdictCounts(slice);
+  });
+  mixCache = { history, entries, setAt, out };
   return out;
 }
 function verdictStreak(history) {

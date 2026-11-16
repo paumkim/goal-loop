@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=817 -->
+<!-- spec-check files=43 tests=820 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3028,4 +3028,35 @@ remains the live public artifact; all work is local on dev. No docs line referen
 by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (817 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CW — the verdict mix is a single pass with an identity memo (2026-11-16)
+
+Interpretation of this iteration: audit finding A3 (fresh re-audit at dev HEAD c9c08cf,
+ses_e1c980f2fffeR6lPzktJKz2sQs) — iterationVerdictMix re-filtered the full verdict history once per
+rail entry (O(h × n) with an array allocation per window) on every reactive invalidation of the
+dialog.
+
+298. src/core/history.ts: iterationVerdictMix is now O(h + n). Verdicts bucket into their
+     (from, to] windows in one pass with a sliding window pointer (windows are contiguous and in
+     `entries` array order; a verdict belongs to the first window whose endedAt it does not
+     precede). Semantics are byte-identical for monotone histories — verdicts at or before setAt
+     belong to no window, verdicts past the last window's endedAt belong to no window, a window
+     verdict exactly at endedAt joins it. A non-monotone history falls back to the original filter
+     read, so pathological input can never paint a different frame than before.
+299. A single-slot identity memo ((history ref, entries ref, setAt)) caches the result across the
+     render loop's repeated invalidations; the cached array is shared, never copied — the render
+     hot path now costs one property read per verdict instead of h × n comparisons plus a fresh
+     allocation per window per invalidation.
+
+300. Evidence: unit layer (test/history.test.ts): the identity memo returns the identical array
+     for the same refs and recomputes for a fresh history ref; an O-behavior proxy pins the scan at
+     one verdict read per verdict (≤ H + 4 getter invocations over 400 verdicts and 40 windows);
+     a non-monotone history yields the same frame as the filter read. Existing mix tests
+     unchanged and green. Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=817 to files=43 tests=820. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (820 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.
