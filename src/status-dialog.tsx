@@ -8,8 +8,8 @@ import { Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
-import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint } from "./core/hud.ts"
-import { contextMeter } from "./core/history.ts"
+import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
+import { contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
@@ -32,6 +32,8 @@ export const StatusDialogBody = (props: {
   onCopySummary?: (summary: string, version: number) => void
 }): JSX.Element => {
   const theme = () => props.theme
+  // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
+  const ascii = motionDisabled(process.env)
   const mono = () => props.mono === true
   const label = (text: string) => (
     <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
@@ -158,7 +160,7 @@ export const StatusDialogBody = (props: {
           {/* context estimate vs the auto-compact threshold — the dial the boundary compaction reads; omitted entirely when the server could not estimate */}
           <Show when={goal().contextSize !== undefined}>
             {(() => {
-              const meter = () => contextMeter(goal().contextSize as number, goal().compactAtTokens)
+              const meter = () => contextMeter(goal().contextSize as number, goal().compactAtTokens, CONTEXT_BAR_CELLS, ascii)
               const hot = () => meter().hot
               const fg = () => (mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
               return (

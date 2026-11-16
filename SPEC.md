@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=757 -->
+<!-- spec-check files=43 tests=763 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2448,3 +2448,36 @@ local on dev. No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run check green (757 tests), coordinator submit +
 merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CB — ASCII demotion for dumb terminals (2026-11-16)
+
+Interpretation of this iteration: the brief demands "ASCII/Unicode-safe fallbacks". The reduced-color
+surface (NO_COLOR / TERM=dumb) dropped chromatic accents but kept painting █ ░ ▁▂▃▄▅▆▇ — eighth-block
+glyphs a genuinely dumb terminal cannot render. This workstream demotes every bar glyph to
+ink-density ASCII under the same env predicate; no chrome, layout, spacing or motion changes.
+
+245. src/core/history.ts: renderBar, contextSparkline and contextMeter gain an optional `ascii` flag
+     (Unicode stays the default — every existing caller is byte-compatible). New exported constants:
+     BAR_FILLED/BAR_EMPTY (█/░), BAR_FILLED_ASCII/BAR_EMPTY_ASCII (#/-), SPARK_GLYPHS_ASCII
+     (ink-density "." ":" "-" "=" "+" "*" "#" "@"), SPARK_GAP_ASCII (" "), SPARK_TRUNC_ASCII (">").
+     ASCII mode semantics: gap = a void cell (absence is honest), truncation lead-in = `>`, peak-0
+     renders the lowest ramp glyph. Two-tone loop progress bar keeps its info/faint tone split, now
+     sourced from renderBar's text instead of hardcoded literals (previously the component repeated
+     █/░ inline and ignored renderBar's pair entirely).
+246. Components evaluate `motionDisabled(process.env)` once per mount (same predicate as reduced
+     motion) and pass it down: LoopSection (progress bar, context sparkline) and StatusDialogBody
+     (context meter). HistoryBlock/VerdictTrail glyphs (✓ ✗ ⊘ ●○·│) are letterform/geometric glyphs
+     with the same coverage class as ASCII punctuation and are intentionally not demoted. The ambient
+     pill remains inline-in-slot (unchangeable here); its glyphs (◎ ✓ ·) are likewise geometric.
+
+Evidence: unit tests (renderBar/contextSparkline/contextMeter ASCII paths, unmeasurable-gap void,
+peak-0, truncation marker, clamp — test/history.test.ts) plus render tests under NO_COLOR=1
+(LoopSection bar renders # and never █; sparkline row never emits eighth-blocks —
+test/tui-render.test.tsx). Unicode frames are byte-identical to before (snapshot suite green,
+unmodified). Fresh evidence only; no live claim is made.
+
+Marker bumped files=43 tests=757 to files=43 tests=763. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched.
+
+Verification (all run in the worktree): bun run compile, bun run check green (763 tests),
+coordinator submit + merge-next, and bun run check on dev shown green at the end.

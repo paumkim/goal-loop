@@ -811,3 +811,39 @@ describe("dialog hover grammar (mouse over reveals the affordance)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("ASCII demotion (NO_COLOR / TERM=dumb)", () => {
+  test("LoopSection paints bars as ink-density ASCII and never emits eighth-blocks or box glyphs unrenderable on dumb terminals", async () => {
+    const previous = process.env.NO_COLOR
+    process.env.NO_COLOR = "1"
+    try {
+      const frame = await render(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 40} nowMs={() => now} />, 100, 40)
+      expect(frame).toContain("###")
+      expect(frame).not.toContain("█")
+      expect(frame).not.toContain("░")
+    } finally {
+      if (previous === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = previous
+    }
+  })
+
+  test("LoopSection sparkline row demotes to the ASCII ramp when NO_COLOR is set", async () => {
+    const previous = process.env.NO_COLOR
+    process.env.NO_COLOR = "1"
+    try {
+      const withContext = loopedGoal({
+        loopHistory: [
+          { version: 1, condition: "add a progress bar", summary: "Added an 18-cell block progress bar.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, contextTokens: 41_000 },
+          { version: 2, condition: "render the verdict trail", summary: "Trail renders up to 24 verdicts.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, contextTokens: 91_000 },
+        ],
+      })
+      const frame = await render(() => <LoopSection goal={withContext} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, 100, 30)
+      expect(frame).toContain("context")
+      expect(frame).not.toContain("▄")
+      expect(frame).not.toContain("█")
+    } finally {
+      if (previous === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = previous
+    }
+  })
+})

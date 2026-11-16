@@ -426,3 +426,36 @@ describe("contextMeter", () => {
     expect(meter.hot).toBe(false)
   })
 })
+
+describe("ASCII demotion (NO_COLOR / TERM=dumb)", () => {
+  test("renderBar paints the same shape in ink-density ASCII under ascii=true", () => {
+    expect(renderBar(1, 2, 8, true).text).toBe("####----")
+    expect(renderBar(0, 5, 8, true).text).toBe("--------")
+    expect(renderBar(5, 5, 8, true).text).toBe("########")
+    expect(renderBar(99, 5, 8, true).text).toBe("########")
+    expect(renderBar(1, 2, 8).text).toBe("████░░░░")
+  })
+
+  test("contextSparkline maps levels onto the ASCII ramp, gaps become voids, truncation becomes >", () => {
+    // Level = min(7, floor(value / peak * 8)) onto ".", ":", "-", "=", "+", "*", "#", "@"
+    const ramp = contextSparkline([{ contextTokens: 10_000 }, {}, { contextTokens: 40_000 }, { contextTokens: 80_000 }], true)!
+    // idx 1 = ":" (10k/80k), gap = " " (void), idx 4 = "+" (40k/80k), idx 7 = "@" (peak) — exactly four cells
+    expect(ramp.bars).toBe(": +@")
+    const truncated = contextSparkline(Array.from({ length: 20 }, (_, index) => ({ contextTokens: (index + 1) * 1_000 })), true)!
+    expect(truncated.bars.startsWith(">")).toBe(true)
+    expect(truncated.bars).not.toContain("…")
+  })
+
+  test("contextSparkline ascii peak-0 renders the lowest ramp glyph, not eighth-blocks", () => {
+    const spark = contextSparkline([{ contextTokens: 0 }, { contextTokens: 0 }], true)!
+    expect(spark.bars).toBe("..")
+    expect(spark.bars).not.toContain("▁")
+  })
+
+  test("contextMeter paints the same shape in ink-density ASCII under ascii=true", () => {
+    const meter = contextMeter(50_000, 100_000, 10, true)
+    expect(meter.text).toBe("#####-----")
+    expect(meter.pct).toBe(50)
+    expect(contextMeter(0, undefined, 10, true).text).toBe("----------")
+  })
+})
