@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, pillCaret, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -819,5 +819,17 @@ describe("zero-tool iterations in the ledger", () => {
     expect(frame).toContain("✓")
     expect(frame).not.toContain("inspection only")
     await setup.renderer.destroy()
+  })
+})
+
+describe("pillCaret", () => {
+  test("the glyph is ▾ while the card is painted, ▸ while it is not", () => {
+    expect(pillCaret(true)).toBe("▾")
+    expect(pillCaret(false)).toBe("▸")
+  })
+
+  test("ASCII demotes to v and > under NO_COLOR / TERM=dumb", () => {
+    expect(pillCaret(true, true)).toBe("v")
+    expect(pillCaret(false, true)).toBe(">")
   })
 })

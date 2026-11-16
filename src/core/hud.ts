@@ -44,6 +44,12 @@ const stateWord = (goal: GoalSnapshot): string =>
           ? "stuck"
           : "active"
 
+/** The pill's open/closed affordance: a leading caret, `▾` while the card is painted, `▸` while it is not.
+ * Truthful to the card's presence (the caller keys it to the card actually rendering, not merely to the session's
+ * hud slot). ASCII demotes to `v`/`>` under NO_COLOR / TERM=dumb — the same predicate the pips, bar and sparkline use.
+ */
+export const pillCaret = (open: boolean, ascii: boolean = false): string => open ? (ascii ? "v" : "▾") : (ascii ? ">" : "▸")
+
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
  * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with `…`

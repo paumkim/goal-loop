@@ -17,7 +17,7 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -527,10 +527,10 @@ export default Plugin.define({
           try {
             const g = goal()
             // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
-          // minus the landing acknowledgment suffix when it rides the same line. Walks the degradation
-          // ladder (retry → compact → turns → pips) before truncating the core, so an 80-column floor
-          // never clips the state the pill exists to show.
-          const budget = Math.max(1, dimensions().width - 2 - (landingNow() ? LANDING_SUFFIX.length : 0))
+          // 2 cells for the open/closed caret prefix, minus the landing acknowledgment suffix when it rides
+          // the same line. Walks the degradation ladder (retry → compact → turns → pips) before truncating
+          // the core, so an 80-column floor never clips the state the pill exists to show.
+          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? LANDING_SUFFIX.length : 0))
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -542,15 +542,21 @@ export default Plugin.define({
         const dimensions = useTerminalDimensions()
         const pinnedNow = () => isPinned(props.sessionID)
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
+        // The leading caret is the pill's open/closed affordance: ▾ while the card is painted, ▸ while
+        // it is not. Keyed to the card actually rendering (not merely the session's hud slot), so the
+        // glyph never claims “open” over a missing card. Two cells, already reserved by the label budget.
+        const caret = () =>
+          pillCaret(getHudSession() === props.sessionID && cardFor() !== undefined, motionDisabled(process.env)) + " "
         const pillText = () => {
           const model = pill()
           if (!model) return ""
           const landed = landingNow() ? LANDING_SUFFIX : ""
-          if (!pinnedNow()) return model.text + landed
+          const prefix = caret()
+          if (!pinnedNow()) return prefix + model.text + landed
           const g = goal()
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
-          const base = model.text + landed
+          const base = prefix + model.text + landed
           return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base
         }
         // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
