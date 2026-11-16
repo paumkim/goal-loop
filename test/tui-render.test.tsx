@@ -1638,3 +1638,79 @@ describe("view tabs (overview · ledger)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("verdict trail as a control (mouse — the timeline scrubs, not just reports)", () => {
+  const trailGoal = (): GoalSnapshot => loopedGoal({
+    history: [
+      { turn: 1, verdict: "not_met", reason: "api shape still wrong", at: now - 1000 * 60 * 60 },
+      { turn: 2, verdict: "met", reason: "refactor landed green", at: now - 1000 * 60 * 30 },
+      { turn: 3, verdict: "not_met", reason: "", at: now - 1000 * 60 * 10 }, // an empty reason stays an inert picture
+    ],
+  })
+  const trailRender = (goal: GoalSnapshot, width = 100, height = 40) =>
+    testRender(() => <LoopSection goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={(r) => { copied.push(r) }} />, { width, height })
+  const copied: string[] = []
+  const dotX = (frame: string, index: number) => {
+    const at = findIn(frame, "trail")
+    expect(at).toBeDefined()
+    return at!.x + 10 + 2 + index // label column (10) + gap (2) + the dot's ordinal cell
+  }
+
+  test("clicking the timeline's dots copies that turn's reason — earlier verdicts are reachable, not just the last three", async () => {
+    copied.length = 0
+    const setup = await trailRender(trailGoal())
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    // Turn 1 — the reason the why ledger would not reach from here (the ledger shows newest first, 3 max)
+    await setup.mockMouse.click(dotX(frame, 0), findIn(frame, "trail")!.y)
+    // Turn 2 — a different reason, from a different dot
+    await setup.mockMouse.click(dotX(frame, 1), findIn(frame, "trail")!.y)
+    await setup.renderOnce()
+    expect(copied).toEqual(["api shape still wrong", "refactor landed green"])
+    await setup.renderer.destroy()
+  })
+
+  test("left click activates, right click is inert — button discipline is the same everywhere else in the dialog", async () => {
+    copied.length = 0
+    const setup = await trailRender(trailGoal())
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const y = findIn(frame, "trail")!.y
+    await setup.mockMouse.click(dotX(frame, 0), y, 2)
+    await setup.renderOnce()
+    expect(copied).toEqual([])
+    await setup.renderer.destroy()
+  })
+
+  test("a dot whose reason is empty is inert — the picture paints, no copy fires", async () => {
+    copied.length = 0
+    const setup = await trailRender(trailGoal())
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const y = findIn(frame, "trail")!.y
+    await setup.mockMouse.click(dotX(frame, 2), y)
+    await setup.renderOnce()
+    expect(copied).toEqual([])
+    await setup.renderer.destroy()
+  })
+
+  test("hover names the turn; the resting frame carries no hover tag; a click adds the copied acknowledgment", async () => {
+    copied.length = 0
+    const setup = await trailRender(trailGoal())
+    await setup.renderOnce()
+    const rest = setup.captureCharFrame()
+    expect(rest).not.toContain("verdicts · turn 2")
+    const x = dotX(rest, 1)
+    const y = findIn(rest, "trail")!.y
+    await setup.mockMouse.moveTo(x, y)
+    await setup.renderOnce()
+    const hovered = setup.captureCharFrame()
+    expect(hovered).toContain("verdicts · turn 2")
+    expect(hovered).not.toContain("✓ copied")
+    await setup.mockMouse.click(x, y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("verdicts · turn 2 · ✓ copied")
+    expect(copied).toEqual(["refactor landed green"])
+    await setup.renderer.destroy()
+  })
+})

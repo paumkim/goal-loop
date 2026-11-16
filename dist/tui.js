@@ -1410,6 +1410,27 @@ var VerdictTrail = (props) => {
   const mono = () => props.mono === true;
   const ascii = () => props.ascii?.() === true || motionDisabled(process.env);
   const trail = () => trailWindow(props.history, 24);
+  const [hovered, setHovered] = createSignal(null);
+  const [copiedTurn, setCopiedTurn] = createSignal(null);
+  let copiedTimer;
+  onCleanup(() => {
+    if (copiedTimer)
+      clearTimeout(copiedTimer);
+  });
+  const interactive = () => props.onCopyReason !== undefined;
+  const hoveredEntry = () => trail().shown.find((entry) => entry.turn === hovered());
+  const copyAt = (entry) => {
+    if (!props.onCopyReason || entry.reason.trim().length === 0)
+      return;
+    try {
+      props.onCopyReason(entry.reason);
+      setCopiedTurn(entry.turn);
+      if (copiedTimer)
+        clearTimeout(copiedTimer);
+      copiedTimer = setTimeout(() => setCopiedTurn(null), 1600);
+    } catch {}
+  };
+  const copyHint = (entry) => entry.reason.trim().length > 0;
   return _$createComponent(Show, {
     get when() {
       return trail().shown.length > 0;
@@ -1430,13 +1451,34 @@ var VerdictTrail = (props) => {
         get each() {
           return trail().shown;
         },
-        children: (entry) => (() => {
-          var _el$51 = _$createElement("text");
-          _$setProp(_el$51, "wrapMode", "none");
-          _$insert(_el$51, () => verdictEntryGlyph(entry, ascii()));
-          _$effect((_$p) => _$setProp(_el$51, "fg", colorFor(props.theme, entry, mono()), _$p));
-          return _el$51;
-        })()
+        children: (entry) => {
+          const copyable = interactive() && copyHint(entry);
+          return (() => {
+            var _el$51 = _$createElement("box"), _el$52 = _$createElement("text");
+            _$insertNode(_el$51, _el$52);
+            _$setProp(_el$51, "flexDirection", "row");
+            _$setProp(_el$51, "onMouseUp", copyable ? (event) => {
+              if (event.button !== 0)
+                return;
+              event.stopPropagation();
+              copyAt(entry);
+            } : undefined);
+            _$setProp(_el$51, "onMouseOver", () => setHovered(entry.turn));
+            _$setProp(_el$51, "onMouseOut", () => setHovered(null));
+            _$setProp(_el$52, "wrapMode", "none");
+            _$insert(_el$52, () => verdictEntryGlyph(entry, ascii()));
+            _$effect((_p$) => {
+              var _v$27 = colorFor(props.theme, entry, mono()), _v$28 = hovered() === entry.turn ? TextAttributes.BOLD : undefined;
+              _v$27 !== _p$.e && (_p$.e = _$setProp(_el$52, "fg", _v$27, _p$.e));
+              _v$28 !== _p$.t && (_p$.t = _$setProp(_el$52, "attributes", _v$28, _p$.t));
+              return _p$;
+            }, {
+              e: undefined,
+              t: undefined
+            });
+            return _el$51;
+          })();
+        }
       }));
       _$insertNode(_el$47, _el$48);
       _$insertNode(_el$47, _el$49);
@@ -1446,6 +1488,13 @@ var VerdictTrail = (props) => {
       _$insert(_el$47, () => trail().shown.length, _el$49);
       _$insert(_el$47, () => trail().total, _el$50);
       _$insert(_el$47, () => trail().total === 1 ? "" : "s", null);
+      _$insert(_el$47, () => {
+        const h = hoveredEntry();
+        if (!h)
+          return "";
+        const ack = copiedTurn() === h.turn ? ascii() ? " \xB7 + copied" : " \xB7 \u2713 copied" : "";
+        return ` \xB7 turn ${h.turn}${ack}`;
+      }, null);
       _$insert(_el$44, _$createComponent(WhyLedger, {
         get theme() {
           return props.theme;
@@ -1493,56 +1542,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$52 = _$createElement("box"), _el$53 = _$createElement("box");
-    _$insertNode(_el$52, _el$53);
-    _$setProp(_el$52, "flexDirection", "column");
-    _$setProp(_el$52, "gap", 1);
-    _$setProp(_el$53, "flexDirection", "row");
-    _$setProp(_el$53, "gap", 2);
-    _$insert(_el$53, () => label(theme(), "history"), null);
-    _$insert(_el$53, _$createComponent(Show, {
+    var _el$53 = _$createElement("box"), _el$54 = _$createElement("box");
+    _$insertNode(_el$53, _el$54);
+    _$setProp(_el$53, "flexDirection", "column");
+    _$setProp(_el$53, "gap", 1);
+    _$setProp(_el$54, "flexDirection", "row");
+    _$setProp(_el$54, "gap", 2);
+    _$insert(_el$54, () => label(theme(), "history"), null);
+    _$insert(_el$54, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$54 = _$createElement("text"), _el$55 = _$createTextNode(`no verdicts yet \xB7 `), _el$56 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$54, _el$55);
-          _$insertNode(_el$54, _el$56);
-          _$setProp(_el$54, "wrapMode", "none");
-          _$insert(_el$54, elapsed, _el$56);
-          _$effect((_$p) => _$setProp(_el$54, "fg", theme().text.faint, _$p));
-          return _el$54;
+          var _el$55 = _$createElement("text"), _el$56 = _$createTextNode(`no verdicts yet \xB7 `), _el$57 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$55, _el$56);
+          _$insertNode(_el$55, _el$57);
+          _$setProp(_el$55, "wrapMode", "none");
+          _$insert(_el$55, elapsed, _el$57);
+          _$effect((_$p) => _$setProp(_el$55, "fg", theme().text.faint, _$p));
+          return _el$55;
         })();
       },
       children: (entry) => (() => {
-        var _el$57 = _$createElement("box"), _el$58 = _$createElement("text"), _el$59 = _$createElement("text");
-        _$insertNode(_el$57, _el$58);
-        _$insertNode(_el$57, _el$59);
-        _$setProp(_el$57, "flexDirection", "row");
-        _$setProp(_el$57, "gap", 2);
-        _$setProp(_el$57, "flexGrow", 1);
-        _$setProp(_el$58, "wrapMode", "none");
-        _$setProp(_el$58, "flexShrink", 0);
-        _$insert(_el$58, () => verdictEntryGlyph(entry(), ascii()));
-        _$setProp(_el$59, "wrapMode", "word");
-        _$setProp(_el$59, "flexGrow", 1);
-        _$insert(_el$59, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        var _el$58 = _$createElement("box"), _el$59 = _$createElement("text"), _el$60 = _$createElement("text");
+        _$insertNode(_el$58, _el$59);
+        _$insertNode(_el$58, _el$60);
+        _$setProp(_el$58, "flexDirection", "row");
+        _$setProp(_el$58, "gap", 2);
+        _$setProp(_el$58, "flexGrow", 1);
+        _$setProp(_el$59, "wrapMode", "none");
+        _$setProp(_el$59, "flexShrink", 0);
+        _$insert(_el$59, () => verdictEntryGlyph(entry(), ascii()));
+        _$setProp(_el$60, "wrapMode", "word");
+        _$setProp(_el$60, "flexGrow", 1);
+        _$insert(_el$60, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$27 = colorFor(theme(), entry(), mono()), _v$28 = TextAttributes.BOLD, _v$29 = theme().text.base;
-          _v$27 !== _p$.e && (_p$.e = _$setProp(_el$58, "fg", _v$27, _p$.e));
-          _v$28 !== _p$.t && (_p$.t = _$setProp(_el$58, "attributes", _v$28, _p$.t));
-          _v$29 !== _p$.a && (_p$.a = _$setProp(_el$59, "fg", _v$29, _p$.a));
+          var _v$29 = colorFor(theme(), entry(), mono()), _v$30 = TextAttributes.BOLD, _v$31 = theme().text.base;
+          _v$29 !== _p$.e && (_p$.e = _$setProp(_el$59, "fg", _v$29, _p$.e));
+          _v$30 !== _p$.t && (_p$.t = _$setProp(_el$59, "attributes", _v$30, _p$.t));
+          _v$31 !== _p$.a && (_p$.a = _$setProp(_el$60, "fg", _v$31, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$57;
+        return _el$58;
       })()
     }), null);
-    _$insert(_el$52, _$createComponent(VerdictTrail, {
+    _$insert(_el$53, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -1558,7 +1607,7 @@ var HistoryBlock = (props) => {
       },
       nowMs
     }), null);
-    return _el$52;
+    return _el$53;
   })();
 };
 
