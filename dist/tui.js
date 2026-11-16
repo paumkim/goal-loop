@@ -1863,71 +1863,90 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   const hintAvailable = Boolean(evaluatorHint(goal));
   const spendAvailable = Boolean(goal.spend);
   const contextAvailable = goal.contextSize !== undefined;
+  const whyAvailable = Boolean(goal.reason && goal.reason.trim());
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
-  const fit = (hint, spend, context, last, fix) => 5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
-  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, last = lastAvailable, fix = remediationWanted;
-  let rows = fit(hint, spend, context, last, fix);
+  const fit = (hint, spend, context, why, last, fix) => 5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
+  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted;
+  let rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
       context,
+      why,
       last,
       remediation: fix
     };
   hint = false;
-  rows = fit(hint, spend, context, last, fix);
+  rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
       context,
+      why,
       last,
       remediation: fix
     };
   spend = false;
-  rows = fit(hint, spend, context, last, fix);
+  rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
       context,
+      why,
       last,
       remediation: fix
     };
   context = false;
-  rows = fit(hint, spend, context, last, fix);
+  rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
       context,
+      why,
+      last,
+      remediation: fix
+    };
+  why = false;
+  rows = fit(hint, spend, context, why, last, fix);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      context,
+      why,
       last,
       remediation: fix
     };
   last = false;
-  rows = fit(hint, spend, context, last, fix);
+  rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
     return {
       rows,
       hint,
       spend,
       context,
+      why,
       last,
       remediation: fix
     };
   fix = false;
-  rows = fit(hint, spend, context, last, fix);
+  rows = fit(hint, spend, context, why, last, fix);
   return {
     rows,
     hint,
     spend,
     context,
+    why,
     last,
     remediation: fix
   };
@@ -2099,6 +2118,7 @@ var HudCard = (props) => {
   const ascii = () => motionDisabled(process.env) || mono();
   const g = () => props.goal;
   const [conditionHovered, setConditionHovered] = createSignal3(false);
+  const [whyHovered, setWhyHovered] = createSignal3(false);
   const looped = () => Boolean(g().loopEnabled);
   const cap = () => {
     const max = g().loopMaxLoops;
@@ -2114,6 +2134,7 @@ var HudCard = (props) => {
   const turns = () => g().turns;
   const stateColor = () => stateAccentColor(theme(), g().status, isRetryStuck(g()), mono());
   const last = () => lastVerdict(g().history ?? []);
+  const whyReason = () => g().reason?.replace(/\s+/g, " ").trim() ?? "";
   const turnsSince = () => {
     const entry = last();
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0;
@@ -2367,31 +2388,91 @@ var HudCard = (props) => {
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
       get when() {
+        return _$memo3(() => !!plan().why)() && whyReason();
+      },
+      get children() {
+        return (() => {
+          const copyable = () => Boolean(props.onCopyReason);
+          return (() => {
+            var _el$43 = _$createElement3("box"), _el$44 = _$createElement3("text"), _el$46 = _$createElement3("text");
+            _$insertNode3(_el$43, _el$44);
+            _$insertNode3(_el$43, _el$46);
+            _$setProp3(_el$43, "flexDirection", "row");
+            _$setProp3(_el$43, "gap", 1);
+            _$insertNode3(_el$44, _$createTextNode3(`why`));
+            _$setProp3(_el$44, "wrapMode", "none");
+            _$setProp3(_el$44, "flexShrink", 0);
+            _$setProp3(_el$44, "width", LABEL);
+            _$setProp3(_el$46, "wrapMode", "none");
+            _$setProp3(_el$46, "flexGrow", 1);
+            _$insert3(_el$46, () => truncate(whyReason(), CONDITION_MAX, ascii() ? "..." : "\u2026"));
+            _$insert3(_el$43, _$createComponent3(Show3, {
+              get when() {
+                return _$memo3(() => !!whyHovered())() && copyable();
+              },
+              get children() {
+                return _$createComponent3(Hint, {
+                  get theme() {
+                    return theme();
+                  },
+                  text: "copy"
+                });
+              }
+            }), null);
+            _$effect3((_p$) => {
+              var _v$31 = copyable() ? (event) => {
+                if (event.button !== 0)
+                  return;
+                event.stopPropagation();
+                props.onCopyReason?.(whyReason());
+              } : undefined, _v$32 = copyable() ? () => setWhyHovered(true) : undefined, _v$33 = copyable() ? () => setWhyHovered(false) : undefined, _v$34 = theme().text.faint, _v$35 = whyHovered() && copyable() ? theme().text.base : theme().text.muted, _v$36 = whyHovered() && copyable() ? TextAttributes3.BOLD : undefined;
+              _v$31 !== _p$.e && (_p$.e = _$setProp3(_el$43, "onMouseUp", _v$31, _p$.e));
+              _v$32 !== _p$.t && (_p$.t = _$setProp3(_el$43, "onMouseOver", _v$32, _p$.t));
+              _v$33 !== _p$.a && (_p$.a = _$setProp3(_el$43, "onMouseOut", _v$33, _p$.a));
+              _v$34 !== _p$.o && (_p$.o = _$setProp3(_el$44, "fg", _v$34, _p$.o));
+              _v$35 !== _p$.i && (_p$.i = _$setProp3(_el$46, "fg", _v$35, _p$.i));
+              _v$36 !== _p$.n && (_p$.n = _$setProp3(_el$46, "attributes", _v$36, _p$.n));
+              return _p$;
+            }, {
+              e: undefined,
+              t: undefined,
+              a: undefined,
+              o: undefined,
+              i: undefined,
+              n: undefined
+            });
+            return _el$43;
+          })();
+        })();
+      }
+    }), _el$18);
+    _$insert3(_el$0, _$createComponent3(Show3, {
+      get when() {
         return _$memo3(() => !!plan().remediation)() && remediation();
       },
       children: (fix) => (() => {
-        var _el$43 = _$createElement3("box"), _el$44 = _$createElement3("text"), _el$46 = _$createElement3("text");
-        _$insertNode3(_el$43, _el$44);
-        _$insertNode3(_el$43, _el$46);
-        _$setProp3(_el$43, "flexDirection", "row");
-        _$setProp3(_el$43, "gap", 1);
-        _$insertNode3(_el$44, _$createTextNode3(`fix`));
-        _$setProp3(_el$44, "wrapMode", "none");
-        _$setProp3(_el$44, "flexShrink", 0);
-        _$setProp3(_el$44, "width", LABEL);
-        _$setProp3(_el$46, "wrapMode", "word");
-        _$setProp3(_el$46, "flexGrow", 1);
-        _$insert3(_el$46, () => fix().text);
+        var _el$47 = _$createElement3("box"), _el$48 = _$createElement3("text"), _el$50 = _$createElement3("text");
+        _$insertNode3(_el$47, _el$48);
+        _$insertNode3(_el$47, _el$50);
+        _$setProp3(_el$47, "flexDirection", "row");
+        _$setProp3(_el$47, "gap", 1);
+        _$insertNode3(_el$48, _$createTextNode3(`fix`));
+        _$setProp3(_el$48, "wrapMode", "none");
+        _$setProp3(_el$48, "flexShrink", 0);
+        _$setProp3(_el$48, "width", LABEL);
+        _$setProp3(_el$50, "wrapMode", "word");
+        _$setProp3(_el$50, "flexGrow", 1);
+        _$insert3(_el$50, () => fix().text);
         _$effect3((_p$) => {
-          var _v$31 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$32 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
-          _v$31 !== _p$.e && (_p$.e = _$setProp3(_el$44, "fg", _v$31, _p$.e));
-          _v$32 !== _p$.t && (_p$.t = _$setProp3(_el$46, "fg", _v$32, _p$.t));
+          var _v$37 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$38 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
+          _v$37 !== _p$.e && (_p$.e = _$setProp3(_el$48, "fg", _v$37, _p$.e));
+          _v$38 !== _p$.t && (_p$.t = _$setProp3(_el$50, "fg", _v$38, _p$.t));
           return _p$;
         }, {
           e: undefined,
           t: undefined
         });
-        return _el$43;
+        return _el$47;
       })()
     }), _el$18);
     _$insertNode3(_el$18, _el$19);

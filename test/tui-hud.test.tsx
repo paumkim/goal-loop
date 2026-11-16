@@ -488,24 +488,24 @@ describe("evaluatorHint", () => {
   test("hudCardRows grows one row for the teaching hint while the goal is fresh", () => {
     expect(hudCardRows(fresh())).toBe(6)
     // After the first turn lands, the hint is gone and the card relaxes to its pre-hint size.
-    expect(hudCardRows(loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBe(6)
+    expect(hudCardRows(loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBe(7)
   })
 })
 
 describe("hudCardRows", () => {
   test("grows by exactly one row when the snapshot carries a spend estimate", () => {
     const spend = { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }
-    expect(hudCardRows(loopedGoal({ spend }))).toBe(7)
+    expect(hudCardRows(loopedGoal({ spend }))).toBe(8)
     const { history: _h, spend: _s, ...bare } = loopedGoal({ spend })
-    expect(hudCardRows(bare as unknown as GoalSnapshot)).toBe(5)
+    expect(hudCardRows(bare as unknown as GoalSnapshot)).toBe(6)
   })
 
   test("grows by one row for the last-verdict line and one for the remediation", () => {
-    expect(hudCardRows(loopedGoal())).toBe(6)
-    expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(8)
-    expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(8)
+    expect(hudCardRows(loopedGoal())).toBe(7)
+    expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(9)
+    expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(9)
     const { history: _h, ...noHistory } = loopedGoal()
-    expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
+    expect(hudCardRows(noHistory as GoalSnapshot)).toBe(6)
   })
 })
 
@@ -604,45 +604,47 @@ describe("hudCardRows viewport ceiling (maxRows) — optional rows drop until th
   test("a one-line remediation costs one row, not the flat two it reserved before", () => {
     // 'goal failed — /goal clear to reset' is 34 cells — one row at the 49-cell remediation width
     const failed = loopedGoal({ status: "failed", history: undefined as unknown as GoalSnapshot["history"] })
-    expect(hudCardRows(failed)).toBe(6)
+    expect(hudCardRows(failed)).toBe(7)
   })
 
   test("a long failureLabel costs the rows it actually wraps to, not a flat two", () => {
     const failed = loopedGoal({ status: "failed", failureLabel: "x".repeat(100), history: undefined as unknown as GoalSnapshot["history"] })
-    expect(hudCardRows(failed)).toBe(8) // 5 + 3 wrapped remediation rows
+    expect(hudCardRows(failed)).toBe(9) // 5 + why 1 + 3 wrapped remediation rows
   })
 
   test("under a ceiling the teaching hint drops first, then spend", () => {
     const goal = hinted()
-    // full: 5 + spend 1 + hint 1 = 7
-    expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 6)).toBe(6) // hint gone, spend kept
-    expect(hudCardRows(goal, false, 5)).toBe(5) // hint and spend gone
+    // full: 5 + spend 1 + hint 1 + why 1 = 8
+    expect(hudCardRows(goal)).toBe(8)
+    expect(hudCardRows(goal, false, 7)).toBe(7) // hint gone, spend and why kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint and spend gone, why kept
+    expect(hudCardRows(goal, false, 5)).toBe(5) // hint, spend and why gone
     expect(hudCardRows(goal, false, 4)).toBe(5)
   })
 
   test("under a ceiling the remediation drops only after hint, spend and last", () => {
-    const goal = hot() // 5 + remediation 2 = 7 (hot compaction wraps to two rows at 49 cells)
-    expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 6)).toBe(5)
+    const goal = hot() // 5 + why 1 + remediation 2 = 8 (hot compaction wraps to two rows at 49 cells)
+    expect(hudCardRows(goal)).toBe(8)
+    expect(hudCardRows(goal, false, 6)).toBe(5) // why and remediation gone: hint/spend/context/last all unavailable
     expect(hudCardRows(goal, false, 4)).toBe(5) // remediation gone: the irreducible core remains
   })
 
   test("the last-verdict row drops after spend; the menu never drops", () => {
     const paused = loopedGoal({ status: "paused", pauseCause: "cap", spend: { cost: 1, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 } })
-    // 5 + spend 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 9
-    expect(hudCardRows(paused)).toBe(9)
-    expect(hudCardRows(paused, false, 8)).toBe(8) // spend gone
-    expect(hudCardRows(paused, false, 6)).toBe(5) // spend, last and remediation gone: the irreducible core
+    // 5 + spend 1 + why 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 10
+    expect(hudCardRows(paused)).toBe(10)
+    expect(hudCardRows(paused, false, 8)).toBe(8) // spend and why gone
+    expect(hudCardRows(paused, false, 6)).toBe(5) // spend, why, last and remediation gone: the irreducible core
     expect(hudCardRows(paused, true, 3)).toBe(9) // menu rows never drop; remediation gone: 5 + menu 4
   })
 
   test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
-    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, context: false, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, context: false, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, last: false, remediation: false })
-    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 5, hint: false, spend: false, context: false, last: false, remediation: false })
-    expect(cardRowPlan(hot())).toEqual({ rows: 7, hint: false, spend: false, context: false, last: false, remediation: true })
+    expect(cardRowPlan(hinted())).toEqual({ rows: 8, hint: true, spend: true, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 7)).toEqual({ rows: 7, hint: false, spend: true, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
+    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 5, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
+    expect(cardRowPlan(hot())).toEqual({ rows: 8, hint: false, spend: false, context: false, why: true, last: false, remediation: true })
   })
 })
 
@@ -651,24 +653,42 @@ describe("hudCardRows context meter row", () => {
     loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
 
   test("grows by exactly one row when the snapshot carries a context estimate", () => {
-    // hinted() shape (5 + spend 1 + hint 1 = 7) plus the context row = 8; without spend = 7
-    expect(hudCardRows(metered())).toBe(8)
+    // hinted() shape (5 + spend 1 + hint 1 + why 1 = 8) plus the context row = 9; without spend = 8
+    expect(hudCardRows(metered())).toBe(9)
     const { spend: _s, ...noSpend } = metered()
-    expect(hudCardRows(noSpend as GoalSnapshot)).toBe(7) // hint 1 + context 1
+    expect(hudCardRows(noSpend as GoalSnapshot)).toBe(8) // hint 1 + context 1 + why 1
     const { contextSize: _c, ...noContext } = metered()
-    expect(hudCardRows(noContext as GoalSnapshot)).toBe(7) // unchanged from the pre-context plan
+    expect(hudCardRows(noContext as GoalSnapshot)).toBe(8) // unchanged from the pre-context plan
   })
 
   test("under a ceiling the context row drops after spend and before the last-verdict row", () => {
     const goal = metered()
-    expect(hudCardRows(goal, false, 7)).toBe(7) // hint gone; spend and context kept
-    expect(hudCardRows(goal, false, 6)).toBe(6) // hint and spend gone; context kept
-    expect(hudCardRows(goal, false, 5)).toBe(5) // hint, spend and context gone: the irreducible core
-    // a verdicts-bearing goal: context drops before last does
+    expect(hudCardRows(goal, false, 7)).toBe(7) // hint and spend gone; context and why kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint, spend and context gone; why kept
+    expect(hudCardRows(goal, false, 5)).toBe(5) // hint, spend, context and why gone: the irreducible core
+    // a verdicts-bearing goal: why drops after context, before the last-verdict row
     const withLast = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
-    expect(hudCardRows(withLast)).toBe(7) // 5 + context 1 + last 1
-    expect(hudCardRows(withLast, false, 6)).toBe(6) // context gone, last kept
-    expect(cardRowPlan(withLast, false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, last: true, remediation: false })
+    expect(hudCardRows(withLast)).toBe(8) // 5 + context 1 + why 1 + last 1
+    expect(hudCardRows(withLast, false, 6)).toBe(6) // context and why gone, last kept
+    expect(cardRowPlan(withLast, false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
+  })
+})
+
+describe("hudCardRows why row", () => {
+  test("grows by exactly one row when the snapshot carries an evaluator reason", () => {
+    expect(hudCardRows(loopedGoal())).toBe(7) // 5 + why 1 + last 1
+    const { reason: _r, ...noReason } = loopedGoal()
+    expect(hudCardRows(noReason as GoalSnapshot)).toBe(6) // last kept
+    expect(hudCardRows(loopedGoal({ reason: "   " }))).toBe(6) // whitespace-only reason paints no row
+  })
+
+  test("under a ceiling the why row drops after context and before the last-verdict row", () => {
+    const goal = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
+    // full: 5 + context 1 + why 1 + last 1 = 8
+    expect(hudCardRows(goal)).toBe(8)
+    expect(hudCardRows(goal, false, 7)).toBe(7) // context gone, why and last kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // why gone too, last kept
+    expect(cardRowPlan(goal, false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
   })
 })
 
@@ -679,7 +699,7 @@ describe("cardRowPlan under a ceiling (render)", () => {
 
   test("under a ceiling the teaching hint gives way to the rows below it", async () => {
     const { frame } = await render(() => (
-      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />
     ), 80, 12)
     expect(frame).not.toContain("the evaluator reads only the transcript") // teaching row dropped
     expect(frame).toContain("spend") // cost row still painted

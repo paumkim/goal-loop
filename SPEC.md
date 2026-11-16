@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=840 -->
+<!-- spec-check files=43 tests=848 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3439,3 +3439,45 @@ bun run compile, bun run check end-to-end green incl. spec-check (43/840), docs-
 changelog grep before submit. Evidence is source + render layers only; live TUI remains unverifiable.
 Follow-ups NOT done in this slice: the C1 card why-row, the measured card width, per-iteration
 spend attribution, cross-session overview.
+
+## Workstream CE — the card's why row: the evaluator's reason, on the surface you see (2026-11-16)
+
+Interpretation of this iteration: the compact card answered "what did the evaluator decide" (the
+last-verdict row) but never "why" — the reason was reachable only by opening the dialog or the
+context menu. The host has wired `onCopyReason` into the card mount since the card gained its
+props (tui.tsx), and the props doc promised "absent callback renders the reason row inert" — a
+contract that existed nowhere. This slice paints the why row and finishes that promise.
+
+336. src/hud-card.tsx paints a `why` row directly under the last-verdict row: the evaluator's
+     one-line reason, whitespace-collapsed (`reason.replace(/\s+/g, " ").trim()`), painted
+     `wrapMode="none"` and truncated to the condition cell budget (42 cells, `truncate` with the
+     same ellipsis arms), LABEL column 10 cells. When the host wires `onCopyReason` the row is a
+     click-to-copy affordance mirroring the condition row: on hover it brightens the foreground
+     (muted -> base) and sets TextAttributes.BOLD (a weight, never an underline, so the grammar
+     survives NO_COLOR/TERM=dumb), shows the `copy` hint, and a left-button mouseUp copies the
+     collapsed text through the host's clipboard+toast path; `event.stopPropagation()` keeps the
+     card-menu toggle from firing. Absent the callback the row paints inert — no handlers, no
+     hover attributes, no hint — exactly the contract the dialog's evaluator row documents. When
+     `reason` is absent or whitespace-only the row is omitted entirely.
+337. The why row joins `cardRowPlan` as a droppable optional rung after the context row and before
+     the last-verdict row: under a viewport ceiling the drop order is now teaching hint -> spend ->
+     context -> why -> last -> remediation (the final rung). `CardRowPlan` carries a new
+     `readonly why: boolean`; `hudCardRows` arithmetic and the mount anchor flow through unchanged.
+     Tests: two new plan-arithmetic functions (tui-hud.test.tsx — one-row growth with spend/hint/
+     no-verdict fixtures, blank-reason omission, and the ceiling drop order ending in the
+     `cardRowPlan` shape match) and six new render functions (tui-render.test.tsx — whitespace
+     collapse, click-to-copy via the mock mouse, inert-without-callback with an inert click,
+     blank-reason omission, ellipsis truncation at the 42-cell budget, and the painted drop order:
+     why kept at a one-row-short ceiling after context drops, why gone a row further down, last
+     surviving both). Two existing render tests re-pinned (+1 ceiling step). Nine HudCard
+     full-frame snapshots re-pinned programmatically under TZ=UTC (`bun test --update-snapshots`,
+     diff verified hunk-by-hunk: every change is the added why row plus one consumed trailing pad).
+     The card mount wiring (tui.tsx passes onCopyReason into the card) is unchanged from the prior
+     slice — this workstream only completes the surface it feeds.
+     Spec-check marker files=43 tests=840 -> 848.
+
+Verification (all run in the worktree): bun test (848 pass, 0 fail, 21 snapshots re-pinned and
+byte-stable at the new frames), bun run compile, bun run check end-to-end green incl. spec-check
+(43/848), docs-watch companion + changelog grep before submit. Evidence is source + render layers
+only; live TUI remains unverifiable. Follow-ups NOT done in this slice: the measured card width,
+per-iteration spend attribution, cross-session overview.

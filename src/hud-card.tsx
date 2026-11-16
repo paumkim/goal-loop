@@ -11,6 +11,7 @@
  *   │ spend      $0.42 · 182k in · 21k out            │
  *   │ context    ████████░░░░░░░░ ~95k of 150k · 63%   │  (when the server can estimate)
  *   │ last       ✓ met · this turn                     │
+ *   │ why        docs build still fails\u2026           │  (evaluator's reason; click to copy)
  *   │ ! compact pending 1/4 · …verifyCommand           │  (only when hot / failed)
  *   │ [details] [pin] [clear goal]               esc      │
  *   ╰──────────────────────────────────────────────────╯
@@ -82,6 +83,8 @@ export interface CardRowPlan {
   readonly spend: boolean
   /** Whether the context meter row fits the budget. */
   readonly context: boolean
+  /** Whether the why row (the evaluator's one-line reason) fits the budget. */
+  readonly why: boolean
   /** Whether the last-verdict row fits the budget. */
   readonly last: boolean
   /** Whether the remediation row fits the budget. It drops last, after hint, spend and last — first to come back, last to go. */
@@ -93,7 +96,7 @@ export interface CardRowPlan {
  * so its cost is the greedy word wrap of the actual text, never a flat guess. Under `maxRows` — the
  * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
  * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the context
- * meter, then the last verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
+ * meter, then the why row, then the last verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
  * ceiling with the menu open (5 core rows + 4 menu rows > maxRows) the anchor still exceeds the ceiling;
  * rows are deliberately left unclamped in that pathological case — the absolute box is anchored
  * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
@@ -106,28 +109,32 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
   const hintAvailable = Boolean(evaluatorHint(goal))
   const spendAvailable = Boolean(goal.spend)
   const contextAvailable = goal.contextSize !== undefined
+  const whyAvailable = Boolean(goal.reason && goal.reason.trim())
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
-  const fit = (hint: boolean, spend: boolean, context: boolean, last: boolean, fix: boolean): number =>
-    5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
-  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, last = lastAvailable, fix = remediationWanted
-  let rows = fit(hint, spend, context, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  const fit = (hint: boolean, spend: boolean, context: boolean, why: boolean, last: boolean, fix: boolean): number =>
+    5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
+  let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted
+  let rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
   hint = false
-  rows = fit(hint, spend, context, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
   spend = false
-  rows = fit(hint, spend, context, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
   context = false
-  rows = fit(hint, spend, context, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
+  why = false
+  rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
   last = false
-  rows = fit(hint, spend, context, last, fix)
-  if (rows <= maxRows) return { rows, hint, spend, context, last, remediation: fix }
+  rows = fit(hint, spend, context, why, last, fix)
+  if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
   fix = false
-  rows = fit(hint, spend, context, last, fix)
-  return { rows, hint, spend, context, last, remediation: fix }
+  rows = fit(hint, spend, context, why, last, fix)
+  return { rows, hint, spend, context, why, last, remediation: fix }
 }
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
@@ -309,7 +316,7 @@ export const HudCard = (props: {
   /** Wired by the host; absent callback renders the summary row inert. */
   onCopySummary?: (summary: string) => void
   /** Viewport ceiling for the card's total rows (mirror of ClampedColumn's `height - 1`). The plan drops the
-   * teaching hint, then spend, then the context meter, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
+   * teaching hint, then spend, then the context meter, then the why row, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
   maxRows?: number
 }): JSX.Element => {
   const theme = () => props.theme
@@ -317,6 +324,7 @@ export const HudCard = (props: {
   const ascii = () => motionDisabled(process.env) || mono()
   const g = () => props.goal
   const [conditionHovered, setConditionHovered] = createSignal(false)
+  const [whyHovered, setWhyHovered] = createSignal(false)
   const looped = () => Boolean(g().loopEnabled)
   const cap = () => {
     const max = g().loopMaxLoops
@@ -332,6 +340,8 @@ export const HudCard = (props: {
   // A stuck-retrying active goal reads amber everywhere the pill does — word and accent stay coherent. Mono: `base` for any live/terminal word, faint for a cleared record.
   const stateColor = () => stateAccentColor(theme(), g().status, isRetryStuck(g()), mono())
   const last = () => lastVerdict(g().history ?? [])
+  // The evaluator's one-line reason, whitespace-collapsed for a single-row paint; absent/blank reasons paint no row.
+  const whyReason = () => g().reason?.replace(/\s+/g, " ").trim() ?? ""
   const turnsSince = () => {
     const entry = last()
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0
@@ -490,6 +500,31 @@ export const HudCard = (props: {
             </text>
           </box>
         )}
+      </Show>
+      {/* why — the evaluator's one-line reason, whitespace-collapsed; dropped by the row plan under a viewport ceiling, after context, before the last-verdict row. When the host wires onCopyReason the row is a click-to-copy affordance (same grammar as the condition row and the dialog's evaluator row); otherwise it paints inert. */}
+      <Show when={plan().why && whyReason()}>
+        {(() => {
+          const copyable = () => Boolean(props.onCopyReason)
+          return (
+            <box
+              flexDirection="row"
+              gap={1}
+              onMouseUp={copyable() ? (event) => { if (event.button !== 0) return; event.stopPropagation(); props.onCopyReason?.(whyReason()) } : undefined}
+              onMouseOver={copyable() ? () => setWhyHovered(true) : undefined}
+              onMouseOut={copyable() ? () => setWhyHovered(false) : undefined}
+            >
+              <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
+                why
+              </text>
+              <text wrapMode="none" flexGrow={1} fg={whyHovered() && copyable() ? theme().text.base : theme().text.muted} attributes={whyHovered() && copyable() ? TextAttributes.BOLD : undefined}>
+                {truncate(whyReason(), CONDITION_MAX, ascii() ? "..." : "\u2026")}
+              </text>
+              <Show when={whyHovered() && copyable()}>
+                <Hint theme={theme()} text="copy" />
+              </Show>
+            </box>
+          )
+        })()}
       </Show>
       {/* failure-first-class remediation — exactly what to do, never a vague warning */}
       <Show when={plan().remediation && remediation()}>
