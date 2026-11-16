@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory } from "../src/core/format.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory, truncate } from "../src/core/format.ts"
+import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
   checkin,
@@ -247,6 +248,49 @@ describe("format", () => {
   })
   test("usage diff never goes negative", () => {
     expect(diffUsage(EMPTY_USAGE, { ...EMPTY_USAGE, cost: 5 }).cost).toBe(0)
+  })
+})
+
+describe("truncate", () => {
+  test("an ASCII string at exactly the cap is returned unchanged", () => {
+    expect(truncate("a".repeat(42), 42)).toBe("a".repeat(42))
+  })
+
+  test("the cap is terminal cells, not code units — CJK text truncates at 2 cells per glyph", () => {
+    const out = truncate("床前明月光疑是地上霜举头望明月低头思故乡", 12)
+    // 5 CJK glyphs (10 cells) + … = 11 cells; a 6th glyph would overflow the 11-cell budget
+    expect(stringWidth(out)).toBe(11)
+    expect(out).toBe("床前明月光…")
+  })
+
+  test("the boundary never splits an astral emoji — no lone surrogate ever leaks", () => {
+    const out = truncate("ship the 🚀 release notes now please", 13)
+    // budget 12: "ship the 🚀" is exactly 11 cells, the dangling space is rstripped, + … = 12
+    expect(stringWidth(out)).toBe(12)
+    expect(out).toBe("ship the 🚀…")
+    // a lone surrogate throws URIError here — the cheapest exact check
+    expect(() => encodeURIComponent(out)).not.toThrow()
+  })
+
+  test("a ZWJ family emoji is one grapheme costing 2 cells", () => {
+    const out = truncate("ab👨‍👩‍👧‍👦cd", 5)
+    expect(stringWidth(out)).toBeLessThanOrEqual(5)
+    expect(out).toBe("ab👨‍👩‍👧‍👦…")
+  })
+
+  test("a combining mark stays attached to its base — é never decomposes at the boundary", () => {
+    const out = truncate("abe\u0301fghij", 4)
+    expect(out).toBe("abe\u0301…")
+    expect(stringWidth(out)).toBe(4)
+  })
+
+  test("max of 1 yields just the ellipsis; max of 0 yields empty", () => {
+    expect(truncate("hello", 1)).toBe("…")
+    expect(truncate("hello", 0)).toBe("")
+  })
+
+  test("whitespace collapses before measuring", () => {
+    expect(truncate("a   b\n\tc", 10)).toBe("a b c")
   })
 })
 

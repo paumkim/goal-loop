@@ -1,5 +1,9 @@
+import stringWidth from "string-width"
 import { COMPACT_MISS_CAP } from "./types.ts"
 import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
+
+/** Grapheme clusters, so a truncation boundary never splits an emoji, a flag or a combining sequence. */
+const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
 
 export const GOAL_GLYPH = "\u25CE"
 
@@ -105,7 +109,25 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
   return lines.join("\n")
 }
 
+/**
+ * Hard-cap a one-line fragment at `max` terminal cells, appending `…` when anything was cut.
+ * Width-aware (unlike a code-unit slice): a CJK cell costs 2, an emoji 2, a combining mark 0,
+ * and the boundary always falls between graphemes — the output never carries a lone surrogate
+ * or half a ZWJ sequence, and never renders wider than `max` cells.
+ */
 export function truncate(text: string, max: number): string {
+  if (max <= 0) return ""
   const flat = text.replace(/\s+/g, " ").trim()
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1)}\u2026`
+  if (stringWidth(flat) <= max) return flat
+  const budget = max - 1 // reserve one cell for the ellipsis
+  let out = ""
+  let used = 0
+  for (const { segment } of segmenter.segment(flat)) {
+    const w = stringWidth(segment)
+    if (used + w > budget) break
+    out += segment
+    used += w
+  }
+  // Never leave a dangling space before the ellipsis.
+  return `${out.replace(/\s+$/, "")}\u2026`
 }
