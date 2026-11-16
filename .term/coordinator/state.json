@@ -1240,6 +1240,17 @@
       "submittedAt": "2026-11-16T05:03:54Z",
       "mergedAt": "2026-11-16T05:04:24Z",
       "mergedInto": "dev"
+    },
+    "tui-retry-watch": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,dist,SPEC.md",
+      "branch": "wt/tui-retry-watch",
+      "worktree": "worktrees/wt-tui-retry-watch",
+      "status": "done",
+      "createdAt": "2026-11-16T05:15:43Z",
+      "submittedAt": "2026-11-16T05:19:39Z",
+      "mergedAt": "2026-11-16T05:20:02Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
