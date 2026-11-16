@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=505 -->
+<!-- spec-check files=41 tests=526 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2072,3 +2072,9 @@ Marker bumped `files=41 tests=484` → `files=41 tests=488` (test-only addition;
 207. New `test/spec-check.test.ts` (17 tests) pins those helpers: marker parsing (mid-document, whitespace variants, absent/malformed/wrong-order/duplicate markers), diagnosis (pass, files/tests mismatch messages byte-exact, both at once, probe-error passthrough order, red suite, unparseable reporter, unparseable npm output as mismatch), and the report formatters. Previously the gate was itself untested — its marker regex or mismatch messages could drift without a single test noticing.
 One deliberate, documented spec widening: the marker regex now tolerates flexible whitespace between tokens (`<!--\s*spec-check\s+files=…`); the canonical marker SPEC writes is unchanged.
 Marker bumped `files=41 tests=488` → `files=41 tests=505` (test-only addition; the gate script is not shipped in the tarball, so `files` is unchanged).
+
+## Workstream BM — unit tests for the docs freshness gate itself (2026-11-16)
+
+208. `scripts/docs-watch.ts` now exports its pure machinery: `esc`, `parseChangelogLog` (`%cd\t%s` git-log lines into rows; subjects may contain tabs), `sortRows` (newest-first, non-mutating), `renderRows` (escaped `<tr>` table body), `extractStamp`, `stampVerdict` (per-page verdict: missing stamp or trailing stamp), `sliceChangelogRows` (trimmed section between the changes markers; undefined when a marker is missing or inverted), `changelogVerdict`, `formatFailures`, and the `CHANGE_START`/`CHANGE_END` markers. The I/O stays in the gate entry points, which call the same helpers as before, so the committed-page output is byte-identical. `main()` now runs only under `import.meta.main` — importing the module in the suite has no side effects (no git subprocess, no file rewrites).
+209. New `test/docs-watch-helpers.test.ts` (21 tests) pins those helpers: marker escaping (& ordering, no double-escaping), `%cd\t%s` parsing (including tab-containing subjects), row sort/copy semantics, row rendering with HTML escaping, stamp extraction, the three stamp/changelog verdicts (fresh/stale/missing/inverted), and the failure report format. The pre-existing integration suite `test/docs-watch.test.ts` (3 spawn-based tests in a mkdtemp git repo) is unchanged and passes against the refactored script, pinning the byte-identical committed-page behavior. Previously the gate's pure core was untested; a regex or marker edit here could have silently passed stale docs.
+Marker bumped `files=41 tests=505` → `files=41 tests=526` (test-only addition; the watcher is not shipped in the tarball, so `files` is unchanged).
