@@ -285,7 +285,7 @@ import { effect as _$effect2 } from "@opentui/solid";
 import { insert as _$insert2 } from "@opentui/solid";
 import { setProp as _$setProp2 } from "@opentui/solid";
 import { createElement as _$createElement2 } from "@opentui/solid";
-import { Show as Show2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
+import { For as For2, Show as Show2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
 import { TextAttributes as TextAttributes2 } from "@opentui/core";
 
 // src/core/history.ts
@@ -1488,6 +1488,18 @@ var StatusDialogBody = (props) => {
   })();
   const stateColor = () => props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted;
   const g = () => props.goal;
+  const OTHERS_VISIBLE = 4;
+  const OTHERS_CONDITION_MAX = 34;
+  const OTHERS_TAG_MAX = 12;
+  const sessionTag = (sessionID) => {
+    const label = props.sessionLabel?.(sessionID) ?? sessionID;
+    return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}\u2026` : label;
+  };
+  const othersLive = () => {
+    const own = g()?.sessionID;
+    const rows = (props.others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== own);
+    return rows.length > 0 ? rows : undefined;
+  };
   const remediation = () => {
     const goal = g();
     return goal ? remediationFor(goal) : undefined;
@@ -1809,6 +1821,87 @@ var StatusDialogBody = (props) => {
               }
             });
           }
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return othersLive();
+          },
+          children: (rows) => (() => {
+            var _el$28 = _$createElement2("box"), _el$29 = _$createElement2("box"), _el$30 = _$createElement2("text");
+            _$insertNode2(_el$28, _el$29);
+            _$setProp2(_el$28, "flexDirection", "column");
+            _$insertNode2(_el$29, _el$30);
+            _$setProp2(_el$29, "flexDirection", "row");
+            _$setProp2(_el$29, "gap", 2);
+            _$insert2(_el$29, () => label("elsewhere"), _el$30);
+            _$setProp2(_el$30, "wrapMode", "none");
+            _$insert2(_el$30, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals`);
+            _$insert2(_el$28, _$createComponent2(For2, {
+              get each() {
+                return rows().slice(0, OTHERS_VISIBLE);
+              },
+              children: (other) => (() => {
+                var _el$33 = _$createElement2("box"), _el$34 = _$createElement2("text"), _el$35 = _$createElement2("text"), _el$36 = _$createElement2("text"), _el$37 = _$createElement2("text");
+                _$insertNode2(_el$33, _el$34);
+                _$insertNode2(_el$33, _el$35);
+                _$insertNode2(_el$33, _el$36);
+                _$insertNode2(_el$33, _el$37);
+                _$setProp2(_el$33, "flexDirection", "row");
+                _$setProp2(_el$33, "gap", 2);
+                _$insert2(_el$33, () => label(""), _el$34);
+                _$setProp2(_el$34, "wrapMode", "none");
+                _$setProp2(_el$34, "flexShrink", 0);
+                _$insert2(_el$34, (() => {
+                  var _c$2 = _$memo2(() => !!mono());
+                  return () => _c$2() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
+                })());
+                _$setProp2(_el$35, "wrapMode", "none");
+                _$setProp2(_el$35, "flexShrink", 0);
+                _$insert2(_el$35, () => sessionTag(other.sessionID));
+                _$setProp2(_el$36, "wrapMode", "none");
+                _$setProp2(_el$36, "flexShrink", 0);
+                _$insert2(_el$36, (() => {
+                  var _c$3 = _$memo2(() => !!other.loopEnabled);
+                  return () => _c$3() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
+                })());
+                _$setProp2(_el$37, "wrapMode", "none");
+                _$setProp2(_el$37, "flexGrow", 1);
+                _$insert2(_el$37, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
+                _$effect2((_p$) => {
+                  var _v$8 = stateAccentColor(theme(), other.status, false, mono()), _v$9 = theme().text.muted, _v$0 = theme().text.faint, _v$1 = theme().text.muted;
+                  _v$8 !== _p$.e && (_p$.e = _$setProp2(_el$34, "fg", _v$8, _p$.e));
+                  _v$9 !== _p$.t && (_p$.t = _$setProp2(_el$35, "fg", _v$9, _p$.t));
+                  _v$0 !== _p$.a && (_p$.a = _$setProp2(_el$36, "fg", _v$0, _p$.a));
+                  _v$1 !== _p$.o && (_p$.o = _$setProp2(_el$37, "fg", _v$1, _p$.o));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined,
+                  a: undefined,
+                  o: undefined
+                });
+                return _el$33;
+              })()
+            }), null);
+            _$insert2(_el$28, _$createComponent2(Show2, {
+              get when() {
+                return rows().length > OTHERS_VISIBLE;
+              },
+              get children() {
+                var _el$31 = _$createElement2("box"), _el$32 = _$createElement2("text");
+                _$insertNode2(_el$31, _el$32);
+                _$setProp2(_el$31, "flexDirection", "row");
+                _$setProp2(_el$31, "gap", 2);
+                _$insert2(_el$31, () => label(""), _el$32);
+                _$setProp2(_el$32, "wrapMode", "none");
+                _$insert2(_el$32, () => `+${rows().length - OTHERS_VISIBLE} more`);
+                _$effect2((_$p) => _$setProp2(_el$32, "fg", theme().text.faint, _$p));
+                return _el$31;
+              }
+            }), null);
+            _$effect2((_$p) => _$setProp2(_el$30, "fg", theme().text.faint, _$p));
+            return _el$28;
+          })()
         }), null);
         _$effect2((_p$) => {
           var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.BOLD : undefined;
@@ -2827,6 +2920,17 @@ var isGoalSnapshot = (value) => {
   return true;
 };
 var parseGoalSnapshot = (value) => isGoalSnapshot(value) ? value : undefined;
+var parseListGoalOutput = (value) => {
+  if (!isRecord(value) || !Array.isArray(value.goals))
+    return;
+  const out = [];
+  for (const entry of value.goals) {
+    const parsed = parseGoalSnapshot(entry);
+    if (parsed)
+      out.push(parsed);
+  }
+  return out;
+};
 var parseGetGoalOutput = (value) => {
   if (!isRecord(value))
     return;
@@ -2894,6 +2998,19 @@ var tui_default = Plugin.define({
     const [entries, setEntries] = createSignal4({});
     const [now, setNow] = createSignal4(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
+    const [others, setOthers] = createSignal4([]);
+    const sessionLabel = (sessionID) => {
+      try {
+        return context.data.session.get(sessionID)?.title ?? sessionID;
+      } catch {
+        return sessionID.slice(-12);
+      }
+    };
+    const refreshOthers = () => rpc.list({}).then((result) => {
+      const goals = parseListGoalOutput(result);
+      if (goals)
+        setOthers(goals);
+    }).catch(() => {});
     const [statusDialogSession, setStatusDialogSession] = createSignal4(undefined);
     const [iterationsExpanded, setIterationsExpanded] = createSignal4(false);
     const [dialogNoticeStale, setDialogNoticeStale] = createSignal4(false);
@@ -2922,7 +3039,11 @@ var tui_default = Plugin.define({
         mono: reducedColor,
         expanded: () => iterationsExpanded(),
         onToggleExpanded: () => setIterationsExpanded((v) => !v),
-        noticeStale: () => dialogNoticeStale()
+        noticeStale: () => dialogNoticeStale(),
+        get others() {
+          return others();
+        },
+        sessionLabel
       });
     };
     const closeStatusDialog = () => {
@@ -2958,6 +3079,7 @@ var tui_default = Plugin.define({
         if (!fresh)
           setDialogNoticeStale(true);
       }).catch(() => setDialogNoticeStale(true));
+      refreshOthers();
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal;
@@ -3252,6 +3374,8 @@ var tui_default = Plugin.define({
         const parsed = parseChangedEvent(event?.data);
         if (parsed)
           put(parsed.sessionID, parsed.goal);
+        if (statusDialogOpen())
+          refreshOthers();
       } catch {}
     });
     const offNotice = rpc.events.on("notice", (event) => {

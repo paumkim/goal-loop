@@ -4,10 +4,10 @@
  * content: state line, wrapped condition/evaluator/spend rows, and the history sections. Everything is
  * presentational, rendered from the live snapshot passed in by the caller; theme tokens only.
  */
-import { Show, createSignal, onCleanup } from "solid-js"
+import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
-import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
 import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
@@ -36,6 +36,10 @@ export const StatusDialogBody = (props: {
   onToggleExpanded?: () => void
   /** When set and returning true, renders a faint "snapshot unavailable" line above the body — the dialog opened from fallback/stale cache because the live get-RPC failed. */
   noticeStale?: () => boolean
+  /** Other sessions in this directory holding live goals (active/paused), excluding the session under dialog. Read-only awareness; the host owns session switching. Omitted/empty renders no rows. */
+  others?: readonly GoalSnapshot[]
+  /** Maps a session ID to its dialog-safe label (the mount passes the session slug when the host knows it). Falls back to the id suffix. */
+  sessionLabel?: (sessionID: string) => string
 }): JSX.Element => {
   const theme = () => props.theme
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
@@ -57,6 +61,21 @@ export const StatusDialogBody = (props: {
   // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
   const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted)
   const g = () => props.goal
+  // elsewhere — live goals held by other sessions in this directory. Read-only on purpose: switching
+  // sessions is the host's business, so rows carry no handlers and no key chords. Live means the same
+  // predicate the controller and the store use (active | paused) — failed/cleared are terminal, never listed.
+  const OTHERS_VISIBLE = 4
+  const OTHERS_CONDITION_MAX = 34
+  const OTHERS_TAG_MAX = 12
+  const sessionTag = (sessionID: string): string => {
+    const label = props.sessionLabel?.(sessionID) ?? sessionID
+    return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}…` : label
+  }
+  const othersLive = () => {
+    const own = g()?.sessionID
+    const rows = (props.others ?? []).filter((o) => (o.status === "active" || o.status === "paused") && o.sessionID !== own)
+    return rows.length > 0 ? rows : undefined
+  }
   const remediation = () => {
     const goal = g()
     return goal ? remediationFor(goal) : undefined
@@ -194,6 +213,46 @@ export const StatusDialogBody = (props: {
           </Show>
           <Show when={!goal().loopEnabled}>
             <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
+          </Show>
+          {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers */}
+          <Show when={othersLive()}>
+            {(rows) => (
+              <box flexDirection="column">
+                <box flexDirection="row" gap={2}>
+                  {label("elsewhere")}
+                  <text fg={theme().text.faint} wrapMode="none">
+                    {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals`}
+                  </text>
+                </box>
+                <For each={rows().slice(0, OTHERS_VISIBLE)}>
+                  {(other) => (
+                    <box flexDirection="row" gap={2}>
+                      {label("")}
+                      <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, false, mono())}>
+                        {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
+                      </text>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+                        {sessionTag(other.sessionID)}
+                      </text>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
+                        {other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status}
+                      </text>
+                      <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
+                        {truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026")}
+                      </text>
+                    </box>
+                  )}
+                </For>
+                <Show when={rows().length > OTHERS_VISIBLE}>
+                  <box flexDirection="row" gap={2}>
+                    {label("")}
+                    <text wrapMode="none" fg={theme().text.faint}>
+                      {`+${rows().length - OTHERS_VISIBLE} more`}
+                    </text>
+                  </box>
+                </Show>
+              </box>
+            )}
           </Show>
         </box>
         )}

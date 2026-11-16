@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=848 -->
+<!-- spec-check files=43 tests=851 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3481,3 +3481,42 @@ byte-stable at the new frames), bun run compile, bun run check end-to-end green 
 (43/848), docs-watch companion + changelog grep before submit. Evidence is source + render layers
 only; live TUI remains unverifiable. Follow-ups NOT done in this slice: the measured card width,
 per-iteration spend attribution, cross-session overview.
+
+## Workstream CI — the dialog's elsewhere block: who else is running a loop in this project (2026-11-16)
+
+Interpretation of this iteration: every TUI surface so far served exactly one session — the one whose
+dialog or card you are looking at. The plugin already answers `list` over RPC (server controller.list(),
+restore-read-through on an empty map) and the contract ships it to every client, but no surface painted
+it. The result: a second session in the same project can hold an armed loop for hours and the user has
+no glanceable signal short of opening that session. This slice paints the read-only truth.
+
+338. src/core/wire.ts gains parseListGoalOutput: narrows the `list` RPC envelope (`{goals: unknown[]}`)
+     to GoalSnapshot[], dropping malformed entries one by one (a single corrupt record must not hide
+     every other live goal); undefined only when the envelope itself is unrecognizable. src/tui.tsx
+     gains a setup-scope `others` signal + refreshOthers (rpc.list({}), parse, no-throw posture),
+     refreshed when the /goal dialog opens and whenever any goal `changed` event lands while the
+     dialog is open; TUI-local, never stored, excluding nothing at refresh time (the dialog body
+     filters its own session so the component is safe standalone). `sessionLabel` resolves a session
+     id to its host title via context.data.session.get(id)?.title (the client SessionInfo carries
+     `title`, not `slug`), falling back to the id; the dialog caps display at 12 cells with a trailing
+     ellipsis.
+339. src/status-dialog.tsx gains the `elsewhere` block below the history sections: header row
+     (`elsewhere` + "N other session[s] holding live goals"), one row per other LIVE session
+     (active | paused — the same predicate the controller and store use; failed/achieved/cleared
+     are terminal, never listed), reading the same state grammar as the rest of the dialog: accent
+     dot (●/‖, or * under mono — weight never hue carries the signal), host title truncated at 12
+     cells with ellipsis (raw ids never paint), loop position (`v2/5`) or the bare state word,
+     whitespace-collapsed condition truncated at 34 cells. Rows carry no handlers, no chords —
+     session switching is the host's business; the block is awareness, not control. The block is
+     omitted entirely when empty (no visual noise on the common single-session path), caps at 4
+     rows + a faint `+N more` line, and prints singular "1 other session" at exactly one. Tests:
+     three new render functions (test/tui-render.test.tsx — row paint + own-session/terminal-goal
+     exclusion + raw-id absence, the singular noun, and the empty/absent omission). Snapshot
+     fixtures mount the dialog without `others`, so all full-frame snapshots stay byte-stable.
+     Spec-check marker files=43 tests=848 -> 851.
+
+Verification (all run in the worktree): bun test (851 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/851), docs-watch companion +
+changelog grep before submit. Evidence is source + render layers only; live TUI remains
+unverifiable. Follow-ups NOT done in this slice: the measured card width, per-iteration spend
+attribution, the already-satisfied-at-HEAD blue tone.
