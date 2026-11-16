@@ -1031,6 +1031,17 @@
       "submittedAt": "2026-11-16T01:20:18Z",
       "mergedAt": "2026-11-16T01:20:37Z",
       "mergedInto": "dev"
+    },
+    "spec-check-unit-tests": {
+      "agent": "opencode",
+      "paths": "scripts/spec-check.ts,test/spec-check.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/spec-check-unit-tests",
+      "worktree": "worktrees/wt-spec-check-unit-tests",
+      "status": "done",
+      "createdAt": "2026-11-16T01:34:52Z",
+      "submittedAt": "2026-11-16T01:35:51Z",
+      "mergedAt": "2026-11-16T01:36:11Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
