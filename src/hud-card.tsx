@@ -392,7 +392,7 @@ export const HudCard = (props: {
           condition
         </text>
         <text wrapMode="none" flexGrow={1} fg={theme().text.base} attributes={conditionHovered() ? TextAttributes.UNDERLINE : undefined}>
-          {truncate(g().condition, CONDITION_MAX)}
+          {truncate(g().condition, CONDITION_MAX, ascii() ? "..." : "\u2026")}
         </text>
         <Show when={conditionHovered()}>
           <Hint theme={theme()} text="copy" />

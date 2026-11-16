@@ -101,7 +101,7 @@ export const StatusDialogBody = (props: {
   return (
     <box flexDirection="column" gap={1}>
       <Show when={props.noticeStale?.()}>
-        <text wrapMode="word" fg={theme().text.faint}>{"snapshot unavailable — showing last known state"}</text>
+        <text wrapMode="word" fg={theme().text.faint}>{"snapshot unavailable - showing last known state"}</text>
       </Show>
       <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
         {(goal) => (

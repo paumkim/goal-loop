@@ -3219,3 +3219,54 @@ by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check
 ok), coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream DE — the dumb-terminal sweep: no raw Unicode on the reduced-color surface (2026-11-17)
+
+Interpretation of this iteration: a fresh pinned re-audit (ses_e1c260c0fffeCdIaXB9JoDJ84I) of dev at 6701719
+found the last surviving dumb-terminal glyph leaks and two dead-code/guard nits — the reduced-color
+guarantee (NO_COLOR / TERM=dumb; weight and glyph shape carry all meaning) had been shipped for every
+glyph family except this one. This workstream closes the family; it does not re-audit or re-ship anything else.
+
+315. truncate() (src/core/format.ts) gains an `ellipsis` parameter (default "\u2026" — behavior for
+     every existing caller unchanged). The ellipsis's OWN WIDTH is now reserved in the cell budget
+     (stringWidth(ellipsis), not a flat 1), so a 3-cell "..." never paints past `max`. Threads through:
+     fitLadder (pill degradation; hud.ts), pinSuffix (pill pin; hud.ts, ascii arm via the caller in
+     tui.tsx), the card's condition row (hud-card.tsx CONDITION_MAX), the rail summary
+     (tui-history.tsx SUMMARY_MAX), the why-ledger reason (WHY_REASON_MAX). Callers pass "..." under
+     their ascii() predicate; fitLadder receives the ellipsis from pillModel's existing ascii param.
+     formatStatus() (the plain-text `/goal` report, not TUI chrome) deliberately keeps the Unicode
+     ellipsis and documents why.
+316. Rail connector demoted: RailSummary paints `|` (not U+2502) under ascii() (tui-history.tsx).
+     Fold-row label demoted: `...` (not U+2026) (tui-history.tsx). Sparkline caption arrow demoted:
+     oldest->newest (not U+2192) (tui-history.tsx). Streak suffixes and remediation copy paint an
+     ASCII `x` for U+00D7 and an ASCII hyphen-minus for U+2014 (tui-history.tsx streak suffix, hud.ts
+     remediationFor) — unconditionally: both substitutes are width-1 in every terminal and lose no
+     information, so no per-surface branch is carried.
+317. status-dialog.tsx snapshot-unavailable notice and the rail fold row's "older iterations" affordance:
+     em-dashes replaced by " - " (unconditional ASCII). U+00B7 middle-dot separators (formatSpend, the
+     dialog footer hints, the pill/card/dialog `·` joins) are EXPLICITLY TOLERATED as Latin-1-safe
+     chrome: they are one-cell separators with no meaning-bearing shape, decode identically in every
+     terminal that can render ASCII text, and demoting them would cost dozens of per-site branches for
+     zero legibility gain. This is the documented exception to the reduced-color glyph rule, not an
+     oversight.
+318. Dead code deleted: monochrome() (hud.ts) was a byte-identical duplicate of motionDisabled()
+     with no call sites outside its own test block; deleted with the test. The block is gone, not
+     re-pointed — motionDisabled already pins the same predicate table.
+319. Finding 8 (loopMaxLoops not isFinite-guarded in hud-card.tsx:315, hud.ts:98, hud.ts:170) verified
+     MOOT at the source of truth: src/core/wire.ts validates loopMaxLoops with isFiniteNumber (typeof
+     number && Number.isFinite), as it does for turns/elapsedMs — /Infinity can never arrive from the
+     wire. No guards were added; nothing was weakened.
+320. Finding 9 (the why ledger's mono arm was unpinned): new render test pins HistoryBlock under
+     mono: the ✓ copied ack
+     demoted to + copied, and no ✓ leaking onto a dumb surface (test/tui-render.test.tsx). Evidence is
+     render-layer only; live TUI remains unverifiable (dead provider).
+321. Four named frames re-pinned PROGRAMMATICALLY (TZ=UTC + bun's multiline-string framing): HudCard ·
+     failed, HudCard · paused at the turn cap, StatusDialogBody · paused at the turn cap, LoopSection ·
+     ASCII (rail connector now `|`). Nothing else in the corpus moved. Marker files=43 tests=826
+     UNCHANGED: one test function deleted (monochrome), one added (the mono why-ledger pin); the
+     in-place pinSuffix ascii assertion extends an existing function.
+
+Marker unchanged: files=43 tests=826. No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check ok),
+coordinator submit + merge-next, bun run check on dev shown green at the end.

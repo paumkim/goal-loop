@@ -63,11 +63,11 @@ export const pillCaret = (open: boolean, ascii: boolean = false): string => open
  * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with `…`
  * when even it cannot fit; the pill never paints wider than `budget` cells.
  */
-const fitLadder = (rungs: readonly string[], budget: number): string => {
+const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = "\u2026"): string => {
   for (const rung of rungs) {
     if (stringWidth(rung) <= budget) return rung
   }
-  return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)))
+  return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)), ellipsis)
 }
 
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
@@ -105,11 +105,12 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
     const text = fitLadder(
       [`${core}${pipSeg}${head}${turns}${compacting}${retrying}`, `${core}${pipSeg}${head}${turns}${compacting}`, `${core}${pipSeg}${head}${turns}`, `${core}${pipSeg}${head}`, `${core}${head}`],
       budget,
+      ascii ? "..." : "\u2026",
     )
     return { text, tone }
   }
   const core = `${glyph} goal ${state} · ${formatDurationCoarse(elapsed)}`
-  const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget)
+  const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget, ascii ? "..." : "\u2026")
   return { text, tone }
 }
 
@@ -185,12 +186,12 @@ export const PIN_PREFIX = " · pin: "
  * scrolls. Returns "" when the condition cannot get `PIN_MIN_WIDTH` cells — a lone hint is worse
  * than none. `conditionMax` is the caller's remaining width budget, not the total terminal width.
  */
-export const pinSuffix = (condition: string, conditionMax: number): string => {
+export const pinSuffix = (condition: string, conditionMax: number, ascii: boolean = false): string => {
   const budget = Math.floor(conditionMax)
   if (!Number.isFinite(budget) || budget < PIN_MIN_WIDTH) return ""
   const flat = condition.replace(/\s+/g, " ").trim()
   if (flat.length === 0) return ""
-  return `${PIN_PREFIX}${truncate(flat, budget)}`
+  return `${PIN_PREFIX}${truncate(flat, budget, ascii ? "..." : "\u2026")}`
 }
 
 /**
@@ -200,16 +201,6 @@ export const pinSuffix = (condition: string, conditionMax: number): string => {
  * Anything else gets the pulse — it only ever runs while `evaluating` is true.
  */
 export const motionDisabled = (env: Record<string, string | undefined>): boolean =>
-  env.NO_COLOR !== undefined || env.TERM === "dumb"
-
-/**
- * Reduced-color surface: same env predicate as `motionDisabled` (NO_COLOR set, or a terminal that cannot
- * animate/color). The plugin drops every chromatic accent from its own chrome — glyph shapes, status words
- * and weight (bold) carry all meaning, and hover becomes an underline instead of a background fill. The
- * host's own chrome is out of scope: opencode renders full color regardless of NO_COLOR (verified live),
- * so the guarantee here covers plugin surfaces only.
- */
-export const monochrome = (env: Record<string, string | undefined>): boolean =>
   env.NO_COLOR !== undefined || env.TERM === "dumb"
 
 /** Minimal structural theme for the accent mappers: the host's ResolvedTheme subsets fit, and so do the minimal test themes. Generic over the color representation so RGBA and hex strings both type-check. */
@@ -282,7 +273,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (goal.status === "failed") {
     // The classifier's label is short and stable; naming the cause beats a generic reset line. Falls back for records persisted before failureLabel existed.
     const label = goal.failureLabel
-    return { tone: "error", text: label ? `${label} — /goal clear to reset` : `goal failed — /goal clear to reset` }
+    return { tone: "error", text: label ? `${label} - /goal clear to reset` : `goal failed - /goal clear to reset` }
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible · rephrase the condition, else /goal clear` }
@@ -290,7 +281,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   // A paused goal stopped executing for exactly one of three reasons; the record carries which one, so the remedy is exact rather than generic (records persisted before pauseCause existed fall through to the catch-all line).
   if (goal.status === "paused") {
     const cause = goal.pauseCause
-    if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal — a message will not extend it` }
+    if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal - a message will not extend it` }
     if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns · send a message to resume, or /goal clear` }
     if (cause === "user") return { tone: "warning", text: `interrupted · send a message to resume` }
     return { tone: "warning", text: `paused · send a message to resume, or /goal clear` }
@@ -309,7 +300,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (streak.verdict === "not_met" && streak.count >= 3) {
     return {
       tone: "warning",
-      text: `${streak.count}× not_met in a row · consider evaluator.verifyCommand`,
+      text: `${streak.count}x not_met in a row · consider evaluator.verifyCommand`,
     }
   }
   return undefined

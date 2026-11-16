@@ -63,10 +63,10 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
   return (
     <box flexDirection="row" gap={2} onMouseUp={props.onCopy ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy() } : undefined} onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
       <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
-        │
+        {ascii() ? "|" : "│"}
       </text>
       <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined}>
-        {`│ ${truncate(props.text, SUMMARY_MAX)}`}
+        {`${ascii() ? "|" : "│"} ${truncate(props.text, SUMMARY_MAX, ascii() ? "..." : "\u2026")}`}
         {props.copied?.() ? (ascii() ? " + copied" : " ✓ copied") : ""}
       </text>
     </box>
@@ -158,7 +158,7 @@ export const LoopSection = (props: {
   }
   const streakSuffix = () => {
     const s = verdictStreak(props.goal.history ?? [])
-    return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
+    return s.count >= 2 && s.verdict ? ` · ${s.count}x ${s.verdict.replace("_", " ")} in a row` : ""
   }
   const isTerminal = () => props.goal.status === "achieved" || props.goal.status === "impossible" || props.goal.status === "cleared" || props.goal.status === "failed"
   const capReached = () => {
@@ -248,7 +248,7 @@ export const LoopSection = (props: {
               {s().bars}
             </text>
             <text wrapMode="none" fg={theme().text.faint}>
-              {`~${formatTokens(s().peak)} peak · arm sizes, oldest→newest`}
+              {`~${formatTokens(s().peak)} peak · arm sizes, oldest${ascii() ? "->" : "→"}newest`}
             </text>
           </box>
         )}
@@ -257,10 +257,10 @@ export const LoopSection = (props: {
       <Show when={done() > RAIL_VISIBLE}>
         <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
-            …
+            {ascii() ? "..." : "…"}
           </text>
           <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.UNDERLINE : undefined}>
-            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} — click or press x`}
+            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`}
           </text>
         </box>
       </Show>
@@ -384,7 +384,7 @@ const WhyLedger = (props: {
                 {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}`}
               </text>
               <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.UNDERLINE : undefined}>
-                {truncate(entry.reason, WHY_REASON_MAX)}
+                {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
                 {copied() === entry.at ? (ascii() ? " + copied" : " ✓ copied") : ""}
               </text>
               <Show when={interactive && hovered() === entry.at}>
@@ -450,7 +450,7 @@ export const HistoryBlock = (props: {
   const streak = () => verdictStreak(history())
   const streakSuffix = () => {
     const s = streak()
-    return s.count >= 2 && s.verdict ? ` · ${s.count}× ${s.verdict.replace("_", " ")} in a row` : ""
+    return s.count >= 2 && s.verdict ? ` · ${s.count}x ${s.verdict.replace("_", " ")} in a row` : ""
   }
   const elapsed = () => formatDurationCoarse(props.elapsedMs())
   const countsText = () => {
