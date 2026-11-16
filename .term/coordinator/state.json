@@ -1636,6 +1636,17 @@
       "submittedAt": "2026-11-16T09:14:07Z",
       "mergedAt": "2026-11-16T09:14:33Z",
       "mergedInto": "dev"
+    },
+    "tui-card-row-ceiling": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-card-row-ceiling",
+      "worktree": "worktrees/wt-tui-card-row-ceiling",
+      "status": "done",
+      "createdAt": "2026-11-16T09:17:29Z",
+      "submittedAt": "2026-11-16T09:19:51Z",
+      "mergedAt": "2026-11-16T09:20:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
