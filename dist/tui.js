@@ -1358,6 +1358,148 @@ function reviewSummaryLine(review) {
   return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
 }
 
+// src/core/spend-ledger.ts
+import { writeFileSync as writeFileSync4 } from "fs";
+import { join as join4, resolve as resolve4 } from "path";
+var pad4 = (n) => String(n).padStart(2, "0");
+var spendLedgerName = (nowMs, attempt = 0) => {
+  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  const stamp = `${valid.getUTCFullYear()}${pad4(valid.getUTCMonth() + 1)}${pad4(valid.getUTCDate())}` + `-${pad4(valid.getUTCHours())}${pad4(valid.getUTCMinutes())}${pad4(valid.getUTCSeconds())}`;
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-spend-ledger-${stamp}${suffix}.md`;
+};
+var measuredSpend = (entry) => {
+  const spend = entry.spend;
+  if (!spend)
+    return;
+  const fields = [spend.cost, spend.input, spend.output, spend.reasoning, spend.cacheRead, spend.cacheWrite];
+  if (!fields.every((n) => Number.isFinite(n) && n >= 0))
+    return;
+  return spend;
+};
+var count = (n) => n !== undefined && Number.isFinite(n) ? String(Math.round(n)) : GAP;
+var costCell = (spend) => spend ? formatCost(spend.cost) : GAP;
+var toolsCell = (entry) => Number.isFinite(entry.toolCalls) ? String(entry.toolCalls) : GAP;
+var totalsOf = (entries) => {
+  let measured = 0;
+  let turns = 0;
+  let tools = 0;
+  let cost = 0;
+  let input = 0;
+  let output = 0;
+  let reasoning = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  for (const entry of entries) {
+    turns += Number.isFinite(entry.turns) ? entry.turns : 0;
+    tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
+    const spend = measuredSpend(entry);
+    if (!spend)
+      continue;
+    measured += 1;
+    cost += spend.cost;
+    input += spend.input;
+    output += spend.output;
+    reasoning += spend.reasoning;
+    cacheRead += spend.cacheRead;
+    cacheWrite += spend.cacheWrite;
+  }
+  if (measured === 0)
+    return { iterations: entries.length, measured, turns, tools };
+  return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite };
+};
+function buildSpendLedger(goal, nowMs) {
+  const entries = goal.loopHistory ?? [];
+  const isLoop = Boolean(goal.loopEnabled);
+  const totals = totalsOf(entries);
+  const stamp = isoOf(nowMs);
+  const lines = [];
+  lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
+  lines.push("");
+  lines.push(`_Generated ${stamp} from the opencode-goal plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push("");
+  lines.push(isLoop ? "## Objective" : "## Condition");
+  lines.push("");
+  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
+  lines.push("");
+  lines.push(`## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| iteration | ended | spend | in | out | reasoning | cache read | cache write | tools | sha |", "| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |");
+    for (const entry of entries) {
+      const spend = measuredSpend(entry);
+      lines.push(`| v${entry.version} | ${isoOf(entry.endedAt)} | ${costCell(spend)} | ${count(spend?.input)} | ${count(spend?.output)} | ${count(spend?.reasoning)} | ${count(spend?.cacheRead)} | ${count(spend?.cacheWrite)} | ${toolsCell(entry)} | ${shortSha(entry.sha)} |`);
+    }
+    lines.push("");
+  }
+  lines.push("## Totals");
+  lines.push("");
+  lines.push(`- Iterations recorded: ${totals.iterations}`);
+  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
+  if (totals.measured === 0) {
+    lines.push("- Spend across iterations: no iteration carried a measurement");
+    lines.push(`- In tokens: ${GAP} \xB7 Out tokens: ${GAP} \xB7 Reasoning tokens: ${GAP}`);
+    lines.push(`- Cache read: ${GAP} \xB7 Cache write: ${GAP}`);
+  } else {
+    const partial = totals.measured < totals.iterations ? ` (${totals.measured} of ${totals.iterations} iterations measured \u2014 the unmeasured iterations are not $0.00; they are unknown)` : "";
+    lines.push(`- Spend across measured iterations: ${formatCost(totals.cost ?? 0)}${partial}`);
+    lines.push(`- In tokens: ${count(totals.input)} \xB7 Out tokens: ${count(totals.output)} \xB7 Reasoning tokens: ${count(totals.reasoning)}`);
+    lines.push(`- Cache read: ${count(totals.cacheRead)} \xB7 Cache write: ${count(totals.cacheWrite)}`);
+    if (totals.measured < totals.iterations) {
+      lines.push(`- Token totals sum the ${totals.measured} measured iterations only; adding the ${totals.iterations - totals.measured} unmeasured ones would be inventing numbers.`);
+    }
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("_opencode-goal spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
+  return {
+    markdown: lines.join(`
+`),
+    iterations: totals.iterations,
+    measured: totals.measured,
+    ...totals.cost !== undefined ? { spendTotal: totals.cost } : {}
+  };
+}
+function exportSpendLedger(goal, nowMs, dir) {
+  const targetDir = resolve4(dir);
+  const ledger = buildSpendLedger(goal, nowMs);
+  const bytes = Buffer.byteLength(ledger.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join4(targetDir, spendLedgerName(nowMs, attempt));
+    try {
+      writeFileSync4(path, ledger.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        iterations: ledger.iterations,
+        measured: ledger.measured,
+        ...ledger.spendTotal !== undefined ? { spendTotal: ledger.spendTotal } : {}
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free spend ledger filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function spendSummaryLine(result) {
+  if (result.iterations === 0)
+    return "no landed iterations to report";
+  if (result.measured === 0)
+    return `spend ledger written: no iteration carried a measurement (0 of ${result.iterations})`;
+  const spend = formatCost(result.spendTotal ?? 0);
+  if (result.measured < result.iterations)
+    return `spend ledger written: ${spend} across ${result.measured} of ${result.iterations} measured iterations`;
+  return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
+}
+
 // src/core/dossier-attest.ts
 var ANSWERS = new Set(["yes", "no", "unknown"]);
 var cellAnswer = (raw) => {
@@ -1537,7 +1679,7 @@ function selectNewestSealedDossier(entries) {
 
 // src/tui.tsx
 import { readFileSync, readdirSync, statSync } from "fs";
-import { join as join4 } from "path";
+import { join as join5 } from "path";
 
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
@@ -6543,7 +6685,7 @@ var tui_default = Plugin.define({
             try {
               return {
                 name,
-                mtimeMs: statSync(join4(directory, name)).mtimeMs
+                mtimeMs: statSync(join5(directory, name)).mtimeMs
               };
             } catch {
               return {
@@ -6575,7 +6717,7 @@ var tui_default = Plugin.define({
         }
         let markdown;
         try {
-          markdown = readFileSync(join4(directory, newest), "utf8");
+          markdown = readFileSync(join5(directory, newest), "utf8");
         } catch (error) {
           safeToast({
             title: "attest failed",
@@ -6652,6 +6794,31 @@ var tui_default = Plugin.define({
       } catch (error) {
         safeToast({
           title: "review failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
+      }
+    };
+    const spendLedgerAction = (sessionID, goal) => {
+      if (!goal || !sessionID)
+        return;
+      try {
+        const result = exportSpendLedger(goal, Date.now(), process.cwd());
+        const summary = spendSummaryLine(result);
+        const title = result.iterations === 0 ? "nothing to report" : result.measured < result.iterations ? "spend ledger written (partial)" : "spend ledger written";
+        const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success";
+        safeToast({
+          title,
+          message: `${result.path} \xB7 ${summary}`,
+          variant,
+          duration: 6000,
+          sessionID
+        });
+      } catch (error) {
+        safeToast({
+          title: "spend report failed",
           message: String(error instanceof Error ? error : error).slice(0, 200),
           variant: "error",
           duration: 5000,
@@ -7258,6 +7425,19 @@ var tui_default = Plugin.define({
             const sessionID = currentSession();
             const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
             reviewRecordAction(sessionID, goal);
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.spend",
+        title: "Goal: export the spend ledger (markdown report)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            spendLedgerAction(sessionID, goal);
           } catch {}
         }
       }, {
