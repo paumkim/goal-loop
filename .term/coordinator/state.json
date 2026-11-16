@@ -2142,6 +2142,26 @@
       "submittedAt": "2026-11-16T16:23:11Z",
       "mergedAt": "2026-11-16T16:25:48Z",
       "mergedInto": "dev"
+    },
+    "tui-dossier-view": {
+      "agent": "orchestrator",
+      "paths": "src/core/dossier-view.ts,src/status-dialog.tsx,src/tui.tsx,src/core/dialog-keys.ts,test/dossier-view.test.ts,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/dialog-keys.test.ts,test/package-integrity.test.ts,SPEC.md,docs",
+      "branch": "wt/tui-dossier-view",
+      "worktree": "worktrees/wt-tui-dossier-view",
+      "status": "done",
+      "createdAt": "2026-11-16T16:31:19Z",
+      "submittedAt": "2026-11-16T16:47:39Z",
+      "mergedAt": "2026-11-16T16:53:11Z",
+      "mergedInto": "dev"
+    },
+    "context-after-compaction": {
+      "agent": "inkling",
+      "paths": "src/core/context-size.ts,src/core/entries.ts,test/entries.test.ts,test/context-size.test.ts",
+      "branch": "wt/context-after-compaction",
+      "worktree": "worktrees/wt-context-after-compaction",
+      "status": "submitted",
+      "createdAt": "2026-11-16T16:39:38Z",
+      "submittedAt": "2026-11-16T16:44:52Z"
     }
   },
   "mergeLock": null
