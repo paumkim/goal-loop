@@ -144,8 +144,6 @@ export const LoopSection = (props: {
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
   const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.slice(0, 7)}` : "")
-  // Per-iteration spend attribution: the server stamps the arm→advance usage delta on each completed entry. Render the cost only — the rail row is tight. Omitted when the arm or the advance could not measure.
-  const spendSuffix = (entry: { spend?: { readonly cost: number } }) => (entry.spend && entry.spend.cost > 0 ? ` · ${formatCost(entry.spend.cost)}` : "")
   const paused = () => props.goal.status === "paused"
   const stateWord = () => {
     const s = props.goal.status
@@ -335,6 +333,9 @@ export const LoopSection = (props: {
 }
 
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
+// Spend attribution, one grammar everywhere: the loop rail stamps the arm→advance delta on each completed iteration; the why ledger stamps the per-turn delta on each verdict. Render the cost only. Omitted when the host could not measure (or the turn cost nothing).
+const spendSuffix = (entry: { spend?: { readonly cost: number } }) => (entry.spend && entry.spend.cost > 0 ? ` · ${formatCost(entry.spend.cost)}` : "")
+
 /**
  * The why ledger: at most the three most recent verdicts whose reason text is non-empty,
  * oldest first (the trail's own direction). One row per verdict — glyph, verdict word,
@@ -385,7 +386,7 @@ const WhyLedger = (props: {
                 {verdictEntryGlyph(entry, ascii())}
               </text>
               <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
-                {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}`}
+                {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${spendSuffix(entry)}`}
               </text>
               <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined}>
                 {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}

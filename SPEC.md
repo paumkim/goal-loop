@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=870 -->
+<!-- spec-check files=43 tests=876 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1123,7 +1123,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 
 ### A. Correctness
 
-- **A-1 (high) — `src/runtime/controller.ts:197` & `:881` — compaction misses are double-counted.** A no-op compaction reported via
+- **A-1 (high) — `src/runtime/controller.ts` line 197 & line 881 (at audit time) — compaction misses are double-counted.** A no-op compaction reported via
   `session.compaction.ended` increments `loopCompact.misses` (the ended-event path), and the next armed iteration's settle increments the
   same pending request again (the arm path), so one physical unlanded compaction consumes two of the four misses and forces the re-request
   and the "Compaction pending" notice an iteration early. Proposed fix: single-source miss accounting — the arm-time settle must not count a
@@ -1161,7 +1161,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 
 ### B. Reliability
 
-- **A-8 (medium) — `src/runtime/controller.ts:253` — `set()` does not await the initial `commit(record)`.** A crash immediately after
+- **A-8 (medium) — `src/runtime/controller.ts` line 253 (at audit time) — `set()` does not await the initial `commit(record)`.** A crash immediately after
   `/goal` returns can lose the just-set record even though `set()` is async and `commit()` returns a promise. Same pattern in
   `onUserPrompt`, `evaluationFailed`, `handleFailure` (intentional fire-and-forget there, results superseded by the next commit) — but the
   set path is the one place a lost write silently un-sets the goal. Proposed fix: `await this.commit(record)` in `set()`.
@@ -3664,3 +3664,41 @@ bun run compile, bun run check end-to-end green incl. spec-check (43/870) and th
 line-reference guard. Evidence is source + test-render layers; live TUI remains unverifiable.
 Follow-ups NOT done in this slice: the pinned-pill width budget, a live check on an actual
 120-column terminal.
+
+## Workstream CN — per-turn spend in the why ledger (2026-11-16)
+
+Interpretation of this iteration: CK stamped the arm→advance usage delta on each completed LOOP
+iteration, but the per-turn layer — the verdict entries in the history — carried the evaluating
+turn's tool count (CL) and nothing about what the turn cost. The why ledger is where the
+evaluator's per-turn calls live; it now carries per-turn spend, measured, never estimated.
+
+351. src/core/types.ts — VerdictEntry gains `readonly spend?: UsageSnapshot` (additive; records
+     written before this change stay valid and paint as before). src/runtime/controller.ts —
+     Runtime gains a runtime-local `turnUsage?: UsageSnapshot` (dropped on restore, like
+     armUsage). arm() seeds it with the measured arm-time reading for EVERY goal (loop or not);
+     evaluate() diffs the fetched cumulative usage against it (the arm-time reading seeds the
+     first turn), stashes the new reading, and history.push stamps `spend: diffUsage(...)` when
+     both sides measured. After a restore there is no previous reading, so the first recorded
+     verdict carries no spend rather than a cumulative-since-set number — never estimated. A
+     failed evaluation still advances turnUsage (the tokens were spent; the next turn's delta
+     covers them, matching armUsage's posture). src/core/wire.ts — isVerdictEntry validates
+     spend when present via the existing isUsageSnapshot (same narrowing as LoopEntry.spend).
+352. src/tui-history.tsx — the loop rail's spend suffix (added by CK) is hoisted to module
+     scope as spendSuffix and reused: the why ledger's muted furniture row appends ` · $x.xx`
+     per verdict only when spend.cost > 0, the same paint-nothing-when-zero grammar as the
+     rail. Format via formatCost. met stays blue (verdictAccentColor); no glyph/hue change —
+     the cost rides the existing muted text. The verdict trail (glyph lane) is untouched.
+353. Docs: `docs/index.html` + `docs/runtime.html` epoch anchors re-pointed at the current
+     finish()/invalidate line after the controller grew; SPEC.md's historical audit refs to the
+     controller (the A-1 and A-8 entries) are rephrased from bare `path:line` to prose
+     ("line N (at audit time)") so the line-ref guard does not pin stale numbers as live refs —
+     the audit text and resolutions are unchanged. Tests: controller.test.ts +2 (arm-seeded
+     first-turn delta then per-turn deltas; absent spend when usage throws), wire.test.ts +2
+     (accept spend / reject broken or partial spend), tui-hud.test.tsx +2 (both costs paint in
+     the why ledger; a spend-free record paints no cost). Spec-check marker files=43
+     tests=870 -> 876.
+
+Verification (all run in the worktree): bun test (876 pass, 0 fail), bun run compile,
+bun run check end-to-end green incl. spec-check (43/876) and the docs line-reference guard.
+Evidence is source + test-render layers; live TUI remains unverifiable. Follow-ups NOT done in
+this slice: per-iteration spend in the final tally, spend in the trail.

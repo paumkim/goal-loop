@@ -92,6 +92,8 @@ interface Runtime {
   capFreezeNotified?: boolean
   /** Cumulative usage snapshot captured when the current loop iteration was armed (arm / advance). Runtime-local like iterationToolCalls; a restored runtime drops it, so the next recorded iteration carries no spend — never estimated. */
   armUsage?: UsageSnapshot
+  /** Cumulative usage reading from the previous evaluation turn (arm-time reading seeds it). Runtime-local like armUsage; a restored runtime drops it, so the first recorded verdict after a restore carries no turn spend — never estimated. */
+  turnUsage?: UsageSnapshot
 }
 
 const HISTORY = 20
@@ -347,9 +349,10 @@ export class GoalController {
     }
     this.goals.set(sessionID, record)
     this.reset(sessionID)
-    if (loop && measured) {
-      const runtime = this.runtimes.get(sessionID)
-      if (runtime) runtime.armUsage = measured
+    const armRuntime = this.runtimes.get(sessionID)
+    if (armRuntime && measured) {
+      if (loop) armRuntime.armUsage = measured
+      armRuntime.turnUsage = measured
     }
     // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
@@ -653,6 +656,9 @@ export class GoalController {
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
     const usage = await session.usage(sessionID).catch(() => undefined)
+    // Per-turn spend: the delta against the previous reading (the arm-time reading seeds the first turn). Runtime-local — after a restore there is no previous reading, so the verdict carries no spend rather than a cumulative-since-set number.
+    const turnSpend = usage && runtime.turnUsage ? diffUsage(usage, runtime.turnUsage) : undefined
+    if (usage) runtime.turnUsage = usage
     if (this.stale(record, runtime, epoch)) return
     const abort = new AbortController()
     runtime.abort = abort
@@ -705,7 +711,7 @@ export class GoalController {
     record.verdict = result.verdict
     record.reason = result.reason || undefined
     // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools })
+    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}) })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
     if (result.verdict === "met") {
