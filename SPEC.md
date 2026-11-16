@@ -2912,3 +2912,28 @@ by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (807 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CS — the pinned-condition budget counts cells, not code units (2026-11-16)
+
+Interpretation of this iteration: audit finding 4 (pinned re-audit ses_e1c980f2fffeR6lPzktJKz2sQs,
+HEAD 811136f) — pinBudget subtracted string length from terminal width while the pill paints
+cells; a multibyte glyph in the state prefix or landing suffix would silently shrink the pin
+budget or overflow the row.
+
+286. src/hud-card.tsx: pinBudget(terminalWidth, pillText) now takes the pill text string and
+     measures it with stringWidth, and subtracts stringWidth(PIN_PREFIX) — cells in, cells out,
+     both sides of the arithmetic. PIN_PREFIX is the constant the pill paints right before the
+     pinned condition, so the budget matches the painted cells exactly.
+287. src/tui.tsx: the pill mount passes the base string (prefix + model.text + landing suffix) to
+     pinBudget instead of base.length — the call-site unit mismatch that made misuse easy is gone.
+288. Evidence: unit layer. test/tui-hud.test.tsx pinBudget tests updated to invoke the new
+     signature and gained an East-Asian-wide cell assertion (世 × 20 glyphs = 40 cells — the ─
+     glyph first used was East-Asian ambiguous and does not measure 2 cells). No render case
+     changes (no pinned frame carries a wide glyph). Live TUI remains unverifiable (dead
+     provider).
+
+No marker change: files=43 tests=807 unchanged (tests edited in place, none added). No version
+bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev. No docs
+line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (807 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.

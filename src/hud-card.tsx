@@ -14,6 +14,7 @@
  *   ╰──────────────────────────────────────────────────╯
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
+import stringWidth from "string-width"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
@@ -124,9 +125,9 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
 export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): number => cardRowPlan(goal, contextOpen, maxRows).rows
 
-/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
-export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
-  Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
+/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (stringWidth on both sides; the pill carries multibyte glyphs). */
+export const pinBudget = (terminalWidth: number, pillText: string): number =>
+  Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1
 
 // Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the three plugin chords.
 export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older"

@@ -329,7 +329,9 @@ describe("pinSuffix", () => {
 
 describe("pinBudget", () => {
   test("subtracts the pill text, the pin prefix and one cell of breathing room", () => {
-    expect(pinBudget(80, 40)).toBe(80 - 40 - " · pin: ".length - 1)
+    expect(pinBudget(80, "p".repeat(40))).toBe(80 - 40 - " · pin: ".length - 1)
+    // Wide (East Asian) glyphs in the pill text budget by cells, not code units: 20 glyphs × 2 cells = 40 cells
+    expect(pinBudget(80, "世".repeat(20))).toBe(80 - 40 - stringWidth(" · pin: ") - 1)
   })
 })
 

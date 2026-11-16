@@ -566,7 +566,7 @@ export default Plugin.define({
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
           const base = prefix + model.text + landed
-          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base
+          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base)) : base
         }
         // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
         // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced

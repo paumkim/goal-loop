@@ -1684,7 +1684,7 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   };
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => cardRowPlan(goal, contextOpen, maxRows).rows;
-var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
+var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy) => copied ? "\u2713 copied" : roomy ? "copy condition" : "copy";
@@ -3000,7 +3000,7 @@ var tui_default = Plugin.define({
             return prefix + model.text + landed;
           const g = goal();
           const base = prefix + model.text + landed;
-          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base;
+          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base)) : base;
         };
         const animated = () => {
           const g = goal();
