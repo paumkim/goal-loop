@@ -2795,11 +2795,20 @@ var tui_default = Plugin.define({
         }).then((ok) => {
           if (ok !== true)
             return;
+          const clearFailed = (error) => safeToast({
+            title: "clear failed",
+            message: String(error instanceof Error ? error : error).slice(0, 200),
+            variant: "error",
+            duration: 5000,
+            sessionID
+          });
           try {
             rpc.clear({
               sessionID
-            }, at(sessionID)).catch(() => {});
-          } catch {}
+            }, at(sessionID)).catch(clearFailed);
+          } catch (error) {
+            clearFailed(error);
+          }
         }).catch(() => {});
       } catch {}
     };
