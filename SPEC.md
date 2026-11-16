@@ -232,10 +232,12 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     trim/cap) and `test/store.test.ts` (`sameDirectory` normalization, `loadLive` directory
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
-    `coordinatorFlow` `:64`, `commitStatusSuffix` `:82`, `rubric` `:263`, `facts` `:288`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:461`, `prompts.ts:164`). References were
-    re-synced against HEAD on 2026-11-15 after the restoreOne/sameDirectory and merge-next merges
-    shifted `controller.ts`. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:301`, `facts` `:326`,
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1092`, `prompts.ts:201`). References were
+    re-synced against HEAD on 2026-11-16 (`docs/config.html`, `docs/architecture.html`, `docs/index.html`,
+    `docs/core.html`, `docs/runtime.html`, `docs/install.html`) after source moved past the 2026-11-15
+    sync; the 2026-11-15 values (64/82/263/288, `controller.ts:461`) are superseded and recorded in git
+    history. Note the caveat, discovered the hard way: `docs:check` verifies only page
     stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
     points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
     source moves. The README coordinator section documents the `.gitignore` auto-append and the
