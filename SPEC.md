@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=902 -->
+<!-- spec-check files=44 tests=905 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3945,3 +3945,37 @@ painted for a key that did not work, and this slice keeps it that way.
 Verification (all run in the worktree): bun test (902 pass, 0 fail), bun run check green incl.
 spec-check (44/902). Follow-ups NOT done in this slice: none — the remaining advertised surface is
 covered end-to-end by this suite plus the 39+ click tests.
+
+
+## Workstream CW — the reduced-color contract gets frames, not just predicates (2026-11-16)
+
+Interpretation of this iteration: the design bar demands ASCII/Unicode-safe fallbacks under
+NO_COLOR / TERM=dumb, and the demotion logic was test-pinned at the predicate layer (glyph
+mappers, bar/spark demotions) — but no committed frame had ever rendered under mono, so the
+contract was never eyeballed end-to-end and the render scripts could not even spell mono. The
+frame matrix grew this fifth axis.
+
+379. scripts/render-history.tsx, scripts/render-card.tsx, scripts/render-dialog.tsx — all take a
+     `--mono` flag: it sets NO_COLOR=1 before mounting (components read motionDisabled
+     (process.env) for their ASCII arms) and threads `mono` into LoopSection/HistoryBlock /
+     HudCard / StatusDialogBody + DialogFooter. Frame headings gain a ` · mono` suffix; the
+     demo fixture's trail summary no longer embeds literal glyphs in prose (check/cross/slash),
+     which keeps the smoke assertion honest. scripts/render-dialog.tsx also fixed a latent
+     same-class stale mirror found by this arm: the hand-mirrored `◎ /goal · loop` header now
+     paints goalGlyph(motionDisabled(process.env)) — `*` under reduced color, `◎` above it —
+     matching what src/tui.tsx paints for the host.
+380. Frame evidence (all exit 0): mono history frames demote the bar (`#######-----------`),
+     trail (`+x+x+...`), goal marker (`*`), spark ramp and rails (`|`); mono card demotes the
+     marker, bar and rail glyphs, truncates with ASCII `...`, and keeps `$0.90` whole at the
+     52-cell clamp floor; mono dialog paints the `*` header, `[copy] [pin] [clear]` (80-column
+     compact tier), and `[+ copied]` under --copied. No Unicode glyph survives the arms.
+381. Tests: render-scripts.test.ts +3 (one per script, asserting exit 0, the `· mono` headings,
+     the demoted chrome, the whole-cost clamp floor on the card, and the absence of Unicode
+     ✓/█/◎ in history + dialog frames). spec-check marker files=44 tests=902 -> 905.
+382. The `now`-row gap-run before `· last` investigated and left alone: identical in color and
+     mono frames — it is the trailing allocation of a wrapped flexGrow text line, not a spacing
+     defect.
+
+Verification (all run in the worktree): bun test (905 pass, 0 fail), bun run check green incl.
+spec-check (44/905), frames above. Evidence is source + test-render layers; live TUI remains
+unverifiable. Follow-ups NOT done in this slice: none.

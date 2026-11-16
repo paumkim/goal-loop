@@ -7,13 +7,16 @@
  *
  * Frames: the active loop (terminal 80 -> the 64-cell card at the 80-column floor), the achieved
  * state, and the clamp-floor card at width 52 — the case the spend row's degradation ladder exists
- * for (its dollar figure used to clip mid-figure there).
+ * for (its dollar figure used to clip mid-figure there). --mono prints the same arms under
+ * reduced color (NO_COLOR set); glyphs demote to ASCII.
  */
 import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
+const mono = process.argv.includes("--mono")
+if (mono) process.env.NO_COLOR = "1"
 const theme: HudCardTheme = {
   text: {
     base: RGBA.fromHex("#e8e8e8"),
@@ -68,12 +71,13 @@ const mount = async (name: string, goal: GoalSnapshot, terminal: number, width?:
         onCopyCondition={() => {}}
         onTogglePin={() => {}}
         width={width}
+        mono={mono}
       />
     ),
     { width: terminal, height: 12 },
   )
   await setup.renderOnce()
-  console.log(name)
+  console.log(mono ? name.replace("=== ", "=== ") + " · mono" : name)
   console.log(setup.captureCharFrame())
   await setup.renderer.destroy()
 }

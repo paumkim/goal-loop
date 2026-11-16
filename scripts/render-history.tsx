@@ -9,6 +9,8 @@
  *
  * Modes: default prints all three frames (looped goal, non-looped goal with verdicts, fresh
  * non-looped goal); --empty prints the looped frame with an empty history.
+ * --mono prints every frame under reduced color: the smoke arm for the NO_COLOR / TERM=dumb
+ * contract — glyphs demote to ASCII (verified by the smoke test) and no frame may regress.
  */
 import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
@@ -19,6 +21,8 @@ import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 const width = Number(process.argv[2] ?? 112)
 const height = Number(process.argv[3] ?? 34)
 const empty = process.argv.includes("--empty")
+const mono = process.argv.includes("--mono")
+if (mono) process.env.NO_COLOR = "1"
 
 const theme: HistoryTheme = {
   text: {
@@ -63,7 +67,7 @@ const loopedGoal: GoalSnapshot = {
   loopMaxLoops: 5,
   loopHistory: empty ? [] : [
     { version: 1, condition: "add a progress bar to the loop section", summary: "Added an 18-cell block progress bar under the loop header; filled cells use feedback.info, empty cells text.faint. Caption reads 'vN of at most M · K complete'.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9001122334", spend: { ...spend, cost: 0.25 } },
-    { version: 2, condition: "render the per-turn evaluator verdict trail", summary: "Trail renders up to the 24 newest verdicts as ✓/✗/⊘ glyphs, oldest first, with a 'shown of total' caption. Left-truncates long trails; section omitted when empty.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, sha: "b2c3d4e5f60718293a4b5c6d7e8f900112233445", spend: { ...spend, cost: 0.5 } },
+    { version: 2, condition: "render the per-turn evaluator verdict trail", summary: "Trail renders up to the 24 newest verdicts as check/cross/slash glyphs, oldest first, with a 'shown of total' caption. Left-truncates long trails; section omitted when empty.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, sha: "b2c3d4e5f60718293a4b5c6d7e8f900112233445", spend: { ...spend, cost: 0.5 } },
   ],
   loopNotProgress: 0,
   elapsedMs: 1000 * 60 * 12,
@@ -119,13 +123,13 @@ const freshGoal: GoalSnapshot = {
 }
 
 const frames: Array<[string, () => JSX.Element]> = empty
-  ? [["loop · empty history", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />]]
+  ? [["loop · empty history", () => <LoopSection goal={loopedGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />]]
   : [
-      ["looped · 2 completed iterations, 30 verdicts", () => <LoopSection goal={loopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />],
-      ["looped · paused (stall/retries diagnostics)", () => <LoopSection goal={pausedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 12} />],
-      ["looped · complete (final tally row)", () => <LoopSection goal={completeGoal} theme={theme} elapsedMs={() => 1000 * 60 * 39} />],
-      ["non-looped · 34 verdicts, trailing streak", () => <HistoryBlock goal={nonLoopedGoal} theme={theme} elapsedMs={() => 1000 * 60 * 41} />],
-      ["non-looped · fresh, no verdicts yet", () => <HistoryBlock goal={freshGoal} theme={theme} elapsedMs={() => 1000 * 60 * 2} />],
+      ["looped · 2 completed iterations, 30 verdicts", () => <LoopSection goal={loopedGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 12 + 1000 * 37} />],
+      ["looped · paused (stall/retries diagnostics)", () => <LoopSection goal={pausedGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 12} />],
+      ["looped · complete (final tally row)", () => <LoopSection goal={completeGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 39} />],
+      ["non-looped · 34 verdicts, trailing streak", () => <HistoryBlock goal={nonLoopedGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 41} />],
+      ["non-looped · fresh, no verdicts yet", () => <HistoryBlock goal={freshGoal} theme={theme} mono={mono} elapsedMs={() => 1000 * 60 * 2} />],
     ]
 
 for (const [name, renderFrame] of frames) {
@@ -138,7 +142,7 @@ for (const [name, renderFrame] of frames) {
     { width, height },
   )
   await setup.renderOnce()
-  console.log(`=== ${name} ===`)
+  console.log(`=== ${name}${mono ? " · mono" : ""} ===`)
   console.log(setup.captureCharFrame())
   await setup.renderer.destroy()
 }

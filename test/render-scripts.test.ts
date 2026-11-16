@@ -32,6 +32,39 @@ describe("render script smoke tests", () => {
     expect(gridChars(result.stdout)).toBeGreaterThan(200)
   }, 30_000)
 
+  test("render-history.tsx --mono demotes every glyph to ASCII and no Unicode ✓/█ survives", () => {
+    const result = run("scripts/render-history.tsx", ["--mono"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("· mono ===")
+    expect(result.stdout).toContain("#######-----------")
+    expect(result.stdout).toContain("+x+")
+    expect(result.stdout).not.toContain("✓")
+    expect(result.stdout).not.toContain("█")
+    expect(result.stdout).not.toContain("◎")
+  }, 30_000)
+
+  test("render-card.tsx --mono demotes the frame (asterisk marker, # bar) and keeps $0.90 whole at the clamp floor", () => {
+    const result = run("scripts/render-card.tsx", ["--mono"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("· mono")
+    expect(result.stdout).toContain("* /goal")
+    expect(result.stdout).toContain("#########-------")
+    expect(result.stdout).toContain("$0.90")
+    expect(result.stdout).not.toContain("✓")
+  }, 30_000)
+
+  test("render-dialog.tsx --mono paints the demoted mirrored header and ASCII copy ack", () => {
+    const result = run("scripts/render-dialog.tsx", ["--mono", "--copied"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("* /goal · loop")
+    expect(result.stdout).toContain("[+ copied]")
+    expect(result.stdout).not.toContain("✓")
+    expect(result.stdout).not.toContain("◎")
+  }, 30_000)
+
   test("render-card.tsx exits 0 and prints the three card frames (whole-cost contract at the clamp floor)", () => {
     const result = run("scripts/render-card.tsx")
     expect(result.error).toBeUndefined()
