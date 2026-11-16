@@ -118,8 +118,9 @@ describe("pillModel", () => {
     expect(pill.text).not.toContain("loop")
   })
 
-  test("a goal stuck at 3 failed turns renders the retry counter with the retrying tone", () => {
+  test("a goal stuck at 3 failed turns renders the stuck word with the retry counter and the retrying tone", () => {
     const pill = pillModel(loopedGoal({ retries: 3 }), 1000 * 60 * 12)
+    expect(pill.text).toContain("stuck")
     expect(pill.text).toContain("· retry 3")
     expect(pill.tone).toBe("retrying")
   })
@@ -312,6 +313,17 @@ describe("HudCard", () => {
     expect(frame).toContain("[clear goal]")
     expect(frame).toContain("[esc]")
     expect(frame).not.toContain("fix")
+    await setup.renderer.destroy()
+  })
+
+  test("stuck-retrying state renders the stuck word and the retry remediation", async () => {
+    const goal = loopedGoal({ retries: 4 })
+    const { frame, setup } = await render(() => (
+      <HudCard goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).toContain("stuck")
+    expect(frame).toContain("4 failed turns in a row")
+    expect(frame).not.toContain("active")
     await setup.renderer.destroy()
   })
 

@@ -21,7 +21,9 @@ known value forward (`preserveContextSize`) instead of flickering the row to unk
 the ambient pill while a boundary compaction request is running hot (≥2 misses) in addition to its amber tone —
 a bold flip on a slow tick, never while idle, and off entirely under reduced motion. The same first-class
 treatment covers a goal whose turns all keep failing: `retries` (automatic turns retried since the last success)
-reaching 3 appends `· retry N` to the ambient pill in the same amber warning family, and the `fix` row names
+reaching 3 swaps the ambient pill's state word `active` → `stuck` and appends `· retry N` in the same amber
+warning family; the HUD card mirrors it (the `now` row reads `stuck` in amber and the card border joins the
+amber family, exactly like a hot compaction), and the `fix` row names
 the exact exits (`check provider quota or settings · else /goal clear`) on the card and in the dialog — a
 stuck-retrying goal outranks a hot compaction in the remediation order, because nothing executes at all. When a goal goes live→terminal (achieved / impossible / failed, never
 `cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
@@ -413,7 +415,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=664 -->
+<!-- spec-check files=43 tests=665 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

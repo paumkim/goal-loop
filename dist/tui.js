@@ -266,7 +266,7 @@ var isCompactHot = (goal) => {
   const pending = goal.loopCompact;
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
 };
-var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active";
+var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
 var pillModel = (goal, elapsed) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
@@ -1008,7 +1008,7 @@ import { createElement as _$createElement3 } from "@opentui/solid";
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { createSignal, Show as Show3 } from "solid-js";
 var CONDITION_MAX = 42;
-var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active" : goal.status;
+var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
 var verdictColor = (theme, verdict) => verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint;
 var Hint = (props) => (() => {
   var _el$ = _$createElement3("text");
@@ -1068,7 +1068,7 @@ var HudCard = (props) => {
       return theme().text.feedback.info.base;
     if (s === "failed")
       return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
-    if (s === "impossible" || s === "paused" || isCompactHot(g()))
+    if (s === "impossible" || s === "paused" || isCompactHot(g()) || isRetryStuck(g()))
       return theme().text.feedback.warning.base;
     return theme().border?.base ?? theme().text.faint;
   };
@@ -1078,7 +1078,7 @@ var HudCard = (props) => {
     if (s === "paused")
       return theme().text.feedback.warning.base;
     if (s === "active")
-      return theme().text.feedback.info.base;
+      return isRetryStuck(g()) ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
     if (s === "achieved")
       return theme().text.feedback.info.base;
     if (s === "impossible")

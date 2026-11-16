@@ -18,7 +18,7 @@ import { createSignal, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
-import { isCompactHot, remediationFor, PIN_PREFIX } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -47,7 +47,9 @@ const stateWord = (goal: GoalSnapshot): string =>
         ? "checking"
         : goal.waiting
           ? "waiting"
-          : "active"
+          : isRetryStuck(goal)
+            ? "stuck"
+            : "active"
       : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
 const verdictColor = (theme: HudCardTheme, verdict: Verdict): ColorInput =>
   verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint
@@ -126,14 +128,16 @@ export const HudCard = (props: {
     const s = g().status
     if (s === "achieved") return theme().text.feedback.info.base
     if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
-    if (s === "impossible" || s === "paused" || isCompactHot(g())) return theme().text.feedback.warning.base
+    // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first.
+    if (s === "impossible" || s === "paused" || isCompactHot(g()) || isRetryStuck(g())) return theme().text.feedback.warning.base
     return theme().border?.base ?? theme().text.faint
   }
   const turns = () => g().turns
   const stateColor = () => {
     const s = g().status
     if (s === "paused") return theme().text.feedback.warning.base
-    if (s === "active") return theme().text.feedback.info.base
+    // A stuck-retrying active goal reads amber everywhere the pill does — word and accent stay coherent.
+    if (s === "active") return isRetryStuck(g()) ? theme().text.feedback.warning.base : theme().text.feedback.info.base
     if (s === "achieved") return theme().text.feedback.info.base
     if (s === "impossible") return theme().text.feedback.warning.base
     if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
