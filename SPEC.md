@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=892 -->
+<!-- spec-check files=43 tests=894 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3877,3 +3877,36 @@ check green incl. spec-check (43/892), rendered-frame eyeball at terminals 52/64
 at every width). Evidence is source + test-render layers; live TUI remains unverifiable.
 Follow-ups NOT done in this slice: budget-aware degradation for the status-dialog spend row
 (modal has room; same helper is ready if a future narrow surface needs it).
+
+
+## Workstream CU — the frame matrix closes: every painted surface has a committed frame script (2026-11-16)
+
+Interpretation of this iteration: the remaining honest gap was not a painted defect but a
+verification hole. The render-dialog frame I use to critique the money grammar hand-painted a
+stale footer ("up/down scroll · pgup/pgdn page · home/end start/end · esc close") — a shortcut set
+no footer tier has painted since the footer-tier work — meaning the dialog's bottom edge had never
+been in any committed frame, and the HUD card (the surface that produced CT) had no committed
+frame at all. A frame eyeball is only as honest as what it mounts.
+
+371. scripts/render-card.tsx (new) — mounts the real HudCard; frames the active loop at terminal
+     80 (the 64-cell design at the floor), the achieved state (the state word flips), and width
+     52, the clamp-floor case the spend ladder exists for ($0.90 stays whole, cached drops).
+372. scripts/render-dialog.tsx — the stale hand-painted footer line is gone; the frame mounts the
+     real DialogFooter (and the mount's own esc affordance and bold ◎ /goal · loop header stay
+     mirrored). New flags: --width=N (default 150), --pinned, --copied, --achieved. The theme is
+     typed HistoryTheme & HudCardTheme (identical text shapes; HistoryTheme ignores the extras).
+     The --buggy regression path, --height, and the banner strings are unchanged.
+373. Tests: render-scripts.test.ts +2 (render-card smoke asserting exit 0, the three frame names
+     and the whole-$0.90 clamp-floor contract; render-dialog --width=80 asserts the real
+     compact-tier footer and the absence of the stale line). Spec-check marker files=43
+     tests=892 -> 894.
+374. Frame evidence (all exit 0): the footer width ladder paints as the DialogFooter suite pins —
+     80 short hint + compact labels, 100/120 short hint + noun labels, 140 full key hint; pinned
+     flips to [unpin]/[unpin condition], copied flips to [✓ copied], both compose at 100; the
+     achieved dialog paints the final tally with NO now row (the CS fence end-to-end); the
+     achieved card speaks its state word. Live TUI remains unverifiable (provider).
+
+Verification (all run in the worktree): bun test (894 pass, 0 fail), bun run check green incl.
+spec-check (43/894), rendered frames above. Evidence is source + test-render layers; live TUI
+remains unverifiable. Follow-ups NOT done in this slice: none — a committed pill frame is out of
+reach (the pill mounts inside the host's slot; there is no component seam to render standalone).
