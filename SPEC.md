@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=749 -->
+<!-- spec-check files=43 tests=757 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2421,3 +2421,30 @@ artifact; all work is local on dev. No docs line references were touched by this
 
 Verification (all run in the worktree): bun run compile, bun run check green (749 tests),
 coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CA — full-frame snapshots for the named layout states (2026-11-16)
+
+Interpretation of this iteration: the brief's craft axis demands "snapshot tests for every new layout
+state (empty, armed, waiting-on-evaluator, met, hot, failed)". Until now the suite pinned layout via
+substring assertions and interaction tests, but nothing locked a complete frame — a chrome change
+(spacing, an extra row, a hint reword) could pass every assertion. This closes that gap at the
+strongest available layer.
+
+243. `test/tui-snapshots.test.tsx` (+ `__snapshots__/tui-snapshots.test.tsx.snap`, committed): eight
+     full-frame snapshots across the three headlessly renderable zoom levels — HudCard (armed,
+     evaluating, hot, failed), LoopSection (freshly armed, finished/met with the final tally), and
+     StatusDialogBody (freshly armed with the teaching hint, hot with the remediation row). Snapshot
+     failures mean chrome changed; intended changes regenerate with `bun test -u`, unintended ones
+     are regressions by definition. Frames are deterministic by construction — every clock is injected
+     (`elapsedMs`, `nowMs`); nothing reads the wall clock inside the render path.
+244. The ambient pill (level a) is inline in the plugin's slot render and is not headlessly
+     renderable; its states stay pinned by the pillModel unit tests. The dialog's Esc affordance and
+     the check-flash/landing windows remain source-layer. The snapshot suite adds no chrome, no
+     layout and no motion — purely a regression net.
+
+Marker bumped files=43 tests=749 to files=43 tests=757. No src changes, dist/ untouched by this
+workstream. No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is
+local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run check green (757 tests), coordinator submit +
+merge-next, and bun run check on dev shown green at the end.

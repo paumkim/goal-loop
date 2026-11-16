@@ -1,0 +1,271 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│  [details]   [pin]   [clear goal]                     [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (named layout states) HudCard · evaluating (the evaluator is thinking) 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        checking v3/5 ●●○○○ · 4 turns · 12m               │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (named layout states) HudCard · hot (compaction keeps missing — exact remediation, never a vague warning) 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│ fix        compact pending 2/4 · send a message for a safe   │                
+│            point · else set evaluator.verifyCommand          │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (named layout states) HudCard · failed (failure is a first-class screen) 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        failed v3/5 ●●○○○ · 4 turns · 12m                 │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│ fix        provider error — /goal clear to reset             │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (named layout states) LoopSection · freshly armed (empty ledger, the now row carries the state) 1`] = `
+"loop        v1 of at most 5 · 0 complete                                                            
+                                                                                                    
+            ░░░░░░░░░░░░░░░░░░                                                                      
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+now         ◎  v1 · active · 0 turns · 3m elapsed                                                   
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (named layout states) LoopSection · met (finished loop renders the final tally) 1`] = `
+"loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · achieved · 4 turns · 39m elapsed                              · last ✗ this turn
+                                                                                                    
+final       ✓  loop achieved · 2 iterations · 15 turns · 64 tools · 30m wall                        
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (named layout states) StatusDialogBody · freshly armed (the teaching hint is on screen) 1`] = `
+"active  3m · 0 turns                                                                                
+                                                                                                    
+goal        ship the release notes                                                                  
+                                                                                                    
+hint        the evaluator reads only the transcript — it cannot run commands; prove the condition   
+            with visible output                                                                     
+                                                                                                    
+loop        v1 of at most 5 · 0 complete                                                            
+                                                                                                    
+            ░░░░░░░░░░░░░░░░░░                                                                      
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+now         ◎  v1 · active · 0 turns · 3m elapsed                                                   
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (named layout states) StatusDialogBody · hot (the remediation row rides the dialog, not just the card) 1`] = `
+"active  12m · 4 turns                                                                               
+                                                                                                    
+goal        ship the release notes                                                                  
+                                                                                                    
+evaluator   Evaluator: docs build still fails                                                       
+                                                                                                    
+fix         compact pending 2/4 · send a message for a safe point · else set evaluator.             
+            verifyCommand                                                                           
+                                                                                                    
+spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
+loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+pace        ~15m/iteration · ~45m left at this pace                                                 
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+compact     pending 3m 00s · miss 2/4 · ~148k at request                                            
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · active · 4 turns · 12m elapsed                             · last ✗ this turn   
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
