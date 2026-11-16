@@ -5,7 +5,7 @@
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
 import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
-import { formatDurationCoarse, GOAL_GLYPH } from "./format.ts"
+import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. */
@@ -40,6 +40,34 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
   }
   return { text: `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`, tone }
 }
+
+/** Minimum cells a pinned condition needs before the pin suffix is worth rendering at all. */
+export const PIN_MIN_WIDTH = 12
+export const PIN_PREFIX = " · pin: "
+
+/**
+ * The pinned-condition suffix for the ambient pill: ` · pin: <condition>`, truncated so the whole
+ * pill stays inside `conditionMax` cells for the condition itself. The pill lives on the jump row
+ * directly above the prompt, so a pinned condition stays visible no matter how far the conversation
+ * scrolls. Returns "" when the condition cannot get `PIN_MIN_WIDTH` cells — a lone hint is worse
+ * than none. `conditionMax` is the caller's remaining width budget, not the total terminal width.
+ */
+export const pinSuffix = (condition: string, conditionMax: number): string => {
+  const budget = Math.floor(conditionMax)
+  if (!Number.isFinite(budget) || budget < PIN_MIN_WIDTH) return ""
+  const flat = condition.replace(/\s+/g, " ").trim()
+  if (flat.length === 0) return ""
+  return `${PIN_PREFIX}${truncate(flat, budget)}`
+}
+
+/**
+ * Motion guard for the evaluator-thinking pulse: no animation when the user asked for none
+ * (NO_COLOR) or the terminal cannot animate (TERM=dumb). The host conversation renders in the
+ * same terminal, so the common conventions apply without a plugin-specific variable.
+ * Anything else gets the pulse — it only ever runs while `evaluating` is true.
+ */
+export const motionDisabled = (env: Record<string, string | undefined>): boolean =>
+  env.NO_COLOR !== undefined || env.TERM === "dumb"
 
 export interface Remediation {
   /** `warning` renders amber, `error` renders the faint/red family the theme exposes for failures. */

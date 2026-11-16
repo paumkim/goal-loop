@@ -8,8 +8,8 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor } from "../src/core/hud.ts"
+import { HudCard, hudCardRows, pinBudget, type HudCardTheme } from "../src/hud-card.tsx"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled } from "../src/core/hud.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
@@ -159,6 +159,50 @@ describe("remediationFor", () => {
   })
 })
 
+describe("pinSuffix", () => {
+  test("returns empty when the condition budget is below PIN_MIN_WIDTH or not finite", () => {
+    expect(pinSuffix("condition", 11)).toBe("")
+    expect(pinSuffix("condition", Number.NaN)).toBe("")
+    expect(pinSuffix("condition", -3)).toBe("")
+  })
+
+  test("appends the truncated condition and stays within the budget", () => {
+    const budget = 12
+    const suffix = pinSuffix("some very long condition that goes on and on", budget)
+    expect(suffix.startsWith(" · pin: ")).toBe(true)
+    expect(suffix.length).toBeLessThanOrEqual(" · pin: ".length + budget)
+  })
+
+  test("short condition renders whole without truncation", () => {
+    expect(pinSuffix("ship it", 40)).toBe(" · pin: ship it")
+  })
+
+  test("empty and whitespace-only conditions yield empty", () => {
+    expect(pinSuffix("   ", 40)).toBe("")
+    expect(pinSuffix("", 40)).toBe("")
+  })
+
+  test("newlines are flattened before measuring", () => {
+    expect(pinSuffix("line one\nline two", 40)).toBe(" · pin: line one line two")
+  })
+})
+
+describe("pinBudget", () => {
+  test("subtracts the pill text, the pin prefix and one cell of breathing room", () => {
+    expect(pinBudget(80, 40)).toBe(80 - 40 - " · pin: ".length - 1)
+  })
+})
+
+describe("motionDisabled", () => {
+  test("NO_COLOR and TERM=dumb each disable motion; other terminals keep it", () => {
+    expect(motionDisabled({ NO_COLOR: "" })).toBe(true)
+    expect(motionDisabled({ NO_COLOR: "1" })).toBe(true)
+    expect(motionDisabled({ TERM: "dumb" })).toBe(true)
+    expect(motionDisabled({ TERM: "xterm-256color" })).toBe(false)
+    expect(motionDisabled({})).toBe(false)
+  })
+})
+
 describe("hudCardRows", () => {
   test("grows by one row for the last-verdict line and one for the remediation", () => {
     expect(hudCardRows(loopedGoal())).toBe(6)
@@ -236,6 +280,44 @@ describe("HudCard", () => {
     await setup.mockMouse.click(esc!.x + 2, esc!.y)
     await setup.renderOnce()
     expect(fired).toEqual(["details", "clear", "close"])
+    await setup.renderer.destroy()
+  })
+
+  test("unpinned card renders [pin]; clicking it fires onTogglePin", async () => {
+    const fired: string[] = []
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} pinned={false} onTogglePin={() => fired.push("pin")} />
+    ))
+    expect(frame).toContain("[pin]")
+    expect(frame).not.toContain("[unpin]")
+    const pin = find(frame, "[pin]")
+    expect(pin).toBeDefined()
+    await setup.mockMouse.click(pin!.x + 1, pin!.y)
+    await setup.renderOnce()
+    expect(fired).toEqual(["pin"])
+    await setup.renderer.destroy()
+  })
+
+  test("pinned card renders [unpin]; clicking it fires onTogglePin", async () => {
+    const fired: string[] = []
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} pinned={true} onTogglePin={() => fired.push("unpin")} />
+    ))
+    expect(frame).toContain("[unpin]")
+    const unpin = find(frame, "[unpin]")
+    expect(unpin).toBeDefined()
+    await setup.mockMouse.click(unpin!.x + 2, unpin!.y)
+    await setup.renderOnce()
+    expect(fired).toEqual(["unpin"])
+    await setup.renderer.destroy()
+  })
+
+  test("without onTogglePin the card renders no pin button (back-compat)", async () => {
+    const { frame, setup } = await render(() => (
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).not.toContain("[pin]")
+    expect(frame).not.toContain("[unpin]")
     await setup.renderer.destroy()
   })
 })

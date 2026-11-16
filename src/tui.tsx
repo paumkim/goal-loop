@@ -12,12 +12,12 @@ import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { createMemo, createSignal, Show } from "solid-js"
+import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
-import { HudCard, HudButton, hudCardRows, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel } from "./core/hud.ts"
+import { HudCard, HudButton, hudCardRows, pinBudget, type HudCardTheme } from "./hud-card.tsx"
+import { pillModel, pinSuffix, motionDisabled } from "./core/hud.ts"
 import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -129,9 +129,10 @@ export default Plugin.define({
               {statusBody(sessionID, fallback)}
             </scrollbox>
             <box flexDirection="row" gap={1}>
-              <text fg={context.theme.text.faint} wrapMode="none">up/down scroll · pgup/pgdn page · home/end start/end · esc close</text>
+              <text fg={context.theme.text.faint} wrapMode="none">up/down scroll · pgup/pgdn page · home/end start/end · p pin condition · esc close</text>
               <box flexGrow={1} />
               <HudButton theme={context.theme as unknown as HudCardTheme} label="copy condition" onPress={() => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)} />
+              <HudButton theme={context.theme as unknown as HudCardTheme} label={isPinned(sessionID) ? "unpin" : "pin condition"} onPress={() => togglePin(sessionID)} />
               <HudButton theme={context.theme as unknown as HudCardTheme} label="clear goal" onPress={() => {
                 try {
                   void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
@@ -271,11 +272,31 @@ export default Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
     }, TICK_MS)
 
+    // One-per-session pin registry: a pinned condition is appended (truncated) to the ambient pill so it
+    // stays visible on the jump row no matter how far the conversation scrolls. Lives at setup scope so the
+    // pill, the HUD card and the /goal dialog all read one source. TUI-local by design — a pin is a view
+    // preference, not goal state.
+    const [pinned, setPinned] = createSignal<ReadonlySet<string>>(new Set())
+    const isPinned = (sessionID: string | undefined) => Boolean(sessionID && pinned().has(sessionID))
+    const togglePin = (sessionID: string | undefined) => {
+      if (!sessionID) return
+      setPinned((previous) => {
+        const next = new Set(previous)
+        if (next.has(sessionID)) next.delete(sessionID)
+        else next.add(sessionID)
+        return next
+      })
+    }
+    // Reduced motion: no pulse, no animation. Evaluated once — a user toggling NO_COLOR mid-session gets it on next launch.
+    const motionOk = !motionDisabled(process.env)
+    const [pulse, setPulse] = createSignal(false)
+
     // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
     // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. Left click
     // toggles the compact HUD card (level b — bordered floating panel above the jump row); right click
-    // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). The card is
-    // dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.
+    // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). Pinning the condition
+    // (card `[pin]` button or `p` in the dialog) appends it to the pill so it survives conversation scroll.
+    // The card is dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.
     const [getHudSession, setHudSession] = createSignal<string | undefined>(undefined)
     const copyToClipboard = (text: string, sessionID?: string) => {
       try {
@@ -329,6 +350,33 @@ export default Plugin.define({
             return undefined
           }
         }
+        const dimensions = useTerminalDimensions()
+        const pinnedNow = () => isPinned(props.sessionID)
+        const pillText = () => {
+          const model = pill()
+          if (!model) return ""
+          if (!pinnedNow()) return model.text
+          const g = goal()
+          // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
+          // truncated to whatever cells remain after the state prefix.
+          return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text
+        }
+        // Soft pulse while the evaluator is thinking: bold flips on a slow tick, only while `evaluating`;
+        // reduced-motion/NO_COLOR/TERM=dumb gets a static pill (motionOk stays false).
+        createEffect(() => {
+          if (goal()?.evaluating === true && motionOk) {
+            const timer = setInterval(() => setPulse((value) => !value), 850)
+            onCleanup(() => clearInterval(timer))
+            return
+          }
+          setPulse(false)
+        })
+        const pillAttrs = () => {
+          const underline = hovered() ? TextAttributes.UNDERLINE : 0
+          const bold = goal()?.evaluating === true && pulse() && motionOk ? TextAttributes.BOLD : 0
+          const attrs = underline | bold
+          return attrs === 0 ? undefined : attrs
+        }
         const color = () => {
           const tone = pill()?.tone
           if (tone === "paused" || tone === "hot") return context.theme.text.feedback.warning.base
@@ -368,8 +416,8 @@ export default Plugin.define({
                 } catch {}
               }}
             >
-              <text fg={color()} wrapMode="none" attributes={hovered() ? TextAttributes.UNDERLINE : undefined}>
-                {pill()?.text ?? ""}
+              <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
+                {pillText()}
               </text>
             </box>
             <Show when={cardFor()}>
@@ -388,6 +436,8 @@ export default Plugin.define({
                       setHudSession(undefined)
                     }}
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
+                    pinned={pinnedNow()}
+                    onTogglePin={() => togglePin(props.sessionID)}
                   />
                 </box>
               )}
@@ -415,8 +465,9 @@ export default Plugin.define({
       ],
     }))
 
-    // Scrolling keys for the status dialog. Plain arrow keys are safe here: the commands are only
-    // enabled while the dialog is open, so they never intercept prompt editing. Closing the dialog is
+    // Scrolling keys and the pin toggle for the status dialog. Plain arrow keys are safe here: the
+    // commands are only enabled while the dialog is open, so they never intercept prompt editing.
+    // Closing the dialog is
     // the host's job — `ui.dialog.show` puts the host in modal mode, whose built-in layer binds
     // escape and ctrl+c to dismiss the top dialog and run its onClose.
     context.keymap.layer(() => ({
@@ -424,6 +475,14 @@ export default Plugin.define({
       priority: 100,
       enabled: () => statusDialogOpen(),
       commands: [
+        {
+          id: "goal.status.pin",
+          title: "Goal status: toggle pinned condition",
+          group: "Goal",
+          bind: "p",
+          enabled: () => statusDialogOpen(),
+          run: () => { try { togglePin(statusDialogSession()) } catch {} },
+        },
         {
           id: "goal.status.scroll-up",
           title: "Goal status: scroll up",
