@@ -1526,6 +1526,17 @@
       "submittedAt": "2026-11-16T08:13:41Z",
       "mergedAt": "2026-11-16T08:14:06Z",
       "mergedInto": "dev"
+    },
+    "tui-mouse-correctness": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-mouse-correctness",
+      "worktree": "worktrees/wt-tui-mouse-correctness",
+      "status": "done",
+      "createdAt": "2026-11-16T08:19:23Z",
+      "submittedAt": "2026-11-16T08:22:41Z",
+      "mergedAt": "2026-11-16T08:24:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
