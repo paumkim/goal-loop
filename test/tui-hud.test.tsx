@@ -9,9 +9,9 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, pillCaret, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
-import { GOAL_GLYPH } from "../src/core/format.ts"
+import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
@@ -516,6 +516,28 @@ describe("footerButtonCells / dialogFooterTier", () => {
     for (const copied of [false, true]) for (const pinned of [false, true]) {
       expect(dialogFooterTier(80, copied, pinned)).toEqual({ wide: false, roomy: false })
     }
+  })
+
+  test("chrome glyphs demote to ASCII under reduced color (goal marker, landing suffix, copy ack)", () => {
+    expect(goalGlyph(false)).toBe(GOAL_GLYPH)
+    expect(goalGlyph(true)).toBe("*")
+    expect(landingSuffix(false)).toBe(LANDING_SUFFIX)
+    expect(landingSuffix(true)).toBe(" · landed +")
+    // the pill budget math subtracts landingSuffix(...).length on either surface — the arms must agree
+    expect(landingSuffix(true).length).toBe(LANDING_SUFFIX.length)
+    expect(footerCopyLabel(true, true, true)).toBe("+ copied")
+    expect(footerCopyLabel(true, true, false)).toBe("✓ copied")
+    // both acknowledgment labels measure the same cells — the tier arithmetic is state-independent
+    expect(footerButtonCells("+ copied")).toBe(footerButtonCells("✓ copied"))
+  })
+
+  test("under ASCII the pill and terminal acknowledgment paint *, never a broken glyph", () => {
+    const achieved = loopedGoal({ status: "achieved", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 4, elapsedMs: 1000 * 60 * 12 })
+    expect(terminalPill(achieved, 1000 * 60 * 12, true)?.text.startsWith("* goal achieved")).toBe(true)
+    expect(terminalPill(achieved, 1000 * 60 * 12, false)?.text.startsWith(`${GOAL_GLYPH} goal achieved`)).toBe(true)
+    const looped = loopedGoal({ status: "active" })
+    expect(pillModel(looped, 1000 * 60 * 12, true).text.startsWith("* loop · v3/5")).toBe(true)
+    expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith(`${GOAL_GLYPH} loop · v3/5`)).toBe(true)
   })
 
   test("the compact band prices in BOTH ClampedColumn paddings (width−6) — the audit's A1 frame-accounting fix", () => {

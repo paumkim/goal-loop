@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=820 -->
+<!-- spec-check files=43 tests=822 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3088,4 +3088,41 @@ Marker unchanged: files=43 tests=820. No version bump, no tag, no push; v1.1.0 r
 public artifact; all work is local on dev. No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (820 pass, spec-check ok),
+coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CY — the chrome glyph family demotes under reduced color (2026-11-17)
+
+Interpretation of this iteration: audit finding A4 (fresh pinned re-audit at dev HEAD fdd6544,
+ses_e1c980f2fffeR6lPzktJKz2sQs) — the goal marker (◎ GOAL_GLYPH) and the copy acknowledgment
+(✓ copied) were the one glyph family CU left behind: under TERM=dumb/NO_COLOR every sibling
+(bars, sparkline, pips, carets, verdicts, the rail's running row) already demoted, so a
+dumb-terminal user saw the pill and the dialog as a broken glyph with no demoted counterpart.
+
+304. src/core/format.ts: new GOAL_GLYPH_ASCII ("*") and goalGlyph(ascii). src/core/hud.ts:
+     pillModel and terminalPill take the ambient ascii predicate and paint `*` on reduced-color
+     surfaces (terminalPill gained an optional `ascii` parameter, default false — back-compat);
+     LANDING_SUFFIX gained an ASCII arm LANDING_SUFFIX_ASCII (" · landed +", identical 11-cell
+     width, so the pill budget math is untouched) exposed via landingSuffix(ascii).
+305. src/hud-card.tsx: the card title paints via goalGlyph(motionDisabled(process.env) || mono());
+     footerCopyLabel gained an optional ascii parameter ("+ copied") — both acknowledgment labels
+     measure the same cells (footerButtonCells identical), so the CV/CX footer tier arithmetic is
+     state-independent by construction. src/tui-history.tsx: the rail's running-row goal marker
+     paints goalGlyph(ascii()) instead of a raw ◎ literal, and RailSummary's in-modal copy
+     acknowledgment demotes to " + copied". src/status-dialog.tsx: the condition/evaluator row
+     acknowledgment demotes the same way (ascii = env || mono prop). src/tui.tsx: the dialog header
+     marker, the notice-title marker, and the landing acknowledgment suffix all thread the
+     motionDisabled(process.env) predicate (the pill's budget offset reads landingSuffix().length —
+     identical cells on either surface).
+306. Evidence: unit layer (test/tui-hud.test.tsx, 2 new tests): goalGlyph/landingSuffix/footerCopyLabel
+     ASCII arms with width parity, and ASCII pill/terminal-acknowledgment leading glyphs. Render layer
+     (test/__snapshots__/tui-snapshots.test.tsx.snap): the two reduced-color frames re-pin — HudCard ·
+     mono paints `* /goal-loop` in the border title, LoopSection · ASCII paints `*` in the running row.
+     Marker bumped files=43 tests=820 → files=43 tests=822 (2 new test functions, same commit). The
+     remaining ✓ uses (verdict glyphs, the trail) were already demoted by CU. Live TUI remains
+     unverifiable (dead provider).
+
+Marker bumped files=43 tests=820 to files=43 tests=822. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (822 pass, spec-check ok),
 coordinator submit + merge-next, bun run check on dev shown green at the end.

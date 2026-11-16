@@ -39,7 +39,7 @@ export const StatusDialogBody = (props: {
 }): JSX.Element => {
   const theme = () => props.theme
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
-  const ascii = motionDisabled(process.env)
+  const ascii = motionDisabled(process.env) || props.mono === true
   const mono = () => props.mono === true
   const label = (text: string) => (
     <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
@@ -78,7 +78,7 @@ export const StatusDialogBody = (props: {
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer)
   })
-  const copiedSuffix = (key: string) => (copied() === key ? " ✓ copied" : "")
+  const copiedSuffix = (key: string) => (copied() === key ? (ascii ? " + copied" : " ✓ copied") : "")
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const copyCondition = (condition: string) => {

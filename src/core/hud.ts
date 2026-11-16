@@ -6,7 +6,7 @@
  */
 import stringWidth from "string-width"
 import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
-import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./format.ts"
+import { formatDurationCoarse, goalGlyph, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /**
@@ -93,12 +93,13 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
             : goal.waiting
               ? "waiting"
               : "armed"
+  const glyph = goalGlyph(ascii)
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii)
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined
     const compacting = pending ? ` · compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
-    const core = `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}`
+    const core = `${glyph} loop · v${goal.loopIteration ?? 1}${cap}`
     const head = ` · ${state} · ${formatDurationCoarse(elapsed)}`
     const pipSeg = pips ? ` ${pips}` : ""
     const text = fitLadder(
@@ -107,7 +108,7 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
     )
     return { text, tone }
   }
-  const core = `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}`
+  const core = `${glyph} goal ${state} · ${formatDurationCoarse(elapsed)}`
   const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget)
   return { text, tone }
 }
@@ -136,6 +137,10 @@ export const ACK_FLASH_MS = 1_700
 export const LANDING_ACK_MS = 3_000
 
 export const LANDING_SUFFIX = " · landed \u2713"
+/** ASCII arm of the landing acknowledgment suffix (NO_COLOR / TERM=dumb): `+` stands in for the tick. Same 11-cell width — the pill budget math is unchanged. */
+export const LANDING_SUFFIX_ASCII = " · landed +"
+/** The landing suffix for the current surface; identical cell width in both arms. */
+export const landingSuffix = (ascii: boolean = false): string => (ascii ? LANDING_SUFFIX_ASCII : LANDING_SUFFIX)
 
 /**
  * The pill's pulse interval runs while any of the transient conditions is live: the evaluator is
@@ -153,7 +158,8 @@ export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly
  * undefined — a deliberate user reset is silent, an active goal is not a completion. Same grammar
  * as `pillModel` so the jump-row text does not change shape.
  */
-export const terminalPill = (goal: GoalSnapshot, elapsed: number): PillModel | undefined => {
+export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false): PillModel | undefined => {
+  const glyph = goalGlyph(ascii)
   const tone: HudTone | undefined =
     goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined
   if (!tone) return undefined
@@ -163,9 +169,9 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number): PillModel | u
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
     const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1)
-    return { text: `${GOAL_GLYPH} loop ${word} · v${iteration}${cap} · ${span}`, tone }
+    return { text: `${glyph} loop ${word} · v${iteration}${cap} · ${span}`, tone }
   }
-  return { text: `${GOAL_GLYPH} goal ${word} · ${span}`, tone }
+  return { text: `${glyph} goal ${word} · ${span}`, tone }
 }
 
 /** Minimum cells a pinned condition needs before the pin suffix is worth rendering at all. */

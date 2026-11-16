@@ -13,11 +13,11 @@ import { TextAttributes } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
-import { GOAL_GLYPH } from "./core/format.ts"
+import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -133,7 +133,7 @@ export default Plugin.define({
           <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
-                {GOAL_GLYPH} /goal{looped() ? ` · loop${loopPosition()}` : ""}
+                {goalGlyph(motionDisabled(process.env))} /goal{looped() ? ` · loop${loopPosition()}` : ""}
               </text>
               <box
                 flexShrink={0}
@@ -362,7 +362,7 @@ export default Plugin.define({
       // Passing sessionID lets the host offer an "Open" action when the notice belongs to a session family
       // that is not currently open (see the plugin toast adapter in the host sources, plugin/api.tsx).
       safeToast({
-        title: `${GOAL_GLYPH} ${notice.title}`,
+        title: `${goalGlyph(motionDisabled(process.env))} ${notice.title}`,
         message: notice.message,
         variant: notice.level,
         sessionID: notice.sessionID,
@@ -545,11 +545,12 @@ export default Plugin.define({
           // 2 cells for the open/closed caret prefix, minus the landing acknowledgment suffix when it rides
           // the same line. Walks the degradation ladder (retry → compact → turns → pips) before truncating
           // the core, so an 80-column floor never clips the state the pill exists to show.
-          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? LANDING_SUFFIX.length : 0))
+          const landing = () => landingSuffix(motionDisabled(process.env))
+          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? landing().length : 0))
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
-            return t ? terminalPill(t, t.elapsedMs) : undefined
+            return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env)) : undefined
           } catch {
             return undefined
           }
@@ -565,7 +566,7 @@ export default Plugin.define({
         const pillText = () => {
           const model = pill()
           if (!model) return ""
-          const landed = landingNow() ? LANDING_SUFFIX : ""
+          const landed = landingNow() ? landingSuffix(motionDisabled(process.env)) : ""
           const prefix = caret()
           if (!pinnedNow()) return prefix + model.text + landed
           const g = goal()
