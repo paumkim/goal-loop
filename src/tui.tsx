@@ -17,7 +17,7 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, isCompactHot } from "./core/hud.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -103,6 +103,7 @@ export default Plugin.define({
     }
     const showStatusDialogInner = (sessionID: string, fallback: string) => {
       setScrollRef(undefined)
+      setStatusEscHovered(false)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       void refresh(sessionID).catch(() => {})
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
@@ -121,8 +122,15 @@ export default Plugin.define({
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
                 {GOAL_GLYPH} /goal{looped() ? ` · loop${loopPosition()}` : ""}
               </text>
-              <box flexShrink={0} paddingLeft={1} paddingRight={1} onMouseUp={() => closeStatusDialog()}>
-                <text fg={context.theme.text.muted}>esc</text>
+              <box
+                flexShrink={0}
+                paddingLeft={1}
+                paddingRight={1}
+                onMouseUp={() => closeStatusDialog()}
+                onMouseOver={() => setStatusEscHovered(true)}
+                onMouseOut={() => setStatusEscHovered(false)}
+              >
+                <text fg={statusEscHovered() ? context.theme.text.base : context.theme.text.muted} attributes={statusEscHovered() ? TextAttributes.UNDERLINE : undefined}>esc</text>
               </box>
             </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
@@ -172,10 +180,26 @@ export default Plugin.define({
      * Setup-scope and TUI-local like the pin registry: a transient view acknowledgment, not state.
      */
     const [terminalAcks, setTerminalAcks] = createSignal<Readonly<Record<string, { goal: GoalSnapshot; at: number }>>>({})
+    // The check-flash window after a goal lands `achieved`: per session, self-terminating, setup-scope
+    // like the ack registry. A view acknowledgment riding the existing pulse — never state, never stored.
+    const [flashing, setFlashing] = createSignal<ReadonlySet<string>>(new Set())
     const terminalTimers = new Set<ReturnType<typeof setTimeout>>()
     const noteTerminal = (sessionID: string, goal: GoalSnapshot) => {
       const ack = { goal, at: Date.now() }
       setTerminalAcks((previous) => ({ ...previous, [sessionID]: ack }))
+      if (goal.status === "achieved") {
+        setFlashing((previous) => new Set(previous).add(sessionID))
+        const flashTimer = setTimeout(() => {
+          terminalTimers.delete(flashTimer)
+          setFlashing((previous) => {
+            if (!previous.has(sessionID)) return previous
+            const next = new Set(previous)
+            next.delete(sessionID)
+            return next
+          })
+        }, ACK_FLASH_MS)
+        terminalTimers.add(flashTimer)
+      }
       const timer = setTimeout(() => {
         terminalTimers.delete(timer)
         setTerminalAcks((previous) => {
@@ -187,13 +211,20 @@ export default Plugin.define({
       }, TERMINAL_ACK_MS)
       terminalTimers.add(timer)
     }
-    const dropTerminal = (sessionID: string) =>
+    const dropTerminal = (sessionID: string) => {
       setTerminalAcks((previous) => {
         if (!previous[sessionID]) return previous
         const next = { ...previous }
         delete next[sessionID]
         return next
       })
+      setFlashing((previous) => {
+        if (!previous.has(sessionID)) return previous
+        const next = new Set(previous)
+        next.delete(sessionID)
+        return next
+      })
+    }
 
     /** Pull a fresh snapshot from the server and cache it. A malformed RPC response keeps the previous entry (same posture as a failed fetch). */
     const refresh = (sessionID: string) =>
@@ -360,6 +391,8 @@ export default Plugin.define({
     const [statusCopied, setStatusCopied] = createSignal(false)
     // Right-click context menu on the HUD card: TUI-local view state like the pin and the card itself.
     const [contextOpen, setContextOpen] = createSignal(false)
+    // The dialog header's esc affordance hovers like every other clickable row: brightened + underlined. Setup-scope because the dialog closure is not a component.
+    const [statusEscHovered, setStatusEscHovered] = createSignal(false)
     let statusCopiedTimer: ReturnType<typeof setTimeout> | undefined
     const flashStatusCopied = () => {
       setStatusCopied(true)
@@ -451,9 +484,10 @@ export default Plugin.define({
         // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
         // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced
         // motion/NO_COLOR/TERM=dumb gets a static pill (motionOk stays false).
+        // Motion is live while the evaluator is thinking, the compaction request runs hot, or the just-achieved flash window is open. The flash rides the same slow bold-flip as the evaluating pulse — it only exists for the first ACK_FLASH_MS of the ack pill, then the pill goes static. The goal() read is undefined once terminal; the flash is keyed off the session alone.
         const animated = () => {
           const g = goal()
-          return Boolean(g && (g.evaluating === true || isCompactHot(g)))
+          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID) })
         }
         createEffect(() => {
           if (animated() && motionOk) {
@@ -709,6 +743,7 @@ export default Plugin.define({
       setTerminalAcks({})
       offChanged()
       offNotice()
+      setFlashing(new Set<string>())
       setStatusDialogOpen(false)
       setStatusDialogSession(undefined)
       setScrollRef(undefined)

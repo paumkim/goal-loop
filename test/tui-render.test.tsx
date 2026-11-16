@@ -766,3 +766,48 @@ describe("in-modal copy acknowledgment (rows flip ✓ copied)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("dialog hover grammar (mouse over reveals the affordance)", () => {
+  test("hovering the condition row reveals the faint copy hint; leaving hides it", async () => {
+    const setup = await testRender(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyCondition={() => {}} />,
+      { width: 112, height: 44 },
+    )
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    expect(frame).not.toContain("copy")
+    const at = findIn(frame, "ship the release notes")
+    expect(at).toBeDefined()
+    await setup.mockMouse.moveTo(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame.split("\n")[at!.y]!).toContain("copy")
+    // Move off the row: the hint disappears again (no lingering chrome).
+    await setup.mockMouse.moveTo(at!.x + 4, at!.y + 40 > 43 ? 0 : at!.y + 40)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame.split("\n")[at!.y]!).not.toContain("copy")
+    await setup.renderer.destroy()
+  })
+
+  test("hovering the evaluator row reveals the faint copy hint; leaving hides it", async () => {
+    const setup = await testRender(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={() => {}} />,
+      { width: 112, height: 44 },
+    )
+    await setup.renderOnce()
+    let frame = setup.captureCharFrame()
+    expect(frame).not.toContain("copy")
+    const at = findIn(frame, "Evaluator: docs build still fails")
+    expect(at).toBeDefined()
+    await setup.mockMouse.moveTo(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame.split("\n")[at!.y]!).toContain("copy")
+    await setup.mockMouse.moveTo(at!.x + 4, 0)
+    await setup.renderOnce()
+    frame = setup.captureCharFrame()
+    expect(frame.split("\n")[at!.y]!).not.toContain("copy")
+    await setup.renderer.destroy()
+  })
+})

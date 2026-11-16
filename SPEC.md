@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=741 -->
+<!-- spec-check files=43 tests=747 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2309,3 +2309,44 @@ matter and is recorded for the `github-single-channel` lease holder.
 
 Verification (all run in the worktree): `cd test && bun test` (741 pass), `bun run check` green, coordinator
 submit + merge-next, and `bun run check` on dev shown green at the end.
+
+## Workstream BX — check-flash on met; hover-true dialog affordances (2026-11-16)
+
+Interpretation of this iteration: two named gaps against the design brief. (1) The brief calls for
+"a check-flash on met" — the completion moment had a 45s static acknowledgment pill but no motion
+beat where the user was watching; every other transient (evaluator thinking, hot compaction) already
+pulsed. (2) Two clickable dialog surfaces gave no hover feedback at all, which breaks the mouse-first
+bar (every interactive element answers the pointer before it is clicked).
+
+235. `ACK_FLASH_MS = 1_700` in `src/core/hud.ts`. When a goal transitions live→terminal via
+    `noteTerminal` with status `achieved`, the session joins a TUI-local `flashing` set for the first
+    1.7s of the ack window; the pill rides the existing 850ms bold-flip interval (no new timer chain),
+    then a dedicated one-shot timer removes the session and the pill goes static for the remainder of
+    the ack. `cleared` and non-achieved terminal states arm no flash. Under reduced motion
+    (NO_COLOR / TERM=dumb) the effect never starts — static pill, no motion, unchanged. A fresh live
+    goal (`dropTerminal`) and unmount both disarm the flash. Loops and non-looped goals both flash
+    (both land `achieved`).
+236. `pillMotionNeeded({ evaluating, hot, flashing })` — the pure predicate behind the pill's pulse
+    interval; a flash alone drives it. Contract pinned in unit tests (`test/tui-hud.test.tsx`).
+237. Dialog hover truth (`src/status-dialog.tsx`): the condition row and the evaluator/reason row
+    reveal a faint `copy` hint while hovered — same grammar as the HUD card's condition row and the
+    rail's summary lines. The condition row keeps its resting underline (it is the primary content);
+    the reason row underlines on hover as before. Render-tested: hover reveals the hint, mouse-out
+    removes it, no lingering chrome (`test/tui-render.test.tsx`, `mockMouse.moveTo`).
+238. The dialog header's `esc` label (`src/tui.tsx`) is now a hot affordance like every other
+    clickable: on hover the label brightens muted→base and underlines; reset on dialog (re)open.
+    This one lives in the plugin's inline dialog chrome, not a render-tested component — evidence is
+    source-layer, same class as the `esc` button's existing click wiring.
+
+Honesty boundary: the check-flash is not observable live behind the dead provider (no verdict ever
+lands a terminal transition — the same ceiling recorded for the ack pill itself). Evidence for the
+flash is source-layer (the predicate is unit-tested; the timer arm/disarm path mirrors the ack
+registry's reviewed pattern); evidence for the hover hints is render-layer (real mouse moves over the
+headless grid). The dialog `esc` hover is source-layer. Fresh evidence only; no live claim is made.
+
+Marker bumped files=43 tests=741 to files=43 tests=747. No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev. No docs line references were touched by this workstream (insertion
+points were after all pinned anchors).
+
+Verification (all run in the worktree): `bun run compile`, `bun run check` green (747 tests),
+coordinator submit + merge-next, and `bun run check` on dev shown green at the end.
