@@ -60,8 +60,8 @@ export const pillCaret = (open: boolean, ascii: boolean = false): string => open
 
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
- * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with `…`
- * when even it cannot fit; the pill never paints wider than `budget` cells.
+ * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with the
+ * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells.
  */
 const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = "\u2026"): string => {
   for (const rung of rungs) {
@@ -73,8 +73,9 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
 /**
  * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
- * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the core
- * with `…`. An unbounded budget (the default) composes exactly the historical full label.
+ * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the
+ * core with the surface's ellipsis. An unbounded budget (the default) composes exactly the historical
+ * full label.
  */
 export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY): PillModel => {
   const state = stateWord(goal)

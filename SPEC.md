@@ -3296,3 +3296,27 @@ slice stay untouched.
 Verification (all run in the worktree): bun run compile, bun test test/tui-hud.test.tsx (100 pass),
 bun run check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev
 shown green at the end. Evidence is source + predicate layers only; live TUI remains unverifiable.
+## Workstream DG — the ellipsis never paints wider than the cap it decorates (2026-11-16)
+
+Interpretation of this iteration: while shipping DF, a contract violation in truncate() became verifiable
+(and was verified this slice): when the caller's ellipsis is wider than `max` itself, the content budget
+(`max - stringWidth(ellipsis)`) goes negative, the grapheme loop emits nothing, and the function returns
+the BARE ellipsis — 3 cells at max=2, 3 cells at max=1 under the ASCII arm — past the cap the function
+exists to enforce. DE had threaded the parameter; nothing yet bounded the ellipsis against the cap.
+
+325. truncate() (src/core/format.ts): when `stringWidth(ellipsis) >= max`, the function emits whole
+     graphemes of the ellipsis up to `max` cells (the width contract wins over showing an ellipsis).
+     The default U+2026 (1 cell) never hits this arm for max >= 1; the arm exists for the 3-cell `...`
+     on reduced-color surfaces, where pill budgets can legitimately shrink to 1-2 cells at an 80-column
+     floor under the new call sites.
+326. fitLadder's and pillModel's doc comments now say "the caller's ellipsis / the surface's ellipsis"
+     where they unconditionally claimed U+2026 — comments match the threaded parameter. No behavior,
+     budget, ladder order, or snapshot changed: the fix only fires where the old output would have
+     exceeded `max` cells, and no pinned frame paints an ellipsis at that width.
+327. Existing truncate test extended IN PLACE (no new test function): pins `truncate("hello", 2, "...")`
+     -> "..", `truncate("hello", 1, "...")` -> ".", stringWidth bound asserted, and the default U+2026
+     arm untouched (truncate("hello", 1) === "…"). Marker files=43 tests=827 UNCHANGED.
+
+Verification (all run in the worktree): bun run compile, bun test test/core.test.ts (86 pass),
+bun run check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev
+shown green at the end. Evidence is source + predicate layers only; live TUI remains unverifiable.

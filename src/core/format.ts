@@ -147,13 +147,27 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
  * `ellipsis`, e.g. `...` on a reduced-color surface) when anything was cut.
  * Width-aware (unlike a code-unit slice): a CJK cell costs 2, an emoji 2, a combining mark 0,
  * and the boundary always falls between graphemes — the output never carries a lone surrogate
- * or half a ZWJ sequence, and never renders wider than `max` cells.
+ * or half a ZWJ sequence, and never renders wider than `max` cells. When even the ellipsis is
+ * wider than `max`, whole graphemes of the ellipsis are emitted up to `max` — the width
+ * contract wins over showing an ellipsis.
  */
 export function truncate(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
   const flat = text.replace(/\s+/g, " ").trim()
   if (stringWidth(flat) <= max) return flat
-  const budget = max - stringWidth(ellipsis) // reserve exactly the cells the ellipsis paints
+  const ellipsisWidth = stringWidth(ellipsis)
+  if (ellipsisWidth >= max) {
+    let fitted = ""
+    let used = 0
+    for (const { segment } of segmenter.segment(ellipsis)) {
+      const w = stringWidth(segment)
+      if (used + w > max) break
+      fitted += segment
+      used += w
+    }
+    return fitted
+  }
+  const budget = max - ellipsisWidth // reserve exactly the cells the ellipsis paints
   let out = ""
   let used = 0
   for (const { segment } of segmenter.segment(flat)) {
