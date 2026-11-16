@@ -15,6 +15,7 @@ import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
+import { buildLoopDossier } from "./core/dossier.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
@@ -511,13 +512,14 @@ export default Plugin.define({
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       statusCopiedTimer = setTimeout(() => setStatusCopied(false), 1600)
     }
-    const copyLabel: Readonly<Record<"condition" | "reason" | "summary" | "verify", { title: string; message: string }>> = {
+    const copyLabel: Readonly<Record<"condition" | "reason" | "summary" | "verify" | "dossier", { title: string; message: string }>> = {
       condition: { title: "condition copied", message: "goal condition is on the clipboard" },
       reason: { title: "reason copied", message: "the evaluator's reason is on the clipboard" },
       summary: { title: "summary copied", message: "the iteration summary is on the clipboard" },
       verify: { title: "verify tail copied", message: "the verifier output tail is on the clipboard" },
+      dossier: { title: "dossier copied", message: "the loop dossier markdown is on the clipboard" },
     }
-    const copyToClipboard = (text: string, sessionID: string | undefined, what: "condition" | "reason" | "summary" | "verify" = "condition") => {
+    const copyToClipboard = (text: string, sessionID: string | undefined, what: "condition" | "reason" | "summary" | "verify" | "dossier" = "condition") => {
       try {
         const ok = context.renderer.copyToClipboardOSC52(text)
         const label = copyLabel[what]
@@ -955,6 +957,20 @@ export default Plugin.define({
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               const summary = goal?.loopHistory?.at(-1)?.summary
               if (summary && sessionID) copyToClipboard(summary, sessionID, "summary")
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.copy",
+          title: "Goal: copy loop dossier (markdown)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              if (goal && sessionID) copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier")
             } catch {}
           },
         },
