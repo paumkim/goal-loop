@@ -117,8 +117,8 @@ export default Plugin.define({
       setIterationsExpanded(false)
       setDialogNoticeStale(false)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
-      // If the RPC rejects, say so in the dialog — never let stale chrome pass as fresh.
-      void refresh(sessionID).catch(() => setDialogNoticeStale(true))
+      // If the RPC rejects or the payload cannot be parsed, say so in the dialog — never let stale chrome pass as fresh.
+      void refresh(sessionID).then((fresh) => { if (!fresh) setDialogNoticeStale(true) }).catch(() => setDialogNoticeStale(true))
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal
@@ -263,11 +263,13 @@ export default Plugin.define({
       })
     }
 
-    /** Pull a fresh snapshot from the server and cache it. A malformed RPC response keeps the previous entry (same posture as a failed fetch). */
-    const refresh = (sessionID: string) =>
+    /** Pull a fresh snapshot from the server and cache it. Resolves false when the payload is malformed — the caller treats it exactly like a rejection (stale chrome must never pass as fresh). */
+    const refresh = (sessionID: string): Promise<boolean> =>
       rpc.get({ sessionID }, at(sessionID)).then((result) => {
         const output = parseGetGoalOutput(result)
-        if (output) put(sessionID, output.goal)
+        if (!output) return false
+        put(sessionID, output.goal)
+        return true
       })
 
     const put = (sessionID: string, goal: GoalSnapshot | null) => {

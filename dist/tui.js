@@ -1754,7 +1754,7 @@ var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "un
 var footerButtonCells = (label) => stringWidth(label) + 4;
 var footerClearLabel = (roomy) => roomy ? "clear goal" : "clear";
 var dialogFooterTier = (width, copied, pinned) => {
-  const budget = Math.floor(width) - 3;
+  const budget = Math.floor(width) - 6;
   const buttons = (roomy) => footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4;
   return {
     wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
@@ -2611,7 +2611,10 @@ var tui_default = Plugin.define({
       setHudSession(undefined);
       setIterationsExpanded(false);
       setDialogNoticeStale(false);
-      refresh(sessionID).catch(() => setDialogNoticeStale(true));
+      refresh(sessionID).then((fresh) => {
+        if (!fresh)
+          setDialogNoticeStale(true);
+      }).catch(() => setDialogNoticeStale(true));
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal;
@@ -2791,8 +2794,10 @@ var tui_default = Plugin.define({
       sessionID
     }, at(sessionID)).then((result) => {
       const output = parseGetGoalOutput(result);
-      if (output)
-        put(sessionID, output.goal);
+      if (!output)
+        return false;
+      put(sessionID, output.goal);
+      return true;
     });
     const put = (sessionID, goal) => {
       try {

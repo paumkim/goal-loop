@@ -3060,3 +3060,32 @@ by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (820 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CX — the footer prices in both ClampedColumn paddings; an unparseable snapshot is never fresh (2026-11-17)
+
+Interpretation of this iteration: two line-verified defects from the fresh pinned re-audit at
+dev HEAD fdd6544 (ses_e1c980f2fffeR6lPzktJKz2sQs). A1 (medium, ergonomics/frame-accounting): the
+footer budget subtracted only the dialog's paddingRight={3}, ignoring the ClampedColumn's
+paddingLeft={3} — the row's left edge starts at x=3, so the content ceiling is width−6 and every
+tier boundary since CV admitted ~3 cells past the box. A2 (medium-low, failure honesty): refresh()
+silently dropped a resolved-but-unparseable get payload, so a corrupt server response or version
+skew rendered stale chrome with zero indication — the exact failure CT closed, via the parse path.
+
+301. src/hud-card.tsx: dialogFooterTier budget is now floor(width) − 6 (both ClampedColumn
+     paddings). Re-measured consequences: roomy unlocks at 100 (default) / 102 (pinned) / 94
+     (copied — its label is narrower); 96 still paints compact (correct); full hint unlocks at
+     123 (default) / 117 (copied) / 125 (pinned). 80-column floor untouched.
+302. src/tui.tsx: refresh() now resolves false on parse failure (true after a successful put);
+     the dialog-open call site routes both false and catch to setDialogNoticeStale(true) — the
+     CT noticeStale contract now covers the parse path exactly as it covers the reject path.
+303. Evidence: unit layer (test/tui-hud.test.tsx boundary matrix re-pinned to the width−6
+     arithmetic: 94/96/99/100/101/102 and 116/117/122/123/124/125), render layer
+     (test/tui-render.test.tsx: the pinned-goal roomy width moved 100→103). No new test
+     functions — marker unchanged at 820. A2's call-site closure lives in plugin setup (cannot
+     mount headlessly, same constraint as CT); its evidence is the unchanged StatusDialogBody
+     noticeStale render contract plus the source diff. Live TUI remains unverifiable (dead provider).
+
+Marker unchanged: files=43 tests=820. No version bump, no tag, no push; v1.1.0 remains the live
+public artifact; all work is local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (820 pass, spec-check ok),
+coordinator submit + merge-next, bun run check on dev shown green at the end.

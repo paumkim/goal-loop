@@ -441,7 +441,7 @@ describe("DialogFooter (80-column floor)", () => {
       expect(frame).not.toContain("[pin]")
       expect(frame).not.toContain("unpin condition")
     }
-    for (const width of [100, 160]) {
+    for (const width of [103, 160]) {
       const frame = await renderFooter(width, true)
       expect(frame).toContain("[unpin condition]")
       expect(frame).not.toContain("[unpin]")
