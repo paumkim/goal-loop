@@ -1032,7 +1032,8 @@ var Hint = (props) => (() => {
 var hudCardRows = (goal) => 5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0);
 var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 p pin condition \xB7 esc close";
-var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 esc close";
+var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy";
+var footerCopyLabel = (copied, roomy) => copied ? "\u2713 copied" : roomy ? "copy condition" : "copy";
 var DialogFooter = (props) => {
   const dimensions = useTerminalDimensions();
   const wide = () => dimensions().width >= 140;
@@ -1051,7 +1052,7 @@ var DialogFooter = (props) => {
         return props.theme;
       },
       get label() {
-        return roomy() ? "copy condition" : "copy";
+        return footerCopyLabel(props.copied(), roomy());
       },
       get onPress() {
         return props.onCopy;
@@ -1710,7 +1711,11 @@ var tui_default = Plugin.define({
               return context.theme;
             },
             pinned: () => isPinned(sessionID),
-            onCopy: () => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID),
+            copied: statusCopied,
+            onCopy: () => {
+              copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID);
+              flashStatusCopied();
+            },
             onTogglePin: () => togglePin(sessionID),
             onClear: () => {
               try {
@@ -1916,6 +1921,14 @@ var tui_default = Plugin.define({
     const motionOk = !motionDisabled(process.env);
     const [pulse, setPulse] = createSignal2(false);
     const [getHudSession, setHudSession] = createSignal2(undefined);
+    const [statusCopied, setStatusCopied] = createSignal2(false);
+    let statusCopiedTimer;
+    const flashStatusCopied = () => {
+      setStatusCopied(true);
+      if (statusCopiedTimer)
+        clearTimeout(statusCopiedTimer);
+      statusCopiedTimer = setTimeout(() => setStatusCopied(false), 1600);
+    };
     const copyToClipboard = (text, sessionID) => {
       try {
         const ok = context.renderer.copyToClipboardOSC52(text);
@@ -2155,6 +2168,22 @@ var tui_default = Plugin.define({
         run: () => {
           try {
             togglePin(statusDialogSession());
+          } catch {}
+        }
+      }, {
+        id: "goal.status.copy",
+        title: "Goal status: copy condition",
+        group: "Goal",
+        bind: "c",
+        enabled: () => statusDialogOpen(),
+        run: () => {
+          try {
+            const s = statusDialogSession();
+            const condition = s ? entries()[s]?.goal?.condition : undefined;
+            if (!condition)
+              return;
+            copyToClipboard(condition, s);
+            flashStatusCopied();
           } catch {}
         }
       }, {

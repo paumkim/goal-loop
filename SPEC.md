@@ -12,9 +12,12 @@ to copy), the state row (live or terminal), the last verdict, failure-first-clas
 and clickable `details` / `pin` / `clear goal` / `esc` buttons; Esc dismisses. (c) The `/goal` detail view: a
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, and clickable `copy condition` / `pin condition` / `clear
-goal` footer buttons (`p` toggles the pin). The footer degrades in two steps so it never clips mid-word: above
+goal` footer buttons (`p` toggles the pin, `c` copies the condition — host toasts do not render above the
+modal, so the copy button acknowledges with a transient `✓ copied` label instead). The footer degrades in two
+steps so it never clips mid-word: above
 140 columns the full key hint plus full button labels; above 96 the short hint (`up/down scroll · p pin ·
-esc close`) with full labels; below that, compact button labels (`copy` / `pin` / `clear`) — the 80-column
+c copy`, Esc stays visible in the host dialog chrome) with full labels; below that, compact button labels
+(`copy` / `pin` / `clear`) — the 80-column
 floor always fits. The dialog's state word carries the same accents as the HUD card in terminal states so the
 header never reads muted-gray on an outcome: `achieved` in feedback.info, `impossible` / `paused` in
 feedback.warning, `failed` in feedback.error (falling back to warning where the theme has no error token). The dialog renders a `context` row when the server can estimate the
@@ -420,7 +423,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=670 -->
+<!-- spec-check files=43 tests=673 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

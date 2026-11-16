@@ -131,7 +131,11 @@ export default Plugin.define({
             <DialogFooter
               theme={context.theme as unknown as HudCardTheme}
               pinned={() => isPinned(sessionID)}
-              onCopy={() => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)}
+              copied={statusCopied}
+              onCopy={() => {
+                copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)
+                flashStatusCopied()
+              }}
               onTogglePin={() => togglePin(sessionID)}
               onClear={() => {
                 try {
@@ -349,6 +353,14 @@ export default Plugin.define({
     // When the goal ends, a live→terminal transition leaves a 45s acknowledgment pill on the jump row
     // (see noteTerminal / terminalPill) instead of the pill blinking out; `cleared` stays silent.
     const [getHudSession, setHudSession] = createSignal<string | undefined>(undefined)
+    // In-modal copy acknowledgment: host toasts do not render above the modal, so the footer's copy button (and the `c` chord) flip its label to ✓ copied for a beat instead.
+    const [statusCopied, setStatusCopied] = createSignal(false)
+    let statusCopiedTimer: ReturnType<typeof setTimeout> | undefined
+    const flashStatusCopied = () => {
+      setStatusCopied(true)
+      if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
+      statusCopiedTimer = setTimeout(() => setStatusCopied(false), 1600)
+    }
     const copyToClipboard = (text: string, sessionID?: string) => {
       try {
         const ok = context.renderer.copyToClipboardOSC52(text)
@@ -552,6 +564,22 @@ export default Plugin.define({
           bind: "p",
           enabled: () => statusDialogOpen(),
           run: () => { try { togglePin(statusDialogSession()) } catch {} },
+        },
+        {
+          id: "goal.status.copy",
+          title: "Goal status: copy condition",
+          group: "Goal",
+          bind: "c",
+          enabled: () => statusDialogOpen(),
+          run: () => {
+            try {
+              const s = statusDialogSession()
+              const condition = s ? entries()[s]?.goal?.condition : undefined
+              if (!condition) return
+              copyToClipboard(condition, s)
+              flashStatusCopied()
+            } catch {}
+          },
         },
         {
           id: "goal.status.scroll-up",

@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, pinBudget, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, pinBudget, footerCopyLabel, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -294,6 +294,18 @@ describe("hudCardRows", () => {
     expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(8)
     const { history: _h, ...noHistory } = loopedGoal()
     expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
+  })
+})
+
+describe("footerCopyLabel", () => {
+  test("a fresh copy button reads copy condition with cells to spare and copy below 96", () => {
+    expect(footerCopyLabel(false, true)).toBe("copy condition")
+    expect(footerCopyLabel(false, false)).toBe("copy")
+  })
+
+  test("after a copy the button acknowledges with ✓ copied at either width", () => {
+    expect(footerCopyLabel(true, true)).toBe("✓ copied")
+    expect(footerCopyLabel(true, false)).toBe("✓ copied")
   })
 })
 

@@ -70,17 +70,24 @@ export const pinBudget = (terminalWidth: number, pillTextLength: number): number
   Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
 
 export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn page · home/end start/end · p pin condition · esc close"
-export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · esc close"
+export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · c copy"
+
+/** Copy button label: transient in-modal acknowledgment wins; otherwise full at ≥96 cells, compact below. */
+export const footerCopyLabel = (copied: boolean, roomy: boolean): string =>
+  copied ? "✓ copied" : roomy ? "copy condition" : "copy"
 
 /**
  * The host dialog footer: the key hint plus the three mouse actions. The row clips mid-word when the
  * hint is longer than the cells the buttons leave behind (a broken-sentence hint reads as broken chrome),
  * so it degrades in two steps: full hint + full labels above 140 cells, short hint + full labels above 96,
- * short hint + compact labels below. The 80-column floor always fits.
+ * short hint + compact labels below. The 80-column floor always fits. Esc stays visible in the host
+ * dialog chrome, so the short hint spends its cells on the two plugin chords instead.
+ * `copied` flips the copy button's label to `✓ copied` (host toasts do not render above the modal).
  */
 export const DialogFooter = (props: {
   theme: HudCardTheme
   pinned: () => boolean
+  copied: () => boolean
   onCopy: () => void
   onTogglePin: () => void
   onClear: () => void
@@ -94,7 +101,7 @@ export const DialogFooter = (props: {
         {wide() ? DIALOG_FOOTER_FULL_HINT : DIALOG_FOOTER_SHORT_HINT}
       </text>
       <box flexGrow={1} />
-      <HudButton theme={props.theme} label={roomy() ? "copy condition" : "copy"} onPress={props.onCopy} />
+      <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} onPress={props.onCopy} />
       <HudButton theme={props.theme} label={props.pinned() ? "unpin" : roomy() ? "pin condition" : "pin"} onPress={props.onTogglePin} />
       <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} onPress={props.onClear} />
     </box>
