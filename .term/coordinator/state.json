@@ -998,6 +998,17 @@
       "submittedAt": "2026-11-16T01:08:21Z",
       "mergedAt": "2026-11-16T01:08:36Z",
       "mergedInto": "dev"
+    },
+    "plugin-spec-version-pin": {
+      "agent": "orchestrator",
+      "paths": "test/cli-installer.test.ts,SPEC.md",
+      "branch": "wt/plugin-spec-version-pin",
+      "worktree": "worktrees/wt-plugin-spec-version-pin",
+      "status": "done",
+      "createdAt": "2026-11-16T01:11:00Z",
+      "submittedAt": "2026-11-16T01:12:03Z",
+      "mergedAt": "2026-11-16T01:12:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
