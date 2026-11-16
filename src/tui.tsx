@@ -71,7 +71,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} mono={reducedColor} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -130,6 +130,7 @@ export default Plugin.define({
             </scrollbox>
             <DialogFooter
               theme={context.theme as unknown as HudCardTheme}
+              mono={reducedColor}
               pinned={() => isPinned(sessionID)}
               copied={statusCopied}
               onCopy={() => {
@@ -342,6 +343,8 @@ export default Plugin.define({
     }
     // Reduced motion: no pulse, no animation. Evaluated once — a user toggling NO_COLOR mid-session gets it on next launch.
     const motionOk = !motionDisabled(process.env)
+    // Reduced color: NO_COLOR / TERM=dumb also drop the plugin's chromatic accents (weight and glyphs carry meaning). Same env predicate as the motion guard.
+    const reducedColor = !motionOk
     const [pulse, setPulse] = createSignal(false)
 
     // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
@@ -459,6 +462,7 @@ export default Plugin.define({
           return attrs === 0 ? undefined : attrs
         }
         const color = () => {
+          if (reducedColor) return context.theme.text.muted
           const tone = pill()?.tone
           if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible") return context.theme.text.feedback.warning.base
           if (tone === "failed") return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
@@ -508,6 +512,7 @@ export default Plugin.define({
                   <HudCard
                     goal={g()}
                     theme={context.theme as unknown as HudCardTheme}
+                    mono={reducedColor}
                     elapsedMs={elapsed}
                     onClose={() => setHudSession(undefined)}
                     onDetails={() => openDashboard(props.sessionID)}

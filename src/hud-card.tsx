@@ -19,7 +19,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -52,8 +52,8 @@ const stateWord = (goal: GoalSnapshot): string =>
             ? "stuck"
             : "active"
       : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
-const verdictColor = (theme: HudCardTheme, verdict: Verdict): ColorInput =>
-  verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint
+const verdictColor = (theme: HudCardTheme, verdict: Verdict, mono: boolean): ColorInput =>
+  verdictAccentColor(theme, verdict, mono)
 
 const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
   <text wrapMode="none" fg={props.theme.text.faint}>
@@ -88,6 +88,7 @@ export const DialogFooter = (props: {
   theme: HudCardTheme
   pinned: () => boolean
   copied: () => boolean
+  mono?: boolean
   onCopy: () => void
   onTogglePin: () => void
   onClear: () => void
@@ -101,16 +102,17 @@ export const DialogFooter = (props: {
         {wide() ? DIALOG_FOOTER_FULL_HINT : DIALOG_FOOTER_SHORT_HINT}
       </text>
       <box flexGrow={1} />
-      <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} onPress={props.onCopy} />
-      <HudButton theme={props.theme} label={props.pinned() ? "unpin" : roomy() ? "pin condition" : "pin"} onPress={props.onTogglePin} />
-      <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} onPress={props.onClear} />
+      <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} mono={props.mono} onPress={props.onCopy} />
+      <HudButton theme={props.theme} label={props.pinned() ? "unpin" : roomy() ? "pin condition" : "pin"} mono={props.mono} onPress={props.onTogglePin} />
+      <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} mono={props.mono} onPress={props.onClear} />
     </box>
   )
 }
 
-/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. */
-export const HudButton = (props: { theme: HudCardTheme; label: string; onPress: () => void }): JSX.Element => {
+/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label underlines instead. */
+export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
+  const mono = () => props.mono === true
   return (
     <box
       flexDirection="row"
@@ -118,7 +120,7 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; onPress: 
       height={1}
       paddingLeft={1}
       paddingRight={1}
-      backgroundColor={hovered() ? props.theme.background?.raised?.high : undefined}
+      backgroundColor={!mono() && hovered() ? props.theme.background?.raised?.high : undefined}
       onMouseOver={() => setHovered(true)}
       onMouseOut={() => setHovered(false)}
       onMouseUp={() => {
@@ -129,7 +131,7 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; onPress: 
         }
       }}
     >
-      <text wrapMode="none" fg={hovered() ? props.theme.text.base : props.theme.text.muted}>
+      <text wrapMode="none" fg={hovered() ? props.theme.text.base : props.theme.text.muted} attributes={mono() && hovered() ? TextAttributes.UNDERLINE : undefined}>
         {`[${props.label}]`}
       </text>
     </box>
@@ -151,8 +153,11 @@ export const HudCard = (props: {
   /** When true the ambient pill appends the (truncated) condition so it stays visible while scrolling. Rendered as `unpin`; false renders `pin`. Omit both to hide the button (tests, embeds). */
   pinned?: boolean
   onTogglePin?: () => void
+  /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
+  mono?: boolean
 }): JSX.Element => {
   const theme = () => props.theme
+  const mono = () => props.mono === true
   const g = () => props.goal
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const looped = () => Boolean(g().loopEnabled)
@@ -164,25 +169,11 @@ export const HudCard = (props: {
   const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "")
   const title = () =>
     looped() ? `${GOAL_GLYPH} /goal-loop · v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`
-  const borderColor = () => {
-    const s = g().status
-    if (s === "achieved") return theme().text.feedback.info.base
-    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
-    // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first.
-    if (s === "impossible" || s === "paused" || isCompactHot(g()) || isRetryStuck(g())) return theme().text.feedback.warning.base
-    return theme().border?.base ?? theme().text.faint
-  }
+  // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first. Under mono the border override or faint — chrome never carries the signal.
+  const borderColor = () => borderAccentColor(theme(), g().status, { hot: isCompactHot(g()), stuck: isRetryStuck(g()) }, mono())
   const turns = () => g().turns
-  const stateColor = () => {
-    const s = g().status
-    if (s === "paused") return theme().text.feedback.warning.base
-    // A stuck-retrying active goal reads amber everywhere the pill does — word and accent stay coherent.
-    if (s === "active") return isRetryStuck(g()) ? theme().text.feedback.warning.base : theme().text.feedback.info.base
-    if (s === "achieved") return theme().text.feedback.info.base
-    if (s === "impossible") return theme().text.feedback.warning.base
-    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
-    return theme().text.faint
-  }
+  // A stuck-retrying active goal reads amber everywhere the pill does — word and accent stay coherent. Mono: `base` for any live/terminal word, faint for a cleared record.
+  const stateColor = () => stateAccentColor(theme(), g().status, isRetryStuck(g()), mono())
   const last = () => lastVerdict(g().history ?? [])
   const turnsSince = () => {
     const entry = last()
@@ -250,7 +241,7 @@ export const HudCard = (props: {
             <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
               last
             </text>
-            <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry().verdict)} attributes={TextAttributes.BOLD}>
+            <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
               {verdictGlyph(entry().verdict)}
             </text>
             <text wrapMode="none" fg={theme().text.muted}>
@@ -263,10 +254,10 @@ export const HudCard = (props: {
       <Show when={remediation()}>
         {(fix) => (
           <box flexDirection="row" gap={1}>
-            <text wrapMode="none" flexShrink={0} width={LABEL} fg={fix().tone === "error" ? (theme().text.feedback.error?.base ?? theme().text.feedback.warning.base) : theme().text.feedback.warning.base}>
+            <text wrapMode="none" flexShrink={0} width={LABEL} fg={fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono())}>
               fix
             </text>
-            <text wrapMode="word" flexGrow={1} fg={fix().tone === "error" ? (theme().text.feedback.error?.base ?? theme().text.feedback.warning.base) : theme().text.feedback.warning.base}>
+            <text wrapMode="word" flexGrow={1} fg={fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono())}>
               {fix().text}
             </text>
           </box>
@@ -274,13 +265,13 @@ export const HudCard = (props: {
       </Show>
       {/* actions */}
       <box flexDirection="row" gap={1} marginTop={0}>
-        <HudButton theme={theme()} label="details" onPress={props.onDetails} />
+        <HudButton theme={theme()} label="details" mono={mono()} onPress={props.onDetails} />
         <Show when={props.onTogglePin}>
-          <HudButton theme={theme()} label={props.pinned ? "unpin" : "pin"} onPress={() => props.onTogglePin?.()} />
+          <HudButton theme={theme()} label={props.pinned ? "unpin" : "pin"} mono={mono()} onPress={() => props.onTogglePin?.()} />
         </Show>
-        <HudButton theme={theme()} label="clear goal" onPress={props.onClear} />
+        <HudButton theme={theme()} label="clear goal" mono={mono()} onPress={props.onClear} />
         <box flexGrow={1} />
-        <HudButton theme={theme()} label="esc" onPress={props.onClose} />
+        <HudButton theme={theme()} label="esc" mono={mono()} onPress={props.onClose} />
       </box>
     </box>
   )

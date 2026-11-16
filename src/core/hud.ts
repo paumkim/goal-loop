@@ -127,6 +127,67 @@ export const pinSuffix = (condition: string, conditionMax: number): string => {
 export const motionDisabled = (env: Record<string, string | undefined>): boolean =>
   env.NO_COLOR !== undefined || env.TERM === "dumb"
 
+/**
+ * Reduced-color surface: same env predicate as `motionDisabled` (NO_COLOR set, or a terminal that cannot
+ * animate/color). The plugin drops every chromatic accent from its own chrome — glyph shapes, status words
+ * and weight (bold) carry all meaning, and hover becomes an underline instead of a background fill. The
+ * host's own chrome is out of scope: opencode renders full color regardless of NO_COLOR (verified live),
+ * so the guarantee here covers plugin surfaces only.
+ */
+export const monochrome = (env: Record<string, string | undefined>): boolean =>
+  env.NO_COLOR !== undefined || env.TERM === "dumb"
+
+/** Minimal structural theme for the accent mappers: the host's ResolvedTheme subsets fit, and so do the minimal test themes. Generic over the color representation so RGBA and hex strings both type-check. */
+export interface NeutralTheme<C> {
+  readonly text: {
+    readonly base: C
+    readonly muted: C
+    readonly faint: C
+    readonly feedback: {
+      readonly info: { readonly base: C }
+      readonly warning: { readonly base: C }
+      readonly error?: { readonly base: C }
+    }
+  }
+}
+
+/** Status-word accent. Mono returns `faint` for a cleared record and `base` otherwise — the word itself is the signal. */
+export const stateAccentColor = <C>(theme: NeutralTheme<C>, status: string, stuck: boolean, mono: boolean): C => {
+  if (mono) return status === "cleared" ? theme.text.faint : theme.text.base
+  if (status === "paused" || status === "impossible") return theme.text.feedback.warning.base
+  if (status === "active") return stuck ? theme.text.feedback.warning.base : theme.text.feedback.info.base
+  if (status === "achieved") return theme.text.feedback.info.base
+  if (status === "failed") return theme.text.feedback.error?.base ?? theme.text.feedback.warning.base
+  return theme.text.faint
+}
+
+/** Card border accent. Color mode: quiet faint for a nominal/evaluating goal, amber family once the goal is hot/stuck/paused or impossible, outcome hues for terminal states, `border.base` override first. Mono: the host's border override or faint — chrome never carries the signal. */
+export const borderAccentColor = <C>(
+  theme: NeutralTheme<C> & { readonly border?: { readonly base: C } },
+  status: string,
+  accent: { readonly hot?: boolean; readonly stuck?: boolean },
+  mono: boolean,
+): C => {
+  if (mono) return theme.border?.base ?? theme.text.faint
+  if (status === "achieved") return theme.text.feedback.info.base
+  if (status === "failed") return theme.text.feedback.error?.base ?? theme.text.feedback.warning.base
+  if (status === "impossible" || status === "paused" || accent.hot === true || accent.stuck === true) return theme.text.feedback.warning.base
+  return theme.border?.base ?? theme.text.faint
+}
+
+/** Verdict glyph accent. Mono: met and impossible render `base`, everything else faint — the glyph shape carries the verdict. */
+export const verdictAccentColor = <C>(theme: NeutralTheme<C>, verdict: string, mono: boolean): C => {
+  if (verdict === "met") return mono ? theme.text.base : theme.text.feedback.info.base
+  if (verdict === "impossible") return mono ? theme.text.base : theme.text.feedback.warning.base
+  return theme.text.faint
+}
+
+/** Remediation (`fix`) row accent. Mono: `base` — the remedy is exact either way, the tone never is. */
+export const fixAccentColor = <C>(theme: NeutralTheme<C>, tone: "warning" | "error", mono: boolean): C => {
+  if (mono) return theme.text.base
+  return tone === "error" ? theme.text.feedback.error?.base ?? theme.text.feedback.warning.base : theme.text.feedback.warning.base
+}
+
 export interface Remediation {
   /** `warning` renders amber, `error` renders the faint/red family the theme exposes for failures. */
   readonly tone: "warning" | "error"

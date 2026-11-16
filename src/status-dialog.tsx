@@ -8,7 +8,7 @@ import { Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
-import { remediationFor } from "./core/hud.ts"
+import { remediationFor, stateAccentColor, fixAccentColor } from "./core/hud.ts"
 import { contextMeter } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
@@ -24,8 +24,11 @@ export const StatusDialogBody = (props: {
   nowMs: () => number
   /** When set, clicking the condition row copies the full condition via this callback (host wires clipboard + toast). */
   onCopyCondition?: (condition: string) => void
+  /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
+  mono?: boolean
 }): JSX.Element => {
   const theme = () => props.theme
+  const mono = () => props.mono === true
   const label = (text: string) => (
     <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
       {text}
@@ -40,13 +43,7 @@ export const StatusDialogBody = (props: {
     </box>
   )
   // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
-  const stateColor = () => {
-    const s = props.goal?.status
-    if (s === "paused" || s === "impossible") return theme().text.feedback.warning.base
-    if (s === "active" || s === "achieved") return theme().text.feedback.info.base
-    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
-    return theme().text.muted
-  }
+  const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted)
   const g = () => props.goal
   const remediation = () => {
     const goal = g()
@@ -85,7 +82,7 @@ export const StatusDialogBody = (props: {
             {(fix) => (
               <box flexDirection="row" gap={2}>
                 {label("fix")}
-                <text wrapMode="word" flexGrow={1} fg={fix().tone === "error" ? (theme().text.feedback.error?.base ?? theme().text.feedback.warning.base) : theme().text.feedback.warning.base}>
+                <text wrapMode="word" flexGrow={1} fg={fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono())}>
                   {fix().text}
                 </text>
               </box>
@@ -97,7 +94,7 @@ export const StatusDialogBody = (props: {
             {(() => {
               const meter = () => contextMeter(goal().contextSize as number, goal().compactAtTokens)
               const hot = () => meter().hot
-              const fg = () => hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base
+              const fg = () => (mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base)
               return (
                 <box flexDirection="row" gap={2}>
                   {label("context")}
@@ -106,7 +103,7 @@ export const StatusDialogBody = (props: {
                     fallback={<text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(goal().contextSize as number)} tokens`}</text>}
                   >
                     <text wrapMode="none" fg={fg()}>{meter().text}</text>
-                    <text wrapMode="none" fg={hot() ? theme().text.feedback.warning.base : theme().text.muted}>
+                    <text wrapMode="none" fg={mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted}>
                       {`~${formatTokens(goal().contextSize as number)} of ${formatTokens(goal().compactAtTokens as number)} · ${meter().pct}%`}
                     </text>
                   </Show>
@@ -115,10 +112,10 @@ export const StatusDialogBody = (props: {
             })()}
           </Show>
           <Show when={goal().loopEnabled}>
-            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} />
+            <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} />
           </Show>
           <Show when={!goal().loopEnabled}>
-            <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} />
+            <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} mono={mono()} />
           </Show>
         </box>
       )}

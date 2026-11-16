@@ -308,6 +308,42 @@ var pinSuffix = (condition, conditionMax) => {
   return `${PIN_PREFIX}${truncate(flat, budget)}`;
 };
 var motionDisabled = (env) => env.NO_COLOR !== undefined || env.TERM === "dumb";
+var stateAccentColor = (theme, status, stuck, mono) => {
+  if (mono)
+    return status === "cleared" ? theme.text.faint : theme.text.base;
+  if (status === "paused" || status === "impossible")
+    return theme.text.feedback.warning.base;
+  if (status === "active")
+    return stuck ? theme.text.feedback.warning.base : theme.text.feedback.info.base;
+  if (status === "achieved")
+    return theme.text.feedback.info.base;
+  if (status === "failed")
+    return theme.text.feedback.error?.base ?? theme.text.feedback.warning.base;
+  return theme.text.faint;
+};
+var borderAccentColor = (theme, status, accent, mono) => {
+  if (mono)
+    return theme.border?.base ?? theme.text.faint;
+  if (status === "achieved")
+    return theme.text.feedback.info.base;
+  if (status === "failed")
+    return theme.text.feedback.error?.base ?? theme.text.feedback.warning.base;
+  if (status === "impossible" || status === "paused" || accent.hot === true || accent.stuck === true)
+    return theme.text.feedback.warning.base;
+  return theme.border?.base ?? theme.text.faint;
+};
+var verdictAccentColor = (theme, verdict, mono) => {
+  if (verdict === "met")
+    return mono ? theme.text.base : theme.text.feedback.info.base;
+  if (verdict === "impossible")
+    return mono ? theme.text.base : theme.text.feedback.warning.base;
+  return theme.text.faint;
+};
+var fixAccentColor = (theme, tone, mono) => {
+  if (mono)
+    return theme.text.base;
+  return tone === "error" ? theme.text.feedback.error?.base ?? theme.text.feedback.warning.base : theme.text.feedback.warning.base;
+};
 var remediationFor = (goal) => {
   if (goal.status === "failed") {
     return { tone: "error", text: `goal failed \u2014 /goal clear to reset` };
@@ -365,9 +401,10 @@ var label = (theme, text) => (() => {
   _$effect((_$p) => _$setProp(_el$, "fg", theme.text.faint, _$p));
   return _el$;
 })();
-var colorFor = (theme, verdict) => verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint;
+var colorFor = (theme, verdict, mono) => verdictAccentColor(theme, verdict, mono);
 var LoopSection = (props) => {
   const theme = () => props.theme;
+  const mono = () => props.mono === true;
   const history = () => props.goal.loopHistory ?? [];
   const done = () => history().length;
   const max = () => props.goal.loopMaxLoops;
@@ -411,9 +448,11 @@ var LoopSection = (props) => {
   const finished = () => history().length > 0 && (isTerminal() || capReached());
   const totals = () => loopTotals(history(), props.goal.setAt);
   const finalGlyph = () => props.goal.status === "achieved" ? "\u2713" : props.goal.status === "impossible" ? "\u2298" : "\u2717";
-  const finalColor = () => props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint;
+  const finalColor = () => mono() ? props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint : props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint;
   const nowColor = () => {
     const s = props.goal.status;
+    if (mono())
+      return s === "paused" || s === "impossible" || s === "active" ? theme().text.base : theme().text.faint;
     if (s === "paused" || s === "impossible")
       return theme().text.feedback.warning.base;
     if (s === "active")
@@ -450,7 +489,7 @@ var LoopSection = (props) => {
         var _el$8 = _$createElement("text");
         _$setProp(_el$8, "wrapMode", "none");
         _$insert(_el$8, () => "\u2588".repeat(bar().filled));
-        _$effect((_$p) => _$setProp(_el$8, "fg", theme().text.feedback.info.base, _$p));
+        _$effect((_$p) => _$setProp(_el$8, "fg", mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
         return _el$8;
       }
     }), null);
@@ -508,7 +547,7 @@ var LoopSection = (props) => {
             var _c$ = _$memo(() => !!pending());
             return () => _c$() ? `pending ${age()} \xB7 miss ${c.misses}/${COMPACT_MISS_CAP}${c.estimatedTokens !== undefined ? ` \xB7 ~${formatTokens(c.estimatedTokens)} at request` : ""}` : `landed ${age()} ago`;
           })());
-          _$effect((_$p) => _$setProp(_el$20, "fg", pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
+          _$effect((_$p) => _$setProp(_el$20, "fg", mono() ? theme().text.base : pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base, _$p));
           return _el$19;
         })();
       }
@@ -564,7 +603,7 @@ var LoopSection = (props) => {
               return _el$25;
             }
           }), null);
-          _$effect((_$p) => _$setProp(_el$23, "fg", zeroTools ? theme().text.faint : theme().text.feedback.info.base, _$p));
+          _$effect((_$p) => _$setProp(_el$23, "fg", zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
           return _el$21;
         })();
       }
@@ -602,7 +641,7 @@ var LoopSection = (props) => {
           return () => _c$2() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
         })());
         _$effect((_p$) => {
-          var _v$10 = theme().text.muted, _v$11 = colorFor(theme(), entry().verdict), _v$12 = TextAttributes.BOLD, _v$13 = theme().text.faint;
+          var _v$10 = theme().text.muted, _v$11 = colorFor(theme(), entry().verdict, mono()), _v$12 = TextAttributes.BOLD, _v$13 = theme().text.faint;
           _v$10 !== _p$.e && (_p$.e = _$setProp(_el$30, "fg", _v$10, _p$.e));
           _v$11 !== _p$.t && (_p$.t = _$setProp(_el$32, "fg", _v$11, _p$.t));
           _v$12 !== _p$.a && (_p$.a = _$setProp(_el$32, "attributes", _v$12, _p$.a));
@@ -654,6 +693,9 @@ var LoopSection = (props) => {
       },
       get history() {
         return props.goal.history ?? [];
+      },
+      get mono() {
+        return mono();
       }
     }), null);
     _$effect((_p$) => {
@@ -677,6 +719,7 @@ var LoopSection = (props) => {
   })();
 };
 var VerdictTrail = (props) => {
+  const mono = () => props.mono === true;
   const trail = () => trailWindow(props.history, 24);
   return _$createComponent(Show, {
     get when() {
@@ -699,7 +742,7 @@ var VerdictTrail = (props) => {
           var _el$40 = _$createElement("text");
           _$setProp(_el$40, "wrapMode", "none");
           _$insert(_el$40, () => verdictGlyph(entry.verdict));
-          _$effect((_$p) => _$setProp(_el$40, "fg", colorFor(props.theme, entry.verdict), _$p));
+          _$effect((_$p) => _$setProp(_el$40, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
           return _el$40;
         })()
       }));
@@ -718,6 +761,7 @@ var VerdictTrail = (props) => {
 };
 var HistoryBlock = (props) => {
   const theme = () => props.theme;
+  const mono = () => props.mono === true;
   const history = () => props.goal.history ?? [];
   const counts = () => verdictCounts(history());
   const last = () => lastVerdict(history());
@@ -771,7 +815,7 @@ var HistoryBlock = (props) => {
         _$setProp(_el$48, "flexGrow", 1);
         _$insert(_el$48, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$14 = colorFor(theme(), entry().verdict), _v$15 = TextAttributes.BOLD, _v$16 = theme().text.base;
+          var _v$14 = colorFor(theme(), entry().verdict, mono()), _v$15 = TextAttributes.BOLD, _v$16 = theme().text.base;
           _v$14 !== _p$.e && (_p$.e = _$setProp(_el$47, "fg", _v$14, _p$.e));
           _v$15 !== _p$.t && (_p$.t = _$setProp(_el$47, "attributes", _v$15, _p$.t));
           _v$16 !== _p$.a && (_p$.a = _$setProp(_el$48, "fg", _v$16, _p$.a));
@@ -790,6 +834,9 @@ var HistoryBlock = (props) => {
       },
       get history() {
         return history();
+      },
+      get mono() {
+        return mono();
       }
     }), null);
     return _el$41;
@@ -799,6 +846,7 @@ var HistoryBlock = (props) => {
 // src/status-dialog.tsx
 var StatusDialogBody = (props) => {
   const theme = () => props.theme;
+  const mono = () => props.mono === true;
   const label = (text) => (() => {
     var _el$ = _$createElement2("text");
     _$setProp2(_el$, "flexShrink", 0);
@@ -819,16 +867,7 @@ var StatusDialogBody = (props) => {
     _$effect2((_$p) => _$setProp2(_el$3, "fg", theme().text.base, _$p));
     return _el$2;
   })();
-  const stateColor = () => {
-    const s = props.goal?.status;
-    if (s === "paused" || s === "impossible")
-      return theme().text.feedback.warning.base;
-    if (s === "active" || s === "achieved")
-      return theme().text.feedback.info.base;
-    if (s === "failed")
-      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
-    return theme().text.muted;
-  };
+  const stateColor = () => props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted;
   const g = () => props.goal;
   const remediation = () => {
     const goal = g();
@@ -900,7 +939,7 @@ var StatusDialogBody = (props) => {
           _$setProp2(_el$12, "wrapMode", "word");
           _$setProp2(_el$12, "flexGrow", 1);
           _$insert2(_el$12, () => fix().text);
-          _$effect2((_$p) => _$setProp2(_el$12, "fg", fix().tone === "error" ? theme().text.feedback.error?.base ?? theme().text.feedback.warning.base : theme().text.feedback.warning.base, _$p));
+          _$effect2((_$p) => _$setProp2(_el$12, "fg", fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _$p));
           return _el$11;
         })()
       }), null);
@@ -918,7 +957,7 @@ var StatusDialogBody = (props) => {
           return (() => {
             const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens);
             const hot = () => meter().hot;
-            const fg = () => hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
+            const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
             return (() => {
               var _el$13 = _$createElement2("box");
               _$setProp2(_el$13, "flexDirection", "row");
@@ -948,7 +987,7 @@ var StatusDialogBody = (props) => {
                     var _el$15 = _$createElement2("text");
                     _$setProp2(_el$15, "wrapMode", "none");
                     _$insert2(_el$15, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
-                    _$effect2((_$p) => _$setProp2(_el$15, "fg", hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
+                    _$effect2((_$p) => _$setProp2(_el$15, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
                     return _el$15;
                   })()];
                 }
@@ -975,6 +1014,9 @@ var StatusDialogBody = (props) => {
             },
             get nowMs() {
               return props.nowMs;
+            },
+            get mono() {
+              return mono();
             }
           });
         }
@@ -993,6 +1035,9 @@ var StatusDialogBody = (props) => {
             },
             get elapsedMs() {
               return props.elapsedMs;
+            },
+            get mono() {
+              return mono();
             }
           });
         }
@@ -1031,7 +1076,7 @@ import { createSignal, Show as Show3 } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
 var CONDITION_MAX = 42;
 var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
-var verdictColor = (theme, verdict) => verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint;
+var verdictColor = (theme, verdict, mono) => verdictAccentColor(theme, verdict, mono);
 var Hint = (props) => (() => {
   var _el$ = _$createElement3("text");
   _$setProp3(_el$, "wrapMode", "none");
@@ -1064,6 +1109,9 @@ var DialogFooter = (props) => {
       get label() {
         return footerCopyLabel(props.copied(), roomy());
       },
+      get mono() {
+        return props.mono;
+      },
       get onPress() {
         return props.onCopy;
       }
@@ -1074,6 +1122,9 @@ var DialogFooter = (props) => {
       },
       get label() {
         return _$memo3(() => !!props.pinned())() ? "unpin" : roomy() ? "pin condition" : "pin";
+      },
+      get mono() {
+        return props.mono;
       },
       get onPress() {
         return props.onTogglePin;
@@ -1086,6 +1137,9 @@ var DialogFooter = (props) => {
       get label() {
         return roomy() ? "clear goal" : "clear";
       },
+      get mono() {
+        return props.mono;
+      },
       get onPress() {
         return props.onClear;
       }
@@ -1096,6 +1150,7 @@ var DialogFooter = (props) => {
 };
 var HudButton = (props) => {
   const [hovered, setHovered] = createSignal(false);
+  const mono = () => props.mono === true;
   return (() => {
     var _el$5 = _$createElement3("box"), _el$6 = _$createElement3("text");
     _$insertNode3(_el$5, _el$6);
@@ -1114,19 +1169,22 @@ var HudButton = (props) => {
     _$setProp3(_el$6, "wrapMode", "none");
     _$insert3(_el$6, () => `[${props.label}]`);
     _$effect3((_p$) => {
-      var _v$ = hovered() ? props.theme.background?.raised?.high : undefined, _v$2 = hovered() ? props.theme.text.base : props.theme.text.muted;
+      var _v$ = !mono() && hovered() ? props.theme.background?.raised?.high : undefined, _v$2 = hovered() ? props.theme.text.base : props.theme.text.muted, _v$3 = mono() && hovered() ? TextAttributes3.UNDERLINE : undefined;
       _v$ !== _p$.e && (_p$.e = _$setProp3(_el$5, "backgroundColor", _v$, _p$.e));
       _v$2 !== _p$.t && (_p$.t = _$setProp3(_el$6, "fg", _v$2, _p$.t));
+      _v$3 !== _p$.a && (_p$.a = _$setProp3(_el$6, "attributes", _v$3, _p$.a));
       return _p$;
     }, {
       e: undefined,
-      t: undefined
+      t: undefined,
+      a: undefined
     });
     return _el$5;
   })();
 };
 var HudCard = (props) => {
   const theme = () => props.theme;
+  const mono = () => props.mono === true;
   const g = () => props.goal;
   const [conditionHovered, setConditionHovered] = createSignal(false);
   const looped = () => Boolean(g().loopEnabled);
@@ -1137,31 +1195,12 @@ var HudCard = (props) => {
   const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1);
   const pips = () => looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "";
   const title = () => looped() ? `${GOAL_GLYPH} /goal-loop \xB7 v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`;
-  const borderColor = () => {
-    const s = g().status;
-    if (s === "achieved")
-      return theme().text.feedback.info.base;
-    if (s === "failed")
-      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
-    if (s === "impossible" || s === "paused" || isCompactHot(g()) || isRetryStuck(g()))
-      return theme().text.feedback.warning.base;
-    return theme().border?.base ?? theme().text.faint;
-  };
+  const borderColor = () => borderAccentColor(theme(), g().status, {
+    hot: isCompactHot(g()),
+    stuck: isRetryStuck(g())
+  }, mono());
   const turns = () => g().turns;
-  const stateColor = () => {
-    const s = g().status;
-    if (s === "paused")
-      return theme().text.feedback.warning.base;
-    if (s === "active")
-      return isRetryStuck(g()) ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
-    if (s === "achieved")
-      return theme().text.feedback.info.base;
-    if (s === "impossible")
-      return theme().text.feedback.warning.base;
-    if (s === "failed")
-      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
-    return theme().text.faint;
-  };
+  const stateColor = () => stateAccentColor(theme(), g().status, isRetryStuck(g()), mono());
   const last = () => lastVerdict(g().history ?? []);
   const turnsSince = () => {
     const entry = last();
@@ -1248,11 +1287,11 @@ var HudCard = (props) => {
         _$setProp3(_el$21, "wrapMode", "none");
         _$insert3(_el$21, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
-          var _v$13 = theme().text.faint, _v$14 = verdictColor(theme(), entry().verdict), _v$15 = TextAttributes3.BOLD, _v$16 = theme().text.muted;
-          _v$13 !== _p$.e && (_p$.e = _$setProp3(_el$18, "fg", _v$13, _p$.e));
-          _v$14 !== _p$.t && (_p$.t = _$setProp3(_el$20, "fg", _v$14, _p$.t));
-          _v$15 !== _p$.a && (_p$.a = _$setProp3(_el$20, "attributes", _v$15, _p$.a));
-          _v$16 !== _p$.o && (_p$.o = _$setProp3(_el$21, "fg", _v$16, _p$.o));
+          var _v$14 = theme().text.faint, _v$15 = verdictColor(theme(), entry().verdict, mono()), _v$16 = TextAttributes3.BOLD, _v$17 = theme().text.muted;
+          _v$14 !== _p$.e && (_p$.e = _$setProp3(_el$18, "fg", _v$14, _p$.e));
+          _v$15 !== _p$.t && (_p$.t = _$setProp3(_el$20, "fg", _v$15, _p$.t));
+          _v$16 !== _p$.a && (_p$.a = _$setProp3(_el$20, "attributes", _v$16, _p$.a));
+          _v$17 !== _p$.o && (_p$.o = _$setProp3(_el$21, "fg", _v$17, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -1281,9 +1320,9 @@ var HudCard = (props) => {
         _$setProp3(_el$25, "flexGrow", 1);
         _$insert3(_el$25, () => fix().text);
         _$effect3((_p$) => {
-          var _v$17 = fix().tone === "error" ? theme().text.feedback.error?.base ?? theme().text.feedback.warning.base : theme().text.feedback.warning.base, _v$18 = fix().tone === "error" ? theme().text.feedback.error?.base ?? theme().text.feedback.warning.base : theme().text.feedback.warning.base;
-          _v$17 !== _p$.e && (_p$.e = _$setProp3(_el$23, "fg", _v$17, _p$.e));
-          _v$18 !== _p$.t && (_p$.t = _$setProp3(_el$25, "fg", _v$18, _p$.t));
+          var _v$18 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$19 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
+          _v$18 !== _p$.e && (_p$.e = _$setProp3(_el$23, "fg", _v$18, _p$.e));
+          _v$19 !== _p$.t && (_p$.t = _$setProp3(_el$25, "fg", _v$19, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -1301,6 +1340,9 @@ var HudCard = (props) => {
         return theme();
       },
       label: "details",
+      get mono() {
+        return mono();
+      },
       get onPress() {
         return props.onDetails;
       }
@@ -1317,6 +1359,9 @@ var HudCard = (props) => {
           get label() {
             return props.pinned ? "unpin" : "pin";
           },
+          get mono() {
+            return mono();
+          },
           onPress: () => props.onTogglePin?.()
         });
       }
@@ -1326,6 +1371,9 @@ var HudCard = (props) => {
         return theme();
       },
       label: "clear goal",
+      get mono() {
+        return mono();
+      },
       get onPress() {
         return props.onClear;
       }
@@ -1336,24 +1384,27 @@ var HudCard = (props) => {
         return theme();
       },
       label: "esc",
+      get mono() {
+        return mono();
+      },
       get onPress() {
         return props.onClose;
       }
     }), null);
     _$effect3((_p$) => {
-      var _v$3 = props.width ?? 64, _v$4 = borderColor(), _v$5 = theme().background?.raised?.high, _v$6 = ` ${title()} `, _v$7 = stateColor(), _v$8 = theme().text.faint, _v$9 = theme().text.base, _v$0 = conditionHovered() ? TextAttributes3.UNDERLINE : undefined, _v$1 = theme().text.faint, _v$10 = stateColor(), _v$11 = TextAttributes3.BOLD, _v$12 = theme().text.muted;
-      _v$3 !== _p$.e && (_p$.e = _$setProp3(_el$7, "width", _v$3, _p$.e));
-      _v$4 !== _p$.t && (_p$.t = _$setProp3(_el$7, "borderColor", _v$4, _p$.t));
-      _v$5 !== _p$.a && (_p$.a = _$setProp3(_el$7, "backgroundColor", _v$5, _p$.a));
-      _v$6 !== _p$.o && (_p$.o = _$setProp3(_el$7, "title", _v$6, _p$.o));
-      _v$7 !== _p$.i && (_p$.i = _$setProp3(_el$7, "titleColor", _v$7, _p$.i));
-      _v$8 !== _p$.n && (_p$.n = _$setProp3(_el$9, "fg", _v$8, _p$.n));
-      _v$9 !== _p$.s && (_p$.s = _$setProp3(_el$1, "fg", _v$9, _p$.s));
-      _v$0 !== _p$.h && (_p$.h = _$setProp3(_el$1, "attributes", _v$0, _p$.h));
-      _v$1 !== _p$.r && (_p$.r = _$setProp3(_el$11, "fg", _v$1, _p$.r));
-      _v$10 !== _p$.d && (_p$.d = _$setProp3(_el$13, "fg", _v$10, _p$.d));
-      _v$11 !== _p$.l && (_p$.l = _$setProp3(_el$13, "attributes", _v$11, _p$.l));
-      _v$12 !== _p$.u && (_p$.u = _$setProp3(_el$14, "fg", _v$12, _p$.u));
+      var _v$4 = props.width ?? 64, _v$5 = borderColor(), _v$6 = theme().background?.raised?.high, _v$7 = ` ${title()} `, _v$8 = stateColor(), _v$9 = theme().text.faint, _v$0 = theme().text.base, _v$1 = conditionHovered() ? TextAttributes3.UNDERLINE : undefined, _v$10 = theme().text.faint, _v$11 = stateColor(), _v$12 = TextAttributes3.BOLD, _v$13 = theme().text.muted;
+      _v$4 !== _p$.e && (_p$.e = _$setProp3(_el$7, "width", _v$4, _p$.e));
+      _v$5 !== _p$.t && (_p$.t = _$setProp3(_el$7, "borderColor", _v$5, _p$.t));
+      _v$6 !== _p$.a && (_p$.a = _$setProp3(_el$7, "backgroundColor", _v$6, _p$.a));
+      _v$7 !== _p$.o && (_p$.o = _$setProp3(_el$7, "title", _v$7, _p$.o));
+      _v$8 !== _p$.i && (_p$.i = _$setProp3(_el$7, "titleColor", _v$8, _p$.i));
+      _v$9 !== _p$.n && (_p$.n = _$setProp3(_el$9, "fg", _v$9, _p$.n));
+      _v$0 !== _p$.s && (_p$.s = _$setProp3(_el$1, "fg", _v$0, _p$.s));
+      _v$1 !== _p$.h && (_p$.h = _$setProp3(_el$1, "attributes", _v$1, _p$.h));
+      _v$10 !== _p$.r && (_p$.r = _$setProp3(_el$11, "fg", _v$10, _p$.r));
+      _v$11 !== _p$.d && (_p$.d = _$setProp3(_el$13, "fg", _v$11, _p$.d));
+      _v$12 !== _p$.l && (_p$.l = _$setProp3(_el$13, "attributes", _v$12, _p$.l));
+      _v$13 !== _p$.u && (_p$.u = _$setProp3(_el$14, "fg", _v$13, _p$.u));
       return _p$;
     }, {
       e: undefined,
@@ -1639,7 +1690,8 @@ var tui_default = Plugin.define({
         },
         elapsedMs: elapsed,
         nowMs: () => now(),
-        onCopyCondition: (condition) => copyToClipboard(condition, sessionID)
+        onCopyCondition: (condition) => copyToClipboard(condition, sessionID),
+        mono: reducedColor
       });
     };
     const closeStatusDialog = () => {
@@ -1724,6 +1776,7 @@ var tui_default = Plugin.define({
             get theme() {
               return context.theme;
             },
+            mono: reducedColor,
             pinned: () => isPinned(sessionID),
             copied: statusCopied,
             onCopy: () => {
@@ -1933,6 +1986,7 @@ var tui_default = Plugin.define({
       });
     };
     const motionOk = !motionDisabled(process.env);
+    const reducedColor = !motionOk;
     const [pulse, setPulse] = createSignal2(false);
     const [getHudSession, setHudSession] = createSignal2(undefined);
     const [statusCopied, setStatusCopied] = createSignal2(false);
@@ -2042,6 +2096,8 @@ var tui_default = Plugin.define({
           return attrs === 0 ? undefined : attrs;
         };
         const color = () => {
+          if (reducedColor)
+            return context.theme.text.muted;
           const tone = pill()?.tone;
           if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible")
             return context.theme.text.feedback.warning.base;
@@ -2118,6 +2174,7 @@ var tui_default = Plugin.define({
                   get theme() {
                     return context.theme;
                   },
+                  mono: reducedColor,
                   elapsedMs: elapsed,
                   onClose: () => setHudSession(undefined),
                   onDetails: () => openDashboard(props.sessionID),
