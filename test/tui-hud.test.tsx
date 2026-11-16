@@ -929,7 +929,7 @@ describe("HudCard", () => {
 describe("zero-tool iterations in the ledger", () => {
   const historyTheme: HistoryTheme = theme
 
-  test("a zero-tool iteration renders the muted inspection-only row", async () => {
+  test("a zero-tool met iteration renders the already-satisfied-at-HEAD row", async () => {
     const goal = loopedGoal({
       loopHistory: [{ version: 1, condition: "c", summary: " looked around ", reason: "met", turns: 2, toolCalls: 0, endedAt: now - 1000 * 60 * 5 }],
       loopIteration: 2,
@@ -937,8 +937,9 @@ describe("zero-tool iterations in the ledger", () => {
     const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame).toContain("no tools · inspection only")
+    expect(frame).toContain("no tools · already satisfied at HEAD")
     expect(frame).toContain("○")
+    expect(frame).not.toContain("inspection only")
     await setup.renderer.destroy()
   })
 
@@ -949,6 +950,21 @@ describe("zero-tool iterations in the ledger", () => {
     const frame = setup.captureCharFrame()
     expect(frame).toContain("✓")
     expect(frame).not.toContain("inspection only")
+    expect(frame).not.toContain("already satisfied at HEAD")
+    await setup.renderer.destroy()
+  })
+
+  test("mono drops the hue but keeps the hollow glyph and the satisfied-at-HEAD tag", async () => {
+    const goal = loopedGoal({
+      loopHistory: [{ version: 1, condition: "c", summary: " already done ", reason: "met", turns: 2, toolCalls: 0, endedAt: now - 1000 * 60 * 5 }],
+      loopIteration: 2,
+    })
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} mono />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("no tools · already satisfied at HEAD")
+    expect(frame).toContain(".")   // ASCII ink-density glyph in the mono arm
+    expect(frame).not.toContain("○")
     await setup.renderer.destroy()
   })
 })

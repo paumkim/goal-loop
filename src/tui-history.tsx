@@ -254,7 +254,7 @@ export const LoopSection = (props: {
           </box>
         )}
       </Show>
-      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced. Older iterations fold behind one click so a long loop never buries the live row. */}
+      {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; a met iteration with zero tool calls produced no work — the evaluator found the condition already satisfied at HEAD — so it paints the blue accent (info.base, the palette's info hue; mono keeps the ○ shape as the signal) with the 'already satisfied at HEAD' tag. Older iterations fold behind one click so a long loop never buries the live row. */}
       <Show when={done() > RAIL_VISIBLE}>
         <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
@@ -268,17 +268,18 @@ export const LoopSection = (props: {
       <For each={visibleHistory()}>
         {(entry, index) => {
           const fullIndex = () => railOffset() + index()
+          // satisfied-at-HEAD: met with zero tool calls — the evaluator found the condition already holding at HEAD. Blue accent (info.base); mono drops the hue and keeps the hollow ○.
           const zeroTools = entry.toolCalls === 0
-          const rowColor = zeroTools ? theme().text.faint : theme().text.base
+          const rowColor = zeroTools ? (mono() ? theme().text.base : theme().text.muted) : theme().text.base
           return (
             <box flexDirection="column">
               <box flexDirection="row" gap={2}>
                 {label(theme(), `v${entry.version}`)}
-                <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base}>
+                <text wrapMode="none" flexShrink={0} fg={mono() ? theme().text.base : theme().text.feedback.info.base}>
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
-                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`}
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`}
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>
