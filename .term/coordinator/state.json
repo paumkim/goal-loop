@@ -1504,6 +1504,17 @@
       "submittedAt": "2026-11-16T08:03:08Z",
       "mergedAt": "2026-11-16T08:03:23Z",
       "mergedInto": "dev"
+    },
+    "tui-clear-confirm": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/tui-clear-confirm",
+      "worktree": "worktrees/wt-tui-clear-confirm",
+      "status": "done",
+      "createdAt": "2026-11-16T08:07:15Z",
+      "submittedAt": "2026-11-16T08:08:02Z",
+      "mergedAt": "2026-11-16T08:08:30Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
