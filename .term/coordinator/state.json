@@ -1889,6 +1889,17 @@
       "submittedAt": "2026-11-16T12:11:33Z",
       "mergedAt": "2026-11-16T12:12:16.000Z",
       "mergedInto": "dev"
+    },
+    "tui-fluid-card-width": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx src/tui.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html test/tui-render.test.tsx",
+      "branch": "wt/tui-fluid-card-width",
+      "worktree": "worktrees/wt-tui-fluid-card-width",
+      "status": "done",
+      "createdAt": "2026-11-16T12:15:07Z",
+      "submittedAt": "2026-11-16T12:19:03Z",
+      "mergedAt": "2026-11-16T12:20:32.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
