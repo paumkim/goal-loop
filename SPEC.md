@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=922 -->
+<!-- spec-check files=44 tests=929 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4151,3 +4151,53 @@ and without new paint when the route is unwired.
      the wheel natively; no test yet); the footer hint omits the pre-existing `r` chord (kept out
      of this slice); digits beyond 4 fold into the `+N more` line with no key route (paint order
      is the contract).
+
+
+## Workstream DN — the dialog's overflow is reachable, and the wheel works (2026-11-16)
+
+Interpretation: the design bar's mouse-first clauses that still had zero coverage or no path at
+all. (1) The elsewhere block painted at most four foreign live goals; the `+N more` line sat
+there as a silent, non-interactive cap — the fifth and later live sessions were invisible from
+`/goal status` with no mouse path and no keyboard path. (2) The bar says scrollable regions
+scroll with the mouse wheel; the dialog's scrollbox is the one scrollable surface in the plugin
+and nothing pinned wheel scrolling at real coordinates. This slice closes both, mouse and
+keyboard.
+
+398. src/status-dialog.tsx — the `+N more` line is a click-to-expand fold row (rail-fold grammar):
+     collapsed it paints `+N more`, expanded it paints `fold to FOREIGN_ROWS_VISIBLE`; hover
+     brightens the label and, while the host wires onToggleExpandedOthers, appends a faint
+     `click · m` tag (unwired, `click` — the fold works on local state either way, mirroring
+     the rail fold's uncontrolled fallback). Left click toggles, right/middle inert, try/catch
+     around the toggle. Digits paint only on rows 1..FOREIGN_ROWS_VISIBLE (`digit()` is
+     undefined past the chord cap — paint order is the contract). Rows 5+ paint the plain
+     10-cell label gutter. Controlled via expandedOthers/onToggleExpandedOthers from the
+     parent; local createSignal fallback when unwired (LoopSection pattern).
+399. src/core/dialog-keys.ts — when the host wires BOTH `foreignMoreVisible` (the overflow
+     predicate) and `toggleForeignMore`, the factory emits one more chord after the digits and
+     before the scroll ladder: `m` → `goal.status.elsewhere-more`, group Goal, title "Goal
+     status: show or fold the other sessions list". enabled mirrors the dialog-open gate AND
+     the overflow predicate (disabled past the chord cap; no overflow, no chord). run() wraps
+     the toggle in try/catch — the same swallow posture as every chord. Unwired, the factory
+     emits exactly the pre-DN command set; one half wired, no chord (both-or-neither, the
+     transcriptFor contract).
+400. src/tui.tsx — a setup-scope foreignMoreExpanded signal (same pattern as
+     iterationsExpanded) feeds the body's expandedOthers/onToggleExpandedOthers and the dialog
+     keymap's foreignMoreVisible (foreignLiveRows(...).length > FOREIGN_ROWS_VISIBLE) /
+     toggleForeignMore. No footer change (the fold key rides the row it addresses, the DL/DM
+     posture), no header change.
+401. Tests: +3 unit (dialog-keys: `m` joins after the digits when both halves wired, after
+     `r` when only the fold is wired, absent when exactly one half is wired; enabled mirrors
+     the open gate and the overflow gate; a throwing toggle never escapes). +3 interactive
+     (the fold paints all six foreign sessions when opened and folds back on click — the
+     hidden sessions carry no digit; the fold works without host wiring on local state; the
+     scrollbox scrolls under the mouse wheel at real coordinates, and scrolls back up — pins
+     opentui's ScrollBox.onMouseEvent mechanism the dialog depends on; mechanism-layer
+     evidence, not plugin-mount evidence). +1 snapshot (elsewhere overflow opened — all six
+     sessions paint, digits stay on the first four, fold row says `fold to 4`; recorded at
+     width 100 × height 44, deterministic clock). Evidence: bun test 929/929.
+402. Honest limits: the wheel pin is mechanism-layer (a bare scrollbox fixture exercising the
+     same @opentui/core ScrollBox the dialog mounts), not plugin-mount evidence — the plugin's
+     full mount is not headlessly renderable, and live TUI remains unverifiable (provider
+     dead) — never claimed. Rows past the fold cap stay digit-less (the chord cap is four by
+     design; `m` toggles, it does not address rows). Unwired embedders get the fold on local
+     state but no `m` chord by design.

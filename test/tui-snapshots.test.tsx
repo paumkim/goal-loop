@@ -182,6 +182,25 @@ describe("full-frame snapshots (named layout states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
+  test("StatusDialogBody · elsewhere overflow — the fold opened (every foreign session paints; digits stay on the first four rows)", async () => {
+    const slugs: Record<string, string> = { ses_1111111111: "brisk-falcon", ses_2222222222: "quiet-otter", ses_4444444444: "shy-heron", ses_5555555555: "grand-oyster", ses_6666666666: "still-bison", ses_7777777777: "ember-crab" }
+    const sessionLabel = (id: string): string => slugs[id] ?? id
+    const foreign = [
+      loopedGoal({ sessionID: "ses_1111111111", id: "goal_f1", condition: "ship the deploy pipeline before friday", loopIteration: 2, loopMaxLoops: 5 }),
+      loopedGoal({ sessionID: "ses_2222222222", id: "goal_f2", condition: "audit the whole tui surface", loopEnabled: false, status: "paused", pauseCause: "cap" }),
+      loopedGoal({ sessionID: "ses_4444444444", id: "goal_f4", condition: "map the snapshot states" }),
+      loopedGoal({ sessionID: "ses_5555555555", id: "goal_f5", condition: "harden the 80 column floor" }),
+      loopedGoal({ sessionID: "ses_6666666666", id: "goal_f6", condition: "wheel pin on the dialog" }),
+      loopedGoal({ sessionID: "ses_7777777777", id: "goal_f7", condition: "fold affordance coverage" }),
+    ]
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 10} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} onViewTranscript={() => {}} expandedOthers={() => true} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
   test("StatusDialogBody · why ledger (each verdict row carries the commit sha it landed on)", async () => {
     const shaA = "a3f5c8e91d4b6f7061728394a5b6c7d8e9f0a1b2"
     const shaB = "b1e4d7a20f3c5968778394a5b6c7d8e9f0a1b2c3d"
