@@ -68,6 +68,11 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot(loopedSnapshot())?.loopIteration).toBe(2)
   })
 
+  test("accepts a persisted failureLabel and tolerates its absence", () => {
+    expect(parseGoalSnapshot({ ...snapshot(), status: "failed", failureLabel: "authentication failure" })?.failureLabel).toBe("authentication failure")
+    expect(parseGoalSnapshot(snapshot())?.failureLabel).toBeUndefined()
+  })
+
   test("accepts a persisted pauseCause (cap / stall / user) and tolerates its absence", () => {
     for (const cause of ["cap", "stall", "user"] as const) {
       expect(parseGoalSnapshot({ ...snapshot(), status: "paused", pauseCause: cause })?.pauseCause).toBe(cause)
@@ -115,6 +120,7 @@ describe("parseGoalSnapshot", () => {
       ["unknown reason type", broken((d) => void (d.reason = 42))],
       ["unknown pauseCause", broken((d) => void (d.pauseCause = "forever"))],
       ["non-string pauseCause", broken((d) => void (d.pauseCause = 3))],
+      ["non-string failureLabel", broken((d) => void (d.failureLabel = 3))],
       ["unknown verdict", broken((d) => void (d.verdict = "sure"))],
     ]
     for (const [, value] of cases) expect(parseGoalSnapshot(value)).toBeUndefined()

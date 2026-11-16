@@ -401,6 +401,7 @@ describe("GoalController", () => {
     h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
     expect(h.controller.get(SID)?.status).toBe("failed")
     expect(h.controller.get(SID)?.reason).toContain("Run /goal again")
+    expect(h.controller.get(SID)?.failureLabel).toBe("authentication failure")
 
     await h.set()
     h.controller.onExecutionFailed(SID, { status: 429, message: "slow down" })

@@ -205,7 +205,9 @@ export interface Remediation {
 // hudCardRows), the dialog has more room but shows the same line. One exact action, no hedging.
 export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (goal.status === "failed") {
-    return { tone: "error", text: `goal failed — /goal clear to reset` }
+    // The classifier's label is short and stable; naming the cause beats a generic reset line. Falls back for records persisted before failureLabel existed.
+    const label = goal.failureLabel
+    return { tone: "error", text: label ? `${label} — /goal clear to reset` : `goal failed — /goal clear to reset` }
   }
   if (goal.status === "impossible") {
     return { tone: "warning", text: `judged impossible · rephrase the condition, else /goal clear` }

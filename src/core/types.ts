@@ -131,6 +131,8 @@ export interface GoalRecord {
   stall: number
   /** Why the goal is paused; set when entering the paused status, cleared on resume/finish. Absent outside paused records and on pre-pauseCause persisted records. */
   pauseCause?: PauseCause
+  /** The classifier's short label for the unrecoverable error that failed the goal (e.g. "authentication failure"). Set only on records entering the failed status; absent on legacy records and non-failed goals. */
+  failureLabel?: string
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */

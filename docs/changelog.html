@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-16 00:53 UTC</code></td><td>feat(tui): a failed goal names its cause — the record carries the classifier's failureLabel (set at the fatal-failure site, additive, absent on legacy records), the fix row reads 'authentication failure — /goal clear to reset' instead of a bare state word, and the wire parser tolerates/rejects it exactly like pauseCause</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:47 UTC</code></td><td>feat(tui): the card shows what the loop costs — a spend row (tokens in/out, cached, cost) under the state line, same grammar and omit-when-unknown contract as the detail view; the absolute mount anchor grows with it</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:42 UTC</code></td><td>feat(tui): truncation speaks terminal cells, not code units — grapheme-aware caps (CJK 2 cells, emoji 2, combining 0) so no boundary ever leaks half an emoji or splits a flag; ellipsis always fits and never leaves a dangling space</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 00:35 UTC</code></td><td>feat(tui): in-modal copies acknowledge in place — condition, evaluator/reason and iteration-summary rows flip a transient '✓ copied' on the clicked line (host toasts do not render above the /goal dialog)</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-15 17:55 UTC</code></td><td>docs: GitHub install route proven end-to-end; fix docs to match (Workstream BE)</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 17:44 UTC</code></td><td>docs(install): document GitHub install routes; npm registry route pending publish</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 17:23 UTC</code></td><td>fix(cli): restore candidate is oldest plugin-free backup (Workstream BB)</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 17:14 UTC</code></td><td>refactor(pkg): standalone rename @el4cteo/opencode-goal -&gt; opencode-goalv2 (Workstream BA)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
