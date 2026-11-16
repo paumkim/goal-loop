@@ -21,7 +21,7 @@ import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
-import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
+import { parseChangedEvent, parseGetGoalOutput, parseListGoalOutput, parseNotice } from "./core/wire.ts"
 
 type Entry = GoalSnapshotCacheEntry
 
@@ -61,6 +61,23 @@ export default Plugin.define({
     const [entries, setEntries] = createSignal<Readonly<Record<string, Entry>>>({})
     const [now, setNow] = createSignal(Date.now())
     const [statusDialogOpen, setStatusDialogOpen] = createSignal(false)
+    // Elsewhere — the live goals OTHER sessions hold in this directory, for the dialog's \`elsewhere\` block.
+    // Setup-scope TUI-local state like the pin registry: a read-only view, never stored. Refreshed when the
+    // dialog opens and whenever any goal `changed` event lands while it is open; the host owns session
+    // switching, so the block carries no actions.
+    const [others, setOthers] = createSignal<readonly GoalSnapshot[]>([])
+    const sessionLabel = (sessionID: string): string => {
+      try {
+        return context.data.session.get(sessionID)?.title ?? sessionID
+      } catch {
+        return sessionID.slice(-12)
+      }
+    }
+    const refreshOthers = (): Promise<void> =>
+      rpc.list({}).then((result) => {
+        const goals = parseListGoalOutput(result)
+        if (goals) setOthers(goals)
+      }).catch(() => {})
     const [statusDialogSession, setStatusDialogSession] = createSignal<string | undefined>(undefined)
     /** Loop-rail fold: controlled expand for the dialog's "N older iterations" row (keyboard parity with the click target). */
     const [iterationsExpanded, setIterationsExpanded] = createSignal(false)
@@ -76,7 +93,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -120,6 +137,7 @@ export default Plugin.define({
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       // If the RPC rejects or the payload cannot be parsed, say so in the dialog — never let stale chrome pass as fresh.
       void refresh(sessionID).then((fresh) => { if (!fresh) setDialogNoticeStale(true) }).catch(() => setDialogNoticeStale(true))
+      void refreshOthers()
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal
@@ -386,6 +404,7 @@ export default Plugin.define({
       try {
         const parsed = parseChangedEvent(event?.data)
         if (parsed) put(parsed.sessionID, parsed.goal)
+        if (statusDialogOpen()) void refreshOthers()
       } catch {
         // A malformed event must not take the plugin's render tree down.
       }

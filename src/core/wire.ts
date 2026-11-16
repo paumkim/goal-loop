@@ -130,6 +130,21 @@ export const parseGoalSnapshot = (value: unknown): GoalSnapshot | undefined => (
  * Narrows the `goal` RPC's result. `undefined` means the payload was unusable — the caller keeps the
  * previously cached entry (the same posture as a failed fetch) instead of displaying or caching garbage.
  */
+/**
+ * Narrows a `list` RPC output to the live goals it carries. Malformed entries are dropped one by one —
+ * a single corrupt record must not hide every other live goal. Returns undefined only when the envelope
+ * itself is unrecognizable.
+ */
+export const parseListGoalOutput = (value: unknown): GoalSnapshot[] | undefined => {
+  if (!isRecord(value) || !Array.isArray(value.goals)) return undefined
+  const out: GoalSnapshot[] = []
+  for (const entry of value.goals as unknown[]) {
+    const parsed = parseGoalSnapshot(entry)
+    if (parsed) out.push(parsed)
+  }
+  return out
+}
+
 export const parseGetGoalOutput = (value: unknown): { readonly goal: GoalSnapshot | null } | undefined => {
   if (!isRecord(value)) return undefined
   const goal = value.goal

@@ -1264,3 +1264,50 @@ describe("why ledger (the evaluator's most recent reasons, inline)", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("elsewhere block (other sessions holding live goals)", () => {
+  const foreign = [
+    loopedGoal({ sessionID: "ses_1111111111", id: "goal_f1", condition: "ship the deploy pipeline before friday", loopIteration: 2, loopMaxLoops: 5 }),
+    loopedGoal({ sessionID: "ses_2222222222", id: "goal_f2", condition: "audit the whole tui surface", loopEnabled: false, status: "paused", pauseCause: "cap" }),
+  ]
+  const slugs: Record<string, string> = { ses_1111111111: "brisk-falcon", ses_2222222222: "quiet-otter" }
+  const sessionLabel = (id: string): string => slugs[id] ?? id
+
+  test("paints one read-only row per other live session, own session and terminal goals excluded", async () => {
+    const own = loopedGoal() // sessionID ses_test — the dialog's own session
+    const achieved = loopedGoal({ sessionID: "ses_3333333333", id: "goal_f3", status: "achieved" })
+    const frame = await render(() => (
+      <StatusDialogBody goal={own} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={() => {}} others={[own, achieved, ...foreign]} sessionLabel={sessionLabel} />
+    ))
+    expect(frame).toContain("elsewhere")
+    expect(frame).toContain("2 other sessions holding live goals")
+    expect(frame).toContain("brisk-falcon")
+    expect(frame).toContain("quiet-otter")
+    expect(frame).toContain("v2/5") // looped foreign session shows its position
+    expect(frame).toContain("ship the deploy pipeline") // whitespace-collapsed condition prefix
+    expect(frame).toContain("audit the whole tui surface")
+    expect(frame).not.toContain("ses_1111111111") // slug resolves; raw ids never paint
+    expect(frame).not.toContain("ses_2222222222")
+    expect(frame).not.toContain("ses_3333333333") // achieved is terminal, never listed
+  })
+
+  test("singular noun for exactly one other live session", async () => {
+    const frame = await render(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={[foreign[0]!]} sessionLabel={sessionLabel} />
+    ))
+    expect(frame).toContain("1 other session holding live goals")
+    expect(frame).toContain("brisk-falcon")
+    expect(frame).not.toContain("quiet-otter")
+  })
+
+  test("omits the block entirely when no other session holds a live goal", async () => {
+    const empty = await render(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={[]} sessionLabel={sessionLabel} />
+    ))
+    expect(empty).not.toContain("elsewhere")
+    const absent = await render(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />
+    ))
+    expect(absent).not.toContain("elsewhere")
+  })
+})
