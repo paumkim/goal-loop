@@ -2258,6 +2258,22 @@
       "submittedAt": "2026-11-16T18:37:55Z",
       "mergedAt": "2026-11-16T18:40:35Z",
       "mergedInto": "dev"
+    },
+    "iteration-94-find-in-dossier": {
+      "agent": "orchestrator",
+      "paths": "src/core/find.ts,src/status-dialog.tsx,test/find.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/iteration-94-find-in-dossier",
+      "worktree": "worktrees/wt-iteration-94-find-in-dossier",
+      "status": "done",
+      "createdAt": "2026-11-16T18:47:17Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-16T19:32:25Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "submittedAt": "2026-11-16T19:32:25Z",
+      "mergedAt": "2026-11-16T19:35:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
