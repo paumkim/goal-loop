@@ -31,7 +31,7 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarChrome } from "./core/scrollbar.ts"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleLiveSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
@@ -439,6 +439,11 @@ export default Plugin.define({
     // Minute-resolution clock, ticking only while some goal is active.
     const timer = setInterval(() => {
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
+      // Stale-chrome guard: the pill paints from the entries cache and never re-pulls otherwise, so one
+      // dropped `changed` event strands "goal checking · Nm" on the jump row forever. Re-pull live
+      // snapshots older than STALE_LIVE_ENTRY_MS; a terminal/null response flows through the normal
+      // intake, arms the acknowledgment pill, and the stale chrome converges.
+      for (const sessionID of staleLiveSessionIDs(entries(), Date.now())) void refresh(sessionID).catch(() => {})
     }, TICK_MS)
 
     // One-per-session pin registry: a pinned condition is appended (truncated) to the ambient pill so it

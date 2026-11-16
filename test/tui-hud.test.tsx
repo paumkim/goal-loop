@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleLiveSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -1391,5 +1391,41 @@ describe("quotable tallies (EA): the rail row and the final tally copy one left 
     expect(frame).toContain("loop achieved")
     expect(frame).not.toContain("✓ copied")
     await setup.renderer.destroy()
+  })
+})
+
+describe("staleLiveSessionIDs", () => {
+  const liveEntry = (overrides: Partial<GoalSnapshot> = {}, receivedAt: number | undefined = now) =>
+    ({ goal: loopedGoal(overrides), receivedAt })
+  test("returns sessions whose live snapshot is older than the floor", () => {
+    const entries = {
+      ses_1: liveEntry({}, now - STALE_LIVE_ENTRY_MS),
+      ses_2: liveEntry({}, now - STALE_LIVE_ENTRY_MS - 1),
+    }
+    expect(staleLiveSessionIDs(entries, now).sort()).toEqual(["ses_1", "ses_2"])
+  })
+  test("leaves fresh live snapshots alone", () => {
+    const entries = { ses_fresh: liveEntry({}, now - STALE_LIVE_ENTRY_MS + 1000) }
+    expect(staleLiveSessionIDs(entries, now)).toEqual([])
+  })
+  test("includes paused goals — a resume elsewhere strands the pill just the same", () => {
+    const entries = { ses_paused: liveEntry({ status: "paused" }, now - STALE_LIVE_ENTRY_MS - 1) }
+    expect(staleLiveSessionIDs(entries, now)).toEqual(["ses_paused"])
+  })
+  test("excludes terminal and null goals", () => {
+    const entries = {
+      ses_achieved: liveEntry({ status: "achieved" }, now - STALE_LIVE_ENTRY_MS - 1),
+      ses_cleared: { goal: null, receivedAt: now - STALE_LIVE_ENTRY_MS - 1 },
+    }
+    expect(staleLiveSessionIDs(entries, now)).toEqual([])
+  })
+  test("a missing receivedAt counts as infinitely stale", () => {
+    const entries = { ses_untimed: { goal: loopedGoal() } }
+    expect(staleLiveSessionIDs(entries, now)).toEqual(["ses_untimed"])
+  })
+  test("the floor is configurable", () => {
+    const entries = { ses_1: liveEntry({}, now - 5000) }
+    expect(staleLiveSessionIDs(entries, now, 4000)).toEqual(["ses_1"])
+    expect(staleLiveSessionIDs(entries, now, 10_000)).toEqual([])
   })
 })
