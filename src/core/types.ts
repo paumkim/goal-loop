@@ -142,6 +142,24 @@ export interface GoalRecord {
   pauseCause?: PauseCause
   /** The classifier's short label for the unrecoverable error that failed the goal (e.g. "authentication failure"). Set only on records entering the failed status; absent on legacy records and non-failed goals. */
   failureLabel?: string
+  /**
+   * The last `evaluator.verifyCommand` gate run against this record (additive; absent on legacy records,
+   * on goals with no command configured, and on non-met verdicts — the gate only runs on `met`).
+   * Observational only: written by the controller, read by the dashboard. The tail is display-safe
+   * (control sequences stripped, last lines, capped) and rides the record so a restart restores it.
+   */
+  lastVerify?: {
+    /** The configured command exactly as run. */
+    readonly command: string
+    /** Exit code; null when the process never returned one (spawn error or timeout). */
+    readonly code: number | null
+    /** True when the gate killed the command at evaluator.verifyTimeoutMs. */
+    readonly timedOut?: boolean
+    /** Last lines of combined output, display-safe, capped at the tail. Absent when the command produced no output. */
+    readonly tail?: string
+    /** ms since epoch (the shared clock). */
+    readonly at: number
+  }
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */

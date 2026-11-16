@@ -249,3 +249,46 @@ describe("verification gate config", () => {
     expect(config.evaluator.verifyCommand).toBe("")
   })
 })
+
+describe("verification tail on the record (dashboard evidence)", () => {
+  test("a passing gate persists the exit code and the stripped tail on the record", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check" } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: 0, output: "\u001b[32m42 pass\u001b[0m\n0 fail", timedOut: false })
+    await h.turn(3)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.lastVerify).toBeDefined()
+    expect(record.lastVerify!.command).toBe("bun run check")
+    expect(record.lastVerify!.code).toBe(0)
+    expect(record.lastVerify!.tail).toBe("42 pass\n0 fail")
+    expect(record.lastVerify!.tail).not.toContain("\u001b")
+    expect(typeof record.lastVerify!.at).toBe("number")
+  })
+
+  test("a failing gate persists the stripped tail and exit code; the reason contract is unchanged", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check" } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: 1, output: "\u001b[31m1 fail\u001b[0m\nerror: expected true", timedOut: false })
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.verdict).toBe("not_met")
+    expect(record.lastVerify!.code).toBe(1)
+    expect(record.lastVerify!.tail).toBe("1 fail\nerror: expected true")
+    expect(record.reason).toContain("1 fail")
+  })
+
+  test("a timeout persists timedOut with a null exit code and no tail", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check", verifyTimeoutMs: 5_000 } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: null, output: "", timedOut: true })
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.lastVerify!.timedOut).toBe(true)
+    expect(record.lastVerify!.code).toBeNull()
+    expect(record.lastVerify!.tail).toBeUndefined()
+  })
+})

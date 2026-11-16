@@ -65,6 +65,21 @@ describe("render script smoke tests", () => {
     expect(result.stdout).not.toContain("◎")
   }, 30_000)
 
+  test("render-dialog.tsx paints the verify section (the gate's output on screen, ASCII glyph under mono)", () => {
+    const color = run("scripts/render-dialog.tsx", ["--width=80"])
+    expect(color.error).toBeUndefined()
+    expect(color.status).toBe(0)
+    expect(color.stdout).toContain("$ bun run check")
+    expect(color.stdout).toContain("✓ exit 0")
+    expect(color.stdout).toContain("spec-check: ok (44 files, 907 tests")
+    const mono = run("scripts/render-dialog.tsx", ["--width=80", "--mono"])
+    expect(mono.error).toBeUndefined()
+    expect(mono.status).toBe(0)
+    expect(mono.stdout).toContain("+ exit 0")
+    expect(mono.stdout).not.toContain("✓")
+    expect(mono.stdout).toContain("spec-check: ok (44 files, 907 tests")
+  }, 30_000)
+
   test("render-card.tsx exits 0 and prints the three card frames (whole-cost contract at the clamp floor)", () => {
     const result = run("scripts/render-card.tsx")
     expect(result.error).toBeUndefined()

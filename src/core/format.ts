@@ -34,6 +34,21 @@ export function wrapLines(text: string, width: number): number {
   return lines
 }
 
+/**
+ * Strips terminal control sequences (OSC, CSI, two-char Fe, lone C0/DEL) from subprocess output so a
+ * persisted tail paints as plain text, never as raw escapes or mojibake, and normalizes CR to LF.
+ * Tabs and newlines survive. Applied at the engine boundary (the verifier returns raw subprocess
+ * output) before anything is stored on the record.
+ */
+export function stripControls(text: string): string {
+  return text
+    .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "") // OSC ... BEL/ST
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "") // CSI ... final byte
+    .replace(/\u001b[@-Z\\-_]/g, "") // two-char Fe sequences
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "") // lone C0 and DEL
+    .replace(/\r\n?/g, "\n")
+}
+
 export const GOAL_GLYPH = "\u25CE"
 /** ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the goal marker becomes a plain asterisk. */
 export const GOAL_GLYPH_ASCII = "*"
