@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=556 -->
+<!-- spec-check files=41 tests=563 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2102,3 +2102,9 @@ Marker bumped `files=41 tests=544` → `files=41 tests=551` (test-only addition;
 216. New `test/docs-line-refs.test.ts` (5 tests) closes the drift class that recurred across iterations 7-9: every `file.ts[x]:N` and `file.ts[x]:N-M` reference in `docs/*.html` and `SPEC.md` (80 refs at time of writing) is now machine-checked — the cited file must resolve on disk (root-relative, then `src/`/`src/core/`/`src/runtime/` fallbacks for refs written without a directory prefix), the range must be ordered and in bounds, every single-line ref must land on a non-empty line, and every ranged ref must cover at least one non-empty line (Appendix A is frozen to the Phase-1 commit, so it is checked structurally, never on content). Bare `:NNN` fragments without an attached filename are skipped by design. The suite asserts it found >=70 refs so an over-strict regex cannot pass vacuously.
 217. Mutation-verified both ways: in `docs/core.html`, rewriting a `config.ts:44` citation to an out-of-range line fails the in-bounds and non-empty tests, and pointing the citation at a path that does not exist (`src/core/nope.ts`) fails the file-exists test; reverting passes. Docs line refs can no longer rot silently against the source tree.
 Marker bumped `files=41 tests=551` → `files=41 tests=556` (test-only addition; no shipped file changed).
+
+## Workstream BR — OPENCODE_GOAL_* env surface pinned to the docs (2026-11-16)
+
+218. New `test/env-vars.test.ts` (7 tests) walks src/, README.md and docs/config.html and compares the `OPENCODE_GOAL_[A-Z0-9_]+` token sets in both directions: every variable referenced in src/ is documented in README.md AND docs/config.html, every variable documented in either file is referenced in src/, the two docs carry the identical set, and the set matches the code set exactly. The 13 current variables (12 option overrides read in `src/core/config.ts` + `OPENCODE_GOAL_PROBE` read in `src/index.ts`) are all documented in both files today. Refuses to pass vacuously (asserts src/ references >=10).
+219. Mutation-verified both directions: adding `OPENCODE_GOAL_FAKE_VAR` to docs/config.html fails the documented-but-not-read and identical-set tests; renaming the `OPENCODE_GOAL_COMPACT_AT_TOKENS` reads in src/core/config.ts fails the read-but-undocumented and exact-set tests; reverting passes. The documented env list can no longer drift from the code silently.
+Marker bumped `files=41 tests=556` → `files=41 tests=563` (test-only addition; no shipped file changed).
