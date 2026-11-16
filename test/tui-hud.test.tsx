@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, pinBudget, footerCopyLabel, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -421,6 +421,31 @@ describe("hudCardRows", () => {
     expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(8)
     const { history: _h, ...noHistory } = loopedGoal()
     expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
+  })
+})
+
+describe("footerPinLabel", () => {
+  test("the object noun survives the toggle at the roomy tier; compact tiers use the bare verbs", () => {
+    expect(footerPinLabel(false, true)).toBe("pin condition")
+    expect(footerPinLabel(true, true)).toBe("unpin condition")
+    expect(footerPinLabel(false, false)).toBe("pin")
+    expect(footerPinLabel(true, false)).toBe("unpin")
+  })
+})
+
+describe("dialog footer hints", () => {
+  test("no tier repeats the Esc chord — it stays in the host dialog chrome", () => {
+    expect(DIALOG_FOOTER_FULL_HINT).not.toContain("esc")
+    expect(DIALOG_FOOTER_SHORT_HINT).not.toContain("esc")
+  })
+
+  test("both hints document the two plugin chords; the full hint also documents paging", () => {
+    for (const hint of [DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT]) {
+      expect(hint).toContain("p pin")
+      expect(hint).toContain("c copy")
+    }
+    expect(DIALOG_FOOTER_FULL_HINT).toContain("pgup/pgdn")
+    expect(DIALOG_FOOTER_SHORT_HINT).not.toContain("pgup")
   })
 })
 

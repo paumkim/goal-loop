@@ -1439,9 +1439,10 @@ var Hint = (props) => (() => {
 })();
 var hudCardRows = (goal) => 5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0);
 var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
-var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 p pin condition \xB7 esc close";
+var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy";
 var footerCopyLabel = (copied, roomy) => copied ? "\u2713 copied" : roomy ? "copy condition" : "copy";
+var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "unpin" : roomy ? "pin condition" : "pin";
 var DialogFooter = (props) => {
   const dimensions = useTerminalDimensions();
   const wide = () => dimensions().width >= 140;
@@ -1474,7 +1475,7 @@ var DialogFooter = (props) => {
         return props.theme;
       },
       get label() {
-        return _$memo3(() => !!props.pinned())() ? "unpin" : roomy() ? "pin condition" : "pin";
+        return footerPinLabel(props.pinned(), roomy());
       },
       get mono() {
         return props.mono;

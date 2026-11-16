@@ -27,12 +27,14 @@ the modal, so each row (condition, evaluator/reason, summary) flips a transient 
 on the clicked line, the same grammar as the footer's copy button (the host clipboard/OSC52 call still fires; the
 host toast, where visible, still fires). Clickable `copy condition` / `pin condition` / `clear
 goal` footer buttons (`p` toggles the pin, `c` copies the condition — host toasts do not render above the
-modal, so the copy button acknowledges with a transient `✓ copied` label instead). The footer degrades in two
+modal, so the copy button acknowledges with a transient `✓ copied` label instead). The pin button keeps its
+object noun across states at the roomy tier — `pin condition` ↔ `unpin condition` (`footerPinLabel`) — so the
+mouse target does not shrink mid-toggle; compact tiers render bare `pin` ↔ `unpin`. The footer degrades in two
 steps so it never clips mid-word: above
-140 columns the full key hint plus full button labels; above 96 the short hint (`up/down scroll · p pin ·
-c copy`, Esc stays visible in the host dialog chrome) with full labels; below that, compact button labels
+140 columns the full key hint (`up/down scroll · pgup/pgdn · home/end · p pin · c copy`, sized to the host dialog's real inner width — the centered dialog leaves the hint ~59 cells at a 160-cell terminal, so a longer hint clips mid-word) plus full button labels; above 96 the short hint (`up/down scroll · p pin · c copy`, Esc stays visible in the host dialog chrome) with full labels; below that, compact button labels
 (`copy` / `pin` / `clear`) — the 80-column
-floor always fits. The same env guard governs color as motion: under `NO_COLOR` (or `TERM=dumb`) every
+floor always fits. No tier repeats the Esc chord: it stays in the host dialog chrome, and the full hint documents
+both plugin chords (`p pin · c copy`) the short hint does, plus paging. The same env guard governs color as motion: under `NO_COLOR` (or `TERM=dumb`) every
 chromatic accent is dropped from the plugin's own surfaces — the pill, card, dialog and history render with
 neutral tokens only, hover becomes an underline instead of a background fill, and status words, verdict
 glyphs (✓ / ⊘ / ○) and weight (bold) carry all meaning; meaning never depended on color alone. The host's
@@ -450,7 +452,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=722 -->
+<!-- spec-check files=43 tests=725 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
