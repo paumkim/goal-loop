@@ -106,7 +106,7 @@ export const StatusDialogBody = (props: {
             </text>
           </box>
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
-          <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
+          <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
             <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={conditionHovered() ? TextAttributes.UNDERLINE : undefined}>
               {goal().condition}{copiedSuffix("condition")}
@@ -122,7 +122,7 @@ export const StatusDialogBody = (props: {
                 when={props.onCopyReason}
                 fallback={field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}
               >
-                <box flexDirection="row" gap={2} onMouseUp={() => copyReason(reason())} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
+                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyReason(reason()) }} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
                   {label(goal().status === "active" ? "evaluator" : "reason")}
                   <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.UNDERLINE : undefined}>
                     {reason()}{copiedSuffix("reason")}

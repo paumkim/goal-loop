@@ -657,7 +657,12 @@ var RailSummary = (props) => {
     _$insert(_el$5, () => `\u2502 ${truncate(props.text, SUMMARY_MAX)}`, null);
     _$insert(_el$5, () => props.copied?.() ? " \u2713 copied" : "", null);
     _$effect((_p$) => {
-      var _v$ = props.onCopy ? copy : undefined, _v$2 = props.theme.text.faint, _v$3 = props.theme.text.faint, _v$4 = props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined;
+      var _v$ = props.onCopy ? (event) => {
+        if (event.button !== 0)
+          return;
+        event.stopPropagation();
+        copy();
+      } : undefined, _v$2 = props.theme.text.faint, _v$3 = props.theme.text.faint, _v$4 = props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined;
       _v$ !== _p$.e && (_p$.e = _$setProp(_el$2, "onMouseUp", _v$, _p$.e));
       _v$2 !== _p$.t && (_p$.t = _$setProp(_el$3, "fg", _v$2, _p$.t));
       _v$3 !== _p$.a && (_p$.a = _$setProp(_el$5, "fg", _v$3, _p$.a));
@@ -886,7 +891,12 @@ var LoopSection = (props) => {
         _$insertNode(_el$14, _el$17);
         _$setProp(_el$14, "flexDirection", "row");
         _$setProp(_el$14, "gap", 2);
-        _$setProp(_el$14, "onMouseUp", () => setShowAll((v) => !v));
+        _$setProp(_el$14, "onMouseUp", (event) => {
+          if (event.button !== 0)
+            return;
+          event.stopPropagation();
+          setShowAll((v) => !v);
+        });
         _$setProp(_el$14, "onMouseOver", () => setRailHovered(true));
         _$setProp(_el$14, "onMouseOut", () => setRailHovered(false));
         _$insertNode(_el$15, _$createTextNode(`\u2026`));
@@ -1295,7 +1305,12 @@ var StatusDialogBody = (props) => {
       _$insertNode2(_el$1, _el$10);
       _$setProp2(_el$1, "flexDirection", "row");
       _$setProp2(_el$1, "gap", 2);
-      _$setProp2(_el$1, "onMouseUp", () => copyCondition(goal().condition));
+      _$setProp2(_el$1, "onMouseUp", (event) => {
+        if (event.button !== 0)
+          return;
+        event.stopPropagation();
+        copyCondition(goal().condition);
+      });
       _$setProp2(_el$1, "onMouseOver", () => setConditionHovered(true));
       _$setProp2(_el$1, "onMouseOut", () => setConditionHovered(false));
       _$insert2(_el$1, () => label("goal"), _el$10);
@@ -1332,7 +1347,12 @@ var StatusDialogBody = (props) => {
             _$insertNode2(_el$13, _el$14);
             _$setProp2(_el$13, "flexDirection", "row");
             _$setProp2(_el$13, "gap", 2);
-            _$setProp2(_el$13, "onMouseUp", () => copyReason(reason()));
+            _$setProp2(_el$13, "onMouseUp", (event) => {
+              if (event.button !== 0)
+                return;
+              event.stopPropagation();
+              copyReason(reason());
+            });
             _$setProp2(_el$13, "onMouseOver", () => setReasonHovered(true));
             _$setProp2(_el$13, "onMouseOut", () => setReasonHovered(false));
             _$insert2(_el$13, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$14);
@@ -1623,7 +1643,10 @@ var HudButton = (props) => {
     _$setProp3(_el$5, "paddingRight", 1);
     _$setProp3(_el$5, "onMouseOver", () => setHovered(true));
     _$setProp3(_el$5, "onMouseOut", () => setHovered(false));
-    _$setProp3(_el$5, "onMouseUp", () => {
+    _$setProp3(_el$5, "onMouseUp", (event) => {
+      if (event.button !== 0)
+        return;
+      event.stopPropagation();
       try {
         props.onPress();
       } catch {}
@@ -1659,9 +1682,12 @@ var HudMenuRow = (props) => {
     _$setProp3(_el$7, "height", 1);
     _$setProp3(_el$7, "onMouseOver", () => enabled() && setHovered(true));
     _$setProp3(_el$7, "onMouseOut", () => setHovered(false));
-    _$setProp3(_el$7, "onMouseUp", () => {
+    _$setProp3(_el$7, "onMouseUp", (event) => {
+      if (event.button !== 0)
+        return;
       if (!enabled())
         return;
+      event.stopPropagation();
       try {
         props.onPress();
       } catch {}
@@ -1751,7 +1777,12 @@ var HudCard = (props) => {
     _$insertNode3(_el$1, _el$12);
     _$setProp3(_el$1, "flexDirection", "row");
     _$setProp3(_el$1, "gap", 1);
-    _$setProp3(_el$1, "onMouseUp", copyCondition);
+    _$setProp3(_el$1, "onMouseUp", (event) => {
+      if (event.button !== 0)
+        return;
+      event.stopPropagation();
+      copyCondition();
+    });
     _$setProp3(_el$1, "onMouseOver", () => setConditionHovered(true));
     _$setProp3(_el$1, "onMouseOut", () => setConditionHovered(false));
     _$insertNode3(_el$10, _$createTextNode3(`condition`));
@@ -2408,7 +2439,12 @@ var tui_default = Plugin.define({
             _$setProp4(_el$5, "flexShrink", 0);
             _$setProp4(_el$5, "paddingLeft", 1);
             _$setProp4(_el$5, "paddingRight", 1);
-            _$setProp4(_el$5, "onMouseUp", () => closeStatusDialog());
+            _$setProp4(_el$5, "onMouseUp", (event) => {
+              if (event.button !== 0)
+                return;
+              event.stopPropagation();
+              closeStatusDialog();
+            });
             _$setProp4(_el$5, "onMouseOver", () => setStatusEscHovered(true));
             _$setProp4(_el$5, "onMouseOut", () => setStatusEscHovered(false));
             _$insertNode4(_el$6, _$createTextNode4(`esc`));
@@ -2903,7 +2939,7 @@ var tui_default = Plugin.define({
                     return;
                   if (event.button === 2)
                     openDashboard(props.sessionID);
-                  else
+                  else if (event.button === 0)
                     toggleHud();
                 } catch {}
               });

@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=769 -->
+<!-- spec-check files=43 tests=774 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2560,3 +2560,38 @@ No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check green (769 tests),
 coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CF — right and middle never activate; left does (2026-11-16)
+
+Interpretation of this iteration: mouse-first ergonomics, the audit's top finding. Every leaf
+click handler in the TUI ignored event.button: a right-click on any button/row fired its action
+and bubbled to the card root (toggling the context menu), and the pill treated middle-click as a
+left click. One misplaced press on [clear goal] or a menu row could therefore erase the armed goal
+and its history, or corrupt the menu state — exactly the failure the clear-confirm workstream closed
+for keyboard-speed clicks.
+
+253. src/hud-card.tsx (HudButton, HudMenuRow, card condition row), src/status-dialog.tsx
+     (condition and reason rows), src/tui-history.tsx (RailSummary, the fold row), src/tui.tsx
+     (dialog esc, ambient pill): every leaf onMouseUp now activates on button 0 ONLY. Handled left
+     clicks call event.stopPropagation() so no ancestor re-fires them; non-left presses fall through
+     unhandled, preserving the documented "right-click anywhere on the card toggles the context menu"
+     contract. The pill is now explicit: button 0 toggles the card, button 2 opens the dashboard,
+     other buttons inert. The dialog esc closes on left only. Note: the renderer stamps
+     isDragging=true on any left up that ends an in-progress selection (plain clicks included — the
+     audit's isDragging suggestion was tried and reverted: it swallowed every real activation);
+     button filtering is the reliable discriminator here.
+254. test/tui-render.test.tsx gains a "mouse-button discipline" describe block with five tests:
+     right-click on the [clear goal] menu row fires nothing and toggles the menu via the root;
+     middle-click on a menu row fires nothing and leaves the menu open; right-click on the card's
+     footer [clear goal] button fires nothing (menu opens instead); right-click on a loop summary row
+     copies nothing; left-click on a loop summary row still copies (regression guard).
+255. Evidence is test-layer (mouse button is fully mockable); the drag-release distinction is not
+     component-distinguishable in this host and stays host-owned. No chrome, layout or motion changes.
+
+Marker bumped files=43 tests=769 to files=43 tests=774. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched by
+this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test tui-render.test.tsx (73 pass),
+bun run check green (774 tests), coordinator submit + merge-next, and bun run check on dev shown
+green at the end.
