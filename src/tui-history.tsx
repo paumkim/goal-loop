@@ -7,6 +7,7 @@
  * RGBA, no absolute positioning. Pure layout math lives in `src/core/history.ts` (unit-tested).
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
+import stringWidth from "string-width"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
@@ -382,6 +383,9 @@ const WhyLedger = (props: {
   })
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT)
   const now = () => props.nowMs?.() ?? Date.now()
+  const furniture = (entry: VerdictEntry) => `${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${spendSuffix(entry)}`
+  // The reason column hangs off the end of the muted furniture; verdict word, turn digits and relative time vary across rows, which used to shift the reason. Pin the furniture cell to the widest visible row (stringWidth — the row carries multibyte glyphs) so reasons land on one x.
+  const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0)
   return (
     <Show when={rows().length > 0}>
       <For each={rows()}>
@@ -393,8 +397,8 @@ const WhyLedger = (props: {
               <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry, mono())} attributes={TextAttributes.BOLD}>
                 {verdictEntryGlyph(entry, ascii())}
               </text>
-              <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
-                {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${spendSuffix(entry)}`}
+              <text wrapMode="none" flexShrink={0} fg={theme().text.muted} width={furnitureWidth()}>
+                {furniture(entry)}
               </text>
               <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined}>
                 {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}

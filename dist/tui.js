@@ -1271,6 +1271,8 @@ var WhyLedger = (props) => {
   });
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT);
   const now = () => props.nowMs?.() ?? Date.now();
+  const furniture = (entry) => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${spendSuffix(entry)}`;
+  const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0);
   return _$createComponent(Show, {
     get when() {
       return rows().length > 0;
@@ -1303,7 +1305,7 @@ var WhyLedger = (props) => {
             _$insert(_el$39, () => verdictEntryGlyph(entry, ascii()));
             _$setProp(_el$40, "wrapMode", "none");
             _$setProp(_el$40, "flexShrink", 0);
-            _$insert(_el$40, () => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}${spendSuffix(entry)}`);
+            _$insert(_el$40, () => furniture(entry));
             _$setProp(_el$41, "wrapMode", "word");
             _$setProp(_el$41, "flexGrow", 1);
             _$insert(_el$41, () => truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026"), null);
@@ -1325,19 +1327,21 @@ var WhyLedger = (props) => {
               }
             }), null);
             _$effect((_p$) => {
-              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base, _v$25 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
+              var _v$21 = colorFor(theme(), entry, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = furnitureWidth(), _v$25 = theme().text.base, _v$26 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
               _v$21 !== _p$.e && (_p$.e = _$setProp(_el$39, "fg", _v$21, _p$.e));
               _v$22 !== _p$.t && (_p$.t = _$setProp(_el$39, "attributes", _v$22, _p$.t));
               _v$23 !== _p$.a && (_p$.a = _$setProp(_el$40, "fg", _v$23, _p$.a));
-              _v$24 !== _p$.o && (_p$.o = _$setProp(_el$41, "fg", _v$24, _p$.o));
-              _v$25 !== _p$.i && (_p$.i = _$setProp(_el$41, "attributes", _v$25, _p$.i));
+              _v$24 !== _p$.o && (_p$.o = _$setProp(_el$40, "width", _v$24, _p$.o));
+              _v$25 !== _p$.i && (_p$.i = _$setProp(_el$41, "fg", _v$25, _p$.i));
+              _v$26 !== _p$.n && (_p$.n = _$setProp(_el$41, "attributes", _v$26, _p$.n));
               return _p$;
             }, {
               e: undefined,
               t: undefined,
               a: undefined,
               o: undefined,
-              i: undefined
+              i: undefined,
+              n: undefined
             });
             return _el$38;
           })();
@@ -1469,10 +1473,10 @@ var HistoryBlock = (props) => {
         _$setProp(_el$59, "flexGrow", 1);
         _$insert(_el$59, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$26 = colorFor(theme(), entry(), mono()), _v$27 = TextAttributes.BOLD, _v$28 = theme().text.base;
-          _v$26 !== _p$.e && (_p$.e = _$setProp(_el$58, "fg", _v$26, _p$.e));
-          _v$27 !== _p$.t && (_p$.t = _$setProp(_el$58, "attributes", _v$27, _p$.t));
-          _v$28 !== _p$.a && (_p$.a = _$setProp(_el$59, "fg", _v$28, _p$.a));
+          var _v$27 = colorFor(theme(), entry(), mono()), _v$28 = TextAttributes.BOLD, _v$29 = theme().text.base;
+          _v$27 !== _p$.e && (_p$.e = _$setProp(_el$58, "fg", _v$27, _p$.e));
+          _v$28 !== _p$.t && (_p$.t = _$setProp(_el$58, "attributes", _v$28, _p$.t));
+          _v$29 !== _p$.a && (_p$.a = _$setProp(_el$59, "fg", _v$29, _p$.a));
           return _p$;
         }, {
           e: undefined,
