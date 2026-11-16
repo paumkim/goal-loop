@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=884 -->
+<!-- spec-check files=43 tests=885 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3787,3 +3787,34 @@ Verification (all run in the worktree): bun test (884 pass, 0 fail, snapshots by
 bun run compile, bun run check end-to-end green incl. spec-check (43/884). Evidence is source +
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
 explicit success tone on the pill pulse cadence itself (motion untouched by design).
+
+## Workstream CR — the why ledger pins its reason column; the render demo exercises the spend grammar (2026-11-16)
+
+Interpretation of this iteration: a ruthless re-read of the actual painted frames (scripts/render-
+history.tsx / render-dialog.tsx) exposed one visible defect and one verification gap. The why
+ledger's reason hangs off the end of a muted furniture prefix whose width varies with the verdict
+word ("met" vs "not met"), turn digits and relative time — so reasons landed on a ragged x across
+rows, exactly the tell of chrome rather than craft on the flagship explainability row. And the
+render demo never carried sha/spend, so the money grammar added across CM-CN-CO-CP-CQ had never
+been eyeballed in a real frame — only toContain assertions.
+
+363. src/tui-history.tsx — the why ledger derives the furniture string per row once
+     (furniture(entry)) and pins the furniture <text> cell width to the max stringWidth across the
+     visible rows (import string-width). Reasons land on one x regardless of verdict word, turn
+     digits, relative time or the optional spend suffix; multibyte glyphs count as their cell
+     width; rows without spend paid no penalty (their shorter furniture is padded to the max).
+     The glyph column, the word-wrap reason cell and the hover/copy grammar are unchanged.
+364. scripts/render-history.tsx — the looped demo now stamps sha and arm→advance spend on both
+     completed iterations, toolCalls and per-turn spend on every verdict, so the frames paint rail
+     `· sha · $` rows, why-ledger per-turn costs, and the `$0.75` final tally end-to-end. Section
+     names unchanged (render-scripts.test.ts's assertions hold). The 80-col floor wraps rail rows
+     wherever they naturally break — the continuation aligns to the text column; no suffix-pair
+     gluing (rejected: arbitrary special-casing of one pair).
+365. Tests: tui-hud.test.tsx +1 (reason column aligns across rows with met/not_met and turn 3/29 —
+     asserts the reason starts at the same cell in both frame rows). Spec-check marker files=43
+     tests=884 -> 885.
+
+Verification (all run in the worktree): bun test (885 pass, 0 fail, snapshots byte-stable),
+bun --preload @opentui/solid/preload scripts/render-history.tsx eyeballed at width 112 (aligned
+reasons; sha+spend rail; $0.75 in the final tally row), bun run compile, bun run check green incl.
+spec-check (43/885). Evidence is source + test-render layers; live TUI remains unverifiable.

@@ -54,7 +54,7 @@ const loopedGoal: GoalSnapshot = {
   checkins: 0,
   baseline,
   history: empty ? [] : [
-    ...verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "not yet", at: now - 1000 * 60 * (42 - index) })),
+    ...verdicts.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "not yet", at: now - 1000 * 60 * (42 - index), toolCalls: verdict === "met" ? 3 : 2, spend: { ...spend, cost: 0.1 } })),
     { turn: 3, verdict: "not_met" as Verdict, reason: "still not", at: now - 1000 * 10 },
   ],
   loopEnabled: true,
@@ -62,8 +62,8 @@ const loopedGoal: GoalSnapshot = {
   loopObjective: "ship the /goal-loop observability pass: every iteration of the loop is visible at a glance in the /goal dialog",
   loopMaxLoops: 5,
   loopHistory: empty ? [] : [
-    { version: 1, condition: "add a progress bar to the loop section", summary: "Added an 18-cell block progress bar under the loop header; filled cells use feedback.info, empty cells text.faint. Caption reads 'vN of at most M · K complete'.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27 },
-    { version: 2, condition: "render the per-turn evaluator verdict trail", summary: "Trail renders up to the 24 newest verdicts as ✓/✗/⊘ glyphs, oldest first, with a 'shown of total' caption. Left-truncates long trails; section omitted when empty.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12 },
+    { version: 1, condition: "add a progress bar to the loop section", summary: "Added an 18-cell block progress bar under the loop header; filled cells use feedback.info, empty cells text.faint. Caption reads 'vN of at most M · K complete'.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9001122334", spend: { ...spend, cost: 0.25 } },
+    { version: 2, condition: "render the per-turn evaluator verdict trail", summary: "Trail renders up to the 24 newest verdicts as ✓/✗/⊘ glyphs, oldest first, with a 'shown of total' caption. Left-truncates long trails; section omitted when empty.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, sha: "b2c3d4e5f60718293a4b5c6d7e8f900112233445", spend: { ...spend, cost: 0.5 } },
   ],
   loopNotProgress: 0,
   elapsedMs: 1000 * 60 * 12,

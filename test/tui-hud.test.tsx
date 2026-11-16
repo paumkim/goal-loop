@@ -1164,6 +1164,24 @@ describe("per-turn spend in the why ledger", () => {
     await setup.renderer.destroy()
   })
 
+  test("the reason column aligns across rows despite verdict and turn-width variance", async () => {
+    const goal = loopedGoal({
+      history: [
+        { turn: 3, verdict: "met", reason: "short-verdict-row", at: now - 1000 * 60 * 9, toolCalls: 4 },
+        { turn: 29, verdict: "not_met", reason: "wide-not-met-row", at: now - 1000 * 60 * 3, toolCalls: 0 },
+      ],
+    })
+    const setup = await testRender(() => <LoopSection goal={goal} theme={theme as unknown as HistoryTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const lines = setup.captureCharFrame().split("\n")
+    const a = lines.findIndex((l) => l.includes("short-verdict-row"))
+    const b = lines.findIndex((l) => l.includes("wide-not-met-row"))
+    expect(a).toBeGreaterThanOrEqual(0)
+    expect(b).toBeGreaterThanOrEqual(0)
+    expect(lines[a]!.indexOf("short-verdict-row")).toBe(lines[b]!.indexOf("wide-not-met-row"))
+    await setup.renderer.destroy()
+  })
+
   test("a verdict from a record without spend paints no cost at all", async () => {
     const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme as unknown as HistoryTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
     await setup.renderOnce()

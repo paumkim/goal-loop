@@ -163,9 +163,9 @@ final       ✓  loop achieved · 2 iterations · 15 turns · 64 tools · 30m wa
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
                                                                                                     
-why         ✓  met · turn 3 · 3m ago  done                                                          
+why         ✓  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            ✓  met · turn 4 · 2m ago  done                                                          
+            ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
@@ -254,9 +254,9 @@ now         ◎  v3 · active · 4 turns · 12m elapsed                         
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
                                                                                                     
-why         ✓  met · turn 3 · 3m ago  done                                                          
+why         ✓  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            ✓  met · turn 4 · 2m ago  done                                                          
+            ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
@@ -387,9 +387,9 @@ now         ◎  v3 · paused · 4 turns · stall 0 · retries 0 · 12m elapsed 
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
                                                                                                     
-why         ✓  met · turn 3 · 3m ago  done                                                          
+why         ✓  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            ✓  met · turn 4 · 2m ago  done                                                          
+            ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
@@ -435,9 +435,9 @@ final       ⊘  loop impossible · 2 iterations · 15 turns · 64 tools · 30m 
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
                                                                                                     
-why         ✓  met · turn 3 · 3m ago  done                                                          
+why         ✓  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            ✓  met · turn 4 · 2m ago  done                                                          
+            ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
@@ -474,9 +474,9 @@ now         ◎  v3 · active · 4 turns · 12m elapsed                         
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
                                                                                                     
-why         ✓  met · turn 3 · 3m ago  done                                                          
+why         ✓  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            ✓  met · turn 4 · 2m ago  done                                                          
+            ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
@@ -569,9 +569,9 @@ now         *  v3 · active · 4 turns · 12m elapsed                           
                                                                                                     
 trail       +x++x   5 of 5 verdicts                                                                 
                                                                                                     
-why         +  met · turn 3 · 3m ago  done                                                          
+why         +  met · turn 3 · 3m ago      done                                                      
                                                                                                     
-            +  met · turn 4 · 2m ago  done                                                          
+            +  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             x  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
