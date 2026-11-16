@@ -489,9 +489,11 @@
       "branch": "wt/dz-evidence-fresh",
       "createdAt": "2026-11-16T18:03:15Z",
       "paths": "SPEC.md",
-      "status": "submitted",
+      "status": "done",
       "submittedAt": "2026-11-16T18:03:15Z",
-      "worktree": "worktrees/wt-dz-evidence-fresh"
+      "worktree": "worktrees/wt-dz-evidence-fresh",
+      "mergedAt": "2026-11-16T22:33:25Z",
+      "mergedInto": "dev"
     },
     "e2e-proof": {
       "agent": "inkling",
