@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=48 tests=1078 -->
+<!-- spec-check files=49 tests=1086 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4886,3 +4886,45 @@ context menu grows two rows that funnel to the same two doors, and the dossier g
      the two dossier rows are the same artifact as the dialog's rows — one record, four doors;
      live-TUI behaviour remains unverifiable from this seat; wiring is verified at the source
      and the headless render layers only.
+
+## Workstream DC — the dialog's scrollbar stops being a default widget (2026-11-16)
+
+Interpretation: the status dialog's scrollbox (host-owned, `src/tui.tsx`) ships opentui's native
+ScrollBar — a real GUI surface: drag the thumb with grab-offset math, click the track to page,
+wheel scrolls, and the bar hides itself when the content fits. But left default it painted
+opentui's hardcoded hex grays (`#9a9ea3` thumb on `#252527` track): invisible to light hosts,
+indifferent to the mono arm, ignored by the NO_COLOR contract. DC keeps the mechanism and
+owns the chrome — one pure module decides the two cells, one wiring site passes them through,
+and the suite pins both the tones and the mouse grammar end-to-end.
+
+456. `src/core/scrollbar.ts` (new shipped module): `scrollbarChrome(theme, mono)` returns
+     the overlay-scrollbar chrome — track = `theme.background` (invisible; the bar recedes
+     until needed, macOS-style) in both arms, thumb = `text.muted` in color (quiet chrome,
+     never a hue) and `text.base` in mono (hue-dropping must not mean contrast-dropping —
+     the brightest tone the palette has). `ScrollbarTheme<C>` = `NeutralTheme<C>` plus the
+     host `background` token. No arrows, no extra state, no event wiring — color decision only.
+457. Host wiring (`src/tui.tsx`): the dialog `<scrollbox>` passes
+     `verticalScrollbarOptions={{ trackOptions: scrollbarChrome(context.theme, reducedColor), showArrows: false }}`
+     — the `reducedColor` flag already threaded everywhere the dialog paints, so mono/NO_COLOR
+     arm the bar through the same decision as every other cell. The wheel path, the keyboard
+     chords, and the scrollbox ref contract are untouched.
+458. Tests (`test/scrollbar.test.tsx`, new): three pure tone pins (color arm, mono arm, and
+     the arms-differ-only-in-thumb-tone contract), and five headless-render mechanism pins at
+     real coordinates — overflow paints the themed thumb over the invisible track (spans in the
+     bar's last column, track bg asserted on every painted row), mono arm paints base everywhere
+     and never muted, a fitting rail paints no bar cell at all, a `mockMouse.drag` on the thumb
+     pages `scrollTop` (0 → >0, capped at the 52-row clamp), and a left-click on the track below
+     the thumb pages toward the click. The drag/click pins ride the real opentui event pipeline,
+     not a re-implementation.
+459. Package integrity re-pinned: the pack grows by one shipped file (48 → 49); the
+     `paths.length` pin in `test/package-integrity.test.ts` moves to 49 in the same commit.
+     Tests: 1086 pass, 0 fail (42 files).
+460. Honest limits: opentui owns the thumb math, visibility, and drag offset — this seat pins
+     tones and event flow at the source and the headless render layers only; live-TUI behaviour
+     remains unverifiable. The bar adds one overlay column inside the dialog's padding; the
+     snapshot frames (char grid only, colors invisible to captureCharFrame) are unchanged.
+     Track `background` under a host whose theme paints the dialog on a non-background surface
+     would be a visible stripe — noted as a host-theme coupling, not an invented new token.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=49 tests=1086.

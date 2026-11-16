@@ -20,6 +20,7 @@ import { exportLoopDossier } from "./core/dossier-export.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
+import { scrollbarChrome } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -176,7 +177,8 @@ export default Plugin.define({
                 <text fg={statusEscHovered() ? context.theme.text.base : context.theme.text.muted} attributes={statusEscHovered() ? TextAttributes.BOLD : undefined}>esc</text>
               </box>
             </box>
-            <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}>
+            <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}
+              verticalScrollbarOptions={{ trackOptions: scrollbarChrome(context.theme, reducedColor), showArrows: false }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
             <DialogFooter
