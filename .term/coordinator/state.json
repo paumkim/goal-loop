@@ -1471,6 +1471,17 @@
       "submittedAt": "2026-11-16T07:47:39Z",
       "mergedAt": "2026-11-16T07:48:09Z",
       "mergedInto": "dev"
+    },
+    "tui-snapshot-states": {
+      "agent": "orchestrator",
+      "paths": "test/tui-snapshots.test.tsx,SPEC.md",
+      "branch": "wt/tui-snapshot-states",
+      "worktree": "worktrees/wt-tui-snapshot-states",
+      "status": "done",
+      "createdAt": "2026-11-16T07:51:04Z",
+      "submittedAt": "2026-11-16T07:52:49Z",
+      "mergedAt": "2026-11-16T07:53:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
