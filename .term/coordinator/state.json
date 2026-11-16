@@ -1922,6 +1922,17 @@
       "submittedAt": "2026-11-16T12:33:37Z",
       "mergedAt": "2026-11-16T12:35:13.000Z",
       "mergedInto": "dev"
+    },
+    "tui-final-tally-spend": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts src/tui-history.tsx test/history.test.ts test/tui-render.test.tsx SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-final-tally-spend",
+      "worktree": "worktrees/wt-tui-final-tally-spend",
+      "status": "done",
+      "createdAt": "2026-11-16T12:36:42Z",
+      "submittedAt": "2026-11-16T12:38:11Z",
+      "mergedAt": "2026-11-16T12:38:42.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
