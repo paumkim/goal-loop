@@ -3451,6 +3451,22 @@ var tui_default = Plugin.define({
           } catch {}
         }
       }, {
+        id: "goal.status.copy-evaluator-reason",
+        title: "Goal status: copy evaluator reason",
+        group: "Goal",
+        bind: "r",
+        enabled: () => statusDialogOpen(),
+        run: () => {
+          try {
+            const s = statusDialogSession();
+            const reason = s ? entries()[s]?.goal?.reason : undefined;
+            if (!reason)
+              return;
+            copyToClipboard(reason, s, "reason");
+            flashStatusCopied();
+          } catch {}
+        }
+      }, {
         id: "goal.status.scroll-up",
         title: "Goal status: scroll up",
         group: "Goal",
