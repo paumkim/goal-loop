@@ -1014,3 +1014,56 @@ describe("per-iteration spend attribution in the rail", () => {
     await setup.renderer.destroy()
   })
 })
+
+describe("zero-work met verdicts across the card, trail and why ledger", () => {
+  const historyTheme: HistoryTheme = theme
+  const withHistory = (list: GoalSnapshot["history"]) => loopedGoal({ history: list })
+
+  test("a zero-tool met turn paints the hollow glyph in the trail and the why ledger", async () => {
+    const goal = withHistory([
+      { turn: 1, verdict: "not_met", reason: "not yet", at: now - 1000 * 60 * 9, toolCalls: 4 },
+      { turn: 2, verdict: "met", reason: "already held at HEAD", at: now - 1000 * 60 * 3, toolCalls: 0 },
+    ])
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("○")
+    expect(frame).toContain("trail")
+    expect(frame).toContain("already held at HEAD")
+    await setup.renderer.destroy()
+  })
+
+  test("a worked met turn keeps the check and no hollow glyph paints", async () => {
+    const goal = withHistory([
+      { turn: 1, verdict: "met", reason: "shipped", at: now - 1000 * 60 * 3, toolCalls: 7 },
+    ])
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("✓")
+    expect(frame).not.toContain("○")
+    await setup.renderer.destroy()
+  })
+
+  test("under mono the trail drops the hue and keeps the hollow satisfied-at-HEAD glyph as shape", async () => {
+    const goal = withHistory([
+      { turn: 1, verdict: "met", reason: "already held at HEAD", at: now - 1000 * 60 * 3, toolCalls: 0 },
+    ])
+    const setup = await testRender(() => <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} mono />, { width: 112, height: 24 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain(".")
+    expect(frame).not.toContain("○")
+    await setup.renderer.destroy()
+  })
+
+  test("the card's last-verdict row paints the hollow glyph for a zero-tool met landing", async () => {
+    const goal = loopedGoal({ history: [{ turn: 1, verdict: "met", reason: "already held at HEAD", at: now - 1000 * 60 * 3, toolCalls: 0 }] })
+    const { frame, setup } = await render(() => (
+      <HudCard goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ), 80, 12)
+    expect(frame).toContain("○")
+    expect(frame).toContain("met")
+    await setup.renderer.destroy()
+  })
+})

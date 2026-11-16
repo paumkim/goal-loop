@@ -61,6 +61,8 @@ export interface VerdictEntry {
   readonly verdict: Verdict
   readonly reason: string
   readonly at: number
+  /** Tool calls the evaluating turn used (0 = the turn produced nothing — at a met verdict that means the condition already held at HEAD). Absent on records written before this field landed; never fabricated. */
+  readonly toolCalls?: number
 }
 
 /** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */

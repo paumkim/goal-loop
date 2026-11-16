@@ -56,6 +56,19 @@ export function verdictGlyph(verdict: VerdictEntry["verdict"], ascii: boolean = 
   }
 }
 
+/**
+ * The glyph for one recorded verdict. A met verdict whose turn used zero tool calls is a
+ * satisfied-at-HEAD landing — the evaluator found the condition already holding and nothing
+ * was produced — so it paints the hollow glyph (color: ○, reduced-color/ASCII: .), the same
+ * zero-work grammar the loop rail uses for iterations. Everything else (met with work, every
+ * not_met, every impossible, or a record from before toolCalls existed) paints the verdict's
+ * own glyph via verdictGlyph.
+ */
+export function verdictEntryGlyph(entry: { verdict: VerdictEntry["verdict"]; toolCalls?: number }, ascii: boolean = false): string {
+  if (entry.verdict === "met" && entry.toolCalls === 0) return ascii ? "." : "\u25CB"
+  return verdictGlyph(entry.verdict, ascii)
+}
+
 /** Per-iteration durations in ms; v1 anchors at the record's setAt, vN at the previous entry's endedAt. Negative spans clamp to 0. */
 export function iterationDurations(entries: readonly LoopEntry[], setAt: number): number[] {
   const out: number[] = []

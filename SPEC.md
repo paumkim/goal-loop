@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=857 -->
+<!-- spec-check files=43 tests=867 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3590,3 +3590,41 @@ line-reference guard, docs-watch companion + changelog grep before submit. Evide
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
 measured card width, the satisfied-at-HEAD tone in the verdict trail (needs a toolCalls field on
 VerdictEntry, server-side), per-turn spend in the why ledger.
+
+## Workstream CL — satisfied-at-HEAD, turn level: the zero-work met verdict paints hollow everywhere (2026-11-16)
+
+Interpretation of this iteration: CJ taught the loop rail to paint a zero-tool met iteration as
+satisfied-at-HEAD (hollow glyph, info/blue accent, the 'already satisfied at HEAD' tag), but the
+same fact reads solid ✓ in the verdict trail, the why ledger and the card's last-verdict row —
+three surfaces contradicted the rail for the same landing. met already paints info.base (blue) in
+verdictAccentColor, so the hue axis was taken; the open axis was glyph shape. This slice closes
+it at the source: the evaluating turn's tool count rides the VerdictEntry, and every surface that
+paints a verdict glyph reads it.
+
+345. src/core/types.ts — VerdictEntry gains `readonly toolCalls?: number` (additive; records
+     written before this change stay valid and paint as before). src/runtime/controller.ts —
+     the history push stamps the turn's tool count (same `tools` value the loop's zero-tool
+     machinery reads; line-neutral edit, no docs line-ref drift). src/core/wire.ts —
+     isVerdictEntry validates toolCalls when present (finite number; absent tolerated).
+346. src/core/history.ts — new verdictEntryGlyph(entry, ascii): a met verdict with
+     toolCalls === 0 paints the hollow satisfied-at-HEAD glyph (color: ○, reduced-color/ASCII:
+     .); every other case delegates to verdictGlyph unchanged. src/tui-history.tsx — the verdict
+     trail, the why ledger and both last-verdict cells (loop section, compact history block)
+     paint via verdictEntryGlyph. src/hud-card.tsx — the card's last-verdict row paints via
+     verdictEntryGlyph (the card passed mono() as the ascii flag; it now passes its ascii()
+     predicate, the same reduced-color grammar as the rest of the card). Mono arm drops the
+     hue; shape and the tag-free row grammar carry the signal. The trail/why-ledger color stays
+     verdictAccentColor (met = info blue) — the glyph carries the distinction.
+347. Tests: history.test.ts gains a verdictEntryGlyph describe (4 cases: zero-work met hollow in
+     both arms, worked met keeps ✓/+, pre-toolCalls entries paint the verdict glyph, not_met/
+     impossible keep their glyphs at zero tools); wire.test.ts gains two cases (accept
+     toolCalls absent/zero/seven; reject NaN/string); tui-hud.test.tsx gains four render cases
+     (trail + why ledger hollow for a zero-tool met, worked met keeps ✓ and paints no ○, mono
+     arm keeps the hollow ASCII shape, the card's last-verdict row paints hollow). Snapshot tail
+     count unchanged (21, byte-stable). Spec-check marker files=43 tests=857 -> 867.
+
+Verification (all run in the worktree): bun test (867 pass, 0 fail, 21 snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/867) and the docs
+line-reference guard, docs-watch companion + changelog grep before submit. Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
+measured card width, per-turn spend in the why ledger.

@@ -241,3 +241,21 @@ describe("contextSize / compactAtTokens", () => {
     expect(parseGoalSnapshot({ ...snapshot(), compactAtTokens: true })).toBeUndefined()
   })
 })
+
+describe("zero-work verdict entries", () => {
+  const withTools = (value?: unknown) => ({
+    ...snapshot(),
+    history: [{ turn: 1, verdict: "met" as const, reason: "already held at HEAD", at: 100, ...(value === undefined ? {} : { toolCalls: value }) }],
+  })
+
+  test("an additive VerdictEntry toolCalls is accepted when present", () => {
+    expect(parseGoalSnapshot(withTools(0))?.history[0]?.toolCalls).toBe(0)
+    expect(parseGoalSnapshot(withTools(7))?.history[0]?.toolCalls).toBe(7)
+  })
+
+  test("toolCalls may be absent and broken values are rejected", () => {
+    expect(parseGoalSnapshot(withTools(undefined))?.history[0]?.toolCalls).toBeUndefined()
+    expect(parseGoalSnapshot(withTools(Number.NaN))).toBeUndefined()
+    expect(parseGoalSnapshot(withTools("0"))).toBeUndefined()
+  })
+})

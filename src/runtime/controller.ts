@@ -705,7 +705,7 @@ export class GoalController {
     record.verdict = result.verdict
     record.reason = result.reason || undefined
     // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now() })
+    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
     if (result.verdict === "met") {

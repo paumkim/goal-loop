@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
 import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
 import { verdictAccentColor, motionDisabled } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
@@ -307,7 +307,7 @@ export const LoopSection = (props: {
                 · last
               </text>
               <text wrapMode="none" fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-                {verdictGlyph(entry().verdict, ascii())}
+                {verdictEntryGlyph(entry(), ascii())}
               </text>
               <text wrapMode="none" fg={theme().text.faint}>
                 {turnsSince() === 0 ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}
@@ -382,7 +382,7 @@ const WhyLedger = (props: {
             <box flexDirection="row" gap={2} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
               {label(theme(), index() === 0 ? "why" : "")}
               <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry.verdict, mono())} attributes={TextAttributes.BOLD}>
-                {verdictGlyph(entry.verdict, ascii())}
+                {verdictEntryGlyph(entry, ascii())}
               </text>
               <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
                 {`${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}`}
@@ -414,7 +414,7 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
         <box flexDirection="row" gap={2}>
           {label(props.theme, "trail")}
           <box flexDirection="row" flexShrink={0}>
-            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict, ascii())}</text>}</For>
+            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictEntryGlyph(entry, ascii())}</text>}</For>
           </box>
           <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
             {" "}
@@ -478,7 +478,7 @@ export const HistoryBlock = (props: {
           {(entry) => (
             <box flexDirection="row" gap={2} flexGrow={1}>
               <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-                {verdictGlyph(entry().verdict, ascii())}
+                {verdictEntryGlyph(entry(), ascii())}
               </text>
               <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
                 {`last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} · ${countsText()} · ${elapsed()} elapsed${streakSuffix()}`}

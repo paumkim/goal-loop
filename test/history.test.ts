@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, CONTEXT_BAR_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, CONTEXT_BAR_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -503,5 +503,27 @@ describe("ASCII demotion (NO_COLOR / TERM=dumb)", () => {
     expect(meter.text).toBe("#####-----")
     expect(meter.pct).toBe(50)
     expect(contextMeter(0, undefined, 10, true).text).toBe("----------")
+  })
+})
+
+describe("verdictEntryGlyph", () => {
+  test("a met verdict from a zero-tool turn paints the satisfied-at-HEAD hollow glyph", () => {
+    expect(verdictEntryGlyph({ verdict: "met", toolCalls: 0 })).toBe("○")
+    expect(verdictEntryGlyph({ verdict: "met", toolCalls: 0 }, true)).toBe(".")
+  })
+
+  test("a met verdict from a worked turn keeps the check glyph", () => {
+    expect(verdictEntryGlyph({ verdict: "met", toolCalls: 3 })).toBe("✓")
+    expect(verdictEntryGlyph({ verdict: "met", toolCalls: 3 }, true)).toBe("+")
+  })
+
+  test("an entry from before toolCalls existed paints the verdict glyph", () => {
+    expect(verdictEntryGlyph({ verdict: "met" })).toBe("✓")
+    expect(verdictEntryGlyph({ verdict: "met" }, true)).toBe("+")
+  })
+
+  test("not_met and impossible keep the verdict glyph even at zero tools", () => {
+    expect(verdictEntryGlyph({ verdict: "not_met", toolCalls: 0 })).toBe("✗")
+    expect(verdictEntryGlyph({ verdict: "impossible", toolCalls: 0 })).toBe("⊘")
   })
 })
