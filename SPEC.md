@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=551 -->
+<!-- spec-check files=41 tests=556 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2096,3 +2096,9 @@ Marker bumped `files=41 tests=537` → `files=41 tests=544` (test-only addition;
 214. New `test/plugin-json.test.ts` (7 tests) pins every JSON example in `README.md` and `docs/install.html` to reality: both files contain a JSON options block, both parse (README fences are paired by a line state machine because closing bare fences are indistinguishable from openings lexically; HTML uses `<pre><code>`/`<code>` with entity unescaping); the README block parses to `{ plugins: [{ package: PLUGIN_SPEC }] }`; every fence/block naming a specifier contains `PLUGIN_SPEC` verbatim; every occurrence of the `github:paumkim/opencode-goalv2#…` specifier anywhere in either file equals `PLUGIN_SPEC` (README ≥2, install.html ≥4); and `PLUGIN_SPEC` equals `github:paumkim/opencode-goalv2#v` + `package.json` version.
 215. No source behavior changed; the work is test-only. Mutation-verified: rewriting one specifier occurrence in install.html to `#v9.9.9` fails the specifier-pins test; reverting passes. Docs that instruct the user to paste the example into `opencode.json` now cannot rot silently against the installer.
 Marker bumped `files=41 tests=544` → `files=41 tests=551` (test-only addition; no shipped file changed).
+
+## Workstream BQ — docs line references pinned by a test (2026-11-16)
+
+216. New `test/docs-line-refs.test.ts` (5 tests) closes the drift class that recurred across iterations 7-9: every `file.ts[x]:N` and `file.ts[x]:N-M` reference in `docs/*.html` and `SPEC.md` (80 refs at time of writing) is now machine-checked — the cited file must resolve on disk (root-relative, then `src/`/`src/core/`/`src/runtime/` fallbacks for refs written without a directory prefix), the range must be ordered and in bounds, every single-line ref must land on a non-empty line, and every ranged ref must cover at least one non-empty line (Appendix A is frozen to the Phase-1 commit, so it is checked structurally, never on content). Bare `:NNN` fragments without an attached filename are skipped by design. The suite asserts it found >=70 refs so an over-strict regex cannot pass vacuously.
+217. Mutation-verified both ways: in `docs/core.html`, rewriting a `config.ts:44` citation to an out-of-range line fails the in-bounds and non-empty tests, and pointing the citation at a path that does not exist (`src/core/nope.ts`) fails the file-exists test; reverting passes. Docs line refs can no longer rot silently against the source tree.
+Marker bumped `files=41 tests=551` → `files=41 tests=556` (test-only addition; no shipped file changed).
