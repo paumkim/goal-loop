@@ -1427,6 +1427,17 @@
       "submittedAt": "2026-11-16T07:15:59Z",
       "mergedAt": "2026-11-16T07:17:28Z",
       "mergedInto": "dev"
+    },
+    "tui-context-sparkline": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts,src/core/wire.ts,src/core/history.ts,src/runtime/controller.ts,src/tui-history.tsx,test/history.test.ts,test/wire.test.ts,test/loop.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-context-sparkline",
+      "worktree": "worktrees/wt-tui-context-sparkline",
+      "status": "done",
+      "createdAt": "2026-11-16T07:20:07Z",
+      "submittedAt": "2026-11-16T07:30:12Z",
+      "mergedAt": "2026-11-16T07:31:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
