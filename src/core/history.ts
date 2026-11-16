@@ -36,14 +36,23 @@ export function barCaption(current: number, max: number | undefined, done: numbe
     : `v${v} · ${safeDone} complete`
 }
 
-export function verdictGlyph(verdict: VerdictEntry["verdict"]): string {
+export const VERDICT_MET_ASCII = "+"
+export const VERDICT_IMPOSSIBLE_ASCII = "!"
+export const VERDICT_NOT_MET_ASCII = "x"
+
+/**
+ * The verdict glyph — shape carries the verdict when NO_COLOR strips hue. `ascii` swaps the
+ * Unicode pair (+ neighbors `!`/`x` from the sparkline/bar ramp family) under NO_COLOR /
+ * TERM=dumb, like every other glyph the plugin paints on a reduced-color surface.
+ */
+export function verdictGlyph(verdict: VerdictEntry["verdict"], ascii: boolean = false): string {
   switch (verdict) {
     case "met":
-      return "✓"
+      return ascii ? VERDICT_MET_ASCII : "✓"
     case "impossible":
-      return "⊘"
+      return ascii ? VERDICT_IMPOSSIBLE_ASCII : "⊘"
     default:
-      return "✗"
+      return ascii ? VERDICT_NOT_MET_ASCII : "✗"
   }
 }
 

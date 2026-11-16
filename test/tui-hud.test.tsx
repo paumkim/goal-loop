@@ -624,6 +624,15 @@ describe("cardRowPlan under a ceiling (render)", () => {
     expect(frame).toContain("esc")
   })
 
+  test("under mono the last-verdict row paints the ASCII glyph, not Unicode", async () => {
+    const { frame } = await render(() => (
+      <HudCard goal={loopedGoal({ turns: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono />
+    ), 80, 12)
+    expect(frame).toContain("+")
+    expect(frame).not.toContain("✓")
+    expect(frame).toContain("met · this turn")
+  })
+
   test("without a ceiling every row paints — nothing regresses", async () => {
     const { frame } = await render(() => (
       <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />

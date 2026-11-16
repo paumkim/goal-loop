@@ -292,14 +292,17 @@ function barCaption(current, max, done) {
   const v = Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1;
   return typeof max === "number" && Number.isFinite(max) && max > 0 ? `v${v} of at most ${Math.floor(max)} \xB7 ${safeDone} complete` : `v${v} \xB7 ${safeDone} complete`;
 }
-function verdictGlyph(verdict) {
+var VERDICT_MET_ASCII = "+";
+var VERDICT_IMPOSSIBLE_ASCII = "!";
+var VERDICT_NOT_MET_ASCII = "x";
+function verdictGlyph(verdict, ascii = false) {
   switch (verdict) {
     case "met":
-      return "\u2713";
+      return ascii ? VERDICT_MET_ASCII : "\u2713";
     case "impossible":
-      return "\u2298";
+      return ascii ? VERDICT_IMPOSSIBLE_ASCII : "\u2298";
     default:
-      return "\u2717";
+      return ascii ? VERDICT_NOT_MET_ASCII : "\u2717";
   }
 }
 function iterationDurations(entries, setAt) {
@@ -724,7 +727,7 @@ var RailSummary = (props) => {
 var LoopSection = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
-  const ascii = motionDisabled(process.env);
+  const ascii = () => motionDisabled(process.env) || mono();
   const [copiedVersion, setCopiedVersion] = createSignal(null);
   let copiedTimer;
   onCleanup(() => {
@@ -759,7 +762,7 @@ var LoopSection = (props) => {
   const railOffset = () => Math.max(0, done() - visibleHistory().length);
   const max = () => props.goal.loopMaxLoops;
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1);
-  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii);
+  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii());
   const filledBarText = () => bar().text.slice(0, bar().filled);
   const emptyBarText = () => bar().text.slice(bar().filled);
   const durations = () => iterationDurations(history(), props.goal.setAt);
@@ -767,10 +770,12 @@ var LoopSection = (props) => {
   const shareSuffix = (index) => shares()[index] === undefined ? "" : ` \xB7 ${shares()[index]}% of wall`;
   const pace = () => paceEstimate(durations(), max());
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt);
-  const spark = () => contextSparkline(history(), ascii);
+  const spark = () => contextSparkline(history(), ascii());
   const mixSuffix = (index) => {
     const mix = mixes()[index];
-    return mix ? ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}` : "";
+    if (!mix)
+      return "";
+    return ascii() ? ` \xB7 ${mix.met}+ ${mix.not_met}x${mix.impossible > 0 ? ` ${mix.impossible}!` : ""}` : ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}`;
   };
   const endedSuffix = (entry) => ` \xB7 ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`;
   const paused = () => props.goal.status === "paused";
@@ -800,7 +805,7 @@ var LoopSection = (props) => {
   const livePace = () => isTerminal() ? undefined : pace();
   const finished = () => history().length > 0 && (isTerminal() || capReached());
   const totals = () => loopTotals(history(), props.goal.setAt);
-  const finalGlyph = () => props.goal.status === "achieved" ? "\u2713" : props.goal.status === "impossible" ? "\u2298" : "\u2717";
+  const finalGlyph = () => ascii() ? props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x" : props.goal.status === "achieved" ? "\u2713" : props.goal.status === "impossible" ? "\u2298" : "\u2717";
   const finalColor = () => mono() ? props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint : props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint;
   const nowColor = () => {
     const s = props.goal.status;
@@ -992,7 +997,7 @@ var LoopSection = (props) => {
           _$insert(_el$33, () => label(theme(), `v${entry.version}`), _el$34);
           _$setProp(_el$34, "wrapMode", "none");
           _$setProp(_el$34, "flexShrink", 0);
-          _$insert(_el$34, zeroTools ? "\u25CB" : "\u2713");
+          _$insert(_el$34, () => zeroTools ? ascii() ? "." : "\u25CB" : ascii() ? "+" : "\u2713");
           _$setProp(_el$35, "wrapMode", "word");
           _$setProp(_el$35, "flexGrow", 1);
           _$setProp(_el$35, "fg", rowColor);
@@ -1047,7 +1052,7 @@ var LoopSection = (props) => {
         _$insertNode(_el$37, _$createTextNode(`\xB7 last`));
         _$setProp(_el$37, "wrapMode", "none");
         _$setProp(_el$39, "wrapMode", "none");
-        _$insert(_el$39, () => verdictGlyph(entry().verdict));
+        _$insert(_el$39, () => verdictGlyph(entry().verdict, ascii()));
         _$setProp(_el$40, "wrapMode", "none");
         _$insert(_el$40, (() => {
           var _c$3 = _$memo(() => turnsSince() === 0);
@@ -1109,7 +1114,8 @@ var LoopSection = (props) => {
       },
       get mono() {
         return mono();
-      }
+      },
+      ascii
     }), null);
     _$effect((_p$) => {
       var _v$1 = theme().text.base, _v$10 = TextAttributes.BOLD, _v$11 = theme().text.base, _v$12 = nowColor(), _v$13 = TextAttributes.BOLD, _v$14 = theme().text.base;
@@ -1133,6 +1139,7 @@ var LoopSection = (props) => {
 };
 var VerdictTrail = (props) => {
   const mono = () => props.mono === true;
+  const ascii = () => props.ascii?.() === true || motionDisabled(process.env);
   const trail = () => trailWindow(props.history, 24);
   return _$createComponent(Show, {
     get when() {
@@ -1154,7 +1161,7 @@ var VerdictTrail = (props) => {
         children: (entry) => (() => {
           var _el$47 = _$createElement("text");
           _$setProp(_el$47, "wrapMode", "none");
-          _$insert(_el$47, () => verdictGlyph(entry.verdict));
+          _$insert(_el$47, () => verdictGlyph(entry.verdict, ascii()));
           _$effect((_$p) => _$setProp(_el$47, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
           return _el$47;
         })()
@@ -1175,6 +1182,7 @@ var VerdictTrail = (props) => {
 var HistoryBlock = (props) => {
   const theme = () => props.theme;
   const mono = () => props.mono === true;
+  const ascii = () => motionDisabled(process.env) || mono();
   const history = () => props.goal.history ?? [];
   const counts = () => verdictCounts(history());
   const last = () => lastVerdict(history());
@@ -1223,7 +1231,7 @@ var HistoryBlock = (props) => {
         _$setProp(_el$53, "flexGrow", 1);
         _$setProp(_el$54, "wrapMode", "none");
         _$setProp(_el$54, "flexShrink", 0);
-        _$insert(_el$54, () => verdictGlyph(entry().verdict));
+        _$insert(_el$54, () => verdictGlyph(entry().verdict, ascii()));
         _$setProp(_el$55, "wrapMode", "word");
         _$setProp(_el$55, "flexGrow", 1);
         _$insert(_el$55, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
@@ -1250,7 +1258,8 @@ var HistoryBlock = (props) => {
       },
       get mono() {
         return mono();
-      }
+      },
+      ascii
     }), null);
     return _el$48;
   })();
@@ -2029,7 +2038,7 @@ var HudCard = (props) => {
         _$setProp3(_el$30, "width", LABEL);
         _$setProp3(_el$32, "wrapMode", "none");
         _$setProp3(_el$32, "flexShrink", 0);
-        _$insert3(_el$32, () => verdictGlyph(entry().verdict));
+        _$insert3(_el$32, () => verdictGlyph(entry().verdict, mono()));
         _$setProp3(_el$33, "wrapMode", "none");
         _$insert3(_el$33, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
@@ -3421,6 +3430,8 @@ var tui_default = Plugin.define({
     }));
     return () => {
       clearInterval(timer);
+      if (statusCopiedTimer)
+        clearTimeout(statusCopiedTimer);
       for (const pending of terminalTimers)
         clearTimeout(pending);
       terminalTimers.clear();

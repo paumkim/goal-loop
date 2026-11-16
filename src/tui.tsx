@@ -907,6 +907,7 @@ export default Plugin.define({
 
     return () => {
       clearInterval(timer)
+      if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       for (const pending of terminalTimers) clearTimeout(pending)
       terminalTimers.clear()
       setTerminalAcks({})
