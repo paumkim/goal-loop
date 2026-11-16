@@ -1248,6 +1248,116 @@ function sealAckSegment(seal, ascii) {
   return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
 }
 
+// src/core/dossier-review.ts
+import { writeFileSync as writeFileSync3 } from "fs";
+import { join as join3, resolve as resolve3 } from "path";
+var pad3 = (n) => String(n).padStart(2, "0");
+var reviewName = (nowMs, attempt = 0) => {
+  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  const stamp = `${valid.getUTCFullYear()}${pad3(valid.getUTCMonth() + 1)}${pad3(valid.getUTCDate())}` + `-${pad3(valid.getUTCHours())}${pad3(valid.getUTCMinutes())}${pad3(valid.getUTCSeconds())}`;
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-dossier-review-${stamp}${suffix}.md`;
+};
+var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
+var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
+var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var reviewVerdict = (exists, onThisLine, underSeal) => {
+  if (exists === "no" || onThisLine === "no" || underSeal === "no")
+    return "gaps";
+  if (exists === "yes" && onThisLine === "yes" && underSeal === "yes")
+    return "clean";
+  return "unknown";
+};
+function buildReview(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const base = buildLoopDossier(goal, nowMs);
+  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
+  const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
+  const rows = verification.checks.map((check) => {
+    const exists = verifyCell2(check.status);
+    const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
+    const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
+    return {
+      sha: check.sha,
+      shortSha: shortSha(check.sha),
+      iterations: check.iterations,
+      exists,
+      onThisLine,
+      underSeal,
+      verdict: reviewVerdict(exists, onThisLine, underSeal)
+    };
+  });
+  const clean = rows.filter((row) => row.verdict === "clean").length;
+  const gaps = rows.filter((row) => row.verdict === "gaps").length;
+  const unknown = rows.filter((row) => row.verdict === "unknown").length;
+  const appendix = [
+    "## Review (freshly probed at generation time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). A verdict of \`clean\` requires a yes on all three; any \`no\` makes the row \`gaps\`; a row with no \`no\` but at least one question git could not answer is \`unknown\` \u2014 never collapsed into either. Existence is not ancestry, ancestry is not the seal; no question substitutes for another._`,
+    ""
+  ];
+  if (verification.unique === 0) {
+    appendix.push("The record quotes no sha \u2014 there is nothing to review. An unshaded record cannot be re-probed, and none is claimed.", "");
+  } else {
+    appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
+    for (const row of rows) {
+      appendix.push(`| ${row.shortSha} | ${iterationList5(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
+    }
+    appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
+  }
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown };
+}
+function exportReview(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve3(dir);
+  const review = buildReview(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(review.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join3(targetDir, reviewName(nowMs, attempt));
+    try {
+      writeFileSync3(path, review.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: review.unique,
+        clean: review.clean,
+        gaps: review.gaps,
+        unknown: review.unknown,
+        verification: review.verification,
+        reach: review.reach,
+        sign: review.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free review filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function reviewSummaryLine(review) {
+  if (review.unique === 0)
+    return "record quotes no shas to review";
+  if (review.gaps > 0)
+    return `review written with gaps: ${review.clean} of ${review.unique} shas clean on all three questions`;
+  if (review.unknown > 0)
+    return `review unverifiable: ${review.clean} of ${review.unique} shas clean, ${review.unknown} could not answer`;
+  return `review written: ${review.clean} of ${review.unique} shas clean on all three questions`;
+}
+
 // src/core/dossier-attest.ts
 var ANSWERS = new Set(["yes", "no", "unknown"]);
 var cellAnswer = (raw) => {
@@ -1312,9 +1422,9 @@ function parseAttestationAppendix(markdown) {
     return { kind: "unparsable" };
   return { kind: "sealed", stamp, directory, rows, gap, malformed };
 }
-var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var reachCell3 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
+var signCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var shasAsGoal = (rows) => ({
   loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
 });
@@ -1334,9 +1444,9 @@ function attestSealedDossier(markdown, directory, probes = {}) {
   const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
   const rows = parsed.rows.map((row) => {
     const now = {
-      exists: verifyCell2(verifyBySha.get(row.sha) ?? "unknown"),
-      onThisLine: reachCell2(reachBySha.get(row.sha) ?? "unknown"),
-      underSeal: signCell2(signBySha.get(row.sha) ?? "unknown")
+      exists: verifyCell3(verifyBySha.get(row.sha) ?? "unknown"),
+      onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
+      underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
     };
     const seal = { exists: row.exists, onThisLine: row.onThisLine, underSeal: row.underSeal };
     const wasClean = seal.exists === "yes" && seal.onThisLine === "yes" && seal.underSeal === "yes";
@@ -1427,7 +1537,7 @@ function selectNewestSealedDossier(entries) {
 
 // src/tui.tsx
 import { readFileSync, readdirSync, statSync } from "fs";
-import { join as join3 } from "path";
+import { join as join4 } from "path";
 
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
@@ -6433,7 +6543,7 @@ var tui_default = Plugin.define({
             try {
               return {
                 name,
-                mtimeMs: statSync(join3(directory, name)).mtimeMs
+                mtimeMs: statSync(join4(directory, name)).mtimeMs
               };
             } catch {
               return {
@@ -6465,7 +6575,7 @@ var tui_default = Plugin.define({
         }
         let markdown;
         try {
-          markdown = readFileSync(join3(directory, newest), "utf8");
+          markdown = readFileSync(join4(directory, newest), "utf8");
         } catch (error) {
           safeToast({
             title: "attest failed",
@@ -6517,6 +6627,31 @@ var tui_default = Plugin.define({
       } catch (error) {
         safeToast({
           title: "attest failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
+      }
+    };
+    const reviewRecordAction = (sessionID, goal) => {
+      if (!goal || !sessionID)
+        return;
+      try {
+        const result = exportReview(goal, Date.now(), process.cwd());
+        const summary = reviewSummaryLine(result);
+        const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written";
+        const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success";
+        safeToast({
+          title,
+          message: `${result.path} \xB7 ${summary}`,
+          variant,
+          duration: 6000,
+          sessionID
+        });
+      } catch (error) {
+        safeToast({
+          title: "review failed",
           message: String(error instanceof Error ? error : error).slice(0, 200),
           variant: "error",
           duration: 5000,
@@ -7110,6 +7245,19 @@ var tui_default = Plugin.define({
         run: () => {
           try {
             attestSealedDossierAction(currentSession());
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.review",
+        title: "Goal: review the dossier in one file (every question git can answer)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            reviewRecordAction(sessionID, goal);
           } catch {}
         }
       }, {
