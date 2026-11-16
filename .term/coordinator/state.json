@@ -1097,6 +1097,17 @@
       "submittedAt": "2026-11-16T02:16:09Z",
       "mergedAt": "2026-11-16T02:16:31Z",
       "mergedInto": "dev"
+    },
+    "config-defaults-test": {
+      "agent": "opencode",
+      "paths": "test/config-defaults.test.ts,SPEC.md",
+      "branch": "wt/config-defaults-test",
+      "worktree": "worktrees/wt-config-defaults-test",
+      "status": "done",
+      "createdAt": "2026-11-16T02:19:51Z",
+      "submittedAt": "2026-11-16T02:22:55Z",
+      "mergedAt": "2026-11-16T02:25:30Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
