@@ -368,9 +368,11 @@
       "branch": "wt/coordinator-scratch-branch-order",
       "createdAt": "2026-11-16T18:02:11Z",
       "paths": "packages/coordinator/**,test/coordinator-merge-safety.test.ts",
-      "status": "submitted",
+      "status": "done",
       "submittedAt": "2026-11-16T18:02:46Z",
-      "worktree": "worktrees/wt-coordinator-scratch-branch-order"
+      "worktree": "worktrees/wt-coordinator-scratch-branch-order",
+      "mergedAt": "2026-11-16T22:32:13Z",
+      "mergedInto": "dev"
     },
     "coordinator-state-done": {
       "agent": "opencode",
