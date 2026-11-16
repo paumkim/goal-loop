@@ -527,7 +527,7 @@ describe("dialog footer hints", () => {
   })
 })
 
-describe("hudCardRows viewport ceiling (maxRows) — the anchor clamps instead of overflowing the screen", () => {
+describe("hudCardRows viewport ceiling (maxRows) — optional rows drop until the core fits", () => {
   // hint-only goal: freshly armed, one spend estimate, no verdicts, no remediation (evaluatorHint yields to remediation)
   const hinted = () =>
     loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 } })
@@ -555,11 +555,11 @@ describe("hudCardRows viewport ceiling (maxRows) — the anchor clamps instead o
     expect(hudCardRows(goal, false, 4)).toBe(5)
   })
 
-  test("the remediation never drops — the ceiling clamps at the failure screen", () => {
+  test("under a ceiling the remediation drops only after hint, spend and last", () => {
     const goal = hot() // 5 + remediation 2 = 7 (hot compaction wraps to two rows at 49 cells)
     expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 6)).toBe(7)
-    expect(hudCardRows(goal, false, 4)).toBe(7)
+    expect(hudCardRows(goal, false, 6)).toBe(5)
+    expect(hudCardRows(goal, false, 4)).toBe(5) // remediation gone: the irreducible core remains
   })
 
   test("the last-verdict row drops after spend; the menu never drops", () => {
@@ -567,15 +567,16 @@ describe("hudCardRows viewport ceiling (maxRows) — the anchor clamps instead o
     // 5 + spend 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 9
     expect(hudCardRows(paused)).toBe(9)
     expect(hudCardRows(paused, false, 8)).toBe(8) // spend gone
-    expect(hudCardRows(paused, false, 6)).toBe(7) // spend and last gone: 5 + 2
-    expect(hudCardRows(paused, true, 3)).toBe(11) // menu rows never drop: 5 + 2 + menu 4
+    expect(hudCardRows(paused, false, 6)).toBe(5) // spend, last and remediation gone: the irreducible core
+    expect(hudCardRows(paused, true, 3)).toBe(9) // menu rows never drop; remediation gone: 5 + menu 4
   })
 
   test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
-    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, last: false })
-    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, last: false })
-    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, last: false })
-    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 7, hint: false, spend: false, last: false })
+    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, last: false, remediation: false })
+    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 5, hint: false, spend: false, last: false, remediation: false })
+    expect(cardRowPlan(hot())).toEqual({ rows: 7, hint: false, spend: false, last: false, remediation: true })
   })
 })
 
@@ -603,10 +604,19 @@ describe("cardRowPlan under a ceiling (render)", () => {
     expect(frame).toContain("esc")
   })
 
-  test("the remediation row survives any ceiling that leaves room for the border and actions", async () => {
+  test("a brutal ceiling drops the remediation — the actions row and esc always survive", async () => {
     const hot = loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
     const { frame } = await render(() => (
       <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={5} />
+    ), 80, 12)
+    expect(frame).not.toContain("compact pending") // remediation (last rung) gave way
+    expect(frame).toContain("esc") // the dismiss affordance never drops
+  })
+
+  test("a ceiling with one row to spare keeps the remediation", async () => {
+    const hot = loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
+    const { frame } = await render(() => (
+      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />
     ), 80, 12)
     expect(frame).toContain("compact pending")
     expect(frame).toContain("esc")
