@@ -28,7 +28,7 @@ opencode-goal status             # scope, config path, installed yes/no
 opencode-goal install --project  # target the project's config instead of global
 ```
 
-The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists — the oldest backup whose parsed content provably lacks the plugin — (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["opencode-goalv2"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
+The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists — the oldest backup whose parsed content provably lacks the plugin — (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
 
 ## Use
 
@@ -171,7 +171,7 @@ All optional, set in `opencode.json`:
 {
   "plugins": [
     {
-      "package": "opencode-goalv2",
+      "package": "github:paumkim/opencode-goalv2#v1.1.0",
       "options": {
         "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
         "maxTurns": 0,
