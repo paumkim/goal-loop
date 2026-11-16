@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=48 tests=1068 -->
+<!-- spec-check files=48 tests=1069 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4760,7 +4760,7 @@ Interpretation:
 - Lease-scoped paths become enforced, not advisory. `submit` (and `submit --force`, which logs
   the override into the lease record) checks every commit on `wt/<slug>` since the merge-base
   with `dev` against the claimed paths plus the configured shared scopes (`sharedPaths` in
-  config.json; default `.term/coordinator/state.json`); `**`-suffixed scopes match by prefix on
+  config.json; default `.term/coordinator/state.json` and `docs/changelog.html`); `**`-suffixed scopes match by prefix on
   segment boundaries, bare paths match exactly or as a directory prefix.
 - Shared-counter determinism: the marker `<!-- spec-check files=N tests=N -->` is re-counted by
   the pipeline itself. `scripts/spec-check.ts --write` probes reality (npm pack file count, bun

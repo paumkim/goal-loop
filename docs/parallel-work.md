@@ -47,10 +47,11 @@ worktree.
 
 ## Shared artifacts
 
-Some files must be touched by everyone: `.term/coordinator/state.json` (default) and
-whatever the repo adds to `sharedPaths` in `.term/coordinator/config.json`
-(comma-separated scopes). Shared files never fail the submit scope check. The SPEC.md
-marker does not need to be shared: merge-next re-counts it on the merged tree.
+Some files must be touched by everyone: `.term/coordinator/state.json` and
+`docs/changelog.html` (defaults), plus whatever the repo adds to `sharedPaths` in
+`.term/coordinator/config.json` (comma-separated scopes). Shared files never fail the
+submit scope check. The SPEC.md marker does not need to be shared: merge-next re-counts
+it on the merged tree.
 
 If your claim genuinely spans shared files, keep the edits minimal and expect conflicts.
 The preflight in merge-next names every in-flight lease whose scope your merge overlaps.

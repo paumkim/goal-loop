@@ -38,7 +38,7 @@ STATE_FILE="$DATA_DIR/state.json"
 
 DEV_BRANCH="dev"
 WORKTREE_DIR="worktrees"
-SHARED_PATHS_DEFAULT=".term/coordinator/state.json"
+SHARED_PATHS_DEFAULT=".term/coordinator/state.json,docs/changelog.html"
 
 read_config() {
   DEV_BRANCH="dev"
@@ -48,7 +48,7 @@ read_config() {
     if command -v jq >/dev/null 2>&1; then
       DEV_BRANCH=$(jq -r '.devBranch // "dev"' "$CONFIG_FILE" 2>/dev/null || printf 'dev')
       WORKTREE_DIR=$(jq -r '.worktreeDir // "worktrees"' "$CONFIG_FILE" 2>/dev/null || printf 'worktrees')
-      SHARED_PATHS=$(jq -r '.sharedPaths // ".term/coordinator/state.json"' "$CONFIG_FILE" 2>/dev/null || printf '%s' "$SHARED_PATHS_DEFAULT")
+      SHARED_PATHS=$(jq -r '.sharedPaths // ".term/coordinator/state.json,docs/changelog.html"' "$CONFIG_FILE" 2>/dev/null || printf '%s' "$SHARED_PATHS_DEFAULT")
     else
       local v
       v=$(grep -o '"devBranch"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" 2>/dev/null | sed -E 's/.*"devBranch"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/' | head -1)

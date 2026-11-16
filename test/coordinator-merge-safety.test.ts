@@ -213,6 +213,21 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     expect(submit.status).toBe(0)
   })
 
+  test("the default shared scopes include docs/changelog.html (no claim needed, no race)", () => {
+    setup("true")
+    const claim = run(dir, ["claim", "changelog-touch", "--agent", "t", "--paths", "src/only.ts"])
+    expect(claim.status).toBe(0)
+    const wt = join(dir, "worktrees", "wt-changelog-touch")
+    mkdirSync(join(wt, "src"), { recursive: true })
+    writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
+    mkdirSync(join(wt, "docs"), { recursive: true })
+    writeFileSync(join(wt, "docs", "changelog.html"), "<p>new row</p>\n")
+    git(wt, ["add", "-A"])
+    git(wt, ["commit", "-q", "-m", "changelog row"], "2026-11-02T10:00:00+00:00")
+    const submit = run(wt, ["submit"])
+    expect(submit.status).toBe(0)
+  })
+
   test("a glob scope matches its subtree and exact files", () => {
     setup("true")
     const claim = run(dir, ["claim", "globbed", "--agent", "t", "--paths", "src/**"])
