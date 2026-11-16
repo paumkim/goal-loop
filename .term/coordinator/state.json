@@ -1818,9 +1818,11 @@
       "paths": "src/tui.tsx src/hud-card.tsx src/tui-history.tsx src/status-dialog.tsx test/tui-render.test.tsx SPEC.md dist/tui.js",
       "branch": "wt/dj-hover-no-underline",
       "worktree": "worktrees/wt-dj-hover-no-underline",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-16T10:59:12Z",
-      "submittedAt": "2026-11-16T11:01:56Z"
+      "submittedAt": "2026-11-16T11:01:56Z",
+      "mergedAt": "2026-11-16T11:05:53.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
