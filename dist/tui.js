@@ -2449,13 +2449,7 @@ var tui_default = Plugin.define({
               flashStatusCopied();
             },
             onTogglePin: () => togglePin(sessionID),
-            onClear: () => {
-              try {
-                rpc.clear({
-                  sessionID
-                }, at(sessionID)).catch(() => {});
-              } catch {}
-            }
+            onClear: () => requestClearGoal(sessionID)
           })];
         }
       }), () => {
@@ -2749,6 +2743,30 @@ var tui_default = Plugin.define({
         });
       }
     };
+    const requestClearGoal = (sessionID) => {
+      if (!sessionID)
+        return;
+      try {
+        const g = live(sessionID) ?? entries()[sessionID]?.goal;
+        const message = g?.loopEnabled ? `Clear the armed loop (iteration ${g.loopIteration ?? 1}${typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? ` of at most ${g.loopMaxLoops}` : ""}) and its full history? This cannot be undone.` : "Clear the armed goal and its history? This cannot be undone.";
+        context.ui.dialog.confirm({
+          title: "Clear goal",
+          message,
+          label: {
+            confirm: "clear goal",
+            cancel: "keep"
+          }
+        }).then((ok) => {
+          if (ok !== true)
+            return;
+          try {
+            rpc.clear({
+              sessionID
+            }, at(sessionID)).catch(() => {});
+          } catch {}
+        }).catch(() => {});
+      } catch {}
+    };
     const openDashboard = (sessionID) => {
       if (!sessionID)
         return;
@@ -2928,14 +2946,9 @@ var tui_default = Plugin.define({
                     openDashboard(props.sessionID);
                   },
                   onClear: () => {
-                    try {
-                      if (props.sessionID)
-                        rpc.clear({
-                          sessionID: props.sessionID
-                        }, at(props.sessionID)).catch(() => {});
-                    } catch {}
                     setContextOpen(false);
                     setHudSession(undefined);
+                    requestClearGoal(props.sessionID);
                   },
                   onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID),
                   get contextOpen() {
@@ -3104,13 +3117,7 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession())),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.clear({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
+        run: () => requestClearGoal(currentSession())
       }, {
         id: "goal.loop.status",
         title: "Goal loop: show status",
@@ -3197,13 +3204,7 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.clear({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
+        run: () => requestClearGoal(currentSession())
       }]
     }));
     return () => {
