@@ -434,3 +434,60 @@ describe("evaluator teaching hint (fresh goal)", () => {
     expect(frame).toContain("the evaluator reads only the transcript")
   })
 })
+
+const findIn = (frame: string, needle: string): { x: number; y: number } | undefined => {
+  const lines = frame.split("\n")
+  for (let y = 0; y < lines.length; y += 1) {
+    const x = lines[y]!.indexOf(needle)
+    if (x >= 0) return { x, y }
+  }
+  return undefined
+}
+
+describe("copy-to-clipboard affordances (mouse)", () => {
+  test("clicking the evaluator row copies the raw reason", async () => {
+    let copied: string | undefined
+    const goal = loopedGoal()
+    const setup = await testRender(() => <StatusDialogBody goal={goal} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={(r) => { copied = r }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "Evaluator: docs build still fails")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("Evaluator: docs build still fails")
+    await setup.renderer.destroy()
+  })
+
+  test("the evaluator row renders unchanged without onCopyReason — and clicks are inert", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "Evaluator: docs build still fails")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("Evaluator: docs build still fails")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking an iteration summary line copies the full summary with its version", async () => {
+    const calls: Array<[string, number]> = []
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopySummary={(s, v) => calls.push([s, v])} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "Added an 18-cell block progress bar.")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    expect(calls).toEqual([["Added an 18-cell block progress bar.", 1]])
+    await setup.renderer.destroy()
+  })
+
+  test("summary lines render unchanged without onCopySummary", async () => {
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("Added an 18-cell block progress bar.")
+    await setup.renderer.destroy()
+  })
+})
