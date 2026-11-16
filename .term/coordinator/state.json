@@ -1229,6 +1229,17 @@
       "submittedAt": "2026-11-16T04:48:10Z",
       "mergedAt": "2026-11-16T04:51:32Z",
       "mergedInto": "dev"
+    },
+    "tui-context-meter": {
+      "agent": "orchestrator",
+      "paths": "src,test,SPEC.md,dist",
+      "branch": "wt/tui-context-meter",
+      "worktree": "worktrees/wt-tui-context-meter",
+      "status": "done",
+      "createdAt": "2026-11-16T04:55:40Z",
+      "submittedAt": "2026-11-16T05:03:54Z",
+      "mergedAt": "2026-11-16T05:04:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
