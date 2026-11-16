@@ -1,7 +1,7 @@
 import { BOUNDARY_DROP_FACTOR, BOUNDARY_LANDING_GRACE_MS, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
-import { diffUsage, formatDuration, formatStatus, statusLabel, truncate } from "../core/format.ts"
+import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
 import {
@@ -704,12 +704,14 @@ export class GoalController {
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
       this.finish(record, "achieved", result.reason)
-      this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, result.reason || record.condition)
+      const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
+      this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, `${story} · ${result.reason || record.condition}`)
       return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason)
     }
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
-      this.notify(sessionID, "impossible", "error", "Goal judged impossible", result.reason || record.condition)
+      const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
+      this.notify(sessionID, "impossible", "error", "Goal judged impossible", `${story} · ${result.reason || record.condition}`)
       return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
@@ -819,7 +821,8 @@ export class GoalController {
     const endClean = async (reason: string) => {
       assignLoopState()
       await this.finish(record, "achieved", reason)
-      this.notify(sessionID, "achieved", "success", "Loop complete", reason)
+      const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt, iterations: history.length })
+      this.notify(sessionID, "achieved", "success", "Loop complete", `${story} · ${reason}`)
       return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
     }
 
@@ -1090,7 +1093,8 @@ export class GoalController {
     if (failure.kind === "fatal") {
       const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
       this.finish(record, "failed", reason)
-      this.notify(record.sessionID, "failed", "error", "Goal failed", reason)
+      const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt })
+      this.notify(record.sessionID, "failed", "error", "Goal failed", `${story} · ${reason}`)
       return
     }
     record.retries++
