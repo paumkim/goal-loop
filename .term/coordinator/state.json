@@ -1823,6 +1823,17 @@
       "submittedAt": "2026-11-16T11:01:56Z",
       "mergedAt": "2026-11-16T11:05:53.000Z",
       "mergedInto": "dev"
+    },
+    "tui-card-context-meter": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx test/tui-hud.test.tsx test/tui-render.test.tsx SPEC.md dist/tui.js",
+      "branch": "wt/tui-card-context-meter",
+      "worktree": "worktrees/wt-tui-card-context-meter",
+      "status": "done",
+      "createdAt": "2026-11-16T11:08:25Z",
+      "submittedAt": "2026-11-16T11:14:18Z",
+      "mergedAt": "2026-11-16T11:19:41.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
