@@ -10,7 +10,7 @@
  *   │ now        v3 · checking · 4 turns · 12m elapsed │
  *   │ last       ✓ met · this turn                     │
  *   │ ! compact pending 1/4 · …verifyCommand           │  (only when hot / failed)
- *   │ [details] [clear goal]                  esc      │
+ *   │ [details] [pin] [clear goal]               esc      │
  *   ╰──────────────────────────────────────────────────╯
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
@@ -18,7 +18,7 @@ import { createSignal, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
-import { isCompactHot, remediationFor } from "./core/hud.ts"
+import { isCompactHot, remediationFor, PIN_PREFIX } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -53,6 +53,10 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. */
 export const hudCardRows = (goal: GoalSnapshot): number =>
   5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0)
+
+/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
+export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
+  Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
 
 /** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. */
 export const HudButton = (props: { theme: HudCardTheme; label: string; onPress: () => void }): JSX.Element => {
@@ -94,6 +98,9 @@ export const HudCard = (props: {
   onDetails: () => void
   onClear: () => void
   onCopyCondition: (condition: string) => void
+  /** When true the ambient pill appends the (truncated) condition so it stays visible while scrolling. Rendered as `unpin`; false renders `pin`. Omit both to hide the button (tests, embeds). */
+  pinned?: boolean
+  onTogglePin?: () => void
 }): JSX.Element => {
   const theme = () => props.theme
   const g = () => props.goal
@@ -208,6 +215,9 @@ export const HudCard = (props: {
       {/* actions */}
       <box flexDirection="row" gap={1} marginTop={0}>
         <HudButton theme={theme()} label="details" onPress={props.onDetails} />
+        <Show when={props.onTogglePin}>
+          <HudButton theme={theme()} label={props.pinned ? "unpin" : "pin"} onPress={() => props.onTogglePin?.()} />
+        </Show>
         <HudButton theme={theme()} label="clear goal" onPress={props.onClear} />
         <box flexGrow={1} />
         <HudButton theme={theme()} label="esc" onPress={props.onClose} />

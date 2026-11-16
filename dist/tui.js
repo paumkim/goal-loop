@@ -3,7 +3,7 @@
 import { use as _$use } from "@opentui/solid";
 import { createTextNode as _$createTextNode4 } from "@opentui/solid";
 import { insertNode as _$insertNode4 } from "@opentui/solid";
-import { memo as _$memo3 } from "@opentui/solid";
+import { memo as _$memo4 } from "@opentui/solid";
 import { createComponent as _$createComponent4 } from "@opentui/solid";
 import { effect as _$effect4 } from "@opentui/solid";
 import { insert as _$insert4 } from "@opentui/solid";
@@ -12,7 +12,7 @@ import { createElement as _$createElement4 } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/solid";
-import { createMemo, createSignal as createSignal2, Show as Show4 } from "solid-js";
+import { createMemo, createSignal as createSignal2, createEffect, onCleanup, Show as Show4 } from "solid-js";
 
 // src/core/types.ts
 var LIVE_STATUSES = new Set(["active", "paused"]);
@@ -259,6 +259,18 @@ var pillModel = (goal, elapsed) => {
   }
   return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`, tone };
 };
+var PIN_MIN_WIDTH = 12;
+var PIN_PREFIX = " \xB7 pin: ";
+var pinSuffix = (condition, conditionMax) => {
+  const budget = Math.floor(conditionMax);
+  if (!Number.isFinite(budget) || budget < PIN_MIN_WIDTH)
+    return "";
+  const flat = condition.replace(/\s+/g, " ").trim();
+  if (flat.length === 0)
+    return "";
+  return `${PIN_PREFIX}${truncate(flat, budget)}`;
+};
+var motionDisabled = (env) => env.NO_COLOR !== undefined || env.TERM === "dumb";
 var remediationFor = (goal) => {
   if (goal.status === "failed") {
     return { tone: "error", text: `goal failed \u2014 /goal clear to reset` };
@@ -894,6 +906,7 @@ var StatusDialogBody = (props) => {
 };
 
 // src/hud-card.tsx
+import { memo as _$memo3 } from "@opentui/solid";
 import { createComponent as _$createComponent3 } from "@opentui/solid";
 import { createTextNode as _$createTextNode3 } from "@opentui/solid";
 import { insertNode as _$insertNode3 } from "@opentui/solid";
@@ -914,6 +927,7 @@ var Hint = (props) => (() => {
   return _el$;
 })();
 var hudCardRows = (goal) => 5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0);
+var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
 var HudButton = (props) => {
   const [hovered, setHovered] = createSignal(false);
   return (() => {
@@ -1108,6 +1122,22 @@ var HudCard = (props) => {
       label: "details",
       get onPress() {
         return props.onDetails;
+      }
+    }), _el$13);
+    _$insert3(_el$12, _$createComponent3(Show3, {
+      get when() {
+        return props.onTogglePin;
+      },
+      get children() {
+        return _$createComponent3(HudButton, {
+          get theme() {
+            return theme();
+          },
+          get label() {
+            return props.pinned ? "unpin" : "pin";
+          },
+          onPress: () => props.onTogglePin?.()
+        });
       }
     }), _el$13);
     _$insert3(_el$12, _$createComponent3(HudButton, {
@@ -1461,7 +1491,7 @@ var tui_default = Plugin.define({
             _$insertNode4(_el$3, _el$4);
             _$insert4(_el$3, GOAL_GLYPH, _el$4);
             _$insert4(_el$3, (() => {
-              var _c$ = _$memo3(() => !!looped());
+              var _c$ = _$memo4(() => !!looped());
               return () => _c$() ? ` \xB7 loop${loopPosition()}` : "";
             })(), null);
             _$insertNode4(_el$5, _el$6);
@@ -1499,7 +1529,7 @@ var tui_default = Plugin.define({
             _$insertNode4(_el$9, _el$10);
             _$setProp4(_el$9, "flexDirection", "row");
             _$setProp4(_el$9, "gap", 1);
-            _$insertNode4(_el$0, _$createTextNode4(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 esc close`));
+            _$insertNode4(_el$0, _$createTextNode4(`up/down scroll \xB7 pgup/pgdn page \xB7 home/end start/end \xB7 p pin condition \xB7 esc close`));
             _$setProp4(_el$0, "wrapMode", "none");
             _$setProp4(_el$10, "flexGrow", 1);
             _$insert4(_el$9, _$createComponent4(HudButton, {
@@ -1508,6 +1538,15 @@ var tui_default = Plugin.define({
               },
               label: "copy condition",
               onPress: () => copyToClipboard(entries()[sessionID]?.goal?.condition ?? fallback, sessionID)
+            }), null);
+            _$insert4(_el$9, _$createComponent4(HudButton, {
+              get theme() {
+                return context.theme;
+              },
+              get label() {
+                return isPinned(sessionID) ? "unpin" : "pin condition";
+              },
+              onPress: () => togglePin(sessionID)
             }), null);
             _$insert4(_el$9, _$createComponent4(HudButton, {
               get theme() {
@@ -1658,6 +1697,22 @@ var tui_default = Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active"))
         setNow(Date.now());
     }, TICK_MS);
+    const [pinned, setPinned] = createSignal2(new Set);
+    const isPinned = (sessionID) => Boolean(sessionID && pinned().has(sessionID));
+    const togglePin = (sessionID) => {
+      if (!sessionID)
+        return;
+      setPinned((previous) => {
+        const next = new Set(previous);
+        if (next.has(sessionID))
+          next.delete(sessionID);
+        else
+          next.add(sessionID);
+        return next;
+      });
+    };
+    const motionOk = !motionDisabled(process.env);
+    const [pulse, setPulse] = createSignal2(false);
     const [getHudSession, setHudSession] = createSignal2(undefined);
     const copyToClipboard = (text, sessionID) => {
       try {
@@ -1717,6 +1772,31 @@ var tui_default = Plugin.define({
             return;
           }
         };
+        const dimensions = useTerminalDimensions();
+        const pinnedNow = () => isPinned(props.sessionID);
+        const pillText = () => {
+          const model = pill();
+          if (!model)
+            return "";
+          if (!pinnedNow())
+            return model.text;
+          const g = goal();
+          return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text;
+        };
+        createEffect(() => {
+          if (goal()?.evaluating === true && motionOk) {
+            const timer = setInterval(() => setPulse((value) => !value), 850);
+            onCleanup(() => clearInterval(timer));
+            return;
+          }
+          setPulse(false);
+        });
+        const pillAttrs = () => {
+          const underline = hovered() ? TextAttributes4.UNDERLINE : 0;
+          const bold = goal()?.evaluating === true && pulse() && motionOk ? TextAttributes4.BOLD : 0;
+          const attrs = underline | bold;
+          return attrs === 0 ? undefined : attrs;
+        };
         const color = () => {
           const tone = pill()?.tone;
           if (tone === "paused" || tone === "hot")
@@ -1765,9 +1845,9 @@ var tui_default = Plugin.define({
                 } catch {}
               });
               _$setProp4(_el$12, "wrapMode", "none");
-              _$insert4(_el$12, () => pill()?.text ?? "");
+              _$insert4(_el$12, pillText);
               _$effect4((_p$) => {
-                var _v$4 = color(), _v$5 = hovered() ? TextAttributes4.UNDERLINE : undefined;
+                var _v$4 = color(), _v$5 = pillAttrs();
                 _v$4 !== _p$.e && (_p$.e = _$setProp4(_el$12, "fg", _v$4, _p$.e));
                 _v$5 !== _p$.t && (_p$.t = _$setProp4(_el$12, "attributes", _v$5, _p$.t));
                 return _p$;
@@ -1804,7 +1884,11 @@ var tui_default = Plugin.define({
                     } catch {}
                     setHudSession(undefined);
                   },
-                  onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID)
+                  onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID),
+                  get pinned() {
+                    return pinnedNow();
+                  },
+                  onTogglePin: () => togglePin(props.sessionID)
                 }));
                 _$effect4((_p$) => {
                   var _v$6 = -cardRows(), _v$7 = cardRows();
@@ -1844,6 +1928,17 @@ var tui_default = Plugin.define({
       priority: 100,
       enabled: () => statusDialogOpen(),
       commands: [{
+        id: "goal.status.pin",
+        title: "Goal status: toggle pinned condition",
+        group: "Goal",
+        bind: "p",
+        enabled: () => statusDialogOpen(),
+        run: () => {
+          try {
+            togglePin(statusDialogSession());
+          } catch {}
+        }
+      }, {
         id: "goal.status.scroll-up",
         title: "Goal status: scroll up",
         group: "Goal",
