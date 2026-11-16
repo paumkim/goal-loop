@@ -44,6 +44,14 @@ const stateWord = (goal: GoalSnapshot): string =>
           ? "stuck"
           : "active"
 
+/**
+ * May the HUD card arm right now? A goal must be eligible to paint (live record on disk or in cache),
+ * AND the status dialog — the deeper zoom level — must not own the screen. The palette `goal.hud.toggle`,
+ * the pill's left click and the HUD Esc layer all consult this one predicate rather than re-deriving a
+ * local copy, so there is exactly one place the "dialog owns the screen" rule lives.
+ */
+export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): boolean => hasGoal && !statusDialogOpen
+
 /** The pill's open/closed affordance: a leading caret, `▾` while the card is painted, `▸` while it is not.
  * Truthful to the card's presence (the caller keys it to the card actually rendering, not merely to the session's
  * hud slot). ASCII demotes to `v`/`>` under NO_COLOR / TERM=dumb — the same predicate the pips, bar and sparkline use.
