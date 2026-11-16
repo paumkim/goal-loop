@@ -1790,6 +1790,17 @@
       "submittedAt": "2026-11-16T10:39:32Z",
       "mergedAt": "2026-11-16T10:40:24Z",
       "mergedInto": "dev"
+    },
+    "tui-hint-emdash": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
+      "branch": "wt/tui-hint-emdash",
+      "worktree": "worktrees/wt-tui-hint-emdash",
+      "status": "done",
+      "createdAt": "2026-11-16T10:42:16Z",
+      "submittedAt": "2026-11-16T10:44:04Z",
+      "mergedAt": "2026-11-16T10:45:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
