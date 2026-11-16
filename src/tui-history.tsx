@@ -168,7 +168,7 @@ export const LoopSection = (props: {
                 <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : theme().text.feedback.info.base}>
                   {zeroTools ? "○" : "✓"}
                 </text>
-                <text wrapMode="none" fg={rowColor}>
+                <text wrapMode="word" flexGrow={1} fg={rowColor}>
                   {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[index()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`}
                 </text>
               </box>
@@ -218,7 +218,7 @@ export const LoopSection = (props: {
           <text wrapMode="none" flexShrink={0} fg={finalColor()} attributes={TextAttributes.BOLD}>
             {finalGlyph()}
           </text>
-          <text wrapMode="none" fg={theme().text.base}>
+          <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
             {`loop ${props.goal.status} · ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} · ${totals().turns} turns · ${totals().tools} tools · ${formatDurationCoarse(totals().spanMs)} wall`}
           </text>
         </box>

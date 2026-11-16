@@ -522,7 +522,8 @@ var LoopSection = (props) => {
           _$setProp(_el$23, "wrapMode", "none");
           _$setProp(_el$23, "flexShrink", 0);
           _$insert(_el$23, zeroTools ? "\u25CB" : "\u2713");
-          _$setProp(_el$24, "wrapMode", "none");
+          _$setProp(_el$24, "wrapMode", "word");
+          _$setProp(_el$24, "flexGrow", 1);
           _$setProp(_el$24, "fg", rowColor);
           _$insert(_el$24, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[index()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 inspection only" : ""}${mixSuffix(index())}${endedSuffix(entry)}${shareSuffix(index())}`);
           _$insert(_el$21, _$createComponent(Show, {
@@ -620,7 +621,8 @@ var LoopSection = (props) => {
         _$setProp(_el$15, "wrapMode", "none");
         _$setProp(_el$15, "flexShrink", 0);
         _$insert(_el$15, finalGlyph);
-        _$setProp(_el$16, "wrapMode", "none");
+        _$setProp(_el$16, "wrapMode", "word");
+        _$setProp(_el$16, "flexGrow", 1);
         _$insert(_el$16, () => `loop ${props.goal.status} \xB7 ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} \xB7 ${totals().turns} turns \xB7 ${totals().tools} tools \xB7 ${formatDurationCoarse(totals().spanMs)} wall`);
         _$effect((_p$) => {
           var _v$ = finalColor(), _v$2 = TextAttributes.BOLD, _v$3 = theme().text.base;
@@ -807,7 +809,16 @@ var StatusDialogBody = (props) => {
     _$effect2((_$p) => _$setProp2(_el$3, "fg", theme().text.base, _$p));
     return _el$2;
   })();
-  const stateColor = () => props.goal?.status === "paused" ? theme().text.feedback.warning.base : props.goal?.status === "active" ? theme().text.feedback.info.base : theme().text.muted;
+  const stateColor = () => {
+    const s = props.goal?.status;
+    if (s === "paused" || s === "impossible")
+      return theme().text.feedback.warning.base;
+    if (s === "active" || s === "achieved")
+      return theme().text.feedback.info.base;
+    if (s === "failed")
+      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
+    return theme().text.muted;
+  };
   const g = () => props.goal;
   const remediation = () => {
     const goal = g();
