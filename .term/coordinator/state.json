@@ -1548,6 +1548,17 @@
       "submittedAt": "2026-11-16T08:25:32Z",
       "mergedAt": "2026-11-16T08:25:59Z",
       "mergedInto": "dev"
+    },
+    "tui-ascii-pips": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,src/tui.tsx,test/history.test.ts,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-ascii-pips",
+      "worktree": "worktrees/wt-tui-ascii-pips",
+      "status": "done",
+      "createdAt": "2026-11-16T08:27:11Z",
+      "submittedAt": "2026-11-16T08:28:32Z",
+      "mergedAt": "2026-11-16T08:29:00Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
