@@ -976,6 +976,17 @@
       "submittedAt": "2026-11-16T00:44:14Z",
       "mergedAt": "2026-11-16T00:44:21Z",
       "mergedInto": "dev"
+    },
+    "docs-honesty-sweep": {
+      "agent": "inkling",
+      "paths": "SPEC.md,test/constants.test.ts",
+      "branch": "wt/docs-honesty-sweep",
+      "worktree": "worktrees/wt-docs-honesty-sweep",
+      "status": "done",
+      "createdAt": "2026-11-16T01:03:58Z",
+      "submittedAt": "2026-11-16T01:05:11Z",
+      "mergedAt": "2026-11-16T01:05:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
