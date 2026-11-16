@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=894 -->
+<!-- spec-check files=44 tests=902 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3910,3 +3910,38 @@ Verification (all run in the worktree): bun test (894 pass, 0 fail), bun run che
 spec-check (43/894), rendered frames above. Evidence is source + test-render layers; live TUI
 remains unverifiable. Follow-ups NOT done in this slice: none — a committed pill frame is out of
 reach (the pill mounts inside the host's slot; there is no component seam to render standalone).
+
+
+## Workstream CV — the dialog's advertised keyboard is now tested, not just wired (2026-11-16)
+
+Interpretation of this iteration: the mouse-first arc closed with 39+ click tests, but the dialog's
+keyboard advertised the same coverage and had none — ten keymap commands (the footer's `up/down`,
+`pgup/pgdn`, `home/end`, `p` pin, `x` fold, `c`/`r` copies) registered through
+context.keymap.layer in src/tui.tsx with zero test seam, zero pinned behavior. No footer tier ever
+painted for a key that did not work, and this slice keeps it that way.
+
+375. src/core/dialog-keys.ts (new) — the ten dialog commands as a pure factory,
+     dialogStatusCommands(deps), importing nothing from @opentui; the structural command shape is
+     checked against the host's KeymapLayer site in tui.tsx at compile time. Exports
+     DIALOG_LINE_CELLS (3), DIALOG_PAGE_CELLS (15), SCROLL_END (Number.MAX_SAFE_INTEGER).
+     Handler semantics are byte-preserved from the inline originals, including the silent
+     try/catch each run handler wraps itself in and the early return when there is nothing to copy.
+376. src/tui.tsx — the inner anonymous command array is gone; the dialog layer spreads
+     dialogStatusCommands with closures over the same setup-scope values the inline handlers used
+     (statusDialogSession, togglePin, setIterationsExpanded, copyToClipboard, flashStatusCopied,
+     scrollRef). The layer registration itself (mode global, priority 100, layer-level enabled)
+     is unchanged.
+377. Tests: test/dialog-keys.test.ts (new, +8) — command order/ids/binds/group; every command's
+     enabled() mirroring the dialog-open gate both closed and open; the scroll ladder arithmetic
+     (arrows ±3, pages ±15, home → 0, end → SCROLL_END); `p` with and without a session; `c` and
+     `r` copy payloads incl. the "reason" kind and the copy+flash both-or-neither contract; `x`
+     toggling once per press; a throwing dependency never escaping a key event. spec-check marker
+     files=43 tests=894 -> 44 tests=902 (src/core/dialog-keys.ts is shipped source, so npm pack
+     counts one more file; package-integrity asserts the tarball grew to 44).
+378. Evidence is source + render-layer adjacent (unit): the keymap layer wiring was verified by
+     reading the host contract (KeymapLayer/KeymapCommand in node_modules/@opencode/plugin) and by
+     the test suite; no live key event has been exercised — the live TUI remains unverifiable.
+
+Verification (all run in the worktree): bun test (902 pass, 0 fail), bun run check green incl.
+spec-check (44/902). Follow-ups NOT done in this slice: none — the remaining advertised surface is
+covered end-to-end by this suite plus the 39+ click tests.

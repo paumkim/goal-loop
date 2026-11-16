@@ -21,6 +21,7 @@ import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardT
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
+import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseListGoalOutput, parseNotice } from "./core/wire.ts"
 
 type Entry = GoalSnapshotCacheEntry
@@ -731,110 +732,35 @@ export default Plugin.define({
     // commands are only enabled while the dialog is open, so they never intercept prompt editing.
     // Closing the dialog is
     // the host's job — `ui.dialog.show` puts the host in modal mode, whose built-in layer binds
-    // escape and ctrl+c to dismiss the top dialog and run its onClose.
+    // escape and ctrl+c to dismiss the top dialog and run its onClose. The commands themselves are
+    // the pure factory in core/dialog-keys.ts, so the advertised keymap is unit-tested without the
+    // host.
     context.keymap.layer(() => ({
       mode: "global",
       priority: 100,
       enabled: () => statusDialogOpen(),
-      commands: [
-        {
-          id: "goal.status.pin",
-          title: "Goal status: toggle pinned condition",
-          group: "Goal",
-          bind: "p",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { togglePin(statusDialogSession()) } catch {} },
+      commands: dialogStatusCommands({
+        open: statusDialogOpen,
+        session: statusDialogSession,
+        togglePin,
+        toggleExpanded: () => setIterationsExpanded((v) => !v),
+        condition: () => {
+          const sessionID = statusDialogSession()
+          return sessionID ? entries()[sessionID]?.goal?.condition : undefined
         },
-        {
-          id: "goal.status.history",
-          title: "Goal status: show or fold older iterations",
-          group: "Goal",
-          bind: "x",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { setIterationsExpanded((v) => !v) } catch {} },
+        reason: () => {
+          const sessionID = statusDialogSession()
+          return sessionID ? entries()[sessionID]?.goal?.reason : undefined
         },
-        {
-          id: "goal.status.copy",
-          title: "Goal status: copy condition",
-          group: "Goal",
-          bind: "c",
-          enabled: () => statusDialogOpen(),
-          run: () => {
-            try {
-              const s = statusDialogSession()
-              const condition = s ? entries()[s]?.goal?.condition : undefined
-              if (!condition) return
-              copyToClipboard(condition, s)
-              flashStatusCopied()
-            } catch {}
-          },
+        copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
+        flashCopied: flashStatusCopied,
+        scrollBy: (cells) => {
+          scrollRef()?.scrollBy(cells)
         },
-        {
-          // Keyboard twin of clicking the evaluator/reason row: the same payload, in-modal ack for free.
-          id: "goal.status.copy-evaluator-reason",
-          title: "Goal status: copy evaluator reason",
-          group: "Goal",
-          bind: "r",
-          enabled: () => statusDialogOpen(),
-          run: () => {
-            try {
-              const s = statusDialogSession()
-              const reason = s ? entries()[s]?.goal?.reason : undefined
-              if (!reason) return
-              copyToClipboard(reason, s, "reason")
-              flashStatusCopied()
-            } catch {}
-          },
+        scrollTo: (cell) => {
+          scrollRef()?.scrollTo(cell)
         },
-        {
-          id: "goal.status.scroll-up",
-          title: "Goal status: scroll up",
-          group: "Goal",
-          bind: "up",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollBy(-3) } catch {} },
-        },
-        {
-          id: "goal.status.scroll-down",
-          title: "Goal status: scroll down",
-          group: "Goal",
-          bind: "down",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollBy(3) } catch {} },
-        },
-        {
-          id: "goal.status.page-up",
-          title: "Goal status: page up",
-          group: "Goal",
-          bind: "pageup",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollBy(-15) } catch {} },
-        },
-        {
-          id: "goal.status.page-down",
-          title: "Goal status: page down",
-          group: "Goal",
-          bind: "pagedown",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollBy(15) } catch {} },
-        },
-        {
-          id: "goal.status.home",
-          title: "Goal status: scroll to start",
-          group: "Goal",
-          bind: "home",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollTo(0) } catch {} },
-        },
-        {
-          id: "goal.status.end",
-          title: "Goal status: scroll to end",
-          group: "Goal",
-          bind: "end",
-          enabled: () => statusDialogOpen(),
-          run: () => { try { scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER) } catch {} },
-        },
-      ],
+      }),
     }))
 
     context.keymap.layer(() => ({

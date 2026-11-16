@@ -2911,6 +2911,144 @@ var GoalRpc = Rpc.define({
   }
 });
 
+// src/core/dialog-keys.ts
+var DIALOG_LINE_CELLS = 3;
+var DIALOG_PAGE_CELLS = 15;
+var SCROLL_END = Number.MAX_SAFE_INTEGER;
+var dialogStatusCommands = (deps) => {
+  const enabled = () => deps.open();
+  return [
+    {
+      id: "goal.status.pin",
+      title: "Goal status: toggle pinned condition",
+      group: "Goal",
+      bind: "p",
+      enabled,
+      run: () => {
+        try {
+          deps.togglePin(deps.session());
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.history",
+      title: "Goal status: show or fold older iterations",
+      group: "Goal",
+      bind: "x",
+      enabled,
+      run: () => {
+        try {
+          deps.toggleExpanded();
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.copy",
+      title: "Goal status: copy condition",
+      group: "Goal",
+      bind: "c",
+      enabled,
+      run: () => {
+        try {
+          const text = deps.condition();
+          if (!text)
+            return;
+          deps.copy(text, deps.session());
+          deps.flashCopied();
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.copy-evaluator-reason",
+      title: "Goal status: copy evaluator reason",
+      group: "Goal",
+      bind: "r",
+      enabled,
+      run: () => {
+        try {
+          const text = deps.reason();
+          if (!text)
+            return;
+          deps.copy(text, deps.session(), "reason");
+          deps.flashCopied();
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.scroll-up",
+      title: "Goal status: scroll up",
+      group: "Goal",
+      bind: "up",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollBy(-DIALOG_LINE_CELLS);
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.scroll-down",
+      title: "Goal status: scroll down",
+      group: "Goal",
+      bind: "down",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollBy(DIALOG_LINE_CELLS);
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.page-up",
+      title: "Goal status: page up",
+      group: "Goal",
+      bind: "pageup",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollBy(-DIALOG_PAGE_CELLS);
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.page-down",
+      title: "Goal status: page down",
+      group: "Goal",
+      bind: "pagedown",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollBy(DIALOG_PAGE_CELLS);
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.home",
+      title: "Goal status: scroll to start",
+      group: "Goal",
+      bind: "home",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollTo(0);
+        } catch {}
+      }
+    },
+    {
+      id: "goal.status.end",
+      title: "Goal status: scroll to end",
+      group: "Goal",
+      bind: "end",
+      enabled,
+      run: () => {
+        try {
+          deps.scrollTo(SCROLL_END);
+        } catch {}
+      }
+    }
+  ];
+};
+
 // src/core/wire.ts
 var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var isString = (value) => typeof value === "string";
@@ -3808,127 +3946,28 @@ var tui_default = Plugin.define({
       mode: "global",
       priority: 100,
       enabled: () => statusDialogOpen(),
-      commands: [{
-        id: "goal.status.pin",
-        title: "Goal status: toggle pinned condition",
-        group: "Goal",
-        bind: "p",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            togglePin(statusDialogSession());
-          } catch {}
+      commands: dialogStatusCommands({
+        open: statusDialogOpen,
+        session: statusDialogSession,
+        togglePin,
+        toggleExpanded: () => setIterationsExpanded((v) => !v),
+        condition: () => {
+          const sessionID = statusDialogSession();
+          return sessionID ? entries()[sessionID]?.goal?.condition : undefined;
+        },
+        reason: () => {
+          const sessionID = statusDialogSession();
+          return sessionID ? entries()[sessionID]?.goal?.reason : undefined;
+        },
+        copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
+        flashCopied: flashStatusCopied,
+        scrollBy: (cells) => {
+          scrollRef()?.scrollBy(cells);
+        },
+        scrollTo: (cell) => {
+          scrollRef()?.scrollTo(cell);
         }
-      }, {
-        id: "goal.status.history",
-        title: "Goal status: show or fold older iterations",
-        group: "Goal",
-        bind: "x",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            setIterationsExpanded((v) => !v);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.copy",
-        title: "Goal status: copy condition",
-        group: "Goal",
-        bind: "c",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            const s = statusDialogSession();
-            const condition = s ? entries()[s]?.goal?.condition : undefined;
-            if (!condition)
-              return;
-            copyToClipboard(condition, s);
-            flashStatusCopied();
-          } catch {}
-        }
-      }, {
-        id: "goal.status.copy-evaluator-reason",
-        title: "Goal status: copy evaluator reason",
-        group: "Goal",
-        bind: "r",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            const s = statusDialogSession();
-            const reason = s ? entries()[s]?.goal?.reason : undefined;
-            if (!reason)
-              return;
-            copyToClipboard(reason, s, "reason");
-            flashStatusCopied();
-          } catch {}
-        }
-      }, {
-        id: "goal.status.scroll-up",
-        title: "Goal status: scroll up",
-        group: "Goal",
-        bind: "up",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollBy(-3);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.scroll-down",
-        title: "Goal status: scroll down",
-        group: "Goal",
-        bind: "down",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollBy(3);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.page-up",
-        title: "Goal status: page up",
-        group: "Goal",
-        bind: "pageup",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollBy(-15);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.page-down",
-        title: "Goal status: page down",
-        group: "Goal",
-        bind: "pagedown",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollBy(15);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.home",
-        title: "Goal status: scroll to start",
-        group: "Goal",
-        bind: "home",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollTo(0);
-          } catch {}
-        }
-      }, {
-        id: "goal.status.end",
-        title: "Goal status: scroll to end",
-        group: "Goal",
-        bind: "end",
-        enabled: () => statusDialogOpen(),
-        run: () => {
-          try {
-            scrollRef()?.scrollTo(Number.MAX_SAFE_INTEGER);
-          } catch {}
-        }
-      }]
+      })
     }));
     context.keymap.layer(() => ({
       mode: "global",
