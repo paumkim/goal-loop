@@ -1,0 +1,5 @@
+# Headless @opentui/solid render tests (test/tui-render.test.tsx) need the same preload
+# the render scripts use: it maps solid-js's server build to the client build so
+# testRender works under `bun test`. Scoped to the test directory only.
+[test]
+preload = ["@opentui/solid/preload"]
