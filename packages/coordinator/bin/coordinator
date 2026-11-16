@@ -853,8 +853,10 @@ do_merge_next() {
     release_merge_lock
     exit 1
   fi
-  git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
+  # remove the merge worktree first, then delete the scratch branch (a branch checked out
+  # in a linked worktree refuses to be deleted — silently swallowed by `|| true`)
   safe_remove_worktree "$merge_wt" "${scratch}" "merged" || true
+  git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
 
   finish_merged_lease "$slug" "$branch"
   release_merge_lock
