@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=51 tests=1134 -->
+<!-- spec-check files=52 tests=1159 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=51 tests=1134 -->
+<!-- spec-check files=52 tests=1159 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,4 +5060,73 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=51 tests=1134 -->
+<!-- spec-check files=52 tests=1159 -->
+
+## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
+
+Interpretation of the mouse-first clause: the dossier paints the whole record, the copy row hands
+it over, the save row writes it to disk, the outline rail quotes it in parts, find spots the one
+word it needs — but nobody asks the document the one question every receipt must survive: are the
+shas it quotes still resolvable? A record that cannot be checked is a claim, not an attestation.
+This iteration adds the verification pass: a `verify` row in the dossier view (one click, the same
+grammar as copy and save) and a palette twin `goal.dossier.verify` — one probe per sha the ledger
+quotes, the outcome painted in place, the Markdown verification report on the clipboard. No chord,
+no footer furniture; the palette and the row are the discovery surfaces.
+
+471. src/core/verify-record.ts — new pure module, no JSX, no theme; the probe is injected.
+     `recordShaMentions(goal)` extracts exactly the shas the record quotes — the loop ledger's
+     per-iteration `sha`, oldest first — deduplicated by sha with the quoting iterations listed
+     (first-appearance order, never re-sorted); entries without a sha are skipped, never guessed.
+     `verifyRecord(goal, probe)` sweeps those shas; the probe contract is three-valued
+     (`true` exists / `false` git answered and the object does not resolve / `"unknown"` git could
+     not answer) and a probe that throws degrades one row to `unknown` instead of sinking the
+     sweep — one bad row never fails the report. `gitCatFileProbe(cwd)` is the real probe: one
+     `git -C <dir> cat-file -e <sha>` per sha, 10 s timeout; a numeric exit status means git
+     answered (0 exists; anything else — including a non-hex sha — is an unresolvable receipt);
+     a spawn failure or timeout is `unknown`, categorically not `missing`. `verifyReportMarkdown`
+     renders the report: generation stamp, the probed directory, the one-line condition, one table
+     row per unique sha (sha · quoting iterations · yes/no/unknown), the present/missing/unknown
+     counts, and an honesty footer stating what existence does not prove (ancestry) and what
+     absence is not (misconduct); a record with no quoted shas paints a GAP row, never an empty
+     table dressed as a pass. `verifySummaryLine` is the chrome-free one-liner for the toast;
+     `verifyAckSegment` is the compact in-row acknowledgement (`✓ N/N resolve` / ascii `+ N/N
+     resolve`, the unresolvable arm `✗`→`-`, the unknown arm `!`) — a record with no quoted shas
+     says so rather than painting a pass.
+472. src/status-dialog.tsx — the dossier view grows the verify row between the save row and the
+     find row: same hover affordance, same left-click grammar, `stopPropagation` and `zIndex={1}`
+     (the hit-grid claim order the find row already established — this row, like the find row,
+     must win its own row's cells against the sibling rows' overflowing text rects). The clicked
+     row paints the outcome via `verifyAckSegment` for the usual acknowledgment window (2.4 s —
+     the counts deserve a beat longer than a verb). A host that returns `undefined` ran nothing
+     the UI can attest to: the click registers, no ack paints — the row never claims a sweep that
+     did not happen. Unwired, the row does not paint; the document renders exactly as before.
+473. src/tui.tsx — `verifyRecordAction` runs the sweep against `process.cwd()` (the same directory
+     the export row writes into), copies the Markdown report via OSC52, and toasts the outcome —
+     `record verified` (success) / `record does not verify` (error) / `record unverifiable`
+     (warning) / `nothing to verify`; a record with no quoted shas is stated, never glossed. Both
+     `StatusDialogBody` instantiation sites wire `onVerifyDossier` (the dialog and the card-side
+     frame). Palette command `goal.dossier.verify` ("Goal: verify the record (shas + markdown
+     report)") with the same action; no footer chord. The outcome toast carries the honesty rule:
+     unknown is never folded into missing.
+474. Tests: +19 unit (verify-record.test.ts: mentions dedupe/order/trim, all-present and mixed
+     sweeps, throwing probe → per-row unknown, unanswerable probe → all-unknown, non-hex sha
+     reaches the probe, empty record, report contents (stamp/directory/table/counts/honesty
+     footer/GAP row), staleness pair, summary-line and ack-segment arms incl. ascii) + 6
+     interactive (tui-render.test.tsx: the row paints and a click runs the host sweep and paints
+     `✓ 2/2 resolve`, mono demotes to `+ 6/6`, a missing sha paints the unresolvable arm, right
+     click inert, unwired row absent, host returning undefined paints no ack). Tests: 1159 pass,
+     0 fail (45 files).
+475. Honest limits: existence is not ancestry and says nothing about the working tree's
+     cleanliness; absence is an unresolvable receipt, not proof of misconduct — the report says
+     what the repository still holds, at the named directory, at generation time; a stale report
+     is identified by its stamp, never by trust; the probe requires a git binary and a repository
+     at the probed cwd — outside one, every row reads `unknown` and the report says so — no
+     fallback invents object existence; the verification is per-sha existence only (no
+     reachability from any ref, no signature check, no content compare); verification is at the
+     headless test-renderer layer — live-TUI behaviour remains unverifiable. The dossier bytes
+     themselves are unchanged — the verification report is a separate artifact, and the export
+     path still writes exactly the document.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
+<!-- spec-check files=52 tests=1159 -->
