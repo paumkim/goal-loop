@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=784 -->
+<!-- spec-check files=43 tests=800 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2708,3 +2708,50 @@ now carry byte-for-byte snapshots; regressions land loudly.
 Verification (all run in the worktree): bun test tui-snapshots.test.tsx (20 pass, 6 added),
 bun run check green (784 tests), coordinator submit + merge-next, and bun run check on dev shown
 green at the end.
+
+## Workstream CM — the card fits the terminal it floats on (2026-11-16)
+
+Interpretation of this iteration: craft details and failure-is-first-class, one lie removed. The
+card's mount anchored with a flat 2-row allowance for the failure-first-class remediation no matter
+how wide the text actually wraps at the ~49-cell remediation column (an unlucky long failureLabel
+wrapped to 3+ rows and the anchor under-reserved, so the absolute box painted below the border), and
+it never clamped against the terminal at all: on a short screen the negative-top anchor ran the
+card's title above the buffer. Audit findings #4 and #8, landed together.
+
+267. src/core/format.ts: a new exported wrapLines(text, width) — greedy word wrap on single
+     spaces, width measured with stringWidth (cells, never code units), never mid-word; a single
+     word longer than the line hard-breaks across as many rows as it needs; an empty string paints
+     one line. Unit-tested in test/core.test.ts (empty, exact fit, catalog remediations, long
+     failureLabel, CJK two-cell glyphs, overlong word).
+268. src/hud-card.tsx: REMEDIATION_WIDTH (49 cells: the 64-cell default card minus border 2,
+     padding 2, LABEL 10, gap 1) is exported; a new cardRowPlan(goal, contextOpen, maxRows) is the
+     single source of truth for the card's height — it returns { rows, hint, spend, last } and both
+     the renderer (optional rows wrapped in Show on the same plan) and the anchor (hudCardRows,
+     now with a third maxRows parameter, default Infinity, so every existing call site and test is
+     byte-compatible) consume it. The remediation row costs wrapLines(text, 49) rows, never a flat
+     2. Under maxRows the plan drops whole optional rows in a fixed least-essential-first order —
+     the teaching hint, then spend, then the last-verdict row. The remediation and the menu never
+     drop; when the irreducible core exceeds the ceiling the plan returns it anyway (the anchor
+     clamps, the renderer clips the top rather than the esc affordance at the bottom). The card
+     accepts a maxRows prop and derives all three optional rows from the same plan — the painted
+     rows are by construction the anchored rows.
+269. src/tui.tsx (pill mount): the card ceiling is computed at mount time from the live terminal
+     dimensions — Math.max(8, height - 2), one row reserved for the host slot above the prompt and
+     one for the global status line; the floor of 8 is border + condition + now + actions + a
+     two-line remediation. opentui boxes paint overflow: visible by default, so the budget IS the
+     clamp — the absolute box keeps top={-rows()} but rows is now the capped value, mirroring
+     ClampedColumn's viewport cap (its "height - 1" reservation, applied to the floating card).
+270. test/core.test.ts: six wrapLines cases. test/tui-hud.test.tsx: six cardRowPlan/hudCardRows
+     ceiling cases (1-line remediation costs 1 row, long failureLabel costs its real wrap, the
+     drop order hint → spend → last, the remediation and menu never drop, plan/hudCardRows
+     agreement) plus four render cases pinning the omission behavior and that esc/clear survive a
+     ceiling. The mount wiring is source-layer evidence (a plugin slot cannot mount headlessly);
+     the row omission is render-layer evidence. Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=784 to files=43 tests=800. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched by
+this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test (800 pass, 20 snapshots),
+bun run check green, coordinator submit + merge-next, and bun run check on dev shown green at the
+end.

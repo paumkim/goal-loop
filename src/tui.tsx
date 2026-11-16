@@ -588,9 +588,12 @@ export default Plugin.define({
           const g = showing()
           return g && getHudSession() === props.sessionID ? g : undefined
         }
+        // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
+        // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
+        const maxCardRows = () => Math.max(8, dimensions().height - 2)
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g, contextOpen()) : 0
+          return g ? hudCardRows(g, contextOpen(), maxCardRows()) : 0
         }
         const toggleHud = () => {
           try {
@@ -639,6 +642,7 @@ export default Plugin.define({
                     }}
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
                     contextOpen={contextOpen()}
+                    maxRows={maxCardRows()}
                     onToggleContext={() => setContextOpen((v) => !v)}
                     onCloseMenu={() => setContextOpen(false)}
                     onCopyReason={(reason) => copyToClipboard(reason, props.sessionID, "reason")}

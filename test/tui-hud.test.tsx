@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH } from "../src/core/format.ts"
@@ -524,6 +524,100 @@ describe("dialog footer hints", () => {
     }
     expect(DIALOG_FOOTER_FULL_HINT).toContain("pgup/pgdn")
     expect(DIALOG_FOOTER_SHORT_HINT).not.toContain("pgup")
+  })
+})
+
+describe("hudCardRows viewport ceiling (maxRows) — the anchor clamps instead of overflowing the screen", () => {
+  // hint-only goal: freshly armed, one spend estimate, no verdicts, no remediation (evaluatorHint yields to remediation)
+  const hinted = () =>
+    loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 } })
+  // remediation-only goal: hot compaction (hint yields to remediation by rule), no spend, no verdicts
+  const hot = () =>
+    loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
+
+  test("a one-line remediation costs one row, not the flat two it reserved before", () => {
+    // 'goal failed — /goal clear to reset' is 34 cells — one row at the 49-cell remediation width
+    const failed = loopedGoal({ status: "failed", history: undefined as unknown as GoalSnapshot["history"] })
+    expect(hudCardRows(failed)).toBe(6)
+  })
+
+  test("a long failureLabel costs the rows it actually wraps to, not a flat two", () => {
+    const failed = loopedGoal({ status: "failed", failureLabel: "x".repeat(100), history: undefined as unknown as GoalSnapshot["history"] })
+    expect(hudCardRows(failed)).toBe(8) // 5 + 3 wrapped remediation rows
+  })
+
+  test("under a ceiling the teaching hint drops first, then spend", () => {
+    const goal = hinted()
+    // full: 5 + spend 1 + hint 1 = 7
+    expect(hudCardRows(goal)).toBe(7)
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint gone, spend kept
+    expect(hudCardRows(goal, false, 5)).toBe(5) // hint and spend gone
+    expect(hudCardRows(goal, false, 4)).toBe(5)
+  })
+
+  test("the remediation never drops — the ceiling clamps at the failure screen", () => {
+    const goal = hot() // 5 + remediation 2 = 7 (hot compaction wraps to two rows at 49 cells)
+    expect(hudCardRows(goal)).toBe(7)
+    expect(hudCardRows(goal, false, 6)).toBe(7)
+    expect(hudCardRows(goal, false, 4)).toBe(7)
+  })
+
+  test("the last-verdict row drops after spend; the menu never drops", () => {
+    const paused = loopedGoal({ status: "paused", pauseCause: "cap", spend: { cost: 1, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 } })
+    // 5 + spend 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 9
+    expect(hudCardRows(paused)).toBe(9)
+    expect(hudCardRows(paused, false, 8)).toBe(8) // spend gone
+    expect(hudCardRows(paused, false, 6)).toBe(7) // spend and last gone: 5 + 2
+    expect(hudCardRows(paused, true, 3)).toBe(11) // menu rows never drop: 5 + 2 + menu 4
+  })
+
+  test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
+    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, last: false })
+    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, last: false })
+    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, last: false })
+    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 7, hint: false, spend: false, last: false })
+  })
+})
+
+describe("cardRowPlan under a ceiling (render)", () => {
+  // fresh goal with one spend estimate: hint + spend both painted by default
+  const hinted = () =>
+    loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 } })
+
+  test("under a ceiling the teaching hint gives way to the rows below it", async () => {
+    const { frame } = await render(() => (
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
+    ), 80, 12)
+    expect(frame).not.toContain("the evaluator reads only the transcript") // teaching row dropped
+    expect(frame).toContain("spend") // cost row still painted
+    expect(frame).toContain("esc")
+  })
+
+  test("tightened further, the spend row also gives way — the actions row never does", async () => {
+    const { frame } = await render(() => (
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={5} />
+    ), 80, 12)
+    expect(frame).not.toContain("the evaluator reads only the transcript")
+    expect(frame).not.toContain("spend")
+    expect(frame).toContain("clear goal")
+    expect(frame).toContain("esc")
+  })
+
+  test("the remediation row survives any ceiling that leaves room for the border and actions", async () => {
+    const hot = loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
+    const { frame } = await render(() => (
+      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={5} />
+    ), 80, 12)
+    expect(frame).toContain("compact pending")
+    expect(frame).toContain("esc")
+  })
+
+  test("without a ceiling every row paints — nothing regresses", async () => {
+    const { frame } = await render(() => (
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ), 80, 14)
+    expect(frame).toContain("the evaluator reads only the transcript")
+    expect(frame).toContain("spend")
   })
 })
 

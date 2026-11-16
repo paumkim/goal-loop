@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory, truncate } from "../src/core/format.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
@@ -450,5 +450,38 @@ describe("renderTranscript", () => {
     expect(text.length).toBeLessThan(600)
     expect(text).toContain("file locked")
     expect(text).toContain("earlier messages omitted")
+  })
+})
+describe("wrapLines", () => {
+  test("an empty string still paints one line", () => {
+    expect(wrapLines("", 49)).toBe(1)
+  })
+
+  test("a string that fits the width — exactly or under — wraps to one line", () => {
+    expect(wrapLines("a".repeat(49), 49)).toBe(1)
+    expect(wrapLines("goal failed — /goal clear to reset", 49)).toBe(1)
+    expect(wrapLines("paused · send a message to resume, or /goal clear", 49)).toBe(1)
+  })
+
+  test("wraps greedily at single spaces, never mid-word", () => {
+    expect(wrapLines("judged impossible · rephrase the condition, else /goal clear", 49)).toBe(2)
+    expect(wrapLines("turn cap reached · /goal clear or set a new goal — a message will not extend it", 49)).toBe(2)
+    expect(wrapLines("5× not_met in a row · consider evaluator.verifyCommand", 49)).toBe(2)
+  })
+
+  test("a long failureLabel surfacing in the failed remediation costs the rows it actually needs", () => {
+    // catalog remediation: `${label} — /goal clear to reset`; a 100-cell label needs three rows at 49 cells
+    const text = `${"x".repeat(100)} — /goal clear to reset`
+    expect(wrapLines(text, 49)).toBe(3)
+  })
+
+  test("a word longer than the line hard-breaks across as many rows as it needs", () => {
+    expect(wrapLines("a".repeat(100), 49)).toBe(3)
+    expect(wrapLines("short " + "b".repeat(100), 49)).toBe(4)
+  })
+
+  test("the width cap is terminal cells, not code units — CJK counts two", () => {
+    // 30 CJK glyphs = 60 cells; at 49 cells per line that is two lines, never one
+    expect(wrapLines("床".repeat(30), 49)).toBe(2)
   })
 })
