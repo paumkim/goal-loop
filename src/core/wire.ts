@@ -78,6 +78,7 @@ const isLoopEntry = (value: unknown): value is LoopEntry =>
   isFiniteNumber(value.endedAt) &&
   (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) &&
   (value.sha === undefined || typeof value.sha === "string")
+  && (value.spend === undefined || isUsageSnapshot(value.spend))
 
 const isLoopCompact = (value: unknown): value is LoopCompactState =>
   isRecord(value) &&

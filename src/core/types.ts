@@ -79,6 +79,8 @@ export interface LoopEntry {
   readonly contextTokens?: number
   /** The sha HEAD resolved to when the iteration was recorded (stamped at loop advance). Absent outside a repository or when HEAD could not be read — never guessed. */
   readonly sha?: string
+  /** Usage delta attributed to this iteration alone (diff between the arm-time cumulative usage and the advance-time cumulative usage). Absent when either side could not be measured — never estimated, never fabricated. */
+  readonly spend?: UsageSnapshot
 }
 
 /** Consecutive unlanded boundary compactions after which the plugin suspends further requests until a landing is observed. 2 misses arm a forced re-request; 4 suspends. Lives here so core formatters can display it. */

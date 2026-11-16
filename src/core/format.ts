@@ -80,7 +80,7 @@ export function formatTokens(n: number): string {
   return `${(n / 1_000_000).toFixed(2)}M`
 }
 
-function formatCost(usd: number): string {
+export function formatCost(usd: number): string {
   if (usd <= 0) return "$0"
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`
 }

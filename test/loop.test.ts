@@ -79,6 +79,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean } }> = []
   let compactOutcome: BoundaryCompactResult = { requested: true, estimatedTokens: 250_000 }
   let contextSize: number | undefined = 250_000
+  let usageValue: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
     config: resolveConfig(options),
@@ -104,7 +105,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
         }
         void calls.synthetic.push(input)
       },
-      usage: async () => ({ cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
+      usage: async () => usageValue,
       compact: async () => {},
     },
     evaluator: {
@@ -159,6 +160,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     setCompactOutcome: (outcome: BoundaryCompactResult) => void (compactOutcome = outcome),
     setSyntheticError: (error?: Error) => void (syntheticFail.error = error),
     setContextSize: (size: number | undefined) => void (contextSize = size),
+    setUsage: (usage: UsageSnapshot | undefined) => void (usageValue = usage),
     controller,
     storage,
     turn,
@@ -1892,5 +1894,41 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     const record = h.controller.get(SID)!
     expect(record.loopIteration).toBe(2) // the loop advanced
     expect(record.condition).toBe("v2 condition")
+  })
+})
+
+describe("per-iteration spend attribution", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("an entry is stamped with the usage delta against its arm", async () => {
+    await h.setLoop("improve the parser")
+    h.setUsage({ cost: 5, input: 500, output: 50, reasoning: 1, cacheRead: 40, cacheWrite: 2 })
+    h.verdicts.push(met("parser done"), met("fuzz done"))
+    h.summaries.push("parser rewritten", "fuzz done")
+    h.nextGoals.push("add fuzz coverage", "add property tests")
+    await h.turn(3)
+    // First advance: delta from the arm-time cumulative {cost: 1, input: 100, output: 10}
+    const record1 = h.controller.get(SID)!
+    expect(record1.loopHistory).toHaveLength(1)
+    expect(record1.loopHistory![0]!.spend).toEqual({ cost: 4, input: 400, output: 40, reasoning: 1, cacheRead: 40, cacheWrite: 2 })
+    // Second iteration measures from the first advance, not from the goal arm
+    h.setUsage({ cost: 9, input: 900, output: 90, reasoning: 1, cacheRead: 40, cacheWrite: 2 })
+    await h.turn(2)
+    const record2 = h.controller.get(SID)!
+    expect(record2.loopHistory![1]!.spend).toEqual({ cost: 4, input: 400, output: 40, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+  })
+
+  test("an entry records no spend when the host cannot measure usage at the advance", async () => {
+    await h.setLoop("improve the parser")
+    h.setUsage(undefined)
+    h.verdicts.push(met("done"))
+    h.summaries.push("work")
+    h.nextGoals.push("next steps")
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.loopHistory![0]!.spend).toBeUndefined()
   })
 })
