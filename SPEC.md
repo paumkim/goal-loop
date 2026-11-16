@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=52 tests=1159 -->
+<!-- spec-check files=53 tests=1181 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=52 tests=1159 -->
+<!-- spec-check files=53 tests=1181 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=52 tests=1159 -->
+<!-- spec-check files=53 tests=1181 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,4 +5129,69 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=52 tests=1159 -->
+<!-- spec-check files=53 tests=1181 -->
+
+## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
+
+Interpretation of the mouse-first clause: EC asked the record whether the shas it quotes still
+resolve in the object store — existence. The question that remains after existence is placement:
+does the history this session was built on actually carry those commits, or is the record
+attesting work that lives on a branch, a rewrite, or nowhere this checkout can see? This
+iteration adds the ancestry pass: a `reach` row in the dossier view (one click, the same grammar
+as copy/save/verify) and a palette twin `goal.dossier.reach` — one `git merge-base --is-ancestor
+<sha> HEAD` per quoted sha, the outcome painted in place, the Markdown ancestry report on the
+clipboard. No chord, no footer furniture; the palette and the row are the discovery surfaces.
+EC and ED are complementary and neither substitutes for the other; together they answer the two
+halves of “is this real?” — the object exists, and the object is on this line.
+
+476. src/core/reach-record.ts — new pure module, no JSX, no theme; the probe is injected, and the
+     mention extraction is imported from verify-record.ts (`recordShaMentions`), never reimplemented.
+     `reachRecord(goal, probe)` sweeps the quoted shas; the probe contract is three-valued
+     (`true` ancestor / `false` git answered and not an ancestor (exit 1) / `"unknown"` git could
+     not answer) and a probe that throws degrades one row to `unknown` instead of sinking the
+     sweep. `gitAncestorProbe(cwd)` is the real probe: one `git -C <dir> merge-base --is-ancestor
+     <sha> HEAD` per sha, 10 s timeout; exit 0 → ancestor, exit 1 → not on this line (git answered),
+     every other outcome — exit ≥ 2 (including 128 for an unparseable sha), a spawn failure, a
+     timeout — is `unknown`, categorically not `no`. `reachReportMarkdown` renders the report:
+     generation stamp, the probed directory, the one-line condition, one table row per unique sha
+     (sha · quoting iterations · yes/no/unknown), the on-this-line/not/unknown counts, and an
+     honesty footer stating what unreached does not imply (another branch, a rewrite, a record that
+     predates the merge) and that ancestry is not content; a record with no quoted shas paints a
+     GAP row, never an empty table dressed as a pass. `reachSummaryLine` is the chrome-free
+     one-liner for the toast; `reachAckSegment` is the compact in-row acknowledgement
+     (`✓ N/N on this line` / ascii `+ N/N on this line`, the unreached arm `✗`→`-`, the unknown
+     arm `!`).
+477. src/status-dialog.tsx — the dossier view grows the reach row between the verify row and the
+     find row: same hover affordance, same left-click grammar, `stopPropagation` and `zIndex={1}`
+     (the hit-grid claim order the find row established). The clicked row paints the outcome via
+     `reachAckSegment` for the usual 2.4 s acknowledgment window; a host returning `undefined`
+     paints no ack — the row never claims a sweep that did not happen. Unwired, the row does not
+     paint; the document renders exactly as before.
+478. src/tui.tsx — `reachRecordAction` runs the sweep against `process.cwd()` (the same directory
+     the export row writes into), copies the Markdown report via OSC52, and toasts the outcome —
+     `record reaches HEAD` (success) / `record does not reach HEAD` (warning) / `record
+     unverifiable` (warning) / `nothing to place` (success). Not-on-this-line is a warning, never
+     an error: it is the expected answer mid-loop before the merge, and the honesty rule is that
+     information is not accusation. Both outcomes keep unknown categorically out of the not bucket.
+     Palette command `goal.dossier.reach` ("Goal: verify the record reaches HEAD (shas + markdown
+     report)") with the same action; no footer chord.
+479. Tests: +16 unit (reach-record.test.ts: all-on-this-line and mixed sweeps, throwing probe →
+     per-row unknown, unanswerable probe → all-unknown, non-hex sha reaches the probe, empty
+     record, report contents (stamp/directory/table/counts/honesty footer/GAP row), staleness pair,
+     summary-line and ack-segment arms incl. ascii) + 6 interactive (tui-render.test.tsx: the row
+     paints and a click runs the host sweep and paints `✓ 2/2 on this line`, mono demotes to
+     `+ 6/6 on this line`, an unreached sha paints the unreached arm, right click inert, unwired row
+     absent, host returning undefined paints no ack). Tests: 1181 pass, 0 fail (46 files).
+480. Honest limits: ancestry is per-sha and from HEAD only — it says nothing about which ref the
+     work landed on, signatures, the content of the commit, or the working tree's cleanliness;
+     not-on-this-line is expected mid-loop before the merge and means the checkout cannot see the
+     commit, not that the record is false; unknown means git could not answer and is never counted
+     as no; a stale report is identified by its stamp, never by trust; the probe requires a git
+     binary and a repository at the probed cwd; ancestry verification is at the headless
+     test-renderer layer — live-TUI behaviour remains unverifiable. The dossier bytes themselves are
+     unchanged — the ancestry report is a separate artifact, and the export path still writes
+     exactly the document.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
+<!-- spec-check files=53 tests=1181 -->
