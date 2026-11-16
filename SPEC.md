@@ -4813,14 +4813,13 @@ Acceptance criteria:
    an ETA; `doctor` fails on a dirty main checkout and on a dangling worktree.
 8. The two-agent overlapping-scope scenario passes end-to-end.
 
-Verification: `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts` — 31 pass, 0 fail
-(21 new merge-safety tests + the rewritten fast-forward-failure test + the 10 pre-existing merge-next
-tests). Full suite green at the merged HEAD (marker re-counted by the pipeline: 48/1071 at the DZ
-merge; the scratch-order fixup takes it to 1072 and the next merge-next re-counts it itself). The
+Verification: `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts` — 35 pass, 0 fail
+(25 merge-safety tests, one added by the scratch-branch-order fixup, plus the 10 pre-existing
+merge-next tests). The full suite is green at the merged HEAD; the marker is re-counted and committed
+by merge-next itself on the merged tree, so the exact counts are not pinned here. The
 two-agent overlapping-scope scenario is the acceptance
 artifact (test/coordinator-merge-safety.test.ts, "two agents, overlapping scopes, conflicting edits"):
 no red merge lands, dev stays untouched on the conflict and on the red gate, the loser rebases with the
 printed path, the winner lands green, and the loser's uncommitted bytes are recoverable from
-`refs/coordinator/saved/<slug>-<ts>` after the merge pipeline removes its worktree. spec-check files=47
-tests=1049.
+`refs/coordinator/saved/<slug>-<ts>` after the merge pipeline removes its worktree.
 
