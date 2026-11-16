@@ -1647,6 +1647,17 @@
       "submittedAt": "2026-11-16T09:19:51Z",
       "mergedAt": "2026-11-16T09:20:14Z",
       "mergedInto": "dev"
+    },
+    "tui-pinbudget-cells": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-pinbudget-cells",
+      "worktree": "worktrees/wt-tui-pinbudget-cells",
+      "status": "done",
+      "createdAt": "2026-11-16T09:21:01Z",
+      "submittedAt": "2026-11-16T09:22:37Z",
+      "mergedAt": "2026-11-16T09:23:03Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
