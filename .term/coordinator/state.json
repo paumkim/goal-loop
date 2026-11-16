@@ -1768,6 +1768,17 @@
       "submittedAt": "2026-11-16T10:30:07Z",
       "mergedAt": "2026-11-16T10:30:48Z",
       "mergedInto": "dev"
+    },
+    "tui-pill-budget-measure": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-pill-budget-measure",
+      "worktree": "worktrees/wt-tui-pill-budget-measure",
+      "status": "done",
+      "createdAt": "2026-11-16T10:34:44Z",
+      "submittedAt": "2026-11-16T10:36:57Z",
+      "mergedAt": "2026-11-16T10:37:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
