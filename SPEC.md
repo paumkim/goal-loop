@@ -1,6 +1,6 @@
 # SPEC — current behavior of opencode-goal
 
-Status: current as of v1.0.1 (plus the two workstreams specified below). The TUI indicator renders natively: a compact segment painted on the
+Status: current as of v1.1.0. The TUI indicator renders natively: a compact segment painted on the
 empty left side of the host's jump-to-latest row (the 1-row strip directly above the input prompt, claimed through the host's
 `session.composer.top` slot with a zero-flow absolute box), state transitions surface as
 host toasts, and the `/goal` detail view is a host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal,
@@ -108,7 +108,7 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Out of scope
 
-- New features beyond the two workstreams. Any behavior change updates this file in the same commit.
+- New features beyond the behavior specified here. Any behavior change updates this file in the same commit.
 - Per-iteration met toasts are info-level by default; if they prove noisy in the smoke run, suppress
   after N iterations in a follow-up (not silently changed).
 
@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=452 -->
+<!-- spec-check files=41 tests=456 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2032,3 +2032,10 @@ Followed docs/install.html exactly in scratch (dirs /tmp/opencode/gh-route1.oiRP
 194. `bin/opencode-goal.mjs` exports `PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v1.1.0"` and writes that into the `plugins` array instead of the bare `"opencode-goalv2"` (Workstream BE route-2 finding: the bare specifier resolved only against npmjs.org and showed as `failed` in `/plugins` on fresh machines). The GitHub release is the distribution channel for this package; the specifier resolves at startup from GitHub (verified end-to-end, Workstream BE route 1 and its e2e).
 195. Back-compat: `uninstall` and `status` match both specifiers, so configs installed by the v1.1.0 installer uninstall cleanly. Installer-written configs now assert `PLUGIN_SPEC`; new regression test pins legacy bare-spec uninstall. Also fixes a comment-terminator bug (`-*/` inside the header mechanism comment closed the block comment) caught by `bun test test/cli-installer.test.ts`.
 Marker bumped `files=41 tests=451` → `files=41 tests=452`.
+
+## Workstream BG — status stamp refreshed and boundary-compaction constants pinned (2026-11-15)
+
+196. The live status line (line 3) said "current as of v1.0.1 (plus the two workstreams specified below)" though package.json is 1.1.0 and the file holds workstreams A–BF; it now reads "current as of v1.1.0". The stale "two workstreams" phrasing in the out-of-scope section was reworded to match. No behavior change.
+197. New test/constants.test.ts pins the exact values of the boundary-compaction magic numbers in `src/core/constants.ts` (`BOUNDARY_MIN_TOKENS=10_000`, `BOUNDARY_DROP_FACTOR=0.6`, `COMPACT_COOLDOWN_MS=120_000`, `BOUNDARY_LANDING_GRACE_MS=600_000`) and the relationships the controller and compactor rely on (drop factor is a proper fraction; landing grace outlasts the request cooldown; minimum size is a positive integer). Previously the file had no direct test and only indirect coverage through the compactor/loop suites.
+Marker bumped `files=41 tests=452` → `files=41 tests=456` (test-only addition; no shipped file changed).
+Known deferred: docs/config.html and docs/architecture.html contain line-reference drift (source line numbers no longer accurate); fixing is deferred because a live coordinator lease (github-single-channel) holds `docs`. Fix on its release or successor lease.
