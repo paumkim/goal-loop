@@ -269,3 +269,221 @@ trail       ✓✗✓✓✗   5 of 5 verdicts
                                                                                                     
 "
 `;
+
+exports[`full-frame snapshots (waiting and remediation states) HudCard · waiting (background work is holding evaluation back — the pill's fifth word) 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        waiting v3/5 ●●○○○ · 4 turns · 12m                │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (waiting and remediation states) HudCard · paused at the turn cap (exact remediation: clear or re-arm — never 'try again') 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        paused v3/5 ●●○○○ · 4 turns · 12m                 │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│ fix        turn cap reached · /goal clear or set a new goal  │                
+│            — a message will not extend it                    │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (waiting and remediation states) HudCard · judged impossible (remediation rides two rows of the anchor budget) 1`] = `
+"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+│ condition  ship the release notes                            │                
+│ now        impossible v3/5 ●●○○○ · 4 turns · 12m             │                
+│ spend      278k in · 25k out · 96k cached · $0.42            │                
+│ last       ✗ not met · this turn                             │                
+│ fix        judged impossible · rephrase the condition, else  │                
+│            /goal clear                                       │                
+│  [details]   [clear goal]                             [esc]  │                
+└──────────────────────────────────────────────── esc dismiss ─┘                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+"
+`;
+
+exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · paused at the turn cap (the dialog carries the same exact remedy as the card) 1`] = `
+"paused  12m · 4 turns                                                                               
+                                                                                                    
+goal        ship the release notes                                                                  
+                                                                                                    
+reason      Evaluator: docs build still fails                                                       
+                                                                                                    
+fix         turn cap reached · /goal clear or set a new goal — a message will not extend it         
+                                                                                                    
+spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
+loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+pace        ~15m/iteration · ~45m left at this pace                                                 
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · paused · 4 turns · stall 0 · retries 0 · 12m elapsed       · last ✗ this turn   
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · judged impossible (the dialog shows why, not a generic failure) 1`] = `
+"impossible  12m · 4 turns                                                                           
+                                                                                                    
+goal        ship the release notes                                                                  
+                                                                                                    
+reason      Evaluator: docs build still fails                                                       
+                                                                                                    
+fix         judged impossible · rephrase the condition, else /goal clear                            
+                                                                                                    
+spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
+loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
+│           │ Added an 18-cell block progress bar.                                                  
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · impossible · 4 turns · 12m elapsed                         · last ✗ this turn   
+                                                                                                    
+final       ⊘  loop impossible · 2 iterations · 15 turns · 64 tools · 30m wall                      
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (waiting and remediation states) LoopSection · zero-tool iterations render the muted row (state inspection, no work produced) 1`] = `
+"loop        v3 of at most 5 · 2 complete                                                            
+                                                                                                    
+            ███████░░░░░░░░░░░                                                                      
+                                                                                                    
+pace        ~15m/iteration · ~45m left at this pace                                                 
+                                                                                                    
+objective   make every loop iteration visible at a glance                                           
+                                                                                                    
+v1          ○  met · 2 turns · 0 tools · 15m 00s · no tools · inspection only · ended 27m ago at 07:
+               33 · 50% of wall                                                                     
+│           │ Inspection only — nothing to build.                                                   
+                                                                                                    
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
+│           │ Trail renders up to 24 verdicts.                                                      
+                                                                                                    
+now         ◎  v3 · active · 4 turns · 12m elapsed                                · last ✗ this turn
+                                                                                                    
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;

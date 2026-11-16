@@ -169,3 +169,65 @@ describe("full-frame snapshots (named layout states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 })
+
+describe("full-frame snapshots (waiting and remediation states)", () => {
+  test("HudCard · waiting (background work is holding evaluation back — the pill's fifth word)", async () => {
+    const snapshot = await frame(
+      () => <HudCard goal={loopedGoal({ waiting: true })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />,
+      80,
+      24,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("HudCard · paused at the turn cap (exact remediation: clear or re-arm — never 'try again')", async () => {
+    const snapshot = await frame(
+      () => <HudCard goal={loopedGoal({ status: "paused", pauseCause: "cap" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />,
+      80,
+      26,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("HudCard · judged impossible (remediation rides two rows of the anchor budget)", async () => {
+    const snapshot = await frame(
+      () => <HudCard goal={loopedGoal({ status: "impossible" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />,
+      80,
+      26,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("StatusDialogBody · paused at the turn cap (the dialog carries the same exact remedy as the card)", async () => {
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={loopedGoal({ status: "paused", pauseCause: "cap" })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("StatusDialogBody · judged impossible (the dialog shows why, not a generic failure)", async () => {
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={loopedGoal({ status: "impossible" })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("LoopSection · zero-tool iterations render the muted row (state inspection, no work produced)", async () => {
+    const idle = loopedGoal({
+      loopHistory: [
+        { version: 1, condition: "add a progress bar", summary: "Inspection only — nothing to build.", reason: "not_met", turns: 2, toolCalls: 0, endedAt: now - 1000 * 60 * 27 },
+        { version: 2, condition: "render the verdict trail", summary: "Trail renders up to 24 verdicts.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12 },
+      ],
+    })
+    const snapshot = await frame(
+      () => <LoopSection goal={idle} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />,
+      100,
+      30,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+})

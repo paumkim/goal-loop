@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=763 -->
+<!-- spec-check files=43 tests=769 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2481,3 +2481,31 @@ remains the live public artifact; all work is local on dev. No docs line referen
 
 Verification (all run in the worktree): bun run compile, bun run check green (763 tests),
 coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CC — snapshot the waiting and remediation layout states (2026-11-16)
+
+Interpretation of this iteration: the craft axis demands snapshot tests for every layout state, and
+Workstream CA pinned eight of them. The audit that motivated this found six more live states whose
+pixels were unpinned: the `waiting` flavor (background work holding evaluation back — the pill's
+fifth state word), the two remediation-first-class screens the failure axis exists for (paused at
+the turn cap, judged impossible), both surfaces they render on, and the zero-tool muted ledger row
+(narrative legibility: state inspection only, no work produced).
+
+247. test/tui-snapshots.test.tsx gains six full-frame snapshots under a new describe block:
+     HudCard waiting (now row reads "waiting"), HudCard paused at the turn cap (remediation row
+     reads "turn cap reached · /goal clear or set a new goal …"), HudCard judged impossible
+     ("rephrase the condition, else /goal clear"), StatusDialogBody paused and impossible (the
+     dialog carries the identical exact remedy, not a generic failure line), and LoopSection with a
+     toolCalls=0 iteration (the muted "no tools · inspection only" row beside a work-producing
+     iteration). Frames deterministic by construction (all clocks injected). The remediation rows
+     grow the card's anchor by exactly the two rows hudCardRows budgets — these snapshots pin that
+     contract byte-for-byte; a regression there would otherwise shift the card mid-toggle silently.
+248. No chrome, layout, motion or src changes; the ambient pill and live paths remain source-layer
+     behind the dead provider. Evidence is test-layer only.
+
+Marker bumped files=43 tests=763 to files=43 tests=769. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched by
+this workstream.
+
+Verification (all run in the worktree): bun run check green (769 tests), coordinator submit +
+merge-next, and bun run check on dev shown green at the end.
