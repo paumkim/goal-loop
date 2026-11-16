@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=456 -->
+<!-- spec-check files=41 tests=464 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2039,3 +2039,9 @@ Marker bumped `files=41 tests=451` → `files=41 tests=452`.
 197. New test/constants.test.ts pins the exact values of the boundary-compaction magic numbers in `src/core/constants.ts` (`BOUNDARY_MIN_TOKENS=10_000`, `BOUNDARY_DROP_FACTOR=0.6`, `COMPACT_COOLDOWN_MS=120_000`, `BOUNDARY_LANDING_GRACE_MS=600_000`) and the relationships the controller and compactor rely on (drop factor is a proper fraction; landing grace outlasts the request cooldown; minimum size is a positive integer). Previously the file had no direct test and only indirect coverage through the compactor/loop suites.
 Marker bumped `files=41 tests=452` → `files=41 tests=456` (test-only addition; no shipped file changed).
 Known deferred: docs/config.html and docs/architecture.html contain line-reference drift (source line numbers no longer accurate); fixing is deferred because a live coordinator lease (github-single-channel) holds `docs`. Fix on its release or successor lease.
+
+## Workstream BH — headless render unit tests for the dialog components (2026-11-15)
+
+198. `src/status-dialog.tsx` (StatusDialogBody) and `src/tui-history.tsx` (LoopSection, HistoryBlock, VerdictTrail) now have unit tests in `test/tui-render.test.tsx` (8 tests). They mount the components in @opentui/solid's `testRender` and assert on the captured character grid: loop caption/bar/objective/rail/now-row/trail, the final-tally row on a finished loop, paused stall/retries diagnostics, non-looped last-verdict/counts/trail, the fresh-goal "no verdicts yet" line, the fallback text for an undefined snapshot, and the StatusDialogBody looped-vs-non-looped branch selection (evaluator vs reason label, LoopSection vs HistoryBlock). Previously these components were only manually render-verified via `scripts/render-dialog.tsx` / `scripts/render-history.tsx`, which are not wired into `bun run check`.
+199. `test/bunfig.toml` scopes `[test] preload = ["@opentui/solid/preload"]` to the test directory — the same solid-js server→client build remap the render scripts use. Load-bearing: without it the render tests fail at import (verified by removing the file and re-running). No other test file imports solid-js, so the rest of the suite is unaffected.
+Marker bumped `files=41 tests=456` → `files=41 tests=464` (test-only addition; no shipped file changed).
