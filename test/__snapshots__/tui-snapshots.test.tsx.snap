@@ -6,9 +6,9 @@ exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 │ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │  [details]   [pin]   [clear goal]                     [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -34,9 +34,9 @@ exports[`full-frame snapshots (named layout states) HudCard · evaluating (the e
 │ now        checking v3/5 ●●○○○ · 4 turns · 12m               │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -62,11 +62,11 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 │ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │ fix        compact pending 2/4 · send a message for a safe   │                
 │            point · else set evaluator.verifyCommand          │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -92,10 +92,10 @@ exports[`full-frame snapshots (named layout states) HudCard · failed (failure i
 │ now        failed v3/5 ●●○○○ · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │ fix        provider error - /goal clear to reset             │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -276,9 +276,9 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · waitin
 │ now        waiting v3/5 ●●○○○ · 4 turns · 12m                │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -304,11 +304,11 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 │ now        paused v3/5 ●●○○○ · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │ fix        turn cap reached · /goal clear or set a new goal  │                
 │            - a message will not extend it                    │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -334,11 +334,11 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · judged
 │ now        impossible v3/5 ●●○○○ · 4 turns · 12m             │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │ fix        judged impossible · rephrase the condition, else  │                
 │            /goal clear                                       │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -494,13 +494,13 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 │ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       ✗ not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │  [details]   [clear goal]                             [esc]  │                
 │ menu       copy condition                                    │                
 │            copy evaluator reason                             │                
 │            copy latest summary                               │                
 │            clear goal                                        │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -528,9 +528,9 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 │ now        active v3/5 ##--- · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
 │ last       x not met · this turn                             │                
+│ why        Evaluator: docs build still fails                 │                
 │  [details]   [clear goal]                             [esc]  │                
 └──────────────────────────────────────────────── esc dismiss ─┘                
-                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -607,14 +607,6 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFoot
 "
 `;
 
-
-exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 140 columns (full hint · full labels) 1`] = `
-"up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older                          [copy condition]   [pin condition]   [clear goal] 
-                                                                                                                                            
-                                                                                                                                            
-"
-`;
-
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 96 columns (short hint · compact labels — the noun labels overflow at 96) 1`] = `
 "up/down scroll · p pin · c copy · x older                              [copy]   [pin]   [clear] 
                                                                                                 
@@ -626,5 +618,12 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFoot
 "up/down scroll · p pin · c copy · x older         [copy condition]   [pin condition]   [clear goal] 
                                                                                                     
                                                                                                     
+"
+`;
+
+exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 140 columns (full hint · full labels) 1`] = `
+"up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older                          [copy condition]   [pin condition]   [clear goal] 
+                                                                                                                                            
+                                                                                                                                            
 "
 `;

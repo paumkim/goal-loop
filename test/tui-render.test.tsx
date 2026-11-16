@@ -400,18 +400,75 @@ describe("HUD card context meter row", () => {
   })
 
   test("under a ceiling the context row paints after spend and drops before the last-verdict row", async () => {
-    // spend + hint + context available: full = 5 + 3 = 8; at 6 the hint and spend rows have given way, context has not
+    // spend + hint + context + why available: full = 5 + 4 = 9; at 7 the hint and spend rows have given way, context has not
     const spendFirst = loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
-    expect(hudCardRows(spendFirst, false, 6)).toBe(6)
-    const kept = await render(() => <HudCard goal={spendFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    expect(hudCardRows(spendFirst, false, 7)).toBe(7)
+    const kept = await render(() => <HudCard goal={spendFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />)
     expect(kept).toContain("context") // spend and hint dropped; context kept
     expect(kept).not.toContain("spend")
-    // verdicts-bearing goal without spend: at a one-row-short ceiling the context row gives way, the last-verdict row stays
+    // verdicts-bearing goal without spend: at a two-row-short ceiling the context and why rows give way, the last-verdict row stays
     const lastFirst = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
     expect(hudCardRows(lastFirst, false, 6)).toBe(6)
     const lastKept = await render(() => <HudCard goal={lastFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
     expect(lastKept).not.toContain("context")
     expect(lastKept).toContain("not met") // the last-verdict row survived
+  })
+})
+
+describe("HUD card why row", () => {
+  test("paints the evaluator's reason, whitespace-collapsed to one line", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ reason: "docs build\n  still\tfails" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("why")
+    expect(frame).toContain("docs build still fails")
+  })
+
+  test("clicking the row copies the collapsed reason when the host wires onCopyReason", async () => {
+    let copied: string | undefined
+    const setup = await testRender(() => <HudCard goal={loopedGoal({ reason: "flaky test in ci" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} onCopyReason={(r) => { copied = r }} />, { width: 80, height: 16 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "flaky test in ci")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("flaky test in ci")
+    await setup.renderer.destroy()
+  })
+
+  test("without onCopyReason the row paints inert — and clicks are inert", async () => {
+    const setup = await testRender(() => <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />, { width: 80, height: 16 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("why")
+    expect(frame).toContain("Evaluator: docs build still fails")
+    const at = findIn(frame, "Evaluator: docs build still fails")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("Evaluator: docs build still fails")
+    await setup.renderer.destroy()
+  })
+
+  test("a blank reason omits the row entirely", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ reason: "   " })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).not.toContain("why")
+  })
+
+  test("a reason longer than the budget truncates with the ellipsis, never wraps", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ reason: "x".repeat(60) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("x".repeat(41) + "…")
+    expect(frame).not.toContain("x".repeat(42))
+  })
+
+  test("under a ceiling the why row drops after context and before the last-verdict row", async () => {
+    // verdicts-bearing goal: 5 + context 1 + why 1 + last 1 = 8; at 7 the context row has given way, at 6 the why row has too
+    const metered = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
+    const kept = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />)
+    expect(kept).toContain("why")
+    expect(kept).not.toContain("context")
+    const dropped = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    expect(dropped).not.toContain("why")
+    expect(dropped).toContain("not met") // the last-verdict row survived
   })
 })
 
