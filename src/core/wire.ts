@@ -65,7 +65,12 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheWrite)
 
 const isVerdictEntry = (value: unknown): value is VerdictEntry =>
-  isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at)
+  isRecord(value) &&
+  isFiniteNumber(value.turn) &&
+  isVerdict(value.verdict) &&
+  isString(value.reason) &&
+  isFiniteNumber(value.at) &&
+  (value.toolCalls === undefined || isFiniteNumber(value.toolCalls))
 
 const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&

@@ -322,6 +322,11 @@ function verdictGlyph(verdict, ascii = false) {
       return ascii ? VERDICT_NOT_MET_ASCII : "\u2717";
   }
 }
+function verdictEntryGlyph(entry, ascii = false) {
+  if (entry.verdict === "met" && entry.toolCalls === 0)
+    return ascii ? "." : "\u25CB";
+  return verdictGlyph(entry.verdict, ascii);
+}
 function iterationDurations(entries, setAt) {
   const out = [];
   let previous = setAt;
@@ -1118,7 +1123,7 @@ var LoopSection = (props) => {
         _$insertNode(_el$34, _$createTextNode(`\xB7 last`));
         _$setProp(_el$34, "wrapMode", "none");
         _$setProp(_el$36, "wrapMode", "none");
-        _$insert(_el$36, () => verdictGlyph(entry().verdict, ascii()));
+        _$insert(_el$36, () => verdictEntryGlyph(entry(), ascii()));
         _$setProp(_el$37, "wrapMode", "none");
         _$insert(_el$37, (() => {
           var _c$4 = _$memo(() => turnsSince() === 0);
@@ -1260,7 +1265,7 @@ var WhyLedger = (props) => {
             _$insert(_el$38, () => label(theme(), index() === 0 ? "why" : ""), _el$39);
             _$setProp(_el$39, "wrapMode", "none");
             _$setProp(_el$39, "flexShrink", 0);
-            _$insert(_el$39, () => verdictGlyph(entry.verdict, ascii()));
+            _$insert(_el$39, () => verdictEntryGlyph(entry, ascii()));
             _$setProp(_el$40, "wrapMode", "none");
             _$setProp(_el$40, "flexShrink", 0);
             _$insert(_el$40, () => `${entry.verdict.replace("_", " ")} \xB7 turn ${entry.turn} \xB7 ${relativeTime(entry.at, now())}`);
@@ -1333,7 +1338,7 @@ var VerdictTrail = (props) => {
         children: (entry) => (() => {
           var _el$51 = _$createElement("text");
           _$setProp(_el$51, "wrapMode", "none");
-          _$insert(_el$51, () => verdictGlyph(entry.verdict, ascii()));
+          _$insert(_el$51, () => verdictEntryGlyph(entry, ascii()));
           _$effect((_$p) => _$setProp(_el$51, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
           return _el$51;
         })()
@@ -1424,7 +1429,7 @@ var HistoryBlock = (props) => {
         _$setProp(_el$57, "flexGrow", 1);
         _$setProp(_el$58, "wrapMode", "none");
         _$setProp(_el$58, "flexShrink", 0);
-        _$insert(_el$58, () => verdictGlyph(entry().verdict, ascii()));
+        _$insert(_el$58, () => verdictEntryGlyph(entry(), ascii()));
         _$setProp(_el$59, "wrapMode", "word");
         _$setProp(_el$59, "flexGrow", 1);
         _$insert(_el$59, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
@@ -2461,7 +2466,7 @@ var HudCard = (props) => {
         _$setProp3(_el$39, "width", LABEL);
         _$setProp3(_el$41, "wrapMode", "none");
         _$setProp3(_el$41, "flexShrink", 0);
-        _$insert3(_el$41, () => verdictGlyph(entry().verdict, mono()));
+        _$insert3(_el$41, () => verdictEntryGlyph(entry(), ascii()));
         _$setProp3(_el$42, "wrapMode", "none");
         _$insert3(_el$42, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
@@ -2864,7 +2869,7 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at);
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
 var isGoalSnapshot = (value) => {

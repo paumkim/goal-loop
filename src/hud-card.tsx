@@ -22,7 +22,7 @@ import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
-import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
+import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
@@ -493,7 +493,7 @@ export const HudCard = (props: {
               last
             </text>
             <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-              {verdictGlyph(entry().verdict, mono())}
+              {verdictEntryGlyph(entry(), ascii())}
             </text>
             <text wrapMode="none" fg={theme().text.muted}>
               {`${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " · this turn" : ` · ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`}
