@@ -416,7 +416,7 @@ export const HudCard = (props: {
               last
             </text>
             <text wrapMode="none" flexShrink={0} fg={verdictColor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-              {verdictGlyph(entry().verdict)}
+              {verdictGlyph(entry().verdict, mono())}
             </text>
             <text wrapMode="none" fg={theme().text.muted}>
               {`${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " · this turn" : ` · ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`}

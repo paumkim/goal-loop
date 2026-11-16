@@ -89,7 +89,7 @@ export const LoopSection = (props: {
   const theme = () => props.theme
   const mono = () => props.mono === true
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb — the same predicate as reduced motion): bar and sparkline glyphs become ink-density ASCII, never broken boxes. Evaluated once per mount.
-  const ascii = motionDisabled(process.env)
+  const ascii = () => motionDisabled(process.env) || mono()
   // In-modal acknowledgment: host toasts do not render above the /goal dialog, so a summary copy
   // flips a transient `✓ copied` on the line itself (same grammar as the dialog's footer button).
   const [copiedVersion, setCopiedVersion] = createSignal<number | null>(null)
@@ -122,7 +122,7 @@ export const LoopSection = (props: {
   const railOffset = () => Math.max(0, done() - visibleHistory().length)
   const max = () => props.goal.loopMaxLoops
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
-  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii)
+  const bar = () => renderBar(done(), max(), BAR_CELLS, ascii())
   const filledBarText = () => bar().text.slice(0, bar().filled)
   const emptyBarText = () => bar().text.slice(bar().filled)
   const durations = () => iterationDurations(history(), props.goal.setAt)
@@ -130,10 +130,11 @@ export const LoopSection = (props: {
   const shareSuffix = (index: number) => (shares()[index] === undefined ? "" : ` · ${shares()[index]}% of wall`)
   const pace = () => paceEstimate(durations(), max())
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
-  const spark = () => contextSparkline(history(), ascii)
+  const spark = () => contextSparkline(history(), ascii())
   const mixSuffix = (index: number) => {
     const mix = mixes()[index]
-    return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
+    if (!mix) return ""
+    return ascii() ? ` · ${mix.met}+ ${mix.not_met}x${mix.impossible > 0 ? ` ${mix.impossible}!` : ""}` : ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}`
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
   const paused = () => props.goal.status === "paused"
@@ -161,7 +162,7 @@ export const LoopSection = (props: {
   const livePace = () => (isTerminal() ? undefined : pace())
   const finished = () => history().length > 0 && (isTerminal() || capReached())
   const totals = () => loopTotals(history(), props.goal.setAt)
-  const finalGlyph = () => (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
+  const finalGlyph = () => ascii() ? (props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x") : (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
   const finalColor = () => mono()
     ? (props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint)
     : (props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint)
@@ -267,7 +268,7 @@ export const LoopSection = (props: {
               <box flexDirection="row" gap={2}>
                 {label(theme(), `v${entry.version}`)}
                 <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base}>
-                  {zeroTools ? "○" : "✓"}
+                  {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
                   {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}`}
@@ -296,7 +297,7 @@ export const LoopSection = (props: {
                 · last
               </text>
               <text wrapMode="none" fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-                {verdictGlyph(entry().verdict)}
+                {verdictGlyph(entry().verdict, ascii())}
               </text>
               <text wrapMode="none" fg={theme().text.faint}>
                 {turnsSince() === 0 ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}
@@ -318,21 +319,22 @@ export const LoopSection = (props: {
         </box>
       </Show>
       {/* evaluator verdict trail */}
-      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} />
+      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} ascii={ascii} />
     </box>
   )
 }
 
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
-const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean }): JSX.Element => {
+const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean; ascii?: () => boolean }): JSX.Element => {
   const mono = () => props.mono === true
+  const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const trail = () => trailWindow(props.history, 24)
   return (
     <Show when={trail().shown.length > 0}>
       <box flexDirection="row" gap={2}>
         {label(props.theme, "trail")}
         <box flexDirection="row" flexShrink={0}>
-          <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict)}</text>}</For>
+          <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict, ascii())}</text>}</For>
         </box>
         <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
           {" "}
@@ -358,6 +360,7 @@ export const HistoryBlock = (props: {
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
+  const ascii = () => motionDisabled(process.env) || mono()
   const history = () => props.goal.history ?? []
   const counts = () => verdictCounts(history())
   const last = () => lastVerdict(history())
@@ -388,7 +391,7 @@ export const HistoryBlock = (props: {
           {(entry) => (
             <box flexDirection="row" gap={2} flexGrow={1}>
               <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
-                {verdictGlyph(entry().verdict)}
+                {verdictGlyph(entry().verdict, ascii())}
               </text>
               <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
                 {`last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} · ${countsText()} · ${elapsed()} elapsed${streakSuffix()}`}
@@ -397,7 +400,7 @@ export const HistoryBlock = (props: {
           )}
         </Show>
       </box>
-      <VerdictTrail theme={theme()} history={history()} mono={mono()} />
+      <VerdictTrail theme={theme()} history={history()} mono={mono()} ascii={ascii} />
     </box>
   )
 }

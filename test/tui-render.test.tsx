@@ -454,7 +454,8 @@ describe("reduced-color surfaces", () => {
     const frame = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono />, 80, 40)
     expect(frame).toContain("loop")
     expect(frame).toContain("v3 of at most 5")
-    expect(frame).toContain("✓")
+    expect(frame).toContain("+")
+    expect(frame).not.toContain("✓")
     expect(frame).toContain("met · 9 turns · 41 tools")
   })
 

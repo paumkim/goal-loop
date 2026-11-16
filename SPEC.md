@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=809 -->
+<!-- spec-check files=43 tests=811 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2961,4 +2961,39 @@ remains the live public artifact; all work is local on dev. No docs line referen
 by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (809 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CU — reduced-color surfaces demote every verdict glyph (2026-11-16)
+
+Interpretation of this iteration: audit finding A2 (pinned re-audit at dev HEAD c9c08cf, fresh
+pass, ses_e1c980f2fffeR6lPzktJKz2sQs) — the verdict glyph family painted Unicode unconditionally;
+under NO_COLOR / TERM=dumb every verdict (met/impossible/not_met, the rail's work-produced marker,
+the mix suffix, the final tally) rendered as indistinguishable replacement cells. Bar, pips,
+caret and sparkline already demoted; this closes the one family that did not. Ride-along A4: the
+copied-state timer is cleared on plugin dispose now, like every sibling timer.
+
+292. src/core/history.ts: verdictGlyph(verdict, ascii = false) gains the ASCII arm — met → +,
+     impossible → !, not_met → x (the sparkline/bar ramp family). Exported VERDICT_*_ASCII
+     constants mirror the existing PIP_*/SPARK_*/BAR_*_ASCII pattern.
+293. src/tui-history.tsx: LoopSection and HistoryBlock each define one `ascii` predicate
+     (motionDisabled(process.env) || mono()) — the reduced-color surface as the component actually
+     sees it, not the environment alone — and every glyph decision uses it: the rail's work-produced
+     marker (. inspection / + work produced), the iteration-mix suffix (met N+, not_met Mx, the
+     impossible share as !), the final-tally glyph, all verdictGlyph call sites, and both
+     VerdictTrail instances (accepted via an optional ascii prop, default keeps Unicode).
+     Bar and sparkline consume the same predicate via () => form, so env-only NO_COLOR still
+     demotes exactly as before.
+294. src/tui.tsx: the plugin-dispose cleanup clears statusCopiedTimer (last untracked timer in
+     setup scope). src/hud-card.tsx: the card's last-verdict glyph threads mono(). Snapshot frame
+     "HudCard · mono" re-pinned (✓→x, ✓→+; two mono-reduced frames total — the .snap diff is
+     exactly the glyph demotion, 5 lines, nothing else moved).
+295. Evidence: unit layer (verdictGlyph ASCII arm in test/history.test.ts), render layer (new
+     card-level mono test asserting the ASCII glyph and no ✓; the rail mono test re-pinned to
+     ASCII; mix/final-tally paths covered by the re-pinned reduced-color snapshot). Full check
+     green: 811 tests. Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=809 to files=43 tests=811. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (811 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.

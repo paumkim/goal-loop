@@ -71,6 +71,12 @@ describe("verdictGlyph", () => {
     expect(verdictGlyph("not_met")).toBe("✗")
     expect(verdictGlyph("impossible")).toBe("⊘")
   })
+
+  test("ascii arm demotes to the sparkline ramp family under NO_COLOR / TERM=dumb", () => {
+    expect(verdictGlyph("met", true)).toBe("+")
+    expect(verdictGlyph("not_met", true)).toBe("x")
+    expect(verdictGlyph("impossible", true)).toBe("!")
+  })
 })
 
 describe("iterationDurations", () => {
