@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=776 -->
+<!-- spec-check files=43 tests=778 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2645,3 +2645,39 @@ this workstream.
 Verification (all run in the worktree): bun run compile, bun test history.test.ts tui-hud.test.tsx
 (151 pass), bun run check green (776 tests), coordinator submit + merge-next, and bun run check on
 dev shown green at the end.
+
+## Workstream CK — the ambient pill fits the terminal it lives on (2026-11-16)
+
+Interpretation of this iteration: progressive disclosure at the ambient zoom level; the 80-column
+floor applied to the one surface that had none. The 1-row pill composed an unbounded label — at 80
+columns a distress pill (v8/8, 8 pips, turns, misses pending, retries) painted ~78–96 cells into an
+absolute box with wrapMode="none" and no width cap, so trailing distress — precisely the segment the
+pill exists to surface — clipped away, and the pin suffix could not ride behind it. Audit finding #2.
+
+261. src/core/hud.ts: pillModel gains a fourth parameter, `budget` (cells, default Infinity — every
+     existing call site and unit test is byte-compatible). When bounded, the label walks a degradation
+     ladder of whole segments in priority order — `retry` drops first, then `compact pending`, then
+     `turns`, then the pips — and the final rung (the irreducible state core) is hard-truncated with
+     `…` via the width-aware, grapheme-safe `truncate`. Selection is width-aware (stringWidth), never
+     code-unit slicing. The non-loop variant ladders retry → turns → core the same way.
+262. src/tui.tsx (pill mount): the pill now budgets its label to `dimensions().width - 2` —
+     one cell of left padding, one cell of right margin — minus the landing acknowledgment suffix
+     when it rides the same line (LANDING_SUFFIX.length; the ASCII-wide … swap does not change its
+     width). The budget is live — useTerminalDimensions re-reads on resize, so rotating the terminal
+     narrow re-tiers on the next render tick. The pin budget composes as before: base now fits, so
+     pinBudget gets a real base length instead of a pre-clipped one.
+263. test/tui-hud.test.tsx: two new tests pin the ladder (loop distress goal: retry→compact→turns→pips
+     order, width ≤ budget at every rung, `…` guardrail ends the smallest budget) and the non-loop
+     ladder; plus stringWidth import. Marker bumped files=43 tests=776 to files=43 tests=778.
+     Evidence is unit-layer (the budget math is pure) plus source-layer for the mount wiring; the
+     host jump-button overlap hypothesis noted by the audit stays a hypothesis — the fix bounds the
+     pill to the terminal, and does not claim the host's reserved hit zone (unverifiable from this
+     repo). No chrome, layout, motion or interaction changes; the pill colors and hit areas are
+     untouched.
+
+No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev.
+No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (79 pass),
+bun run check green (778 tests), coordinator submit + merge-next, and bun run check on dev shown
+green at the end.

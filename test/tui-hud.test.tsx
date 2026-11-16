@@ -10,6 +10,7 @@ import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import stringWidth from "string-width"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
@@ -89,6 +90,42 @@ describe("pillModel", () => {
     expect(pill.text).toContain("●●")
     expect(pill.text).toContain("4 turns")
     expect(pill.tone).toBe("armed")
+  })
+
+  test("a budget walks the degradation ladder — retry drops first, then compact, then turns, then pips — and never exceeds the cells given", () => {
+    const distress = loopedGoal({ loopIteration: 5, loopMaxLoops: 5, turns: 123, retries: 12, loopCompact: { requestedAt: now - 60_000, iteration: 3, misses: 4 } })
+    const full = pillModel(distress, 1000 * 60 * 45)
+    expect(stringWidth(full.text)).toBeLessThanOrEqual(Number.POSITIVE_INFINITY)
+    // 70 cells: retry is dropped; turns and compact survive.
+    const dropRetry = pillModel(distress, 1000 * 60 * 45, false, 70)
+    expect(dropRetry.text).not.toContain("retry")
+    expect(dropRetry.text).toContain("compact pending")
+    expect(stringWidth(dropRetry.text)).toBeLessThanOrEqual(70)
+    // 45 cells: retry and compact both go; turns survive.
+    const dropCompact = pillModel(distress, 1000 * 60 * 45, false, 45)
+    expect(dropCompact.text).not.toContain("compact")
+    expect(dropCompact.text).not.toContain("retry")
+    expect(dropCompact.text).toContain("turns")
+    expect(stringWidth(dropCompact.text)).toBeLessThanOrEqual(45)
+    // 33 cells: turns go too; the state core + pips remain.
+    const dropTurns = pillModel(distress, 1000 * 60 * 45, false, 33)
+    expect(dropTurns.text).not.toContain("turns")
+    expect(stringWidth(dropTurns.text)).toBeLessThanOrEqual(33)
+    // An absurdly small budget hard-truncates the core with an ellipsis instead of painting wide.
+    const tiny = pillModel(distress, 1000 * 60 * 45, false, 8)
+    expect(stringWidth(tiny.text)).toBeLessThanOrEqual(8)
+    expect(tiny.text.endsWith("…")).toBe(true)
+  })
+
+  test("a budget on a non-loop goal drops retry, then turns, before truncating the core", () => {
+    const plain = loopedGoal({ loopEnabled: false, loopHistory: [], turns: 321, retries: 7 }) as unknown as GoalSnapshot
+    const dropRetry = pillModel(plain, 1000 * 60 * 41, false, 33)
+    expect(dropRetry.text).not.toContain("retry")
+    expect(dropRetry.text).toContain("turns")
+    const dropTurns = pillModel(plain, 1000 * 60 * 41, false, 25)
+    expect(dropTurns.text).not.toContain("retry")
+    expect(dropTurns.text).not.toContain("turns")
+    expect(stringWidth(dropTurns.text)).toBeLessThanOrEqual(25)
   })
 
   test("ascii mode demotes the pips and leaves the rest of the label untouched", () => {
