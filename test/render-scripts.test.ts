@@ -77,6 +77,24 @@ describe("render script smoke tests", () => {
     expect(gridChars(result.stdout)).toBeGreaterThan(200)
   }, 30_000)
 
+  test("render-card.tsx failure-first arms paint the exact remediation, never a vague warning", () => {
+    const result = run("scripts/render-card.tsx")
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    // running-hot arm: the compact remedy names the pending count and the verifyCommand escape hatch
+    expect(result.stdout).toContain("=== card · running hot (compaction pending 2/4)")
+    expect(result.stdout).toContain("compact pending 2/4")
+    expect(result.stdout).toContain("evaluator.verifyCommand")
+    // stuck arm: the state word flips and the remedy names the retry count and the clear path
+    expect(result.stdout).toContain("=== card · stuck on retries (3 failed turns)")
+    expect(result.stdout).toContain("stuck 31 turns")
+    expect(result.stdout).toContain("3 failed turns in a row")
+    // failed arm: the loud stop names the failure label and the reset path
+    expect(result.stdout).toContain("=== card · failed (loud stop) ===")
+    expect(result.stdout).toContain("failed 31 turns")
+    expect(result.stdout).toContain("provider error - /goal clear to reset")
+  }, 30_000)
+
   test("render-dialog.tsx --width=80 prints the real compact-tier footer, not a hand-painted line", () => {
     const result = run("scripts/render-dialog.tsx", ["--width=80"])
     expect(result.error).toBeUndefined()
