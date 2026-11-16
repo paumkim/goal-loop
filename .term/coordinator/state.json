@@ -1658,6 +1658,17 @@
       "submittedAt": "2026-11-16T09:22:37Z",
       "mergedAt": "2026-11-16T09:23:03Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-snapshot-stale": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-dialog-snapshot-stale",
+      "worktree": "worktrees/wt-tui-dialog-snapshot-stale",
+      "status": "done",
+      "createdAt": "2026-11-16T09:23:54Z",
+      "submittedAt": "2026-11-16T09:25:02Z",
+      "mergedAt": "2026-11-16T09:25:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
