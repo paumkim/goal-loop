@@ -8,7 +8,9 @@ or `p` in the dialog) the pill appends the condition truncated to the remaining 
 the conversation scrolls; a soft bold pulse marks an in-flight evaluation and never runs while idle or when
 reduced motion is requested (NO_COLOR, TERM=dumb). (b) A compact HUD card: a
 bordered floating panel painted above the jump row (absolute box, theme tokens only) with the condition (click
-to copy), the state row (live or terminal), the last verdict, failure-first-class remediation when the loop is hot or failed,
+to copy), the state row (live or terminal), the spend row when the server can estimate it (same
+`formatSpend` grammar and the same omit-when-unknown contract as the detail view's spend row — tokens in
+flow plus outflow plus cost), the last verdict, failure-first-class remediation when the loop is hot or failed,
 and — for a freshly armed goal, before the first turn lands — one teaching line (`hint  the evaluator reads
 only the transcript`): the evaluator never runs commands or reads files, so the condition must be provable from
 the conversation; the row disappears forever after turn 1. (c) The `/goal` detail view: a
@@ -448,7 +450,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=713 -->
+<!-- spec-check files=43 tests=716 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

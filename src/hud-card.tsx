@@ -17,7 +17,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
@@ -63,7 +63,7 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. */
 export const hudCardRows = (goal: GoalSnapshot): number =>
-  5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0)
+  5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0)
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
@@ -236,6 +236,19 @@ export const HudCard = (props: {
           {`${looped() ? `v${iteration()}${cap()}${pips() ? ` ${pips()}` : ""} · ` : ""}${turns()} turn${turns() === 1 ? "" : "s"} · ${formatDurationCoarse(props.elapsedMs())}`}
         </text>
       </box>
+      {/* spend — what this loop is costing, from the session usage RPC; omitted when the server cannot estimate (same contract as the dialog's spend row) */}
+      <Show when={g().spend}>
+        {(spend) => (
+          <box flexDirection="row" gap={1}>
+            <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
+              spend
+            </text>
+            <text wrapMode="none" fg={theme().text.muted}>
+              {formatSpend(spend())}
+            </text>
+          </box>
+        )}
+      </Show>
       {/* teaching empty state — freshly armed goal, gone after the first turn */}
       <Show when={hint()}>
         {(h) => (
