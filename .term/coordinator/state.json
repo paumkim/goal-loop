@@ -2376,6 +2376,17 @@
       "status": "done",
       "submittedAt": "2026-11-15T23:45:28Z",
       "worktree": "worktrees/wt-v4-proof"
+    },
+    "tui-stale-pill-refresh": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/hud.ts,test/**,SPEC.md,dist,docs/changelog.html",
+      "branch": "wt/tui-stale-pill-refresh",
+      "worktree": "worktrees/wt-tui-stale-pill-refresh",
+      "status": "done",
+      "createdAt": "2026-11-16T23:31:39Z",
+      "submittedAt": "2026-11-16T23:33:04Z",
+      "mergedAt": "2026-11-16T23:34:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
