@@ -62,6 +62,10 @@ export const StatusDialogBody = (props: {
   onCopyReason?: (reason: string) => void
   /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line boldens on hover). */
   onCopySummary?: (summary: string, version: number) => void
+  /** When set, clicking a rail iteration row copies that iteration's attestation line — the receipt (`v3 · met · 9 turns · 41 tools · … · sha · cost`), verbatim. The row boldens on hover. */
+  onCopyAttestation?: (line: string) => void
+  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. The row boldens on hover. */
+  onCopyTally?: (line: string) => void
   /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section boldens on hover. */
   onCopyVerify?: (tail: string) => void
   /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row boldens on hover. */
@@ -552,7 +556,7 @@ export const StatusDialogBody = (props: {
           {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else; the dossier tab does not paint it — the document carries the same bookkeeping whole */}
           <Show when={!dossier()}>
             <Show when={goal().loopEnabled}>
-              <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
+              <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} onCopyAttestation={props.onCopyAttestation} onCopyTally={props.onCopyTally} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
             </Show>
             <Show when={!goal().loopEnabled}>
               <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />

@@ -13,6 +13,8 @@ import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudAr
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
+import { iterationAttestation, finalTallyLine } from "../src/core/attestation.ts"
+import { iterationDurations, loopTotals } from "../src/core/history.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 const theme: HudCardTheme = {
@@ -1305,6 +1307,89 @@ describe("HudCard context menu — keyboard selection paints like hover", () => 
     const clearRow = spans.find((span) => span.text === "clear goal")
     expect(clearRow).toBeDefined()
     expect(clearRow!.attributes & TextAttributes.BOLD).not.toBe(0)
+    await setup.renderer.destroy()
+  })
+})
+
+describe("quotable tallies (EA): the rail row and the final tally copy one left click", () => {
+  const historyTheme: HistoryTheme = theme
+  const tallyGoal = (): GoalSnapshot => loopedGoal({
+    status: "achieved",
+    loopIteration: 2,
+    loopMaxLoops: 5,
+    loopHistory: [
+      { version: 1, condition: "c1", summary: "s1", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, sha: "a1b2c3d4e5f607182930", spend: { cost: 4.2, input: 100, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0 } },
+      { version: 2, condition: "c2", summary: "s2", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, sha: "f6e5d4c3b2a19087", spend: { cost: 0.42, input: 100, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0 } },
+    ],
+  })
+
+  const renderWired = async (goal: GoalSnapshot, mono = false) => {
+    const copied: string[] = []
+    const setup = await testRender(() => (
+      <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 47} nowMs={() => now} mono={mono} onCopyAttestation={(line) => copied.push(line)} onCopyTally={(line) => copied.push(line)} />
+    ), { width: 112, height: 30 })
+    await setup.renderOnce()
+    return { copied, setup }
+  }
+
+  test("clicking a rail row copies that iteration's attestation line verbatim", async () => {
+    const goal = tallyGoal()
+    const { copied, setup } = await renderWired(goal)
+    const frame = setup.captureCharFrame()
+    const target = find(frame, "met · 9 turns")
+    expect(target).toBeDefined()
+    await setup.mockMouse.click(target!.x + 2, target!.y)
+    await setup.renderOnce()
+    const durations = iterationDurations(goal.loopHistory!, goal.setAt)
+    expect(copied).toEqual([iterationAttestation(goal.loopHistory![0]!, durations[0]!)])
+    expect(copied[0]).toBe("v1 · met · 9 turns · 41 tools · 15m 00s · a1b2c3d · $4.20")
+    await setup.renderer.destroy()
+  })
+
+  test("clicking the v2 rail row copies the newer attestation, not the older", async () => {
+    const goal = tallyGoal()
+    const { copied, setup } = await renderWired(goal)
+    const frame = setup.captureCharFrame()
+    const target = find(frame, "met · 6 turns")
+    expect(target).toBeDefined()
+    await setup.mockMouse.click(target!.x + 2, target!.y)
+    await setup.renderOnce()
+    expect(copied).toEqual(["v2 · met · 6 turns · 23 tools · 15m 00s · f6e5d4c · $0.42"])
+    await setup.renderer.destroy()
+  })
+
+  test("clicking the final tally copies loop voice: status, counts, wall, cost", async () => {
+    const goal = tallyGoal()
+    const { copied, setup } = await renderWired(goal)
+    const frame = setup.captureCharFrame()
+    const target = find(frame, "loop achieved")
+    expect(target).toBeDefined()
+    await setup.mockMouse.click(target!.x + 2, target!.y)
+    await setup.renderOnce()
+    expect(copied).toEqual([finalTallyLine("achieved", loopTotals(goal.loopHistory!, goal.setAt))])
+    expect(copied[0]).toBe("loop achieved · 2 iterations · 15 turns · 64 tools · 30m wall · $4.62")
+    await setup.renderer.destroy()
+  })
+
+  test("the copied acknowledgment rides the clicked row for the beat", async () => {
+    const goal = tallyGoal()
+    const { setup } = await renderWired(goal)
+    const frame = setup.captureCharFrame()
+    const target = find(frame, "met · 6 turns")
+    await setup.mockMouse.click(target!.x + 2, target!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("unwired, the rail and the tally paint exactly as before — no handlers, no ack", async () => {
+    const goal = tallyGoal()
+    const { frame, setup } = await render(() => (
+      <LoopSection goal={goal} theme={historyTheme} elapsedMs={() => 1000 * 60 * 47} nowMs={() => now} />
+    ), 112, 30)
+    expect(frame).toContain("met · 9 turns")
+    expect(frame).toContain("loop achieved")
+    expect(frame).not.toContain("✓ copied")
     await setup.renderer.destroy()
   })
 })

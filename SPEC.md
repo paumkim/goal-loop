@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=49 tests=1086 -->
+<!-- spec-check files=50 tests=1110 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4928,3 +4928,66 @@ and the suite pins both the tones and the mouse grammar end-to-end.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=49 tests=1086.
+
+## Workstream EA — the tallies are quotable: the rail attestation row and the final tally copy one left click (2026-11-16)
+
+Interpretation: the rail's `vN` row and the `final` tally row answer "what did this loop
+actually do" with painted numbers, but those numbers were ink to stare at, not payload —
+catching them for an issue, a handoff, or a review meant transcribing them by hand, drift
+included. The mouse-first clause asks that what is painted be quotable. Both rows are now
+click targets carrying exactly the line they paint, built by one shared pure module so the
+copy can never quote numbers the paint disagrees with — the "quoted once" contract the
+dossier established (DT) applied to the loop's own bookkeeping.
+
+461. src/core/attestation.ts — new pure module, no I/O. `iterationAttestation(entry,
+     durationMs)` builds the iteration receipt `v3 · met · 9 turns · 41 tools · 15m 00s ·
+     already satisfied at HEAD · a1b2c3d · $4.20` — version, verdict, turns, tools,
+     duration (formatDuration; omitted at 0/NaN/negative, never a lying `0s`), the
+     zero-tool tag when `toolCalls === 0` (the quote explains itself off-surface), the
+     sha sliced to the seven leading cells the rail paints (absent/blank → omitted,
+     never guessed), and the cost only when it measures above zero.
+     `finalTallyLine(status, totals)` builds the loop's receipt — the exact string the
+     `final` row paints: status word, iterations, turns, tools, `formatDurationCoarse`
+     wall (non-finite clamps to zero — never `NaNhNaNm`), and the spend honestly:
+     `$4.62` when every iteration measured, `$12.34 across 3/5 measured` when partial,
+     nothing when none — partial measurement is never presented as complete.
+     `quoteSha` is the one sha slicer; `AttestationTotals` restates the loopTotals shape
+     so the module does not import the renderer's world. Unit-tested in
+     test/attestation.test.ts.
+462. src/tui-history.tsx — LoopSection wires both. The rail attestation row gains
+     left-click + stopPropagation copy (wired via `onCopyAttestation?: (line) => void`);
+     the row boldens on hover (the NO_COLOR contract); after a copy a faint `✓ copied`
+     (ascii `+ copied`) rides the row end as a flexShrink-0 sibling — outside the
+     wrapping text, so the ack never wraps or shifts the row. The `final` tally row does
+     the same via `onCopyTally?: (line) => void`, same bolden-on-hover, same acknowledgment.
+     Right and middle clicks are inert; resting paint is byte-identical to before (hover
+     only boldens, the ack only post-click); unwired, no handlers are attached and the
+     paint is unchanged. The why ledger, trail, summary rail and fold rows are untouched.
+463. src/status-dialog.tsx — the dialog body forwards `onCopyAttestation` / `onCopyTally`
+     into LoopSection; src/tui.tsx wires both to the existing clipboard funnel
+     (`copyToClipboard(line, sessionID, "attestation" | "tally")`), extending the `what`
+     union and `copyLabel` ("attestation copied" / "tally copied"); the same toast
+     grammar and the same `copyToClipboardOSC52` arm every other copy rides. No chord, no
+     footer furniture — the palette is not involved; these are pointer affordances on
+     painted rows.
+464. Tests: +19 unit (attestation.test.ts: sha slicing, singular forms, hour/minute/second
+     durations, zero-tool tag, duration/sha/cost omissions, NaN clamps, partial-measurement
+     tally) + 5 interactive (tui-hud.test.tsx: v1 row click copies exactly
+     `v1 · met · 9 turns · 41 tools · 15m 00s · a1b2c3d · $4.20` via real mockMouse hit
+     coordinates; v2 click copies the newer line, not the older; the `final` row copies
+     `loop achieved · 2 iterations · 15 turns · 64 tools · 30m wall · $4.62`; the ack
+     paints on the clicked row; unwired paints identically with no ack). Package integrity
+     re-pinned: the pack grows by one shipped file (49 → 50); the `paths.length` pin moves
+     in the same commit. Tests: 1110 pass, 0 fail (43 files).
+465. Honest limits: clicks are verified at the headless test-renderer layer (hit-test
+     coordinates + clipboard payloads); live-TUI behaviour remains unverifiable. The
+     attestation copies the row's suffix measurements, not the rail's full suffix set —
+     the share-of-wall and ended-ago suffixes are deliberately excluded (they are relative
+     to render time, so the quote would rot); the `shaSuffix` furniture elsewhere (why
+     ledger) remains inert; the trail dots keep their reason-copy grammar. The copied
+     payload is the record's own bytes — nothing added, nothing elided beyond the stated
+     duration omission at zero/NaN.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
+<!-- spec-check files=50 tests=1110 -->
