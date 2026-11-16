@@ -1482,6 +1482,17 @@
       "submittedAt": "2026-11-16T07:52:49Z",
       "mergedAt": "2026-11-16T07:53:05Z",
       "mergedInto": "dev"
+    },
+    "tui-ascii-fallback": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/tui-history.tsx,src/status-dialog.tsx,test/history.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-ascii-fallback",
+      "worktree": "worktrees/wt-tui-ascii-fallback",
+      "status": "done",
+      "createdAt": "2026-11-16T07:55:20Z",
+      "submittedAt": "2026-11-16T07:58:59Z",
+      "mergedAt": "2026-11-16T08:00:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
