@@ -1133,6 +1133,121 @@ function signAckSegment(sign, ascii) {
   return ` (${ok} ${sign.verified}/${sign.unique} signed)`;
 }
 
+// src/core/dossier-seal.ts
+import { writeFileSync as writeFileSync2 } from "fs";
+import { join as join2, resolve as resolve2 } from "path";
+var pad2 = (n) => String(n).padStart(2, "0");
+var sealedDossierName = (nowMs, attempt = 0) => {
+  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  const stamp = `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` + `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`;
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-dossier-sealed-${stamp}${suffix}.md`;
+};
+var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
+var verifyCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var reachCell = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
+var signCell = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var cleanShaCount = (verification, reach, sign) => {
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  let clean = 0;
+  for (const check of verification.checks) {
+    if (check.status === "present" && reachStatus.get(check.sha) === "ancestor" && signStatus.get(check.sha) === "verified") {
+      clean += 1;
+    }
+  }
+  return clean;
+};
+function attestationAppendix(goal, verification, reach, sign, nowMs, directory) {
+  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const lines = [
+    "## Attestation (freshly probed at seal time)",
+    "",
+    `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
+    ""
+  ];
+  if (verification.unique === 0) {
+    lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
+    return lines;
+  }
+  const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
+  const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
+  lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
+  for (const check of verification.checks) {
+    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+  }
+  const clean = cleanShaCount(verification, reach, sign);
+  lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
+  return lines;
+}
+function sealRecord(goal, directory, nowMs, probes = {}) {
+  const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
+  const reachProbe = probes.reach ?? gitAncestorProbe(directory);
+  const signProbe = probes.sign ?? gitSignProbe(directory);
+  const verification = verifyRecord(goal, verifyProbe);
+  const reach = reachRecord(goal, reachProbe);
+  const sign = signRecord(goal, signProbe);
+  const clean = cleanShaCount(verification, reach, sign);
+  const base = buildLoopDossier(goal, nowMs);
+  const appendix = attestationAppendix(goal, verification, reach, sign, nowMs, directory);
+  const markdown = `${base}
+
+${appendix.join(`
+`)}`;
+  return { markdown, verification, reach, sign, unique: verification.unique, clean };
+}
+function exportSealedDossier(goal, nowMs, dir, probes = {}) {
+  const targetDir = resolve2(dir);
+  const seal = sealRecord(goal, targetDir, nowMs, probes);
+  const bytes = Buffer.byteLength(seal.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join2(targetDir, sealedDossierName(nowMs, attempt));
+    try {
+      writeFileSync2(path, seal.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        unique: seal.unique,
+        clean: seal.clean,
+        verification: seal.verification,
+        reach: seal.reach,
+        sign: seal.sign
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free sealed-dossier filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function sealSummaryLine(seal) {
+  if (seal.unique === 0)
+    return "record quotes no shas to seal";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  const unknown = seal.verification.unknown + seal.reach.unknown + seal.sign.unknown;
+  if (hard === 0 && unknown === 0)
+    return `record sealed: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  if (hard > 0)
+    return `record sealed with gaps: ${seal.clean} of ${seal.unique} shas pass all three checks`;
+  return `record sealed, unverifiable: ${unknown} of ${3 * seal.unique} checks could not answer`;
+}
+function sealAckSegment(seal, ascii) {
+  const ok = ascii ? "+" : "\u2713";
+  const bad = ascii ? "-" : "\u2717";
+  if (seal.unique === 0)
+    return ascii ? " (no shas)" : " (no shas to seal)";
+  const hard = seal.verification.missing + seal.reach.unreached + seal.sign.unverified;
+  if (hard > 0)
+    return ` (${bad} ${seal.clean} of ${seal.unique} sealed)`;
+  if (seal.clean < seal.unique)
+    return ` (! ${seal.clean} of ${seal.unique} sealed)`;
+  return ` (${ok} ${seal.clean}/${seal.unique} sealed)`;
+}
+
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
 import { createComponent as _$createComponent2 } from "@opentui/solid";
@@ -2694,6 +2809,13 @@ var StatusDialogBody = (props) => {
       clearTimeout(signTimer);
   });
   const signSuffix = () => signAck() ?? "";
+  const [sealAck, setSealAck] = createSignal2(null);
+  let sealTimer;
+  onCleanup2(() => {
+    if (sealTimer)
+      clearTimeout(sealTimer);
+  });
+  const sealSuffix = () => sealAck() ?? "";
   const [reasonHovered, setReasonHovered] = createSignal2(false);
   const [conditionHovered, setConditionHovered] = createSignal2(false);
   const [verifyHovered, setVerifyHovered] = createSignal2(false);
@@ -2702,6 +2824,7 @@ var StatusDialogBody = (props) => {
   const [verifyDossierHovered, setVerifyDossierHovered] = createSignal2(false);
   const [reachDossierHovered, setReachDossierHovered] = createSignal2(false);
   const [signDossierHovered, setSignDossierHovered] = createSignal2(false);
+  const [sealDossierHovered, setSealDossierHovered] = createSignal2(false);
   const [sectionHovered, setSectionHovered] = createSignal2(undefined);
   const [othersHovered, setOthersHovered] = createSignal2(null);
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal2(false);
@@ -2800,6 +2923,19 @@ var StatusDialogBody = (props) => {
         if (signTimer)
           clearTimeout(signTimer);
         signTimer = setTimeout(() => setSignAck(null), 2400);
+      }
+    } catch {}
+  };
+  const sealDossier = () => {
+    if (!props.onSealDossier)
+      return;
+    try {
+      const outcome = props.onSealDossier();
+      if (outcome) {
+        setSealAck(sealAckSegment(outcome, ascii));
+        if (sealTimer)
+          clearTimeout(sealTimer);
+        sealTimer = setTimeout(() => setSealAck(null), 2400);
       }
     } catch {}
   };
@@ -3539,6 +3675,51 @@ var StatusDialogBody = (props) => {
                 return _el$92;
               })() : null;
             })(), _el$36);
+            _$insert2(_el$35, (() => {
+              var _c$8 = _$memo2(() => !!props.onSealDossier);
+              return () => _c$8() ? (() => {
+                var _el$96 = _$createElement2("box"), _el$97 = _$createElement2("text");
+                _$insertNode2(_el$96, _el$97);
+                _$setProp2(_el$96, "flexDirection", "row");
+                _$setProp2(_el$96, "gap", 2);
+                _$setProp2(_el$96, "zIndex", 1);
+                _$setProp2(_el$96, "onMouseUp", (event) => {
+                  if (event.button !== 0)
+                    return;
+                  event.stopPropagation();
+                  sealDossier();
+                });
+                _$setProp2(_el$96, "onMouseOver", () => setSealDossierHovered(true));
+                _$setProp2(_el$96, "onMouseOut", () => setSealDossierHovered(false));
+                _$insert2(_el$96, () => label("seal"), _el$97);
+                _$setProp2(_el$97, "wrapMode", "word");
+                _$setProp2(_el$97, "flexGrow", 1);
+                _$insert2(_el$97, () => `the record, sealed into a file${sealSuffix()}`);
+                _$insert2(_el$96, _$createComponent2(Show2, {
+                  get when() {
+                    return sealDossierHovered();
+                  },
+                  get children() {
+                    var _el$98 = _$createElement2("text");
+                    _$insertNode2(_el$98, _$createTextNode2(`seal`));
+                    _$setProp2(_el$98, "wrapMode", "none");
+                    _$setProp2(_el$98, "flexShrink", 0);
+                    _$effect2((_$p) => _$setProp2(_el$98, "fg", theme().text.faint, _$p));
+                    return _el$98;
+                  }
+                }), null);
+                _$effect2((_p$) => {
+                  var _v$35 = theme().text.base, _v$36 = sealDossierHovered() ? TextAttributes2.BOLD : undefined;
+                  _v$35 !== _p$.e && (_p$.e = _$setProp2(_el$97, "fg", _v$35, _p$.e));
+                  _v$36 !== _p$.t && (_p$.t = _$setProp2(_el$97, "attributes", _v$36, _p$.t));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined
+                });
+                return _el$96;
+              })() : null;
+            })(), _el$36);
             _$insertNode2(_el$36, _el$37);
             _$setProp2(_el$36, "flexDirection", "row");
             _$setProp2(_el$36, "gap", 2);
@@ -3623,35 +3804,35 @@ var StatusDialogBody = (props) => {
                     const active = () => copied() === `section:${entry.id}`;
                     const hovered = () => sectionHovered() === entry.id;
                     return (() => {
-                      var _el$96 = _$createElement2("box"), _el$97 = _$createElement2("text");
-                      _$insertNode2(_el$96, _el$97);
-                      _$setProp2(_el$96, "flexDirection", "row");
-                      _$setProp2(_el$96, "gap", 1);
-                      _$setProp2(_el$96, "flexShrink", 0);
-                      _$setProp2(_el$96, "width", 14);
-                      _$setProp2(_el$96, "onMouseUp", (event) => {
+                      var _el$100 = _$createElement2("box"), _el$101 = _$createElement2("text");
+                      _$insertNode2(_el$100, _el$101);
+                      _$setProp2(_el$100, "flexDirection", "row");
+                      _$setProp2(_el$100, "gap", 1);
+                      _$setProp2(_el$100, "flexShrink", 0);
+                      _$setProp2(_el$100, "width", 14);
+                      _$setProp2(_el$100, "onMouseUp", (event) => {
                         if (event.button !== 0)
                           return;
                         event.stopPropagation();
                         copySection(entry);
                       });
-                      _$setProp2(_el$96, "onMouseOver", () => setSectionHovered(entry.id));
-                      _$setProp2(_el$96, "onMouseOut", () => setSectionHovered(undefined));
-                      _$setProp2(_el$97, "wrapMode", "none");
-                      _$insert2(_el$97, (() => {
-                        var _c$8 = _$memo2(() => !!active());
-                        return () => _c$8() ? ascii ? "+ copied" : "\u2713 copied" : entry.label;
+                      _$setProp2(_el$100, "onMouseOver", () => setSectionHovered(entry.id));
+                      _$setProp2(_el$100, "onMouseOut", () => setSectionHovered(undefined));
+                      _$setProp2(_el$101, "wrapMode", "none");
+                      _$insert2(_el$101, (() => {
+                        var _c$9 = _$memo2(() => !!active());
+                        return () => _c$9() ? ascii ? "+ copied" : "\u2713 copied" : entry.label;
                       })());
                       _$effect2((_p$) => {
-                        var _v$35 = hovered() || active() ? theme().text.base : theme().text.faint, _v$36 = hovered() || active() ? TextAttributes2.BOLD : undefined;
-                        _v$35 !== _p$.e && (_p$.e = _$setProp2(_el$97, "fg", _v$35, _p$.e));
-                        _v$36 !== _p$.t && (_p$.t = _$setProp2(_el$97, "attributes", _v$36, _p$.t));
+                        var _v$37 = hovered() || active() ? theme().text.base : theme().text.faint, _v$38 = hovered() || active() ? TextAttributes2.BOLD : undefined;
+                        _v$37 !== _p$.e && (_p$.e = _$setProp2(_el$101, "fg", _v$37, _p$.e));
+                        _v$38 !== _p$.t && (_p$.t = _$setProp2(_el$101, "attributes", _v$38, _p$.t));
                         return _p$;
                       }, {
                         e: undefined,
                         t: undefined
                       });
-                      return _el$96;
+                      return _el$100;
                     })();
                   }
                 }));
@@ -3763,16 +3944,16 @@ var StatusDialogBody = (props) => {
                 return othersLive();
               },
               children: (rows) => (() => {
-                var _el$98 = _$createElement2("box"), _el$99 = _$createElement2("box"), _el$100 = _$createElement2("text");
-                _$insertNode2(_el$98, _el$99);
-                _$setProp2(_el$98, "flexDirection", "column");
-                _$insertNode2(_el$99, _el$100);
-                _$setProp2(_el$99, "flexDirection", "row");
-                _$setProp2(_el$99, "gap", 2);
-                _$insert2(_el$99, () => label("elsewhere"), _el$100);
-                _$setProp2(_el$100, "wrapMode", "none");
-                _$insert2(_el$100, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 hover a row to open its transcript" : ""}`);
-                _$insert2(_el$98, _$createComponent2(For2, {
+                var _el$102 = _$createElement2("box"), _el$103 = _$createElement2("box"), _el$104 = _$createElement2("text");
+                _$insertNode2(_el$102, _el$103);
+                _$setProp2(_el$102, "flexDirection", "column");
+                _$insertNode2(_el$103, _el$104);
+                _$setProp2(_el$103, "flexDirection", "row");
+                _$setProp2(_el$103, "gap", 2);
+                _$insert2(_el$103, () => label("elsewhere"), _el$104);
+                _$setProp2(_el$104, "wrapMode", "none");
+                _$insert2(_el$104, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 hover a row to open its transcript" : ""}`);
+                _$insert2(_el$102, _$createComponent2(For2, {
                   get each() {
                     return _$memo2(() => !!othersExpanded())() ? rows() : rows().slice(0, OTHERS_VISIBLE);
                   },
@@ -3781,14 +3962,14 @@ var StatusDialogBody = (props) => {
                     const hovered = () => othersHovered() === other.sessionID;
                     const digit = () => index() < FOREIGN_ROWS_VISIBLE ? index() + 1 : undefined;
                     return (() => {
-                      var _el$104 = _$createElement2("box"), _el$105 = _$createElement2("text"), _el$106 = _$createElement2("text"), _el$107 = _$createElement2("text"), _el$108 = _$createElement2("text");
-                      _$insertNode2(_el$104, _el$105);
-                      _$insertNode2(_el$104, _el$106);
-                      _$insertNode2(_el$104, _el$107);
-                      _$insertNode2(_el$104, _el$108);
-                      _$setProp2(_el$104, "flexDirection", "row");
-                      _$setProp2(_el$104, "gap", 2);
-                      _$setProp2(_el$104, "onMouseUp", jump ? (event) => {
+                      var _el$108 = _$createElement2("box"), _el$109 = _$createElement2("text"), _el$110 = _$createElement2("text"), _el$111 = _$createElement2("text"), _el$112 = _$createElement2("text");
+                      _$insertNode2(_el$108, _el$109);
+                      _$insertNode2(_el$108, _el$110);
+                      _$insertNode2(_el$108, _el$111);
+                      _$insertNode2(_el$108, _el$112);
+                      _$setProp2(_el$108, "flexDirection", "row");
+                      _$setProp2(_el$108, "gap", 2);
+                      _$setProp2(_el$108, "onMouseUp", jump ? (event) => {
                         if (event.button !== 0)
                           return;
                         event.stopPropagation();
@@ -3796,58 +3977,58 @@ var StatusDialogBody = (props) => {
                           jump(other.sessionID);
                         } catch {}
                       } : undefined);
-                      _$setProp2(_el$104, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
-                      _$setProp2(_el$104, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
-                      _$insert2(_el$104, (() => {
-                        var _c$0 = _$memo2(() => !!(jump && digit() !== undefined));
-                        return () => _c$0() ? (() => {
-                          var _el$110 = _$createElement2("text");
-                          _$setProp2(_el$110, "wrapMode", "none");
-                          _$setProp2(_el$110, "flexShrink", 0);
-                          _$setProp2(_el$110, "width", LABEL);
-                          _$insert2(_el$110, digit);
-                          _$effect2((_$p) => _$setProp2(_el$110, "fg", theme().text.faint, _$p));
-                          return _el$110;
+                      _$setProp2(_el$108, "onMouseOver", jump ? () => setOthersHovered(other.sessionID) : undefined);
+                      _$setProp2(_el$108, "onMouseOut", jump ? () => setOthersHovered(null) : undefined);
+                      _$insert2(_el$108, (() => {
+                        var _c$1 = _$memo2(() => !!(jump && digit() !== undefined));
+                        return () => _c$1() ? (() => {
+                          var _el$114 = _$createElement2("text");
+                          _$setProp2(_el$114, "wrapMode", "none");
+                          _$setProp2(_el$114, "flexShrink", 0);
+                          _$setProp2(_el$114, "width", LABEL);
+                          _$insert2(_el$114, digit);
+                          _$effect2((_$p) => _$setProp2(_el$114, "fg", theme().text.faint, _$p));
+                          return _el$114;
                         })() : label("");
-                      })(), _el$105);
-                      _$setProp2(_el$105, "wrapMode", "none");
-                      _$setProp2(_el$105, "flexShrink", 0);
-                      _$insert2(_el$105, (() => {
-                        var _c$1 = _$memo2(() => !!mono());
-                        return () => _c$1() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
+                      })(), _el$109);
+                      _$setProp2(_el$109, "wrapMode", "none");
+                      _$setProp2(_el$109, "flexShrink", 0);
+                      _$insert2(_el$109, (() => {
+                        var _c$10 = _$memo2(() => !!mono());
+                        return () => _c$10() ? other.status === "active" ? "*" : "|" : other.status === "active" ? "\u25CF" : "\u2016";
                       })());
-                      _$setProp2(_el$106, "wrapMode", "none");
-                      _$setProp2(_el$106, "flexShrink", 0);
-                      _$insert2(_el$106, () => sessionTag(other.sessionID));
-                      _$setProp2(_el$107, "wrapMode", "none");
-                      _$setProp2(_el$107, "flexShrink", 0);
-                      _$insert2(_el$107, (() => {
-                        var _c$10 = _$memo2(() => !!other.loopEnabled);
-                        return () => _c$10() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
+                      _$setProp2(_el$110, "wrapMode", "none");
+                      _$setProp2(_el$110, "flexShrink", 0);
+                      _$insert2(_el$110, () => sessionTag(other.sessionID));
+                      _$setProp2(_el$111, "wrapMode", "none");
+                      _$setProp2(_el$111, "flexShrink", 0);
+                      _$insert2(_el$111, (() => {
+                        var _c$11 = _$memo2(() => !!other.loopEnabled);
+                        return () => _c$11() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
                       })());
-                      _$setProp2(_el$108, "wrapMode", "none");
-                      _$setProp2(_el$108, "flexGrow", 1);
-                      _$insert2(_el$108, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
-                      _$insert2(_el$104, _$createComponent2(Show2, {
+                      _$setProp2(_el$112, "wrapMode", "none");
+                      _$setProp2(_el$112, "flexGrow", 1);
+                      _$insert2(_el$112, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
+                      _$insert2(_el$108, _$createComponent2(Show2, {
                         get when() {
                           return jump !== undefined && hovered();
                         },
                         get children() {
-                          var _el$109 = _$createElement2("text");
-                          _$setProp2(_el$109, "wrapMode", "none");
-                          _$setProp2(_el$109, "flexShrink", 0);
-                          _$insert2(_el$109, ascii ? "-> transcript" : "\u2192 transcript");
-                          _$effect2((_$p) => _$setProp2(_el$109, "fg", theme().text.faint, _$p));
-                          return _el$109;
+                          var _el$113 = _$createElement2("text");
+                          _$setProp2(_el$113, "wrapMode", "none");
+                          _$setProp2(_el$113, "flexShrink", 0);
+                          _$insert2(_el$113, ascii ? "-> transcript" : "\u2192 transcript");
+                          _$effect2((_$p) => _$setProp2(_el$113, "fg", theme().text.faint, _$p));
+                          return _el$113;
                         }
                       }), null);
                       _$effect2((_p$) => {
-                        var _v$39 = stateAccentColor(theme(), other.status, false, mono()), _v$40 = theme().text.muted, _v$41 = theme().text.faint, _v$42 = theme().text.muted, _v$43 = jump !== undefined && hovered() ? TextAttributes2.BOLD : undefined;
-                        _v$39 !== _p$.e && (_p$.e = _$setProp2(_el$105, "fg", _v$39, _p$.e));
-                        _v$40 !== _p$.t && (_p$.t = _$setProp2(_el$106, "fg", _v$40, _p$.t));
-                        _v$41 !== _p$.a && (_p$.a = _$setProp2(_el$107, "fg", _v$41, _p$.a));
-                        _v$42 !== _p$.o && (_p$.o = _$setProp2(_el$108, "fg", _v$42, _p$.o));
-                        _v$43 !== _p$.i && (_p$.i = _$setProp2(_el$108, "attributes", _v$43, _p$.i));
+                        var _v$41 = stateAccentColor(theme(), other.status, false, mono()), _v$42 = theme().text.muted, _v$43 = theme().text.faint, _v$44 = theme().text.muted, _v$45 = jump !== undefined && hovered() ? TextAttributes2.BOLD : undefined;
+                        _v$41 !== _p$.e && (_p$.e = _$setProp2(_el$109, "fg", _v$41, _p$.e));
+                        _v$42 !== _p$.t && (_p$.t = _$setProp2(_el$110, "fg", _v$42, _p$.t));
+                        _v$43 !== _p$.a && (_p$.a = _$setProp2(_el$111, "fg", _v$43, _p$.a));
+                        _v$44 !== _p$.o && (_p$.o = _$setProp2(_el$112, "fg", _v$44, _p$.o));
+                        _v$45 !== _p$.i && (_p$.i = _$setProp2(_el$112, "attributes", _v$45, _p$.i));
                         return _p$;
                       }, {
                         e: undefined,
@@ -3856,60 +4037,60 @@ var StatusDialogBody = (props) => {
                         o: undefined,
                         i: undefined
                       });
-                      return _el$104;
+                      return _el$108;
                     })();
                   }
                 }), null);
-                _$insert2(_el$98, _$createComponent2(Show2, {
+                _$insert2(_el$102, _$createComponent2(Show2, {
                   get when() {
                     return rows().length > OTHERS_VISIBLE;
                   },
                   get children() {
-                    var _el$101 = _$createElement2("box"), _el$102 = _$createElement2("text");
-                    _$insertNode2(_el$101, _el$102);
-                    _$setProp2(_el$101, "flexDirection", "row");
-                    _$setProp2(_el$101, "gap", 2);
-                    _$setProp2(_el$101, "onMouseUp", (event) => {
+                    var _el$105 = _$createElement2("box"), _el$106 = _$createElement2("text");
+                    _$insertNode2(_el$105, _el$106);
+                    _$setProp2(_el$105, "flexDirection", "row");
+                    _$setProp2(_el$105, "gap", 2);
+                    _$setProp2(_el$105, "onMouseUp", (event) => {
                       if (event.button !== 0)
                         return;
                       event.stopPropagation();
                       toggleOthersExpanded();
                     });
-                    _$setProp2(_el$101, "onMouseOver", () => setFoldHovered(true));
-                    _$setProp2(_el$101, "onMouseOut", () => setFoldHovered(false));
-                    _$insert2(_el$101, () => label(""), _el$102);
-                    _$setProp2(_el$102, "wrapMode", "none");
-                    _$insert2(_el$102, (() => {
-                      var _c$9 = _$memo2(() => !!othersExpanded());
-                      return () => _c$9() ? `fold to ${FOREIGN_ROWS_VISIBLE}` : `+${rows().length - OTHERS_VISIBLE} more`;
+                    _$setProp2(_el$105, "onMouseOver", () => setFoldHovered(true));
+                    _$setProp2(_el$105, "onMouseOut", () => setFoldHovered(false));
+                    _$insert2(_el$105, () => label(""), _el$106);
+                    _$setProp2(_el$106, "wrapMode", "none");
+                    _$insert2(_el$106, (() => {
+                      var _c$0 = _$memo2(() => !!othersExpanded());
+                      return () => _c$0() ? `fold to ${FOREIGN_ROWS_VISIBLE}` : `+${rows().length - OTHERS_VISIBLE} more`;
                     })());
-                    _$insert2(_el$101, _$createComponent2(Show2, {
+                    _$insert2(_el$105, _$createComponent2(Show2, {
                       get when() {
                         return foldHovered();
                       },
                       get children() {
-                        var _el$103 = _$createElement2("text");
-                        _$setProp2(_el$103, "wrapMode", "none");
-                        _$setProp2(_el$103, "flexShrink", 0);
-                        _$insert2(_el$103, () => props.onToggleExpandedOthers ? "click \xB7 m" : "click");
-                        _$effect2((_$p) => _$setProp2(_el$103, "fg", theme().text.faint, _$p));
-                        return _el$103;
+                        var _el$107 = _$createElement2("text");
+                        _$setProp2(_el$107, "wrapMode", "none");
+                        _$setProp2(_el$107, "flexShrink", 0);
+                        _$insert2(_el$107, () => props.onToggleExpandedOthers ? "click \xB7 m" : "click");
+                        _$effect2((_$p) => _$setProp2(_el$107, "fg", theme().text.faint, _$p));
+                        return _el$107;
                       }
                     }), null);
                     _$effect2((_p$) => {
-                      var _v$37 = foldHovered() ? theme().text.base : theme().text.muted, _v$38 = foldHovered() && mono() ? TextAttributes2.BOLD : undefined;
-                      _v$37 !== _p$.e && (_p$.e = _$setProp2(_el$102, "fg", _v$37, _p$.e));
-                      _v$38 !== _p$.t && (_p$.t = _$setProp2(_el$102, "attributes", _v$38, _p$.t));
+                      var _v$39 = foldHovered() ? theme().text.base : theme().text.muted, _v$40 = foldHovered() && mono() ? TextAttributes2.BOLD : undefined;
+                      _v$39 !== _p$.e && (_p$.e = _$setProp2(_el$106, "fg", _v$39, _p$.e));
+                      _v$40 !== _p$.t && (_p$.t = _$setProp2(_el$106, "attributes", _v$40, _p$.t));
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined
                     });
-                    return _el$101;
+                    return _el$105;
                   }
                 }), null);
-                _$effect2((_$p) => _$setProp2(_el$100, "fg", theme().text.faint, _$p));
-                return _el$98;
+                _$effect2((_$p) => _$setProp2(_el$104, "fg", theme().text.faint, _$p));
+                return _el$102;
               })()
             });
           }
@@ -5420,6 +5601,10 @@ var tui_default = Plugin.define({
           const g = entries()[sessionID]?.goal;
           return signRecordAction(sessionID, g);
         },
+        onSealDossier: () => {
+          const g = entries()[sessionID]?.goal;
+          return sealRecordAction(sessionID, g);
+        },
         onCopyDossierSection: (label, raw) => copyToClipboard(raw, sessionID, "section"),
         onViewTranscript: (target) => {
           try {
@@ -6058,6 +6243,33 @@ var tui_default = Plugin.define({
         return;
       }
     };
+    const sealRecordAction = (sessionID, goal) => {
+      if (!goal || !sessionID)
+        return;
+      try {
+        const result = exportSealedDossier(goal, Date.now(), process.cwd());
+        const summary = sealSummaryLine(result);
+        const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps";
+        const variant = result.clean === result.unique ? "success" : "warning";
+        safeToast({
+          title,
+          message: `${result.path} \xB7 ${summary}`,
+          variant,
+          duration: 6000,
+          sessionID
+        });
+        return result;
+      } catch (error) {
+        safeToast({
+          title: "seal failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
+        return;
+      }
+    };
     const requestClearGoal = (sessionID) => {
       if (!sessionID)
         return;
@@ -6593,6 +6805,19 @@ var tui_default = Plugin.define({
             const sessionID = currentSession();
             const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
             signRecordAction(sessionID, goal);
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.seal",
+        title: "Goal: seal the dossier with a fresh attestation (file)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            sealRecordAction(sessionID, goal);
           } catch {}
         }
       }, {
