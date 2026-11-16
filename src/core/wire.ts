@@ -128,6 +128,7 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress)) return false
   if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry))) return false
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact)) return false
+  if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0)) return false
   return true
 }
 

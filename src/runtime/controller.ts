@@ -25,10 +25,10 @@ import type { BoundaryCompactResult } from "./compactor.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"
 
 /**
- * Minimum gap between two re-anchor synthetics queued for the same session. A compaction can land for several
- * reasons at once (host auto-compact, a boundary request, a restart restore); each used to queue its own
- * re-anchor and the "goal-loop · re-anchor after compaction" entries stacked up in the transcript. One re-anchor
- * carries the same ground truth for all of them.
+ * Minimum gap between two re-anchors armed for the same session. A compaction can land for several
+ * reasons at once (host auto-compact, a boundary request, a restart restore); each used to push its own
+ * re-anchor line and the "goal-loop · re-anchor after compaction" entries stacked up in the transcript.
+ * One re-anchor carries the same ground truth for all of them.
  */
 // Re-anchor coalescing shares the compaction cooldown window (same "don't hammer the host" budget).
 const REANCHOR_MIN_INTERVAL_MS = COMPACT_COOLDOWN_MS
@@ -226,10 +226,11 @@ export class GoalController {
   /**
    * The host reported a compaction ended for the session. An ended event is authoritative — it means the host
    * compacted, so any pending boundary-compaction request is recorded as landed (misses reset, fresh requests
-   * re-enabled, one success notice), regardless of what the size estimate says. The mid-turn landing also
-   * re-anchors a live loop immediately (queued, resume: false) so the impacted iteration stops working off a
-   * context that no longer exists. A landing is never silent. Plain goals are re-anchored nowhere: they carry
-   * no loop ground truth to restore, and plain (non-loop) records never arm boundary requests at all.
+   * re-enabled, one success notice), regardless of what the size estimate says. The landing also re-anchors
+   * a live loop immediately: the re-stated ground truth rides the SYSTEM part of the next model request
+   * (one-shot injection via the `context` hook), never the transcript. A landing is never silent. Plain
+   * goals are re-anchored nowhere: they carry no loop ground truth to restore, and plain (non-loop) records
+   * never arm boundary requests at all.
    */
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
@@ -251,31 +252,43 @@ export class GoalController {
     if (record && record.loopEnabled && record.status === "active") this.reanchor(record)
   }
 
-  /** Queue the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
+  /** Re-anchor texts awaiting the next model request; one-shot, volatile (a restart drops a pending one — the next landing re-arms it). */
+  private readonly pendingAnchors = new Map<string, string>()
+
+  /**
+   * The re-anchor the host never sees as a message: after a landed compaction the ground truth is
+   * one-shot-injected into the SYSTEM part on the next model request (via the `context` hook in the
+   * plugin's wiring), so the transcript stays clean and the model still gets the full re-statement.
+   * Consumed on read — the text fires exactly once. Volatile by design.
+   */
+  consumeAnchor(sessionID: string): string | undefined {
+    const text = this.pendingAnchors.get(sessionID)
+    if (text !== undefined) this.pendingAnchors.delete(sessionID)
+    return text
+  }
+
+  /** Arm the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
   private reanchor(record: GoalRecord) {
     const now = this.deps.clock.now()
     const last = this.lastReanchorAt.get(record.sessionID)
     if (last !== undefined && now - last < REANCHOR_MIN_INTERVAL_MS) {
-      this.deps.log.info("loop re-anchor coalesced: one was queued recently", { sessionID: record.sessionID })
+      this.deps.log.info("loop re-anchor coalesced: one was armed recently", { sessionID: record.sessionID })
       return
     }
     this.lastReanchorAt.set(record.sessionID, now)
-    void this.deps.session
-      .synthetic({
-        sessionID: record.sessionID,
-        text: Prompt.loopReanchor({
-          iteration: record.loopIteration ?? 1,
-          maxLoops: record.loopMaxLoops ?? this.deps.config.maxLoops,
-          objective: record.loopObjective ?? record.condition,
-          condition: record.condition,
-          history: record.loopHistory ?? [],
-        }),
-        description: "goal-loop \u00b7 re-anchor after compaction",
-        metadata: { source: Prompt.MARKER, goal: record.id, anchor: true },
-        delivery: "queue",
-        resume: false,
-      })
-      .catch((error) => this.deps.log.warn("loop re-anchor after compaction failed", { error: errorMessage(error) }))
+    this.pendingAnchors.set(
+      record.sessionID,
+      Prompt.loopReanchor({
+        iteration: record.loopIteration ?? 1,
+        maxLoops: record.loopMaxLoops ?? this.deps.config.maxLoops,
+        objective: record.loopObjective ?? record.condition,
+        condition: record.condition,
+        history: record.loopHistory ?? [],
+      }),
+    )
+    // The card counts these; the transcript does not. One quiet number instead of one notice per landing.
+    record.reanchorCount = (record.reanchorCount ?? 0) + 1
+    void this.commit(record).catch((error) => this.deps.log.warn("re-anchor record update failed", { sessionID: record.sessionID, error: errorMessage(error) }))
   }
 
   async spend(sessionID: string): Promise<UsageSnapshot | undefined> {
@@ -552,6 +565,7 @@ export class GoalController {
     void this.deps.store.remove(sessionID)
     this.lastCommit.delete(sessionID)
     this.lastReanchorAt.delete(sessionID)
+    this.pendingAnchors.delete(sessionID)
     if (this.goals.delete(sessionID)) this.deps.emitter.changed(sessionID, null)
   }
 

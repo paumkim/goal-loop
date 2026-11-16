@@ -638,17 +638,18 @@ describe("/goal-loop", () => {
     expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
   })
 
-  test("two quick landings within 2 minutes queue one re-anchor; one after 2 minutes queues another", async () => {
+  test("two quick landings within 2 minutes arm one re-anchor; one after 2 minutes arms another", async () => {
     await h.setLoop("improve the parser")
     h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID)
-    await h.controller.onCompactionLanded(SID)
-    let reanchors = h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))
-    expect(reanchors).toHaveLength(1)
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    await h.controller.onCompactionLanded(SID) // coalesced: no second arm inside the window
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    expect(h.controller.consumeAnchor(SID)).toBeDefined()
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
     await h.clock.advance(130_000)
     await h.controller.onCompactionLanded(SID)
-    reanchors = h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))
-    expect(reanchors).toHaveLength(2)
+    expect(h.controller.get(SID)!.reanchorCount).toBe(2)
   })
 
   test("restore does not stack a compaction on top of an unlanded pending request", async () => {
@@ -692,7 +693,7 @@ describe("/goal-loop", () => {
     expect(h.notices.filter((n) => n.kind === "compact")).toHaveLength(0)
   })
 
-  test("a landed compaction queues a re-anchor restating the armed loop ground truth", async () => {
+  test("a landed compaction arms a one-shot re-anchor injection restating the armed loop ground truth — never a transcript message", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))
     h.summaries.push("parser rewritten and tests green")
@@ -700,17 +701,19 @@ describe("/goal-loop", () => {
     await h.turn(1)
     h.setContextSize(90_000)
     await h.controller.onCompactionLanded(SID)
-    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
-    expect(reanchor).toBeDefined()
-    expect(reanchor.delivery).toBe("queue")
-    expect(reanchor.resume).toBe(false)
-    expect(reanchor.metadata?.anchor).toBe(true)
-    expect(reanchor.text).toContain("<goal-loop-reanchor iteration=\"2\" max=\"5\">")
-    expect(reanchor.text).toContain("improve the parser") // the constant objective
-    expect(reanchor.text).toContain("add fuzz coverage for the parser") // the armed condition
-    expect(reanchor.text).toContain("- v1:") // the completed iteration survives the cut
-    expect(reanchor.text).toContain("git log --oneline -5")
-    expect(reanchor.text).toContain("Do not wait for a user message.")
+    // No synthetic message reaches the transcript — the re-anchor rides the SYSTEM part instead.
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    const anchor = h.controller.consumeAnchor(SID)
+    expect(anchor).toBeDefined()
+    expect(anchor).toContain('<goal-loop-reanchor iteration="2" max="5">')
+    expect(anchor).toContain("improve the parser") // the constant objective
+    expect(anchor).toContain("add fuzz coverage for the parser") // the armed condition
+    expect(anchor).toContain("- v1:") // the completed iteration survives the cut
+    expect(anchor).toContain("git log --oneline -5")
+    expect(anchor).toContain("Do not wait for a user message.")
+    // One-shot: consumed by the next model request, gone after that.
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
   })
 
   test("an ended-compaction event is authoritative: it lands a pending request even with no size drop", async () => {
@@ -725,10 +728,9 @@ describe("/goal-loop", () => {
     expect(record.loopCompact!.landedAt).toBeNumber()
     expect(record.loopCompact!.misses).toBe(0)
     expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(true)
-    // The landing re-anchors the live loop immediately (queued, resume: false).
-    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
-    expect(reanchor).toBeDefined()
-    expect(reanchor!.resume).toBe(false)
+    // The landing re-anchors the live loop immediately: a one-shot system injection, consumed by the next model request.
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    expect(h.controller.consumeAnchor(SID)).toBeDefined()
   })
 
   test("an evidence-based landing records and re-anchors", async () => {
@@ -742,9 +744,9 @@ describe("/goal-loop", () => {
     const record = h.controller.get(SID)!
     expect(record.loopCompact!.landedAt).toBeNumber()
     expect(h.notices.some((n) => n.kind === "compact" && n.level === "success")).toBe(true)
-    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
-    expect(reanchor).toBeDefined()
-    expect(reanchor.text).toContain('iteration="2"')
+    const anchor = h.controller.consumeAnchor(SID)
+    expect(anchor).toBeDefined()
+    expect(anchor).toContain('iteration="2"')
   })
 
   test("two arms with no landing and no drop push the miss count to 2 and the second force re-requests", async () => {
@@ -890,24 +892,27 @@ describe("/goal-loop", () => {
     expect(h5.controller.get(SID)!.loopCompact!.misses).toBe(0)
   })
 
-  test("re-anchor is queued even with no pending boundary request (the host compacted on its own)", async () => {
+  test("re-anchor is armed even with no pending boundary request (the host compacted on its own)", async () => {
     await h.setLoop("improve the parser")
     await h.controller.onCompactionLanded(SID)
-    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
-    expect(reanchor).toBeDefined()
-    expect(reanchor.text).toContain('iteration="1"')
+    const anchor = h.controller.consumeAnchor(SID)
+    expect(anchor).toBeDefined()
+    expect(anchor).toContain('iteration="1"')
   })
 
   test("no re-anchor for a plain goal, or for a terminal loop", async () => {
     await h.setGoal("all tests pass")
     await h.controller.onCompactionLanded(SID)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
+    expect(h.controller.get(SID)?.reanchorCount).toBeUndefined()
 
     const h2 = harness()
     await h2.setLoop("improve the parser")
     h2.controller.clear(SID)
     await h2.controller.onCompactionLanded(SID)
     expect(h2.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    expect(h2.controller.consumeAnchor(SID)).toBeUndefined()
   })
 
   test("a paused loop is not re-anchored", async () => {
@@ -917,6 +922,8 @@ describe("/goal-loop", () => {
     expect(h3.controller.get(SID)?.status).toBe("paused")
     await h3.controller.onCompactionLanded(SID)
     expect(h3.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    expect(h3.controller.consumeAnchor(SID)).toBeUndefined()
+    expect(h3.controller.get(SID)?.reanchorCount).toBeUndefined()
   })
 
   test("an armed loop never pauses at the turn cap; it notifies once and keeps arming", async () => {
@@ -965,10 +972,14 @@ describe("/goal-loop", () => {
     expect(h3.controller.get(SID)?.status).toBe("active")
   })
 
-  test("a failing re-anchor does not break compaction landing", async () => {
+  test("a failing re-anchor path does not break compaction landing", async () => {
+    // The re-anchor is a local mutation + record commit, never a host call: even a host that rejects
+    // every synthetic dispatch cannot break the landing bookkeeping (there is nothing to reject).
     await h.setLoop("improve the parser")
     h.setSyntheticError(new Error("host busy"))
     await expect(h.controller.onCompactionLanded(SID)).resolves.toBeUndefined()
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    expect(h.controller.consumeAnchor(SID)).toBeDefined()
   })
 })
 
@@ -1848,7 +1859,7 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(hu.controller.get(SID)?.status).toBe("active")
   })
 
-  test("(iv) an ended-compaction event mid-turn logs the landing and queues the re-anchor steer (resume: false)", async () => {
+  test("(iv) an ended-compaction event mid-turn logs the landing and arms the re-anchor inject (never a transcript message)", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
     h.summaries.push("s1")
@@ -1857,10 +1868,8 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     h.setContextSize(undefined) // size unknown — the event alone must be able to land it
     await h.controller.onCompactionLanded(SID)
     expect(h.logs.some((l) => l.level === "info" && /compaction landed/i.test(l.message))).toBe(true)
-    const reanchor = h.calls.synthetic.find((s) => String(s.description).includes("re-anchor"))
-    expect(reanchor).toBeDefined()
-    expect(reanchor!.delivery).toBe("queue")
-    expect(reanchor!.resume).toBe(false)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("re-anchor"))).toHaveLength(0)
+    expect(h.controller.consumeAnchor(SID)).toBeDefined()
     expect(h.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
   })
 

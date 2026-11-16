@@ -184,6 +184,12 @@ export interface GoalRecord {
   loopNotProgress?: number
   /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */
   loopCompact?: LoopCompactState
+  /**
+   * How many post-compaction re-anchors have been armed for this goal — the count the HUD card shows
+   * as `⟲ N` so the re-anchor's existence is one quiet number instead of a transcript notice per landing.
+   * Additive; absent on legacy records (treated as 0).
+   */
+  reanchorCount?: number
 }
 
 /** Read model shared with clients over RPC. */

@@ -457,6 +457,10 @@ export const HudCard = (props: {
         <text wrapMode="none" fg={theme().text.muted}>
           {`${looped() ? `v${iteration()}${cap()}${pips() ? ` ${pips()}` : ""} · ` : ""}${turns()} turn${turns() === 1 ? "" : "s"} · ${formatDurationCoarse(props.elapsedMs())}`}
         </text>
+        {/* re-anchors — the count, not the notice: one quiet glyph+number instead of a transcript line per landing. looped goals only; absent at zero and on legacy records. */}
+        <Show when={looped() && (g().reanchorCount ?? 0) > 0}>
+          <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{ascii() ? ` · re-anchor ${g().reanchorCount}` : ` · ⟲ ${g().reanchorCount}`}</text>
+        </Show>
       </box>
       {/* spend — what this loop is costing, from the session usage RPC; omitted when the server cannot estimate (same contract as the dialog's spend row), and by the row plan under a viewport ceiling */}
       <Show when={plan().spend ? g().spend : undefined}>
