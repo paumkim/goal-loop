@@ -18,7 +18,11 @@ steps so it never clips mid-word: above
 140 columns the full key hint plus full button labels; above 96 the short hint (`up/down scroll · p pin ·
 c copy`, Esc stays visible in the host dialog chrome) with full labels; below that, compact button labels
 (`copy` / `pin` / `clear`) — the 80-column
-floor always fits. The dialog's state word carries the same accents as the HUD card in terminal states so the
+floor always fits. The same env guard governs color as motion: under `NO_COLOR` (or `TERM=dumb`) every
+chromatic accent is dropped from the plugin's own surfaces — the pill, card, dialog and history render with
+neutral tokens only, hover becomes an underline instead of a background fill, and status words, verdict
+glyphs (✓ / ⊘ / ○) and weight (bold) carry all meaning; meaning never depended on color alone. The host's
+own chrome is out of scope (opencode renders full color regardless of `NO_COLOR`). The dialog's state word carries the same accents as the HUD card in terminal states so the
 header never reads muted-gray on an outcome: `achieved` in feedback.info, `impossible` / `paused` in
 feedback.warning, `failed` in feedback.error (falling back to warning where the theme has no error token). The dialog renders a `context` row when the server can estimate the
 prompt size: a 16-cell bar against the configured auto-compact threshold (`compactAtTokens`; the row shows the
@@ -430,7 +434,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=683 -->
+<!-- spec-check files=43 tests=691 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

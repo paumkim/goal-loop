@@ -385,3 +385,28 @@ describe("DialogFooter (80-column floor)", () => {
     }
   })
 })
+
+describe("reduced-color surfaces", () => {
+  test("the dialog renders unchanged under mono — remedy, glyphs and words all still present", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ status: "paused", pauseCause: "cap", reason: "Reached the 20-turn safety limit." })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono />)
+    expect(frame).toContain("fix")
+    expect(frame).toContain("turn cap reached")
+    expect(frame).toContain("will not extend")
+    expect(frame).toContain("goal")
+  })
+
+  test("the loop rail renders glyphs and rows under mono", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono />, 80, 40)
+    expect(frame).toContain("loop")
+    expect(frame).toContain("v3 of at most 5")
+    expect(frame).toContain("✓")
+    expect(frame).toContain("met · 9 turns · 41 tools")
+  })
+
+  test("the history block renders the trail and counts under mono", async () => {
+    const frame = await render(() => <HistoryBlock goal={{ ...loopedGoal(), loopEnabled: false, loopIteration: undefined, loopObjective: undefined, loopMaxLoops: undefined, loopHistory: undefined, loopNotProgress: undefined, loopCompact: undefined }} theme={theme} elapsedMs={() => 1000 * 60 * 12} mono />)
+    expect(frame).toContain("history")
+    expect(frame).toContain("met")
+    expect(frame).toContain("trail")
+  })
+})

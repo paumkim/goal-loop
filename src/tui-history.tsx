@@ -11,6 +11,7 @@ import { For, Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
+import { verdictAccentColor } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
@@ -36,8 +37,8 @@ const label = (theme: HistoryTheme, text: string) => (
   </text>
 )
 
-const colorFor = (theme: HistoryTheme, verdict: Verdict): ColorInput =>
-  verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint
+const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorInput =>
+  verdictAccentColor(theme, verdict, mono)
 
 export const LoopSection = (props: {
   goal: GoalSnapshot
@@ -46,8 +47,11 @@ export const LoopSection = (props: {
   elapsedMs: () => number
   /** Reference clock for `ended <ago>` labels. Getter form so it stays reactive; defaults to Date.now(). */
   nowMs?: () => number
+  /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
+  mono?: boolean
 }): JSX.Element => {
   const theme = () => props.theme
+  const mono = () => props.mono === true
   const history = () => props.goal.loopHistory ?? []
   const done = () => history().length
   const max = () => props.goal.loopMaxLoops
@@ -89,9 +93,12 @@ export const LoopSection = (props: {
   const finished = () => history().length > 0 && (isTerminal() || capReached())
   const totals = () => loopTotals(history(), props.goal.setAt)
   const finalGlyph = () => (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
-  const finalColor = () => (props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint)
+  const finalColor = () => mono()
+    ? (props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint)
+    : (props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint)
   const nowColor = () => {
     const s = props.goal.status
+    if (mono()) return s === "paused" || s === "impossible" || s === "active" ? theme().text.base : theme().text.faint
     if (s === "paused" || s === "impossible") return theme().text.feedback.warning.base
     if (s === "active") return theme().text.feedback.info.base
     return theme().text.faint
@@ -109,7 +116,7 @@ export const LoopSection = (props: {
         <box width={LABEL} flexShrink={0} />
         <box flexDirection="row" flexShrink={0}>
         <Show when={bar().filled > 0}>
-          <text wrapMode="none" fg={theme().text.feedback.info.base}>
+          <text wrapMode="none" fg={mono() ? theme().text.base : theme().text.feedback.info.base}>
             {"█".repeat(bar().filled)}
           </text>
         </Show>
@@ -147,7 +154,7 @@ export const LoopSection = (props: {
           return (
             <box flexDirection="row" gap={2}>
               {label(theme(), "compact")}
-              <text wrapMode="none" fg={pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base}>
+              <text wrapMode="none" fg={mono() ? theme().text.base : pending() ? theme().text.feedback.warning.base : theme().text.feedback.info.base}>
                 {pending()
                   ? `pending ${age()} · miss ${c.misses}/${COMPACT_MISS_CAP}${c.estimatedTokens !== undefined ? ` · ~${formatTokens(c.estimatedTokens)} at request` : ""}`
                   : `landed ${age()} ago`}
@@ -165,7 +172,7 @@ export const LoopSection = (props: {
             <box flexDirection="column">
               <box flexDirection="row" gap={2}>
                 {label(theme(), `v${entry.version}`)}
-                <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : theme().text.feedback.info.base}>
+                <text wrapMode="none" flexShrink={0} fg={zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base}>
                   {zeroTools ? "○" : "✓"}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
@@ -201,7 +208,7 @@ export const LoopSection = (props: {
               <text wrapMode="none" fg={theme().text.muted}>
                 · last
               </text>
-              <text wrapMode="none" fg={colorFor(theme(), entry().verdict)} attributes={TextAttributes.BOLD}>
+              <text wrapMode="none" fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
                 {verdictGlyph(entry().verdict)}
               </text>
               <text wrapMode="none" fg={theme().text.faint}>
@@ -224,20 +231,21 @@ export const LoopSection = (props: {
         </box>
       </Show>
       {/* evaluator verdict trail */}
-      <VerdictTrail theme={theme()} history={props.goal.history ?? []} />
+      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} />
     </box>
   )
 }
 
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
-const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[] }): JSX.Element => {
+const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean }): JSX.Element => {
+  const mono = () => props.mono === true
   const trail = () => trailWindow(props.history, 24)
   return (
     <Show when={trail().shown.length > 0}>
       <box flexDirection="row" gap={2}>
         {label(props.theme, "trail")}
         <box flexDirection="row" flexShrink={0}>
-          <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict)}>{verdictGlyph(entry.verdict)}</text>}</For>
+          <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry.verdict, mono())}>{verdictGlyph(entry.verdict)}</text>}</For>
         </box>
         <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
           {" "}
@@ -258,8 +266,11 @@ export const HistoryBlock = (props: {
   theme: HistoryTheme
   /** Live extrapolated elapsed time in ms. Getter form so it stays reactive. */
   elapsedMs: () => number
+  /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
+  mono?: boolean
 }): JSX.Element => {
   const theme = () => props.theme
+  const mono = () => props.mono === true
   const history = () => props.goal.history ?? []
   const counts = () => verdictCounts(history())
   const last = () => lastVerdict(history())
@@ -289,7 +300,7 @@ export const HistoryBlock = (props: {
         >
           {(entry) => (
             <box flexDirection="row" gap={2} flexGrow={1}>
-              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry().verdict)} attributes={TextAttributes.BOLD}>
+              <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry().verdict, mono())} attributes={TextAttributes.BOLD}>
                 {verdictGlyph(entry().verdict)}
               </text>
               <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
@@ -299,7 +310,7 @@ export const HistoryBlock = (props: {
           )}
         </Show>
       </box>
-      <VerdictTrail theme={theme()} history={history()} />
+      <VerdictTrail theme={theme()} history={history()} mono={mono()} />
     </box>
   )
 }

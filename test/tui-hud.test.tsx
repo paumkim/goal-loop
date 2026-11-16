@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, footerCopyLabel, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
@@ -317,6 +317,52 @@ describe("motionDisabled", () => {
     expect(motionDisabled({ TERM: "dumb" })).toBe(true)
     expect(motionDisabled({ TERM: "xterm-256color" })).toBe(false)
     expect(motionDisabled({})).toBe(false)
+  })
+})
+
+describe("monochrome", () => {
+  test("NO_COLOR and TERM=dumb both drop chromatic accents; default terminals keep them", () => {
+    expect(monochrome({ NO_COLOR: "" })).toBe(true)
+    expect(monochrome({ NO_COLOR: "1" })).toBe(true)
+    expect(monochrome({ TERM: "dumb" })).toBe(true)
+    expect(monochrome({ TERM: "xterm-256color", NO_COLOR: undefined })).toBe(false)
+    expect(monochrome({})).toBe(false)
+  })
+})
+
+describe("accent mappers (reduced color)", () => {
+  test("stateAccentColor collapses to base for live/terminal words and faint for cleared under mono", () => {
+    for (const status of ["active", "paused", "achieved", "impossible", "failed"]) {
+      expect(stateAccentColor(theme, status, false, true)).toBe(theme.text.base)
+    }
+    expect(stateAccentColor(theme, "cleared", false, true)).toBe(theme.text.faint)
+    // Color mode sanity: the mappings the mono path bypasses stay intact.
+    expect(stateAccentColor(theme, "active", false, false)).toBe(theme.text.feedback.info.base)
+    expect(stateAccentColor(theme, "active", true, false)).toBe(theme.text.feedback.warning.base)
+    expect(stateAccentColor(theme, "failed", false, false)).toBe(theme.text.feedback.error!.base)
+  })
+
+  test("borderAccentColor under mono defers to the border override or faint, never the amber family", () => {
+    expect(borderAccentColor(theme, "active", {}, true)).toBe(theme.border?.base ?? theme.text.faint)
+    expect(borderAccentColor(theme, "impossible", {}, true)).toBe(theme.border?.base ?? theme.text.faint)
+    expect(borderAccentColor(theme, "achieved", {}, false)).toBe(theme.text.feedback.info.base)
+    expect(borderAccentColor(theme, "paused", {}, false)).toBe(theme.text.feedback.warning.base)
+    expect(borderAccentColor(theme, "active", { hot: true }, false)).toBe(theme.text.feedback.warning.base)
+  })
+
+  test("verdictAccentColor under mono keeps met/impossible in base and others faint", () => {
+    expect(verdictAccentColor(theme, "met", true)).toBe(theme.text.base)
+    expect(verdictAccentColor(theme, "impossible", true)).toBe(theme.text.base)
+    expect(verdictAccentColor(theme, "not_met", true)).toBe(theme.text.faint)
+    expect(verdictAccentColor(theme, "met", false)).toBe(theme.text.feedback.info.base)
+    expect(verdictAccentColor(theme, "not_met", false)).toBe(theme.text.faint)
+  })
+
+  test("fixAccentColor under mono renders base for both tones", () => {
+    expect(fixAccentColor(theme, "warning", true)).toBe(theme.text.base)
+    expect(fixAccentColor(theme, "error", true)).toBe(theme.text.base)
+    expect(fixAccentColor(theme, "error", false)).toBe(theme.text.feedback.error!.base)
+    expect(fixAccentColor(theme, "warning", false)).toBe(theme.text.feedback.warning.base)
   })
 })
 
