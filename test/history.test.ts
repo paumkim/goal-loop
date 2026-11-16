@@ -318,6 +318,39 @@ describe("loopTotals", () => {
     const entries = [{ ...entry(1, Number.NaN), turns: Number.NaN, toolCalls: Number.NaN }]
     expect(loopTotals(entries, setAt)).toEqual({ iterations: 1, turns: 0, tools: 0, spanMs: 0 })
   })
+  test("measured per-iteration spend sums into the tally with the measured count", () => {
+    const usage = { input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+    const entries = [
+      { ...entry(1, 11_000, 10, 3), spend: { ...usage, cost: 0.25 } },
+      { ...entry(2, 31_000, 20, 4), spend: { ...usage, cost: 0.5 } },
+    ]
+    expect(loopTotals(entries, setAt)).toEqual({ iterations: 2, turns: 7, tools: 30, spanMs: 30_000, spend: { total: 0.75, measured: 2 } })
+  })
+
+  test("a partially measured loop reports the partial count — unmeasured iterations are excluded, never read as $0", () => {
+    const usage = { input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+    const entries = [
+      { ...entry(1, 11_000, 10, 3), spend: { ...usage, cost: 0.5 } },
+      entry(2, 31_000, 20, 4),
+    ]
+    expect(loopTotals(entries, setAt).spend).toEqual({ total: 0.5, measured: 1 })
+  })
+
+  test("no measurable spend anywhere leaves the spend key off the totals", () => {
+    const entries = [entry(1, 11_000, 10, 3)]
+    expect(loopTotals(entries, setAt)).toEqual({ iterations: 1, turns: 3, tools: 10, spanMs: 10_000 })
+    expect("spend" in loopTotals(entries, setAt)).toBe(false)
+  })
+
+  test("a non-finite or negative cost does not poison the sum", () => {
+    const usage = { input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+    const entries = [
+      { ...entry(1, 11_000, 10, 3), spend: { ...usage, cost: Number.NaN } },
+      { ...entry(2, 21_000, 10, 2), spend: { ...usage, cost: -1 } },
+      { ...entry(3, 31_000, 10, 2), spend: { ...usage, cost: 0.25 } },
+    ]
+    expect(loopTotals(entries, setAt).spend).toEqual({ total: 0.25, measured: 1 })
+  })
 })
 
 describe("localTime", () => {

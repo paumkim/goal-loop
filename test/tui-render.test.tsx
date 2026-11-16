@@ -155,6 +155,36 @@ describe("LoopSection", () => {
     expect(frame).toContain("loop achieved · 2 iterations · 15 turns · 64 tools")
   })
 
+  test("the final tally carries the loop's measured spend — complete when every iteration measured, honestly partial otherwise", async () => {
+    const stamped = (list: NonNullable<GoalSnapshot["loopHistory"]>) => loopedGoal({ status: "achieved", loopHistory: list })
+    const full = await render(() => (
+      <LoopSection
+        goal={stamped([
+          { version: 1, condition: "add a bar", summary: "Added a bar.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, spend: { ...spend, cost: 0.25 } },
+          { version: 2, condition: "render the trail", summary: "Trail renders.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, spend: { ...spend, cost: 0.5 } },
+        ])}
+        theme={theme}
+        elapsedMs={() => 1000 * 60 * 39}
+        nowMs={() => now}
+      />
+    ))
+    expect(full).toContain("$0.75")
+    expect(full).not.toContain("measured")
+    const partial = await render(() => (
+      <LoopSection
+        goal={stamped([
+          { version: 1, condition: "add a bar", summary: "Added a bar.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, spend: { ...spend, cost: 0.42 } },
+          { version: 2, condition: "render the trail", summary: "Trail renders.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12 },
+        ])}
+        theme={theme}
+        elapsedMs={() => 1000 * 60 * 39}
+        nowMs={() => now}
+      />
+    ))
+    expect(partial).toContain("$0.42")
+    expect(partial).toContain("across 1/2 measured")
+  })
+
   test("paused loop shows stall/retries diagnostics in the now row", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ status: "paused", stall: 3, retries: 2 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("paused")

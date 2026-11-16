@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=878 -->
+<!-- spec-check files=43 tests=883 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3733,3 +3733,30 @@ Verification (all run in the worktree): bun test (878 pass, 0 fail, 21 snapshots
 bun run compile, bun run check end-to-end green incl. spec-check (43/878). Evidence is source +
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: applying
 the ledger hue to the pill's landing flash.
+
+## Workstream CP — the final tally carries the loop's measured spend (2026-11-16)
+
+Interpretation of this iteration: CN stamped per-turn spend on verdict entries and CK stamped the
+arm→advance delta on each completed loop iteration, but the loop's IS-over screen — the final
+tally row — summed nothing: iterations, turns, tools, wall-clock, and no cost. The loop ledger
+now closes its own books: what the whole run measured, in one row.
+
+357. src/core/history.ts — LoopTotals gains `readonly spend?: { readonly total: number;
+     readonly measured: number }` (additive, internal interface). loopTotals accumulates
+     entry.spend.cost only when it is present and finite and >= 0; the key is absent when no
+     iteration could be measured — the tally never claims a $0.00 it cannot see. A partially
+     measured loop reports measured < iterations rather than a rounded-up verdict.
+358. src/tui-history.tsx — the final tally row appends the measured cost inside the existing
+     muted furniture grammar (no hue, no glyph change): ` · $x.xx` when every iteration measured,
+     ` · $x.xx across N/M measured` when partial, nothing otherwise. Word-wrap row; formatCost;
+     snapshots unchanged (finished-loop snapshot entries carry no spend, so tallySpend() is "").
+359. Tests: history.test.ts loopTotals +4 (all-measured sum with the measured count; partial
+     measurement reported as partial with unmeasured iterations excluded; absent spend leaves the
+     key off the object; non-finite/negative cost does not poison the sum), tui-render.test.tsx
+     +1 (finished-loop tally paints $0.75 complete; $0.42 across 1/2 measured partial). Spec-check
+     marker files=43 tests=878 -> 883.
+
+Verification (all run in the worktree): bun test (883 pass, 0 fail, snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/883). Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: spend in
+the goal-dialog verdict sections; the pill's landing-flash ledger hue.
