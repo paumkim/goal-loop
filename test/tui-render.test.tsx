@@ -386,18 +386,27 @@ describe("DialogFooter (80-column floor)", () => {
     }
   })
 
-  test("at 140 cells the full key hint returns", async () => {
+  test("at 140 cells the full key hint returns, without repeating the host's Esc chord", async () => {
     const frame = await renderFooter(140)
     expect(frame).toContain("pgup/pgdn")
+    expect(frame).toContain("home/end")
+    expect(frame).toContain("p pin · c copy")
+    expect(frame).not.toContain("esc")
     expect(frame).toContain("[copy condition]")
     expect(frame).toContain("[clear goal]")
   })
 
-  test("a pinned goal renders [unpin] at every width tier", async () => {
-    for (const width of [80, 96, 160]) {
+  test("a pinned goal keeps its object noun at the roomy tier; compact tiers render [unpin]", async () => {
+    for (const width of [80]) {
       const frame = await renderFooter(width, true)
       expect(frame).toContain("[unpin]")
       expect(frame).not.toContain("[pin]")
+      expect(frame).not.toContain("unpin condition")
+    }
+    for (const width of [96, 160]) {
+      const frame = await renderFooter(width, true)
+      expect(frame).toContain("[unpin condition]")
+      expect(frame).not.toContain("[unpin]")
     }
   })
 })

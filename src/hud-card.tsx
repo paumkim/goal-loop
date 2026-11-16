@@ -69,20 +69,27 @@ export const hudCardRows = (goal: GoalSnapshot): number =>
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
   Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1
 
-export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn page · home/end start/end · p pin condition · esc close"
+// Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the two plugin chords.
+export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy"
 export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · c copy"
 
 /** Copy button label: transient in-modal acknowledgment wins; otherwise full at ≥96 cells, compact below. */
 export const footerCopyLabel = (copied: boolean, roomy: boolean): string =>
   copied ? "✓ copied" : roomy ? "copy condition" : "copy"
 
+/** Pin button label: the object noun stays at the roomy tier across states (`pin condition` ↔ `unpin condition`) so the mouse target barely moves; compact tiers use the bare verbs. */
+export const footerPinLabel = (pinned: boolean, roomy: boolean): string =>
+  pinned ? (roomy ? "unpin condition" : "unpin") : roomy ? "pin condition" : "pin"
+
 /**
  * The host dialog footer: the key hint plus the three mouse actions. The row clips mid-word when the
  * hint is longer than the cells the buttons leave behind (a broken-sentence hint reads as broken chrome),
  * so it degrades in two steps: full hint + full labels above 140 cells, short hint + full labels above 96,
- * short hint + compact labels below. The 80-column floor always fits. Esc stays visible in the host
- * dialog chrome, so the short hint spends its cells on the two plugin chords instead.
+ * short hint + compact labels below. The 80-column floor always fits. No tier repeats the Esc chord — it stays visible in the host
+ * dialog chrome; the hint spends its cells on scrolling and the two plugin chords instead.
  * `copied` flips the copy button's label to `✓ copied` (host toasts do not render above the modal).
+ * The pin button keeps its object noun at the roomy tier across states (`pin condition` ↔ `unpin condition`),
+ * so the mouse target does not shrink mid-toggle; compact tiers use `pin` ↔ `unpin`.
  */
 export const DialogFooter = (props: {
   theme: HudCardTheme
@@ -103,7 +110,7 @@ export const DialogFooter = (props: {
       </text>
       <box flexGrow={1} />
       <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} mono={props.mono} onPress={props.onCopy} />
-      <HudButton theme={props.theme} label={props.pinned() ? "unpin" : roomy() ? "pin condition" : "pin"} mono={props.mono} onPress={props.onTogglePin} />
+      <HudButton theme={props.theme} label={footerPinLabel(props.pinned(), roomy())} mono={props.mono} onPress={props.onTogglePin} />
       <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} mono={props.mono} onPress={props.onClear} />
     </box>
   )
