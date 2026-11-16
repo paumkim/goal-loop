@@ -2098,6 +2098,17 @@
       "submittedAt": "2026-11-16T15:16:18Z",
       "mergedAt": "2026-11-16T15:22:26Z",
       "mergedInto": "dev"
+    },
+    "tui-hud-menu-keyboard": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts src/hud-card.tsx src/tui.tsx test/tui-hud.test.tsx SPEC.md docs/changelog.html",
+      "branch": "wt/tui-hud-menu-keyboard",
+      "worktree": "worktrees/wt-tui-hud-menu-keyboard",
+      "status": "done",
+      "createdAt": "2026-11-16T15:29:47Z",
+      "submittedAt": "2026-11-16T15:39:21Z",
+      "mergedAt": "2026-11-16T15:41:09Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
