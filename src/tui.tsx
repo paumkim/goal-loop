@@ -17,7 +17,7 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -183,7 +183,24 @@ export default Plugin.define({
     // The check-flash window after a goal lands `achieved`: per session, self-terminating, setup-scope
     // like the ack registry. A view acknowledgment riding the existing pulse — never state, never stored.
     const [flashing, setFlashing] = createSignal<ReadonlySet<string>>(new Set())
+    // The landing acknowledgment after a boundary compaction is observed to land (pending → landed
+    // flip on the loopCompact state): same registry shape, longer window, info tone. A background win
+    // surfaced where the user was watching — never state, never stored.
+    const [landing, setLanding] = createSignal<ReadonlySet<string>>(new Set())
     const terminalTimers = new Set<ReturnType<typeof setTimeout>>()
+    const noteLanding = (sessionID: string) => {
+      setLanding((previous) => new Set(previous).add(sessionID))
+      const timer = setTimeout(() => {
+        terminalTimers.delete(timer)
+        setLanding((previous) => {
+          if (!previous.has(sessionID)) return previous
+          const next = new Set(previous)
+          next.delete(sessionID)
+          return next
+        })
+      }, LANDING_ACK_MS)
+      terminalTimers.add(timer)
+    }
     const noteTerminal = (sessionID: string, goal: GoalSnapshot) => {
       const ack = { goal, at: Date.now() }
       setTerminalAcks((previous) => ({ ...previous, [sessionID]: ack }))
@@ -224,6 +241,12 @@ export default Plugin.define({
         next.delete(sessionID)
         return next
       })
+      setLanding((previous) => {
+        if (!previous.has(sessionID)) return previous
+        const next = new Set(previous)
+        next.delete(sessionID)
+        return next
+      })
     }
 
     /** Pull a fresh snapshot from the server and cache it. A malformed RPC response keeps the previous entry (same posture as a failed fetch). */
@@ -245,6 +268,13 @@ export default Plugin.define({
         } else if (goal && isLive(goal.status)) {
           dropTerminal(sessionID)
         }
+        // A boundary compaction landing rides the same intake path: the plugin persists `landedAt`
+        // on the record and pushes a `changed` event — the only stream guaranteed to reach us. Only a
+        // real pending → landed flip arms the acknowledgment; re-delivery of the landed record is a
+        // no-op, and a fresh arm never fabricates one from an already-landed record.
+        const previousCompact = previous?.loopCompact
+        const wasPending = previousCompact !== undefined && previousCompact.landedAt === undefined
+        if (!unchanged && goal && goal.loopCompact?.landedAt !== undefined && wasPending) noteLanding(sessionID)
       } catch {
         // The acknowledgment is chrome; a failed probe must not break snapshot intake.
       }
@@ -472,14 +502,17 @@ export default Plugin.define({
         }
         const dimensions = useTerminalDimensions()
         const pinnedNow = () => isPinned(props.sessionID)
+        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
         const pillText = () => {
           const model = pill()
           if (!model) return ""
-          if (!pinnedNow()) return model.text
+          const landed = landingNow() ? LANDING_SUFFIX : ""
+          if (!pinnedNow()) return model.text + landed
           const g = goal()
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
-          return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text
+          const base = model.text + landed
+          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base
         }
         // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
         // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced
@@ -487,7 +520,7 @@ export default Plugin.define({
         // Motion is live while the evaluator is thinking, the compaction request runs hot, or the just-achieved flash window is open. The flash rides the same slow bold-flip as the evaluating pulse — it only exists for the first ACK_FLASH_MS of the ack pill, then the pill goes static. The goal() read is undefined once terminal; the flash is keyed off the session alone.
         const animated = () => {
           const g = goal()
-          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID) })
+          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
         }
         createEffect(() => {
           if (animated() && motionOk) {
@@ -505,6 +538,7 @@ export default Plugin.define({
         }
         const color = () => {
           if (reducedColor) return context.theme.text.muted
+          if (landingNow()) return context.theme.text.feedback.info.base
           const tone = pill()?.tone
           if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible") return context.theme.text.feedback.warning.base
           if (tone === "failed") return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
@@ -744,6 +778,7 @@ export default Plugin.define({
       offChanged()
       offNotice()
       setFlashing(new Set<string>())
+      setLanding(new Set<string>())
       setStatusDialogOpen(false)
       setStatusDialogSession(undefined)
       setScrollRef(undefined)

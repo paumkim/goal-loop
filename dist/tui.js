@@ -480,7 +480,9 @@ var pillModel = (goal, elapsed) => {
 };
 var TERMINAL_ACK_MS = 45000;
 var ACK_FLASH_MS = 1700;
-var pillMotionNeeded = (args) => args.evaluating === true || args.hot === true || args.flashing === true;
+var LANDING_ACK_MS = 3000;
+var LANDING_SUFFIX = " \xB7 landed \u2713";
+var pillMotionNeeded = (args) => args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true;
 var terminalPill = (goal, elapsed) => {
   const tone = goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined;
   if (!tone)
@@ -2458,7 +2460,22 @@ var tui_default = Plugin.define({
     };
     const [terminalAcks, setTerminalAcks] = createSignal4({});
     const [flashing, setFlashing] = createSignal4(new Set);
+    const [landing, setLanding] = createSignal4(new Set);
     const terminalTimers = new Set;
+    const noteLanding = (sessionID) => {
+      setLanding((previous) => new Set(previous).add(sessionID));
+      const timer = setTimeout(() => {
+        terminalTimers.delete(timer);
+        setLanding((previous) => {
+          if (!previous.has(sessionID))
+            return previous;
+          const next = new Set(previous);
+          next.delete(sessionID);
+          return next;
+        });
+      }, LANDING_ACK_MS);
+      terminalTimers.add(timer);
+    };
     const noteTerminal = (sessionID, goal) => {
       const ack = {
         goal,
@@ -2513,6 +2530,13 @@ var tui_default = Plugin.define({
         next.delete(sessionID);
         return next;
       });
+      setLanding((previous) => {
+        if (!previous.has(sessionID))
+          return previous;
+        const next = new Set(previous);
+        next.delete(sessionID);
+        return next;
+      });
     };
     const refresh = (sessionID) => rpc.get({
       sessionID
@@ -2530,6 +2554,10 @@ var tui_default = Plugin.define({
         } else if (goal && isLive(goal.status)) {
           dropTerminal(sessionID);
         }
+        const previousCompact = previous?.loopCompact;
+        const wasPending = previousCompact !== undefined && previousCompact.landedAt === undefined;
+        if (!unchanged && goal && goal.loopCompact?.landedAt !== undefined && wasPending)
+          noteLanding(sessionID);
       } catch {}
       const mergedGoal = preserveContextSize(entries()[sessionID]?.goal, goal);
       return setEntries((previous) => {
@@ -2754,21 +2782,25 @@ var tui_default = Plugin.define({
         };
         const dimensions = useTerminalDimensions2();
         const pinnedNow = () => isPinned(props.sessionID);
+        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID);
         const pillText = () => {
           const model = pill();
           if (!model)
             return "";
+          const landed = landingNow() ? LANDING_SUFFIX : "";
           if (!pinnedNow())
-            return model.text;
+            return model.text + landed;
           const g = goal();
-          return g ? model.text + pinSuffix(g.condition, pinBudget(dimensions().width, model.text.length)) : model.text;
+          const base = model.text + landed;
+          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base;
         };
         const animated = () => {
           const g = goal();
           return pillMotionNeeded({
             evaluating: g?.evaluating === true,
             hot: g !== undefined && isCompactHot(g),
-            flashing: props.sessionID !== undefined && flashing().has(props.sessionID)
+            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
+            landing: landingNow()
           });
         };
         createEffect(() => {
@@ -2788,6 +2820,8 @@ var tui_default = Plugin.define({
         const color = () => {
           if (reducedColor)
             return context.theme.text.muted;
+          if (landingNow())
+            return context.theme.text.feedback.info.base;
           const tone = pill()?.tone;
           if (tone === "paused" || tone === "hot" || tone === "retrying" || tone === "impossible")
             return context.theme.text.feedback.warning.base;
@@ -3096,6 +3130,7 @@ var tui_default = Plugin.define({
       offChanged();
       offNotice();
       setFlashing(new Set);
+      setLanding(new Set);
       setStatusDialogOpen(false);
       setStatusDialogSession(undefined);
       setScrollRef(undefined);

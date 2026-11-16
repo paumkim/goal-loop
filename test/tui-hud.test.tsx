@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
@@ -295,6 +295,17 @@ describe("pillMotionNeeded", () => {
 
   test("the just-achieved flash alone drives the pulse — the flash rides the same cadence as the evaluating shimmer", () => {
     expect(pillMotionNeeded({ flashing: true })).toBe(true)
+  })
+
+  test("the just-landed window alone drives the pulse — a landing is worth catching even when nothing else moves", () => {
+    expect(pillMotionNeeded({ landing: true })).toBe(true)
+    expect(pillMotionNeeded({ evaluating: false, hot: false, flashing: false, landing: true })).toBe(true)
+  })
+
+  test("the landing acknowledgment is a bounded window longer than the met flash, with a compact suffix", () => {
+    expect(LANDING_ACK_MS).toBeGreaterThan(ACK_FLASH_MS)
+    expect(LANDING_ACK_MS).toBeLessThan(TERMINAL_ACK_MS)
+    expect(LANDING_SUFFIX).toBe(" · landed ✓")
   })
 
   test("evaluating and a hot compaction drive the pulse independently", () => {

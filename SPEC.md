@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=747 -->
+<!-- spec-check files=43 tests=749 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2349,4 +2349,40 @@ artifact; all work is local on dev. No docs line references were touched by this
 points were after all pinned anchors).
 
 Verification (all run in the worktree): `bun run compile`, `bun run check` green (747 tests),
+coordinator submit + merge-next, and `bun run check` on dev shown green at the end.
+
+## Workstream BY — landing acknowledgment on the ambient pill (2026-11-16)
+
+Interpretation of this iteration: the brief's fourth motion item — "a green sweep when landing is
+detected" — was the last undelivered named animation. The boundary-compaction machinery already
+detects the landing plugin-side (`loopCompact.pending → landed`, persisted on the record as `landedAt`
+and pushed on every save); the TUI just never acknowledged it where the user was watching. This closes
+the feedback loop on the same surface as the met flash and the ack pill.
+
+239. `LANDING_ACK_MS = 3_000` in `src/core/hud.ts`. When a snapshot flips `loopCompact` from pending
+    (`landedAt` undefined) to landed, the session joins a TUI-local `landing` set for three seconds:
+    the ambient pill appends ` · landed ✓` (`LANDING_SUFFIX`), renders in the info tone, and flips bold
+    on the same 850ms cadence as the other pulses (`pillMotionNeeded` gains a `landing` argument —
+    one of these alone drives the pulse). After the window the pill is static again. Reduced motion
+    suppresses it (the effect still requires motionOk). A fresh live goal or unmount disarms it.
+    Detection is gated on the same unchanged-snapshot guard as `noteTerminal`, and requires the
+    *previous cached snapshot* to have been pending — a plugin restart landing on an already-landed
+    record never fabricates an acknowledgment, and neither does re-delivery of the landed record.
+240. Only pending → landed is acknowledged; plain `/goal` goals never reach the boundary-compaction
+    path, so they never see this. Loops arming a new boundary request after a landing overwrite
+    `loopCompact` with a fresh pending record, which is the correct next state (no double-ack).
+
+Honesty boundary: a landing cannot occur live behind the dead provider — compaction is model work,
+and no verdict or compaction event ever lands there (the same ceiling as the rest of the loop-side
+surfaces). Evidence is the `pillMotionNeeded` unit tests (a landing alone drives the pulse; the window
+is bounded and ordered against the met flash and the ack window) plus source-layer review of the
+detection flip in the snapshot-intake path, mirroring the reviewed `noteTerminal` pattern. No live
+claim is made. The ack text lives in the pill — no new rows, no mount-anchor changes, 80-column floor
+preserved (the suffix is 11 cells; the pin suffix truncation budget already accounts for the pill's
+rendered length).
+
+Marker bumped files=43 tests=747 to files=43 tests=749. No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev. No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): `bun run compile`, `bun run check` green (749 tests),
 coordinator submit + merge-next, and `bun run check` on dev shown green at the end.
