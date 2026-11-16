@@ -1284,6 +1284,17 @@
       "submittedAt": "2026-11-16T05:39:57Z",
       "mergedAt": "2026-11-16T05:40:13Z",
       "mergedInto": "dev"
+    },
+    "tui-copy-parity": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-copy-parity",
+      "worktree": "worktrees/wt-tui-copy-parity",
+      "status": "done",
+      "createdAt": "2026-11-16T05:41:57Z",
+      "submittedAt": "2026-11-16T05:44:49Z",
+      "mergedAt": "2026-11-16T05:45:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
