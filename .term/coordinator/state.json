@@ -1086,6 +1086,17 @@
       "submittedAt": "2026-11-16T02:05:11Z",
       "mergedAt": "2026-11-16T02:05:21Z",
       "mergedInto": "dev"
+    },
+    "release-checklist-repin": {
+      "agent": "opencode",
+      "paths": "RELEASE-CHECKLIST.md",
+      "branch": "wt/release-checklist-repin",
+      "worktree": "worktrees/wt-release-checklist-repin",
+      "status": "done",
+      "createdAt": "2026-11-16T02:15:44Z",
+      "submittedAt": "2026-11-16T02:16:09Z",
+      "mergedAt": "2026-11-16T02:16:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
