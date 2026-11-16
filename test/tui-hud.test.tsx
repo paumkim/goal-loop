@@ -717,7 +717,7 @@ describe("hudCardRows viewport ceiling (maxRows) — optional rows drop until th
     expect(hudCardRows(paused)).toBe(10)
     expect(hudCardRows(paused, false, 8)).toBe(8) // spend and why gone
     expect(hudCardRows(paused, false, 6)).toBe(5) // spend, why, last and remediation gone: the irreducible core
-    expect(hudCardRows(paused, true, 3)).toBe(9) // menu rows never drop; remediation gone: 5 + menu 4
+    expect(hudCardRows(paused, true, 3)).toBe(11) // menu rows never drop; remediation gone: 5 + menu 6
   })
 
   test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
@@ -835,23 +835,28 @@ describe("cardRowPlan under a ceiling (render)", () => {
 })
 
 describe("contextMenuRows + nextMenuIndex (the keyboard arm's pure model)", () => {
-  test("the four rows paint in a fixed order; the reason and summary rows follow their payload, the clear row is the only danger", () => {
-    const rows = contextMenuRows({ hasReason: false, hasSummary: false })
-    expect(rows.map((row) => row.id)).toEqual(["copy-condition", "copy-reason", "copy-summary", "clear"])
-    expect(rows.map((row) => row.enabled)).toEqual([true, false, false, true])
-    expect(rows.map((row) => row.danger)).toEqual([false, false, false, true])
-    const wired = contextMenuRows({ hasReason: true, hasSummary: true })
-    expect(wired.map((row) => row.enabled)).toEqual([true, true, true, true])
-    expect(wired[3]!.id).toBe(CONTEXT_MENU_CLEAR) // the host's destructive row is always last
+  test("the six rows paint in a fixed order; the payload rows follow their wiring, the clear row is the only danger and always last", () => {
+    const rows = contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false })
+    expect(rows.map((row) => row.id)).toEqual(["copy-condition", "copy-reason", "copy-summary", "copy-dossier", "save-dossier", "clear"])
+    expect(rows.map((row) => row.enabled)).toEqual([true, false, false, false, false, true])
+    expect(rows.map((row) => row.danger)).toEqual([false, false, false, false, false, true])
+    const wired = contextMenuRows({ hasReason: true, hasSummary: true, hasDossier: true })
+    expect(wired.map((row) => row.enabled)).toEqual([true, true, true, true, true, true])
+    expect(wired[5]!.id).toBe(CONTEXT_MENU_CLEAR) // the host's destructive row is always last
+    const dossierOnly = contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: true })
+    expect(dossierOnly.map((row) => row.enabled)).toEqual([true, false, false, true, true, true])
   })
 
   test("arrow selection wraps at both ends and skips disabled rows", () => {
-    const rows = contextMenuRows({ hasReason: false, hasSummary: false }) // 0 and 3 enabled
-    expect(nextMenuIndex(0, 1, rows)).toBe(3) // straight past the two disabled rows
-    expect(nextMenuIndex(3, 1, rows)).toBe(0) // wraps to the top
-    expect(nextMenuIndex(0, -1, rows)).toBe(3) // backwards past the guard rail
-    expect(nextMenuIndex(3, -1, rows)).toBe(0)
-    const wired = contextMenuRows({ hasReason: true, hasSummary: true })
+    const rows = contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false }) // 0 and 5 enabled
+    expect(nextMenuIndex(0, 1, rows)).toBe(5) // straight past the four disabled rows
+    expect(nextMenuIndex(5, 1, rows)).toBe(0) // wraps to the top
+    expect(nextMenuIndex(0, -1, rows)).toBe(5) // backwards past the guard rail
+    expect(nextMenuIndex(5, -1, rows)).toBe(0)
+    const partial = contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: true }) // 0, 3, 4, 5 enabled
+    expect(nextMenuIndex(2, 1, partial)).toBe(3) // the first dossier row follows the summary row
+    expect(nextMenuIndex(4, 1, partial)).toBe(5) // save dossier -> clear
+    const wired = contextMenuRows({ hasReason: true, hasSummary: true, hasDossier: true })
     expect(nextMenuIndex(0, 1, wired)).toBe(1) // no rows skipped when everything is wired
     expect(nextMenuIndex(2, 1, wired)).toBe(3)
   })
@@ -865,9 +870,9 @@ describe("contextMenuRows + nextMenuIndex (the keyboard arm's pure model)", () =
 })
 
 describe("hudCardRows with the context menu", () => {
-  test("the menu adds exactly four rows to the absolute-mount anchor; the default stays unchanged", () => {
+  test("the menu adds exactly six rows to the absolute-mount anchor; the default stays unchanged", () => {
     const base = hudCardRows(loopedGoal())
-    expect(hudCardRows(loopedGoal(), true)).toBe(base + 4)
+    expect(hudCardRows(loopedGoal(), true)).toBe(base + 6)
     expect(hudCardRows(loopedGoal(), false)).toBe(base)
     expect(hudCardRows(loopedGoal())).toBe(base)
   })
@@ -1294,7 +1299,7 @@ describe("HudCard context menu — keyboard selection paints like hover", () => 
 
   test("the clear row paints bold under the selection, hue stays the danger contract (mono keeps the word)", async () => {
     const { frame, setup } = await render(() => (
-      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono={true} contextOpen={true} menuSelected={() => 3} />
+      <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono={true} contextOpen={true} menuSelected={() => 5} />
     ))
     const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
     const clearRow = spans.find((span) => span.text === "clear goal")

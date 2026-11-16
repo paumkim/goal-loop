@@ -51,6 +51,7 @@ const HAND_LABELS: readonly (readonly [prefix: string, label: string])[] = [
   ["completed iterations", "iterations"],
   ["verdict trail", "verdicts"],
   ["boundary compaction", "compaction"],
+  ["re-anchor", "re-anchor"],
   ["verify gate", "verify"],
   ["totals", "totals"],
 ]

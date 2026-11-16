@@ -20,7 +20,7 @@ import { exportLoopDossier } from "./core/dossier-export.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
@@ -463,14 +463,14 @@ export default Plugin.define({
     const [statusCopied, setStatusCopied] = createSignal(false)
     // Right-click context menu on the HUD card: TUI-local view state like the pin and the card itself.
     const [contextOpen, setContextOpen] = createSignal(false)
-    // The keyboard arm of the open menu: ↑/↓ move a selection index over the same four rows the mouse paints (disabled rows are skipped — the inert-row contract), enter activates, esc collapses the menu before the card. Reset to the first row on every open.
+    // The keyboard arm of the open menu: ↑/↓ move a selection index over the same six rows the mouse paints (disabled rows are skipped — the inert-row contract), enter activates, esc collapses the menu before the card. Reset to the first row on every open.
     const [contextIndex, setContextIndex] = createSignal(0)
     const contextRowsFor = (sessionID: string | undefined) => {
       try {
         const goal = sessionID ? entries()[sessionID]?.goal : undefined
-        return contextMenuRows({ hasReason: Boolean(goal?.reason), hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary) })
+        return contextMenuRows({ hasReason: Boolean(goal?.reason), hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary), hasDossier: Boolean(goal) })
       } catch {
-        return contextMenuRows({ hasReason: false, hasSummary: false })
+        return contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false })
       }
     }
     const activateContextMenu = (sessionID: string | undefined) => {
@@ -492,6 +492,12 @@ export default Plugin.define({
             if (summary) copyToClipboard(summary, sessionID, "summary")
             break
           }
+          case CONTEXT_MENU_COPY_DOSSIER:
+            if (goal) copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier")
+            break
+          case CONTEXT_MENU_SAVE_DOSSIER:
+            exportDossier(sessionID, goal)
+            break
           case CONTEXT_MENU_CLEAR:
             setContextOpen(false)
             setHudSession(undefined)
@@ -759,6 +765,8 @@ export default Plugin.define({
                     onCloseMenu={() => { setContextOpen(false); setContextIndex(0) }}
                     onCopyReason={(reason) => copyToClipboard(reason, props.sessionID, "reason")}
                     onCopySummary={(summary) => copyToClipboard(summary, props.sessionID, "summary")}
+                    onCopyDossier={() => { const g = entries()[props.sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), props.sessionID, "dossier") }}
+                    onSaveDossier={() => exportDossier(props.sessionID, entries()[props.sessionID]?.goal)}
                     pinned={pinnedNow()}
                     onTogglePin={() => togglePin(props.sessionID)}
                   />

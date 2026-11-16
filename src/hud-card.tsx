@@ -23,7 +23,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_CLEAR, type CompactMarkerTone } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type CompactMarkerTone } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -69,7 +69,7 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 )
 
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
-const CONTEXT_MENU_ROWS = 4
+const CONTEXT_MENU_ROWS = 6
 
 /** Narrowest card the layout serves: border (2) + padding (2) + LABEL (10) leaves a 38-cell content lane at the floor. */
 export const CARD_WIDTH_MIN = 52
@@ -120,7 +120,7 @@ export interface CardRowPlan {
  * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
  * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the context
  * meter, then the why row, then the last verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
- * ceiling with the menu open (5 core rows + 4 menu rows > maxRows) the anchor still exceeds the ceiling;
+ * ceiling with the menu open (5 core rows + 6 menu rows > maxRows) the anchor still exceeds the ceiling;
  * rows are deliberately left unclamped in that pathological case — the absolute box is anchored
  * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
  * Below maxRows = 9 the card always keeps enough rows to stay dismissible.
@@ -341,6 +341,10 @@ export const HudCard = (props: {
   onCopyReason?: (reason: string) => void
   /** Wired by the host; absent callback renders the summary row inert. */
   onCopySummary?: (summary: string) => void
+  /** Wired by the host; absent callback renders both dossier rows inert (never a trap — the host wires both or neither). */
+  onCopyDossier?: () => void
+  /** Wired by the host; absent callback renders both dossier rows inert. Writes the record as a file through the host (`goal.dossier.export` path) — one O_EXCL write, one receipt. */
+  onSaveDossier?: () => void
   /** Viewport ceiling for the card's total rows (mirror of ClampedColumn's `height - 1`). The plan drops the
    * teaching hint, then spend, then the context meter, then the why row, then the last-verdict row, then remediation (the final rung). Absent: unlimited. */
   maxRows?: number
@@ -596,10 +600,10 @@ export const HudCard = (props: {
         <box flexGrow={1} />
         <HudButton theme={theme()} label="esc" mono={mono()} onPress={props.onClose} />
       </box>
-      {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 4 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
+      {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 6 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
       <Show when={props.contextOpen}>
         <box flexDirection="column" marginTop={0}>
-          {contextMenuRows({ hasReason: Boolean(g().reason && props.onCopyReason), hasSummary: Boolean(latestSummary() && props.onCopySummary) }).map((row, index) => {
+          {contextMenuRows({ hasReason: Boolean(g().reason && props.onCopyReason), hasSummary: Boolean(latestSummary() && props.onCopySummary), hasDossier: Boolean(props.onCopyDossier && props.onSaveDossier) }).map((row, index) => {
             const gutter = index === 0 ? "menu" : ""
             const selected = () => (props.menuSelected?.() ?? 0) === index
             switch (row.id) {
@@ -609,6 +613,10 @@ export const HudCard = (props: {
                 return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => { const r = g().reason; if (r) props.onCopyReason?.(r) })} />
               case CONTEXT_MENU_COPY_SUMMARY:
                 return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => { const s = latestSummary(); if (s) props.onCopySummary?.(s) })} />
+              case CONTEXT_MENU_COPY_DOSSIER:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => props.onCopyDossier?.())} />
+              case CONTEXT_MENU_SAVE_DOSSIER:
+                return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} enabled={row.enabled} selected={selected()} onPress={menuAction(() => props.onSaveDossier?.())} />
               case CONTEXT_MENU_CLEAR:
                 return <HudMenuRow theme={theme()} mono={mono()} gutter={gutter} text={row.text} danger={row.danger} enabled={row.enabled} selected={selected()} onPress={menuAction(() => props.onClear())} />
             }

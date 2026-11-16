@@ -97,18 +97,19 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
 }
 
 /**
- * The HUD card's context menu, as data. Right-click the card paints four rows in a fixed order —
- * the power copies without leaving the hand — and until now the set existed only as JSX, out of
- * reach of the keymap: the menu was the card's one mouse-only island. The rows live here so the
- * paint path (hud-card.tsx maps them), the keyboard path (tui.tsx activates by id) and the tests
- * all read one source instead of three hand-mirrored copies of the enabled predicates.
+ * The HUD card's context menu, as data. Right-click the card paints six rows in a fixed order —
+ * the power copies and the record's file doors without leaving the hand — and until recently the set
+ * existed only as JSX, out of reach of the keymap: the menu was the card's one mouse-only island.
+ * The rows live here so the paint path (hud-card.tsx maps them), the keyboard path (tui.tsx
+ * activates by id) and the tests all read one source instead of three hand-mirrored copies of the
+ * enabled predicates.
  *
  * `enabled` mirrors the mouse grammar: rows whose payload does not exist (no evaluator reason on
  * the record, no landed summary in loopHistory) render faint, light up never, and the click is
  * swallowed. The keyboard twin skips disabled rows by the same contract — selection can rest on a
  * disabled row only transiently if every row is disabled (index stays put).
  */
-export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "clear"
+export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
 
 export interface ContextMenuRow {
   readonly id: ContextMenuId
@@ -120,12 +121,16 @@ export interface ContextMenuRow {
 export const CONTEXT_MENU_COPY_CONDITION: ContextMenuId = "copy-condition"
 export const CONTEXT_MENU_COPY_REASON: ContextMenuId = "copy-reason"
 export const CONTEXT_MENU_COPY_SUMMARY: ContextMenuId = "copy-summary"
+export const CONTEXT_MENU_COPY_DOSSIER: ContextMenuId = "copy-dossier"
+export const CONTEXT_MENU_SAVE_DOSSIER: ContextMenuId = "save-dossier"
 export const CONTEXT_MENU_CLEAR: ContextMenuId = "clear"
 
-export const contextMenuRows = (args: { readonly hasReason: boolean; readonly hasSummary: boolean }): readonly ContextMenuRow[] => [
+export const contextMenuRows = (args: { readonly hasReason: boolean; readonly hasSummary: boolean; readonly hasDossier: boolean }): readonly ContextMenuRow[] => [
   { id: CONTEXT_MENU_COPY_CONDITION, text: "copy condition", enabled: true, danger: false },
   { id: CONTEXT_MENU_COPY_REASON, text: "copy evaluator reason", enabled: args.hasReason, danger: false },
   { id: CONTEXT_MENU_COPY_SUMMARY, text: "copy latest summary", enabled: args.hasSummary, danger: false },
+  { id: CONTEXT_MENU_COPY_DOSSIER, text: "copy dossier", enabled: args.hasDossier, danger: false },
+  { id: CONTEXT_MENU_SAVE_DOSSIER, text: "save dossier file", enabled: args.hasDossier, danger: false },
   { id: CONTEXT_MENU_CLEAR, text: "clear goal", enabled: true, danger: true },
 ]
 
