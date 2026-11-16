@@ -1372,6 +1372,17 @@
       "submittedAt": "2026-11-16T06:42:38Z",
       "mergedAt": "2026-11-16T06:42:53Z",
       "mergedInto": "dev"
+    },
+    "tui-card-spend": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-card-spend",
+      "worktree": "worktrees/wt-tui-card-spend",
+      "status": "done",
+      "createdAt": "2026-11-16T06:45:53Z",
+      "submittedAt": "2026-11-16T06:47:26Z",
+      "mergedAt": "2026-11-16T06:49:40Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
