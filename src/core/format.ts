@@ -5,6 +5,35 @@ import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 /** Grapheme clusters, so a truncation boundary never splits an emoji, a flag or a combining sequence. */
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
 
+/**
+ * Rows a `wrapMode="word"` cell needs to paint `text` at `width` terminal cells. Greedy word wrap on
+ * single spaces (the card's remediation grammar), width measured with stringWidth, never mid-word.
+ * A word longer than the line hard-breaks across as many rows as it needs. An empty string paints one
+ * line. Matches the card's `flexGrow` cell, which wraps at spaces and hard-breaks what cannot fit.
+ */
+export function wrapLines(text: string, width: number): number {
+  const max = Math.max(1, Math.floor(width))
+  let lines = 1
+  let used = 0
+  for (const word of text.split(" ")) {
+    if (word === "") continue
+    const w = stringWidth(word)
+    const sep = used === 0 ? 0 : 1
+    if (used > 0 && used + sep + w > max) {
+      lines += 1
+      used = 0
+    }
+    if (w > max) {
+      const extra = Math.floor((w - 1) / max)
+      lines += extra
+      used = w % max === 0 ? max : w % max
+    } else {
+      used += (used === 0 ? 0 : 1) + w
+    }
+  }
+  return lines
+}
+
 export const GOAL_GLYPH = "\u25CE"
 
 export function formatDuration(ms: number): string {

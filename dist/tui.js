@@ -176,6 +176,29 @@ var COMPACT_MISS_CAP = 4;
 
 // src/core/format.ts
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
+function wrapLines(text, width) {
+  const max = Math.max(1, Math.floor(width));
+  let lines = 1;
+  let used = 0;
+  for (const word of text.split(" ")) {
+    if (word === "")
+      continue;
+    const w = stringWidth(word);
+    const sep = used === 0 ? 0 : 1;
+    if (used > 0 && used + sep + w > max) {
+      lines += 1;
+      used = 0;
+    }
+    if (w > max) {
+      const extra = Math.floor((w - 1) / max);
+      lines += extra;
+      used = w % max === 0 ? max : w % max;
+    } else {
+      used += (used === 0 ? 0 : 1) + w;
+    }
+  }
+  return lines;
+}
 var GOAL_GLYPH = "\u25CE";
 function formatDuration(ms) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -1584,7 +1607,52 @@ var Hint = (props) => (() => {
   return _el$;
 })();
 var CONTEXT_MENU_ROWS = 4;
-var hudCardRows = (goal, contextOpen = false) => 5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0) + (contextOpen ? CONTEXT_MENU_ROWS : 0);
+var REMEDIATION_WIDTH = 49;
+var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => {
+  const remediation = remediationFor(goal);
+  const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0;
+  const hintAvailable = Boolean(evaluatorHint(goal));
+  const spendAvailable = Boolean(goal.spend);
+  const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
+  const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
+  const fit = (hint, spend, last) => 5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + remediationRows + (hint && hintAvailable ? 1 : 0) + menu;
+  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable;
+  let rows = fit(hint, spend, last);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      last
+    };
+  hint = false;
+  rows = fit(hint, spend, last);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      last
+    };
+  spend = false;
+  rows = fit(hint, spend, last);
+  if (rows <= maxRows)
+    return {
+      rows,
+      hint,
+      spend,
+      last
+    };
+  last = false;
+  rows = fit(hint, spend, last);
+  return {
+    rows,
+    hint,
+    spend,
+    last
+  };
+};
+var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY) => cardRowPlan(goal, contextOpen, maxRows).rows;
 var pinBudget = (terminalWidth, pillTextLength) => Math.floor(terminalWidth) - Math.floor(pillTextLength) - PIN_PREFIX.length - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy";
@@ -1757,8 +1825,9 @@ var HudCard = (props) => {
     const entry = last();
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0;
   };
+  const plan = () => cardRowPlan(g(), props.contextOpen === true, props.maxRows ?? Number.POSITIVE_INFINITY);
   const remediation = () => remediationFor(g());
-  const hint = () => evaluatorHint(g());
+  const hint = () => plan().hint ? evaluatorHint(g()) : undefined;
   const latestSummary = () => g().loopHistory?.at(-1)?.summary;
   const copyCondition = () => {
     try {
@@ -1839,7 +1908,7 @@ var HudCard = (props) => {
     _$insert3(_el$17, () => `${looped() ? `v${iteration()}${cap()}${pips() ? ` ${pips()}` : ""} \xB7 ` : ""}${turns()} turn${turns() === 1 ? "" : "s"} \xB7 ${formatDurationCoarse(props.elapsedMs())}`);
     _$insert3(_el$0, _$createComponent3(Show3, {
       get when() {
-        return g().spend;
+        return _$memo3(() => !!plan().spend)() ? g().spend : undefined;
       },
       children: (spend) => (() => {
         var _el$21 = _$createElement3("box"), _el$22 = _$createElement3("text"), _el$24 = _$createElement3("text");
@@ -1896,7 +1965,7 @@ var HudCard = (props) => {
     }), _el$18);
     _$insert3(_el$0, _$createComponent3(Show3, {
       get when() {
-        return last();
+        return _$memo3(() => !!plan().last)() && last();
       },
       children: (entry) => (() => {
         var _el$29 = _$createElement3("box"), _el$30 = _$createElement3("text"), _el$32 = _$createElement3("text"), _el$33 = _$createElement3("text");
@@ -2936,9 +3005,10 @@ var tui_default = Plugin.define({
           const g = showing();
           return g && getHudSession() === props.sessionID ? g : undefined;
         };
+        const maxCardRows = () => Math.max(8, dimensions().height - 2);
         const cardRows = () => {
           const g = cardFor();
-          return g ? hudCardRows(g, contextOpen()) : 0;
+          return g ? hudCardRows(g, contextOpen(), maxCardRows()) : 0;
         };
         const toggleHud = () => {
           try {
@@ -3018,6 +3088,9 @@ var tui_default = Plugin.define({
                   onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID),
                   get contextOpen() {
                     return contextOpen();
+                  },
+                  get maxRows() {
+                    return maxCardRows();
                   },
                   onToggleContext: () => setContextOpen((v) => !v),
                   onCloseMenu: () => setContextOpen(false),

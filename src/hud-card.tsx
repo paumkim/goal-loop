@@ -17,7 +17,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { formatDurationCoarse, formatSpend, GOAL_GLYPH, truncate } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, GOAL_GLYPH, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
@@ -64,9 +64,56 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 4
 
-/** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. Pass `contextOpen` so the anchor grows with the menu. */
-export const hudCardRows = (goal: GoalSnapshot, contextOpen = false): number =>
-  5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0) + (contextOpen ? CONTEXT_MENU_ROWS : 0)
+/**
+ * Cells available to the remediation text: the 64-cell default card minus the border (2),
+ * the horizontal padding (2), the LABEL column (10) and the gap (1). `wrapMode="word"` wraps at this width.
+ */
+export const REMEDIATION_WIDTH = 49
+
+export interface CardRowPlan {
+  /** Rows the card occupies including the border. */
+  readonly rows: number
+  /** Whether the teaching hint row fits the budget. */
+  readonly hint: boolean
+  /** Whether the spend row fits the budget. */
+  readonly spend: boolean
+  /** Whether the last-verdict row fits the budget. */
+  readonly last: boolean
+}
+
+/**
+ * The one place that decides the card's height. The remediation row wraps at REMEDIATION_WIDTH cells,
+ * so its cost is the greedy word wrap of the actual text, never a flat guess. Under `maxRows` — the
+ * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
+ * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the last
+ * verdict. The remediation and the menu never drop; if even the irreducible core exceeds the ceiling,
+ * the anchor clamps and the renderer clips the top rows rather than the dismiss affordance at the bottom.
+ */
+export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): CardRowPlan => {
+  const remediation = remediationFor(goal)
+  const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0
+  const hintAvailable = Boolean(evaluatorHint(goal))
+  const spendAvailable = Boolean(goal.spend)
+  const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
+  const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
+  const fit = (hint: boolean, spend: boolean, last: boolean): number =>
+    5 + (spend && spendAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + remediationRows + (hint && hintAvailable ? 1 : 0) + menu
+  let hint = hintAvailable, spend = spendAvailable, last = lastAvailable
+  let rows = fit(hint, spend, last)
+  if (rows <= maxRows) return { rows, hint, spend, last }
+  hint = false
+  rows = fit(hint, spend, last)
+  if (rows <= maxRows) return { rows, hint, spend, last }
+  spend = false
+  rows = fit(hint, spend, last)
+  if (rows <= maxRows) return { rows, hint, spend, last }
+  last = false
+  rows = fit(hint, spend, last)
+  return { rows, hint, spend, last }
+}
+
+/** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
+export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): number => cardRowPlan(goal, contextOpen, maxRows).rows
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
@@ -216,6 +263,9 @@ export const HudCard = (props: {
   onCopyReason?: (reason: string) => void
   /** Wired by the host; absent callback renders the summary row inert. */
   onCopySummary?: (summary: string) => void
+  /** Viewport ceiling for the card's total rows (mirror of ClampedColumn's `height - 1`). The plan drops the
+   * teaching hint, then spend, then the last-verdict row to fit; remediation and menu never drop. Absent: unlimited. */
+  maxRows?: number
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -240,9 +290,11 @@ export const HudCard = (props: {
     const entry = last()
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0
   }
+  // One plan, same arithmetic as hudCardRows(): rows the mount anchors with == rows painted here.
+  const plan = () => cardRowPlan(g(), props.contextOpen === true, props.maxRows ?? Number.POSITIVE_INFINITY)
   const remediation = () => remediationFor(g())
   // A freshly armed goal teaches one thing: the evaluator reads only the transcript. Gone after turn 1.
-  const hint = () => evaluatorHint(g())
+  const hint = () => (plan().hint ? evaluatorHint(g()) : undefined)
   const latestSummary = () => g().loopHistory?.at(-1)?.summary
   const copyCondition = () => {
     try {
@@ -320,8 +372,8 @@ export const HudCard = (props: {
           {`${looped() ? `v${iteration()}${cap()}${pips() ? ` ${pips()}` : ""} · ` : ""}${turns()} turn${turns() === 1 ? "" : "s"} · ${formatDurationCoarse(props.elapsedMs())}`}
         </text>
       </box>
-      {/* spend — what this loop is costing, from the session usage RPC; omitted when the server cannot estimate (same contract as the dialog's spend row) */}
-      <Show when={g().spend}>
+      {/* spend — what this loop is costing, from the session usage RPC; omitted when the server cannot estimate (same contract as the dialog's spend row), and by the row plan under a viewport ceiling */}
+      <Show when={plan().spend ? g().spend : undefined}>
         {(spend) => (
           <box flexDirection="row" gap={1}>
             <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
@@ -346,8 +398,8 @@ export const HudCard = (props: {
           </box>
         )}
       </Show>
-      {/* last verdict — the evaluator's most recent call */}
-      <Show when={last()}>
+      {/* last verdict — the evaluator's most recent call; dropped by the row plan under a viewport ceiling */}
+      <Show when={plan().last && last()}>
         {(entry) => (
           <box flexDirection="row" gap={1}>
             <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
