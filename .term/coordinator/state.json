@@ -1141,6 +1141,17 @@
       "submittedAt": "2026-11-16T02:49:25Z",
       "mergedAt": "2026-11-16T02:49:44Z",
       "mergedInto": "dev"
+    },
+    "env-vars-test": {
+      "agent": "opencode",
+      "paths": "test/env-vars.test.ts,SPEC.md",
+      "branch": "wt/env-vars-test",
+      "worktree": "worktrees/wt-env-vars-test",
+      "status": "done",
+      "createdAt": "2026-11-16T02:51:46Z",
+      "submittedAt": "2026-11-16T02:52:47Z",
+      "mergedAt": "2026-11-16T02:53:00Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
