@@ -8,12 +8,16 @@ or `p` in the dialog) the pill appends the condition truncated to the remaining 
 the conversation scrolls; a soft bold pulse marks an in-flight evaluation and never runs while idle or when
 reduced motion is requested (NO_COLOR, TERM=dumb). (b) A compact HUD card: a
 bordered floating panel painted above the jump row (absolute box, theme tokens only) with the condition (click
-to copy), the live state row, the last verdict, failure-first-class remediation when the loop is hot or failed,
+to copy), the state row (live or terminal), the last verdict, failure-first-class remediation when the loop is hot or failed,
 and clickable `details` / `pin` / `clear goal` / `esc` buttons; Esc dismisses. (c) The `/goal` detail view: a
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, and clickable `copy condition` / `pin condition` / `clear
-goal` footer buttons (`p` toggles the pin).
-State transitions surface as host toasts (see `src/tui.tsx`, `src/hud-card.tsx`, `src/core/hud.ts`). The
+goal` footer buttons (`p` toggles the pin). When a goal goes live→terminal (achieved / impossible / failed, never
+`cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
+(`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
+wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
+title border and remediation row all reflect the outcome). `cleared` stays silent — a deliberate reset is not
+an announcement. State transitions also surface as host toasts. The
 exceptions to "host-owned layout" are the two absolute boxes (pill, card) of the slot claim; toasts, dialog
 chrome and sizing stay the host's.
 The project `opencode.json` points at the local checkout.
@@ -398,7 +402,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=625 -->
+<!-- spec-check files=43 tests=633 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

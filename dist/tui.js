@@ -259,6 +259,21 @@ var pillModel = (goal, elapsed) => {
   }
   return { text: `${GOAL_GLYPH} goal ${state} \xB7 ${formatDurationCoarse(elapsed)}${turns}`, tone };
 };
+var TERMINAL_ACK_MS = 45000;
+var terminalPill = (goal, elapsed) => {
+  const tone = goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined;
+  if (!tone)
+    return;
+  const word = goal.status === "achieved" ? goal.loopEnabled ? "complete" : "achieved" : goal.status;
+  const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
+  const span = `${formatDurationCoarse(elapsed)}${turns}`;
+  if (goal.loopEnabled) {
+    const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
+    const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1);
+    return { text: `${GOAL_GLYPH} loop ${word} \xB7 v${iteration}${cap} \xB7 ${span}`, tone };
+  }
+  return { text: `${GOAL_GLYPH} goal ${word} \xB7 ${span}`, tone };
+};
 var PIN_MIN_WIDTH = 12;
 var PIN_PREFIX = " \xB7 pin: ";
 var pinSuffix = (condition, conditionMax) => {
@@ -274,6 +289,9 @@ var motionDisabled = (env) => env.NO_COLOR !== undefined || env.TERM === "dumb";
 var remediationFor = (goal) => {
   if (goal.status === "failed") {
     return { tone: "error", text: `goal failed \u2014 /goal clear to reset` };
+  }
+  if (goal.status === "impossible") {
+    return { tone: "warning", text: `judged impossible \xB7 rephrase the condition, else /goal clear` };
   }
   const pending = goal.loopCompact && goal.loopCompact.landedAt === undefined ? goal.loopCompact : undefined;
   if (pending && pending.misses >= 2) {
@@ -917,7 +935,7 @@ import { createElement as _$createElement3 } from "@opentui/solid";
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { createSignal, Show as Show3 } from "solid-js";
 var CONDITION_MAX = 42;
-var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active";
+var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active" : goal.status;
 var verdictColor = (theme, verdict) => verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint;
 var Hint = (props) => (() => {
   var _el$ = _$createElement3("text");
@@ -971,7 +989,16 @@ var HudCard = (props) => {
   const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1);
   const pips = () => looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "";
   const title = () => looped() ? `${GOAL_GLYPH} /goal-loop \xB7 v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`;
-  const borderColor = () => isCompactHot(g()) || g().status === "paused" ? theme().text.feedback.warning.base : theme().border?.base ?? theme().text.faint;
+  const borderColor = () => {
+    const s = g().status;
+    if (s === "achieved")
+      return theme().text.feedback.info.base;
+    if (s === "failed")
+      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
+    if (s === "impossible" || s === "paused" || isCompactHot(g()))
+      return theme().text.feedback.warning.base;
+    return theme().border?.base ?? theme().text.faint;
+  };
   const turns = () => g().turns;
   const stateColor = () => {
     const s = g().status;
@@ -979,6 +1006,12 @@ var HudCard = (props) => {
       return theme().text.feedback.warning.base;
     if (s === "active")
       return theme().text.feedback.info.base;
+    if (s === "achieved")
+      return theme().text.feedback.info.base;
+    if (s === "impossible")
+      return theme().text.feedback.warning.base;
+    if (s === "failed")
+      return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base;
     return theme().text.faint;
   };
   const last = () => lastVerdict(g().history ?? []);
@@ -1583,6 +1616,40 @@ var tui_default = Plugin.define({
         location
       } : undefined;
     };
+    const [terminalAcks, setTerminalAcks] = createSignal2({});
+    const terminalTimers = new Set;
+    const noteTerminal = (sessionID, goal) => {
+      const ack = {
+        goal,
+        at: Date.now()
+      };
+      setTerminalAcks((previous) => ({
+        ...previous,
+        [sessionID]: ack
+      }));
+      const timer = setTimeout(() => {
+        terminalTimers.delete(timer);
+        setTerminalAcks((previous) => {
+          if (previous[sessionID]?.at !== ack.at)
+            return previous;
+          const next = {
+            ...previous
+          };
+          delete next[sessionID];
+          return next;
+        });
+      }, TERMINAL_ACK_MS);
+      terminalTimers.add(timer);
+    };
+    const dropTerminal = (sessionID) => setTerminalAcks((previous) => {
+      if (!previous[sessionID])
+        return previous;
+      const next = {
+        ...previous
+      };
+      delete next[sessionID];
+      return next;
+    });
     const refresh = (sessionID) => rpc.get({
       sessionID
     }, at(sessionID)).then((result) => {
@@ -1590,19 +1657,30 @@ var tui_default = Plugin.define({
       if (output)
         put(sessionID, output.goal);
     });
-    const put = (sessionID, goal) => setEntries((previous) => {
-      const existing = previous[sessionID];
-      if (existing && goalsEqual(existing.goal, goal))
-        return previous;
-      const next = {
-        ...previous,
-        [sessionID]: {
-          goal,
-          receivedAt: Date.now()
+    const put = (sessionID, goal) => {
+      try {
+        const previous = entries()[sessionID]?.goal;
+        const unchanged = previous && goal ? goalsEqual(previous, goal) : false;
+        if (!unchanged && goal && previous && isLive(previous.status) && !isLive(goal.status) && goal.status !== "cleared") {
+          noteTerminal(sessionID, goal);
+        } else if (goal && isLive(goal.status)) {
+          dropTerminal(sessionID);
         }
-      };
-      return pruneSnapshotEntries(next, statusDialogSession());
-    });
+      } catch {}
+      return setEntries((previous) => {
+        const existing = previous[sessionID];
+        if (existing && goalsEqual(existing.goal, goal))
+          return previous;
+        const next = {
+          ...previous,
+          [sessionID]: {
+            goal,
+            receivedAt: Date.now()
+          }
+        };
+        return pruneSnapshotEntries(next, statusDialogSession());
+      });
+    };
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
         return;
@@ -1754,6 +1832,14 @@ var tui_default = Plugin.define({
             return;
           }
         });
+        const terminal = () => {
+          try {
+            return props.sessionID ? terminalAcks()[props.sessionID]?.goal : undefined;
+          } catch {
+            return;
+          }
+        };
+        const showing = () => goal() ?? terminal();
         const elapsed = () => {
           try {
             const g = goal();
@@ -1767,7 +1853,10 @@ var tui_default = Plugin.define({
         const pill = () => {
           try {
             const g = goal();
-            return g ? pillModel(g, elapsed()) : undefined;
+            if (g)
+              return pillModel(g, elapsed());
+            const t = terminal();
+            return t ? terminalPill(t, t.elapsedMs) : undefined;
           } catch {
             return;
           }
@@ -1799,14 +1888,16 @@ var tui_default = Plugin.define({
         };
         const color = () => {
           const tone = pill()?.tone;
-          if (tone === "paused" || tone === "hot")
+          if (tone === "paused" || tone === "hot" || tone === "impossible")
             return context.theme.text.feedback.warning.base;
-          if (tone === "evaluating" || tone === "waiting")
+          if (tone === "failed")
+            return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base;
+          if (tone === "achieved" || tone === "evaluating" || tone === "waiting")
             return context.theme.text.feedback.info.base;
           return context.theme.text.muted;
         };
         const cardFor = () => {
-          const g = goal();
+          const g = showing();
           return g && getHudSession() === props.sessionID ? g : undefined;
         };
         const cardRows = () => {
@@ -1820,7 +1911,7 @@ var tui_default = Plugin.define({
         };
         return _$createComponent4(Show4, {
           get when() {
-            return goal();
+            return showing();
           },
           get children() {
             return [(() => {
@@ -2064,6 +2155,10 @@ var tui_default = Plugin.define({
     }));
     return () => {
       clearInterval(timer);
+      for (const pending of terminalTimers)
+        clearTimeout(pending);
+      terminalTimers.clear();
+      setTerminalAcks({});
       offChanged();
       offNotice();
       setStatusDialogOpen(false);

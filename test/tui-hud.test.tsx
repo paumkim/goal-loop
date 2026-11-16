@@ -9,7 +9,8 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS } from "../src/core/hud.ts"
+import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
@@ -135,6 +136,13 @@ describe("remediationFor", () => {
     expect(fix?.text).toContain("/goal clear")
   })
 
+  test("an impossible verdict renders a rephrase-or-clear remediation", () => {
+    const fix = remediationFor(loopedGoal({ status: "impossible", reason: "no feasible path" }))
+    expect(fix?.tone).toBe("warning")
+    expect(fix?.text).toContain("rephrase")
+    expect(fix?.text).toContain("/goal clear")
+  })
+
   test("hot compaction renders the /compact hint and the verifyCommand suggestion", () => {
     const fix = remediationFor(loopedGoal({ loopCompact: { requestedAt: now - 60_000, estimatedTokens: 182_000, iteration: 3, misses: 2 } }))
     expect(fix?.tone).toBe("warning")
@@ -190,6 +198,42 @@ describe("pinSuffix", () => {
 describe("pinBudget", () => {
   test("subtracts the pill text, the pin prefix and one cell of breathing room", () => {
     expect(pinBudget(80, 40)).toBe(80 - 40 - " · pin: ".length - 1)
+  })
+})
+
+describe("terminalPill", () => {
+  test("a finished single goal renders the acknowledgment with frozen elapsed and turns", () => {
+    const model = terminalPill(loopedGoal({ status: "achieved", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 4, elapsedMs: 1000 * 60 * 12 }), 1000 * 60 * 12)
+    expect(model?.tone).toBe("achieved")
+    expect(model?.text).toBe(`${GOAL_GLYPH} goal achieved · 12m · 4 turns`)
+  })
+
+  test("a finished loop renders the completion grammar with iteration and cap", () => {
+    const model = terminalPill(loopedGoal({ status: "achieved", loopIteration: 5, loopMaxLoops: 5, turns: 31, elapsedMs: 1000 * 60 * 48 }), 1000 * 60 * 48)
+    expect(model?.tone).toBe("achieved")
+    expect(model?.text).toBe(`${GOAL_GLYPH} loop complete · v5/5 · 48m · 31 turns`)
+  })
+
+  test("an impossible verdict renders in the same grammar", () => {
+    const model = terminalPill(loopedGoal({ status: "impossible", loopIteration: 3, turns: 9, elapsedMs: 1000 * 60 * 30 }), 1000 * 60 * 30)
+    expect(model?.tone).toBe("impossible")
+    expect(model?.text).toBe(`${GOAL_GLYPH} loop impossible · v3/5 · 30m · 9 turns`)
+  })
+
+  test("a failed goal renders the failure tone and zero-turn goals omit the turns segment", () => {
+    const model = terminalPill(loopedGoal({ status: "failed", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 0, elapsedMs: 1000 * 60 * 2 }), 1000 * 60 * 2)
+    expect(model?.tone).toBe("failed")
+    expect(model?.text).toBe(`${GOAL_GLYPH} goal failed · 2m`)
+  })
+
+  test("live and deliberately cleared goals render no acknowledgment", () => {
+    expect(terminalPill(loopedGoal({ status: "active" }), 0)).toBeUndefined()
+    expect(terminalPill(loopedGoal({ status: "paused" }), 0)).toBeUndefined()
+    expect(terminalPill(loopedGoal({ status: "cleared" }), 0)).toBeUndefined()
+  })
+
+  test("the acknowledgment window lasts 45s — long enough to notice, never furniture", () => {
+    expect(TERMINAL_ACK_MS).toBe(45_000)
   })
 })
 
@@ -249,6 +293,18 @@ describe("HudCard", () => {
     ))
     expect(frame).toContain("fix")
     expect(frame).toContain("/goal clear")
+    expect(frame).toContain("failed")
+    expect(frame).not.toContain("active")
+    await setup.renderer.destroy()
+  })
+
+  test("achieved terminal goal renders a truthful now row, never a live-looking one", async () => {
+    const goal = loopedGoal({ status: "achieved", turns: 9, reason: "all checks pass" })
+    const { frame, setup } = await render(() => (
+      <HudCard goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 38} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).toContain("achieved")
+    expect(frame).not.toContain("active")
     await setup.renderer.destroy()
   })
 

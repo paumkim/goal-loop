@@ -40,7 +40,15 @@ export interface HudCardTheme {
 
 const CONDITION_MAX = 42
 const stateWord = (goal: GoalSnapshot): string =>
-  goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : "active"
+  goal.status === "paused"
+    ? "paused"
+    : goal.status === "active"
+      ? goal.evaluating
+        ? "checking"
+        : goal.waiting
+          ? "waiting"
+          : "active"
+      : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
 const verdictColor = (theme: HudCardTheme, verdict: Verdict): ColorInput =>
   verdict === "met" ? theme.text.feedback.info.base : verdict === "impossible" ? theme.text.feedback.warning.base : theme.text.faint
 
@@ -114,13 +122,21 @@ export const HudCard = (props: {
   const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops) : "")
   const title = () =>
     looped() ? `${GOAL_GLYPH} /goal-loop · v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`
-  const borderColor = () =>
-    isCompactHot(g()) || g().status === "paused" ? theme().text.feedback.warning.base : (theme().border?.base ?? theme().text.faint)
+  const borderColor = () => {
+    const s = g().status
+    if (s === "achieved") return theme().text.feedback.info.base
+    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
+    if (s === "impossible" || s === "paused" || isCompactHot(g())) return theme().text.feedback.warning.base
+    return theme().border?.base ?? theme().text.faint
+  }
   const turns = () => g().turns
   const stateColor = () => {
     const s = g().status
     if (s === "paused") return theme().text.feedback.warning.base
     if (s === "active") return theme().text.feedback.info.base
+    if (s === "achieved") return theme().text.feedback.info.base
+    if (s === "impossible") return theme().text.feedback.warning.base
+    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
     return theme().text.faint
   }
   const last = () => lastVerdict(g().history ?? [])
