@@ -16,6 +16,7 @@ import { buildLoopDossier } from "./core/dossier.ts"
 import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
 import { dossierOutline, type DossierOutlineEntry } from "./core/dossier-outline.ts"
 import { verifyAckSegment, type VerifyOutcome } from "./core/verify-record.ts"
+import { reachAckSegment, type ReachOutcome } from "./core/reach-record.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
@@ -76,6 +77,8 @@ export const StatusDialogBody = (props: {
   onSaveDossier?: () => void
   /** When set, the dossier view paints a verify row under the save row: one click re-checks every sha the record quotes against the repository at the host's cwd and copies the Markdown verification report (palette twin: `goal.dossier.verify`). The clicked row paints the outcome in place for the usual acknowledgment window (`✓ 6/6 resolve` / ascii `+ 6/6 resolve`). The host returns the outcome counts; a host that returns undefined paints no ack — the click is acknowledged only when the record was actually swept. Unwired, the row does not paint (the document renders exactly as before). */
   onVerifyDossier?: () => VerifyOutcome | undefined
+  /** When set, the dossier view paints a reach row under the verify row: one click asks whether every sha the record quotes is an ancestor of HEAD at the host's cwd and copies the Markdown ancestry report (palette twin: `goal.dossier.reach`). The clicked row paints the outcome in place for the usual acknowledgment window (`✓ 6/6 on this line` / ascii `+ 6/6 on this line`). The host returns the outcome counts; a host that returns undefined paints no ack — the click is acknowledged only when the ancestry sweep actually ran. Unwired, the row does not paint (the document renders exactly as before). */
+  onReachDossier?: () => ReachOutcome | undefined
   /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
@@ -235,12 +238,20 @@ export const StatusDialogBody = (props: {
     if (verifyTimer) clearTimeout(verifyTimer)
   })
   const verifySuffix = () => verifyAck() ?? ""
+  // The reach row's ack carries the ancestry sweep's truth, not just a verb — same contract as the verify row, one question further (HEAD, not the object store).
+  const [reachAck, setReachAck] = createSignal<string | null>(null)
+  let reachTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (reachTimer) clearTimeout(reachTimer)
+  })
+  const reachSuffix = () => reachAck() ?? ""
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [dossierHovered, setDossierHovered] = createSignal(false)
   const [saveHovered, setSaveHovered] = createSignal(false)
   const [verifyDossierHovered, setVerifyDossierHovered] = createSignal(false)
+  const [reachDossierHovered, setReachDossierHovered] = createSignal(false)
   const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
@@ -320,6 +331,20 @@ export const StatusDialogBody = (props: {
         setVerifyAck(verifyAckSegment(outcome, ascii))
         if (verifyTimer) clearTimeout(verifyTimer)
         verifyTimer = setTimeout(() => setVerifyAck(null), 2400)
+      }
+    } catch {
+      // Best-effort.
+    }
+  }
+  // The reach row's side effect lives in the host (one probe per quoted sha + a report copy, toasted there); the row paints only the outcome the host reports back. A host that returns undefined ran nothing the UI can attest to — no ack.
+  const reachDossier = () => {
+    if (!props.onReachDossier) return
+    try {
+      const outcome = props.onReachDossier()
+      if (outcome) {
+        setReachAck(reachAckSegment(outcome, ascii))
+        if (reachTimer) clearTimeout(reachTimer)
+        reachTimer = setTimeout(() => setReachAck(null), 2400)
       }
     } catch {
       // Best-effort.
@@ -597,6 +622,20 @@ export const StatusDialogBody = (props: {
                     </text>
                     <Show when={verifyDossierHovered()}>
                       <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>verify</text>
+                    </Show>
+                  </box>
+                )
+                : null}
+              {/* the reach row — the record, in reach. One click asks whether every sha the ledger quotes is an ancestor of HEAD at the host's cwd and copies the Markdown ancestry report (palette twin `goal.dossier.reach`). zIndex 1 for the same reason as the find row: the hit grid awards a cell to the last render pass over it. Painted only when the host wires onReachDossier. No chord, no footer furniture; the palette is the discovery surface */}
+              {props.onReachDossier
+                ? (
+                  <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); reachDossier() }} onMouseOver={() => setReachDossierHovered(true)} onMouseOut={() => setReachDossierHovered(false)}>
+                    {label("reach")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={reachDossierHovered() ? TextAttributes.BOLD : undefined}>
+                      {`the shas the record quotes, on this line${reachSuffix()}`}
+                    </text>
+                    <Show when={reachDossierHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>reach</text>
                     </Show>
                   </box>
                 )
