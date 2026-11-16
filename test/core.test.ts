@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens } from "../src/core/format.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatStatus, formatTokens, outcomeStory } from "../src/core/format.ts"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
   checkin,
@@ -223,6 +223,15 @@ describe("config", () => {
 })
 
 describe("format", () => {
+  test("outcomeStory renders turns, elapsed and optional loop iterations", () => {
+    expect(outcomeStory({ turns: 1, elapsedMs: 65_000 })).toBe("1 turn · 1m 05s")
+    expect(outcomeStory({ turns: 12, elapsedMs: 3_725_000 })).toBe("12 turns · 1h 02m")
+    expect(outcomeStory({ turns: 0, elapsedMs: 5_000 })).toBe("0 turns · 5s")
+    expect(outcomeStory({ turns: 34, elapsedMs: 90_000, iterations: 4 })).toBe("34 turns · 1m 30s · 4 iterations")
+    expect(outcomeStory({ turns: 3, elapsedMs: 1_000, iterations: 1 })).toBe("3 turns · 1s · 1 iteration")
+    expect(outcomeStory({ turns: 3, elapsedMs: 1_000, iterations: 0 })).toBe("3 turns · 1s")
+  })
+
   test("durations and tokens", () => {
     expect(formatDuration(5_000)).toBe("5s")
     expect(formatDuration(65_000)).toBe("1m 05s")

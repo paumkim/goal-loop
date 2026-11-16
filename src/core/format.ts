@@ -13,6 +13,20 @@ export function formatDuration(ms: number): string {
   return `${s}s`
 }
 
+/**
+ * The one-line story of a finished goal: turns, wall time, and — for loops — completed iterations.
+ * Used by the outcome toast so every user reads the shape of what happened without opening the dialog.
+ */
+export const outcomeStory = (input: { turns: number; elapsedMs: number; iterations?: number }): string => {
+  const turns = `${Math.max(0, input.turns)} turn${input.turns === 1 ? "" : "s"}`
+  const elapsed = formatDuration(input.elapsedMs)
+  const iterations =
+    typeof input.iterations === "number" && input.iterations > 0
+      ? ` · ${input.iterations} iteration${input.iterations === 1 ? "" : "s"}`
+      : ""
+  return `${turns} · ${elapsed}${iterations}`
+}
+
 /** Minute-resolution duration for always-on indicators, so they re-render rarely. */
 export function formatDurationCoarse(ms: number): string {
   const minutes = Math.floor(Math.max(0, ms) / 60_000)

@@ -185,6 +185,18 @@ describe("GoalController", () => {
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
   })
 
+  test("the outcome toast carries the story: turns · wall time · reason", async () => {
+    h = harness()
+    await h.set()
+    h.clock.t += 125_000
+    h.verdicts.push(met("all 40 tests pass"))
+    await h.turn()
+    const notice = h.notices.at(-1)
+    expect(notice?.kind).toBe("achieved")
+    expect(notice?.message).toContain("1 turn · 2m 05s")
+    expect(notice?.message).toContain("all 40 tests pass")
+  })
+
   test("evaluator receives turn number, elapsed time and spend since the goal was set", async () => {
     await h.set()
     h.clock.t += 90_000

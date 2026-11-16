@@ -53,7 +53,9 @@ user abort; legacy paused records without a cause fall back to `paused · send a
 (`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
 wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
 title border and remediation row all reflect the outcome). `cleared` stays silent — a deliberate reset is not
-an announcement. State transitions also surface as host toasts. The
+an announcement. State transitions also surface as host toasts; outcome toasts
+(`achieved` / `impossible` / `failed` / `Loop complete`) open with the story — turns, wall time, and
+completed iterations for loops (`34 turns · 12m 05s · 4 iterations · <reason>`). The
 exceptions to "host-owned layout" are the two absolute boxes (pill, card) of the slot claim; toasts, dialog
 chrome and sizing stay the host's.
 The project `opencode.json` points at the local checkout.
@@ -438,7 +440,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=697 -->
+<!-- spec-check files=43 tests=699 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
