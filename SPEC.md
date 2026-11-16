@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=965 -->
+<!-- spec-check files=45 tests=975 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4418,3 +4418,55 @@ the verdict history the ledger's three-row window cannot quote.
      still shows at most the 24 most recent verdicts by its pre-existing window;
      older verdicts remain reachable through the rail's expand fold and the why
      ledger cap, not through a pagination claim this surface never made.
+
+## Workstream DT — the loop's dossier: one document, quoted once (2026-11-16)
+
+Interpretation: every surface the plugin paints answers "what just happened" for the eyes in
+front of the terminal. Nothing answers "hand me this loop's whole story so I can paste it
+into an issue, a handoff, or a review". The data all exists in the record — the armed
+objective, the per-iteration ledger (sha, turns, tools, context at arm, spend), the
+per-turn verdict history with reasons, the boundary-compaction state, the verify gate's
+last word — but it was reachable only by transcribing frame by frame. The palette command
+`goal.dossier.copy` (no footer chord; the three chords stay p/c/x) synthesizes the record
+into a self-contained Markdown document and puts it on the clipboard through the same
+OSC52 path every other copy affordance uses.
+
+429. src/core/dossier.ts — `buildLoopDossier(goal, nowMs)`, a pure builder (I/O-free,
+     JSX-free, clock injected; byte-identical output for identical input). Sections:
+     title (`# Goal loop dossier` / `# Goal dossier` for plain goals), provenance line,
+     objective/condition (blockquote), status (optionally `paused:` / `failure:` bits),
+     completed iterations (per entry: ended + wall span via `iterationDurations`, turns,
+     tools, commit short-sha, context at arm, spend via `formatSpend`, summary and
+     evaluator reason as blockquotes), the verdict trail (a table of turn/verdict/tools/
+     commit/spend, tallies with a zero-tool-met `already held at HEAD` count, then the
+     full evaluator prose one blockquote per turn), boundary compaction (landed / pending
+     with miss count / unmeasurable / staleness-unknown / host-unwilling, or an honest
+     "no request on this record" with the note that only the latest request is kept), the
+     verify gate (command as inline code with an outgrowing backtick fence, result line,
+     output tail in a fenceBlock whose fence outgrows any run of three-plus backticks in
+     the payload), and totals (iterations, turns, tools, wall span, spend across measured
+     iterations reported as partial when only some entries carry one).
+430. Honesty invariants, all unit-tested: absent measurements render the em-dash gap
+     (never `$0.00`, never an invented sha); free text is blockquote- or fence-protected so
+     a condition containing `#` or triple backticks forges no document structure (asserted:
+     hostile condition produces no `\n## Forged heading`); the session id is deliberately
+     omitted so a pasted dossier leaks no provenance; `isoOf` never throws on NaN and the
+     builder never reads the wall clock itself.
+431. Palette wiring in src/tui.tsx: `goal.dossier.copy`
+     ("Goal: copy loop dossier (markdown)", group Goal, palette-only — no key chord, no
+     footer furniture), enabled whenever a goal exists on the current session (live or
+     finished — a landed loop is the interesting dossier), built from the same
+     `live(...) ?? entries()[...]?.goal` snapshot the other copy commands use, copied via
+     the shared `copyToClipboard` with the new `dossier` label ("dossier copied").
+432. Tests: +10 pure-builder tests in test/dossier.test.ts covering the full-loop render,
+     determinism, session-id absence, legacy records (gap rendering, no fabricated costs),
+     plain goals, hostile free text, the verify gate's outgrowing fence and absent-gate
+     wording, all three boundary-compaction outcomes, zero-tool met tallies, and the
+     isoOf/shortSha/inlineCode/fenceBlock/quote helpers. spec-check files=45 tests=975.
+433. Honest limits: the dossier quotes the record; it was not independently re-verified and
+     says so in its footer. Boundary compaction stays the record's single latest request —
+     there is no compaction log to export, and the document says exactly that instead of
+     implying a trail it does not have. Live-TUI behaviour is unverifiable here (provider
+     dead); wiring is verified at the source and unit-render layers only. No new click
+     targets, no keyboard twin — the palette is the discovery surface, consistent with
+     every unadvertised copy affordance.

@@ -252,6 +252,15 @@ function formatSpend(spend, maxWidth = Number.POSITIVE_INFINITY) {
     return cost ?? parts[0] ?? "";
   return out;
 }
+var STATUS_LABEL = {
+  active: "active",
+  paused: "paused",
+  achieved: "achieved",
+  impossible: "judged impossible",
+  cleared: "cleared",
+  failed: "failed after an unrecoverable error"
+};
+var statusLabel = (status) => STATUS_LABEL[status];
 function truncate(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
@@ -283,18 +292,6 @@ function truncate(text, max, ellipsis = "\u2026") {
   }
   return `${out.replace(/\s+$/, "")}${ellipsis}`;
 }
-
-// src/status-dialog.tsx
-import { memo as _$memo2 } from "@opentui/solid";
-import { createComponent as _$createComponent2 } from "@opentui/solid";
-import { effect as _$effect2 } from "@opentui/solid";
-import { insert as _$insert2 } from "@opentui/solid";
-import { createTextNode as _$createTextNode2 } from "@opentui/solid";
-import { insertNode as _$insertNode2 } from "@opentui/solid";
-import { setProp as _$setProp2 } from "@opentui/solid";
-import { createElement as _$createElement2 } from "@opentui/solid";
-import { For as For2, Show as Show2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
-import { TextAttributes as TextAttributes2 } from "@opentui/core";
 
 // src/core/history.ts
 var BAR_CELLS = 18;
@@ -570,6 +567,246 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) 
     over: ratio >= 1
   };
 }
+
+// src/core/dossier.ts
+var GAP = "\u2014";
+var isoOf = (ms) => {
+  if (!Number.isFinite(ms))
+    return GAP;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? GAP : date.toISOString();
+};
+var shortSha = (sha) => {
+  if (!sha)
+    return GAP;
+  const flat = sha.trim();
+  if (flat.length === 0)
+    return GAP;
+  return flat.length > 7 ? flat.slice(0, 7) : flat;
+};
+var inlineCode = (text) => {
+  let longest = 0;
+  for (const run of text.match(/`+/g) ?? [])
+    longest = Math.max(longest, run.length);
+  if (longest === 0)
+    return `\`${text}\``;
+  const fence = "`".repeat(longest + 1);
+  return `${fence} ${text} ${fence}`;
+};
+var fenceBlock = (text) => {
+  let longest = 2;
+  for (const run of text.match(/`{3,}/g) ?? [])
+    longest = Math.max(longest, run.length);
+  const fence = "`".repeat(longest + 1);
+  const body = text.replace(/\r\n?/g, `
+`).replace(/\n+$/, "").split(`
+`);
+  return [fence, ...body, fence];
+};
+var quote = (text) => {
+  const lines = text.replace(/\r\n?/g, `
+`).split(`
+`);
+  return lines.map((line) => line.trim().length === 0 ? ">" : `> ${line}`);
+};
+var spendCell = (spend) => spend && Number.isFinite(spend.cost) && spend.cost > 0 ? formatCost(spend.cost) : GAP;
+var iterationLines = (entry, spanMs) => {
+  const lines = [
+    `### Iteration v${entry.version} \u2014 met`,
+    "",
+    `- Ended: ${isoOf(entry.endedAt)}${spanMs > 0 ? ` (wall span ${formatDuration(spanMs)})` : ""}`,
+    `- Turns: ${entry.turns} \xB7 Tool calls: ${entry.toolCalls ?? GAP}`,
+    `- Commit: ${shortSha(entry.sha)}`,
+    `- Context at arm: ${entry.contextTokens !== undefined && Number.isFinite(entry.contextTokens) ? `~${formatTokens(entry.contextTokens)} tokens` : GAP}`,
+    `- Spend: ${entry.spend ? formatSpend(entry.spend) : GAP}`
+  ];
+  lines.push(`- Summary:`, "", ...quote(entry.summary), "");
+  lines.push(`- Evaluator reason:`, "", ...quote(entry.reason));
+  return lines;
+};
+var verdictTable = (history) => {
+  const lines = [
+    "| turn | verdict | tools | commit | spend |",
+    "| ---: | --- | ---: | --- | --- |"
+  ];
+  for (const entry of history) {
+    const tools = entry.toolCalls ?? GAP;
+    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} |`);
+  }
+  return lines;
+};
+var verdictProse = (history) => {
+  const lines = [];
+  for (const entry of history) {
+    const bits = [`turn ${entry.turn}`, entry.verdict, isoOf(entry.at)];
+    if (entry.toolCalls !== undefined)
+      bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`);
+    if (entry.sha)
+      bits.push(shortSha(entry.sha));
+    lines.push(`- ${bits.join(" \xB7 ")}`);
+    lines.push(...quote(entry.reason));
+  }
+  return lines;
+};
+var boundaryCompactLines = (goal, nowMs) => {
+  const compact = goal.loopCompact;
+  if (!compact) {
+    return [
+      "No boundary-compaction request on this record. (The record keeps only the latest request; earlier ones are not logged anywhere.)"
+    ];
+  }
+  const lines = [
+    `- Latest request: ${isoOf(compact.requestedAt)} for iteration ${compact.iteration} (${formatDuration(Math.max(0, nowMs - compact.requestedAt))} ago)`,
+    `- Context at request: ${compact.estimatedTokens !== undefined && Number.isFinite(compact.estimatedTokens) ? `~${formatTokens(compact.estimatedTokens)} tokens` : "unknown (unestimable arm)"}`
+  ];
+  if (compact.landedAt) {
+    lines.push(`- Outcome: landed at ${isoOf(compact.landedAt)} (${formatDuration(Math.max(0, nowMs - compact.landedAt))} ago)`);
+  } else {
+    lines.push(`- Outcome: pending \xB7 miss ${compact.misses}/${COMPACT_MISS_CAP}`);
+  }
+  if (compact.unmeasurableTicks !== undefined && compact.unmeasurableTicks > 0)
+    lines.push(`- Unestimable arms in a row: ${compact.unmeasurableTicks} (never a miss; a landing cannot be ruled out)`);
+  if (compact.stalenessUnknown)
+    lines.push(`- Landing unresolvable: repeated unmeasurable arms; this request is never suspended.`);
+  if (compact.unwillingWarned)
+    lines.push(`- Host-unwilling warning fired: two measurable arms without a landing.`);
+  return lines;
+};
+var verifyLines = (goal) => {
+  const verify = goal.lastVerify;
+  if (!verify) {
+    return [
+      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when `evaluator.verifyCommand` is configured.)"
+    ];
+  }
+  const result = verify.timedOut ? "timed out" : verify.code === null ? "no exit code (spawn error or timeout)" : `exit ${verify.code}`;
+  const lines = [`- Command: ${inlineCode(verify.command)}`, `- Result: ${result} \xB7 ${isoOf(verify.at)}`];
+  if (verify.tail) {
+    lines.push("- Output tail:", "");
+    lines.push(...fenceBlock(verify.tail));
+  } else {
+    lines.push("- Output tail: (none \u2014 the command produced no output)");
+  }
+  return lines;
+};
+function buildLoopDossier(goal, nowMs) {
+  const lines = [];
+  const isLoop = Boolean(goal.loopEnabled);
+  const generatedAt = isoOf(nowMs);
+  lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier");
+  lines.push("");
+  lines.push(`_Generated ${generatedAt} from the opencode-goal plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push("");
+  lines.push(isLoop ? "## Objective" : "## Condition");
+  lines.push("");
+  lines.push(...quote(isLoop ? goal.loopObjective ?? goal.condition : goal.condition));
+  lines.push("");
+  lines.push("## Status");
+  lines.push("");
+  const statusBits = [statusLabel(goal.status)];
+  if (goal.pauseCause)
+    statusBits.push(`paused: ${goal.pauseCause}`);
+  if (goal.failureLabel)
+    statusBits.push(`failure: ${goal.failureLabel}`);
+  lines.push(`- Status: ${statusBits.join(" \xB7 ")}`);
+  lines.push(`- Set: ${isoOf(goal.setAt)} \xB7 ${goal.endedAt ? `Ended: ${isoOf(goal.endedAt)} \xB7 ` : ""}Elapsed: ${formatDuration(Math.max(0, goal.elapsedMs))}`);
+  const turnsBits = [`${goal.turns} turn${goal.turns === 1 ? "" : "s"} evaluated`];
+  if (goal.stall > 0)
+    turnsBits.push(`stall ${goal.stall}`);
+  if (goal.retries > 0)
+    turnsBits.push(`retries ${goal.retries}`);
+  lines.push(`- ${turnsBits.join(" \xB7 ")}`);
+  if (goal.contextSize !== undefined && Number.isFinite(goal.contextSize)) {
+    const threshold = goal.compactAtTokens !== undefined && goal.compactAtTokens > 0 ? ` of ~${formatTokens(goal.compactAtTokens)} auto-compact threshold` : "";
+    lines.push(`- Context (est.): ~${formatTokens(goal.contextSize)} tokens${threshold}`);
+  }
+  if (goal.spend)
+    lines.push(`- Spend (this goal): ${formatSpend(goal.spend)}`);
+  if (isLoop) {
+    const iteration = goal.loopIteration ?? 1;
+    const max = goal.loopMaxLoops !== undefined && goal.loopMaxLoops > 0 ? ` of at most ${goal.loopMaxLoops}` : "";
+    lines.push(`- Iteration: ${iteration}${max}`);
+    if (goal.loopNotProgress !== undefined && goal.loopNotProgress > 0)
+      lines.push(`- Consecutive zero-tool iterations: ${goal.loopNotProgress}`);
+  }
+  if (goal.reason) {
+    lines.push(`- Reason:`);
+    lines.push(...quote(goal.reason));
+  }
+  lines.push("");
+  const entries = goal.loopHistory ?? [];
+  if (isLoop || entries.length > 0) {
+    lines.push(`## Completed iterations (${entries.length})`);
+    lines.push("");
+    if (entries.length === 0) {
+      lines.push("None yet \u2014 this loop has not landed an iteration.");
+      lines.push("");
+    } else {
+      const spans = iterationDurations(entries, goal.setAt);
+      entries.forEach((entry, index) => {
+        lines.push(...iterationLines(entry, spans[index] ?? 0));
+        lines.push("");
+      });
+    }
+  }
+  const history = goal.history ?? [];
+  lines.push(`## Verdict trail (${history.length} evaluated turn${history.length === 1 ? "" : "s"})`);
+  lines.push("");
+  if (history.length === 0) {
+    lines.push("No turns have been evaluated yet.");
+    lines.push("");
+  } else {
+    lines.push(...verdictTable(history));
+    lines.push("");
+    const counts = verdictCounts(history);
+    const zeroToolMet = history.filter((entry) => entry.verdict === "met" && entry.toolCalls === 0).length;
+    const tally = [`met ${counts.met}`, `not_met ${counts.not_met}`, `impossible ${counts.impossible}`];
+    if (zeroToolMet > 0)
+      tally.push(`${zeroToolMet} met with zero tool calls (condition already held at HEAD)`);
+    lines.push(`Tallies: ${tally.join(" \xB7 ")}`);
+    lines.push("");
+    lines.push(...verdictProse(history));
+    lines.push("");
+  }
+  lines.push("## Boundary compaction");
+  lines.push("");
+  lines.push(...boundaryCompactLines(goal, nowMs));
+  lines.push("");
+  lines.push("## Verify gate");
+  lines.push("");
+  lines.push(...verifyLines(goal));
+  lines.push("");
+  const totals = loopTotals(entries, goal.setAt);
+  lines.push("## Totals");
+  lines.push("");
+  lines.push(`- Iterations complete: ${totals.iterations}`);
+  lines.push(`- Turns: ${totals.turns} \xB7 Tool calls: ${totals.tools}`);
+  if (totals.spanMs > 0)
+    lines.push(`- Wall span (first iteration \u2192 last landing): ${formatDuration(totals.spanMs)}`);
+  if (totals.spend) {
+    const partial = totals.spend.measured < totals.iterations ? ` (${totals.spend.measured} of ${totals.iterations} iterations measured)` : "";
+    lines.push(`- Spend across iterations: ${formatCost(totals.spend.total)}${partial}`);
+  } else if (entries.length > 0) {
+    lines.push("- Spend across iterations: no iteration carried a measurement");
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("_opencode-goal dossier \xB7 source: plugin record \xB7 nothing above was re-verified; it is the record's own bookkeeping._");
+  return lines.join(`
+`);
+}
+
+// src/status-dialog.tsx
+import { memo as _$memo2 } from "@opentui/solid";
+import { createComponent as _$createComponent2 } from "@opentui/solid";
+import { effect as _$effect2 } from "@opentui/solid";
+import { insert as _$insert2 } from "@opentui/solid";
+import { createTextNode as _$createTextNode2 } from "@opentui/solid";
+import { insertNode as _$insertNode2 } from "@opentui/solid";
+import { setProp as _$setProp2 } from "@opentui/solid";
+import { createElement as _$createElement2 } from "@opentui/solid";
+import { For as For2, Show as Show2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
+import { TextAttributes as TextAttributes2 } from "@opentui/core";
 
 // src/core/hud.ts
 var RETRY_HOT_THRESHOLD = 3;
@@ -4273,6 +4510,10 @@ var tui_default = Plugin.define({
       verify: {
         title: "verify tail copied",
         message: "the verifier output tail is on the clipboard"
+      },
+      dossier: {
+        title: "dossier copied",
+        message: "the loop dossier markdown is on the clipboard"
       }
     };
     const copyToClipboard = (text, sessionID, what = "condition") => {
@@ -4759,6 +5000,20 @@ var tui_default = Plugin.define({
             const summary = goal?.loopHistory?.at(-1)?.summary;
             if (summary && sessionID)
               copyToClipboard(summary, sessionID, "summary");
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.copy",
+        title: "Goal: copy loop dossier (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        run: () => {
+          try {
+            const sessionID = currentSession();
+            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+            if (goal && sessionID)
+              copyToClipboard(buildLoopDossier(goal, Date.now()), sessionID, "dossier");
           } catch {}
         }
       }, {
