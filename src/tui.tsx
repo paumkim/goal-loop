@@ -21,6 +21,7 @@ import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine,
 import { gitAncestorProbe, reachRecord, reachReportMarkdown, reachSummaryLine, type ReachOutcome } from "./core/reach-record.ts"
 import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type SignOutcome } from "./core/sign-record.ts"
 import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
+import { exportReview, reviewSummaryLine } from "./core/dossier-review.ts"
 import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
@@ -685,6 +686,19 @@ export default Plugin.define({
         safeToast({ title: "attest failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
       }
     }
+    // The review, in one file: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write one O_EXCL file — the record's own bytes, then a combined appendix whose rows carry every answer git gave, per sha, with one verdict column. This is the artifact a reviewer opens cold; the standalone verify/reach/sign reports remain available one question at a time. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
+    const reviewRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
+      if (!goal || !sessionID) return
+      try {
+        const result = exportReview(goal, Date.now(), process.cwd())
+        const summary = reviewSummaryLine(result)
+        const title = result.unique === 0 ? "nothing to review" : result.gaps > 0 ? "review written with gaps" : result.unknown > 0 ? "review unverifiable" : "review written"
+        const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success"
+        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
+      } catch (error) {
+        safeToast({ title: "review failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+      }
+    }
     // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
     const sealRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SealOutcome | undefined => {
       if (!goal || !sessionID) return undefined
@@ -1221,6 +1235,20 @@ export default Plugin.define({
           run: () => {
             try {
               attestSealedDossierAction(currentSession())
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.review",
+          title: "Goal: review the dossier in one file (every question git can answer)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              reviewRecordAction(sessionID, goal)
             } catch {}
           },
         },

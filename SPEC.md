@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,7 +5129,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5194,7 +5194,7 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 ## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
 
@@ -5267,7 +5267,7 @@ line, the object carries a verifiable mark. None substitutes for another.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
 
 ## Workstream EG — the dossier, sealed: the proofs ride the file (2026-11-16)
 
@@ -5416,4 +5416,67 @@ what it cannot prove. Plain `goal.dossier.seal` and `goal.dossier.export` are un
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=55 tests=1235.
-<!-- spec-check files=56 tests=1253 -->
+<!-- spec-check files=57 tests=1270 -->
+
+## Workstream EI — the review, in one file: every question git can answer (2026-11-16)
+
+Interpretation of the mouse-first clause: the arc so far sealed the record (EG), attested the
+sealed file later (EH) — but a reviewer opening a handoff cold still has to run three commands
+or three palette entries and hold three reports in their head. This iteration writes the capstone:
+`goal.dossier.review` (palette only: no chord, no footer furniture) re-runs the extant three
+sweeps (existence, ancestry, the seal) against the repository at the host's cwd and writes ONE
+O_EXCL file — the record's own bytes, then a single combined appendix whose per-sha rows carry
+every answer git gave plus one honest verdict column (`clean` / `gaps` / `unknown`) and a finishing
+counts line. The standalone verify/reach/sign commands remain available one question at a time;
+the sealed twin and the plain export are untouched. Gaps and unknowns toast a warning, never an
+error — information is not accusation.
+
+495. src/core/dossier-review.ts — new pure module, no JSX, no theme. `reviewName(nowMs,
+     attempt?)` stamps `goal-dossier-review-<YYYYMMDD-HHMMSS>[-n].md` (a non-finite clock stamps
+     the epoch; deterministic). `reviewVerdict(exists, onThisLine, underSeal)` is the one honest
+     collapse: all yes → `clean`; any no → `gaps`; no no anywhere but at least one question git
+     could not answer → `unknown` — never collapsed into either. `buildReview(goal, directory,
+     nowMs, probes?)` runs the extant `verifyRecord` / `reachRecord` / `signRecord` (same
+     injected-probe contracts, never reimplemented; a probe that throws degrades its question to
+     `unknown`), renders the base document byte-for-byte first, then a
+     `## Review (freshly probed at generation time)` appendix — self-describing (generation time,
+     probed directory), a per-row table (sha · quoted at · the three answers · verdict), the
+     finishing counts (`- All three: N of M shas clean … · G with gaps · U unverifiable`), and a
+     footer that restates what a clean row proves and what it does not (existence is not ancestry,
+     ancestry is not the seal; the file is a snapshot of its receipts; `goal.dossier.attest`
+     re-checks a sealed copy weeks later). A record with no quoted shas renders the GAP sentence,
+     no table, and a summary line that says so. `exportReview(goal, nowMs, dir, probes?)` writes
+     O_EXCL with collision retries (`MAX_EXPORT_ATTEMPTS`), never overwrites, and throws with the
+     filesystem's own message — the target is always the existing caller-named directory.
+     `reviewSummaryLine` is the toast's chrome-free one-liner.
+496. src/tui.tsx — `reviewRecordAction` + palette command `goal.dossier.review`
+     ("Goal: review the dossier in one file (every question git can answer)"). Writes the file
+     into `process.cwd()`; toasts `review written` (success) / `review written with gaps` /
+     `review unverifiable` / `nothing to review` (warning for the last three — the repository
+     moved or the machine differs; information is not accusation, so gaps never toast as an
+     error); read/write failures toast error with the filesystem's own message. Enabled when a
+     goal is live, like the sealed twin. No footer chord, no dialog row, the palette is the surface.
+497. Tests: +17 unit (dossier-review.test.ts: `reviewName` stem/suffix/epoch and its independence
+     from the sealed and plain stems; the `reviewVerdict` truth table (all-yes clean, any no
+     gaps wherever it sits, no-no-plus-unknown stays unknown); the base document rides byte-for-
+     byte and the appendix lands after `## Totals`; an all-clean sweep (yes/yes/yes/clean rows,
+     counts line, stamp and directory in the appendix); a single no reads gaps wherever it sits;
+     a fresh unknown is unknown, never clean, never gaps; a throwing probe degrades its question
+     to unknown; mixed jailed answers land in rows and counts; the GAP record renders one honest
+     sentence and no table; every `reviewSummaryLine` arm; `exportReview` writes one new file
+     (path/bytes/attempts), never overwrites (suffix `-2` on collision, pre-existing bytes kept),
+     the written bytes match a fresh build of the same clock, and a missing directory throws) +
+     re-pinned pack count 57. Tests: 1270 pass, 0 fail (50 files).
+498. Honest limits: the appendix is generated, never trusted later — re-probing is
+     `goal.dossier.attest`'s job for a sealed copy, and this command does not attest anything;
+     `clean` means three git processes answered yes at generation time, nothing more; `gaps` names
+     a no, not misconduct (most commits are unsigned; existence is not ancestry, ancestry is not
+     the seal); `unknown` never counts on either side and a probe outage yields an all-unknown
+     review that says so; the record's own bytes above the appendix were not re-verified; the probes
+     require a git binary and a repository at the probed cwd — outside one, every answer reads
+     `unknown`; the plain export and the sealed twin are untouched; headless test-renderer layer,
+     live TUI unverifiable.
+
+The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
+`bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=56 tests=1253.
+<!-- spec-check files=57 tests=1270 -->
