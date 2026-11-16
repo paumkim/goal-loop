@@ -17,7 +17,7 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, HudButton, hudCardRows, pinBudget, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pinSuffix, motionDisabled } from "./core/hud.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS } from "./core/hud.ts"
 import { pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -158,6 +158,38 @@ export default Plugin.define({
       return location ? { location } : undefined
     }
 
+    /**
+     * The completion moment: when a goal goes live→terminal the ambient pill used to blink out
+     * with no residual signal where the user was watching. The ack keeps one terminal snapshot
+     * per session for `TERMINAL_ACK_MS` so the jump row can acknowledge the outcome
+     * (achieved/impossible/failed; `cleared` is a deliberate reset and stays silent). Holds its
+     * own copy of the snapshot — the entries cache may evict the goal before the ack expires.
+     * Setup-scope and TUI-local like the pin registry: a transient view acknowledgment, not state.
+     */
+    const [terminalAcks, setTerminalAcks] = createSignal<Readonly<Record<string, { goal: GoalSnapshot; at: number }>>>({})
+    const terminalTimers = new Set<ReturnType<typeof setTimeout>>()
+    const noteTerminal = (sessionID: string, goal: GoalSnapshot) => {
+      const ack = { goal, at: Date.now() }
+      setTerminalAcks((previous) => ({ ...previous, [sessionID]: ack }))
+      const timer = setTimeout(() => {
+        terminalTimers.delete(timer)
+        setTerminalAcks((previous) => {
+          if (previous[sessionID]?.at !== ack.at) return previous
+          const next = { ...previous }
+          delete next[sessionID]
+          return next
+        })
+      }, TERMINAL_ACK_MS)
+      terminalTimers.add(timer)
+    }
+    const dropTerminal = (sessionID: string) =>
+      setTerminalAcks((previous) => {
+        if (!previous[sessionID]) return previous
+        const next = { ...previous }
+        delete next[sessionID]
+        return next
+      })
+
     /** Pull a fresh snapshot from the server and cache it. A malformed RPC response keeps the previous entry (same posture as a failed fetch). */
     const refresh = (sessionID: string) =>
       rpc.get({ sessionID }, at(sessionID)).then((result) => {
@@ -165,8 +197,22 @@ export default Plugin.define({
         if (output) put(sessionID, output.goal)
       })
 
-    const put = (sessionID: string, goal: GoalSnapshot | null) =>
-      setEntries((previous) => {
+    const put = (sessionID: string, goal: GoalSnapshot | null) => {
+      // Completion-moment detection runs before the entries update: a live→terminal transition
+      // arms the acknowledgment pill, a fresh live goal disarms any stale one. Best-effort.
+      try {
+        const previous = entries()[sessionID]?.goal
+        // An identical snapshot changes nothing — skip re-arming so the ack window stays 45s from the transition.
+        const unchanged = previous && goal ? goalsEqual(previous, goal) : false
+        if (!unchanged && goal && previous && isLive(previous.status) && !isLive(goal.status) && goal.status !== "cleared") {
+          noteTerminal(sessionID, goal)
+        } else if (goal && isLive(goal.status)) {
+          dropTerminal(sessionID)
+        }
+      } catch {
+        // The acknowledgment is chrome; a failed probe must not break snapshot intake.
+      }
+      return setEntries((previous) => {
         const existing = previous[sessionID]
         // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.
         if (existing && goalsEqual(existing.goal, goal)) return previous
@@ -174,6 +220,7 @@ export default Plugin.define({
         // Drop null entries (unless a dialog is rendering that session) and cap the map.
         return pruneSnapshotEntries(next, statusDialogSession())
       })
+    }
 
     /** Lazily fetches a session's goal the first time a view asks for it; events keep it fresh afterwards. */
     const ensure = (sessionID: string) => {
@@ -297,6 +344,8 @@ export default Plugin.define({
     // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). Pinning the condition
     // (card `[pin]` button or `p` in the dialog) appends it to the pill so it survives conversation scroll.
     // The card is dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.
+    // When the goal ends, a live→terminal transition leaves a 45s acknowledgment pill on the jump row
+    // (see noteTerminal / terminalPill) instead of the pill blinking out; `cleared` stays silent.
     const [getHudSession, setHudSession] = createSignal<string | undefined>(undefined)
     const copyToClipboard = (text: string, sessionID?: string) => {
       try {
@@ -333,6 +382,16 @@ export default Plugin.define({
             return undefined
           }
         })
+        // Completion moment: a live→terminal transition leaves a short-lived acknowledgment
+        // snapshot behind so the pill does not blink out (see noteTerminal).
+        const terminal = () => {
+          try {
+            return props.sessionID ? terminalAcks()[props.sessionID]?.goal : undefined
+          } catch {
+            return undefined
+          }
+        }
+        const showing = () => goal() ?? terminal()
         const elapsed = () => {
           try {
             const g = goal()
@@ -345,7 +404,10 @@ export default Plugin.define({
         const pill = () => {
           try {
             const g = goal()
-            return g ? pillModel(g, elapsed()) : undefined
+            if (g) return pillModel(g, elapsed())
+            const t = terminal()
+            // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
+            return t ? terminalPill(t, t.elapsedMs) : undefined
           } catch {
             return undefined
           }
@@ -379,12 +441,13 @@ export default Plugin.define({
         }
         const color = () => {
           const tone = pill()?.tone
-          if (tone === "paused" || tone === "hot") return context.theme.text.feedback.warning.base
-          if (tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
+          if (tone === "paused" || tone === "hot" || tone === "impossible") return context.theme.text.feedback.warning.base
+          if (tone === "failed") return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
+          if (tone === "achieved" || tone === "evaluating" || tone === "waiting") return context.theme.text.feedback.info.base
           return context.theme.text.muted
         }
         const cardFor = () => {
-          const g = goal()
+          const g = showing()
           return g && getHudSession() === props.sessionID ? g : undefined
         }
         const cardRows = () => {
@@ -397,7 +460,7 @@ export default Plugin.define({
           } catch {}
         }
         return (
-          <Show when={goal()}>
+          <Show when={showing()}>
             <box
               position="absolute"
               top={-1}
@@ -586,6 +649,9 @@ export default Plugin.define({
 
     return () => {
       clearInterval(timer)
+      for (const pending of terminalTimers) clearTimeout(pending)
+      terminalTimers.clear()
+      setTerminalAcks({})
       offChanged()
       offNotice()
       setStatusDialogOpen(false)

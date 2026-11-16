@@ -8,8 +8,8 @@ import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
-/** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. */
-export type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot"
+/** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. `achieved`/`impossible`/`failed` are terminal acknowledgment tones (see `terminalPill`). */
+export type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "achieved" | "impossible" | "failed"
 
 export interface PillModel {
   readonly text: string
@@ -39,6 +39,34 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number): PillModel => {
     return { text: `${GOAL_GLYPH} loop · v${goal.loopIteration ?? 1}${cap}${pips ? ` ${pips}` : ""} · ${state} · ${formatDurationCoarse(elapsed)}${turns}${compacting}`, tone }
   }
   return { text: `${GOAL_GLYPH} goal ${state} · ${formatDurationCoarse(elapsed)}${turns}`, tone }
+}
+
+/**
+ * How long a terminal acknowledgment pill lingers on the jump row after a live→terminal transition.
+ * Long enough to notice without becoming furniture; the entries cache may evict the goal itself sooner.
+ */
+export const TERMINAL_ACK_MS = 45_000
+
+/**
+ * The completion moment: when a goal goes live→terminal the ambient pill would otherwise blink out
+ * with no residual signal where the user was watching. Rendered for `TERMINAL_ACK_MS` after the
+ * transition (wired in tui.tsx from the snapshot path). `cleared` and still-live statuses return
+ * undefined — a deliberate user reset is silent, an active goal is not a completion. Same grammar
+ * as `pillModel` so the jump-row text does not change shape.
+ */
+export const terminalPill = (goal: GoalSnapshot, elapsed: number): PillModel | undefined => {
+  const tone: HudTone | undefined =
+    goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined
+  if (!tone) return undefined
+  const word = goal.status === "achieved" ? (goal.loopEnabled ? "complete" : "achieved") : goal.status
+  const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
+  const span = `${formatDurationCoarse(elapsed)}${turns}`
+  if (goal.loopEnabled) {
+    const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
+    const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1)
+    return { text: `${GOAL_GLYPH} loop ${word} · v${iteration}${cap} · ${span}`, tone }
+  }
+  return { text: `${GOAL_GLYPH} goal ${word} · ${span}`, tone }
 }
 
 /** Minimum cells a pinned condition needs before the pin suffix is worth rendering at all. */
@@ -76,15 +104,18 @@ export interface Remediation {
 }
 
 /**
- * Failure is a first-class screen: when the loop is hot or a verdict keeps coming back failed,
+ * Failure is a first-class screen: when the loop is hot, the goal is stuck failed or judged impossible,
  * say exactly what to do — never a vague warning. Returns undefined when everything is nominal.
- * Order matters: an unrecoverable failure outranks a hot compaction request, which outranks a verdict streak.
+ * Order matters: an unrecoverable failure outranks an impossible verdict, which outranks a hot compaction request, which outranks a verdict streak.
  */
 // Remediation strings stay short: the HUD card wraps them at ~49 columns (two rows are budgeted in
 // hudCardRows), the dialog has more room but shows the same line. One exact action, no hedging.
 export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (goal.status === "failed") {
     return { tone: "error", text: `goal failed — /goal clear to reset` }
+  }
+  if (goal.status === "impossible") {
+    return { tone: "warning", text: `judged impossible · rephrase the condition, else /goal clear` }
   }
   const pending = goal.loopCompact && goal.loopCompact.landedAt === undefined ? goal.loopCompact : undefined
   if (pending && pending.misses >= 2) {
