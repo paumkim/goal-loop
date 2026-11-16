@@ -2120,6 +2120,17 @@
       "submittedAt": "2026-11-16T15:59:28Z",
       "mergedAt": "2026-11-16T16:01:25Z",
       "mergedInto": "dev"
+    },
+    "tui-verdict-trail-scrub": {
+      "agent": "orchestrator",
+      "paths": "src/tui-history.tsx test/tui-render.test.tsx SPEC.md",
+      "branch": "wt/tui-verdict-trail-scrub",
+      "worktree": "worktrees/wt-tui-verdict-trail-scrub",
+      "status": "done",
+      "createdAt": "2026-11-16T16:07:00Z",
+      "submittedAt": "2026-11-16T16:10:09Z",
+      "mergedAt": "2026-11-16T16:12:08.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
