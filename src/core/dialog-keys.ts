@@ -9,6 +9,9 @@
  * When the host also wires `transcriptFor` + `openTranscript` (the elsewhere block's jump route),
  * four digit chords join the factory — `1`..`4` open the transcript of the matching elsewhere row.
  * Keyboard parity for the mouse affordance the dialog paints; absent wiring, no digits exist.
+ * When the host additionally wires `foreignMoreVisible` + `toggleForeignMore` (the elsewhere overflow
+ * fold), the `m` chord joins after the digits — it flips the same controlled flag the click-to-expand
+ * fold row flips. Absent wiring, no chord exists.
  */
 
 /** Cells one arrow key scrolls the dialog body. */
@@ -53,10 +56,14 @@ export interface DialogStatusDeps {
   readonly transcriptFor?: (index: number) => string | undefined
   /** Open the transcript route for `sessionID`. */
   readonly openTranscript?: (sessionID: string) => void
+  /** Whether more than the elsewhere fold cap of live foreign goals is painted — arms the `m` chord. Wired together with toggleForeignMore. */
+  readonly foreignMoreVisible?: () => boolean
+  /** Flip the elsewhere overflow fold (the same controlled flag the fold row flips). */
+  readonly toggleForeignMore?: () => void
 }
 
 /**
- * The ten core commands, in footer-reading order (pin, fold, copies, the digit chords when wired, then the scroll ladder). Fourteen with the jump wired.
+ * The ten core commands, in footer-reading order (pin, fold, copies, the digit chords and the `m` fold chord when wired, then the scroll ladder). Fifteen with both wired.
  * Every handler swallows its errors: a dead snapshot or a detached scrollbox must never throw out
  * of a key event — host modal chrome owns the interaction, the plugin owns nothing here.
  */
@@ -135,6 +142,23 @@ export const dialogStatusCommands = (deps: DialogStatusDeps): readonly DialogSta
             },
           }),
         )
+      : []),
+    ...(deps.foreignMoreVisible && deps.toggleForeignMore
+      ? [
+          {
+            id: "goal.status.elsewhere-more",
+            title: "Goal status: show or fold the other sessions list",
+            group: "Goal",
+            bind: "m",
+            enabled: () => deps.open() && deps.foreignMoreVisible?.() === true,
+            run: () => {
+              // Same swallow posture as every chord here.
+              try {
+                deps.toggleForeignMore?.()
+              } catch {}
+            },
+          } satisfies DialogStatusCommand,
+        ]
       : []),
     {
       id: "goal.status.scroll-up",

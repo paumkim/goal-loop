@@ -173,6 +173,76 @@ describe("dialogStatusCommands", () => {
     expect(jumps).toEqual(["ses_b"])
   })
 
+  test("with the elsewhere fold wired, the `m` chord joins after the digits — and only when both halves are wired", () => {
+    const bothWired = dialogStatusCommands(
+      spyDeps({
+        transcriptFor: (row) => ["ses_a"][row - 1],
+        openTranscript: () => {},
+        foreignMoreVisible: () => true,
+        toggleForeignMore: () => {},
+      }),
+    )
+    expect(bothWired.map((command) => command.id)).toEqual([
+      "goal.status.pin",
+      "goal.status.history",
+      "goal.status.copy",
+      "goal.status.copy-evaluator-reason",
+      "goal.status.transcript-1",
+      "goal.status.transcript-2",
+      "goal.status.transcript-3",
+      "goal.status.transcript-4",
+      "goal.status.elsewhere-more",
+      "goal.status.scroll-up",
+      "goal.status.scroll-down",
+      "goal.status.page-up",
+      "goal.status.page-down",
+      "goal.status.home",
+      "goal.status.end",
+    ])
+    expect(bothWired.find((command) => command.id === "goal.status.elsewhere-more")!.bind).toBe("m")
+    expect(bothWired.find((command) => command.id === "goal.status.elsewhere-more")!.group).toBe("Goal")
+    const foldOnly = dialogStatusCommands(spyDeps({ foreignMoreVisible: () => true, toggleForeignMore: () => {} }))
+    expect(foldOnly.map((command) => command.id)).toEqual([
+      "goal.status.pin",
+      "goal.status.history",
+      "goal.status.copy",
+      "goal.status.copy-evaluator-reason",
+      "goal.status.elsewhere-more",
+      "goal.status.scroll-up",
+      "goal.status.scroll-down",
+      "goal.status.page-up",
+      "goal.status.page-down",
+      "goal.status.home",
+      "goal.status.end",
+    ])
+    const halfWired = dialogStatusCommands(spyDeps({ foreignMoreVisible: () => true }))
+    expect(halfWired.some((command) => command.id === "goal.status.elsewhere-more")).toBe(false)
+    const otherHalf = dialogStatusCommands(spyDeps({ toggleForeignMore: () => {} }))
+    expect(otherHalf.some((command) => command.id === "goal.status.elsewhere-more")).toBe(false)
+    expect(halfWired.length + 1).toBe(otherHalf.length + 1) // ten core either way
+  })
+
+  test("the `m` chord mirrors the dialog-open gate and the overflow gate — no overflow, no reachable fold", () => {
+    let toggles = 0
+    const deps = (openGate: boolean, moreVisible: boolean) =>
+      spyDeps({ open: () => openGate, foreignMoreVisible: () => moreVisible, toggleForeignMore: () => { toggles++ } })
+    expect(byId(deps(true, true))["goal.status.elsewhere-more"]!.enabled()).toBe(true)
+    expect(byId(deps(true, false))["goal.status.elsewhere-more"]!.enabled()).toBe(false)
+    expect(byId(deps(false, true))["goal.status.elsewhere-more"]!.enabled()).toBe(false)
+    byId(deps(true, true))["goal.status.elsewhere-more"]!.run()
+    expect(toggles).toBe(1)
+  })
+
+  test("a throwing fold toggle never escapes the key event — same swallow posture as every chord", () => {
+    const deps = spyDeps({
+      foreignMoreVisible: () => true,
+      toggleForeignMore: () => {
+        throw new Error("host detached")
+      },
+    })
+    expect(() => byId(deps)["goal.status.elsewhere-more"]!.run()).not.toThrow()
+  })
+
   test("a throwing jump route never escapes the key event — same swallow posture as every chord", () => {
     const deps = spyDeps({
       transcriptFor: () => "ses_a",

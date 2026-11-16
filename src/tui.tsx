@@ -16,7 +16,7 @@ import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
-import { StatusDialogBody, foreignLiveRows } from "./status-dialog.tsx"
+import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
@@ -80,6 +80,7 @@ export default Plugin.define({
         if (goals) setOthers(goals)
       }).catch(() => {})
     const [statusDialogSession, setStatusDialogSession] = createSignal<string | undefined>(undefined)
+    const [foreignMoreExpanded, setForeignMoreExpanded] = createSignal(false)
     /** Loop-rail fold: controlled expand for the dialog's "N older iterations" row (keyboard parity with the click target). */
     const [iterationsExpanded, setIterationsExpanded] = createSignal(false)
     /** Set when the dialog's live get-RPC rejects; the body renders a faint "snapshot unavailable" line so stale chrome can never pass as fresh. */
@@ -94,7 +95,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -761,6 +762,8 @@ export default Plugin.define({
             // The host detached — the chord is chrome, not a command.
           }
         },
+        foreignMoreVisible: () => foreignLiveRows(others(), statusDialogSession()).length > FOREIGN_ROWS_VISIBLE,
+        toggleForeignMore: () => setForeignMoreExpanded((v) => !v),
         copy: (text, sessionID, what) => copyToClipboard(text, sessionID, what),
         flashCopied: flashStatusCopied,
         scrollBy: (cells) => {

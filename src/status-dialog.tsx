@@ -49,6 +49,10 @@ export const StatusDialogBody = (props: {
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded`. */
   onToggleExpanded?: () => void
+  /** Controlled elsewhere overflow (the `+N more` fold). Pair with onToggleExpandedOthers; uncontrolled when absent (local state, like the rail's fold). */
+  expandedOthers?: () => boolean
+  /** Fired on elsewhere-fold-row activation. */
+  onToggleExpandedOthers?: () => void
   /** When set and returning true, renders a faint "snapshot unavailable" line above the body — the dialog opened from fallback/stale cache because the live get-RPC failed. */
   noticeStale?: () => boolean
   /** Other sessions in this directory holding live goals (active/paused), excluding the session under dialog. Read-only awareness; the host owns session switching. Omitted/empty renders no rows. */
@@ -118,6 +122,19 @@ export const StatusDialogBody = (props: {
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
+  const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
+  const [foldHovered, setFoldHovered] = createSignal(false)
+  // Controlled when the caller passes `expandedOthers` (the dialog keymap drives it so the `m` chord
+  // and the fold row flip the same flag); local state otherwise. Same contract as the rail's fold.
+  const othersExpanded = () => props.expandedOthers?.() ?? localOthersExpanded()
+  const toggleOthersExpanded = () => {
+    try {
+      if (props.onToggleExpandedOthers) return props.onToggleExpandedOthers()
+      setLocalOthersExpanded((v) => !v)
+    } catch {
+      // The host detached mid-click — the fold keeps its paint, nothing to undo.
+    }
+  }
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
@@ -297,15 +314,16 @@ export const StatusDialogBody = (props: {
                     {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " · hover a row to open its transcript" : ""}`}
                   </text>
                 </box>
-                <For each={rows().slice(0, OTHERS_VISIBLE)}>
+                <For each={othersExpanded() ? rows() : rows().slice(0, OTHERS_VISIBLE)}>
                   {(other, index) => {
                     const jump = props.onViewTranscript
                     const hovered = () => othersHovered() === other.sessionID
-                    const digit = () => index() + 1
+                    // Digits ride the keyboard twin contract: rows 1-4 (the chord cap) paint one, beyond the cap paints none — paint order is the contract.
+                    const digit = () => (index() < FOREIGN_ROWS_VISIBLE ? index() + 1 : undefined)
                     return (
                     <box flexDirection="row" gap={2} onMouseUp={jump ? (event) => { if (event.button !== 0) return; event.stopPropagation(); try { jump(other.sessionID) } catch { /* the host discarded the navigation — nothing to undo */ } } : undefined} onMouseOver={jump ? () => setOthersHovered(other.sessionID) : undefined} onMouseOut={jump ? () => setOthersHovered(null) : undefined}>
-                      {jump ? (
-                        // The keyboard twin: while the chord route is wired, digits 1-4 in the dialog keymap jump to this row's transcript — the digit says so. Absent when unwired (paint identical to before).
+                      {jump && digit() !== undefined ? (
+                        // The keyboard twin: while the chord route is wired, digits 1-4 in the dialog keymap jump to this row's transcript — the digit says so. Rows past the chord cap paint none.
                         <text wrapMode="none" flexShrink={0} fg={theme().text.faint} width={LABEL}>
                           {digit()}
                         </text>
@@ -334,11 +352,17 @@ export const StatusDialogBody = (props: {
                   }}
                 </For>
                 <Show when={rows().length > OTHERS_VISIBLE}>
-                  <box flexDirection="row" gap={2}>
+                  <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleOthersExpanded() }} onMouseOver={() => setFoldHovered(true)} onMouseOut={() => setFoldHovered(false)}>
                     {label("")}
-                    <text wrapMode="none" fg={theme().text.faint}>
-                      {`+${rows().length - OTHERS_VISIBLE} more`}
+                    {/* click-to-expand, the rail-fold grammar: collapsed `+N more` expands the block in-flow; expanded folds back to the chord cap. Mouse-first — the hidden sessions are one click away; the `m` chord (dialog keymap, wired by the host) is the keyboard twin. */}
+                    <text wrapMode="none" fg={foldHovered() ? theme().text.base : theme().text.muted} attributes={foldHovered() && mono() ? TextAttributes.BOLD : undefined}>
+                      {othersExpanded() ? `fold to ${FOREIGN_ROWS_VISIBLE}` : `+${rows().length - OTHERS_VISIBLE} more`}
                     </text>
+                    <Show when={foldHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
+                        {props.onToggleExpandedOthers ? "click · m" : "click"}
+                      </text>
+                    </Show>
                   </box>
                 </Show>
               </box>

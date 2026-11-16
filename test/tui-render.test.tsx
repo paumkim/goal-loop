@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
-import { RGBA, TextAttributes } from "@opentui/core"
+import { RGBA, TextAttributes, type ScrollBoxRenderable } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, HudCard, hudCardRows } from "../src/hud-card.tsx"
@@ -1331,6 +1331,92 @@ describe("elsewhere block (other sessions holding live goals)", () => {
     expect(frame).not.toContain("ses_1111111111") // slug resolves; raw ids never paint
     expect(frame).not.toContain("ses_2222222222")
     expect(frame).not.toContain("ses_3333333333") // achieved is terminal, never listed
+  })
+
+  test("the elsewhere fold expands past the four-row chord cap on click, and folds back — the hidden sessions are never trapped behind a silent cap", async () => {
+    // Six live foreign goals — the overflow case: two rows live behind the fold.
+    const slugs6: Record<string, string> = { ses_1111111111: "brisk-falcon", ses_2222222222: "quiet-otter", ses_4444444444: "shy-heron", ses_5555555555: "grand-oyster", ses_6666666666: "still-bison", ses_7777777777: "ember-crab" }
+    const sessionLabel6 = (id: string): string => slugs6[id] ?? id
+    const six = [
+      ...foreign,
+      loopedGoal({ sessionID: "ses_4444444444", id: "goal_f4", condition: "map the snapshot states" }),
+      loopedGoal({ sessionID: "ses_5555555555", id: "goal_f5", condition: "harden the 80 column floor" }),
+      loopedGoal({ sessionID: "ses_6666666666", id: "goal_f6", condition: "wheel pin on the dialog" }),
+      loopedGoal({ sessionID: "ses_7777777777", id: "goal_f7", condition: "fold affordance coverage" }),
+    ]
+    const [expanded, setExpanded] = createSignal(false)
+    const render6 = () => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={six} sessionLabel={sessionLabel6} expandedOthers={() => expanded()} onToggleExpandedOthers={() => setExpanded((v) => !v)} />
+    )
+    const setup = await testRender(render6, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const collapsed = setup.captureCharFrame()
+    expect(collapsed).toContain("+2 more")
+    expect(collapsed).toContain("shy-heron")
+    expect(collapsed).not.toContain("still-bison")
+    expect(collapsed).not.toContain("ember-crab")
+    expect(collapsed).not.toContain("fold to 4")
+    const foldAt = findIn(collapsed, "+2 more")
+    expect(foldAt).toBeDefined()
+    await setup.mockMouse.click(foldAt!.x + 1, foldAt!.y)
+    await setup.renderOnce()
+    const opened = setup.captureCharFrame()
+    for (const slug of ["shy-heron", "grand-oyster", "still-bison", "ember-crab"]) expect(opened).toContain(slug)
+    expect(opened).toContain("fold to 4")
+    expect(opened).not.toContain("+2 more")
+    const foldBack = findIn(opened, "fold to 4")
+    expect(foldBack).toBeDefined()
+    await setup.mockMouse.click(foldBack!.x + 1, foldBack!.y)
+    await setup.renderOnce()
+    const refolded = setup.captureCharFrame()
+    expect(refolded).toContain("+2 more")
+    expect(refolded).not.toContain("still-bison")
+    expect(refolded).not.toContain("ember-crab")
+    await setup.renderer.destroy()
+  })
+
+  test("the elsewhere fold works without host wiring (local state) — click expands, click folds", async () => {
+    const slugs = { ses_1111111111: "brisk-falcon", ses_2222222222: "quiet-otter", ses_4444444444: "shy-heron", ses_5555555555: "grand-oyster", ses_6666666666: "still-bison" }
+    const label = (id: string): string => slugs[id as keyof typeof slugs] ?? id
+    const five = [
+      ...foreign,
+      loopedGoal({ sessionID: "ses_4444444444", id: "goal_f4", condition: "local fold alpha" }),
+      loopedGoal({ sessionID: "ses_5555555555", id: "goal_f5", condition: "local fold beta" }),
+      loopedGoal({ sessionID: "ses_6666666666", id: "goal_f6", condition: "local fold gamma" }),
+    ]
+    const setup = await testRender(() => (
+      <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={five} sessionLabel={label} />
+    ), { width: 112, height: 44 })
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("+1 more")
+    const at = findIn(setup.captureCharFrame(), "+1 more")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 1, at!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("still-bison")
+    expect(setup.captureCharFrame()).toContain("fold to 4")
+    await setup.renderer.destroy()
+  })
+
+  test("the dialog's scrollbox scrolls under the mouse wheel at real coordinates — the mechanism the dialog's content depends on (pin on opentui's ScrollBox.onMouseEvent)", async () => {
+    let sb: ScrollBoxRenderable | undefined
+    const content = Array.from({ length: 60 }, (_, i) => `rail row ${String(i + 1).padStart(2, "0")} · verdict trail`).join("\n")
+    const setup = await testRender(() => (
+      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }}>
+        <text wrapMode="none">{content}</text>
+      </scrollbox>
+    ), { width: 48, height: 10 })
+    await setup.renderOnce()
+    expect(sb).toBeDefined()
+    const before = sb!.scrollTop
+    await setup.mockMouse.scroll(6, 2, "down")
+    await setup.renderOnce()
+    const afterDown = sb!.scrollTop
+    expect(afterDown).toBeGreaterThan(before)
+    await setup.mockMouse.scroll(6, 2, "up")
+    await setup.renderOnce()
+    expect(sb!.scrollTop).toBeLessThan(afterDown)
+    await setup.renderer.destroy()
   })
 
   test("with the jump route wired, elsewhere rows paint a faint digit gutter (the chord to press); unwired rows paint no digit", async () => {
