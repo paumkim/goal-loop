@@ -1185,6 +1185,17 @@
       "submittedAt": "2026-11-16T03:24:55Z",
       "mergedAt": "2026-11-16T03:25:08Z",
       "mergedInto": "dev"
+    },
+    "compaction-landing-evaluator": {
+      "agent": "inkling-goal",
+      "paths": "src,test,SPEC.md,scripts,package.json",
+      "branch": "wt/compaction-landing-evaluator",
+      "worktree": "worktrees/wt-compaction-landing-evaluator",
+      "status": "done",
+      "createdAt": "2026-11-16T03:38:27Z",
+      "submittedAt": "2026-11-16T03:58:39Z",
+      "mergedAt": "2026-11-16T03:58:59Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
