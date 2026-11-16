@@ -179,7 +179,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · freshly armed (the teaching hint is on screen) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  3m · 0 turns · v1/5                                                                         
                                                                                                     
@@ -223,7 +223,7 @@ now         ◎  v1 · active · 0 turns · 3m elapsed
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · hot (the remediation row rides the dialog, not just the card) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -271,7 +271,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab (the history focus view — strip, the state row, the rail, nothing else) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -318,8 +318,56 @@ why         ✓  met · turn 3 · 3m ago      done
 "
 `;
 
+exports[`full-frame snapshots (named layout states) StatusDialogBody · dossier tab (the whole record in-screen — the copy row, the document's title, the objective; no dashboard chrome) 1`] = `
+"overview · ledger · dossier                                                                         
+active  12m · 4 turns · v3/5                                                                        
+                                                                                                    
+dossier     the whole record as markdown                                                            
+Goal loop dossier                                                                                   
+                                                                                                    
+_Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record. Everything below is     
+the record's own bookkeeping; a measurement it does not carry renders as —, never estimated. The    
+session id is omitted on purpose._                                                                  
+                                                                                                    
+Objective                                                                                           
+                                                                                                    
+make every loop iteration visible at a glance                                                       
+                                                                                                    
+Status                                                                                              
+                                                                                                    
+· Status: active                                                                                    
+· Set: 2027-01-15T07:18:00.000Z · Elapsed: 12m 00s                                                  
+· 4 turns evaluated                                                                                 
+· Spend (this goal): 278k in · 25k out · 96k cached · $0.42                                         
+· Iteration: 3 of at most 5                                                                         
+· Reason:                                                                                           
+Evaluator: docs build still fails                                                                   
+                                                                                                    
+Completed iterations (2)                                                                            
+                                                                                                    
+Iteration v1 — met                                                                                  
+                                                                                                    
+· Ended: 2027-01-15T07:33:00.000Z (wall span 15m 00s)                                               
+· Turns: 9 · Tool calls: 41                                                                         
+· Commit: —                                                                                         
+· Context at arm: —                                                                                 
+· Spend: —                                                                                          
+· Summary:                                                                                          
+                                                                                                    
+Added an 18-cell block progress bar.                                                                
+                                                                                                    
+· Evaluator reason:                                                                                 
+                                                                                                    
+met                                                                                                 
+                                                                                                    
+Iteration v2 — met                                                                                  
+                                                                                                    
+· Ended: 2027-01-15T07:48:00.000Z (wall span 15m 00s)                                               
+"
+`;
+
 exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab failure-first (a hot loop never hides its remedy — the fix row rides the focus view) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -367,7 +415,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -415,7 +463,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · elsewhere overflow — the fold opened (every foreign session paints; digits stay on the first four rows) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  10m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -463,7 +511,7 @@ elsewhere   6 other sessions holding live goals · hover a row to open its trans
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · why ledger (each verdict row carries the commit sha it landed on) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 active  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -599,7 +647,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · judged
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · paused at the turn cap (the dialog carries the same exact remedy as the card) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 paused  12m · 4 turns · v3/5                                                                        
                                                                                                     
@@ -647,7 +695,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · judged impossible (the dialog shows why, not a generic failure) 1`] = `
-"overview · ledger                                                                                   
+"overview · ledger · dossier                                                                         
                                                                                                     
 impossible  12m · 4 turns · v3/5                                                                    
                                                                                                     
