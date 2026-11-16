@@ -1702,6 +1702,17 @@
       "submittedAt": "2026-11-16T09:43:13Z",
       "mergedAt": "2026-11-16T09:43:46Z",
       "mergedInto": "dev"
+    },
+    "tui-footer-budget-stale-parse": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-footer-budget-stale-parse",
+      "worktree": "worktrees/wt-tui-footer-budget-stale-parse",
+      "status": "done",
+      "createdAt": "2026-11-16T09:48:25Z",
+      "submittedAt": "2026-11-16T09:50:49Z",
+      "mergedAt": "2026-11-16T09:52:08Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
