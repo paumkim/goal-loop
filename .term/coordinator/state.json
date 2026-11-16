@@ -2087,6 +2087,17 @@
       "submittedAt": "2026-11-16T14:56:07Z",
       "mergedAt": "2026-11-16T14:58:48Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-view-tabs": {
+      "agent": "orchestrator",
+      "paths": "src/status-dialog.tsx src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
+      "branch": "wt/tui-dialog-view-tabs",
+      "worktree": "worktrees/wt-tui-dialog-view-tabs",
+      "status": "done",
+      "createdAt": "2026-11-16T15:04:51Z",
+      "submittedAt": "2026-11-16T15:16:18Z",
+      "mergedAt": "2026-11-16T15:22:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
