@@ -816,6 +816,17 @@
       "submittedAt": "2026-11-16T21:01:12Z",
       "worktree": "worktrees/wt-iteration-101-spend-ledger"
     },
+    "iteration-102-dossier-index": {
+      "agent": "opencode",
+      "branch": "wt/iteration-102-dossier-index",
+      "createdAt": "2026-11-16T21:08:49Z",
+      "mergedAt": "2026-11-16T21:14:48Z",
+      "mergedInto": "dev",
+      "paths": "src/core/dossier-index.ts,test/dossier-index.test.ts,src/tui.tsx,test/package-integrity.test.ts,SPEC.md,dist,docs/changelog.html",
+      "status": "done",
+      "submittedAt": "2026-11-16T21:13:17Z",
+      "worktree": "worktrees/wt-iteration-102-dossier-index"
+    },
     "iteration-92-scrollbar-chrome": {
       "agent": "orchestrator",
       "branch": "wt/iteration-92-scrollbar-chrome",
