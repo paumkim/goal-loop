@@ -1350,6 +1350,17 @@
       "submittedAt": "2026-11-16T06:30:38Z",
       "mergedAt": "2026-11-16T06:30:54Z",
       "mergedInto": "dev"
+    },
+    "tui-inline-copy-ack": {
+      "agent": "orchestrator",
+      "paths": "src/status-dialog.tsx,src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-inline-copy-ack",
+      "worktree": "worktrees/wt-tui-inline-copy-ack",
+      "status": "done",
+      "createdAt": "2026-11-16T06:32:29Z",
+      "submittedAt": "2026-11-16T06:35:27Z",
+      "mergedAt": "2026-11-16T06:35:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
