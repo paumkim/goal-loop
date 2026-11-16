@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-16 02:50 UTC</code></td><td>feat(tui): the pill shows its own state — leading ▾/▸ (v/&gt; on NO_COLOR/TERM=dumb) keyed to the card actually painted; two cells reserved in the label budget and seen by the pin budget; rides the same text node so hover/pulse cover it</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 02:46 UTC</code></td><td>fix(tui): the card fits the terminal — remediation rows are its real word-wrap at 49 cells not a flat 2; cardRowPlan is the single source of truth for painted and anchored rows; a viewport ceiling (max(8, height-2)) drops teaching rows to keep the remediation and esc affordance on-screen</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 02:32 UTC</code></td><td>fix(tui): the ambient pill fits the terminal — pillModel budgets its label to measured width, dropping retry → compact → turns → pips in priority order before a grapheme-safe … truncation; the mount budgets width-2 minus the landing suffix</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 02:28 UTC</code></td><td>fix(tui): pips demote to # and - under NO_COLOR / TERM=dumb — renderPips joins the bar and sparkline demotion; pillModel gains a default-off ascii flag threaded from the pill mount; card threads its mono flag; two test files pin it</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-15 23:32 UTC</code></td><td>fix(tui): dialog footer degrades in two steps so the key hint never clips mid-word (80-col floor, closes the pre-existing &gt;=120 overflow too)</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 23:24 UTC</code></td><td>feat(tui): the stuck-retrying state reads honestly — pill/card say 'stuck' in amber, card border joins the family</td><td>commit</td></tr>
 <tr><td><code>2026-11-15 23:19 UTC</code></td><td>feat(tui): surface a goal stuck retrying every turn (&gt;=3 failed turns, pill counter + remediation)</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 23:02 UTC</code></td><td>feat(tui): show the context estimate vs the compact threshold; shimmer while hot</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
