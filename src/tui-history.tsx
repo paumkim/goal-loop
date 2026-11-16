@@ -171,6 +171,12 @@ export const LoopSection = (props: {
   const livePace = () => (isTerminal() ? undefined : pace())
   const finished = () => history().length > 0 && (isTerminal() || capReached())
   const totals = () => loopTotals(history(), props.goal.setAt)
+  // The loop's own ledger, summed: the cost of every measured iteration. Partial measurement is never presented as a complete total — the fraction is printed, or nothing is.
+  const tallySpend = () => {
+    const spend = totals().spend
+    if (!spend) return ""
+    return spend.measured === totals().iterations ? ` · ${formatCost(spend.total)}` : ` · ${formatCost(spend.total)} across ${spend.measured}/${totals().iterations} measured`
+  }
   const finalGlyph = () => ascii() ? (props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x") : (props.goal.status === "achieved" ? "✓" : props.goal.status === "impossible" ? "⊘" : "✗")
   const finalColor = () => mono()
     ? (props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint)
@@ -324,7 +330,7 @@ export const LoopSection = (props: {
             {finalGlyph()}
           </text>
           <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
-            {`loop ${props.goal.status} · ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} · ${totals().turns} turns · ${totals().tools} tools · ${formatDurationCoarse(totals().spanMs)} wall`}
+            {`loop ${props.goal.status} · ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} · ${totals().turns} turns · ${totals().tools} tools · ${formatDurationCoarse(totals().spanMs)} wall${tallySpend()}`}
           </text>
         </box>
       </Show>

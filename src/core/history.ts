@@ -234,6 +234,8 @@ interface LoopTotals {
   readonly turns: number
   readonly tools: number
   readonly spanMs: number
+  /** Sum of the measured per-iteration spend, with the count of iterations that carried a measurement. Absent when nothing measured — the tally never claims a $0.00 it cannot see. A partial measurement is reported as partial. */
+  readonly spend?: { readonly total: number; readonly measured: number }
 }
 
 /** Aggregate tally for a finished loop: iterations, evaluated turns, tool calls and wall-clock span setAt → last endedAt. Empty input yields zeros with span 0. */
@@ -241,13 +243,21 @@ export function loopTotals(entries: readonly LoopEntry[], setAt: number): LoopTo
   let turns = 0
   let tools = 0
   let lastEnded = 0
+  let spendTotal = 0
+  let spendMeasured = 0
   for (const entry of entries) {
     turns += Number.isFinite(entry.turns) ? entry.turns : 0
     tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0
+    const cost = entry.spend?.cost
+    if (cost !== undefined && Number.isFinite(cost) && cost >= 0) {
+      spendTotal += cost
+      spendMeasured += 1
+    }
     if (Number.isFinite(entry.endedAt) && entry.endedAt > lastEnded) lastEnded = entry.endedAt
   }
   const spanMs = entries.length === 0 ? 0 : Math.max(0, lastEnded - setAt)
-  return { iterations: entries.length, turns, tools, spanMs }
+  const base = { iterations: entries.length, turns, tools, spanMs }
+  return spendMeasured === 0 ? base : { ...base, spend: { total: spendTotal, measured: spendMeasured } }
 }
 
 /** Local wall-clock HH:MM for a timestamp (24h, zero-padded). Non-finite input yields "--:--". */

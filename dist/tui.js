@@ -462,14 +462,22 @@ function loopTotals(entries, setAt) {
   let turns = 0;
   let tools = 0;
   let lastEnded = 0;
+  let spendTotal = 0;
+  let spendMeasured = 0;
   for (const entry of entries) {
     turns += Number.isFinite(entry.turns) ? entry.turns : 0;
     tools += Number.isFinite(entry.toolCalls) ? entry.toolCalls : 0;
+    const cost = entry.spend?.cost;
+    if (cost !== undefined && Number.isFinite(cost) && cost >= 0) {
+      spendTotal += cost;
+      spendMeasured += 1;
+    }
     if (Number.isFinite(entry.endedAt) && entry.endedAt > lastEnded)
       lastEnded = entry.endedAt;
   }
   const spanMs = entries.length === 0 ? 0 : Math.max(0, lastEnded - setAt);
-  return { iterations: entries.length, turns, tools, spanMs };
+  const base = { iterations: entries.length, turns, tools, spanMs };
+  return spendMeasured === 0 ? base : { ...base, spend: { total: spendTotal, measured: spendMeasured } };
 }
 function localTime(ms) {
   if (!Number.isFinite(ms))
@@ -885,6 +893,12 @@ var LoopSection = (props) => {
   const livePace = () => isTerminal() ? undefined : pace();
   const finished = () => history().length > 0 && (isTerminal() || capReached());
   const totals = () => loopTotals(history(), props.goal.setAt);
+  const tallySpend = () => {
+    const spend = totals().spend;
+    if (!spend)
+      return "";
+    return spend.measured === totals().iterations ? ` \xB7 ${formatCost(spend.total)}` : ` \xB7 ${formatCost(spend.total)} across ${spend.measured}/${totals().iterations} measured`;
+  };
   const finalGlyph = () => ascii() ? props.goal.status === "achieved" ? "+" : props.goal.status === "impossible" ? "!" : "x" : props.goal.status === "achieved" ? "\u2713" : props.goal.status === "impossible" ? "\u2298" : "\u2717";
   const finalColor = () => mono() ? props.goal.status === "achieved" || props.goal.status === "impossible" ? theme().text.base : theme().text.faint : props.goal.status === "achieved" ? theme().text.feedback.info.base : props.goal.status === "impossible" ? theme().text.feedback.warning.base : theme().text.faint;
   const nowColor = () => {
@@ -1174,7 +1188,7 @@ var LoopSection = (props) => {
         _$insert(_el$20, finalGlyph);
         _$setProp(_el$21, "wrapMode", "word");
         _$setProp(_el$21, "flexGrow", 1);
-        _$insert(_el$21, () => `loop ${props.goal.status} \xB7 ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} \xB7 ${totals().turns} turns \xB7 ${totals().tools} tools \xB7 ${formatDurationCoarse(totals().spanMs)} wall`);
+        _$insert(_el$21, () => `loop ${props.goal.status} \xB7 ${totals().iterations} iteration${totals().iterations === 1 ? "" : "s"} \xB7 ${totals().turns} turns \xB7 ${totals().tools} tools \xB7 ${formatDurationCoarse(totals().spanMs)} wall${tallySpend()}`);
         _$effect((_p$) => {
           var _v$8 = finalColor(), _v$9 = TextAttributes.BOLD, _v$0 = theme().text.base;
           _v$8 !== _p$.e && (_p$.e = _$setProp(_el$20, "fg", _v$8, _p$.e));
