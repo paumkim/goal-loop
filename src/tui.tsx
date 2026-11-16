@@ -146,11 +146,7 @@ export default Plugin.define({
                 flashStatusCopied()
               }}
               onTogglePin={() => togglePin(sessionID)}
-              onClear={() => {
-                try {
-                  void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
-                } catch {}
-              }}
+              onClear={() => requestClearGoal(sessionID)}
             />
           </ClampedColumn>
         ),
@@ -449,6 +445,35 @@ export default Plugin.define({
         safeToast({ title: "copy failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
       }
     }
+    // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
+    // history (the dialog's [clear goal], the card footer button, the danger row in the context menu,
+    // and both palette commands). Every clear path funnels through the host's native confirm dialog;
+    // it fails closed — when the host dialog is unavailable or dismissed, nothing is cleared. The
+    // message names what is actually lost so the decision is informed, not reflexive.
+    const requestClearGoal = (sessionID: string | undefined) => {
+      if (!sessionID) return
+      try {
+        const g = live(sessionID) ?? entries()[sessionID]?.goal
+        const message = g?.loopEnabled
+          ? `Clear the armed loop (iteration ${g.loopIteration ?? 1}${typeof g.loopMaxLoops === "number" && g.loopMaxLoops > 0 ? ` of at most ${g.loopMaxLoops}` : ""}) and its full history? This cannot be undone.`
+          : "Clear the armed goal and its history? This cannot be undone."
+        void context.ui.dialog
+          .confirm({ title: "Clear goal", message, label: { confirm: "clear goal", cancel: "keep" } })
+          .then((ok) => {
+            if (ok !== true) return
+            try {
+              void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
+            } catch {
+              // Best-effort: the host surfaces RPC failures as it always does.
+            }
+          })
+          .catch(() => {
+            // Fail closed: no confirmation, no clear.
+          })
+      } catch {
+        // Fail closed: no confirmation, no clear.
+      }
+    }
     const openDashboard = (sessionID: string | undefined) => {
       if (!sessionID) return
       try {
@@ -594,11 +619,9 @@ export default Plugin.define({
                     onClose={() => { setContextOpen(false); setHudSession(undefined) }}
                     onDetails={() => { setContextOpen(false); openDashboard(props.sessionID) }}
                     onClear={() => {
-                      try {
-                        if (props.sessionID) void rpc.clear({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})
-                      } catch {}
                       setContextOpen(false)
                       setHudSession(undefined)
+                      requestClearGoal(props.sessionID)
                     }}
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
                     contextOpen={contextOpen()}
@@ -740,10 +763,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession())),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
-          },
+          run: () => requestClearGoal(currentSession()),
         },
         {
           id: "goal.loop.status",
@@ -828,10 +848,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession())?.loopEnabled),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
-          },
+          run: () => requestClearGoal(currentSession()),
         },
       ],
     }))

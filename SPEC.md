@@ -2509,3 +2509,32 @@ this workstream.
 
 Verification (all run in the worktree): bun run check green (769 tests), coordinator submit +
 merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CD — every clear path asks first (2026-11-16)
+
+Interpretation of this iteration: the mouse-first axis plus failure-is-first-class. Every clear
+affordance in the TUI erased the armed goal and its full history on a single click — the dialog
+footer [clear goal], the card footer button, the danger row in the context menu, and the two palette
+commands (goal.clear, goal.loop.clear). One stray hover-click on the card's danger row wiped an
+armed loop; the host's own /goal discipline (typed deliberately) was no protection against a
+pointing device. This closes that hole with the host's native confirm primitive.
+
+249. src/tui.tsx: a new requestClearGoal helper funnels ALL five clear paths through
+     context.ui.dialog.confirm (title "Clear goal", label { confirm: "clear goal", cancel: "keep" }).
+     The message names what is actually lost — for a loop goal it names the iteration and cap
+     ("Clear the armed loop (iteration N of at most M) and its full history? This cannot be
+     undone."), otherwise "Clear the armed goal and its history? This cannot be undone."
+     Fail closed on every error path: host confirm unavailable, rejected, or dismissed — nothing is
+     cleared. The status dialog and card collapse BEFORE the confirm opens (fresh mount next time),
+     and the rpc.clear call happens only after ok === true.
+250. Evidence is source-layer for the confirm path (the host dialog dispatch has no headless harness,
+     same class as the keymap layers from Workstream BZ); the button wiring of every funnelled path
+     is unchanged and remains covered by the existing card/dialog render tests. No test files were
+     touched; marker unchanged (files=43 tests=769). No chrome, layout or motion changes; the
+     confirm is host-rendered chrome, not a plugin-painted modal — no modal spam.
+
+No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev.
+No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check green (769 tests),
+coordinator submit + merge-next, and bun run check on dev shown green at the end.
