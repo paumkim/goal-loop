@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4990,7 +4990,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5060,7 +5060,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5129,7 +5129,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5194,7 +5194,7 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 ## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
 
@@ -5267,7 +5267,7 @@ line, the object carries a verifiable mark. None substitutes for another.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
 
 ## Workstream EG — the dossier, sealed: the proofs ride the file (2026-11-16)
 
@@ -5348,6 +5348,72 @@ and a probe that throws degrades its row to `unknown` instead of sinking the sea
      commit level only (no author-key inventory, no chain-of-trust documentation); sealing is at
      the headless test-renderer layer — live-TUI behaviour remains unverifiable.
 
+## Workstream EH — the sealed dossier, on trial again: drift since sealing (2026-11-16)
+
+Interpretation of the mouse-first clause: EG sealed the record's shas into the file a handoff
+carries — but a sealed file does not stay true by itself. The question the counterparty
+holding that file asks weeks later is the one this iteration answers: *is what the file
+attested still true of the repository right now?* `goal.dossier.attest` (palette only: no
+chord, no footer furniture) finds the newest `goal-dossier-sealed-*.md` in the host's cwd,
+parses its `## Attestation` appendix, re-probes every sha the appendix names against HEAD at
+the host's cwd — the same extant `verifyRecord` / `reachRecord` / `signRecord` with the same
+injected-probe contracts, never reimplemented — and reports drift since sealing: a sha clean
+on all three at seal time whose exists / on-this-line / under-seal answer flips from yes to
+no. A fresh `unknown` is never drift and never a pass; a sha that was not clean at seal time
+cannot regress and reads `was-not-clean`; the counts name every class, and the report says
+what it cannot prove. Plain `goal.dossier.seal` and `goal.dossier.export` are untouched.
+
+491. src/core/dossier-attest.ts — new pure module, no JSX, no theme. `parseAttestationAppendix(markdown)`
+     never throws: `unsealed` (no `## Attestation` heading) / `unparsable` (heading, no readable row
+     and no GAP sentence) / `sealed` — rows (sha exactly as the file spells it, quoting iterations,
+     the three seal-time answers), the seal-time stamp and directory when present, the GAP flag,
+     and `malformed` for table-looking rows the parser cannot read (counted, never silently kept).
+     `attestSealedDossier(markdown, directory, probes?)` re-probes fresh and classifies each row
+     `held` (yes on all three at seal time, yes now) / `regressed` (git flipped a yes to a no;
+     `flipped` names the questions) / `unknown` (was clean, no flip to no, but git could not answer —
+     never drift, never a pass) / `was-not-clean` (not clean at seal time — reported, never blamed);
+     the empty seal attests to zero shas, printed as the empty truth it is. `attestationReportMarkdown`
+     — fresh, self-describing (generation time, probed directory, the re-attested file, seal-time
+     stamp and directory), per-row table with the verdict and the flipped questions, a finishing
+     counts line, and a tamper-honesty footer: the report detects divergence between seal-time answers
+     and fresh ones, not edits to the appendix's prose. `attestSummaryLine` is the toast's chrome-free
+     one-liner. `selectNewestSealedDossier(entries)` — deterministic newest-first selection over
+     `goal-dossier-sealed-*.md` names (stamp, then collision-attempt suffix, then mtime); the plain
+     export's stem never qualifies. No new probes; the extant three run with the same
+     injected-probe contracts everywhere (tests inject; no test spawns git).
+492. src/tui.tsx — `attestSealedDossierAction` + palette command `goal.dossier.attest`
+     ("Goal: attest a sealed dossier against HEAD (drift report)"). Reads the newest sealed file
+     in `process.cwd()` (readdir + stat, selection via `selectNewestSealedDossier`), re-probes,
+     copies the Markdown drift report (OSC52, like the sibling commands), toasts
+     `attestation holds` (success) / `attestation drifted` / `attestation unverifiable` /
+     `nothing to attest` (warning — drift means the repository moved or the seal was made
+     elsewhere; information is not accusation, so drift never toasts as an error) /
+     `no sealed dossier` when none is found / `not a sealed dossier` for a plain export /
+     `attestation unreadable` when the appendix parses to nothing; read failures toast error.
+     Enabled regardless of goal state — it re-probes a file, not the session. No footer chord,
+     no dialog row, the palette is the surface.
+493. Tests: +18 unit (dossier-attest.test.ts: the fresh sealed fixture (sealRecord with injected
+     probes) parses to stamp/directory/rows/iterations, a plain export is `unsealed`, the GAP
+     record parses as zero rows, a heading with no readable row is `unparsable`, garbage answer
+     cells degrade to `unknown` (case-insensitive) and non-sha rows are counted malformed; all-yes
+     now `held`s; a yes flipped to no is `regressed` naming the question; a fresh unknown is not
+     drift; a seal-time failure cannot regress (`was-not-clean`); a flip wins over a co-occurring
+     unknown; the empty seal never fabricates; a throwing probe degrades per-row; fresh probes
+     receive the sha exactly as the file spells it; `selectNewestSealedDossier` (stamp order,
+     attempt-suffix beats base at the same stamp, plain export stem ignored, mtime tie-break,
+     undefined on empty); report contents incl. the tamper-honesty footer; every summary-line
+     arm) + re-pinned pack count 56. Tests: 1253 pass, 0 fail (49 files).
+494. Honest limits: the appendix is parsed, never trusted — the sweep detects divergence between
+     seal-time answers and fresh ones, not tampering with the bytes around the table; shas are
+     re-probed exactly as the appendix spells them (the 7-character abbreviations the sealed
+     document prints; git resolves them in the sealing repository, and if one stops naming a
+     unique object the affected question fails closed — for existence that reads `missing`, and a
+     file whose reference no longer names one object has failed its trial either way); `unknown`
+     never counts on either side; drift is computed only over rows clean at seal time; the probes
+     require a git binary and a repository at the probed cwd — outside one, every fresh answer
+     reads `unknown`; the plain export and the sealed twin are untouched by this command; headless
+     test-renderer layer, live TUI unverifiable.
+
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=55 tests=1235.
-<!-- spec-check files=55 tests=1235 -->
+<!-- spec-check files=56 tests=1253 -->
