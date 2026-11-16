@@ -805,6 +805,17 @@
       "submittedAt": "2026-11-16T20:49:34Z",
       "worktree": "worktrees/wt-iteration-100-review-dossier"
     },
+    "iteration-101-spend-ledger": {
+      "agent": "orchestrator",
+      "branch": "wt/iteration-101-spend-ledger",
+      "createdAt": "2026-11-16T20:56:10Z",
+      "mergedAt": "2026-11-16T21:02:43Z",
+      "mergedInto": "dev",
+      "paths": "src/core/spend-ledger.ts,test/spend-ledger.test.ts,src/tui.tsx,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
+      "status": "done",
+      "submittedAt": "2026-11-16T21:01:12Z",
+      "worktree": "worktrees/wt-iteration-101-spend-ledger"
+    },
     "iteration-92-scrollbar-chrome": {
       "agent": "orchestrator",
       "branch": "wt/iteration-92-scrollbar-chrome",
