@@ -141,11 +141,35 @@ export const footerCopyLabel = (copied: boolean, roomy: boolean): string =>
 export const footerPinLabel = (pinned: boolean, roomy: boolean): string =>
   pinned ? (roomy ? "unpin condition" : "unpin") : roomy ? "pin condition" : "pin"
 
+/** Cells a footer button paints: the label plus the brackets and one cell of horizontal padding each side (the HudButton chrome). */
+export const footerButtonCells = (label: string): number => stringWidth(label) + 4
+
+const footerClearLabel = (roomy: boolean): string => (roomy ? "clear goal" : "clear")
+
+/**
+ * The footer tier, computed from measured cells — an overfull row paints the rightmost (destructive)
+ * button past the host dialog for every width in the band, so the tier switch reads the actual
+ * arithmetic. `budget` is the terminal width minus the dialog's `paddingRight={3}`; the host owns its
+ * own frame. full (FULL_HINT + noun labels) unlocks only when everything fits; roomy (SHORT_HINT +
+ * noun labels) one notch below; below that the compact labels hold the 80-column floor (≈69 cells).
+ * Copied/pinned flip the labels and re-measure — the tier never paints past budget in any state.
+ */
+export const dialogFooterTier = (width: number, copied: boolean, pinned: boolean): { wide: boolean; roomy: boolean } => {
+  const budget = Math.floor(width) - 3
+  const buttons = (roomy: boolean): number =>
+    footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4
+  return {
+    wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
+    roomy: stringWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget,
+  }
+}
+
 /**
  * The host dialog footer: the key hint plus the three mouse actions. The row clips mid-word when the
  * hint is longer than the cells the buttons leave behind (a broken-sentence hint reads as broken chrome),
- * so it degrades in two steps: full hint + full labels above 140 cells, short hint + full labels above 96,
- * short hint + compact labels below. The 80-column floor always fits. No tier repeats the Esc chord — it stays visible in the host
+ * so the tier degrades in two steps computed from measured cells (dialogFooterTier): full hint when the whole
+ * row fits the budget, short hint + noun labels one notch below, compact labels at the 80-column floor.
+ * No tier repeats the Esc chord — it stays visible in the host
  * dialog chrome; the hint spends its cells on scrolling and the three plugin chords instead.
  * `copied` flips the copy button's label to `✓ copied` (host toasts do not render above the modal).
  * The pin button keeps its object noun at the roomy tier across states (`pin condition` ↔ `unpin condition`),
@@ -161,8 +185,9 @@ export const DialogFooter = (props: {
   onClear: () => void
 }): JSX.Element => {
   const dimensions = useTerminalDimensions()
-  const wide = () => dimensions().width >= 140
-  const roomy = () => dimensions().width >= 96
+  const tier = () => dialogFooterTier(dimensions().width, props.copied(), props.pinned())
+  const wide = () => tier().wide
+  const roomy = () => tier().wide || tier().roomy
   return (
     <box flexDirection="row" gap={1}>
       <text fg={props.theme.text.faint} wrapMode="none">
@@ -171,7 +196,7 @@ export const DialogFooter = (props: {
       <box flexGrow={1} />
       <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} mono={props.mono} onPress={props.onCopy} />
       <HudButton theme={props.theme} label={footerPinLabel(props.pinned(), roomy())} mono={props.mono} onPress={props.onTogglePin} />
-      <HudButton theme={props.theme} label={roomy() ? "clear goal" : "clear"} mono={props.mono} onPress={props.onClear} />
+      <HudButton theme={props.theme} label={footerClearLabel(roomy())} mono={props.mono} onPress={props.onClear} />
     </box>
   )
 }

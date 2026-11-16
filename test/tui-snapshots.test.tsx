@@ -275,10 +275,19 @@ describe("full-frame snapshots (chrome tiers and reduced-color frames)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
-  test("DialogFooter · 96 columns (short hint · full labels)", async () => {
+  test("DialogFooter · 96 columns (short hint · compact labels — the noun labels overflow at 96)", async () => {
     const snapshot = await frame(
       () => <DialogFooter theme={theme} pinned={() => false} copied={() => false} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
       96,
+      3,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
+  test("DialogFooter · 100 columns (short hint · noun labels)", async () => {
+    const snapshot = await frame(
+      () => <DialogFooter theme={theme} pinned={() => false} copied={() => false} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      100,
       3,
     )
     expect(snapshot).toMatchSnapshot()

@@ -400,8 +400,16 @@ describe("DialogFooter (80-column floor)", () => {
     expect(frame).not.toContain("[copy condition]")
   })
 
-  test("at 96 cells the full labels come back with the short hint", async () => {
+  test("at 96 cells the noun labels overflow — compact labels hold the row (audit finding A1)", async () => {
     const frame = await renderFooter(96)
+    expect(frame).toContain("[copy]")
+    expect(frame).toContain("[pin]")
+    expect(frame).toContain("[clear]")
+    expect(frame).not.toContain("copy condition")
+  })
+
+  test("at 100 cells the noun labels return with the short hint", async () => {
+    const frame = await renderFooter(100)
     expect(frame).toContain("[copy condition]")
     expect(frame).toContain("[pin condition]")
     expect(frame).toContain("[clear goal]")
@@ -433,7 +441,7 @@ describe("DialogFooter (80-column floor)", () => {
       expect(frame).not.toContain("[pin]")
       expect(frame).not.toContain("unpin condition")
     }
-    for (const width of [96, 160]) {
+    for (const width of [100, 160]) {
       const frame = await renderFooter(width, true)
       expect(frame).toContain("[unpin condition]")
       expect(frame).not.toContain("[unpin]")

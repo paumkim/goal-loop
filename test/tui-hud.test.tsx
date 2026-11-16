@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, pillCaret, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH } from "../src/core/format.ts"
@@ -501,6 +501,39 @@ describe("hudCardRows", () => {
     expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(8)
     const { history: _h, ...noHistory } = loopedGoal()
     expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
+  })
+})
+
+describe("footerButtonCells / dialogFooterTier", () => {
+  test("a button costs its label plus four cells of chrome (brackets + 1 cell padding each side)", () => {
+    expect(footerButtonCells("clear")).toBe(9)
+    expect(footerButtonCells("clear goal")).toBe(14)
+    expect(footerButtonCells("pin condition")).toBe(17)
+    expect(footerButtonCells("✓ copied")).toBe(12)
+  })
+
+  test("80 columns paints compact in every state — the floor always holds", () => {
+    for (const copied of [false, true]) for (const pinned of [false, true]) {
+      expect(dialogFooterTier(80, copied, pinned)).toEqual({ wide: false, roomy: false })
+    }
+  })
+
+  test("96 columns drops below roomy for the noun labels — the audit's overflow band closes", () => {
+    expect(dialogFooterTier(96, false, false)).toEqual({ wide: false, roomy: false })
+    expect(dialogFooterTier(96, false, true)).toEqual({ wide: false, roomy: false })
+    // the copied label is narrower than "copy condition", so a copied button already fits — the tier measures, never assumes
+    expect(dialogFooterTier(96, true, false)).toEqual({ wide: false, roomy: true })
+    expect(dialogFooterTier(97, false, false).roomy).toBe(true)
+    expect(dialogFooterTier(99, false, true).roomy).toBe(true)
+  })
+
+  test("the full hint unlocks only when the whole row fits the budget", () => {
+    expect(dialogFooterTier(113, false, false).wide).toBe(false)
+    expect(dialogFooterTier(114, true, false).wide).toBe(true)   // copied: 64 + 12 + 17 + 14 + 4 == 111 == budget(114)
+    expect(dialogFooterTier(120, false, false).wide).toBe(true)  // 64 + 18 + 17 + 14 + 4 == 117 == budget(120)
+    expect(dialogFooterTier(121, false, true).wide).toBe(false)  // unpin condition costs two more cells
+    expect(dialogFooterTier(122, false, true).wide).toBe(true)
+    expect(dialogFooterTier(140, false, false)).toEqual({ wide: true, roomy: true })
   })
 })
 
