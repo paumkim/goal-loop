@@ -386,7 +386,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=537 -->
+<!-- spec-check files=41 tests=544 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2084,3 +2084,9 @@ Marker bumped `files=41 tests=505` → `files=41 tests=526` (test-only addition;
 210. New `test/config-defaults.test.ts` (11 tests) pins the option defaults documented in `README.md` and `docs/config.html` to the code. It parses both options tables directly from disk (README `| `option` | default |` rows; config.html `<tr><td><code>option</code>…` rows) and asserts: every `DEFAULTS` key is documented in BOTH tables; every documented value equals the code default (normalized: `` `true```/`false`, numeric strings, `unlimited` → `Number.MAX_SAFE_INTEGER`, `—`/`session model` → undefined, `""` → `""`); both tables document the identical option set; `resolveConfig({}, {})` resolves `DEFAULTS` to itself; `evaluator.mode` documents `auto` while resolving to `session` without a model; `requireCommit` ships `true`/enabled; `model`/`evaluator.model` ship unset; `coordinator` ships `auto`. Mutation-verified: forcing `DEFAULTS.maxLoops` to 6 fails the test; reverting passes.
 211. No source behavior changed; the work is test-only. The maps live in the test, so adding an option to either table without a code default (or vice versa) fails loudly by name rather than silently drifting — the exact hazard that left the documented and actual defaults free to diverge (e.g. `verifyCommand`, `coordinator`).
 Marker bumped `files=41 tests=526` → `files=41 tests=537` (test-only addition; no shipped file changed).
+
+## Workstream BO — package integrity pinned to the actual tarball (2026-11-16)
+
+212. New `test/package-integrity.test.ts` (7 tests) pins `package.json` to the tarball npm would really publish: every `files` entry exists on disk; every `exports` target exists; `bin/opencode-goal.mjs` exists and carries the executable bit; `npm pack --dry-run --json` lists only shipped-file-on-disk paths, contains `LICENSE`/`README.md`/`package.json`/the entrypoints/`dist/tui.js`/`packages/coordinator/*`, and zero forbidden artefacts (test/, scripts/, .github/, .term/, worktrees/, node_modules/, `*.test.ts[x]`, `opencode.json[c]`); the real `npm pack` file list is byte-identical to the dry-run list; `RELEASE-CHECKLIST.md`/`CHANGELOG*` are absent; and the extracted tarball loads through the exact `bun run check:tui` path (`scripts/tui-load-check.ts <extracted>/package/tui.ts` prints `ok: loaded TUI plugin`). Packs use `--ignore-scripts` (prepublishOnly must not re-run the suite mid-test) and temp dirs inside the repo are removed in `afterEach`.
+213. No source behavior changed; the work is test-only. Mutation-verified: adding `"test"` to `files` fails the leak test; reverting passes. This closes the loop on spec-check's tarball coverage — the counts are pinned by spec-check, the contents now pinned here.
+Marker bumped `files=41 tests=537` → `files=41 tests=544` (test-only addition; no shipped file changed).
