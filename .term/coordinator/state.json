@@ -2021,6 +2021,17 @@
       "submittedAt": "2026-11-16T13:34:10Z",
       "mergedAt": "2026-11-16T13:34:43Z",
       "mergedInto": "dev"
+    },
+    "tui-first-impression-frames": {
+      "agent": "orchestrator",
+      "paths": "scripts/render-card.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
+      "branch": "wt/tui-first-impression-frames",
+      "worktree": "worktrees/wt-tui-first-impression-frames",
+      "status": "done",
+      "createdAt": "2026-11-16T13:37:00Z",
+      "submittedAt": "2026-11-16T13:38:41Z",
+      "mergedAt": "2026-11-16T13:39:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
