@@ -126,7 +126,12 @@ export default Plugin.define({
                 flexShrink={0}
                 paddingLeft={1}
                 paddingRight={1}
-                onMouseUp={() => closeStatusDialog()}
+                onMouseUp={(event) => {
+                  // Left button only: a stray right/middle press must not dismiss the dialog.
+                  if (event.button !== 0) return
+                  event.stopPropagation()
+                  closeStatusDialog()
+                }}
                 onMouseOver={() => setStatusEscHovered(true)}
                 onMouseOut={() => setStatusEscHovered(false)}
               >
@@ -598,9 +603,9 @@ export default Plugin.define({
               onMouseUp={(event) => {
                 try {
                   if (!props.sessionID) return
-                  // Right click opens the dashboard directly; everything else toggles the card.
+                  // Right click opens the dashboard directly; left click toggles the card; other buttons are inert.
                   if (event.button === 2) openDashboard(props.sessionID)
-                  else toggleHud()
+                  else if (event.button === 0) toggleHud()
                 } catch {}
               }}
             >

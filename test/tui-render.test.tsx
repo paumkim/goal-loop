@@ -847,3 +847,114 @@ describe("ASCII demotion (NO_COLOR / TERM=dumb)", () => {
     }
   })
 })
+
+describe("mouse-button discipline (left activates; right and middle never do)", () => {
+  const cardHarness = async (goal: GoalSnapshot, spies: { onClear?: () => void; onCopyCondition?: (c: string) => void; onCopyReason?: (r: string) => void } = {}) => {
+    const Harness = () => {
+      const [open, setOpen] = createSignal(false)
+      return (
+        <HudCard
+          goal={goal}
+          theme={theme as never as Parameters<typeof HudCard>[0]["theme"]}
+          elapsedMs={() => 1000 * 60 * 12}
+          onClose={() => {}}
+          onDetails={() => {}}
+          onClear={() => spies.onClear?.()}
+          onCopyCondition={(c) => spies.onCopyCondition?.(c)}
+          contextOpen={open()}
+          onToggleContext={() => setOpen((v) => !v)}
+          onCloseMenu={() => setOpen(false)}
+          onCopyReason={spies.onCopyReason ? (r) => spies.onCopyReason?.(r) : undefined}
+        />
+      )
+    }
+    const setup = await testRender(() => <Harness />, { width: 80, height: 40 })
+    await setup.renderOnce()
+    return setup
+  }
+  const rightClickCard = async (setup: Awaited<ReturnType<typeof testRender>> extends infer _ ? any : never, frame: string) => {
+    const at = findIn(frame, "condition")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y, 2)
+    await setup.renderOnce()
+  }
+  const menuClearRow = (frame: string) => {
+    const menuTop = findIn(frame, "copy condition")
+    expect(menuTop).toBeDefined()
+    const lines = frame.split("\n")
+    for (let y = menuTop!.y; y < lines.length; y += 1) {
+      const x = lines[y]!.indexOf("clear goal")
+      if (x >= 0) return { x, y }
+    }
+    return undefined
+  }
+
+  test("right-clicking the [clear goal] menu row fires no action — the card root toggles the menu instead", async () => {
+    let cleared = false
+    const setup = await cardHarness(loopedGoal(), { onClear: () => { cleared = true } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const menuRow = menuClearRow(opened)
+    expect(menuRow).toBeDefined()
+    await setup.mockMouse.click(menuRow!.x + 2, menuRow!.y, 2)
+    await setup.renderOnce()
+    expect(cleared).toBe(false)
+    expect(setup.captureCharFrame()).not.toContain("copy latest summary") // right-click fell through to the root toggle
+    await setup.renderer.destroy()
+  })
+
+  test("middle-clicking a menu row fires no action and leaves the menu open", async () => {
+    let copied: string | undefined
+    const setup = await cardHarness(loopedGoal(), { onCopyReason: (r) => { copied = r } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const atReason = findIn(opened, "copy evaluator reason")
+    expect(atReason).toBeDefined()
+    await setup.mockMouse.click(atReason!.x + 2, atReason!.y, 1)
+    await setup.renderOnce()
+    expect(copied).toBeUndefined()
+    expect(setup.captureCharFrame()).toContain("copy evaluator reason")
+    await setup.renderer.destroy()
+  })
+
+  test("right-clicking the card's footer [clear goal] button fires no action — right-click anywhere on the card toggles the menu", async () => {
+    let cleared = false
+    const setup = await cardHarness(loopedGoal(), { onClear: () => { cleared = true } })
+    const frame = setup.captureCharFrame()
+    const atClear = findIn(frame, "clear goal") // footer button; menu is closed
+    expect(atClear).toBeDefined()
+    await setup.mockMouse.click(atClear!.x + 2, atClear!.y, 2)
+    await setup.renderOnce()
+    expect(cleared).toBe(false)
+    expect(setup.captureCharFrame()).toContain("copy condition") // menu opened via the root toggle
+    await setup.renderer.destroy()
+  })
+
+  test("right-clicking a loop summary row copies nothing", async () => {
+    let copied: string | undefined
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopySummary={(s) => { copied = s }} />, { width: 100, height: 30 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "Added an 18-cell")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y, 2)
+    await setup.renderOnce()
+    expect(copied).toBeUndefined()
+    await setup.renderer.destroy()
+  })
+
+  test("left-clicking a loop summary row still copies (regression guard)", async () => {
+    let copied: string | undefined
+    const setup = await testRender(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopySummary={(s) => { copied = s }} />, { width: 100, height: 30 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const at = findIn(frame, "Added an 18-cell")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("Added an 18-cell block progress bar.")
+    await setup.renderer.destroy()
+  })
+})

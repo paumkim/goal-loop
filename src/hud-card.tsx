@@ -133,7 +133,11 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: bo
       backgroundColor={!mono() && hovered() ? props.theme.background?.raised?.high : undefined}
       onMouseOver={() => setHovered(true)}
       onMouseOut={() => setHovered(false)}
-      onMouseUp={() => {
+      onMouseUp={(event) => {
+        // Left button only: a stray right/middle press must not fire the action. Non-left presses fall
+        // through to ancestors (right-click anywhere on the card toggles the context menu).
+        if (event.button !== 0) return
+        event.stopPropagation()
         try {
           props.onPress()
         } catch {
@@ -164,8 +168,10 @@ const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; 
       backgroundColor={!mono() && active() ? props.theme.background?.raised?.high : undefined}
       onMouseOver={() => enabled() && setHovered(true)}
       onMouseOut={() => setHovered(false)}
-      onMouseUp={() => {
+      onMouseUp={(event) => {
+        if (event.button !== 0) return
         if (!enabled()) return
+        event.stopPropagation()
         try {
           props.onPress()
         } catch {
@@ -284,7 +290,11 @@ export const HudCard = (props: {
       <box
         flexDirection="row"
         gap={1}
-        onMouseUp={copyCondition}
+        onMouseUp={(event) => {
+          if (event.button !== 0) return
+          event.stopPropagation()
+          copyCondition()
+        }}
         onMouseOver={() => setConditionHovered(true)}
         onMouseOut={() => setConditionHovered(false)}
       >

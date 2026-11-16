@@ -58,7 +58,7 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
     }
   }
   return (
-    <box flexDirection="row" gap={2} onMouseUp={props.onCopy ? copy : undefined} onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
+    <box flexDirection="row" gap={2} onMouseUp={props.onCopy ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy() } : undefined} onMouseOver={() => setHovered(true)} onMouseOut={() => setHovered(false)}>
       <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
         │
       </text>
@@ -240,7 +240,7 @@ export const LoopSection = (props: {
       </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced. Older iterations fold behind one click so a long loop never buries the live row. */}
       <Show when={done() > RAIL_VISIBLE}>
-        <box flexDirection="row" gap={2} onMouseUp={() => setShowAll((v) => !v)} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
+        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); setShowAll((v) => !v) }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             …
           </text>
