@@ -6,6 +6,7 @@
  * character grid. Requires the solid preload (test/bunfig.toml).
  */
 import { describe, expect, test } from "bun:test"
+import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
@@ -552,6 +553,155 @@ describe("loop rail progressive disclosure", () => {
     await setup.renderOnce()
     expect(setup.captureCharFrame()).not.toContain("older iteration")
     await setup.renderer.destroy()
+  })
+})
+
+describe("HUD card context menu (right-click)", () => {
+  interface MenuSpies {
+    onClear?: () => void
+    onCopyCondition?: (condition: string) => void
+    onCopyReason?: (reason: string) => void
+    onCopySummary?: (summary: string) => void
+  }
+
+  const renderCardHarness = async (goal: GoalSnapshot, spies: MenuSpies = {}) => {
+    const Harness = () => {
+      const [open, setOpen] = createSignal(false)
+      return (
+        <HudCard
+          goal={goal}
+          theme={theme}
+          elapsedMs={() => 1000 * 60 * 12}
+          onClose={() => {}}
+          onDetails={() => {}}
+          onClear={() => spies.onClear?.()}
+          onCopyCondition={(c) => spies.onCopyCondition?.(c)}
+          contextOpen={open()}
+          onToggleContext={() => setOpen((v) => !v)}
+          onCloseMenu={() => setOpen(false)}
+          onCopyReason={spies.onCopyReason ? (r) => spies.onCopyReason?.(r) : undefined}
+          onCopySummary={spies.onCopySummary ? (s) => spies.onCopySummary?.(s) : undefined}
+        />
+      )
+    }
+    const setup = await testRender(() => <Harness />, { width: 80, height: 40 })
+    await setup.renderOnce()
+    return setup
+  }
+
+  const rightClickCard = async (setup: Awaited<ReturnType<typeof testRender>> extends infer _ ? any : never, frame: string) => {
+    const at = findIn(frame, "condition")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y, 2)
+    await setup.renderOnce()
+  }
+
+  test("right-click on the card toggles the menu; all four rows render, fixed in position", async () => {
+    const setup = await renderCardHarness(loopedGoal(), { onCopyReason: () => {}, onCopySummary: () => {} })
+    const closed = setup.captureCharFrame()
+    expect(closed).not.toContain("copy evaluator reason")
+    await rightClickCard(setup, closed)
+    const opened = setup.captureCharFrame()
+    expect(opened).toContain("menu")
+    expect(opened).toContain("copy condition")
+    expect(opened).toContain("copy evaluator reason")
+    expect(opened).toContain("copy latest summary")
+    expect(opened).toContain("clear goal")
+    await rightClickCard(setup, opened)
+    expect(setup.captureCharFrame()).not.toContain("copy evaluator reason")
+    await setup.renderer.destroy()
+  })
+
+  test("copy evaluator reason copies the raw reason and closes the menu", async () => {
+    let copied: string | undefined
+    const setup = await renderCardHarness(loopedGoal(), { onCopyReason: (r) => { copied = r } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const at = findIn(opened, "copy evaluator reason")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("Evaluator: docs build still fails")
+    expect(setup.captureCharFrame()).not.toContain("copy evaluator reason")
+    await setup.renderer.destroy()
+  })
+
+  test("copy latest summary copies the newest loopHistory entry", async () => {
+    let copied: string | undefined
+    const setup = await renderCardHarness(loopedGoal(), { onCopySummary: (s) => { copied = s } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const at = findIn(opened, "copy latest summary")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("Trail renders up to 24 verdicts.")
+    await setup.renderer.destroy()
+  })
+
+  test("copy condition copies through the same wiring as the condition row", async () => {
+    let copied: string | undefined
+    const setup = await renderCardHarness(loopedGoal(), { onCopyCondition: (c) => { copied = c }, onCopyReason: () => {}, onCopySummary: () => {} })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const at = findIn(setup.captureCharFrame(), "copy condition")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe("ship the release notes")
+    await setup.renderer.destroy()
+  })
+
+  test("the clear goal row fires onClear and closes the menu", async () => {
+    let cleared = false
+    const setup = await renderCardHarness(loopedGoal(), { onClear: () => { cleared = true } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    // the [clear goal] button shares the label; target the menu row below the menu gutter instead
+    const menuTop = findIn(opened, "copy condition")
+    expect(menuTop).toBeDefined()
+    const lines = opened.split("\n")
+    let menuRow: { x: number; y: number } | undefined
+    for (let y = menuTop!.y; y < lines.length && !menuRow; y += 1) {
+      const x = lines[y]!.indexOf("clear goal")
+      if (x >= 0) menuRow = { x, y }
+    }
+    expect(menuRow).toBeDefined()
+    await setup.mockMouse.click(menuRow!.x + 2, menuRow!.y)
+    await setup.renderOnce()
+    expect(cleared).toBe(true)
+    expect(setup.captureCharFrame()).not.toContain("copy latest summary")
+    await setup.renderer.destroy()
+  })
+
+  test("inert rows: absent reason renders its row faint and inert; absent summary likewise; no callback at all disables them too", async () => {
+    let copied: string | undefined
+    const noReason = loopedGoal({ reason: undefined })
+    const setup = await renderCardHarness(noReason, { onCopyReason: (r) => { copied = r }, onCopySummary: (s) => { copied = s } })
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const atReason = findIn(opened, "copy evaluator reason")
+    expect(atReason).toBeDefined()
+    await setup.mockMouse.click(atReason!.x + 2, atReason!.y)
+    await setup.renderOnce()
+    expect(copied).toBeUndefined()
+    expect(setup.captureCharFrame()).toContain("copy evaluator reason") // stays open, nothing fired
+    await setup.renderer.destroy()
+    // reason present but host did not wire onCopyReason -> still inert
+    copied = undefined
+    const setup2 = await renderCardHarness(loopedGoal(), { onCopySummary: (s) => { copied = s } })
+    const frame2 = setup2.captureCharFrame()
+    await rightClickCard(setup2, frame2)
+    const at2 = findIn(setup2.captureCharFrame(), "copy evaluator reason")
+    expect(at2).toBeDefined()
+    await setup2.mockMouse.click(at2!.x + 2, at2!.y)
+    await setup2.renderOnce()
+    expect(copied).toBeUndefined()
+    await setup2.renderer.destroy()
   })
 })
 

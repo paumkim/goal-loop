@@ -449,6 +449,15 @@ describe("dialog footer hints", () => {
   })
 })
 
+describe("hudCardRows with the context menu", () => {
+  test("the menu adds exactly four rows to the absolute-mount anchor; the default stays unchanged", () => {
+    const base = hudCardRows(loopedGoal())
+    expect(hudCardRows(loopedGoal(), true)).toBe(base + 4)
+    expect(hudCardRows(loopedGoal(), false)).toBe(base)
+    expect(hudCardRows(loopedGoal())).toBe(base)
+  })
+})
+
 describe("footerCopyLabel", () => {
   test("a fresh copy button reads copy condition with cells to spare and copy below 96", () => {
     expect(footerCopyLabel(false, true)).toBe("copy condition")

@@ -61,9 +61,12 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
   </text>
 )
 
-/** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. */
-export const hudCardRows = (goal: GoalSnapshot): number =>
-  5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0)
+/** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
+const CONTEXT_MENU_ROWS = 4
+
+/** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. Pass `contextOpen` so the anchor grows with the menu. */
+export const hudCardRows = (goal: GoalSnapshot, contextOpen = false): number =>
+  5 + (goal.spend ? 1 : 0) + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0) + (contextOpen ? CONTEXT_MENU_ROWS : 0)
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
@@ -145,6 +148,41 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: bo
   )
 }
 
+/** One context-menu row: same hover grammar as HudButton (raised background, brightened label; underline under mono), full card width, faint gutter keeping the LABEL column. Inert rows never light up and swallow the click silently — a disabled action is visibly disabled, never a trap. */
+const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; mono?: boolean; danger?: boolean; enabled?: boolean; onPress: () => void }): JSX.Element => {
+  const [hovered, setHovered] = createSignal(false)
+  const mono = () => props.mono === true
+  const enabled = () => props.enabled !== false
+  const active = () => enabled() && hovered()
+  const fg = () =>
+    !enabled() ? props.theme.text.faint : props.danger ? props.theme.text.feedback.warning.base : active() ? props.theme.text.base : props.theme.text.muted
+  return (
+    <box
+      flexDirection="row"
+      gap={1}
+      height={1}
+      backgroundColor={!mono() && active() ? props.theme.background?.raised?.high : undefined}
+      onMouseOver={() => enabled() && setHovered(true)}
+      onMouseOut={() => setHovered(false)}
+      onMouseUp={() => {
+        if (!enabled()) return
+        try {
+          props.onPress()
+        } catch {
+          // A menu action must never take the panel down.
+        }
+      }}
+    >
+      <text wrapMode="none" flexShrink={0} width={LABEL} fg={props.theme.text.faint}>
+        {props.gutter}
+      </text>
+      <text wrapMode="none" fg={fg()} attributes={mono() && active() ? TextAttributes.UNDERLINE : undefined}>
+        {props.text}
+      </text>
+    </box>
+  )
+}
+
 export const HudCard = (props: {
   goal: GoalSnapshot
   theme: HudCardTheme
@@ -162,6 +200,16 @@ export const HudCard = (props: {
   onTogglePin?: () => void
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
+  /** Context menu (right-click the card) open state; controlled by the mount so the absolute anchor can grow with it. */
+  contextOpen?: boolean
+  /** Right-click anywhere on the card toggles the menu open/closed. */
+  onToggleContext?: () => void
+  /** Called after any menu action so the mount can collapse the menu. */
+  onCloseMenu?: () => void
+  /** Wired by the host; absent callback renders the reason row inert. */
+  onCopyReason?: (reason: string) => void
+  /** Wired by the host; absent callback renders the summary row inert. */
+  onCopySummary?: (summary: string) => void
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -189,11 +237,20 @@ export const HudCard = (props: {
   const remediation = () => remediationFor(g())
   // A freshly armed goal teaches one thing: the evaluator reads only the transcript. Gone after turn 1.
   const hint = () => evaluatorHint(g())
+  const latestSummary = () => g().loopHistory?.at(-1)?.summary
   const copyCondition = () => {
     try {
       props.onCopyCondition(g().condition)
     } catch {
       // Best-effort.
+    }
+  }
+  const menuAction = (run: () => void) => () => {
+    run()
+    try {
+      props.onCloseMenu?.()
+    } catch {
+      // Collapse best-effort.
     }
   }
   return (
@@ -212,6 +269,16 @@ export const HudCard = (props: {
       titleAlignment="left"
       paddingLeft={1}
       paddingRight={1}
+      onMouseUp={(event) => {
+        // Right-click anywhere on the card toggles the context menu; left clicks fall through to the rows/buttons.
+        if (event.button === 2) {
+          try {
+            props.onToggleContext?.()
+          } catch {
+            // Never take the panel down.
+          }
+        }
+      }}
     >
       {/* condition — click to copy */}
       <box
@@ -308,6 +375,15 @@ export const HudCard = (props: {
         <box flexGrow={1} />
         <HudButton theme={theme()} label="esc" mono={mono()} onPress={props.onClose} />
       </box>
+      {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 4 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
+      <Show when={props.contextOpen}>
+        <box flexDirection="column" marginTop={0}>
+          <HudMenuRow theme={theme()} mono={mono()} gutter="menu" text="copy condition" onPress={menuAction(copyCondition)} />
+          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="copy evaluator reason" enabled={Boolean(g().reason && props.onCopyReason)} onPress={menuAction(() => { const r = g().reason; if (r) props.onCopyReason?.(r) })} />
+          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="copy latest summary" enabled={Boolean(latestSummary() && props.onCopySummary)} onPress={menuAction(() => { const s = latestSummary(); if (s) props.onCopySummary?.(s) })} />
+          <HudMenuRow theme={theme()} mono={mono()} gutter="" text="clear goal" danger onPress={menuAction(() => props.onClear())} />
+        </box>
+      </Show>
     </box>
   )
 }

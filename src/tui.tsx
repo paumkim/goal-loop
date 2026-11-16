@@ -358,6 +358,8 @@ export default Plugin.define({
     const [getHudSession, setHudSession] = createSignal<string | undefined>(undefined)
     // In-modal copy acknowledgment: host toasts do not render above the modal, so the footer's copy button (and the `c` chord) flip its label to ✓ copied for a beat instead.
     const [statusCopied, setStatusCopied] = createSignal(false)
+    // Right-click context menu on the HUD card: TUI-local view state like the pin and the card itself.
+    const [contextOpen, setContextOpen] = createSignal(false)
     let statusCopiedTimer: ReturnType<typeof setTimeout> | undefined
     const flashStatusCopied = () => {
       setStatusCopied(true)
@@ -481,10 +483,11 @@ export default Plugin.define({
         }
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g) : 0
+          return g ? hudCardRows(g, contextOpen()) : 0
         }
         const toggleHud = () => {
           try {
+            setContextOpen(false)
             setHudSession((current) => (props.sessionID && current === props.sessionID ? undefined : props.sessionID))
           } catch {}
         }
@@ -520,15 +523,21 @@ export default Plugin.define({
                     theme={context.theme as unknown as HudCardTheme}
                     mono={reducedColor}
                     elapsedMs={elapsed}
-                    onClose={() => setHudSession(undefined)}
-                    onDetails={() => openDashboard(props.sessionID)}
+                    onClose={() => { setContextOpen(false); setHudSession(undefined) }}
+                    onDetails={() => { setContextOpen(false); openDashboard(props.sessionID) }}
                     onClear={() => {
                       try {
                         if (props.sessionID) void rpc.clear({ sessionID: props.sessionID }, at(props.sessionID)).catch(() => {})
                       } catch {}
+                      setContextOpen(false)
                       setHudSession(undefined)
                     }}
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
+                    contextOpen={contextOpen()}
+                    onToggleContext={() => setContextOpen((v) => !v)}
+                    onCloseMenu={() => setContextOpen(false)}
+                    onCopyReason={(reason) => copyToClipboard(reason, props.sessionID, "reason")}
+                    onCopySummary={(summary) => copyToClipboard(summary, props.sessionID, "summary")}
                     pinned={pinnedNow()}
                     onTogglePin={() => togglePin(props.sessionID)}
                   />
@@ -553,7 +562,7 @@ export default Plugin.define({
           group: "Goal",
           bind: "escape",
           enabled: () => getHudSession() !== undefined,
-          run: () => { try { setHudSession(undefined) } catch {} },
+          run: () => { try { setContextOpen(false); setHudSession(undefined) } catch {} },
         },
       ],
     }))
