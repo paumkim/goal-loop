@@ -1438,6 +1438,17 @@
       "submittedAt": "2026-11-16T07:30:12Z",
       "mergedAt": "2026-11-16T07:31:55Z",
       "mergedInto": "dev"
+    },
+    "tui-completion-flash": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/hud.ts,src/status-dialog.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-completion-flash",
+      "worktree": "worktrees/wt-tui-completion-flash",
+      "status": "done",
+      "createdAt": "2026-11-16T07:36:35Z",
+      "submittedAt": "2026-11-16T07:39:28Z",
+      "mergedAt": "2026-11-16T07:40:00Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
