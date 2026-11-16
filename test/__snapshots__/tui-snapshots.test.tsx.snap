@@ -157,8 +157,6 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
                                                                                                     
-now         ◎  v3 · achieved · 4 turns · 39m elapsed                              · last ✗ this turn
-                                                                                                    
 final       ✓  loop achieved · 2 iterations · 15 turns · 64 tools · 30m wall                        
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
@@ -168,6 +166,8 @@ why         ✓  met · turn 3 · 3m ago      done
             ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -429,8 +429,6 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
                                                                                                     
-now         ◎  v3 · impossible · 4 turns · 12m elapsed                         · last ✗ this turn   
-                                                                                                    
 final       ⊘  loop impossible · 2 iterations · 15 turns · 64 tools · 30m wall                      
                                                                                                     
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
@@ -440,6 +438,8 @@ why         ✓  met · turn 3 · 3m ago      done
             ✓  met · turn 4 · 2m ago      done                                                      
                                                                                                     
             ✗  not met · turn 5 · 1m ago  not yet                                                   
+                                                                                                    
+                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

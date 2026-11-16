@@ -298,7 +298,8 @@ export const LoopSection = (props: {
           )
         }}
       </For>
-      {/* the running iteration closes the rail */}
+      {/* the running iteration closes the rail — retired once finished(): a terminal status or an exhausted cap means there is no current iteration, and a live-style row above the final tally would paint in-progress fiction (turns elapsed, running streak, "this turn") about a loop that can no longer advance */}
+      <Show when={!finished()}>
       <box flexDirection="row" gap={2}>
         {label(theme(), "now")}
         <text wrapMode="none" flexShrink={0} fg={nowColor()} attributes={TextAttributes.BOLD}>
@@ -323,6 +324,7 @@ export const LoopSection = (props: {
           )}
         </Show>
       </box>
+      </Show>
       {/* final tally: only once the loop is over */}
       <Show when={finished()}>
         <box flexDirection="row" gap={2}>

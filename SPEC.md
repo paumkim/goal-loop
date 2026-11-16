@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=885 -->
+<!-- spec-check files=43 tests=886 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3818,3 +3818,30 @@ Verification (all run in the worktree): bun test (885 pass, 0 fail, snapshots by
 bun --preload @opentui/solid/preload scripts/render-history.tsx eyeballed at width 112 (aligned
 reasons; sha+spend rail; $0.75 in the final tally row), bun run compile, bun run check green incl.
 spec-check (43/885). Evidence is source + test-render layers; live TUI remains unverifiable.
+
+## Workstream CS — the finished loop retires its live row (2026-11-16)
+
+Interpretation of this iteration: a ruthless eyeball of the painted frames (scripts/render-
+history.tsx at width 80 and 112) showed the looped rail painting BOTH a live-style "now" row and
+the "final" tally row once the loop was over — the now row's glyph, "turns elapsed" and the
+running streak ("2x not met in a row", "this turn") are in-progress fiction about a loop that can
+no longer advance, sitting directly above the row that announces the outcome. Non-looped
+HistoryBlock never painted a now row, so the two grammars disagreed.
+
+366. src/tui-history.tsx — the running-iteration row in the looped rail is wrapped in
+     <Show when={!finished()}>. finished() is exactly the set of states where the loop cannot
+     advance (terminal status, or the cap reached with history) — the same fence the final tally
+     row uses, so the two rows now agree: a loop with no "now" shows the outcome once, and only a
+     live loop shows the live row. The active-state row is byte-identical to before (its tests
+     unchanged); the nowColor/streak/iterVerdict machinery is used only inside the live row.
+367. Tests: tui-render.test.tsx +1 (a finished loop paints the final tally and NOT the now row /
+     "this turn" language; the active loop still paints both — one test, both sides of the fence).
+     Snapshots: the two finished-loop frames re-pinned programmatically under TZ=UTC
+     (LoopSection · met; StatusDialogBody · judged impossible). Spec-check marker files=43
+     tests=885 -> 886.
+
+Verification (all run in the worktree): bun test (886 pass, 0 fail, 21 snapshots stable after the
+two re-pins), bun run compile, bun run check green incl. spec-check (43/886). Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: none — a
+larger "terminal the pill already goes silent on; cleared loops show the final tally only when
+history exists" is the settled grammar, unchanged.
