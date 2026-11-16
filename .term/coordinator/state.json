@@ -1361,6 +1361,17 @@
       "submittedAt": "2026-11-16T06:35:27Z",
       "mergedAt": "2026-11-16T06:35:42Z",
       "mergedInto": "dev"
+    },
+    "tui-unicode-truncate": {
+      "agent": "orchestrator",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,dist,package.json,bun.lock",
+      "branch": "wt/tui-unicode-truncate",
+      "worktree": "worktrees/wt-tui-unicode-truncate",
+      "status": "done",
+      "createdAt": "2026-11-16T06:37:53Z",
+      "submittedAt": "2026-11-16T06:42:38Z",
+      "mergedAt": "2026-11-16T06:42:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
