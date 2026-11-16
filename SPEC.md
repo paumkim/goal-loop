@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=929 -->
+<!-- spec-check files=44 tests=942 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3251,7 +3251,7 @@ glyph family except this one. This workstream closes the family; it does not re-
 318. Dead code deleted: monochrome() (hud.ts) was a byte-identical duplicate of motionDisabled()
      with no call sites outside its own test block; deleted with the test. The block is gone, not
      re-pointed — motionDisabled already pins the same predicate table.
-319. Finding 8 (loopMaxLoops not isFinite-guarded in hud-card.tsx:315, hud.ts:98, hud.ts:170) verified
+319. Finding 8 (loopMaxLoops not isFinite-guarded in hud-card.tsx:315, hud.ts:124, hud.ts:196) verified
      MOOT at the source of truth: src/core/wire.ts validates loopMaxLoops with isFiniteNumber (typeof
      number && Number.isFinite), as it does for turns/elapsedMs — /Infinity can never arrive from the
      wire. No guards were added; nothing was weakened.
@@ -4201,3 +4201,47 @@ keyboard.
      dead) — never claimed. Rows past the fold cap stay digit-less (the chord cap is four by
      design; `m` toggles, it does not address rows). Unwired embedders get the fold on local
      state but no `m` chord by design.
+
+## Workstream DO — the boundary-compaction outcome, at a glance on the dial (2026-11-16)
+
+Interpretation: the bar's information-hierarchy clause names a compaction-landed indicator
+(with armed/disarmed state, iteration, condition, verdict status) — and the dashboard
+progressive-disclosure clause asks for a context meter with landed/missed markers — but no
+surface painted the outcome of a boundary-compaction request. The loop persists enough on the
+record to say it honestly: `loopCompact` carries the request (iteration, requestedAt,
+estimatedTokens), whether it landed (`landedAt`, authoritative; kept until the next boundary
+arm overwrites it), how many measurable observations saw it miss (`misses`), and the two
+"known unknowns" (`stalenessUnknown`, `unmeasurableTicks`). This slice puts that one fact on
+the dial both zoom levels already paint, as a trailing clause after the tokens ratio.
+
+403. src/core/hud.ts — new pure `compactMarker(compact, ascii)` formatter next to
+     isCompactHot: absent when no compact was requested at any boundary (plain goals never
+     reach the boundary-compaction path); `landed ✓` (ascii `landed`) when landedAt is set —
+     authoritative, beats any miss count; `missed ×N` (ascii `xN missed`... plain `missed xN`)
+     per measurable observation that saw a pending request not land (at N >= 2 the
+     failure-first remediation fires and this tag stays informational); `pending` while the
+     request is armed and unobserved; `unknown` under stalenessUnknown (the landing can be
+     ruled in or out neither); `unmeasurable` for unmeasurableTicks > 0. Tones: landed /
+     missed / pending / unknown; the ascii arm is plain words, no glyph dependence.
+404. src/hud-card.tsx — the context row (both the threshold variant and the bare-estimate
+     fallback) appends `· <marker>` after the tokens ratio when a marker exists. Color:
+     success (theme fallback info) for landed, warning for missed, faint otherwise; under mono
+     the row keeps the words and drops the hue. mono/ascii arms: mono drops hues, ascii
+     demotions ride inside the text. The marker rides after the trail and the row plan is
+     unchanged (the row still drops under a ceiling as before).
+405. src/status-dialog.tsx — the dialog's context row paints the identical marker on the same
+     predicate (parity across the zoom levels), reading `g()?.loopCompact` (goal is optional
+     in the dialog — stale-cache fallback when undefined). Same tone map and mono behavior.
+406. Tests: +7 unit (compactMarker — absent, pending, missed with count + ascii demotion,
+     landed beats misses, stalenessUnknown outranks ticks, unmeasurable tone, ascii arm never
+     spends a glyph). +6 interactive (card: pending / landed / missed ×1 paints without
+     firing the failure remediation / no-marker case / bare-estimate fallback / dialog parity
+     `· landed ✓`). No snapshot changes (hot fixtures carry no contextSize, so the context
+     row drops in those frames). spec-check files=44 tests=942.
+407. Honest limits: the marker reflects only the *latest* boundary-compaction request (the
+     persisted bookkeeping), not a per-iteration landed/missed ledger — the loop's history
+     entries do not persist compaction outcomes, so a per-row ledger would need an engine
+     change (rejected: the TUI is chrome, the loop is engine). "pending/unmeasurable" never
+     claim an outcome that did not happen — an unmeasurable context is never a miss. The
+     indicator is informational, not interactive (no hitbox); the failure-first remediation
+     remains the authoritative remedy at misses >= 2.

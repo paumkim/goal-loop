@@ -409,6 +409,41 @@ describe("context meter row", () => {
 })
 
 describe("HUD card context meter row", () => {
+  test("a pending boundary compaction paints the compaction-landed indicator — `pending` on the dial", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 0 } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("· pending")
+  })
+
+  test("a landed compaction paints the acknowledged indicator — `landed ✓`", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 0, landedAt: now } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("· landed ✓")
+  })
+
+  test("a measurable non-drop paints the count — `missed ×1` — and the remediation does not fire at one miss", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 1 } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("· missed ×1")
+    expect(frame).not.toContain("/compact")
+  })
+
+  test("no compaction was requested — no marker paints anywhere on the row", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).not.toContain("· pending")
+    expect(frame).not.toContain("· landed")
+    expect(frame).not.toContain("· missed")
+    expect(frame).not.toContain("· unknown")
+  })
+
+  test("the bare-estimate fallback paints the marker too — the indicator does not depend on the threshold", async () => {
+    const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: undefined, loopCompact: { requestedAt: now, iteration: 3, misses: 2, unmeasurableTicks: 0 } })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("~95k tokens")
+    expect(frame).toContain("· missed ×2")
+  })
+
+  test("the dialog's context row paints the same indicator — parity across the zoom levels", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ contextSize: 120_000, compactAtTokens: 150_000, loopCompact: { requestedAt: now, iteration: 3, misses: 0, landedAt: now } })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("· landed ✓")
+  })
+
   test("renders the bar and the honest ratio against the auto-compact threshold", async () => {
     const frame = await render(() => <HudCard goal={loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
     expect(frame).toContain("context")

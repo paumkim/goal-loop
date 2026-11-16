@@ -5,7 +5,7 @@
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
 import stringWidth from "string-width"
-import { COMPACT_MISS_CAP, type GoalSnapshot } from "./types.ts"
+import { COMPACT_MISS_CAP, type GoalSnapshot, type LoopCompactState } from "./types.ts"
 import { formatDurationCoarse, goalGlyph, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
@@ -31,6 +31,32 @@ export interface PillModel {
 export const isCompactHot = (goal: GoalSnapshot): boolean => {
   const pending = goal.loopCompact
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2)
+}
+
+export type CompactMarkerTone = "landed" | "missed" | "pending" | "unknown"
+export interface CompactMarker {
+  /** Trailing clause; callers prepend their own separator. The ascii arm is plain words — no glyph dependence. */
+  readonly text: string
+  readonly tone: CompactMarkerTone
+}
+
+/**
+ * The boundary-compaction bookkeeping the loop persists on the record, readable at a glance — the
+ * compaction-landed indicator the HUD owes the user. Absent when no compact was requested at any
+ * boundary (plain goals never reach the boundary-compaction path, and `compactAtTokens <= 0` disables
+ * it). `landed` — the host compacted (landedAt is authoritative; kept until the next boundary arm
+ * overwrites it). `missed ×N` — N measurable observations saw the pending request not land (at N >= 2
+ * the failure-first remediation fires; this tag stays informational). `pending` — requested, no
+ * observation yet. `unknown` — the landing can be ruled in or out neither: stalenessUnknown (repeated
+ * unmeasurable arms) or `unmeasurableTicks > 0`. In the ascii arm every glyph demotes to a word.
+ */
+export const compactMarker = (compact: LoopCompactState | undefined, ascii: boolean = false): CompactMarker | undefined => {
+  if (!compact) return undefined
+  if (compact.landedAt !== undefined) return { text: ascii ? "landed" : "landed ✓", tone: "landed" }
+  if (compact.stalenessUnknown === true) return { text: "unknown", tone: "unknown" }
+  if (compact.misses >= 1) return { text: ascii ? `missed x${compact.misses}` : `missed ×${compact.misses}`, tone: "missed" }
+  if ((compact.unmeasurableTicks ?? 0) > 0) return { text: "unmeasurable", tone: "unknown" }
+  return { text: "pending", tone: "pending" }
 }
 
 const stateWord = (goal: GoalSnapshot): string =>
