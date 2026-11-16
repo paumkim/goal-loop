@@ -1691,6 +1691,17 @@
       "submittedAt": "2026-11-16T09:38:23Z",
       "mergedAt": "2026-11-16T09:39:49Z",
       "mergedInto": "dev"
+    },
+    "tui-verdict-mix-single-pass": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,test/history.test.ts,SPEC.md,dist",
+      "branch": "wt/tui-verdict-mix-single-pass",
+      "worktree": "worktrees/wt-tui-verdict-mix-single-pass",
+      "status": "done",
+      "createdAt": "2026-11-16T09:41:33Z",
+      "submittedAt": "2026-11-16T09:43:13Z",
+      "mergedAt": "2026-11-16T09:43:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
