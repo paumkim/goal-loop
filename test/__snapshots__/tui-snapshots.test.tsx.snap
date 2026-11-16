@@ -915,3 +915,51 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFoot
                                                                                                                                             
 "
 `;
+
+exports[`full-frame snapshots (named layout states) StatusDialogBody · dossier tab with the outline rail (the section chips paint left of the document; the document stays whole) 1`] = `
+"overview · ledger · dossier                                                                         
+active  12m · 4 turns · v3/5                                                                        
+                                                                                                    
+dossier     the whole record as markdown                                                            
+objective       Goal loop dossier                                                                   
+status                                                                                              
+iterations      _Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record.         
+verdicts        Everything below is the record's own bookkeeping; a measurement it does not carry   
+compaction      renders as —, never estimated. The session id is omitted on purpose._               
+verify                                                                                              
+totals          Objective                                                                           
+                                                                                                    
+                make every loop iteration visible at a glance                                       
+                                                                                                    
+                Status                                                                              
+                                                                                                    
+                · Status: active                                                                    
+                · Set: 2027-01-15T07:18:00.000Z · Elapsed: 12m 00s                                  
+                · 4 turns evaluated                                                                 
+                · Spend (this goal): 278k in · 25k out · 96k cached · $0.42                         
+                · Iteration: 3 of at most 5                                                         
+                · Reason:                                                                           
+                Evaluator: docs build still fails                                                   
+                                                                                                    
+                Completed iterations (2)                                                            
+                                                                                                    
+                Iteration v1 — met                                                                  
+                                                                                                    
+                · Ended: 2027-01-15T07:33:00.000Z (wall span 15m 00s)                               
+                · Turns: 9 · Tool calls: 41                                                         
+                · Commit: —                                                                         
+                · Context at arm: —                                                                 
+                · Spend: —                                                                          
+                · Summary:                                                                          
+                                                                                                    
+                Added an 18-cell block progress bar.                                                
+                                                                                                    
+                · Evaluator reason:                                                                 
+                                                                                                    
+                met                                                                                 
+                                                                                                    
+                Iteration v2 — met                                                                  
+                                                                                                    
+                · Ended: 2027-01-15T07:48:00.000Z (wall span 15m 00s)                               
+"
+`;

@@ -1735,6 +1735,104 @@ describe("dossier tab (the whole record, in-screen — mouse-first)", () => {
   })
 })
 
+describe("dossier outline rail (mouse — quote any section, one click)", () => {
+  const chipAt = (frame: string, needle: string): { x: number; y: number } | undefined => findIn(frame, needle)
+
+  test("the rail paints the expected labels in order, and the document still paints whole beside it", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    for (const label of ["objective", "status", "iterations", "verdicts", "compaction", "verify", "totals"]) {
+      expect(frame).toContain(label)
+    }
+    expect(frame.indexOf("objective")).toBeLessThan(frame.indexOf("status"))
+    expect(frame.indexOf("status")).toBeLessThan(frame.indexOf("iterations"))
+    expect(frame.indexOf("iterations")).toBeLessThan(frame.indexOf("verdicts"))
+    expect(frame).toContain("Goal loop dossier") // the document still paints, line for line
+    expect(frame).toContain("Completed iterations (")
+    await setup.renderer.destroy()
+  })
+
+  test("hovering a chip boldens it — weight, never hue alone or underline", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={() => {}} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const rest = setup.captureSpans().lines.flatMap((line) => line.spans)
+    expect(rest.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
+    const at = chipAt(setup.captureCharFrame(), "verdicts")
+    expect(at).toBeDefined()
+    await setup.mockMouse.moveTo(at!.x, at!.y)
+    await setup.renderOnce()
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    expect(spans.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
+    const chip = spans.find((span) => span.text === "verdicts")
+    expect(chip).toBeDefined()
+    expect(chip!.attributes & TextAttributes.BOLD).not.toBe(0)
+    await setup.renderer.destroy()
+  })
+
+  test("left-clicking a chip copies that section verbatim — heading included, next section excluded", async () => {
+    const copied: { label: string; raw: string }[] = []
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={(label, raw) => copied.push({ label, raw })} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = chipAt(setup.captureCharFrame(), "verdicts")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    expect(copied.length).toBe(1)
+    expect(copied[0]!.label).toBe("verdicts")
+    expect(copied[0]!.raw.startsWith("## Verdict trail (")).toBe(true)
+    expect(copied[0]!.raw).toContain("Tallies:")
+    expect(copied[0]!.raw).not.toContain("## Boundary compaction")
+    expect(setup.captureCharFrame()).toContain("✓ copied") // the in-modal acknowledgment, painted on the chip
+    await setup.renderer.destroy()
+  })
+
+  test("the copied acknowledgment demotes to `+ copied` under NO_COLOR — words, not hue", async () => {
+    const previous = process.env.NO_COLOR
+    process.env.NO_COLOR = "1"
+    try {
+      const copied: string[] = []
+      const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={(_label, raw) => copied.push(raw)} />, { width: 112, height: 44 })
+      await setup.renderOnce()
+      const at = chipAt(setup.captureCharFrame(), "totals")
+      expect(at).toBeDefined()
+      await setup.mockMouse.click(at!.x, at!.y)
+      await setup.renderOnce()
+      const frame = setup.captureCharFrame()
+      expect(frame).toContain("+ copied")
+      expect(frame).not.toContain("✓ copied")
+      expect(copied.length).toBe(1)
+      await setup.renderer.destroy()
+    } finally {
+      if (previous === undefined) delete process.env.NO_COLOR
+      else process.env.NO_COLOR = previous
+    }
+  })
+
+  test("right click on a chip is inert — no copy, no acknowledgment", async () => {
+    const copied: string[] = []
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={(_label, raw) => copied.push(raw)} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const at = chipAt(setup.captureCharFrame(), "verdicts")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x, at!.y, 2)
+    await setup.renderOnce()
+    expect(copied.length).toBe(0)
+    expect(setup.captureCharFrame()).not.toContain("✓ copied")
+    await setup.renderer.destroy()
+  })
+
+  test("unwired, the rail does not paint — the document renders exactly as before", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("Goal loop dossier") // the document still paints
+    expect(findIn(frame, "verdicts")).toBeUndefined() // no chip labels
+    expect(findIn(frame, "compaction")).toBeUndefined()
+    await setup.renderer.destroy()
+  })
+})
+
 describe("verdict trail as a control (mouse — the timeline scrubs, not just reports)", () => {
   const trailGoal = (): GoalSnapshot => loopedGoal({
     history: [
