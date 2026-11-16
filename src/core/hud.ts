@@ -96,6 +96,55 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
   return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)), ellipsis)
 }
 
+/**
+ * The HUD card's context menu, as data. Right-click the card paints four rows in a fixed order —
+ * the power copies without leaving the hand — and until now the set existed only as JSX, out of
+ * reach of the keymap: the menu was the card's one mouse-only island. The rows live here so the
+ * paint path (hud-card.tsx maps them), the keyboard path (tui.tsx activates by id) and the tests
+ * all read one source instead of three hand-mirrored copies of the enabled predicates.
+ *
+ * `enabled` mirrors the mouse grammar: rows whose payload does not exist (no evaluator reason on
+ * the record, no landed summary in loopHistory) render faint, light up never, and the click is
+ * swallowed. The keyboard twin skips disabled rows by the same contract — selection can rest on a
+ * disabled row only transiently if every row is disabled (index stays put).
+ */
+export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "clear"
+
+export interface ContextMenuRow {
+  readonly id: ContextMenuId
+  readonly text: string
+  readonly enabled: boolean
+  readonly danger: boolean
+}
+
+export const CONTEXT_MENU_COPY_CONDITION: ContextMenuId = "copy-condition"
+export const CONTEXT_MENU_COPY_REASON: ContextMenuId = "copy-reason"
+export const CONTEXT_MENU_COPY_SUMMARY: ContextMenuId = "copy-summary"
+export const CONTEXT_MENU_CLEAR: ContextMenuId = "clear"
+
+export const contextMenuRows = (args: { readonly hasReason: boolean; readonly hasSummary: boolean }): readonly ContextMenuRow[] => [
+  { id: CONTEXT_MENU_COPY_CONDITION, text: "copy condition", enabled: true, danger: false },
+  { id: CONTEXT_MENU_COPY_REASON, text: "copy evaluator reason", enabled: args.hasReason, danger: false },
+  { id: CONTEXT_MENU_COPY_SUMMARY, text: "copy latest summary", enabled: args.hasSummary, danger: false },
+  { id: CONTEXT_MENU_CLEAR, text: "clear goal", enabled: true, danger: true },
+]
+
+/**
+ * Arrow-key selection: wraps at both ends and skips disabled rows (the mouse grammar — inert rows
+ * never light up). Falls back to the resting index when every row is disabled, so the loop always
+ * terminates. Always returns a valid in-range index for a non-empty rows array.
+ */
+export const nextMenuIndex = (index: number, delta: number, rows: readonly { readonly enabled: boolean }[]): number => {
+  const count = rows.length
+  if (count === 0) return 0
+  let next = ((index % count) + count) % count
+  for (let step = 0; step < count; step += 1) {
+    next = (((next + delta) % count) + count) % count
+    if (rows[next]!.enabled) return next
+  }
+  return ((index % count) + count) % count
+}
+
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
 /**
  * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority

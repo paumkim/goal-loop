@@ -601,6 +601,28 @@ var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   }
   return truncate(rungs[rungs.length - 1], Math.max(0, Math.floor(budget)), ellipsis);
 };
+var CONTEXT_MENU_COPY_CONDITION = "copy-condition";
+var CONTEXT_MENU_COPY_REASON = "copy-reason";
+var CONTEXT_MENU_COPY_SUMMARY = "copy-summary";
+var CONTEXT_MENU_CLEAR = "clear";
+var contextMenuRows = (args) => [
+  { id: CONTEXT_MENU_COPY_CONDITION, text: "copy condition", enabled: true, danger: false },
+  { id: CONTEXT_MENU_COPY_REASON, text: "copy evaluator reason", enabled: args.hasReason, danger: false },
+  { id: CONTEXT_MENU_COPY_SUMMARY, text: "copy latest summary", enabled: args.hasSummary, danger: false },
+  { id: CONTEXT_MENU_CLEAR, text: "clear goal", enabled: true, danger: true }
+];
+var nextMenuIndex = (index, delta, rows) => {
+  const count = rows.length;
+  if (count === 0)
+    return 0;
+  let next = (index % count + count) % count;
+  for (let step = 0;step < count; step += 1) {
+    next = ((next + delta) % count + count) % count;
+    if (rows[next].enabled)
+      return next;
+  }
+  return (index % count + count) % count;
+};
 var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
@@ -2572,7 +2594,7 @@ var HudMenuRow = (props) => {
   const [hovered, setHovered] = createSignal3(false);
   const mono = () => props.mono === true;
   const enabled = () => props.enabled !== false;
-  const active = () => enabled() && hovered();
+  const active = () => enabled() && (hovered() || props.selected === true);
   const fg = () => !enabled() ? props.theme.text.faint : props.danger ? props.theme.text.feedback.warning.base : active() ? props.theme.text.base : props.theme.text.muted;
   return (() => {
     var _el$7 = _$createElement3("box"), _el$8 = _$createElement3("text"), _el$9 = _$createElement3("text");
@@ -3086,73 +3108,114 @@ var HudCard = (props) => {
         var _el$20 = _$createElement3("box");
         _$setProp3(_el$20, "flexDirection", "column");
         _$setProp3(_el$20, "marginTop", 0);
-        _$insert3(_el$20, _$createComponent3(HudMenuRow, {
-          get theme() {
-            return theme();
-          },
-          get mono() {
-            return mono();
-          },
-          gutter: "menu",
-          text: "copy condition",
-          get onPress() {
-            return menuAction(copyCondition);
+        _$insert3(_el$20, () => contextMenuRows({
+          hasReason: Boolean(g().reason && props.onCopyReason),
+          hasSummary: Boolean(latestSummary() && props.onCopySummary)
+        }).map((row, index) => {
+          const gutter = index === 0 ? "menu" : "";
+          const selected = () => (props.menuSelected?.() ?? 0) === index;
+          switch (row.id) {
+            case CONTEXT_MENU_COPY_CONDITION:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(copyCondition);
+                }
+              });
+            case CONTEXT_MENU_COPY_REASON:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(() => {
+                    const r = g().reason;
+                    if (r)
+                      props.onCopyReason?.(r);
+                  });
+                }
+              });
+            case CONTEXT_MENU_COPY_SUMMARY:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(() => {
+                    const s = latestSummary();
+                    if (s)
+                      props.onCopySummary?.(s);
+                  });
+                }
+              });
+            case CONTEXT_MENU_CLEAR:
+              return _$createComponent3(HudMenuRow, {
+                get theme() {
+                  return theme();
+                },
+                get mono() {
+                  return mono();
+                },
+                gutter,
+                get text() {
+                  return row.text;
+                },
+                get danger() {
+                  return row.danger;
+                },
+                get enabled() {
+                  return row.enabled;
+                },
+                get selected() {
+                  return selected();
+                },
+                get onPress() {
+                  return menuAction(() => props.onClear());
+                }
+              });
           }
-        }), null);
-        _$insert3(_el$20, _$createComponent3(HudMenuRow, {
-          get theme() {
-            return theme();
-          },
-          get mono() {
-            return mono();
-          },
-          gutter: "",
-          text: "copy evaluator reason",
-          get enabled() {
-            return Boolean(g().reason && props.onCopyReason);
-          },
-          get onPress() {
-            return menuAction(() => {
-              const r = g().reason;
-              if (r)
-                props.onCopyReason?.(r);
-            });
-          }
-        }), null);
-        _$insert3(_el$20, _$createComponent3(HudMenuRow, {
-          get theme() {
-            return theme();
-          },
-          get mono() {
-            return mono();
-          },
-          gutter: "",
-          text: "copy latest summary",
-          get enabled() {
-            return Boolean(latestSummary() && props.onCopySummary);
-          },
-          get onPress() {
-            return menuAction(() => {
-              const s = latestSummary();
-              if (s)
-                props.onCopySummary?.(s);
-            });
-          }
-        }), null);
-        _$insert3(_el$20, _$createComponent3(HudMenuRow, {
-          get theme() {
-            return theme();
-          },
-          get mono() {
-            return mono();
-          },
-          gutter: "",
-          text: "clear goal",
-          danger: true,
-          get onPress() {
-            return menuAction(() => props.onClear());
-          }
-        }), null);
+        }));
         return _el$20;
       }
     }), null);
@@ -4054,6 +4117,55 @@ var tui_default = Plugin.define({
     const [getHudSession, setHudSession] = createSignal4(undefined);
     const [statusCopied, setStatusCopied] = createSignal4(false);
     const [contextOpen, setContextOpen] = createSignal4(false);
+    const [contextIndex, setContextIndex] = createSignal4(0);
+    const contextRowsFor = (sessionID) => {
+      try {
+        const goal = sessionID ? entries()[sessionID]?.goal : undefined;
+        return contextMenuRows({
+          hasReason: Boolean(goal?.reason),
+          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary)
+        });
+      } catch {
+        return contextMenuRows({
+          hasReason: false,
+          hasSummary: false
+        });
+      }
+    };
+    const activateContextMenu = (sessionID) => {
+      try {
+        if (!sessionID)
+          return;
+        const goal = entries()[sessionID]?.goal;
+        const rows = contextRowsFor(sessionID);
+        const row = rows[contextIndex()] ?? rows[0];
+        if (!row || !row.enabled)
+          return;
+        switch (row.id) {
+          case CONTEXT_MENU_COPY_CONDITION:
+            if (goal?.condition)
+              copyToClipboard(goal.condition, sessionID);
+            break;
+          case CONTEXT_MENU_COPY_REASON:
+            if (goal?.reason)
+              copyToClipboard(goal.reason, sessionID, "reason");
+            break;
+          case CONTEXT_MENU_COPY_SUMMARY: {
+            const summary = goal?.loopHistory?.at(-1)?.summary;
+            if (summary)
+              copyToClipboard(summary, sessionID, "summary");
+            break;
+          }
+          case CONTEXT_MENU_CLEAR:
+            setContextOpen(false);
+            setHudSession(undefined);
+            requestClearGoal(sessionID);
+            return;
+        }
+        setContextOpen(false);
+        setContextIndex(0);
+      } catch {}
+    };
     const [statusEscHovered, setStatusEscHovered] = createSignal4(false);
     let statusCopiedTimer;
     const flashStatusCopied = () => {
@@ -4332,8 +4444,17 @@ var tui_default = Plugin.define({
                   get maxRows() {
                     return maxCardRows();
                   },
-                  onToggleContext: () => setContextOpen((v) => !v),
-                  onCloseMenu: () => setContextOpen(false),
+                  onToggleContext: () => setContextOpen((v) => {
+                    const next = !v;
+                    if (next)
+                      setContextIndex(0);
+                    return next;
+                  }),
+                  menuSelected: () => contextIndex(),
+                  onCloseMenu: () => {
+                    setContextOpen(false);
+                    setContextIndex(0);
+                  },
                   onCopyReason: (reason) => copyToClipboard(reason, props.sessionID, "reason"),
                   onCopySummary: (summary) => copyToClipboard(summary, props.sessionID, "summary"),
                   get pinned() {
@@ -4369,10 +4490,49 @@ var tui_default = Plugin.define({
         enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
         run: () => {
           try {
-            setContextOpen(false);
-            setHudSession(undefined);
+            if (contextOpen()) {
+              setContextOpen(false);
+              setContextIndex(0);
+            } else {
+              setHudSession(undefined);
+            }
           } catch {}
         }
+      }]
+    }));
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 100,
+      enabled: () => getHudSession() !== undefined && !statusDialogOpen() && contextOpen(),
+      commands: [{
+        id: "goal.hud.menu-up",
+        title: "Goal HUD menu: move up",
+        group: "Goal",
+        bind: "up",
+        enabled: () => contextOpen(),
+        run: () => {
+          try {
+            setContextIndex((v) => nextMenuIndex(v, -1, contextRowsFor(getHudSession())));
+          } catch {}
+        }
+      }, {
+        id: "goal.hud.menu-down",
+        title: "Goal HUD menu: move down",
+        group: "Goal",
+        bind: "down",
+        enabled: () => contextOpen(),
+        run: () => {
+          try {
+            setContextIndex((v) => nextMenuIndex(v, 1, contextRowsFor(getHudSession())));
+          } catch {}
+        }
+      }, {
+        id: "goal.hud.menu-activate",
+        title: "Goal HUD menu: activate the selected row",
+        group: "Goal",
+        bind: "enter",
+        enabled: () => contextOpen(),
+        run: () => activateContextMenu(getHudSession())
       }]
     }));
     context.keymap.layer(() => ({
