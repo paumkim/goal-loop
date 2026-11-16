@@ -2595,3 +2595,25 @@ this workstream.
 Verification (all run in the worktree): bun run compile, bun test tui-render.test.tsx (73 pass),
 bun run check green (774 tests), coordinator submit + merge-next, and bun run check on dev shown
 green at the end.
+
+## Workstream CJ — a confirmed clear that fails says so (2026-11-16)
+
+Interpretation of this iteration: failure is a first-class screen, one lie removed. Slice 9 funneled
+every clear path through the host's native confirm and failed closed — but the rpc.clear rejection
+that can follow a confirmed clear was swallowed by a bare .catch(() => {}), so the user could confirm
+the destructive wipe and get no signal at all when the RPC refused. The goal stayed armed with no
+explanation. The copy path already toasts failures; the clear path now matches it.
+
+256. src/tui.tsx (requestClearGoal): the rpc.clear call now routes rejections — and synchronous
+     throws — through an error toast mirroring the copy-failure grammar: title "clear failed", the
+     rejection message truncated to 200 chars, variant error, duration 5s, sessionID-scoped. The
+     confirm gate itself is untouched (still fails closed on an unconfirmed or dismissed dialog).
+257. Evidence is source-layer: the RPC dispatch has no headless harness (same class as the
+     confirm-dialog and keymap layers), so no test files were touched and the marker is unchanged
+     (files=43 tests=774). No chrome, layout or motion changes.
+
+No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev.
+No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check green (774 tests),
+coordinator submit + merge-next, and bun run check on dev shown green at the end.

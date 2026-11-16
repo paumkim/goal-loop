@@ -466,10 +466,14 @@ export default Plugin.define({
           .confirm({ title: "Clear goal", message, label: { confirm: "clear goal", cancel: "keep" } })
           .then((ok) => {
             if (ok !== true) return
+            // A confirmed wipe must never fail silently: report the rejection with the same
+            // grammar as a failed copy, so the user learns the goal is still armed.
+            const clearFailed = (error: unknown) =>
+              safeToast({ title: "clear failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
             try {
-              void rpc.clear({ sessionID }, at(sessionID)).catch(() => {})
-            } catch {
-              // Best-effort: the host surfaces RPC failures as it always does.
+              void rpc.clear({ sessionID }, at(sessionID)).catch(clearFailed)
+            } catch (error) {
+              clearFailed(error)
             }
           })
           .catch(() => {
