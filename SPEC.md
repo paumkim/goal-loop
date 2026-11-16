@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=807 -->
+<!-- spec-check files=43 tests=809 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2936,4 +2936,29 @@ bump, no tag, no push; v1.1.0 remains the live public artifact; all work is loca
 line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check (807 pass), coordinator
+submit + merge-next, bun run check on dev shown green at the end.
+## Workstream CT — a failed dialog snapshot says so (2026-11-16)
+
+Interpretation of this iteration: audit finding 3 (pinned re-audit ses_e1c980f2fffeR6lPzktJKz2sQs,
+HEAD 811136f) — the dialog's live get-RPC rejection was swallowed whole (`.catch(() => {})`); the
+dialog opened on stale cache with no cue that what it showed was not fresh.
+
+289. src/status-dialog.tsx: StatusDialogBody gains optional `noticeStale?: () => boolean`. When set
+     and true, a faint `snapshot unavailable — showing last known state` line paints above the
+     body (above the status header and above the fallback text too, so even a goal-less stale
+     dialog is honest). Faint chrome, not a toast — the information belongs in the modal, where the
+     user is already looking; no new color, no new verb.
+290. src/tui.tsx: plugin-scope `dialogNoticeStale` signal, reset to false at the dialog-open choke
+     point (alongside the card disarm and the rail-fold reset), and set to true only when the
+     get-RPC rejects at open time. The entries() cache behavior is unchanged — staleness is
+     announced, never silently patched.
+291. Evidence: render layer. Two tests in test/tui-render.test.tsx ("StatusDialogBody snapshot
+     staleness"): the stale line paints over cached rows; omitted/false paints nothing.
+     Live TUI remains unverifiable (dead provider). No snapshot frames exercise the line.
+
+Marker bumped files=43 tests=807 to files=43 tests=809. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check (809 pass), coordinator
 submit + merge-next, bun run check on dev shown green at the end.

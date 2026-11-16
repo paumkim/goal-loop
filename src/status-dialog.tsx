@@ -34,6 +34,8 @@ export const StatusDialogBody = (props: {
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded`. */
   onToggleExpanded?: () => void
+  /** When set and returning true, renders a faint "snapshot unavailable" line above the body — the dialog opened from fallback/stale cache because the live get-RPC failed. */
+  noticeStale?: () => boolean
 }): JSX.Element => {
   const theme = () => props.theme
   // ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the context meter becomes ink-density ASCII. Evaluated once per mount.
@@ -97,8 +99,12 @@ export const StatusDialogBody = (props: {
     }
   }
   return (
-    <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
-      {(goal) => (
+    <box flexDirection="column" gap={1}>
+      <Show when={props.noticeStale?.()}>
+        <text wrapMode="word" fg={theme().text.faint}>{"snapshot unavailable — showing last known state"}</text>
+      </Show>
+      <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
+        {(goal) => (
         <box flexDirection="column" gap={1} paddingRight={3}>
           <box flexDirection="row" gap={2}>
             <text fg={stateColor()} attributes={TextAttributes.BOLD}>
@@ -190,7 +196,8 @@ export const StatusDialogBody = (props: {
             <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} mono={mono()} />
           </Show>
         </box>
-      )}
-    </Show>
+        )}
+      </Show>
+    </box>
   )
 }

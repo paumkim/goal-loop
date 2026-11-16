@@ -295,6 +295,20 @@ describe("HistoryBlock edge paths", () => {
   })
 })
 
+describe("StatusDialogBody snapshot staleness", () => {
+  test("noticeStale paints a faint snapshot-unavailable line above stale chrome", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} noticeStale={() => true} />)
+    expect(frame).toContain("snapshot unavailable — showing last known state")
+  })
+
+  test("default and explicit false noticeStale paints nothing", async () => {
+    const absent = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(absent).not.toContain("snapshot unavailable")
+    const falseFrame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} noticeStale={() => false} />)
+    expect(falseFrame).not.toContain("snapshot unavailable")
+  })
+})
+
 describe("StatusDialogBody edge paths", () => {
   test("an evaluating goal shows 'checking' in the state line", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal({ evaluating: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)

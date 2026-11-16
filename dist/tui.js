@@ -260,9 +260,9 @@ function truncate(text, max) {
 }
 
 // src/status-dialog.tsx
-import { createTextNode as _$createTextNode2 } from "@opentui/solid";
 import { memo as _$memo2 } from "@opentui/solid";
 import { createComponent as _$createComponent2 } from "@opentui/solid";
+import { createTextNode as _$createTextNode2 } from "@opentui/solid";
 import { insertNode as _$insertNode2 } from "@opentui/solid";
 import { effect as _$effect2 } from "@opentui/solid";
 import { insert as _$insert2 } from "@opentui/solid";
@@ -1320,284 +1320,302 @@ var StatusDialogBody = (props) => {
       acknowledge("reason");
     } catch {}
   };
-  return _$createComponent2(Show2, {
-    get when() {
-      return g();
-    },
-    get fallback() {
-      return (() => {
-        var _el$4 = _$createElement2("text");
-        _$setProp2(_el$4, "wrapMode", "word");
-        _$insert2(_el$4, () => props.fallback);
-        _$effect2((_$p) => _$setProp2(_el$4, "fg", theme().text.base, _$p));
-        return _el$4;
-      })();
-    },
-    children: (goal) => (() => {
-      var _el$5 = _$createElement2("box"), _el$6 = _$createElement2("box"), _el$7 = _$createElement2("text"), _el$8 = _$createElement2("text"), _el$9 = _$createTextNode2(` \xB7 `), _el$0 = _$createTextNode2(` turn`), _el$1 = _$createElement2("box"), _el$10 = _$createElement2("text");
-      _$insertNode2(_el$5, _el$6);
-      _$insertNode2(_el$5, _el$1);
-      _$setProp2(_el$5, "flexDirection", "column");
-      _$setProp2(_el$5, "gap", 1);
-      _$setProp2(_el$5, "paddingRight", 3);
-      _$insertNode2(_el$6, _el$7);
-      _$insertNode2(_el$6, _el$8);
-      _$setProp2(_el$6, "flexDirection", "row");
-      _$setProp2(_el$6, "gap", 2);
-      _$insert2(_el$7, () => goal().status);
-      _$insertNode2(_el$8, _el$9);
-      _$insertNode2(_el$8, _el$0);
-      _$insert2(_el$8, () => formatDurationCoarse(props.elapsedMs()), _el$9);
-      _$insert2(_el$8, () => goal().turns, _el$0);
-      _$insert2(_el$8, () => goal().turns === 1 ? "" : "s", null);
-      _$insert2(_el$8, (() => {
-        var _c$ = _$memo2(() => !!goal().evaluating);
-        return () => _c$() ? " \xB7 checking" : goal().waiting ? " \xB7 waiting" : "";
-      })(), null);
-      _$insertNode2(_el$1, _el$10);
-      _$setProp2(_el$1, "flexDirection", "row");
-      _$setProp2(_el$1, "gap", 2);
-      _$setProp2(_el$1, "onMouseUp", (event) => {
-        if (event.button !== 0)
-          return;
-        event.stopPropagation();
-        copyCondition(goal().condition);
-      });
-      _$setProp2(_el$1, "onMouseOver", () => setConditionHovered(true));
-      _$setProp2(_el$1, "onMouseOut", () => setConditionHovered(false));
-      _$insert2(_el$1, () => label("goal"), _el$10);
-      _$setProp2(_el$10, "wrapMode", "word");
-      _$setProp2(_el$10, "flexGrow", 1);
-      _$insert2(_el$10, () => goal().condition, null);
-      _$insert2(_el$10, () => copiedSuffix("condition"), null);
-      _$insert2(_el$1, _$createComponent2(Show2, {
-        get when() {
-          return conditionHovered();
-        },
-        get children() {
-          var _el$11 = _$createElement2("text");
-          _$insertNode2(_el$11, _$createTextNode2(`copy`));
-          _$setProp2(_el$11, "wrapMode", "none");
-          _$setProp2(_el$11, "flexShrink", 0);
-          _$effect2((_$p) => _$setProp2(_el$11, "fg", theme().text.faint, _$p));
-          return _el$11;
-        }
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return goal().reason;
-        },
-        children: (reason) => _$createComponent2(Show2, {
+  return (() => {
+    var _el$4 = _$createElement2("box");
+    _$setProp2(_el$4, "flexDirection", "column");
+    _$setProp2(_el$4, "gap", 1);
+    _$insert2(_el$4, _$createComponent2(Show2, {
+      get when() {
+        return props.noticeStale?.();
+      },
+      get children() {
+        var _el$5 = _$createElement2("text");
+        _$insertNode2(_el$5, _$createTextNode2(`snapshot unavailable \u2014 showing last known state`));
+        _$setProp2(_el$5, "wrapMode", "word");
+        _$effect2((_$p) => _$setProp2(_el$5, "fg", theme().text.faint, _$p));
+        return _el$5;
+      }
+    }), null);
+    _$insert2(_el$4, _$createComponent2(Show2, {
+      get when() {
+        return g();
+      },
+      get fallback() {
+        return (() => {
+          var _el$7 = _$createElement2("text");
+          _$setProp2(_el$7, "wrapMode", "word");
+          _$insert2(_el$7, () => props.fallback);
+          _$effect2((_$p) => _$setProp2(_el$7, "fg", theme().text.base, _$p));
+          return _el$7;
+        })();
+      },
+      children: (goal) => (() => {
+        var _el$8 = _$createElement2("box"), _el$9 = _$createElement2("box"), _el$0 = _$createElement2("text"), _el$1 = _$createElement2("text"), _el$10 = _$createTextNode2(` \xB7 `), _el$11 = _$createTextNode2(` turn`), _el$12 = _$createElement2("box"), _el$13 = _$createElement2("text");
+        _$insertNode2(_el$8, _el$9);
+        _$insertNode2(_el$8, _el$12);
+        _$setProp2(_el$8, "flexDirection", "column");
+        _$setProp2(_el$8, "gap", 1);
+        _$setProp2(_el$8, "paddingRight", 3);
+        _$insertNode2(_el$9, _el$0);
+        _$insertNode2(_el$9, _el$1);
+        _$setProp2(_el$9, "flexDirection", "row");
+        _$setProp2(_el$9, "gap", 2);
+        _$insert2(_el$0, () => goal().status);
+        _$insertNode2(_el$1, _el$10);
+        _$insertNode2(_el$1, _el$11);
+        _$insert2(_el$1, () => formatDurationCoarse(props.elapsedMs()), _el$10);
+        _$insert2(_el$1, () => goal().turns, _el$11);
+        _$insert2(_el$1, () => goal().turns === 1 ? "" : "s", null);
+        _$insert2(_el$1, (() => {
+          var _c$ = _$memo2(() => !!goal().evaluating);
+          return () => _c$() ? " \xB7 checking" : goal().waiting ? " \xB7 waiting" : "";
+        })(), null);
+        _$insertNode2(_el$12, _el$13);
+        _$setProp2(_el$12, "flexDirection", "row");
+        _$setProp2(_el$12, "gap", 2);
+        _$setProp2(_el$12, "onMouseUp", (event) => {
+          if (event.button !== 0)
+            return;
+          event.stopPropagation();
+          copyCondition(goal().condition);
+        });
+        _$setProp2(_el$12, "onMouseOver", () => setConditionHovered(true));
+        _$setProp2(_el$12, "onMouseOut", () => setConditionHovered(false));
+        _$insert2(_el$12, () => label("goal"), _el$13);
+        _$setProp2(_el$13, "wrapMode", "word");
+        _$setProp2(_el$13, "flexGrow", 1);
+        _$insert2(_el$13, () => goal().condition, null);
+        _$insert2(_el$13, () => copiedSuffix("condition"), null);
+        _$insert2(_el$12, _$createComponent2(Show2, {
           get when() {
-            return props.onCopyReason;
-          },
-          get fallback() {
-            return field(goal().status === "active" ? "evaluator" : "reason", reason(), true);
+            return conditionHovered();
           },
           get children() {
-            var _el$13 = _$createElement2("box"), _el$14 = _$createElement2("text");
-            _$insertNode2(_el$13, _el$14);
-            _$setProp2(_el$13, "flexDirection", "row");
-            _$setProp2(_el$13, "gap", 2);
-            _$setProp2(_el$13, "onMouseUp", (event) => {
-              if (event.button !== 0)
-                return;
-              event.stopPropagation();
-              copyReason(reason());
-            });
-            _$setProp2(_el$13, "onMouseOver", () => setReasonHovered(true));
-            _$setProp2(_el$13, "onMouseOut", () => setReasonHovered(false));
-            _$insert2(_el$13, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$14);
-            _$setProp2(_el$14, "wrapMode", "word");
-            _$setProp2(_el$14, "flexGrow", 1);
-            _$insert2(_el$14, reason, null);
-            _$insert2(_el$14, () => copiedSuffix("reason"), null);
-            _$insert2(_el$13, _$createComponent2(Show2, {
-              get when() {
-                return reasonHovered();
-              },
-              get children() {
-                var _el$15 = _$createElement2("text");
-                _$insertNode2(_el$15, _$createTextNode2(`copy`));
-                _$setProp2(_el$15, "wrapMode", "none");
-                _$setProp2(_el$15, "flexShrink", 0);
-                _$effect2((_$p) => _$setProp2(_el$15, "fg", theme().text.faint, _$p));
-                return _el$15;
-              }
-            }), null);
-            _$effect2((_p$) => {
-              var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.UNDERLINE : undefined;
-              _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$14, "fg", _v$6, _p$.e));
-              _v$7 !== _p$.t && (_p$.t = _$setProp2(_el$14, "attributes", _v$7, _p$.t));
-              return _p$;
-            }, {
-              e: undefined,
-              t: undefined
-            });
-            return _el$13;
+            var _el$14 = _$createElement2("text");
+            _$insertNode2(_el$14, _$createTextNode2(`copy`));
+            _$setProp2(_el$14, "wrapMode", "none");
+            _$setProp2(_el$14, "flexShrink", 0);
+            _$effect2((_$p) => _$setProp2(_el$14, "fg", theme().text.faint, _$p));
+            return _el$14;
           }
-        })
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return hint();
-        },
-        children: (h) => (() => {
-          var _el$17 = _$createElement2("box"), _el$18 = _$createElement2("text");
-          _$insertNode2(_el$17, _el$18);
-          _$setProp2(_el$17, "flexDirection", "row");
-          _$setProp2(_el$17, "gap", 2);
-          _$insert2(_el$17, () => label("hint"), _el$18);
-          _$setProp2(_el$18, "wrapMode", "word");
-          _$setProp2(_el$18, "flexGrow", 1);
-          _$insert2(_el$18, () => h().full);
-          _$effect2((_$p) => _$setProp2(_el$18, "fg", theme().text.muted, _$p));
-          return _el$17;
-        })()
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return remediation();
-        },
-        children: (fix) => (() => {
-          var _el$19 = _$createElement2("box"), _el$20 = _$createElement2("text");
-          _$insertNode2(_el$19, _el$20);
-          _$setProp2(_el$19, "flexDirection", "row");
-          _$setProp2(_el$19, "gap", 2);
-          _$insert2(_el$19, () => label("fix"), _el$20);
-          _$setProp2(_el$20, "wrapMode", "word");
-          _$setProp2(_el$20, "flexGrow", 1);
-          _$insert2(_el$20, () => fix().text);
-          _$effect2((_$p) => _$setProp2(_el$20, "fg", fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _$p));
-          return _el$19;
-        })()
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return goal().spend;
-        },
-        children: (spend) => field("spend", formatSpend(spend()))
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return goal().contextSize !== undefined;
-        },
-        get children() {
-          return (() => {
-            const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens, CONTEXT_BAR_CELLS, ascii);
-            const hot = () => meter().hot;
-            const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
-            return (() => {
-              var _el$21 = _$createElement2("box");
-              _$setProp2(_el$21, "flexDirection", "row");
-              _$setProp2(_el$21, "gap", 2);
-              _$insert2(_el$21, () => label("context"), null);
-              _$insert2(_el$21, _$createComponent2(Show2, {
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return goal().reason;
+          },
+          children: (reason) => _$createComponent2(Show2, {
+            get when() {
+              return props.onCopyReason;
+            },
+            get fallback() {
+              return field(goal().status === "active" ? "evaluator" : "reason", reason(), true);
+            },
+            get children() {
+              var _el$16 = _$createElement2("box"), _el$17 = _$createElement2("text");
+              _$insertNode2(_el$16, _el$17);
+              _$setProp2(_el$16, "flexDirection", "row");
+              _$setProp2(_el$16, "gap", 2);
+              _$setProp2(_el$16, "onMouseUp", (event) => {
+                if (event.button !== 0)
+                  return;
+                event.stopPropagation();
+                copyReason(reason());
+              });
+              _$setProp2(_el$16, "onMouseOver", () => setReasonHovered(true));
+              _$setProp2(_el$16, "onMouseOut", () => setReasonHovered(false));
+              _$insert2(_el$16, () => label(goal().status === "active" ? "evaluator" : "reason"), _el$17);
+              _$setProp2(_el$17, "wrapMode", "word");
+              _$setProp2(_el$17, "flexGrow", 1);
+              _$insert2(_el$17, reason, null);
+              _$insert2(_el$17, () => copiedSuffix("reason"), null);
+              _$insert2(_el$16, _$createComponent2(Show2, {
                 get when() {
-                  return goal().compactAtTokens !== undefined;
-                },
-                get fallback() {
-                  return (() => {
-                    var _el$24 = _$createElement2("text");
-                    _$setProp2(_el$24, "wrapMode", "none");
-                    _$insert2(_el$24, () => `~${formatTokens(goal().contextSize)} tokens`);
-                    _$effect2((_$p) => _$setProp2(_el$24, "fg", theme().text.muted, _$p));
-                    return _el$24;
-                  })();
+                  return reasonHovered();
                 },
                 get children() {
-                  return [(() => {
-                    var _el$22 = _$createElement2("text");
-                    _$setProp2(_el$22, "wrapMode", "none");
-                    _$insert2(_el$22, () => meter().text);
-                    _$effect2((_$p) => _$setProp2(_el$22, "fg", fg(), _$p));
-                    return _el$22;
-                  })(), (() => {
-                    var _el$23 = _$createElement2("text");
-                    _$setProp2(_el$23, "wrapMode", "none");
-                    _$insert2(_el$23, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
-                    _$effect2((_$p) => _$setProp2(_el$23, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
-                    return _el$23;
-                  })()];
+                  var _el$18 = _$createElement2("text");
+                  _$insertNode2(_el$18, _$createTextNode2(`copy`));
+                  _$setProp2(_el$18, "wrapMode", "none");
+                  _$setProp2(_el$18, "flexShrink", 0);
+                  _$effect2((_$p) => _$setProp2(_el$18, "fg", theme().text.faint, _$p));
+                  return _el$18;
                 }
               }), null);
-              return _el$21;
+              _$effect2((_p$) => {
+                var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.UNDERLINE : undefined;
+                _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$17, "fg", _v$6, _p$.e));
+                _v$7 !== _p$.t && (_p$.t = _$setProp2(_el$17, "attributes", _v$7, _p$.t));
+                return _p$;
+              }, {
+                e: undefined,
+                t: undefined
+              });
+              return _el$16;
+            }
+          })
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return hint();
+          },
+          children: (h) => (() => {
+            var _el$20 = _$createElement2("box"), _el$21 = _$createElement2("text");
+            _$insertNode2(_el$20, _el$21);
+            _$setProp2(_el$20, "flexDirection", "row");
+            _$setProp2(_el$20, "gap", 2);
+            _$insert2(_el$20, () => label("hint"), _el$21);
+            _$setProp2(_el$21, "wrapMode", "word");
+            _$setProp2(_el$21, "flexGrow", 1);
+            _$insert2(_el$21, () => h().full);
+            _$effect2((_$p) => _$setProp2(_el$21, "fg", theme().text.muted, _$p));
+            return _el$20;
+          })()
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return remediation();
+          },
+          children: (fix) => (() => {
+            var _el$22 = _$createElement2("box"), _el$23 = _$createElement2("text");
+            _$insertNode2(_el$22, _el$23);
+            _$setProp2(_el$22, "flexDirection", "row");
+            _$setProp2(_el$22, "gap", 2);
+            _$insert2(_el$22, () => label("fix"), _el$23);
+            _$setProp2(_el$23, "wrapMode", "word");
+            _$setProp2(_el$23, "flexGrow", 1);
+            _$insert2(_el$23, () => fix().text);
+            _$effect2((_$p) => _$setProp2(_el$23, "fg", fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _$p));
+            return _el$22;
+          })()
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return goal().spend;
+          },
+          children: (spend) => field("spend", formatSpend(spend()))
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return goal().contextSize !== undefined;
+          },
+          get children() {
+            return (() => {
+              const meter = () => contextMeter(goal().contextSize, goal().compactAtTokens, CONTEXT_BAR_CELLS, ascii);
+              const hot = () => meter().hot;
+              const fg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
+              return (() => {
+                var _el$24 = _$createElement2("box");
+                _$setProp2(_el$24, "flexDirection", "row");
+                _$setProp2(_el$24, "gap", 2);
+                _$insert2(_el$24, () => label("context"), null);
+                _$insert2(_el$24, _$createComponent2(Show2, {
+                  get when() {
+                    return goal().compactAtTokens !== undefined;
+                  },
+                  get fallback() {
+                    return (() => {
+                      var _el$27 = _$createElement2("text");
+                      _$setProp2(_el$27, "wrapMode", "none");
+                      _$insert2(_el$27, () => `~${formatTokens(goal().contextSize)} tokens`);
+                      _$effect2((_$p) => _$setProp2(_el$27, "fg", theme().text.muted, _$p));
+                      return _el$27;
+                    })();
+                  },
+                  get children() {
+                    return [(() => {
+                      var _el$25 = _$createElement2("text");
+                      _$setProp2(_el$25, "wrapMode", "none");
+                      _$insert2(_el$25, () => meter().text);
+                      _$effect2((_$p) => _$setProp2(_el$25, "fg", fg(), _$p));
+                      return _el$25;
+                    })(), (() => {
+                      var _el$26 = _$createElement2("text");
+                      _$setProp2(_el$26, "wrapMode", "none");
+                      _$insert2(_el$26, () => `~${formatTokens(goal().contextSize)} of ${formatTokens(goal().compactAtTokens)} \xB7 ${meter().pct}%`);
+                      _$effect2((_$p) => _$setProp2(_el$26, "fg", mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted, _$p));
+                      return _el$26;
+                    })()];
+                  }
+                }), null);
+                return _el$24;
+              })();
             })();
-          })();
-        }
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return goal().loopEnabled;
-        },
-        get children() {
-          return _$createComponent2(LoopSection, {
-            get goal() {
-              return goal();
-            },
-            get theme() {
-              return theme();
-            },
-            get elapsedMs() {
-              return props.elapsedMs;
-            },
-            get nowMs() {
-              return props.nowMs;
-            },
-            get mono() {
-              return mono();
-            },
-            get onCopySummary() {
-              return props.onCopySummary;
-            },
-            get expanded() {
-              return props.expanded;
-            },
-            get onToggleExpanded() {
-              return props.onToggleExpanded;
-            }
-          });
-        }
-      }), null);
-      _$insert2(_el$5, _$createComponent2(Show2, {
-        get when() {
-          return !goal().loopEnabled;
-        },
-        get children() {
-          return _$createComponent2(HistoryBlock, {
-            get goal() {
-              return goal();
-            },
-            get theme() {
-              return theme();
-            },
-            get elapsedMs() {
-              return props.elapsedMs;
-            },
-            get mono() {
-              return mono();
-            }
-          });
-        }
-      }), null);
-      _$effect2((_p$) => {
-        var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.UNDERLINE : undefined;
-        _v$ !== _p$.e && (_p$.e = _$setProp2(_el$7, "fg", _v$, _p$.e));
-        _v$2 !== _p$.t && (_p$.t = _$setProp2(_el$7, "attributes", _v$2, _p$.t));
-        _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$8, "fg", _v$3, _p$.a));
-        _v$4 !== _p$.o && (_p$.o = _$setProp2(_el$10, "fg", _v$4, _p$.o));
-        _v$5 !== _p$.i && (_p$.i = _$setProp2(_el$10, "attributes", _v$5, _p$.i));
-        return _p$;
-      }, {
-        e: undefined,
-        t: undefined,
-        a: undefined,
-        o: undefined,
-        i: undefined
-      });
-      return _el$5;
-    })()
-  });
+          }
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return goal().loopEnabled;
+          },
+          get children() {
+            return _$createComponent2(LoopSection, {
+              get goal() {
+                return goal();
+              },
+              get theme() {
+                return theme();
+              },
+              get elapsedMs() {
+                return props.elapsedMs;
+              },
+              get nowMs() {
+                return props.nowMs;
+              },
+              get mono() {
+                return mono();
+              },
+              get onCopySummary() {
+                return props.onCopySummary;
+              },
+              get expanded() {
+                return props.expanded;
+              },
+              get onToggleExpanded() {
+                return props.onToggleExpanded;
+              }
+            });
+          }
+        }), null);
+        _$insert2(_el$8, _$createComponent2(Show2, {
+          get when() {
+            return !goal().loopEnabled;
+          },
+          get children() {
+            return _$createComponent2(HistoryBlock, {
+              get goal() {
+                return goal();
+              },
+              get theme() {
+                return theme();
+              },
+              get elapsedMs() {
+                return props.elapsedMs;
+              },
+              get mono() {
+                return mono();
+              }
+            });
+          }
+        }), null);
+        _$effect2((_p$) => {
+          var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.UNDERLINE : undefined;
+          _v$ !== _p$.e && (_p$.e = _$setProp2(_el$0, "fg", _v$, _p$.e));
+          _v$2 !== _p$.t && (_p$.t = _$setProp2(_el$0, "attributes", _v$2, _p$.t));
+          _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$1, "fg", _v$3, _p$.a));
+          _v$4 !== _p$.o && (_p$.o = _$setProp2(_el$13, "fg", _v$4, _p$.o));
+          _v$5 !== _p$.i && (_p$.i = _$setProp2(_el$13, "attributes", _v$5, _p$.i));
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined,
+          a: undefined,
+          o: undefined,
+          i: undefined
+        });
+        return _el$8;
+      })()
+    }), null);
+    return _el$4;
+  })();
 };
 
 // src/hud-card.tsx
@@ -2480,6 +2498,7 @@ var tui_default = Plugin.define({
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
     const [statusDialogSession, setStatusDialogSession] = createSignal4(undefined);
     const [iterationsExpanded, setIterationsExpanded] = createSignal4(false);
+    const [dialogNoticeStale, setDialogNoticeStale] = createSignal4(false);
     const [scrollRef, setScrollRef] = createSignal4(undefined);
     const requested = new Set;
     const statusBody = (sessionID, fallback) => {
@@ -2504,7 +2523,8 @@ var tui_default = Plugin.define({
         onCopySummary: (summary) => copyToClipboard(summary, sessionID, "summary"),
         mono: reducedColor,
         expanded: () => iterationsExpanded(),
-        onToggleExpanded: () => setIterationsExpanded((v) => !v)
+        onToggleExpanded: () => setIterationsExpanded((v) => !v),
+        noticeStale: () => dialogNoticeStale()
       });
     };
     const closeStatusDialog = () => {
@@ -2535,7 +2555,8 @@ var tui_default = Plugin.define({
       setContextOpen(false);
       setHudSession(undefined);
       setIterationsExpanded(false);
-      refresh(sessionID).catch(() => {});
+      setDialogNoticeStale(false);
+      refresh(sessionID).catch(() => setDialogNoticeStale(true));
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal;

@@ -63,6 +63,8 @@ export default Plugin.define({
     const [statusDialogSession, setStatusDialogSession] = createSignal<string | undefined>(undefined)
     /** Loop-rail fold: controlled expand for the dialog's "N older iterations" row (keyboard parity with the click target). */
     const [iterationsExpanded, setIterationsExpanded] = createSignal(false)
+    /** Set when the dialog's live get-RPC rejects; the body renders a faint "snapshot unavailable" line so stale chrome can never pass as fresh. */
+    const [dialogNoticeStale, setDialogNoticeStale] = createSignal(false)
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
 
@@ -73,7 +75,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -113,8 +115,10 @@ export default Plugin.define({
       setContextOpen(false)
       setHudSession(undefined)
       setIterationsExpanded(false)
+      setDialogNoticeStale(false)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
-      void refresh(sessionID).catch(() => {})
+      // If the RPC rejects, say so in the dialog — never let stale chrome pass as fresh.
+      void refresh(sessionID).catch(() => setDialogNoticeStale(true))
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal
