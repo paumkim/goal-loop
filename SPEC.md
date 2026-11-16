@@ -15,7 +15,9 @@ clickable condition row, the same remediation block, and clickable `copy conditi
 goal` footer buttons (`p` toggles the pin). The footer degrades in two steps so it never clips mid-word: above
 140 columns the full key hint plus full button labels; above 96 the short hint (`up/down scroll · p pin ·
 esc close`) with full labels; below that, compact button labels (`copy` / `pin` / `clear`) — the 80-column
-floor always fits. The dialog renders a `context` row when the server can estimate the
+floor always fits. The dialog's state word carries the same accents as the HUD card in terminal states so the
+header never reads muted-gray on an outcome: `achieved` in feedback.info, `impossible` / `paused` in
+feedback.warning, `failed` in feedback.error (falling back to warning where the theme has no error token). The dialog renders a `context` row when the server can estimate the
 prompt size: a 16-cell bar against the configured auto-compact threshold (`compactAtTokens`; the row shows the
 bare `~N tokens` estimate when the threshold is disabled or unavailable), `~N of M · P%` where P is unclamped —
 the warning tone at ≥80% of the threshold, so the dial the boundary compaction reads is visible before the
@@ -418,7 +420,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=669 -->
+<!-- spec-check files=43 tests=670 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -495,7 +497,9 @@ snapshot fields (no RPC, schema, storage or controller changes).
     `src/core/history.ts`): for each `loopHistory` entry a `✓` glyph (feedback.info) on a vertical `│`
     rail, then `vN · met · <turns> turns · <toolCalls> tools · <duration>` — duration is `endedAt` minus the
     previous entry's `endedAt` (or `setAt` for v1), via `formatDuration` — and the entry's `summary` wrapped
-    on a `│`-prefixed line in `text.faint`, indented under the rail. Theme tokens only; no borders, no
+    on a `│`-prefixed line in `text.faint`, indented under the rail. The rail row and the final tally row
+    word-wrap instead of clipping, so the trailing segments (verdict mix, `ended …`, `% of wall`) stay
+    visible at the 80-column floor. Theme tokens only; no borders, no
     hardcoded RGBA, no absolute positioning.
 53. A progress bar sits above the rail: `█` filled (feedback.info.base) vs `░` empty (text.faint),
     fixed 18 cells, filled = round(completed / loopMaxLoops × 18), clamped to [0, 18]; caption

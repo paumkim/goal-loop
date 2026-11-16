@@ -39,12 +39,14 @@ export const StatusDialogBody = (props: {
       </text>
     </box>
   )
-  const stateColor = () =>
-    props.goal?.status === "paused"
-      ? theme().text.feedback.warning.base
-      : props.goal?.status === "active"
-        ? theme().text.feedback.info.base
-        : theme().text.muted
+  // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
+  const stateColor = () => {
+    const s = props.goal?.status
+    if (s === "paused" || s === "impossible") return theme().text.feedback.warning.base
+    if (s === "active" || s === "achieved") return theme().text.feedback.info.base
+    if (s === "failed") return theme().text.feedback.error?.base ?? theme().text.feedback.warning.base
+    return theme().text.muted
+  }
   const g = () => props.goal
   const remediation = () => {
     const goal = g()

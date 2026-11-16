@@ -80,6 +80,13 @@ const render = async (node: () => JSX.Element, width = 112, height = 40): Promis
 
 
 describe("LoopSection", () => {
+  test("at 80 cells the rail row wraps instead of clipping its trailing segments", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, 80, 40)
+    expect(frame).toContain("met · 9 turns · 41 tools")
+    expect(frame).toContain("ended")
+    expect(frame).toContain("of wall")
+  })
+
   test("renders caption, bar, objective, rail rows, now row and trail", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("loop")
