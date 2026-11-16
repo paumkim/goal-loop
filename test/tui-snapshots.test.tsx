@@ -168,6 +168,19 @@ describe("full-frame snapshots (named layout states)", () => {
     )
     expect(snapshot).toMatchSnapshot()
   })
+
+  test("StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy)", async () => {
+    const downgraded = loopedGoal({
+      reason: "Verification `bun run check` did not pass: exit 1: 1 fail\nerror: expected true",
+      lastVerify: { command: "bun run check", code: 1, tail: "1 fail\nerror: expected true", at: now - 1000 * 60 * 3 },
+    })
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={downgraded} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyVerify={() => {}} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
 })
 
 describe("full-frame snapshots (waiting and remediation states)", () => {

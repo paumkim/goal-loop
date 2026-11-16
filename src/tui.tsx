@@ -94,7 +94,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -466,12 +466,13 @@ export default Plugin.define({
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       statusCopiedTimer = setTimeout(() => setStatusCopied(false), 1600)
     }
-    const copyLabel: Readonly<Record<"condition" | "reason" | "summary", { title: string; message: string }>> = {
+    const copyLabel: Readonly<Record<"condition" | "reason" | "summary" | "verify", { title: string; message: string }>> = {
       condition: { title: "condition copied", message: "goal condition is on the clipboard" },
       reason: { title: "reason copied", message: "the evaluator's reason is on the clipboard" },
       summary: { title: "summary copied", message: "the iteration summary is on the clipboard" },
+      verify: { title: "verify tail copied", message: "the verifier output tail is on the clipboard" },
     }
-    const copyToClipboard = (text: string, sessionID: string | undefined, what: "condition" | "reason" | "summary" = "condition") => {
+    const copyToClipboard = (text: string, sessionID: string | undefined, what: "condition" | "reason" | "summary" | "verify" = "condition") => {
       try {
         const ok = context.renderer.copyToClipboardOSC52(text)
         const label = copyLabel[what]

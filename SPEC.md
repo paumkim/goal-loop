@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=907 -->
+<!-- spec-check files=44 tests=912 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4032,3 +4032,37 @@ Verification (all run in the worktree): bun test (907 pass, 0 fail), bun run che
 spec-check (44/907). Evidence is source + test-render layers; live TUI remains unverifiable.
 Follow-ups NOT done in this slice: none. The pill (level a) remains documented as inline-only
 (pinned by pillModel unit tests; extraction would manufacture evidence, not find defects).
+
+
+## Workstream CZ — the verification gate's output tail rides the record into the dashboard (2026-11-16)
+
+Interpretation of this iteration: the design bar's level-(c) contract names a "verifyCommand output
+tail" in the dashboard. It did not exist: the gate produced the tail on the failure path but folded
+it into the not_met reason (truncate 240), and on a passing gate the output vanished entirely — a
+met verdict carried no visible proof of what it was held to. The fix is additive and observational:
+the controller persists a display-safe tail on the record at every gate exit; the dialog paints it.
+
+389. src/core/types.ts — GoalRecord gains additive `lastVerify?: { command, code: number|null,
+     timedOut?, tail?, at }` (absent on legacy records, at unset gates, and on non-met verdicts).
+     Version stays 1; the store round-trips it opaquely (isRecord checks three keys only).
+390. src/runtime/controller.ts — verifyMet marks the record at all four exits (no verifier loaded,
+     pass, downgraded fail incl. timeout, verifier threw). The tail is display-safe before it is
+     stored: stripControls (new in src/core/format.ts — OSC, CSI, Fe, lone C0/DEL, CR→LF) then
+     last 12 lines capped at 1200 code units. Gate behavior is unchanged: same reason strings,
+     same downgrade semantics, fail-closed posture.
+391. src/status-dialog.tsx — a `verify` section (after the fix row, before spend) paints the
+     command as `$ <cmd>`, a glyph + `exit N`/`timed out · <relative time>` line, and the stored
+     tail wrapped at dialog width; mono demotes the glyph (+/x) and drops color. The row is
+     click-to-copy (tail ?? command) with hover bold + in-place `+ copied` ack — same grammar as
+     the reason row; onCopyVerify is optional (no host wiring → static paint, no click target).
+     src/tui.tsx wires onCopyVerify through the shared copyToClipboard (new "verify" toast kind).
+392. Evidence: render-dialog.tsx (not shipped) paints the section in color and --mono at width 80
+     ("$ bun run check", "✓ exit 0 · 4m ago" / "+ exit 0" under mono, tail lines); +1 smoke pin
+     (render-scripts.test.ts asserts both arms and the demotion). +1 full-frame snapshot
+     (StatusDialogBody · verify, the downgrade case: reason + ✗ exit 1 + tail, width 100/44).
+     Engine truth: +3 tests in verify.test.ts (pass persists stripped tail + exit 0; fail persists
+     stripped ANSI tail, reason contract unchanged; timeout persists timedOut with code null).
+393. Verification (all in the worktree): bun test (912 pass, 0 fail). Evidence is source +
+     test-render + snapshot layers; live TUI remains unverifiable (provider dead). Follow-ups
+     NOT done: the pill/card do not carry the tail (level (c) only, by design); HudCard's optional
+     onCopyVerify passes nothing new; the tail is not shown for never-configured gates.

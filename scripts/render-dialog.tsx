@@ -11,7 +11,8 @@
  * footer tier boundaries can be eyeballed (80 = short hint + compact labels, ~100 = short hint + noun
  * labels, >= ~140 = full key hint). --pinned paints the pin button flipped, --copied paints the copy
  * button acknowledged, --mono prints under reduced color (NO_COLOR set) with ASCII glyphs.
- * The footer is the real DialogFooter, never a hand-painted line.
+ * The footer is the real DialogFooter, never a hand-painted line. Both arms paint the verify section
+ * (the last evaluator.verifyCommand gate's own output — the dialog's proof panel).
  */
 import { RGBA, TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
@@ -111,6 +112,7 @@ const goal: GoalSnapshot = {
   evaluating: false,
   waiting: false,
   spend: { cost: 0.9, input: 742_000, output: 2_100, reasoning: 0, cacheRead: 739_000, cacheWrite: 0 },
+  lastVerify: { command: "bun run check", code: 0, tail: "spec-check: ok (44 files, 907 tests match SPEC.md)\nok: loaded TUI plugin", at: now - 1000 * 60 * 4 },
 }
 
 const setup = await testRender(
@@ -131,7 +133,7 @@ const setup = await testRender(
           ? { scrollbarOptions: { visible: true }, contentOptions: { minHeight: 0 } }
           : { scrollX: false, contentOptions: { minHeight: 0 } })}
       >
-        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} />
+        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} onCopyVerify={() => {}} />
       </scrollbox>
       <DialogFooter
         theme={theme}

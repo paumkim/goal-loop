@@ -1,7 +1,7 @@
 import { BOUNDARY_DROP_FACTOR, BOUNDARY_LANDING_GRACE_MS, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
-import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, truncate } from "../core/format.ts"
+import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
 import {
@@ -766,23 +766,39 @@ export class GoalController {
     const { config, log } = this.deps
     const sessionID = record.sessionID
     const command = config.evaluator.verifyCommand
+    // The dashboard paints the gate's own output, so persist a display-safe tail on the record at every exit.
+    const mark = (entry: { code: number | null; timedOut?: boolean; output?: string }) => {
+      const cleaned = entry.output ? stripControls(entry.output).trim() : ""
+      const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
+      record.lastVerify = { command, code: entry.code, ...(entry.timedOut ? { timedOut: true } : {}), ...(tail ? { tail } : {}), at: this.deps.clock.now() }
+    }
     const fail = (detail: string): EvaluationResult => {
       log.warn("met verdict downgraded to not_met by the verification gate", { sessionID, command, detail })
       this.notify(sessionID, "retry", "warning", "Verification failed", `${command}: ${truncate(detail, 160)}`)
       return { verdict: "not_met", reason: `Verification \`${truncate(command, 120)}\` did not pass: ${truncate(detail, 240)}` }
     }
     const verifier = this.deps.verifier
-    if (!verifier) return fail("no verifier port is wired for this plugin instance (fail closed)")
+    if (!verifier) {
+      const detail = "no verifier port is wired for this plugin instance (fail closed)"
+      mark({ code: null, output: detail })
+      return fail(detail)
+    }
     runtime.evaluating = true
     this.emit(record)
     try {
       const signal = AbortSignal.timeout(config.evaluator.verifyTimeoutMs)
       const run = await verifier.verify({ command, cwd: this.deps.directory, timeoutMs: config.evaluator.verifyTimeoutMs, signal })
-      if (run.code === 0) return result
-      const tail = run.output.trim().split("\n").slice(-12).join("\n")
+      if (run.code === 0) {
+        mark({ code: 0, output: run.output })
+        return result
+      }
+      const tail = stripControls(run.output).trim().split("\n").slice(-12).join("\n")
+      mark({ code: run.code ?? null, timedOut: run.timedOut, output: run.output })
       return fail(run.timedOut ? `timed out after ${formatDuration(config.evaluator.verifyTimeoutMs)}` : `exit ${run.code ?? "unknown"}: ${tail || "(no output)"}`)
     } catch (error) {
-      return fail(`verification errored: ${errorMessage(error)}`)
+      const detail = `verification errored: ${errorMessage(error)}`
+      mark({ code: null, output: detail })
+      return fail(detail)
     } finally {
       if (runtime.abort === undefined) runtime.evaluating = false
     }

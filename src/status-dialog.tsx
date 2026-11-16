@@ -9,7 +9,7 @@ import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
 import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
-import { contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
+import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
@@ -30,6 +30,8 @@ export const StatusDialogBody = (props: {
   onCopyReason?: (reason: string) => void
   /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line boldens on hover). */
   onCopySummary?: (summary: string, version: number) => void
+  /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section boldens on hover. */
+  onCopyVerify?: (tail: string) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded`. */
@@ -100,6 +102,7 @@ export const StatusDialogBody = (props: {
   const copiedSuffix = (key: string) => (copied() === key ? (ascii ? " + copied" : " ✓ copied") : "")
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
+  const [verifyHovered, setVerifyHovered] = createSignal(false)
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
@@ -113,6 +116,15 @@ export const StatusDialogBody = (props: {
     try {
       props.onCopyReason(reason)
       acknowledge("reason")
+    } catch {
+      // Best-effort.
+    }
+  }
+  const copyVerify = (tail: string, command: string) => {
+    if (!props.onCopyVerify) return
+    try {
+      props.onCopyVerify(tail || command)
+      acknowledge("verify")
     } catch {
       // Best-effort.
     }
@@ -184,6 +196,52 @@ export const StatusDialogBody = (props: {
                 </text>
               </box>
             )}
+          </Show>
+          {/* verification gate — the last `evaluator.verifyCommand` run and the output it produced; the met verdict was held to this command. Click to copy the tail (host wires clipboard + toast via onCopyVerify) */}
+          <Show when={goal().lastVerify}>
+            {(verify) => {
+              const ok = () => verify().code === 0
+              const glyph = () => (ok() ? (ascii ? "+" : "\u2713") : ascii ? "x" : "\u2717")
+              const outcome = () => (ok() ? "exit 0" : verify().timedOut ? "timed out" : `exit ${verify().code ?? "unknown"}`)
+              const glyphColor = () => (mono() ? theme().text.base : ok() ? theme().text.feedback.info.base : theme().text.feedback.warning.base)
+              const inner = () => (
+                <box flexDirection="column" flexGrow={1}>
+                  <box flexDirection="row" gap={1}>
+                    <text wrapMode="none" fg={mono() ? theme().text.base : theme().text.faint}>$</text>
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={verifyHovered() ? TextAttributes.BOLD : undefined}>
+                      {verify().command}{copiedSuffix("verify")}
+                    </text>
+                  </box>
+                  <box flexDirection="row" gap={1}>
+                    <text wrapMode="none" fg={glyphColor()}>{glyph()}</text>
+                    <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+                      {`${outcome()} · ${relativeTime(verify().at, props.nowMs())}`}
+                    </text>
+                  </box>
+                  <Show when={verify().tail}>
+                    {(t) => (
+                      <text wrapMode="word" fg={theme().text.faint}>
+                        {t()}
+                      </text>
+                    )}
+                  </Show>
+                </box>
+              )
+              return (
+                <Show
+                  when={props.onCopyVerify}
+                  fallback={<box flexDirection="row" gap={2}>{label("verify")}{inner()}</box>}
+                >
+                  <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyVerify(verify().tail ?? "", verify().command) }} onMouseOver={() => setVerifyHovered(true)} onMouseOut={() => setVerifyHovered(false)}>
+                    {label("verify")}
+                    {inner()}
+                    <Show when={verifyHovered()}>
+                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
+                    </Show>
+                  </box>
+                </Show>
+              )
+            }}
           </Show>
           <Show when={goal().spend}>{(spend) => field("spend", formatSpend(spend()))}</Show>
           {/* context estimate vs the auto-compact threshold — the dial the boundary compaction reads; omitted entirely when the server could not estimate */}
