@@ -267,7 +267,7 @@ describe("uninstall", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  test("--restore copies the newest pre-install backup back over the config", () => {
+  test("--restore copies the install-time original back over the config", () => {
     const home = fakeHome();
     const original = STRICT;
     const file = writeGlobalConfig(home, "opencode.jsonc", original);
@@ -277,6 +277,24 @@ describe("uninstall", () => {
     const r = uninstall(["--restore"], { env: envFor(home), cwd: home });
     expect(r.code).toBe(0);
     expect(readFileSync(file, "utf8")).toBe(original);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("--restore copies the install-time original, never a newer drifted plugin-free backup", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    // user rewrites the config: plugin entry gone, unrelated key edited
+    const drifted = STRICT.replace("test/model", "test/other");
+    writeGlobalConfig(home, "opencode.jsonc", drifted);
+    // uninstall takes a drifted plugin-free safety backup as the newest backup, then restores the original
+    const u = uninstall([], { env: envFor(home), cwd: home });
+    expect(u.code).toBe(0);
+    // --restore must converge on the install-time original (STRICT bytes),
+    // not on the drifted plugin-free bytes, even though they are newer
+    const r = uninstall(["--restore"], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(STRICT);
     rmSync(home, { recursive: true, force: true });
   });
 

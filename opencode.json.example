@@ -1,7 +1,7 @@
 {
   "plugins": [
     {
-      "package": "/home/pauk/Projects/opencode-v2-goal/opencode-goalv2",
+      "package": "/path/to/opencode-goalv2",
       "options": {
         "coordinator": true
       }

@@ -8,3 +8,6 @@ worktrees/
 .term/coordinator/.state.*
 worktrees/wt-*
 .docs-watch-state.json
+.pkgtest-load/
+.package-integrity-test-*/
+opencode.json

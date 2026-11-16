@@ -20,7 +20,7 @@ To remove it, ask opencode to remove it — the CLI installer's `uninstall` does
 opencode plugin remove github:paumkim/opencode-goalv2#v1.1.0
 ```
 
-The CLI installer (`opencode-goal install` from the v1.1.0 release tarball) registers a bare `"opencode-goalv2"` specifier, which resolves only against the npm registry, so it is not usable as published. It is fixed on `dev` to register the GitHub specifier and will be correct in the next release; on v1.1.0, use the plugin-add command above.
+The CLI installer (`opencode-goal install` from the v1.1.0 release tarball) registers a bare `"opencode-goalv2"` specifier, which resolves only against the npm registry, so it is not usable as published. It is fixed on `dev` (the source tree now derives the specifier from package.json) and will be correct in the next release; on v1.1.0, use the plugin-add command above.
 
 ```sh
 opencode-goal uninstall          # removes exactly what install added; opencode is as it was
@@ -28,7 +28,7 @@ opencode-goal status             # scope, config path, installed yes/no
 opencode-goal install --project  # target the project's config instead of global
 ```
 
-The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists — the oldest backup whose parsed content provably lacks the plugin — (taking a safety backup of the current state first); `uninstall --restore` puts the newest backup back on demand. Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
+The installer only edits the `plugins` array in the global config opencode itself picks, backs the file up first (timestamped `.bak`, never overwritten), is idempotent, and uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists — the oldest backup whose parsed content provably lacks the plugin — (taking a safety backup of the current state first); `uninstall --restore` puts the pre-install backup back over the config (taking a fresh safety backup first). Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
 
 ## Use
 
