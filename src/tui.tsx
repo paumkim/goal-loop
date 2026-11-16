@@ -537,7 +537,7 @@ export default Plugin.define({
       }
     }
     // The dossier-as-file path (`goal.dossier.export` palette command; the dialog's save row). One O_EXCL write into the host's cwd — never overwrites, suffixes on collision, the path comes back as a toast receipt; a failed write says so instead of failing silently.
-    const exportDossier = (sessionID: string | undefined, goal: GoalSnapshot | undefined) => {
+    const exportDossier = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => {
       if (!goal || !sessionID) return
       try {
         const result = exportLoopDossier(goal, Date.now(), process.cwd())

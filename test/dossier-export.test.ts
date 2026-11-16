@@ -15,7 +15,7 @@ const plainGoal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => ({
   sessionID: "ses_secret_session_id",
   directory: "/tmp/export",
   condition: "ship the release notes",
-  status: "met",
+  status: "achieved",
   reason: "met: notes published",
   setAt: now - 1000 * 60 * 30,
   startedAt: now - 1000 * 60 * 30,
