@@ -203,7 +203,7 @@ export const DialogFooter = (props: {
   )
 }
 
-/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label underlines instead. */
+/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label boldens instead. */
 export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const mono = () => props.mono === true
@@ -229,14 +229,14 @@ export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: bo
         }
       }}
     >
-      <text wrapMode="none" fg={hovered() ? props.theme.text.base : props.theme.text.muted} attributes={mono() && hovered() ? TextAttributes.UNDERLINE : undefined}>
+      <text wrapMode="none" fg={hovered() ? props.theme.text.base : props.theme.text.muted} attributes={mono() && hovered() ? TextAttributes.BOLD : undefined}>
         {`[${props.label}]`}
       </text>
     </box>
   )
 }
 
-/** One context-menu row: same hover grammar as HudButton (raised background, brightened label; underline under mono), full card width, faint gutter keeping the LABEL column. Inert rows never light up and swallow the click silently — a disabled action is visibly disabled, never a trap. */
+/** One context-menu row: same hover grammar as HudButton (raised background, brightened label; bold under mono), full card width, faint gutter keeping the LABEL column. Inert rows never light up and swallow the click silently — a disabled action is visibly disabled, never a trap. */
 const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; mono?: boolean; danger?: boolean; enabled?: boolean; onPress: () => void }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const mono = () => props.mono === true
@@ -266,7 +266,7 @@ const HudMenuRow = (props: { theme: HudCardTheme; gutter: string; text: string; 
       <text wrapMode="none" flexShrink={0} width={LABEL} fg={props.theme.text.faint}>
         {props.gutter}
       </text>
-      <text wrapMode="none" fg={fg()} attributes={mono() && active() ? TextAttributes.UNDERLINE : undefined}>
+      <text wrapMode="none" fg={fg()} attributes={mono() && active() ? TextAttributes.BOLD : undefined}>
         {props.text}
       </text>
     </box>
@@ -391,7 +391,7 @@ export const HudCard = (props: {
         <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
           condition
         </text>
-        <text wrapMode="none" flexGrow={1} fg={theme().text.base} attributes={conditionHovered() ? TextAttributes.UNDERLINE : undefined}>
+        <text wrapMode="none" flexGrow={1} fg={theme().text.base} attributes={conditionHovered() ? TextAttributes.BOLD : undefined}>
           {truncate(g().condition, CONDITION_MAX, ascii() ? "..." : "\u2026")}
         </text>
         <Show when={conditionHovered()}>

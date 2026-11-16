@@ -8,7 +8,7 @@
 import { describe, expect, test } from "bun:test"
 import { createSignal } from "solid-js"
 import { testRender } from "@opentui/solid"
-import { RGBA } from "@opentui/core"
+import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, HudCard, hudCardRows } from "../src/hud-card.tsx"
@@ -844,6 +844,35 @@ describe("dialog hover grammar (mouse over reveals the affordance)", () => {
     await setup.renderOnce()
     frame = setup.captureCharFrame()
     expect(frame.split("\n")[at!.y]!).not.toContain("copy")
+    await setup.renderer.destroy()
+  })
+})
+
+describe("hover grammar: weight, never underline (NO_COLOR-safe)", () => {
+  test("hovering the condition row paints bold and no span in the frame carries UNDERLINE; leaving restores resting attributes", async () => {
+    const setup = await testRender(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyCondition={() => {}} />,
+      { width: 112, height: 44 },
+    )
+    await setup.renderOnce()
+    const charFrame = setup.captureCharFrame()
+    // Resting frame: nothing underlined, nothing bold on the condition text.
+    const rest = setup.captureSpans().lines.flatMap((line) => line.spans)
+    expect(rest.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
+    const at = findIn(charFrame, "ship the release notes")
+    expect(at).toBeDefined()
+    await setup.mockMouse.moveTo(at!.x + 4, at!.y)
+    await setup.renderOnce()
+    const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    expect(spans.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
+    const condition = spans.find((span) => span.text.includes("ship the release notes"))
+    expect(condition).toBeDefined()
+    expect(condition!.attributes & TextAttributes.BOLD).not.toBe(0)
+    await setup.mockMouse.moveTo(at!.x + 4, 0)
+    await setup.renderOnce()
+    const left = setup.captureSpans().lines.flatMap((line) => line.spans)
+    expect(left.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
+    expect(left.find((span) => span.text.includes("ship the release notes"))!.attributes & TextAttributes.BOLD).toBe(0)
     await setup.renderer.destroy()
   })
 })

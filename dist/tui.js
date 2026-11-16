@@ -772,7 +772,7 @@ var RailSummary = (props) => {
           return;
         event.stopPropagation();
         copy();
-      } : undefined, _v$2 = props.theme.text.faint, _v$3 = props.theme.text.faint, _v$4 = props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined;
+      } : undefined, _v$2 = props.theme.text.faint, _v$3 = props.theme.text.faint, _v$4 = props.onCopy && hovered() ? TextAttributes.BOLD : undefined;
       _v$ !== _p$.e && (_p$.e = _$setProp(_el$2, "onMouseUp", _v$, _p$.e));
       _v$2 !== _p$.t && (_p$.t = _$setProp(_el$3, "fg", _v$2, _p$.t));
       _v$3 !== _p$.a && (_p$.a = _$setProp(_el$4, "fg", _v$3, _p$.a));
@@ -1029,7 +1029,7 @@ var LoopSection = (props) => {
           return () => _c$2() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`;
         })());
         _$effect((_p$) => {
-          var _v$5 = theme().text.faint, _v$6 = theme().text.faint, _v$7 = railHovered() ? TextAttributes.UNDERLINE : undefined;
+          var _v$5 = theme().text.faint, _v$6 = theme().text.faint, _v$7 = railHovered() ? TextAttributes.BOLD : undefined;
           _v$5 !== _p$.e && (_p$.e = _$setProp(_el$14, "fg", _v$5, _p$.e));
           _v$6 !== _p$.t && (_p$.t = _$setProp(_el$15, "fg", _v$6, _p$.t));
           _v$7 !== _p$.a && (_p$.a = _$setProp(_el$15, "attributes", _v$7, _p$.a));
@@ -1284,7 +1284,7 @@ var WhyLedger = (props) => {
               }
             }), null);
             _$effect((_p$) => {
-              var _v$21 = colorFor(theme(), entry.verdict, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base, _v$25 = interactive && hovered() === entry.at ? TextAttributes.UNDERLINE : undefined;
+              var _v$21 = colorFor(theme(), entry.verdict, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.muted, _v$24 = theme().text.base, _v$25 = interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined;
               _v$21 !== _p$.e && (_p$.e = _$setProp(_el$39, "fg", _v$21, _p$.e));
               _v$22 !== _p$.t && (_p$.t = _$setProp(_el$39, "attributes", _v$22, _p$.t));
               _v$23 !== _p$.a && (_p$.a = _$setProp(_el$40, "fg", _v$23, _p$.a));
@@ -1647,7 +1647,7 @@ var StatusDialogBody = (props) => {
                 }
               }), null);
               _$effect2((_p$) => {
-                var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.UNDERLINE : undefined;
+                var _v$6 = theme().text.base, _v$7 = reasonHovered() ? TextAttributes2.BOLD : undefined;
                 _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$17, "fg", _v$6, _p$.e));
                 _v$7 !== _p$.t && (_p$.t = _$setProp2(_el$17, "attributes", _v$7, _p$.t));
                 return _p$;
@@ -1811,7 +1811,7 @@ var StatusDialogBody = (props) => {
           }
         }), null);
         _$effect2((_p$) => {
-          var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.UNDERLINE : undefined;
+          var _v$ = stateColor(), _v$2 = TextAttributes2.BOLD, _v$3 = theme().text.muted, _v$4 = theme().text.base, _v$5 = conditionHovered() ? TextAttributes2.BOLD : undefined;
           _v$ !== _p$.e && (_p$.e = _$setProp2(_el$0, "fg", _v$, _p$.e));
           _v$2 !== _p$.t && (_p$.t = _$setProp2(_el$0, "attributes", _v$2, _p$.t));
           _v$3 !== _p$.a && (_p$.a = _$setProp2(_el$1, "fg", _v$3, _p$.a));
@@ -2016,7 +2016,7 @@ var HudButton = (props) => {
     _$setProp3(_el$6, "wrapMode", "none");
     _$insert3(_el$6, () => `[${props.label}]`);
     _$effect3((_p$) => {
-      var _v$ = !mono() && hovered() ? props.theme.background?.raised?.high : undefined, _v$2 = hovered() ? props.theme.text.base : props.theme.text.muted, _v$3 = mono() && hovered() ? TextAttributes3.UNDERLINE : undefined;
+      var _v$ = !mono() && hovered() ? props.theme.background?.raised?.high : undefined, _v$2 = hovered() ? props.theme.text.base : props.theme.text.muted, _v$3 = mono() && hovered() ? TextAttributes3.BOLD : undefined;
       _v$ !== _p$.e && (_p$.e = _$setProp3(_el$5, "backgroundColor", _v$, _p$.e));
       _v$2 !== _p$.t && (_p$.t = _$setProp3(_el$6, "fg", _v$2, _p$.t));
       _v$3 !== _p$.a && (_p$.a = _$setProp3(_el$6, "attributes", _v$3, _p$.a));
@@ -2061,7 +2061,7 @@ var HudMenuRow = (props) => {
     _$setProp3(_el$9, "wrapMode", "none");
     _$insert3(_el$9, () => props.text);
     _$effect3((_p$) => {
-      var _v$4 = !mono() && active() ? props.theme.background?.raised?.high : undefined, _v$5 = props.theme.text.faint, _v$6 = fg(), _v$7 = mono() && active() ? TextAttributes3.UNDERLINE : undefined;
+      var _v$4 = !mono() && active() ? props.theme.background?.raised?.high : undefined, _v$5 = props.theme.text.faint, _v$6 = fg(), _v$7 = mono() && active() ? TextAttributes3.BOLD : undefined;
       _v$4 !== _p$.e && (_p$.e = _$setProp3(_el$7, "backgroundColor", _v$4, _p$.e));
       _v$5 !== _p$.t && (_p$.t = _$setProp3(_el$8, "fg", _v$5, _p$.t));
       _v$6 !== _p$.a && (_p$.a = _$setProp3(_el$9, "fg", _v$6, _p$.a));
@@ -2443,7 +2443,7 @@ var HudCard = (props) => {
       }
     }), null);
     _$effect3((_p$) => {
-      var _v$8 = props.width ?? 64, _v$9 = borderColor(), _v$0 = theme().background?.raised?.high, _v$1 = ` ${title()} `, _v$10 = stateColor(), _v$11 = theme().text.faint, _v$12 = theme().text.base, _v$13 = conditionHovered() ? TextAttributes3.UNDERLINE : undefined, _v$14 = theme().text.faint, _v$15 = stateColor(), _v$16 = TextAttributes3.BOLD, _v$17 = theme().text.muted;
+      var _v$8 = props.width ?? 64, _v$9 = borderColor(), _v$0 = theme().background?.raised?.high, _v$1 = ` ${title()} `, _v$10 = stateColor(), _v$11 = theme().text.faint, _v$12 = theme().text.base, _v$13 = conditionHovered() ? TextAttributes3.BOLD : undefined, _v$14 = theme().text.faint, _v$15 = stateColor(), _v$16 = TextAttributes3.BOLD, _v$17 = theme().text.muted;
       _v$8 !== _p$.e && (_p$.e = _$setProp3(_el$0, "width", _v$8, _p$.e));
       _v$9 !== _p$.t && (_p$.t = _$setProp3(_el$0, "borderColor", _v$9, _p$.t));
       _v$0 !== _p$.a && (_p$.a = _$setProp3(_el$0, "backgroundColor", _v$0, _p$.a));
@@ -2825,7 +2825,7 @@ var tui_default = Plugin.define({
             _$setProp4(_el$5, "onMouseOut", () => setStatusEscHovered(false));
             _$insertNode4(_el$6, _$createTextNode4(`esc`));
             _$effect4((_p$) => {
-              var _v$ = TextAttributes4.BOLD, _v$2 = context.theme.text.base, _v$3 = statusEscHovered() ? context.theme.text.base : context.theme.text.muted, _v$4 = statusEscHovered() ? TextAttributes4.UNDERLINE : undefined;
+              var _v$ = TextAttributes4.BOLD, _v$2 = context.theme.text.base, _v$3 = statusEscHovered() ? context.theme.text.base : context.theme.text.muted, _v$4 = statusEscHovered() ? TextAttributes4.BOLD : undefined;
               _v$ !== _p$.e && (_p$.e = _$setProp4(_el$3, "attributes", _v$, _p$.e));
               _v$2 !== _p$.t && (_p$.t = _$setProp4(_el$3, "fg", _v$2, _p$.t));
               _v$3 !== _p$.a && (_p$.a = _$setProp4(_el$6, "fg", _v$3, _p$.a));
@@ -3274,9 +3274,9 @@ var tui_default = Plugin.define({
           setPulse(false);
         });
         const pillAttrs = () => {
-          const underline = hovered() ? TextAttributes4.UNDERLINE : 0;
+          const hoverBold = hovered() ? TextAttributes4.BOLD : 0;
           const bold = animated() && pulse() && motionOk ? TextAttributes4.BOLD : 0;
-          const attrs = underline | bold;
+          const attrs = hoverBold | bold;
           return attrs === 0 ? undefined : attrs;
         };
         const color = () => {
