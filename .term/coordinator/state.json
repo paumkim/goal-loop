@@ -1537,6 +1537,17 @@
       "submittedAt": "2026-11-16T08:22:41Z",
       "mergedAt": "2026-11-16T08:24:14Z",
       "mergedInto": "dev"
+    },
+    "tui-clear-error-toast": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/tui-clear-error-toast",
+      "worktree": "worktrees/wt-tui-clear-error-toast",
+      "status": "done",
+      "createdAt": "2026-11-16T08:25:07Z",
+      "submittedAt": "2026-11-16T08:25:32Z",
+      "mergedAt": "2026-11-16T08:25:59Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
