@@ -1064,6 +1064,17 @@
       "submittedAt": "2026-11-16T01:48:45Z",
       "mergedAt": "2026-11-16T01:48:55Z",
       "mergedInto": "dev"
+    },
+    "spec-line-refs": {
+      "agent": "opencode",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-line-refs",
+      "worktree": "worktrees/wt-spec-line-refs",
+      "status": "done",
+      "createdAt": "2026-11-16T01:54:21Z",
+      "submittedAt": "2026-11-16T01:55:07Z",
+      "mergedAt": "2026-11-16T01:55:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
