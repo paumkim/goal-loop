@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, pinBudget, footerCopyLabel, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor } from "../src/core/hud.ts"
+import { isCompactHot, pillModel, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, monochrome, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import { GOAL_GLYPH } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
@@ -363,6 +363,34 @@ describe("accent mappers (reduced color)", () => {
     expect(fixAccentColor(theme, "error", true)).toBe(theme.text.base)
     expect(fixAccentColor(theme, "error", false)).toBe(theme.text.feedback.error!.base)
     expect(fixAccentColor(theme, "warning", false)).toBe(theme.text.feedback.warning.base)
+  })
+})
+
+describe("evaluatorHint", () => {
+  const fresh = () => loopedGoal({ turns: 0, history: [], loopIteration: 1, loopHistory: [], reason: undefined, spend: undefined })
+
+  test("a freshly armed goal teaches — looped and plain alike", () => {
+    const hint = evaluatorHint(fresh())
+    expect(hint).not.toBeNull()
+    expect(hint?.card).toBe(EVALUATOR_HINT_CARD)
+    expect(hint?.full).toBe(EVALUATOR_HINT_FULL)
+    // The card cell must fit the 56-cell card interior (64-wide panel minus label and gap).
+    expect(hint?.card.length).toBeLessThanOrEqual(56)
+  })
+
+  test("gone forever after the first turn, the first verdict, or a pause — and when remediation owns the moment", () => {
+    expect(evaluatorHint(loopedGoal({ turns: 0, history: [], loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBeNull()
+    expect(evaluatorHint(loopedGoal({ turns: 1, history: [] }))).toBeNull()
+    expect(evaluatorHint(loopedGoal({ turns: 0, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBeNull()
+    expect(evaluatorHint(loopedGoal({ turns: 0, history: [], status: "paused", pauseCause: "cap" }))).toBeNull()
+    expect(evaluatorHint(loopedGoal({ turns: 0, history: [], status: "achieved" }))).toBeNull()
+    expect(evaluatorHint(loopedGoal({ turns: 0, history: [], status: "failed" }))).toBeNull()
+  })
+
+  test("hudCardRows grows one row for the teaching hint while the goal is fresh", () => {
+    expect(hudCardRows(fresh())).toBe(6)
+    // After the first turn lands, the hint is gone and the card relaxes to its pre-hint size.
+    expect(hudCardRows(loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBe(6)
   })
 })
 

@@ -237,3 +237,21 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   }
   return undefined
 }
+
+/**
+ * The teaching empty state. A freshly armed goal (no turns recorded, no evaluator verdicts, nothing
+ * remedial to act on) is the one moment a user cannot know on their own that the evaluator reads only
+ * what is visible in the conversation — it never runs commands or reads files. One faint line, gone
+ * forever after the first recorded turn. `remediationFor` takes precedence: a goal hot enough to need
+ * the remediation row does not need the onboarding hint. Looped or not — the rule is identical.
+ */
+export const EVALUATOR_HINT_CARD = "the evaluator reads only the transcript"
+export const EVALUATOR_HINT_FULL = "the evaluator reads only the transcript — it cannot run commands; prove the condition with visible output"
+export const evaluatorHint = (goal: GoalSnapshot): { readonly card: string; readonly full: string } | null => {
+  // `evaluating` / `waiting` are boolean flags on an otherwise-`active` record; the hint applies while the status is active.
+  if (goal.status !== "active") return null
+  if (goal.turns > 0) return null
+  if ((goal.history?.length ?? 0) > 0) return null
+  if (remediationFor(goal)) return null
+  return { card: EVALUATOR_HINT_CARD, full: EVALUATOR_HINT_FULL }
+}

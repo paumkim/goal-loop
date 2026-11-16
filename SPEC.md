@@ -9,9 +9,13 @@ the conversation scrolls; a soft bold pulse marks an in-flight evaluation and ne
 reduced motion is requested (NO_COLOR, TERM=dumb). (b) A compact HUD card: a
 bordered floating panel painted above the jump row (absolute box, theme tokens only) with the condition (click
 to copy), the state row (live or terminal), the last verdict, failure-first-class remediation when the loop is hot or failed,
-and clickable `details` / `pin` / `clear goal` / `esc` buttons; Esc dismisses. (c) The `/goal` detail view: a
+and — for a freshly armed goal, before the first turn lands — one teaching line (`hint  the evaluator reads
+only the transcript`): the evaluator never runs commands or reads files, so the condition must be provable from
+the conversation; the row disappears forever after turn 1. (c) The `/goal` detail view: a
+
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
-clickable condition row, the same remediation block, and clickable `copy condition` / `pin condition` / `clear
+clickable condition row, the same remediation block, the same teaching line (`hint  the evaluator reads only the
+transcript — it cannot run commands; prove the condition with visible output`) while the goal is fresh, and clickable `copy condition` / `pin condition` / `clear
 goal` footer buttons (`p` toggles the pin, `c` copies the condition — host toasts do not render above the
 modal, so the copy button acknowledges with a transient `✓ copied` label instead). The footer degrades in two
 steps so it never clips mid-word: above
@@ -434,7 +438,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=691 -->
+<!-- spec-check files=43 tests=697 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
