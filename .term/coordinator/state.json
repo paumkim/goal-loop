@@ -1394,6 +1394,17 @@
       "submittedAt": "2026-11-16T06:53:56Z",
       "mergedAt": "2026-11-16T06:54:18Z",
       "mergedInto": "dev"
+    },
+    "tui-rail-collapse": {
+      "agent": "orchestrator",
+      "paths": "src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-rail-collapse",
+      "worktree": "worktrees/wt-tui-rail-collapse",
+      "status": "done",
+      "createdAt": "2026-11-16T06:55:53Z",
+      "submittedAt": "2026-11-16T06:57:59Z",
+      "mergedAt": "2026-11-16T06:58:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
