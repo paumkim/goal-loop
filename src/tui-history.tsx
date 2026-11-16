@@ -10,7 +10,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
-import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
+import { formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
 import { verdictAccentColor, motionDisabled } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
 
@@ -47,7 +47,8 @@ const colorFor = (theme: HistoryTheme, verdict: Verdict, mono: boolean): ColorIn
  * the summary is the payload a user most often wants verbatim (to paste into a prompt or
  * an issue), so the whole line is the click target — underlined on hover, like the condition row.
  */
-const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean }): JSX.Element => {
+const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean; ascii?: () => boolean }): JSX.Element => {
+  const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const [hovered, setHovered] = createSignal(false)
   const copy = () => {
     if (!props.onCopy) return
@@ -64,7 +65,7 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
       </text>
       <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.UNDERLINE : undefined}>
         {`│ ${truncate(props.text, SUMMARY_MAX)}`}
-        {props.copied?.() ? " ✓ copied" : ""}
+        {props.copied?.() ? (ascii() ? " + copied" : " ✓ copied") : ""}
       </text>
     </box>
   )
@@ -275,7 +276,7 @@ export const LoopSection = (props: {
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>
-              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} />
+              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} ascii={ascii} />
             </Show>
           </box>
           )
@@ -285,7 +286,7 @@ export const LoopSection = (props: {
       <box flexDirection="row" gap={2}>
         {label(theme(), "now")}
         <text wrapMode="none" flexShrink={0} fg={nowColor()} attributes={TextAttributes.BOLD}>
-          ◎
+          {goalGlyph(ascii())}
         </text>
         <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
           {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}`}

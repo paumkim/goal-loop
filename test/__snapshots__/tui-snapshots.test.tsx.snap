@@ -523,7 +523,7 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · mono (NO_COLOR / TERM=dumb — weight and glyphs carry meaning) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
+"┌─ * /goal-loop · v3/5 ────────────────────────────────────────┐                
 │ condition  ship the release notes                            │                
 │ now        active v3/5 ##--- · 4 turns · 12m                 │                
 │ spend      278k in · 25k out · 96k cached · $0.42            │                
@@ -565,7 +565,7 @@ v1          +  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 �
 v2          +  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
                                                                                                     
-now         ◎  v3 · active · 4 turns · 12m elapsed                                · last x this turn
+now         *  v3 · active · 4 turns · 12m elapsed                                · last x this turn
                                                                                                     
 trail       +x++x   5 of 5 verdicts                                                                 
                                                                                                     

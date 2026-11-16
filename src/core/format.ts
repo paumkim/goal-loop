@@ -35,6 +35,10 @@ export function wrapLines(text: string, width: number): number {
 }
 
 export const GOAL_GLYPH = "\u25CE"
+/** ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the goal marker becomes a plain asterisk. */
+export const GOAL_GLYPH_ASCII = "*"
+/** The goal marker for the current surface — demoted under reduced color, never a broken glyph. */
+export const goalGlyph = (ascii: boolean = false): string => (ascii ? GOAL_GLYPH_ASCII : GOAL_GLYPH)
 
 export function formatDuration(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000))

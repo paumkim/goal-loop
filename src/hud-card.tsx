@@ -18,9 +18,9 @@ import stringWidth from "string-width"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { formatDurationCoarse, formatSpend, GOAL_GLYPH, truncate, wrapLines } from "./core/format.ts"
+import { formatDurationCoarse, formatSpend, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint, motionDisabled } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -134,8 +134,8 @@ export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end 
 export const DIALOG_FOOTER_SHORT_HINT = "up/down scroll · p pin · c copy · x older"
 
 /** Copy button label: transient in-modal acknowledgment wins; otherwise full at ≥96 cells, compact below. */
-export const footerCopyLabel = (copied: boolean, roomy: boolean): string =>
-  copied ? "✓ copied" : roomy ? "copy condition" : "copy"
+export const footerCopyLabel = (copied: boolean, roomy: boolean, ascii: boolean = false): string =>
+  copied ? (ascii ? "+ copied" : "✓ copied") : roomy ? "copy condition" : "copy"
 
 /** Pin button label: the object noun stays at the roomy tier across states (`pin condition` ↔ `unpin condition`) so the mouse target barely moves; compact tiers use the bare verbs. */
 export const footerPinLabel = (pinned: boolean, roomy: boolean): string =>
@@ -186,6 +186,7 @@ export const DialogFooter = (props: {
   onClear: () => void
 }): JSX.Element => {
   const dimensions = useTerminalDimensions()
+  const ascii = () => motionDisabled(process.env) || props.mono === true
   const tier = () => dialogFooterTier(dimensions().width, props.copied(), props.pinned())
   const wide = () => tier().wide
   const roomy = () => tier().wide || tier().roomy
@@ -195,7 +196,7 @@ export const DialogFooter = (props: {
         {wide() ? DIALOG_FOOTER_FULL_HINT : DIALOG_FOOTER_SHORT_HINT}
       </text>
       <box flexGrow={1} />
-      <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy())} mono={props.mono} onPress={props.onCopy} />
+      <HudButton theme={props.theme} label={footerCopyLabel(props.copied(), roomy(), ascii())} mono={props.mono} onPress={props.onCopy} />
       <HudButton theme={props.theme} label={footerPinLabel(props.pinned(), roomy())} mono={props.mono} onPress={props.onTogglePin} />
       <HudButton theme={props.theme} label={footerClearLabel(roomy())} mono={props.mono} onPress={props.onClear} />
     </box>
@@ -305,6 +306,7 @@ export const HudCard = (props: {
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
+  const ascii = () => motionDisabled(process.env) || mono()
   const g = () => props.goal
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const looped = () => Boolean(g().loopEnabled)
@@ -315,7 +317,7 @@ export const HudCard = (props: {
   const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1)
   const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops, mono()) : "")
   const title = () =>
-    looped() ? `${GOAL_GLYPH} /goal-loop · v${iteration()}${cap()}` : `${GOAL_GLYPH} /goal`
+    looped() ? `${goalGlyph(ascii())} /goal-loop · v${iteration()}${cap()}` : `${goalGlyph(ascii())} /goal`
   // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first. Under mono the border override or faint — chrome never carries the signal.
   const borderColor = () => borderAccentColor(theme(), g().status, { hot: isCompactHot(g()), stuck: isRetryStuck(g()) }, mono())
   const turns = () => g().turns
