@@ -518,21 +518,24 @@ describe("footerButtonCells / dialogFooterTier", () => {
     }
   })
 
-  test("96 columns drops below roomy for the noun labels — the audit's overflow band closes", () => {
+  test("the compact band prices in BOTH ClampedColumn paddings (width−6) — the audit's A1 frame-accounting fix", () => {
     expect(dialogFooterTier(96, false, false)).toEqual({ wide: false, roomy: false })
     expect(dialogFooterTier(96, false, true)).toEqual({ wide: false, roomy: false })
-    // the copied label is narrower than "copy condition", so a copied button already fits — the tier measures, never assumes
-    expect(dialogFooterTier(96, true, false)).toEqual({ wide: false, roomy: true })
-    expect(dialogFooterTier(97, false, false).roomy).toBe(true)
-    expect(dialogFooterTier(99, false, true).roomy).toBe(true)
+    // the copied label is narrower than "copy condition", so a copied button already fits at 94
+    expect(dialogFooterTier(94, true, false).roomy).toBe(true)
+    expect(dialogFooterTier(99, false, false).roomy).toBe(false)
+    expect(dialogFooterTier(100, false, false).roomy).toBe(true)  // 41 + 53 == width−6
+    expect(dialogFooterTier(101, false, true).roomy).toBe(false)  // unpin condition costs two more cells
+    expect(dialogFooterTier(102, false, true).roomy).toBe(true)   // 41 + 55 == width−6
   })
 
-  test("the full hint unlocks only when the whole row fits the budget", () => {
-    expect(dialogFooterTier(113, false, false).wide).toBe(false)
-    expect(dialogFooterTier(114, true, false).wide).toBe(true)   // copied: 64 + 12 + 17 + 14 + 4 == 111 == budget(114)
-    expect(dialogFooterTier(120, false, false).wide).toBe(true)  // 64 + 18 + 17 + 14 + 4 == 117 == budget(120)
-    expect(dialogFooterTier(121, false, true).wide).toBe(false)  // unpin condition costs two more cells
-    expect(dialogFooterTier(122, false, true).wide).toBe(true)
+  test("the full hint unlocks only when the whole row fits the budget (width−6)", () => {
+    expect(dialogFooterTier(116, true, false).wide).toBe(false)
+    expect(dialogFooterTier(117, true, false).wide).toBe(true)   // copied: 64 + 47 == width−6
+    expect(dialogFooterTier(122, false, false).wide).toBe(false)
+    expect(dialogFooterTier(123, false, false).wide).toBe(true)  // 64 + 53 == width−6
+    expect(dialogFooterTier(124, false, true).wide).toBe(false)  // unpin condition costs two more cells
+    expect(dialogFooterTier(125, false, true).wide).toBe(true)   // 64 + 55 == width−6
     expect(dialogFooterTier(140, false, false)).toEqual({ wide: true, roomy: true })
   })
 })
