@@ -1500,6 +1500,126 @@ function spendSummaryLine(result) {
   return `spend ledger written: ${spend} across ${result.iterations} iteration${result.iterations === 1 ? "" : "s"}`;
 }
 
+// src/core/dossier-index.ts
+import { createHash } from "crypto";
+import { readdirSync, readFileSync, writeFileSync as writeFileSync5 } from "fs";
+import { join as join5, resolve as resolve5 } from "path";
+var pad5 = (n) => String(n).padStart(2, "0");
+var dossierIndexName = (nowMs, attempt = 0) => {
+  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  const stamp = `${valid.getUTCFullYear()}${pad5(valid.getUTCMonth() + 1)}${pad5(valid.getUTCDate())}` + `-${pad5(valid.getUTCHours())}${pad5(valid.getUTCMinutes())}${pad5(valid.getUTCSeconds())}`;
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-dossier-index-${stamp}${suffix}.md`;
+};
+var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
+var KIND_PATTERNS = [
+  ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],
+  ["review", new RegExp(`^goal-dossier-review-${STAMP}\\.md$`)],
+  ["sealed", new RegExp(`^goal-dossier-sealed-${STAMP}\\.md$`)],
+  ["spend ledger", new RegExp(`^goal-spend-ledger-${STAMP}\\.md$`)],
+  ["index", new RegExp(`^goal-dossier-index-${STAMP}\\.md$`)]
+];
+var dossierArtifactKind = (name) => {
+  for (const [kind, pattern] of KIND_PATTERNS) {
+    if (pattern.test(name))
+      return kind;
+  }
+  return;
+};
+function scanDossierArtifacts(dir) {
+  const targetDir = resolve5(dir);
+  const candidates = [];
+  for (const item of readdirSync(targetDir, { withFileTypes: true })) {
+    if (!item.isFile())
+      continue;
+    if (dossierArtifactKind(item.name) === undefined)
+      continue;
+    candidates.push(item.name);
+  }
+  const entries = [];
+  let skipped = 0;
+  for (const name of candidates) {
+    const kind = dossierArtifactKind(name);
+    try {
+      const bytes = readFileSync(join5(targetDir, name));
+      entries.push({ name, kind, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+    } catch {
+      skipped += 1;
+    }
+  }
+  entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  return { entries, skipped };
+}
+function buildDossierIndex(entries, nowMs, skipped = 0) {
+  if (!Number.isInteger(skipped) || skipped < 0)
+    throw new Error(`skipped must be a non-negative integer, got ${skipped}`);
+  const stamp = isoOf(nowMs);
+  const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  const lines = [];
+  lines.push("# Goal dossier index");
+  lines.push("");
+  lines.push(`_Generated ${stamp}. Every row below is a file the dossier family exported into the directory this index was written from, read at generation time: file name, kind, bytes (UTF-8), sha256 of the exact bytes read. The directory path is omitted on purpose. This index inventories; it does not verify \u2014 a file can change after generation and a matching digest here proves nothing about the present._`);
+  lines.push("");
+  lines.push(`## Artifacts (${entries.length} file${entries.length === 1 ? "" : "s"}, ${totalBytes} bytes)`);
+  lines.push("");
+  if (entries.length === 0) {
+    lines.push("None \u2014 the directory holds no exported dossier artifacts the dossier family recognizes. No rows are claimed.");
+    lines.push("");
+  } else {
+    lines.push("| file | kind | bytes | sha256 |", "| --- | --- | ---: | --- |");
+    for (const entry of entries) {
+      lines.push(`| ${inlineCode(entry.name)} | ${entry.kind} | ${entry.bytes} | ${entry.sha256} |`);
+    }
+    lines.push("");
+  }
+  if (skipped > 0) {
+    lines.push(`- ${skipped} matching file${skipped === 1 ? "" : "s"} could not be read (I/O error) and ${skipped === 1 ? "is" : "are"} not listed above; ${skipped === 1 ? "its" : "their"} bytes and digests are unknown, not zero.`);
+    lines.push("");
+  }
+  lines.push("---");
+  lines.push("_opencode-goal dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
+  return {
+    markdown: lines.join(`
+`),
+    artifacts: entries.length,
+    bytes: totalBytes,
+    skipped
+  };
+}
+function exportDossierIndex(nowMs, dir) {
+  const targetDir = resolve5(dir);
+  const scan = scanDossierArtifacts(targetDir);
+  const built = buildDossierIndex(scan.entries, nowMs, scan.skipped);
+  const bytes = Buffer.byteLength(built.markdown, "utf8");
+  for (let attempt = 0;attempt < MAX_EXPORT_ATTEMPTS; attempt++) {
+    const path = join5(targetDir, dossierIndexName(nowMs, attempt));
+    try {
+      writeFileSync5(path, built.markdown, { encoding: "utf8", flag: "wx" });
+      return {
+        path,
+        bytes,
+        attempts: attempt + 1,
+        artifacts: built.artifacts,
+        artifactBytes: built.bytes,
+        skipped: built.skipped
+      };
+    } catch (error) {
+      const code = error?.code;
+      if (code === "EEXIST")
+        continue;
+      throw error;
+    }
+  }
+  throw new Error(`no free dossier index filename after ${MAX_EXPORT_ATTEMPTS} attempts in ${targetDir}`);
+}
+function dossierIndexSummaryLine(result) {
+  const skipped = result.skipped > 0 ? `; ${result.skipped} unreadable (not listed)` : "";
+  if (result.artifacts === 0)
+    return `dossier index written: no artifacts found${skipped}`;
+  return `dossier index written: ${result.artifacts} artifact${result.artifacts === 1 ? "" : "s"}, ${result.artifactBytes} bytes${skipped}`;
+}
+
 // src/core/dossier-attest.ts
 var ANSWERS = new Set(["yes", "no", "unknown"]);
 var cellAnswer = (raw) => {
@@ -1678,8 +1798,8 @@ function selectNewestSealedDossier(entries) {
 }
 
 // src/tui.tsx
-import { readFileSync, readdirSync, statSync } from "fs";
-import { join as join5 } from "path";
+import { readFileSync as readFileSync2, readdirSync as readdirSync2, statSync } from "fs";
+import { join as join6 } from "path";
 
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
@@ -6681,11 +6801,11 @@ var tui_default = Plugin.define({
         const directory = process.cwd();
         let candidates;
         try {
-          candidates = readdirSync(directory).map((name) => {
+          candidates = readdirSync2(directory).map((name) => {
             try {
               return {
                 name,
-                mtimeMs: statSync(join5(directory, name)).mtimeMs
+                mtimeMs: statSync(join6(directory, name)).mtimeMs
               };
             } catch {
               return {
@@ -6717,7 +6837,7 @@ var tui_default = Plugin.define({
         }
         let markdown;
         try {
-          markdown = readFileSync(join5(directory, newest), "utf8");
+          markdown = readFileSync2(join6(directory, newest), "utf8");
         } catch (error) {
           safeToast({
             title: "attest failed",
@@ -6851,6 +6971,29 @@ var tui_default = Plugin.define({
           sessionID
         });
         return;
+      }
+    };
+    const dossierIndexAction = (sessionID) => {
+      try {
+        const result = exportDossierIndex(Date.now(), process.cwd());
+        const summary = dossierIndexSummaryLine(result);
+        const title = result.artifacts === 0 ? "no artifacts found" : result.skipped > 0 ? "index written with gaps" : "dossier index written";
+        const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success";
+        safeToast({
+          title,
+          message: `${result.path} \xB7 ${summary}`,
+          variant,
+          duration: 6000,
+          sessionID
+        });
+      } catch (error) {
+        safeToast({
+          title: "index failed",
+          message: String(error instanceof Error ? error : error).slice(0, 200),
+          variant: "error",
+          duration: 5000,
+          sessionID
+        });
       }
     };
     const requestClearGoal = (sessionID) => {
@@ -7438,6 +7581,17 @@ var tui_default = Plugin.define({
             const sessionID = currentSession();
             const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
             spendLedgerAction(sessionID, goal);
+          } catch {}
+        }
+      }, {
+        id: "goal.dossier.index",
+        title: "Goal: index the exported dossier artifacts (markdown)",
+        group: "Goal",
+        palette: true,
+        enabled: () => true,
+        run: () => {
+          try {
+            dossierIndexAction(currentSession());
           } catch {}
         }
       }, {
