@@ -18,7 +18,7 @@
 <tr><td><span class="chip w">paused</span></td><td>Paused; a user message resumes it. Interrupt (user) or an explicit maxTurns cap pauses it (plain goals only — an armed <code>/goal-loop</code> never pauses at the cap or stall guard; one notice each, the loop keeps running)</td><td><code>src/runtime/controller.ts</code></td></tr>
 <tr><td><span class="chip ok">achieved</span></td><td>Verdict <code>met</code></td><td><code>src/runtime/controller.ts:690</code></td></tr>
 <tr><td><span class="chip e">impossible</span></td><td>Verdict <code>impossible</code></td><td><code>src/runtime/controller.ts:696</code></td></tr>
-<tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:310</code>, <code>src/runtime/controller.ts:399</code></td></tr>
+<tr><td><span class="chip">cleared</span></td><td>User cleared or replaced</td><td><code>src/runtime/controller.ts:310</code>, <code>src/runtime/controller.ts:406</code></td></tr>
 <tr><td><span class="chip e">failed</span></td><td>Fatal error, must fix first (terminal, distinct from cleared)</td><td><code>src/runtime/controller.ts:1053</code></td></tr></tbody></table></div>
 <p>Live states: <code>active</code>, <code>paused</code> (<code>src/core/types.ts:44</code>).</p></section>
 <section id="ports"><h2>Ports</h2><p>Controller depends only on narrow ports, so core stays host-agnostic (<code>src/runtime/ports.ts:2</code>). <code>SessionPort</code>, <code>EvaluatorPort</code>, <code>BackgroundPort</code>, <code>StoragePort</code>, <code>EmitterPort</code>, <code>Clock</code>, <code>Logger</code> (<code>src/runtime/ports.ts:15</code>).</p></section>
