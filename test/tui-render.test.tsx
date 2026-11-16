@@ -2277,6 +2277,123 @@ describe("StatusDialogBody — the record, under seal (the sign row)", () => {
   })
 })
 
+describe("StatusDialogBody — the sealed dossier (the seal row)", () => {
+  const dossierAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "dossier")
+  const sealRowAt = (frame: string): { x: number; y: number } | undefined => findIn(frame, "the record, sealed into a file")
+  const allClean = (unique: number) => ({
+    unique,
+    clean: unique,
+    verification: { checks: [], unique, mentions: unique, present: unique, missing: 0, unknown: 0 },
+    reach: { checks: [], unique, mentions: unique, ancestors: unique, unreached: 0, unknown: 0 },
+    sign: { checks: [], unique, mentions: unique, verified: unique, unverified: 0, unknown: 0 },
+  })
+
+  test("the dossier tab paints a seal row; one click runs the host seal and paints the outcome in place", async () => {
+    let seals = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyDossier={() => {}} onSealDossier={() => { seals += 1; return allClean(2) }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    const row = sealRowAt(frame)
+    expect(row).toBeDefined()
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(seals).toBe(1)
+    expect(setup.captureCharFrame()).toContain("✓ 2/2 sealed")
+    await setup.renderer.destroy()
+  })
+
+  test("mono demotes the pass glyph to + — the counts never demote", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} mono={true} onSealDossier={() => allClean(6)} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = sealRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("+ 6/6 sealed")
+    await setup.renderer.destroy()
+  })
+
+  test("a hard failure paints the cross arm, not the pass — gaps are not a sealed record", async () => {
+    const gap = {
+      unique: 4,
+      clean: 2,
+      verification: { checks: [], unique: 4, mentions: 4, present: 3, missing: 1, unknown: 0 },
+      reach: { checks: [], unique: 4, mentions: 4, ancestors: 3, unreached: 1, unknown: 0 },
+      sign: { checks: [], unique: 4, mentions: 4, verified: 3, unverified: 1, unknown: 0 },
+    }
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onSealDossier={() => gap} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = sealRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("✗ 2 of 4 sealed")
+    await setup.renderer.destroy()
+  })
+
+  test("unknowns only paint the bang arm — git could not answer is never folded into gaps", async () => {
+    const unknownOnly = {
+      unique: 3,
+      clean: 2,
+      verification: { checks: [], unique: 3, mentions: 3, present: 2, missing: 0, unknown: 1 },
+      reach: { checks: [], unique: 3, mentions: 3, ancestors: 3, unreached: 0, unknown: 0 },
+      sign: { checks: [], unique: 3, mentions: 3, verified: 3, unverified: 0, unknown: 0 },
+    }
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onSealDossier={() => unknownOnly} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = sealRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(setup.captureCharFrame()).toContain("! 2 of 3 sealed")
+    await setup.renderer.destroy()
+  })
+
+  test("right click on the seal row is inert — the power button runs nothing", async () => {
+    let seals = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onSealDossier={() => { seals += 1; return allClean(2) }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = sealRowAt(setup.captureCharFrame())
+    await setup.mockMouse.click(row!.x, row!.y, 2)
+    await setup.renderOnce()
+    expect(seals).toBe(0)
+    await setup.renderer.destroy()
+  })
+
+  test("the seal row does not paint when the host leaves it unwired — the document renders exactly as before", async () => {
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("Goal loop dossier")
+    expect(frame).not.toContain("the record, sealed into a file")
+    await setup.renderer.destroy()
+  })
+
+  test("a host that returns undefined runs the click but paints no ack — the row never claims a seal that did not happen", async () => {
+    let seals = 0
+    const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onSealDossier={() => { seals += 1; return undefined }} />, { width: 112, height: 44 })
+    await setup.renderOnce()
+    await setup.mockMouse.click(dossierAt(setup.captureCharFrame())!.x, dossierAt(setup.captureCharFrame())!.y)
+    await setup.renderOnce()
+    const row = sealRowAt(setup.captureCharFrame())
+    expect(row).toBeDefined()
+    await setup.mockMouse.click(row!.x, row!.y)
+    await setup.renderOnce()
+    expect(seals).toBe(1)
+    expect(setup.captureCharFrame()).not.toContain("2/2 sealed")
+    await setup.renderer.destroy()
+  })
+})
+
 describe("StatusDialogBody — find in the record (the dossier spotlight)", () => {
   const dossierProps = () => ({ goal: loopedGoal(), fallback: "fb", theme, elapsedMs: () => 1000 * 60 * 12, nowMs: () => now, view: () => "dossier" as const })
 

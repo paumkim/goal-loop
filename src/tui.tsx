@@ -20,6 +20,7 @@ import { exportLoopDossier } from "./core/dossier-export.ts"
 import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine, type VerifyOutcome } from "./core/verify-record.ts"
 import { gitAncestorProbe, reachRecord, reachReportMarkdown, reachSummaryLine, type ReachOutcome } from "./core/reach-record.ts"
 import { gitSignProbe, signRecord, signReportMarkdown, signSummaryLine, type SignOutcome } from "./core/sign-record.ts"
+import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/dossier-seal.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
@@ -103,7 +104,7 @@ export default Plugin.define({
         const g = goal()
         return g ? elapsedOf(g, entry()?.receivedAt, now()) : 0
       }
-      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyAttestation={(line) => copyToClipboard(line, sessionID, "attestation")} onCopyTally={(line) => copyToClipboard(line, sessionID, "tally")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onSaveDossier={() => { const g = entries()[sessionID]?.goal; exportDossier(sessionID, g) }} onVerifyDossier={() => { const g = entries()[sessionID]?.goal; return verifyRecordAction(sessionID, g) }} onReachDossier={() => { const g = entries()[sessionID]?.goal; return reachRecordAction(sessionID, g) }} onSignDossier={() => { const g = entries()[sessionID]?.goal; return signRecordAction(sessionID, g) }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
+      return <StatusDialogBody goal={goal()} fallback={fallback} theme={context.theme} elapsedMs={elapsed} nowMs={() => now()} onCopyCondition={(condition) => copyToClipboard(condition, sessionID)} onCopyReason={(reason) => copyToClipboard(reason, sessionID, "reason")} onCopySummary={(summary) => copyToClipboard(summary, sessionID, "summary")} onCopyAttestation={(line) => copyToClipboard(line, sessionID, "attestation")} onCopyTally={(line) => copyToClipboard(line, sessionID, "tally")} onCopyVerify={(tail) => copyToClipboard(tail, sessionID, "verify")} onCopyDossier={() => { const g = entries()[sessionID]?.goal; if (g) copyToClipboard(buildLoopDossier(g, Date.now()), sessionID, "dossier") }} onSaveDossier={() => { const g = entries()[sessionID]?.goal; exportDossier(sessionID, g) }} onVerifyDossier={() => { const g = entries()[sessionID]?.goal; return verifyRecordAction(sessionID, g) }} onReachDossier={() => { const g = entries()[sessionID]?.goal; return reachRecordAction(sessionID, g) }} onSignDossier={() => { const g = entries()[sessionID]?.goal; return signRecordAction(sessionID, g) }} onSealDossier={() => { const g = entries()[sessionID]?.goal; return sealRecordAction(sessionID, g) }} onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")} onViewTranscript={(target) => { try { context.ui.router.navigate({ type: "session", sessionID: target }) } catch { /* the host detached — the click is chrome, not a command */ } }} mono={reducedColor} expanded={() => iterationsExpanded()} onToggleExpanded={() => setIterationsExpanded((v) => !v)} view={() => dialogView()} onViewChange={(v) => setDialogView(v)} expandedOthers={() => foreignMoreExpanded()} onToggleExpandedOthers={() => setForeignMoreExpanded((v) => !v)} noticeStale={() => dialogNoticeStale()} others={others()} sessionLabel={sessionLabel} />
     }
     /**
      * Closes the detail dialog the same way the Esc key does: `ui.dialog.clear()` tears down the
@@ -628,6 +629,21 @@ export default Plugin.define({
         return undefined
       }
     }
+    // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
+    const sealRecordAction = (sessionID: string | undefined, goal: GoalSnapshot | null | undefined): SealOutcome | undefined => {
+      if (!goal || !sessionID) return undefined
+      try {
+        const result = exportSealedDossier(goal, Date.now(), process.cwd())
+        const summary = sealSummaryLine(result)
+        const title = result.unique === 0 ? "nothing to seal" : result.clean === result.unique ? "record sealed" : "record sealed with gaps"
+        const variant = result.clean === result.unique ? "success" : "warning"
+        safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
+        return result
+      } catch (error) {
+        safeToast({ title: "seal failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        return undefined
+      }
+    }
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
     // history (the dialog's [clear goal], the card footer button, the danger row in the context menu,
     // and both palette commands). Every clear path funnels through the host's native confirm dialog;
@@ -1123,6 +1139,20 @@ export default Plugin.define({
               const sessionID = currentSession()
               const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
               signRecordAction(sessionID, goal)
+            } catch {}
+          },
+        },
+        {
+          id: "goal.dossier.seal",
+          title: "Goal: seal the dossier with a fresh attestation (file)",
+          group: "Goal",
+          palette: true,
+          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          run: () => {
+            try {
+              const sessionID = currentSession()
+              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+              sealRecordAction(sessionID, goal)
             } catch {}
           },
         },
