@@ -701,7 +701,7 @@ var remediationFor = (goal) => {
   return;
 };
 var EVALUATOR_HINT_CARD = "the evaluator reads only the transcript";
-var EVALUATOR_HINT_FULL = "the evaluator reads only the transcript \u2014 it cannot run commands; prove the condition with visible output";
+var EVALUATOR_HINT_FULL = "the evaluator reads only the transcript - it cannot run commands; prove the condition with visible output";
 var evaluatorHint = (goal) => {
   if (goal.status !== "active")
     return null;
