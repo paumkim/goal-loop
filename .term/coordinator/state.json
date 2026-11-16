@@ -1108,6 +1108,17 @@
       "submittedAt": "2026-11-16T02:22:55Z",
       "mergedAt": "2026-11-16T02:25:30Z",
       "mergedInto": "dev"
+    },
+    "package-integrity-test": {
+      "agent": "opencode",
+      "paths": "test/package-integrity.test.ts,SPEC.md",
+      "branch": "wt/package-integrity-test",
+      "worktree": "worktrees/wt-package-integrity-test",
+      "status": "done",
+      "createdAt": "2026-11-16T02:32:14Z",
+      "submittedAt": "2026-11-16T02:34:17Z",
+      "mergedAt": "2026-11-16T02:34:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
