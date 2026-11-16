@@ -309,7 +309,7 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
     `CONTINUE_RETRY_MS` and the gate in the loop-advance path and shifted every later anchor (controller
     +16, after the loop-advance insertion +29 in total; prompts +6/+5/+2). The 2026-11-15 values
-    (64/82/263/288, `controller.ts:461`) are superseded and recorded in git history. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    (64/82/263/288, controller.ts line 461 at the time) are superseded and recorded in git history. Note the caveat, discovered the hard way: `docs:check` verifies only page
     stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
     points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
     source moves. The README coordinator section documents the `.gitignore` auto-append and the
@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=47 tests=1028 -->
+<!-- spec-check files=47 tests=1033 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4637,3 +4637,44 @@ in-screen; DV is the record, quoted in parts.
      sections. Live-TUI behaviour remains unverifiable from this seat; wiring is
      verified at the source and the headless render/snapshot layers only.
 
+## Workstream DY — the re-anchor rides the system, counted once on the card (2026-11-16)
+
+Status: current. Inputs: `~/Pictures/Screenshots/Screenshot_20261116_105049.png` and
+`Screenshot_20261116_112302.png` (2026-11-16 11:23) — the `◎ goal-loop · re-anchor after compaction` line
+parks above the pill and stacks one per landing (two were visible). The maintainer's ruling: "isn't that
+re-anchor supposed to be happening right away? ... that compaction re-anchor gets it parked, queued or
+somesort" and "redesign it so it doesn't stack up and take up screen display. keep it somewhere by number
+or so. maybe on the side of the hud maybe?"
+
+What the binary says (string-extracted from `~/.opencode/bin/opencode`, v2.3.0 — the source clone is gone):
+- `Durably admit a session compaction request. Steers by default: it runs at the next step boundary instead of waiting behind queued prompts.` —
+  a steer is consumed at the next step boundary of the running execution; a queued item is NOT.
+- `Durably admit synthetic session input and schedule execution unless resume is false.` and
+  `Steering wakes session execution.`
+So `delivery: "queue"` + `resume: false` parked the re-anchor behind the in-flight turn: it landed only when
+some later execution started (typically one iteration late), or never at idle. The visible cost: one transcript
+line per landing, stacking.
+
+What this workstream does (supersedes the delivery side of Workstream W and the "queued steer" wording of BV;
+overlaps DU, whose context-size fix already merged via `wt/context-after-compaction`):
+1. `onCompactionLanded()` no longer emits any synthetic message for the re-anchor. The ground truth is held
+   one-shot in a volatile `pendingAnchors` map; the plugin's `context` hook (always registered, independent of
+   `config.systemReminder`) injects it as a SYSTEM part on the next model request and consumes it. The model
+   gets the full re-statement immediately after the landing; the transcript shows nothing.
+2. `GoalRecord.reanchorCount?` (additive, wire-validated, durable) counts armed re-anchors. The HUD card paints
+   ` · ⟲ N` (mono/ascii: ` · re-anchor N`) as a faint token on the `now` row — looped goals only, hidden at zero
+   and on legacy records. One quiet number instead of a notice per landing. No chord changes, no new row, no
+   dialog chrome; footer stays p/c/x.
+3. `consumeAnchor(sessionID)` is the read-eats-once API; `onSessionDeleted` drops a pending anchor; a restart
+   loses an unconsumed one (one skipped re-anchor, documented, never a crash).
+4. Coalescing (`REANCHOR_MIN_INTERVAL_MS`) unchanged. Plain/terminal/paused loops unchanged (never re-anchored).
+
+Also carried in this workstream: the `docs-line-refs` gate — SPEC.md's historical controller.ts line-461
+single-line citation is reworded to bare text because controller.ts line numbers shift with the reanchor
+rewrite; the gate only tolerates non-empty-line refs.
+
+Verification: `bun run check` green (1011 tests); new assertions in `test/loop.test.ts` (no synthetic re-anchor
+dispatched; one-shot consume; count increments; plain/terminal/paused unaffected; a host rejecting every
+synthetic call cannot break the landing) and `test/tui-context-render.test.tsx` (the `⟲ N` token paints on the
+`now` row; the finite post-compaction size paints; absent at zero). marker bumped (tests=1011).
+Coordinator submit.

@@ -290,12 +290,17 @@ export default Plugin.define({
     await ctx.session.hook("generate", (event) => {
       if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
     })
-    if (config.systemReminder) {
-      await ctx.session.hook("context", (event) => {
+    // One context hook, two possible injections: the standing system reminder (config-gated) and the
+    // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
+    // when the reminder is off; it is invisible on every request except the one after a landing).
+    await ctx.session.hook("context", (event) => {
+      if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
         if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
-      })
-    }
+      }
+      const anchor = controller.consumeAnchor(event.sessionID)
+      if (anchor) event.system.push({ type: "text", text: anchor })
+    })
 
     // ---- event pump with reconnect
     const route = createRouter({ controller, background, log, compactor })
