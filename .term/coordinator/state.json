@@ -1262,6 +1262,17 @@
       "submittedAt": "2026-11-16T05:24:57Z",
       "mergedAt": "2026-11-16T05:25:18Z",
       "mergedInto": "dev"
+    },
+    "tui-80col-floor": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/hud-card.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-80col-floor",
+      "worktree": "worktrees/wt-tui-80col-floor",
+      "status": "done",
+      "createdAt": "2026-11-16T05:30:29Z",
+      "submittedAt": "2026-11-16T05:32:36Z",
+      "mergedAt": "2026-11-16T05:33:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
