@@ -1801,6 +1801,18 @@
       "submittedAt": "2026-11-16T10:44:04Z",
       "mergedAt": "2026-11-16T10:45:22Z",
       "mergedInto": "dev"
+    },
+    "tui-ledger-sha": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts,src/core/git.ts,src/core/wire.ts,src/runtime/controller.ts,src/tui-history.tsx,test/git.test.ts,test/tui-render.test.tsx,SPEC.md,dist,docs/changelog.html",
+      "branch": "wt/tui-ledger-sha",
+      "worktree": "worktrees/wt-tui-ledger-sha",
+      "status": "submitted",
+      "createdAt": "2026-11-16T10:50:40Z",
+      "submittedAt": "2026-11-16T10:56:00Z",
+      "state": "done",
+      "mergedAt": "2026-11-16T10:57:30.463Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
