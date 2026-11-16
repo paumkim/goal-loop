@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=46 tests=992 -->
+<!-- spec-check files=47 tests=1014 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4528,3 +4528,70 @@ doors, and they ride the one controlled signal the other views use.
      ladder are the host's, unchanged. No new chord, no footer furniture, no focus
      stealing; the dossier tab is reachable by mouse (everyone) and by `t` (the
      keyboard twin), and nowhere else.
+
+## Workstream DV — the dossier, quoted in parts: the outline rail (2026-11-16)
+
+Interpretation: DT ships the dossier as one clipboard artifact, DU paints that same
+document in-screen — but both are all-or-nothing. Quoting the verdict trail or the
+verify gate into an issue still meant selecting the rendered text by hand. DV adds a
+mouse-first outline rail to the `dossier` view: one chip per `## ` section of the
+document, left-click copies THAT SECTION's Markdown (the heading included, bytes
+verbatim), the chip acknowledges in place. DT is the record, whole; DU is the record,
+in-screen; DV is the record, quoted in parts.
+
+439. src/core/dossier-outline.ts — `dossierOutline(markdown)`, a pure section slicer
+     (I/O-free, JSX-free, deterministic). Line-oriented with the same fence state
+     machine as `dossierLines` (a line of only backticks runs the fence; a closer must
+     outgrow or match the opener, CommonMark pairing; shorter runs inside are payload),
+     so a fenced `## ` never opens a section. Only flush-left `## ` opens one — `# `,
+     `### `, `> ## ` and `- ## ` do not; the document title never does. Known headings
+     get hand labels (objective, condition, status, iterations, verdicts, compaction,
+     verify, totals; matched by lowercased prefix, tolerating the trailing `(…)` suffix,
+     e.g. `Completed iterations (2)` → `iterations`); unknown headings truncate to 12
+     columns with a trailing …. Each entry carries a stable slug id (lowercase
+     alnum/dash, de-duped `-2`, `-3…` on collision), the 0-based line range, and the
+     section's verbatim bytes (`raw`, heading included, lines joined by `\n`). The
+     sections partition the document from the first `## ` to EOF — consecutive raws
+     rejoin byte-for-byte (asserted in the tests, not in the module). CRLF/CR normalize
+     to LF first.
+440. src/status-dialog.tsx — the `dossier` view gains an optional `onCopyDossierSection
+     (label, raw)` prop. When wired, the document row is wrapped in a horizontal row
+     containing the outline rail (14 columns, one chip per section, before the document
+     column) beside the unchanged `<For each={dossierRows()}>` document. Hover boldens a
+     chip (weight, the NO_COLOR contract — never hue alone); a left-click (button 0,
+     stopPropagation) copies that section; right and middle clicks are inert. The
+     clicked chip paints `✓ copied` (ascii `+ copied`) in base weight for the usual
+     1600ms ack window, same grammar as every row copy. No `copy` suffix on the chip —
+     14 columns cannot carry one honestly; the label is the affordance, hover boldens,
+     and the whole chip is the click target, matching the other rows' grammar.
+     Unwired, the rail does not paint at all (no inert chrome); the document renders
+     exactly as before. No footer change, no new chord, no focus stealing.
+441. Host wiring in src/tui.tsx: `copyLabel` gains `section` ("section copied" /
+     "the quoted dossier section is on the clipboard"), the `what` unions extend to
+     `"section"` in both spots, and the dialog call passes
+     `onCopyDossierSection={(label, raw) => copyToClipboard(raw, sessionID, "section")}`.
+     Nothing else in tui.tsx changes; the keyboard twin story is unchanged (the rail is
+     a pointer surface like every unadvertised affordance).
+442. Tests: +15 pure tests in test/dossier-outline.test.ts (fenced `## ` is payload,
+     CommonMark outgrowing fences, `# `/`### `/`> ## `/`- ## ` never open, loop document
+     section order, the partition/rejoin invariant, raw-starts-with-heading, id
+     de-dupe, ≤ 12-column labels with ellipsis truncation, CRLF/CR parity, the trailing
+     `(…)` tolerance, plus builder-backed cases on a realistic GoalSnapshot: exactly the
+     seven expected sections with reconstruction, the empty verify section still
+     outlined, plain goals outline condition first); +6 mouse render tests in
+     test/tui-render.test.tsx (rail labels in order with the document whole beside it,
+     hover boldens with no underline anywhere, left-click delivers (label, raw) with raw
+     verbatim from `## Verdict trail` to before `## Boundary compaction`, the `✓ copied`
+     ack on the chip, the NO_COLOR `+ copied` demotion, right-click inert, rail absent
+     when unwired); +1 snapshot in test/tui-snapshots.test.tsx (the dossier view with
+     the rail at 100×44; the pre-existing dossier frame snapshot is byte-identical —
+     the unwired rail paints nothing). spec-check files=47 tests=1014.
+443. Honest limits: the rail is inert chrome when the host does not wire
+     `onCopyDossierSection` — hover and click do nothing and the rail does not render.
+     Hover/active state is weight-only; there is no hue to lean on under NO_COLOR/mono.
+     Copying a section quotes bytes verbatim — no re-verification, no re-wrapping, no
+     elision, and the document is always painted in full beside the rail (nothing is
+     hidden behind the chips). Label width is a compromise: unknown headings truncate
+     with … and the tooltip-free rail relies on the click grammar being uniform across
+     sections. Live-TUI behaviour remains unverifiable from this seat; wiring is
+     verified at the source and the headless render/snapshot layers only.

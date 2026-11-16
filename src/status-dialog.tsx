@@ -13,6 +13,7 @@ import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts
 import type { GoalSnapshot } from "./core/types.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
+import { dossierOutline, type DossierOutlineEntry } from "./core/dossier-outline.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
 import { LABEL } from "./core/history.ts"
 
@@ -65,6 +66,8 @@ export const StatusDialogBody = (props: {
   onCopyVerify?: (tail: string) => void
   /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row boldens on hover. */
   onCopyDossier?: (dossier: string) => void
+  /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
+  onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
   onViewTranscript?: (sessionID: string) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
@@ -130,6 +133,8 @@ export const StatusDialogBody = (props: {
     return goal ? buildLoopDossier(goal, props.nowMs()) : undefined
   })
   const dossierRows = createMemo(() => (dossierText() === undefined ? [] : dossierLines(dossierText()!)))
+  // The dossier outline rail: one chip per `## ` section of the rendered document. Only painted when the host wires onCopyDossierSection.
+  const outline = createMemo(() => (dossierText() === undefined ? [] : dossierOutline(dossierText()!)))
   // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter.
   const loopPosition = (goal: GoalSnapshot): string => {
     if (!goal.loopEnabled) return ""
@@ -194,6 +199,7 @@ export const StatusDialogBody = (props: {
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
   const [dossierHovered, setDossierHovered] = createSignal(false)
+  const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
   // The boundary-compaction marker (compaction-landed indicator on the dial the boundary compaction reads). mono drops the hue, ascii demotions live in the text.
@@ -249,6 +255,16 @@ export const StatusDialogBody = (props: {
     try {
       props.onCopyDossier(text)
       acknowledge("dossier")
+    } catch {
+      // Best-effort.
+    }
+  }
+  // A section chip quotes its section, bytes verbatim — the same "the record, whole" contract as the copy row, narrowed to one section.
+  const copySection = (entry: DossierOutlineEntry) => {
+    if (!props.onCopyDossierSection) return
+    try {
+      props.onCopyDossierSection(entry.label, entry.raw)
+      acknowledge(`section:${entry.id}`)
     } catch {
       // Best-effort.
     }
@@ -483,8 +499,26 @@ export const StatusDialogBody = (props: {
                   </Show>
                 </box>
               </Show>
-              <box flexDirection="column" gap={0}>
-                <For each={dossierRows()}>{(line) => dossierRow(line)}</For>
+              <box flexDirection="row" gap={2}>
+                {/* the outline rail — one chip per `## ` section; hover boldens (weight, the NO_COLOR contract), left-click quotes that section verbatim. Inert chrome when the host does not wire the callback: no rail, the document paints exactly as before. No `copy` suffix on the chip — the rail is 14 columns and the label is the affordance; the grammar is the same bolden-on-hover the other rows use */}
+                <Show when={props.onCopyDossierSection}>
+                  <box flexDirection="column" gap={0} flexShrink={0} width={14}>
+                    <For each={outline()}>{(entry) => {
+                      const active = () => copied() === `section:${entry.id}`
+                      const hovered = () => sectionHovered() === entry.id
+                      return (
+                        <box flexDirection="row" gap={1} flexShrink={0} width={14} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copySection(entry) }} onMouseOver={() => setSectionHovered(entry.id)} onMouseOut={() => setSectionHovered(undefined)}>
+                          <text wrapMode="none" fg={hovered() || active() ? theme().text.base : theme().text.faint} attributes={hovered() || active() ? TextAttributes.BOLD : undefined}>
+                            {active() ? (ascii ? "+ copied" : "✓ copied") : entry.label}
+                          </text>
+                        </box>
+                      )
+                    }}</For>
+                  </box>
+                </Show>
+                <box flexDirection="column" gap={0}>
+                  <For each={dossierRows()}>{(line) => dossierRow(line)}</For>
+                </box>
               </box>
             </box>
           </Show>
