@@ -143,6 +143,7 @@ export const LoopSection = (props: {
     return ascii() ? ` · ${mix.met}+ ${mix.not_met}x${mix.impossible > 0 ? ` ${mix.impossible}!` : ""}` : ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}`
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
+  const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.slice(0, 7)}` : "")
   const paused = () => props.goal.status === "paused"
   const stateWord = () => {
     const s = props.goal.status
@@ -277,7 +278,7 @@ export const LoopSection = (props: {
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
                 <text wrapMode="word" flexGrow={1} fg={rowColor}>
-                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}`}
+                  {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " · no tools · inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}`}
                 </text>
               </box>
             <Show when={entry.summary.trim().length > 0}>

@@ -136,6 +136,19 @@ describe("LoopSection", () => {
     expect(bare).not.toContain("arm sizes, oldest→newest")
   })
 
+  test("the rail row names the commit HEAD had landed on (stamped sha)", async () => {
+    const stamped = loopedGoal({
+      loopHistory: [
+        { version: 1, condition: "add a progress bar", summary: "Added an 18-cell block progress bar.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, sha: "a1b2c3d4e5f60718293a4b5c6d7e8f9001122334" },
+        { version: 2, condition: "render the verdict trail", summary: "Trail renders up to 24 verdicts.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12 },
+      ],
+    })
+    const frame = await render(() => <LoopSection goal={stamped} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("a1b2c3d")
+    const bare = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(bare).not.toContain("a1b2c3d")
+  })
+
   test("finished loop renders the final tally row", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ status: "achieved" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
     expect(frame).toContain("final")
