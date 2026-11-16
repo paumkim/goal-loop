@@ -1911,6 +1911,17 @@
       "submittedAt": "2026-11-16T12:27:10Z",
       "mergedAt": "2026-11-16T12:27:48.000Z",
       "mergedInto": "dev"
+    },
+    "tui-work-ledger-accents": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts src/tui-history.tsx src/hud-card.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-work-ledger-accents",
+      "worktree": "worktrees/wt-tui-work-ledger-accents",
+      "status": "done",
+      "createdAt": "2026-11-16T12:31:02Z",
+      "submittedAt": "2026-11-16T12:33:37Z",
+      "mergedAt": "2026-11-16T12:35:13.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
