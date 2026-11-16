@@ -1988,6 +1988,17 @@
       "submittedAt": "2026-11-16T13:13:02Z",
       "mergedAt": "2026-11-16T13:13:27Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-keyboard-layer": {
+      "agent": "orchestrator",
+      "paths": "src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts SPEC.md dist/tui.js docs/changelog.html",
+      "branch": "wt/tui-dialog-keyboard-layer",
+      "worktree": "worktrees/wt-tui-dialog-keyboard-layer",
+      "status": "done",
+      "createdAt": "2026-11-16T13:17:39Z",
+      "submittedAt": "2026-11-16T13:22:10Z",
+      "mergedAt": "2026-11-16T13:22:50.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
