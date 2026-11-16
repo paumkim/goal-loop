@@ -77,6 +77,21 @@ describe("render script smoke tests", () => {
     expect(gridChars(result.stdout)).toBeGreaterThan(200)
   }, 30_000)
 
+  test("render-card.tsx first-impression arms paint the teaching hint and the impossible remedy", () => {
+    const result = run("scripts/render-card.tsx")
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    // freshly armed: zero turns, no history — the hint is the row that teaches the evaluator contract
+    expect(result.stdout).toContain("=== card · freshly armed (teaching hint)")
+    expect(result.stdout).toContain("active 0 turns")
+    expect(result.stdout).toContain("the evaluator reads only the transcript")
+    // impossible: the loud verdict arms the rephrase path
+    expect(result.stdout).toContain("=== card · judged impossible (rephrase or clear)")
+    expect(result.stdout).toContain("impossible 31 turns")
+    expect(result.stdout).toContain("judged impossible")
+    expect(result.stdout).toContain("/goal clear")
+  }, 30_000)
+
   test("render-card.tsx failure-first arms paint the exact remediation, never a vague warning", () => {
     const result = run("scripts/render-card.tsx")
     expect(result.error).toBeUndefined()

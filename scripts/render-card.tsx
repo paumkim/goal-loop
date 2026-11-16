@@ -7,11 +7,12 @@
  *
  * Frames: the active loop (terminal 80 -> the 64-cell card at the 80-column floor), the achieved
  * state, the clamp-floor card at width 52 — the case the spend row's degradation ladder exists
- * for (its dollar figure used to clip mid-figure there) — and three failure-first arms: the hot
- * loop (a boundary compaction pending 2/4 misses, amber border + remediation row), the stuck loop
- * (3 failed turns in a row), and the loudly failed goal. The failure-first contract is the card's
- * whole reason to exist: each arm paints the exact remediation, never a vague warning.
- * --mono prints the same arms under reduced color (NO_COLOR set); glyphs demote to ASCII.
+ * for (its dollar figure used to clip mid-figure there), three failure-first arms (the hot loop —
+ * a boundary compaction pending 2/4 misses, amber border + remediation row — the stuck loop, 3
+ * failed turns in a row, and the loudly failed goal), the freshly armed first-impression arm (the
+ * teaching row a stranger sees first: the evaluator hint, painted for a zero-turn goal and first
+ * to drop under row pressure), and the impossible arm (rephrase or /goal clear). --mono prints
+ * the same arms under reduced color (NO_COLOR set); glyphs demote to ASCII.
  */
 import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
@@ -86,10 +87,13 @@ const mount = async (name: string, goal: GoalSnapshot, terminal: number, width?:
 }
 
 const pendingCompact = { requestedAt: now - 1000 * 60 * 7, estimatedTokens: 512_000, iteration: 31, misses: 2 }
+const fresh = { ...base, turns: 0, history: [], spend: undefined, contextSize: undefined, reason: undefined }
 await mount("=== card · active loop (terminal 80 -> 64-cell card) ===", base, 80)
 await mount("=== card · achieved ===", { ...base, status: "achieved" }, 80)
 await mount("=== card · width 52 (clamp floor, spend ladder) ===", base, 64, 52)
 await mount("=== card · running hot (compaction pending 2/4) ===", { ...base, loopCompact: pendingCompact }, 80)
 await mount("=== card · stuck on retries (3 failed turns) ===", { ...base, retries: 3 }, 80)
 await mount("=== card · failed (loud stop) ===", { ...base, status: "failed", failureLabel: "provider error" }, 80)
+await mount("=== card · freshly armed (teaching hint) ===", fresh, 80)
+await mount("=== card · judged impossible (rephrase or clear) ===", { ...base, status: "impossible" }, 80)
 process.exit(0)
