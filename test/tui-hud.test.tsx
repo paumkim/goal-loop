@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, cardRowPlan, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
@@ -1065,5 +1065,40 @@ describe("zero-work met verdicts across the card, trail and why ledger", () => {
     expect(frame).toContain("○")
     expect(frame).toContain("met")
     await setup.renderer.destroy()
+  })
+})
+
+describe("cardWidth — the fluid card", () => {
+  test("the 64-cell design holds exactly at the 80-column floor; wider terminals expand to the ceiling, narrower compress to the floor", () => {
+    expect(cardWidth(80)).toBe(64)   // the 80-column floor contract: 80 − 16 = 64
+    expect(cardWidth(100)).toBe(84)
+    expect(cardWidth(112)).toBe(88)  // ceiling reached at 104
+    expect(cardWidth(200)).toBe(88)
+    expect(cardWidth(60)).toBe(52)   // floor reached at 68
+    expect(cardWidth(40)).toBe(52)
+    expect(cardWidth(Number.NaN)).toBe(64)   // non-finite input yields the conservative design, never a guess
+    expect(cardWidth(Number.POSITIVE_INFINITY)).toBe(88)
+  })
+
+  test("hudCardRows threads the measured width — a long remediation wraps into fewer rows on a wide card than on a narrow one", () => {
+    const hot = loopedGoal({ loopCompact: { requestedAt: now - 1000 * 60 * 3, iteration: 3, estimatedTokens: 148_000, misses: 2, unmeasurableTicks: 0 } })
+    const narrow = hudCardRows(hot, false, Number.POSITIVE_INFINITY, 52)
+    const wide = hudCardRows(hot, false, Number.POSITIVE_INFINITY, 88)
+    expect(narrow).toBeGreaterThan(wide)
+  })
+
+  test("on a 120-column terminal the condition row shows past the 42-cell default budget", async () => {
+    const marker = "x".repeat(60)
+    const condition = marker + "y".repeat(20)
+    const wide = await testRender(() => <HudCard goal={loopedGoal({ condition })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />, { width: 120, height: 24 })
+    await wide.renderOnce()
+    const wideFrame = wide.captureCharFrame()
+    expect(wideFrame).toContain(marker)          // 88-cell card → 66-cell budget: all 60 x's fit
+    await wide.renderer.destroy()
+    const fixed = await testRender(() => <HudCard goal={loopedGoal({ condition })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} width={64} />, { width: 120, height: 24 })
+    await fixed.renderOnce()
+    const fixedFrame = fixed.captureCharFrame()
+    expect(fixedFrame).toContain("x".repeat(41) + "…")   // explicit override keeps the 64-cell budget: truncates
+    await fixed.renderer.destroy()
   })
 })

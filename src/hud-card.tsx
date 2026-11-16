@@ -43,6 +43,7 @@ export interface HudCardTheme {
   readonly background?: { readonly raised?: { readonly high?: ColorInput } }
 }
 
+/** The 64-cell default's condition/why budget; the live component derives this from its resolved width instead. */
 const CONDITION_MAX = 42
 const stateWord = (goal: GoalSnapshot): string =>
   goal.status === "paused"
@@ -68,11 +69,28 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 4
 
+/** Narrowest card the layout serves: border (2) + padding (2) + LABEL (10) leaves a 38-cell content lane at the floor. */
+export const CARD_WIDTH_MIN = 52
+/** Widest card the layout serves: past this the condition stops being a glance and the card stops being a HUD. */
+export const CARD_WIDTH_MAX = 88
+
 /**
- * Cells available to the remediation text: the 64-cell default card minus the border (2),
- * the horizontal padding (2), the LABEL column (10) and the gap (1). `wrapMode="word"` wraps at this width.
+ * The card's width for a terminal of `terminalWidth` columns. The 64-cell design is preserved exactly at
+ * the 80-column floor (80 − 16 = 64); narrower terminals compress toward CARD_WIDTH_MIN with the same
+ * inner grammar, wider terminals expand to CARD_WIDTH_MAX so a 120-column editor does not stare at a
+ * 64-cell panel in a dead gutter. NaN yields the 64-cell default — a host that cannot report
+ * its size gets the conservative design, never a guess. +/-Infinity clamp to an edge. A `width` prop overrides this entirely.
  */
-export const REMEDIATION_WIDTH = 49
+export const cardWidth = (terminalWidth: number): number => {
+  if (Number.isNaN(terminalWidth)) return 64
+  const fitted = Math.floor(terminalWidth) - 16
+  return Math.max(CARD_WIDTH_MIN, Math.min(CARD_WIDTH_MAX, fitted))
+}
+
+/** Cells available to the remediation text for a card of `width` (border 2, padding 2, LABEL 10, gap 1 = 15). `wrapMode="word"` wraps at this width. */
+export const remediationWidth = (width: number): number => Math.max(24, Math.floor(width) - 15)
+/** Cells available to the condition / why reason at `width` (the 22-cell fixed furniture: border 2, padding 2, LABEL 10, gap 1, right hint slot 7). */
+export const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 22)
 
 export interface CardRowPlan {
   /** Rows the card occupies including the border. */
@@ -92,7 +110,7 @@ export interface CardRowPlan {
 }
 
 /**
- * The one place that decides the card's height. The remediation row wraps at REMEDIATION_WIDTH cells,
+ * The one place that decides the card's height. The remediation row wraps at remediationWidth(width) cells,
  * so its cost is the greedy word wrap of the actual text, never a flat guess. Under `maxRows` — the
  * viewport ceiling the mount computes (mirror of ClampedColumn's `height - 1`) — the plan drops whole
  * optional rows in a fixed, least-essential-first order: the teaching hint, then spend, then the context
@@ -102,10 +120,10 @@ export interface CardRowPlan {
  * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
  * Below maxRows = 9 the card always keeps enough rows to stay dismissible.
  */
-export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): CardRowPlan => {
+export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): CardRowPlan => {
   const remediation = remediationFor(goal)
   const remediationWanted = Boolean(remediation)
-  const remediationRows = remediation ? wrapLines(remediation.text, REMEDIATION_WIDTH) : 0
+  const remediationRows = remediation ? wrapLines(remediation.text, remediationWidth(width)) : 0
   const hintAvailable = Boolean(evaluatorHint(goal))
   const spendAvailable = Boolean(goal.spend)
   const contextAvailable = goal.contextSize !== undefined
@@ -138,7 +156,7 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
 }
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
-export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY): number => cardRowPlan(goal, contextOpen, maxRows).rows
+export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): number => cardRowPlan(goal, contextOpen, maxRows, width).rows
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (stringWidth on both sides; the pill carries multibyte glyphs). */
 export const pinBudget = (terminalWidth: number, pillText: string): number =>
@@ -323,6 +341,10 @@ export const HudCard = (props: {
   const mono = () => props.mono === true
   const ascii = () => motionDisabled(process.env) || mono()
   const g = () => props.goal
+  // Resolved card width: the caller's fixed `width` prop wins; otherwise the card measures the terminal (fluid, clamped CARD_WIDTH_MIN..CARD_WIDTH_MAX, 64 at 80 cols). Inner budgets derive from it.
+  const dimensions = useTerminalDimensions()
+  const width = () => props.width ?? cardWidth(dimensions().width)
+  const conditionCells = () => conditionWidth(width())
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [whyHovered, setWhyHovered] = createSignal(false)
   const looped = () => Boolean(g().loopEnabled)
@@ -370,7 +392,7 @@ export const HudCard = (props: {
   return (
     <box
       flexDirection="column"
-      width={props.width ?? 64}
+      width={width()}
       flexShrink={0}
       border
       borderStyle="single"
@@ -410,7 +432,7 @@ export const HudCard = (props: {
           condition
         </text>
         <text wrapMode="none" flexGrow={1} fg={theme().text.base} attributes={conditionHovered() ? TextAttributes.BOLD : undefined}>
-          {truncate(g().condition, CONDITION_MAX, ascii() ? "..." : "\u2026")}
+          {truncate(g().condition, conditionCells(), ascii() ? "..." : "\u2026")}
         </text>
         <Show when={conditionHovered()}>
           <Hint theme={theme()} text="copy" />
@@ -517,7 +539,7 @@ export const HudCard = (props: {
                 why
               </text>
               <text wrapMode="none" flexGrow={1} fg={whyHovered() && copyable() ? theme().text.base : theme().text.muted} attributes={whyHovered() && copyable() ? TextAttributes.BOLD : undefined}>
-                {truncate(whyReason(), CONDITION_MAX, ascii() ? "..." : "\u2026")}
+                {truncate(whyReason(), conditionCells(), ascii() ? "..." : "\u2026")}
               </text>
               <Show when={whyHovered() && copyable()}>
                 <Hint theme={theme()} text="copy" />
