@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=802 -->
+<!-- spec-check files=43 tests=803 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2818,3 +2818,34 @@ No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check green (802 tests, spec-check
 ok), coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CP — the dialog owns the screen; the card may never arm behind it (2026-11-16)
+
+Interpretation of this iteration: craft and information hierarchy — the symmetric half of
+Workstream CO. CO made every dialog-opening path disarm the card; the disarm alone left the arm
+paths alive: the palette `Goal: toggle card`, the pill's left-click slot handler and the HUD
+Esc layer could all paint/re-arm the card while the status dialog owned the screen, recreating
+the same "card under the modal, Esc layer competing priority-100 with the modal's own Esc" defect
+class from the other direction.
+
+277. src/core/hud.ts: a new exported pure predicate hudArmEnabled(hasGoal, statusDialogOpen) —
+     the single place the rule "a live goal is necessary but never sufficient to paint the card;
+     the status dialog owns the screen" lives. Unit-tested in test/tui-hud.test.tsx (four
+     combinations).
+278. src/tui.tsx: every card-arm site consults it. The palette `goal.hud.toggle` enabled() uses
+     hudArmEnabled(...) AND its run() no-ops while the dialog is open (enabled() is a hint to the
+     host; run() must fail safe). The pill's toggleHud() no-ops while the dialog is open. The HUD
+     Esc layer and its `goal.hud.dismiss` command are disabled entirely while the dialog is open,
+     so Esc behind the modal reaches the modal alone. The pill affordance, clicks for copies,
+     pinning, the card and the dialog are otherwise unchanged.
+279. Evidence: unit-layer for the predicate (four cases), render-layer unchanged (no layout
+     changed), source-layer for the mount wiring (the slot cannot mount headlessly).
+     Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=802 to files=43 tests=803. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched
+by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (92 pass),
+bun run check green, docs-watch refresh committed alongside, coordinator submit + merge-next, and
+bun run check on dev shown green at the end.

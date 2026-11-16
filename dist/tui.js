@@ -507,6 +507,7 @@ var isCompactHot = (goal) => {
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
+var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
 var pillCaret = (open, ascii = false) => open ? ascii ? "v" : "\u25BE" : ascii ? ">" : "\u25B8";
 var fitLadder = (rungs, budget) => {
   for (const rung of rungs) {
@@ -3016,6 +3017,8 @@ var tui_default = Plugin.define({
         };
         const toggleHud = () => {
           try {
+            if (statusDialogOpen())
+              return;
             setContextOpen(false);
             setHudSession((current) => props.sessionID && current === props.sessionID ? undefined : props.sessionID);
           } catch {}
@@ -3124,13 +3127,13 @@ var tui_default = Plugin.define({
     context.keymap.layer(() => ({
       mode: "global",
       priority: 100,
-      enabled: () => getHudSession() !== undefined,
+      enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
       commands: [{
         id: "goal.hud.dismiss",
         title: "Goal HUD: dismiss",
         group: "Goal",
         bind: "escape",
-        enabled: () => getHudSession() !== undefined,
+        enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
         run: () => {
           try {
             setContextOpen(false);
@@ -3278,9 +3281,11 @@ var tui_default = Plugin.define({
         title: "Goal HUD: toggle card",
         group: "Goal",
         palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        enabled: () => hudArmEnabled(Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal), statusDialogOpen()),
         run: () => {
           try {
+            if (statusDialogOpen())
+              return;
             const sessionID = currentSession();
             setContextOpen(false);
             setHudSession((current) => sessionID && current === sessionID ? undefined : sessionID);

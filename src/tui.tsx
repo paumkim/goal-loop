@@ -17,7 +17,7 @@ import { GOAL_GLYPH } from "./core/format.ts"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, isCompactHot, pillMotionNeeded } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { parseChangedEvent, parseGetGoalOutput, parseNotice } from "./core/wire.ts"
@@ -609,6 +609,9 @@ export default Plugin.define({
         }
         const toggleHud = () => {
           try {
+            // While the status dialog owns the screen the pill is a no-op — arming the card
+            // behind the modal re-creates the dialog-behind-card layering bug.
+            if (statusDialogOpen()) return
             setContextOpen(false)
             setHudSession((current) => (props.sessionID && current === props.sessionID ? undefined : props.sessionID))
           } catch {}
@@ -672,17 +675,18 @@ export default Plugin.define({
 
     // Esc dismisses the compact HUD card. Same posture as the dialog scroll layer: only enabled
     // while the card is open, so it never intercepts prompt editing; the host's modal layers own Esc otherwise.
+    // It also disarms while the status dialog owns the screen — the deeper zoom level eats Esc first (no priority contest).
     context.keymap.layer(() => ({
       mode: "global",
       priority: 100,
-      enabled: () => getHudSession() !== undefined,
+      enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
       commands: [
         {
           id: "goal.hud.dismiss",
           title: "Goal HUD: dismiss",
           group: "Goal",
           bind: "escape",
-          enabled: () => getHudSession() !== undefined,
+          enabled: () => getHudSession() !== undefined && !statusDialogOpen(),
           run: () => { try { setContextOpen(false); setHudSession(undefined) } catch {} },
         },
       ],
@@ -811,10 +815,13 @@ export default Plugin.define({
           title: "Goal HUD: toggle card",
           group: "Goal",
           palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          enabled: () => hudArmEnabled(Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal), statusDialogOpen()),
           run: () => {
             // Same effect as clicking the pill: toggle the compact card for the current session.
+            // No-op while the status dialog owns the screen — arming the card behind the modal
+            // would paint it beneath the dialog and re-arm its Esc layer.
             try {
+              if (statusDialogOpen()) return
               const sessionID = currentSession()
               setContextOpen(false)
               setHudSession((current) => (sessionID && current === sessionID ? undefined : sessionID))
