@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=732 -->
+<!-- spec-check files=43 tests=741 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2260,4 +2260,52 @@ files=41 tests=580 to files=41 tests=595. No version bump, no tag, no push; v1.1
 artifact; all work is local on dev.
 
 Verification (all run in the worktree): `cd test && bun test` (595 pass), `bun run check` green, coordinator
+submit + merge-next, and `bun run check` on dev shown green at the end.
+
+## Workstream BW — per-iteration context sparkline (2026-11-16)
+
+Interpretation of this iteration: the loop dialog showed each iteration's duration and wall share, but
+not how the context grew or shrank across iterations — the one thing the boundary-compaction machinery
+measures on every arm. The plugin already estimates the context size at the arm of each iteration
+(tagged with the iteration number on `loopCompact`); it just never landed on the per-iteration record.
+This exposes that measurement as a ledger row. No new estimation is added; the row only renders data the
+plugin already had, and renders the gaps honestly.
+
+231. `LoopEntry` gains an additive optional `contextTokens?: number` — the context size estimated at the
+    arm of that iteration (the boundary-compaction estimate tagged with the iteration, taken from
+    `loopCompact.estimatedTokens` at entry-build time). Stamped only when the tag matches and the value
+    is finite and non-negative; anything else stays absent — never estimated, never fabricated. Absent
+    renders as a `·` gap, never as zero. The wire parser (`isLoopEntry`) accepts the field when finite
+    and rejects non-finite/string values when present; legacy records without it parse unchanged
+    (`test/wire.test.ts`).
+232. The loop dialog renders a `context` row (only when at least one completed entry carries an
+    estimate) between the compact row and the iteration rail: one eighth-block glyph per completed entry
+    (▁..█, scaled to the peak across ALL completed iterations), oldest → newest, a leading `…` past 16
+    bars (the newest are kept), `·` for entries whose arm could not measure the context, and a faint
+    caption `~<peak> peak · arm sizes, oldest→newest`. Colors: bars in base tone, caption faint — no
+    accent, so the row is NO_COLOR-safe by construction. 80-column floor: label 10 + 2 + bars ≤17 + 2 +
+    caption ~30 — about 61 cells.
+233. New pure helper `contextSparkline(entries)` in `src/core/history.ts`, unit-tested for: undefined
+    when no estimate exists anywhere (the row is omitted), peak-relative glyph heights, gaps, trailing
+    gaps skipped for `latest`, SPARK_MAX_CELLS truncation with leading …, zero-peak. The dialog row is
+    render-tested for presence (bars + peak caption) and absence (no estimate → no row)
+    (`test/tui-render.test.tsx`); the stamping path is loop-test tested for both the measurable-arm
+    (v2 entry carries the arm estimate, v1 does not) and the unmeasurable-arm case (no stamp, no
+    fabricated value) (`test/loop.test.ts`).
+234. Honesty boundary: the bars are arm-time estimates, not completion-time, and are estimates of
+    model-visible prompt size (the plugin's own `estimateContextTokens`), not host ground truth; the
+    caption says `arm sizes` so the row cannot be misread as end-of-iteration usage. Loop v1 entries
+    typically lack an estimate (no boundary compaction is requested at the first arm) and render as a gap
+    on legacy records until they age out of the rail. Live verification behind the dead provider is not
+    possible (no verdict ever lands a loop entry); the evidence is unit/loop/render tests at the layers
+    named. Fresh evidence only.
+
+Marker bumped files=43 tests=732 to files=43 tests=741. No version bump, no tag, no push; v1.1.0 remains the live public
+artifact; all work is local on dev. Note on docs line refs: this workstream inserted ~6 lines into
+`src/runtime/controller.ts` at the loop-advance site, shifting every later `controller.ts:NNN` anchor in
+`docs/*.html` (1053, 1082, 1121, 1250 and later) by +6. The refs remain structurally valid (the
+`docs-line-refs` test checks existence and in-bounds ranges only); content re-sync is a docs-lease
+matter and is recorded for the `github-single-channel` lease holder.
+
+Verification (all run in the worktree): `cd test && bun test` (741 pass), `bun run check` green, coordinator
 submit + merge-next, and `bun run check` on dev shown green at the end.

@@ -409,6 +409,33 @@ function durationShares(durations) {
     return durations.map(() => 0);
   return durations.map((span) => Math.round(Math.max(0, Number.isFinite(span) ? span : 0) / total * 100));
 }
+var SPARK_GLYPHS = ["\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2587", "\u2588"];
+var SPARK_MAX_CELLS = 16;
+function contextSparkline(entries) {
+  const estimates = entries.map((entry) => typeof entry.contextTokens === "number" && Number.isFinite(entry.contextTokens) && entry.contextTokens >= 0 ? entry.contextTokens : undefined);
+  const present = estimates.filter((value) => value !== undefined);
+  if (present.length === 0)
+    return;
+  const peak = Math.max(...present);
+  let latest = 0;
+  for (let index = estimates.length - 1;index >= 0; index -= 1) {
+    const value = estimates[index];
+    if (value !== undefined) {
+      latest = value;
+      break;
+    }
+  }
+  const window = estimates.slice(-SPARK_MAX_CELLS);
+  const truncated = window.length < estimates.length;
+  const bars = window.map((value) => {
+    if (value === undefined)
+      return "\xB7";
+    if (peak === 0)
+      return SPARK_GLYPHS[0];
+    return SPARK_GLYPHS[Math.min(7, Math.floor(value / peak * 8))];
+  }).join("");
+  return { bars: (truncated ? "\u2026" : "") + bars, peak, latest, shown: present.length, truncated };
+}
 var CONTEXT_BAR_CELLS = 16;
 var CONTEXT_HOT_RATIO = 0.8;
 function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS) {
@@ -662,6 +689,7 @@ var LoopSection = (props) => {
   const shareSuffix = (index) => shares()[index] === undefined ? "" : ` \xB7 ${shares()[index]}% of wall`;
   const pace = () => paceEstimate(durations(), max());
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt);
+  const spark = () => contextSparkline(history());
   const mixSuffix = (index) => {
     const mix = mixes()[index];
     return mix ? ` \xB7 ${mix.met}\u2713 ${mix.not_met}\u2717${mix.impossible > 0 ? ` ${mix.impossible}\u2298` : ""}` : "";
@@ -801,6 +829,34 @@ var LoopSection = (props) => {
     }), _el$18);
     _$insert(_el$6, _$createComponent(Show, {
       get when() {
+        return spark();
+      },
+      children: (s) => (() => {
+        var _el$29 = _$createElement("box"), _el$30 = _$createElement("text"), _el$31 = _$createElement("text");
+        _$insertNode(_el$29, _el$30);
+        _$insertNode(_el$29, _el$31);
+        _$setProp(_el$29, "flexDirection", "row");
+        _$setProp(_el$29, "gap", 2);
+        _$insert(_el$29, () => label(theme(), "context"), _el$30);
+        _$setProp(_el$30, "wrapMode", "none");
+        _$setProp(_el$30, "flexShrink", 0);
+        _$insert(_el$30, () => s().bars);
+        _$setProp(_el$31, "wrapMode", "none");
+        _$insert(_el$31, () => `~${formatTokens(s().peak)} peak \xB7 arm sizes, oldest\u2192newest`);
+        _$effect((_p$) => {
+          var _v$15 = theme().text.base, _v$16 = theme().text.faint;
+          _v$15 !== _p$.e && (_p$.e = _$setProp(_el$30, "fg", _v$15, _p$.e));
+          _v$16 !== _p$.t && (_p$.t = _$setProp(_el$31, "fg", _v$16, _p$.t));
+          return _p$;
+        }, {
+          e: undefined,
+          t: undefined
+        });
+        return _el$29;
+      })()
+    }), _el$18);
+    _$insert(_el$6, _$createComponent(Show, {
+      get when() {
         return done() > RAIL_VISIBLE;
       },
       get children() {
@@ -843,22 +899,22 @@ var LoopSection = (props) => {
         const zeroTools = entry.toolCalls === 0;
         const rowColor = zeroTools ? theme().text.faint : theme().text.base;
         return (() => {
-          var _el$29 = _$createElement("box"), _el$30 = _$createElement("box"), _el$31 = _$createElement("text"), _el$32 = _$createElement("text");
-          _$insertNode(_el$29, _el$30);
-          _$setProp(_el$29, "flexDirection", "column");
-          _$insertNode(_el$30, _el$31);
-          _$insertNode(_el$30, _el$32);
-          _$setProp(_el$30, "flexDirection", "row");
-          _$setProp(_el$30, "gap", 2);
-          _$insert(_el$30, () => label(theme(), `v${entry.version}`), _el$31);
-          _$setProp(_el$31, "wrapMode", "none");
-          _$setProp(_el$31, "flexShrink", 0);
-          _$insert(_el$31, zeroTools ? "\u25CB" : "\u2713");
-          _$setProp(_el$32, "wrapMode", "word");
-          _$setProp(_el$32, "flexGrow", 1);
-          _$setProp(_el$32, "fg", rowColor);
-          _$insert(_el$32, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}`);
-          _$insert(_el$29, _$createComponent(Show, {
+          var _el$32 = _$createElement("box"), _el$33 = _$createElement("box"), _el$34 = _$createElement("text"), _el$35 = _$createElement("text");
+          _$insertNode(_el$32, _el$33);
+          _$setProp(_el$32, "flexDirection", "column");
+          _$insertNode(_el$33, _el$34);
+          _$insertNode(_el$33, _el$35);
+          _$setProp(_el$33, "flexDirection", "row");
+          _$setProp(_el$33, "gap", 2);
+          _$insert(_el$33, () => label(theme(), `v${entry.version}`), _el$34);
+          _$setProp(_el$34, "wrapMode", "none");
+          _$setProp(_el$34, "flexShrink", 0);
+          _$insert(_el$34, zeroTools ? "\u25CB" : "\u2713");
+          _$setProp(_el$35, "wrapMode", "word");
+          _$setProp(_el$35, "flexGrow", 1);
+          _$setProp(_el$35, "fg", rowColor);
+          _$insert(_el$35, () => `met \xB7 ${entry.turns} turn${entry.turns === 1 ? "" : "s"} \xB7 ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} \xB7 ${formatDuration(durations()[fullIndex()] ?? 0)}${zeroTools ? " \xB7 no tools \xB7 inspection only" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}`);
+          _$insert(_el$32, _$createComponent(Show, {
             get when() {
               return entry.summary.trim().length > 0;
             },
@@ -877,8 +933,8 @@ var LoopSection = (props) => {
               });
             }
           }), null);
-          _$effect((_$p) => _$setProp(_el$31, "fg", zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
-          return _el$29;
+          _$effect((_$p) => _$setProp(_el$34, "fg", zeroTools ? theme().text.faint : mono() ? theme().text.base : theme().text.feedback.info.base, _$p));
+          return _el$32;
         })();
       }
     }), _el$18);
@@ -898,28 +954,28 @@ var LoopSection = (props) => {
         return iterVerdict();
       },
       children: (entry) => (() => {
-        var _el$33 = _$createElement("box"), _el$34 = _$createElement("text"), _el$36 = _$createElement("text"), _el$37 = _$createElement("text");
-        _$insertNode(_el$33, _el$34);
-        _$insertNode(_el$33, _el$36);
-        _$insertNode(_el$33, _el$37);
-        _$setProp(_el$33, "flexDirection", "row");
-        _$setProp(_el$33, "gap", 1);
-        _$setProp(_el$33, "flexShrink", 0);
-        _$insertNode(_el$34, _$createTextNode(`\xB7 last`));
-        _$setProp(_el$34, "wrapMode", "none");
-        _$setProp(_el$36, "wrapMode", "none");
-        _$insert(_el$36, () => verdictGlyph(entry().verdict));
+        var _el$36 = _$createElement("box"), _el$37 = _$createElement("text"), _el$39 = _$createElement("text"), _el$40 = _$createElement("text");
+        _$insertNode(_el$36, _el$37);
+        _$insertNode(_el$36, _el$39);
+        _$insertNode(_el$36, _el$40);
+        _$setProp(_el$36, "flexDirection", "row");
+        _$setProp(_el$36, "gap", 1);
+        _$setProp(_el$36, "flexShrink", 0);
+        _$insertNode(_el$37, _$createTextNode(`\xB7 last`));
         _$setProp(_el$37, "wrapMode", "none");
-        _$insert(_el$37, (() => {
+        _$setProp(_el$39, "wrapMode", "none");
+        _$insert(_el$39, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$40, "wrapMode", "none");
+        _$insert(_el$40, (() => {
           var _c$3 = _$memo(() => turnsSince() === 0);
           return () => _c$3() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
         })());
         _$effect((_p$) => {
-          var _v$15 = theme().text.muted, _v$16 = colorFor(theme(), entry().verdict, mono()), _v$17 = TextAttributes.BOLD, _v$18 = theme().text.faint;
-          _v$15 !== _p$.e && (_p$.e = _$setProp(_el$34, "fg", _v$15, _p$.e));
-          _v$16 !== _p$.t && (_p$.t = _$setProp(_el$36, "fg", _v$16, _p$.t));
-          _v$17 !== _p$.a && (_p$.a = _$setProp(_el$36, "attributes", _v$17, _p$.a));
-          _v$18 !== _p$.o && (_p$.o = _$setProp(_el$37, "fg", _v$18, _p$.o));
+          var _v$17 = theme().text.muted, _v$18 = colorFor(theme(), entry().verdict, mono()), _v$19 = TextAttributes.BOLD, _v$20 = theme().text.faint;
+          _v$17 !== _p$.e && (_p$.e = _$setProp(_el$37, "fg", _v$17, _p$.e));
+          _v$18 !== _p$.t && (_p$.t = _$setProp(_el$39, "fg", _v$18, _p$.t));
+          _v$19 !== _p$.a && (_p$.a = _$setProp(_el$39, "attributes", _v$19, _p$.a));
+          _v$20 !== _p$.o && (_p$.o = _$setProp(_el$40, "fg", _v$20, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -927,7 +983,7 @@ var LoopSection = (props) => {
           a: undefined,
           o: undefined
         });
-        return _el$33;
+        return _el$36;
       })()
     }), null);
     _$insert(_el$6, _$createComponent(Show, {
@@ -1000,36 +1056,36 @@ var VerdictTrail = (props) => {
       return trail().shown.length > 0;
     },
     get children() {
-      var _el$38 = _$createElement("box"), _el$39 = _$createElement("box"), _el$40 = _$createElement("text"), _el$41 = _$createTextNode(` `), _el$42 = _$createTextNode(` of `), _el$43 = _$createTextNode(` verdict`);
-      _$insertNode(_el$38, _el$39);
-      _$insertNode(_el$38, _el$40);
-      _$setProp(_el$38, "flexDirection", "row");
-      _$setProp(_el$38, "gap", 2);
-      _$insert(_el$38, () => label(props.theme, "trail"), _el$39);
-      _$setProp(_el$39, "flexDirection", "row");
-      _$setProp(_el$39, "flexShrink", 0);
-      _$insert(_el$39, _$createComponent(For, {
+      var _el$41 = _$createElement("box"), _el$42 = _$createElement("box"), _el$43 = _$createElement("text"), _el$44 = _$createTextNode(` `), _el$45 = _$createTextNode(` of `), _el$46 = _$createTextNode(` verdict`);
+      _$insertNode(_el$41, _el$42);
+      _$insertNode(_el$41, _el$43);
+      _$setProp(_el$41, "flexDirection", "row");
+      _$setProp(_el$41, "gap", 2);
+      _$insert(_el$41, () => label(props.theme, "trail"), _el$42);
+      _$setProp(_el$42, "flexDirection", "row");
+      _$setProp(_el$42, "flexShrink", 0);
+      _$insert(_el$42, _$createComponent(For, {
         get each() {
           return trail().shown;
         },
         children: (entry) => (() => {
-          var _el$44 = _$createElement("text");
-          _$setProp(_el$44, "wrapMode", "none");
-          _$insert(_el$44, () => verdictGlyph(entry.verdict));
-          _$effect((_$p) => _$setProp(_el$44, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
-          return _el$44;
+          var _el$47 = _$createElement("text");
+          _$setProp(_el$47, "wrapMode", "none");
+          _$insert(_el$47, () => verdictGlyph(entry.verdict));
+          _$effect((_$p) => _$setProp(_el$47, "fg", colorFor(props.theme, entry.verdict, mono()), _$p));
+          return _el$47;
         })()
       }));
-      _$insertNode(_el$40, _el$41);
-      _$insertNode(_el$40, _el$42);
-      _$insertNode(_el$40, _el$43);
-      _$setProp(_el$40, "wrapMode", "none");
-      _$setProp(_el$40, "flexShrink", 0);
-      _$insert(_el$40, () => trail().shown.length, _el$42);
-      _$insert(_el$40, () => trail().total, _el$43);
-      _$insert(_el$40, () => trail().total === 1 ? "" : "s", null);
-      _$effect((_$p) => _$setProp(_el$40, "fg", props.theme.text.muted, _$p));
-      return _el$38;
+      _$insertNode(_el$43, _el$44);
+      _$insertNode(_el$43, _el$45);
+      _$insertNode(_el$43, _el$46);
+      _$setProp(_el$43, "wrapMode", "none");
+      _$setProp(_el$43, "flexShrink", 0);
+      _$insert(_el$43, () => trail().shown.length, _el$45);
+      _$insert(_el$43, () => trail().total, _el$46);
+      _$insert(_el$43, () => trail().total === 1 ? "" : "s", null);
+      _$effect((_$p) => _$setProp(_el$43, "fg", props.theme.text.muted, _$p));
+      return _el$41;
     }
   });
 };
@@ -1053,56 +1109,56 @@ var HistoryBlock = (props) => {
     return parts.join(" \xB7 ");
   };
   return (() => {
-    var _el$45 = _$createElement("box"), _el$46 = _$createElement("box");
-    _$insertNode(_el$45, _el$46);
-    _$setProp(_el$45, "flexDirection", "column");
-    _$setProp(_el$45, "gap", 1);
-    _$setProp(_el$46, "flexDirection", "row");
-    _$setProp(_el$46, "gap", 2);
-    _$insert(_el$46, () => label(theme(), "history"), null);
-    _$insert(_el$46, _$createComponent(Show, {
+    var _el$48 = _$createElement("box"), _el$49 = _$createElement("box");
+    _$insertNode(_el$48, _el$49);
+    _$setProp(_el$48, "flexDirection", "column");
+    _$setProp(_el$48, "gap", 1);
+    _$setProp(_el$49, "flexDirection", "row");
+    _$setProp(_el$49, "gap", 2);
+    _$insert(_el$49, () => label(theme(), "history"), null);
+    _$insert(_el$49, _$createComponent(Show, {
       get when() {
         return last();
       },
       get fallback() {
         return (() => {
-          var _el$47 = _$createElement("text"), _el$48 = _$createTextNode(`no verdicts yet \xB7 `), _el$49 = _$createTextNode(` elapsed`);
-          _$insertNode(_el$47, _el$48);
-          _$insertNode(_el$47, _el$49);
-          _$setProp(_el$47, "wrapMode", "none");
-          _$insert(_el$47, elapsed, _el$49);
-          _$effect((_$p) => _$setProp(_el$47, "fg", theme().text.faint, _$p));
-          return _el$47;
+          var _el$50 = _$createElement("text"), _el$51 = _$createTextNode(`no verdicts yet \xB7 `), _el$52 = _$createTextNode(` elapsed`);
+          _$insertNode(_el$50, _el$51);
+          _$insertNode(_el$50, _el$52);
+          _$setProp(_el$50, "wrapMode", "none");
+          _$insert(_el$50, elapsed, _el$52);
+          _$effect((_$p) => _$setProp(_el$50, "fg", theme().text.faint, _$p));
+          return _el$50;
         })();
       },
       children: (entry) => (() => {
-        var _el$50 = _$createElement("box"), _el$51 = _$createElement("text"), _el$52 = _$createElement("text");
-        _$insertNode(_el$50, _el$51);
-        _$insertNode(_el$50, _el$52);
-        _$setProp(_el$50, "flexDirection", "row");
-        _$setProp(_el$50, "gap", 2);
-        _$setProp(_el$50, "flexGrow", 1);
-        _$setProp(_el$51, "wrapMode", "none");
-        _$setProp(_el$51, "flexShrink", 0);
-        _$insert(_el$51, () => verdictGlyph(entry().verdict));
-        _$setProp(_el$52, "wrapMode", "word");
-        _$setProp(_el$52, "flexGrow", 1);
-        _$insert(_el$52, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
+        var _el$53 = _$createElement("box"), _el$54 = _$createElement("text"), _el$55 = _$createElement("text");
+        _$insertNode(_el$53, _el$54);
+        _$insertNode(_el$53, _el$55);
+        _$setProp(_el$53, "flexDirection", "row");
+        _$setProp(_el$53, "gap", 2);
+        _$setProp(_el$53, "flexGrow", 1);
+        _$setProp(_el$54, "wrapMode", "none");
+        _$setProp(_el$54, "flexShrink", 0);
+        _$insert(_el$54, () => verdictGlyph(entry().verdict));
+        _$setProp(_el$55, "wrapMode", "word");
+        _$setProp(_el$55, "flexGrow", 1);
+        _$insert(_el$55, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$19 = colorFor(theme(), entry().verdict, mono()), _v$20 = TextAttributes.BOLD, _v$21 = theme().text.base;
-          _v$19 !== _p$.e && (_p$.e = _$setProp(_el$51, "fg", _v$19, _p$.e));
-          _v$20 !== _p$.t && (_p$.t = _$setProp(_el$51, "attributes", _v$20, _p$.t));
-          _v$21 !== _p$.a && (_p$.a = _$setProp(_el$52, "fg", _v$21, _p$.a));
+          var _v$21 = colorFor(theme(), entry().verdict, mono()), _v$22 = TextAttributes.BOLD, _v$23 = theme().text.base;
+          _v$21 !== _p$.e && (_p$.e = _$setProp(_el$54, "fg", _v$21, _p$.e));
+          _v$22 !== _p$.t && (_p$.t = _$setProp(_el$54, "attributes", _v$22, _p$.t));
+          _v$23 !== _p$.a && (_p$.a = _$setProp(_el$55, "fg", _v$23, _p$.a));
           return _p$;
         }, {
           e: undefined,
           t: undefined,
           a: undefined
         });
-        return _el$50;
+        return _el$53;
       })()
     }), null);
-    _$insert(_el$45, _$createComponent(VerdictTrail, {
+    _$insert(_el$48, _$createComponent(VerdictTrail, {
       get theme() {
         return theme();
       },
@@ -1113,7 +1169,7 @@ var HistoryBlock = (props) => {
         return mono();
       }
     }), null);
-    return _el$45;
+    return _el$48;
   })();
 };
 
@@ -2098,7 +2154,7 @@ var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
 var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at);
-var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt);
+var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
 var isGoalSnapshot = (value) => {
   if (!isRecord(value))

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, CONTEXT_BAR_CELLS, contextMeter, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, CONTEXT_BAR_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -346,6 +346,43 @@ describe("durationShares", () => {
 
   test("non-finite spans degrade to zero", () => {
     expect(durationShares([Number.NaN, 8_000])).toEqual([0, 100])
+  })
+})
+
+describe("contextSparkline", () => {
+  test("returns undefined when no entry carries a finite non-negative estimate — the row is omitted", () => {
+    expect(contextSparkline([])).toBeUndefined()
+    expect(contextSparkline([{}, {}])).toBeUndefined()
+    expect(contextSparkline([{ contextTokens: Number.NaN }, { contextTokens: Number.POSITIVE_INFINITY }, { contextTokens: -1 }, { contextTokens: "41k" as unknown as number }])).toBeUndefined()
+  })
+
+  test("renders one glyph per entry, gaps as ·, peak-relative heights, newest present as latest", () => {
+    const spark = contextSparkline([{ contextTokens: 10_000 }, {}, { contextTokens: 40_000 }, { contextTokens: 80_000 }])!
+    expect(spark.bars).toBe("▂·▅█")
+    expect(spark.peak).toBe(80_000)
+    expect(spark.latest).toBe(80_000)
+    expect(spark.shown).toBe(3)
+    expect(spark.truncated).toBe(false)
+  })
+
+  test("a present-but-tiny estimate still renders ▁ (present data is not a gap); peak 0 renders all ▁", () => {
+    expect(contextSparkline([{ contextTokens: 0 }, { contextTokens: 0 }])!.bars).toBe("▁▁")
+    expect(contextSparkline([{ contextTokens: 1 }, { contextTokens: 80_000 }])!.bars).toBe("▁█")
+  })
+
+  test("latest skips trailing gaps; middle gaps do not collapse the timeline", () => {
+    const spark = contextSparkline([{ contextTokens: 5_000 }, {}, {}])!
+    expect(spark.latest).toBe(5_000)
+    expect(spark.bars).toBe("█··")
+  })
+
+  test("past SPARK_MAX_CELLS the window keeps the newest entries behind a leading …", () => {
+    const entries = Array.from({ length: SPARK_MAX_CELLS + 4 }, (_, index) => ({ contextTokens: 1_000 * (index + 1) }))
+    const spark = contextSparkline(entries)!
+    expect(spark.truncated).toBe(true)
+    expect(spark.bars.startsWith("…")).toBe(true)
+    expect([...spark.bars.slice(1)]).toHaveLength(SPARK_MAX_CELLS)
+    expect(spark.peak).toBe(1_000 * (SPARK_MAX_CELLS + 4))
   })
 })
 

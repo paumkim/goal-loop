@@ -121,6 +121,21 @@ describe("LoopSection", () => {
     expect(frame).not.toContain("final")
   })
 
+  test("the context row renders arm-size bars per completed iteration and is omitted without estimates", async () => {
+    const withContext = loopedGoal({
+      loopHistory: [
+        { version: 1, condition: "add a progress bar", summary: "Added an 18-cell block progress bar.", reason: "met", turns: 9, toolCalls: 41, endedAt: now - 1000 * 60 * 27, contextTokens: 41_000 },
+        { version: 2, condition: "render the verdict trail", summary: "Trail renders up to 24 verdicts.", reason: "met", turns: 6, toolCalls: 23, endedAt: now - 1000 * 60 * 12, contextTokens: 91_000 },
+      ],
+    })
+    const frame = await render(() => <LoopSection goal={withContext} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("context")
+    expect(frame).toContain("▄█")
+    expect(frame).toContain("~91k peak · arm sizes, oldest→newest")
+    const bare = await render(() => <LoopSection goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(bare).not.toContain("arm sizes, oldest→newest")
+  })
+
   test("finished loop renders the final tally row", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ status: "achieved" })} theme={theme} elapsedMs={() => 1000 * 60 * 39} nowMs={() => now} />)
     expect(frame).toContain("final")

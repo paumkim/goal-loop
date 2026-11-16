@@ -9,7 +9,7 @@
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { For, Show, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
-import { BAR_CELLS, LABEL, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
+import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictGlyph, verdictStreak } from "./core/history.ts"
 import { formatDuration, formatDurationCoarse, formatTokens, truncate } from "./core/format.ts"
 import { verdictAccentColor } from "./core/hud.ts"
 import { COMPACT_MISS_CAP, type GoalSnapshot, type Verdict, type VerdictEntry } from "./core/types.ts"
@@ -118,6 +118,7 @@ export const LoopSection = (props: {
   const shareSuffix = (index: number) => (shares()[index] === undefined ? "" : ` · ${shares()[index]}% of wall`)
   const pace = () => paceEstimate(durations(), max())
   const mixes = () => iterationVerdictMix(props.goal.history ?? [], history(), props.goal.setAt)
+  const spark = () => contextSparkline(history())
   const mixSuffix = (index: number) => {
     const mix = mixes()[index]
     return mix ? ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}` : ""
@@ -218,6 +219,20 @@ export const LoopSection = (props: {
             </box>
           )
         }}
+      </Show>
+      {/* per-iteration context size at arm: each bar is the boundary-compaction estimate measured when that iteration was armed, oldest → newest; a `·` gap marks an unmeasurable arm. Omitted entirely when no entry carries an estimate. */}
+      <Show when={spark()}>
+        {(s) => (
+          <box flexDirection="row" gap={2}>
+            {label(theme(), "context")}
+            <text wrapMode="none" flexShrink={0} fg={theme().text.base}>
+              {s().bars}
+            </text>
+            <text wrapMode="none" fg={theme().text.faint}>
+              {`~${formatTokens(s().peak)} peak · arm sizes, oldest→newest`}
+            </text>
+          </box>
+        )}
       </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; zero-tool iterations render muted — state inspection only, no work produced. Older iterations fold behind one click so a long loop never buries the live row. */}
       <Show when={done() > RAIL_VISIBLE}>

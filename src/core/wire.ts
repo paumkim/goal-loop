@@ -75,7 +75,8 @@ const isLoopEntry = (value: unknown): value is LoopEntry =>
   isString(value.reason) &&
   isFiniteNumber(value.turns) &&
   isFiniteNumber(value.toolCalls) &&
-  isFiniteNumber(value.endedAt)
+  isFiniteNumber(value.endedAt) &&
+  (value.contextTokens === undefined || isFiniteNumber(value.contextTokens))
 
 const isLoopCompact = (value: unknown): value is LoopCompactState =>
   isRecord(value) &&
