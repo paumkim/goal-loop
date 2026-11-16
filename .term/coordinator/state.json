@@ -1009,6 +1009,17 @@
       "submittedAt": "2026-11-16T01:12:03Z",
       "mergedAt": "2026-11-16T01:12:13Z",
       "mergedInto": "dev"
+    },
+    "tui-render-edge-tests": {
+      "agent": "opencode",
+      "paths": "test/tui-render.test.tsx,SPEC.md",
+      "branch": "wt/tui-render-edge-tests",
+      "worktree": "worktrees/wt-tui-render-edge-tests",
+      "status": "done",
+      "createdAt": "2026-11-16T01:15:02Z",
+      "submittedAt": "2026-11-16T01:16:41Z",
+      "mergedAt": "2026-11-16T01:16:54Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
