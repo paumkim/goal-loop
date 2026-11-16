@@ -32,9 +32,12 @@ import { sameDirectory, type GoalStore } from "./store.ts"
  */
 // Re-anchor coalescing shares the compaction cooldown window (same "don't hammer the host" budget).
 const REANCHOR_MIN_INTERVAL_MS = COMPACT_COOLDOWN_MS
-// Consecutive unlanded boundary compactions at which the plugin force re-requests (2). At COMPACT_MISS_CAP
-// (4 misses, src/core/types.ts) it stops asking the host entirely until a landing is observed. Applies to
-// armed loops only; plain goals never request boundary compaction at all.
+// Conditions that name production of a thing: tests/files/merges/commits/artifacts. Used by the zero-tool
+// met-rejection in evaluate(); "all tests pass" included — met with zero tool use is never accepted for these.
+const PRODUCING_CONDITION = /\b(tests?|files?|merge|merged|commit|create|created|implement|write|fix|build|refactor)\b/i
+// Consecutive measurable arms without a landing at which the plugin emits the one host-unwilling warning (2).
+// Past that, re-requests drop to a trickle (every 3rd arm) and COMPACT_MISS_CAP stays as a backstop final warning.
+// Applies to armed loops only; plain goals never request boundary compaction at all.
 const COMPACT_MISS_RETRY = 2
 
 interface ControllerDeps {
@@ -189,54 +192,48 @@ export class GoalController {
   }
 
   /**
-   * Shared drop heuristic: true when the estimated context has dropped to a small fraction of what it was when the
+   * Shared drop heuristic: true when the estimated context has dropped at least 10% from what it was when the
    * boundary request was made (or below an absolute floor when no estimate was recorded). An unknown/unestimable
-   * size is not a drop. Used by the arm-time settle and the compaction-ended event.
+   * size is not a drop. Used by the arm-time settle; the ended event is authoritative and needs no estimate.
+   * Heuristic, not proof: a landed compaction whose context restores large history is invisible to this test,
+   * which is why the ended-event path is preferred.
    */
   private contextDropped(pending: LoopCompactState, size: number | undefined): boolean {
     return size !== undefined && (pending.estimatedTokens === undefined ? size < BOUNDARY_MIN_TOKENS : size <= Math.max(BOUNDARY_MIN_TOKENS, Math.floor(pending.estimatedTokens * BOUNDARY_DROP_FACTOR)))
   }
 
+  /** Reset a pending boundary request to its just-landed form: bookkeeping cleared, misses reset, fresh requests re-enabled. */
+  private landPending(record: GoalRecord, pending: LoopCompactState): void {
+    record.loopCompact = {
+      ...pending,
+      landedAt: this.deps.clock.now(),
+      misses: 0,
+      unmeasurableTicks: undefined,
+      stalenessUnknown: undefined,
+      unwillingWarned: undefined,
+    }
+  }
+
   /**
-   * The host reported a compaction ended for the session. A pending boundary-compaction request is marked landed
-   * only when the estimated context actually dropped since the request was made (evidence-based, same heuristic as
-   * the arm-time settle). A no-op compaction — no estimate, an estimation error, or no drop — counts as a miss
-   * toward the 2-miss re-request and queues no re-anchor (a no-op does not replace history). Notified with a
-   * success notice on a landing; subsequent arms skip the settle check. At the miss cap (4) the tiered warning
-   * below fires one final "Not landing" notice and re-requests suspend until a landing is observed.
+   * The host reported a compaction ended for the session. An ended event is authoritative — it means the host
+   * compacted, so any pending boundary-compaction request is recorded as landed (misses reset, fresh requests
+   * re-enabled, one success notice), regardless of what the size estimate says. The mid-turn landing also
+   * re-anchors a live loop immediately (queued, resume: false) so the impacted iteration stops working off a
+   * context that no longer exists. A landing is never silent. Plain goals are re-anchored nowhere: they carry
+   * no loop ground truth to restore, and plain (non-loop) records never arm boundary requests at all.
    */
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
     const pending = record?.loopCompact
     if (record && pending && !pending.landedAt) {
-      const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
-      // The world may have moved on while the estimate was in flight.
-      if (this.goals.get(sessionID) !== record) return
-      if (this.contextDropped(pending, size)) {
-        record.loopCompact = { ...pending, landedAt: this.deps.clock.now() }
-        try {
-          await this.commit(record)
-        } catch (error) {
-          this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
-        }
-        this.notify(sessionID, "compact", "success", "Compaction landed", `The host compacted the session at the loop boundary; context dropped to ~${size} tokens.`)
-      } else {
-        const misses = pending.misses + 1
-        // Single-source miss accounting: flag this pending so the next arm-time settle does not count the
-        // same unlanded compaction a second time. The flag is cleared by the settle that skips it.
-        record.loopCompact = { ...pending, misses, missesCountedAtEvent: true }
-        try {
-          await this.commit(record)
-        } catch (error) {
-          this.deps.log.warn("compaction-miss record failed to persist", { sessionID, error: errorMessage(error) })
-        }
-        if (misses === COMPACT_MISS_CAP) {
-          this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} compaction attempts; further re-requests are suspended until a landing is observed. The loop keeps running.`)
-        } else if (misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP) {
-          this.notify(sessionID, "compact", "warning", "Compaction pending", `The boundary compaction has not landed after ${misses} compaction attempts; the next armed iteration re-requests (forced past the cooldown).`)
-        }
-        return
+      this.landPending(record, pending)
+      try {
+        await this.commit(record)
+      } catch (error) {
+        this.deps.log.warn("compaction-landed record failed to persist", { sessionID, error: errorMessage(error) })
       }
+      this.deps.log.info("compaction landed via the compaction-ended event", { sessionID })
+      this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session (compaction-ended event); loop boundary state reset.")
     }
     // A landed compaction replaces history with a lossy summary; a live loop re-states its ground truth
     // so the armed condition, the objective and the completed iterations survive the cut. Queued
@@ -662,6 +659,17 @@ export class GoalController {
     }
     if (this.stale(record, runtime, epoch)) return
 
+    // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
+    // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
+    // The "already satisfied at HEAD" wording is exempt: that met is the workstream BT already-satisfied landing,
+    // and rejecting it would strand the loop on a completed condition (the v18 near-duplicate gate is the escape).
+    if (result.verdict === "met" && tools === 0 && PRODUCING_CONDITION.test(record.condition) && !/already satisfied at head/i.test(result.reason ?? "")) {
+      result = {
+        verdict: "not_met" as const,
+        reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
+      }
+    }
+
     // Verifier, not transcriber: a met verdict is not accepted until the configured
     // verification command exits 0 against the current checkout. The output tail rides the
     // not_met reason, so the next turn sees exactly what failed.
@@ -948,64 +956,75 @@ export class GoalController {
     if (this.stale(record, runtime, epoch)) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
-    // an earlier arm is settled first: a landed compaction is recorded as such; one that never landed is
-    // re-requested (forced past the cooldown) at 2 and 3 misses, then SUSPENDED at 4: no further host
-    // requests until a landing is observed (one final "Not landing" warning at the cap crossing).
+    // an earlier arm is settled first, here, before any other bookkeeping: a landed compaction is recorded as
+    // such (success notice, misses reset, fresh requests re-enabled); an unmeasurable context never counts as
+    // a miss nor a landing (one forced re-request at the first unmeasurable tick, then staleness-unknown with
+    // a trickle of at most one forced re-request per 2 arms — never a full suspension); a measurable no-drop
+    // counts a miss — the host-unwilling warning fires once at 2 misses, re-requests drop to a trickle every
+    // 3rd arm, and COMPACT_MISS_CAP stays as a backstop final warning rather than the only signal.
     // An unlanded pending request is NOT re-issued on every arm, and a fresh request is not made on the arm
     // that just observed the landing: every arm stacking a request is what piled up "Nothing to compact yet"
-    // dividers and their re-anchor notes. Only the forced re-request at 2-3 misses (or the first arm after a
-    // landing, or the first arm of the run) goes to the host. The loop keeps running while capped.
+    // dividers and their re-anchor notes. The loop keeps running throughout.
     if (this.deps.compactAtBoundary) {
       const now = clock.now()
       const pending = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
       let force = false
-      let capped = false
       let misses = 0
-      let skipRequest: "landed" | "pending" | "capped" | undefined
+      let staleness = pending?.stalenessUnknown === true
+      let skipRequest: "landed" | "pending" | undefined
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
         if (this.stale(record, runtime, epoch)) return
-        const landed = this.contextDropped(pending, size)
-        if (landed) {
-          record.loopCompact = { ...pending, landedAt: now }
+        if (this.contextDropped(pending, size)) {
+          this.landPending(record, pending)
           skipRequest = "landed"
           await this.commit(record)
           this.notify(sessionID, "compact", "success", "Compaction landed", `Context dropped to ~${size} tokens at the loop boundary.`)
-        } else if (pending.missesCountedAtEvent) {
-          // The compaction-ended event already counted this pending's unlanded observation; count it once.
-          // The ended-event path emitted any pending/capped notice for this count, so the re-request decision
-          // below reuses the count without re-notifying. The flag is consumed by this settle, so the following
-          // arm counts a still-unlanded request normally.
-          record.loopCompact = { ...pending, missesCountedAtEvent: undefined }
-          misses = pending.misses
-          force = misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP
-          capped = misses >= COMPACT_MISS_CAP
-          log.info("loop boundary compact miss already counted at the compaction-ended event; re-using the count", { sessionID, misses, force, capped })
+        } else if (size === undefined) {
+          // Unmeasurable is not a miss and never a landing. Track the streak; the first tick forces one
+          // re-request past cooldown, repeated ticks mark the pending request staleness-unknown — never a
+          // full suspension while the armed iteration is below maxLoops.
+          const unmeasurableTicks = (pending.unmeasurableTicks ?? 0) + 1
+          if (unmeasurableTicks === 1) {
+            record.loopCompact = { ...pending, unmeasurableTicks }
+            force = true
+            log.info("loop boundary compact: context unestimable; one forced re-request past cooldown", { sessionID })
+          } else {
+            if (!staleness) {
+              staleness = true
+              this.notify(sessionID, "compact", "warning", "Compaction landing unknown", "The context size is unavailable, so the boundary compaction cannot be confirmed landed or missed; the loop keeps running with at most one forced re-request per 2 arms.")
+            }
+            record.loopCompact = { ...pending, unmeasurableTicks, stalenessUnknown: true }
+            // At most one forced re-request per 2 arms under unknown staleness; never the hard cap.
+            force = unmeasurableTicks % 2 === 0
+            log.info("loop boundary compact: staleness unknown; re-requesting on the 2-arm trickle", { sessionID, unmeasurableTicks, force })
+          }
           await this.commit(record)
         } else {
           misses = pending.misses + 1
-          record.loopCompact = { ...pending, misses, missesCountedAtEvent: undefined }
-          force = misses >= COMPACT_MISS_RETRY && misses < COMPACT_MISS_CAP
-          capped = misses >= COMPACT_MISS_CAP
-          if (capped) {
-            if (misses === COMPACT_MISS_CAP) {
-              this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} armed iterations; further re-requests are suspended until a landing is observed. The loop keeps running.`)
-            }
-          } else if (force) {
-            this.notify(sessionID, "compact", "warning", "Compaction pending", `The boundary compaction has not landed after ${misses} armed iterations; re-requesting.`)
+          const unwillingWarned = pending.unwillingWarned === true || misses >= COMPACT_MISS_RETRY
+          record.loopCompact = { ...pending, misses, unmeasurableTicks: undefined, stalenessUnknown: undefined, unwillingWarned }
+          if (misses === COMPACT_MISS_RETRY && pending.unwillingWarned !== true) {
+            // The host will not compact (2 measurable arms, no landing): say it once, exactly.
+            this.notify(sessionID, "compact", "warning", "Compaction not landing", "compaction did not land; loop is running hot; consider /compact manually")
+          } else if (misses === COMPACT_MISS_CAP) {
+            // Backstop only: one final warning at the cap crossing; re-requests continue as a trickle.
+            this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} armed iterations; re-requests drop to a trickle every 3rd arm. The loop keeps running.`)
           }
+          // misses 1: silent count. misses 2: forced re-request (just warned). misses >= 3: trickle every 3rd arm.
+          force = misses === COMPACT_MISS_RETRY || misses % 3 === 0
+          log.info("loop boundary compact miss counted at arm", { sessionID, misses, force })
           await this.commit(record)
         }
         if (this.stale(record, runtime, epoch)) return
       }
-      if (capped) skipRequest = "capped"
-      else if (pending && !skipRequest && !force) skipRequest = "pending"
+      if (pending && !skipRequest && !force) skipRequest = "pending"
       if (skipRequest) {
         log.info("loop boundary compact skipped at this arm", { sessionID, reason: skipRequest })
       }
       const result: BoundaryCompactResult =
         skipRequest !== undefined
-          ? { requested: false, reason: skipRequest === "landed" ? "too-small" : skipRequest === "capped" ? "capped" : "cooldown" }
+          ? { requested: false, reason: skipRequest === "landed" ? "too-small" : "cooldown" }
           : await this.deps
               .compactAtBoundary(sessionID, force ? { force: true } : undefined)
               .catch((error): BoundaryCompactResult => {
@@ -1015,7 +1034,13 @@ export class GoalController {
       if (this.stale(record, runtime, epoch)) return
       if (result.requested) {
         // Carry the miss count forward until a compaction actually lands: re-requesting is not evidence of landing.
+        // Reads the post-settle record, not the pre-settle pending: spread it so misses, the once-per-pending
+        // warning flag, and the unmeasurable/staleness state survive the rewrite. The stale estimate is dropped
+        // when the fresh request carries none (it would anchor the drop heuristic to an old number).
+        const settled = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
+        const { estimatedTokens: _staleEstimate, ...carried } = settled ?? {}
         record.loopCompact = {
+          ...carried,
           requestedAt: clock.now(),
           ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
           iteration: nextIteration,

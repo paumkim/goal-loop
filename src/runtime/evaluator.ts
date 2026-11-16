@@ -9,9 +9,10 @@ import {
   summarizeInSession,
 } from "../core/prompts.ts"
 import { renderTranscript } from "../core/transcript.ts"
-import type { CommitPolicy, ModelRef } from "../core/types.ts"
+import type { CommitPolicy, ModelRef, UsageSnapshot } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
+import { truncate } from "../core/format.ts"
 
 interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
@@ -20,6 +21,13 @@ interface EvaluatorDeps {
   modelGenerate(model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
+}
+
+/** Harness-measured facts handed to the evaluator prompts; mirrors the (unexported) shape in core/prompts.ts. */
+interface EvaluationFacts {
+  readonly turn: number
+  readonly elapsedMs: number
+  readonly spend?: UsageSnapshot
 }
 
 export class EvaluationError extends Error {
@@ -50,21 +58,54 @@ export class Evaluator implements EvaluatorPort {
     return (this.inflight.get(sessionID) ?? 0) > 0
   }
 
+  /**
+   * Judge a turn. In `consensus: 2` mode a `met` from the primary judge is not accepted until the *other* judge
+   * (session evaluator <-> independent model) also rules `met`. Any disagreement — or a dead second judge — fails
+   * closed to `not_met` with the disagreement named in the reason string. Opt-in per repo/loop; never a default.
+   */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
     const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
+    const primary = await this.primary(request, facts, signal)
+    if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
+    const secondPath = primary.via === "session" ? "independent" : "session"
+    try {
+      const second = secondPath === "session" ? await this.sessionVerdict(request, facts, signal) : await this.independentVerdict(request, facts, signal)
+      if (second.verdict === "met") return primary.result
+      return {
+        verdict: "not_met",
+        reason: `consensus disagreement: ${primary.via} evaluator ruled met; ${secondPath} evaluator ruled ${second.verdict}${second.reason ? ` (${second.reason})` : ""}; fail closed — met rejected`,
+      }
+    } catch (error) {
+      if (signal.aborted) throw error
+      return { verdict: "not_met", reason: `consensus: ${secondPath} evaluator failed (${truncate(String(error instanceof Error ? error.message : error), 120)}); fail closed — met rejected` }
+    }
+  }
+
+  /** The configured primary path: independent-with-session-fallback, or plain session. Reports which path actually judged. */
+  private async primary(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<{ result: EvaluationResult; via: "session" | "independent" }> {
     const model = this.config.model
     if (this.config.mode === "independent" && model) {
       try {
-        const messages = await this.deps.context(request.sessionID, signal)
-        const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
-        return await this.ask((text) => this.deps.modelGenerate(model, text, signal), prompt)
+        return { result: await this.independentVerdict(request, facts, signal), via: "independent" }
       } catch (error) {
         if (signal.aborted) throw error
         this.log.warn("independent evaluator failed; falling back to session evaluator", { error: String(error) })
       }
     }
+    return { result: await this.sessionVerdict(request, facts, signal), via: "session" }
+  }
+
+  private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
+    const model = this.config.model
+    if (!model) throw new EvaluationError("independent model not configured; set evaluator.model")
+    const messages = await this.deps.context(request.sessionID, signal)
+    const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
+    const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
+    return this.ask((text) => this.deps.modelGenerate(model, text, signal), prompt)
+  }
+
+  private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
     const prompt = evaluateInSession(request.condition, facts, this.commit)
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {

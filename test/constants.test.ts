@@ -9,7 +9,7 @@ import { BOUNDARY_DROP_FACTOR, BOUNDARY_LANDING_GRACE_MS, BOUNDARY_MIN_TOKENS, C
 describe("boundary-compaction constants", () => {
   test("pinned values", () => {
     expect(BOUNDARY_MIN_TOKENS).toBe(10_000)
-    expect(BOUNDARY_DROP_FACTOR).toBe(0.6)
+    expect(BOUNDARY_DROP_FACTOR).toBe(0.9)
     expect(COMPACT_COOLDOWN_MS).toBe(120_000)
     expect(BOUNDARY_LANDING_GRACE_MS).toBe(600_000)
   })

@@ -37,7 +37,7 @@ const loopedSnapshot = (): GoalSnapshot => ({
   loopMaxLoops: 5,
   loopNotProgress: 1,
   loopHistory: [{ version: 1, condition: "v1 done", summary: "s", reason: "r", turns: 3, toolCalls: 7, endedAt: 800 }],
-  loopCompact: { requestedAt: 700, estimatedTokens: 1234, iteration: 2, misses: 2, landedAt: 750, missesCountedAtEvent: true },
+  loopCompact: { requestedAt: 700, estimatedTokens: 1234, iteration: 2, misses: 2, landedAt: 750, unmeasurableTicks: 1, stalenessUnknown: true, unwillingWarned: true },
   spend: { cost: 1, input: 2, output: 3, reasoning: 4, cacheRead: 5, cacheWrite: 6 },
 })
 

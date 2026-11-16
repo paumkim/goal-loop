@@ -58,7 +58,8 @@ While a goal runs, the footer shows its state:
 - **Not met:** the agent gets the reason and starts the next turn on its own.
 - **Met / impossible:** the goal ends and a note is added to the transcript.
 - The evaluator only accepts **fresh evidence**: command output produced at the current HEAD, after the last change — not earlier turns' claims or the agent's own summary. If the agent says tests pass with no test output in front of you, that is **not met**.
-- When `evaluator.verifyCommand` is set, a met verdict is not accepted until the plugin itself runs that command (e.g. `bun run check`) and it exits 0. The evaluator proposes; the verifier disposes. A failing command downgrades the verdict to not-met with the output tail in the reason, so the next turn knows exactly what broke.
+- When `evaluator.verifyCommand` is set, a met verdict is not accepted until the plugin itself runs that command (e.g. `bun run check`) and it exits 0. The evaluator proposes; the verifier disposes. A failing command downgrades the verdict to not-met with the output tail in the reason, so the next turn knows exactly what broke. **A dev loop armed without `evaluator.verifyCommand` is running without the one deterministic guarantee the plugin offers — set it for development loops.**
+- `evaluator.consensus` (default `1`) is the opt-in second opinion: `2` requires two independent judges — the session evaluator and the independent model — to both rule met. Any disagreement, or a second judge that fails or is not configured, fails closed to not-met with the disagreement named in the reason string. It doubles evaluator cost, so enable it per repo/loop, never globally.
 - By default the evaluator reuses the session's cached context, so each check costs little more than a short answer.
 - Finished work has to be committed before the goal counts as met. See [the commit rule](#the-commit-rule).
 
@@ -155,7 +156,8 @@ servers overwriting the live goal records.
    never pause the loop. The model's account of how much work it did is irrelevant to this count.
 3. **Met means verified, not narrated.** The evaluator requires fresh command output at the current HEAD, and
    with `evaluator.verifyCommand` set the plugin itself reruns the check before accepting met. Without the gate,
-   a persuasive transcript that never shows the check passing is still not met.
+   a persuasive transcript that never shows the check passing is still not met. A dev loop armed without
+   `evaluator.verifyCommand` is running without the one deterministic guarantee the plugin offers.
 4. **Probes are read-only.** Launch probe/scratch instances with `OPENCODE_GOAL_PROBE=1` so the plugin never
    writes goal storage; point them at a throwaway checkout. Live sessions are then unaffected by probe accidents.
 5. **Bookkeeping is the merge's job.** Lease records in `.term/coordinator/state.json` are committed by
@@ -201,8 +203,9 @@ All optional, set in `opencode.json`:
 | `evaluator.maxTranscriptChars` | `60000` | Transcript digest budget for the independent evaluator (min 4000) |
 | `evaluator.maxOutputTokens` | `4096` | Verdict answer budget (min 256) |
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
-| `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND` |
+| `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND`. A dev loop armed without it runs without the one deterministic guarantee the plugin offers |
 | `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
+| `evaluator.consensus` | `1` | `2` requires two independent judges (session evaluator + independent model) both ruling met; any disagreement or second-judge failure fails closed to not-met, disagreement named in the reason. Opt-in per repo/loop; doubles evaluator cost |
 | `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default); armed `/goal-loop` runs never pause here — one notice, kept running |
 | `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default); armed `/goal-loop` runs never pause here — one notice, kept running |
 | `checkinMinutes` | `30` | First background check-in; `0` disables idle check-in nudges (automatic retries never stop) |
@@ -212,7 +215,7 @@ All optional, set in `opencode.json`:
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
-| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request is re-requested at 2–3 misses and is suspended entirely at 4 until a landing is observed (one final warning). Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
+| `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary (and on restore of a live goal), so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request warns once at 2 misses ("compaction did not land; loop is running hot; consider /compact manually") and re-requests as a trickle every 3rd arm — the 4-miss cap is a backstop only. An unmeasurable context never counts as a miss (one forced re-request at the first unmeasurable arm, then at most one per 2 arms). Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
@@ -246,19 +249,21 @@ forced re-request (see below) skips only the 2-minute request cooldown; the in-f
 
 **Accepted is not landed.** The host decides the actual compaction point, so the plugin tracks every boundary
 request on the goal record (`loopCompact`: requestedAt, estimated context, iteration, misses). Landing is
-evidence-based: the `session.compaction.ended` event records one only when the estimated context actually
-dropped since the request was made (≤60% of the requested estimate) — a no-op or unestimable compaction counts
-as a miss toward the 2-miss re-request and queues no re-anchor — or the context-size drop is observed at the
-next arm by the same heuristic. A landing is surfaced as a "Compaction landed" notice, in `/goal` output, in the `/goal` detail
+evidence-based and never silent: the `session.compaction.ended` event is authoritative — it records a landing
+regardless of the size estimate and re-anchors a live loop immediately; or a drop of at least 10% is observed
+against the request-time estimate at an arm. A measurable arm with no drop counts a miss. A request that has
+not landed by the second armed iteration triggers the one host-unwilling warning — "compaction did not land;
+loop is running hot; consider /compact manually" — and re-requests (forced past the cooldown, never past the
+busy gate) at that arm and then every 3rd arm; the 4-miss cap remains as a backstop only (one final warning at
+the crossing, then the trickle continues). An unmeasurable context — the host cannot show a number — is never a
+miss and never a landing: the first unmeasurable arm forces one re-request past the cooldown, and repeated
+unmeasurable arms mark the request "staleness unknown" (one warning) with at most one forced re-request per 2
+arms, never a full suspension. A landing is surfaced as a "Compaction landed" notice, in `/goal` output, in the `/goal` detail
 dialog (a `compact` row under the objective while pending or after landing), and in the status line (the footer
 marker carries the miss count while a request is outstanding).
-A request that has not landed by the next two armed iterations is re-requested (forced past the cooldown,
-never past the busy gate) with a "Compaction pending" warning — at the third miss likewise. Once misses reach
-4 with still no landing observed, boundary re-requests are suspended entirely — the host is not asked again
-until a landing is observed (one final "Compaction not landing" warning at the crossing, none afterwards), and
-the loop keeps running regardless. An arm that just recorded the landing, or that has an unlanded request with
-fewer than 2 misses, makes no request at all — arms never stack compactions; only the 2–3-miss re-request
-(and a fresh request on the arm after a landing) goes to the host.
+An arm that just recorded the landing, or that has an unlanded request with fewer than 2 misses, makes no
+request at all — arms never stack compactions; only the trickle re-request (and a fresh request on the arm
+after a landing) goes to the host.
 
 **Compaction cuts the context, not the loop.** When a compaction lands, the history the armed directive, the
 objective and the completed iterations live in is replaced by a lossy summary. The plugin then queues a

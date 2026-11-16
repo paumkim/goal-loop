@@ -49,6 +49,7 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   maxOutputTokens: "evaluator.maxOutputTokens",
   timeoutMs: "evaluator.timeoutMs",
   verifyTimeoutMs: "evaluator.verifyTimeoutMs",
+  consensus: "evaluator.consensus",
   maxTurns: "maxTurns",
   stallTurns: "stallTurns",
   checkinMinutes: "checkinMinutes",
@@ -82,6 +83,8 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.evaluator.verifyCommand
     case "evaluator.verifyTimeoutMs":
       return resolved.evaluator.verifyTimeoutMs
+    case "evaluator.consensus":
+      return resolved.evaluator.consensus
     case "systemReminder":
       return resolved.systemReminder
     case "transcriptNotes":
@@ -119,6 +122,7 @@ const DOC_TO_CODE_NAMES = Object.keys(
       "evaluator.model",
       "evaluator.mode",
       "evaluator.verifyCommand",
+      "evaluator.consensus",
       "systemReminder",
       "transcriptNotes",
       "requireCommit",
@@ -166,6 +170,7 @@ describe("config defaults — documented vs code", () => {
     expect(resolved.evaluator.maxOutputTokens).toBe(DEFAULTS.maxOutputTokens)
     expect(resolved.evaluator.timeoutMs).toBe(DEFAULTS.timeoutMs)
     expect(resolved.evaluator.verifyTimeoutMs).toBe(DEFAULTS.verifyTimeoutMs)
+    expect(resolved.evaluator.consensus).toBe(DEFAULTS.consensus)
     expect(resolved.maxTurns).toBe(DEFAULTS.maxTurns)
     expect(resolved.stallTurns).toBe(DEFAULTS.stallTurns)
     expect(resolved.checkinMinutes).toBe(DEFAULTS.checkinMinutes)
