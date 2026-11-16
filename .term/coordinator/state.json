@@ -1339,6 +1339,17 @@
       "submittedAt": "2026-11-16T06:24:13Z",
       "mergedAt": "2026-11-16T06:24:27Z",
       "mergedInto": "dev"
+    },
+    "tui-copy-reason": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-copy-reason",
+      "worktree": "worktrees/wt-tui-copy-reason",
+      "status": "done",
+      "createdAt": "2026-11-16T06:27:43Z",
+      "submittedAt": "2026-11-16T06:30:38Z",
+      "mergedAt": "2026-11-16T06:30:54Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
