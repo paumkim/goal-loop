@@ -169,6 +169,15 @@ describe("full-frame snapshots (named layout states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
+  test("StatusDialogBody · ledger tab (the history focus view — strip, the state row, the rail, nothing else)", async () => {
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "ledger"} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
   test("StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy)", async () => {
     const downgraded = loopedGoal({
       reason: "Verification `bun run check` did not pass: exit 1: 1 fail\nerror: expected true",
