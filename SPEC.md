@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=44 tests=961 -->
+<!-- spec-check files=44 tests=965 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4377,3 +4377,44 @@ and no remedy at all. The bar does not gate its failure-first promise on the def
      exact text the overview and the card already paint; there is nothing new to click
      (the row stays informational by design, matching the card's compaction markers and
      the elsewhere rows' read-only posture). The `t` chord and the strip are unchanged.
+
+
+## Workstream DS — the verdict trail is a control, not a picture (2026-11-16)
+
+Interpretation: the armed bar's progressive-disclosure clause sketches the verdict
+timeline as the level-(c) timeline, and the why ledger proves the evaluator's last
+three reasons inline. Everything older than three was present in the rail and in the
+trail row, but reachable only as pictures — a colored dot you could stare at, never
+quote. The mouse-first clause asks that what is painted be clickable. The timeline is
+now the scrub surface: every dot in the trail copies THAT turn's exact evaluator
+reason, one left click, mirroring the why ledger's contract and reaching the rest of
+the verdict history the ledger's three-row window cannot quote.
+
+424. src/tui-history.tsx — VerdictTrail dots render one <box> each (1-cell targets).
+     Left-click + stopPropagation copies the dot's reason via the SAME onCopyReason
+     the why ledger uses (no new wiring, no new host contract); right and middle
+     clicks are inert. Dots without a non-empty reason, and the whole trail when the
+     host does not wire onCopyReason, paint exactly as before — no handlers, no
+     hover affordance, pictures stay pictures.
+425. Hover boldens the hovered dot (weight, the same NO_COLOR-safe contract) and the
+     counter text gains a faint ` · turn N` tag; after a copy it reads
+     ` · turn N · ✓ copied` (`+ copied` under ascii). The tag paints only on hover,
+     so every committed frame (overview and the rest of the snapshot matrix) is
+     byte-identical — verified by an empty snapshot diff, not by a blind re-record.
+426. The mono arm keeps weight over hue (hover bold); the ascii arm demotes the glyph
+     exactly as it always did and the tag is words. Nothing rides above the 80-column
+     floor; the tag only extends past the existing counter text on hover.
+427. Tests: +4 interactive (click copies the clicked dot's reason — earlier verdicts
+     reachable, pinned with distinct reasons across two dots; right-click inert;
+     empty-reason dot inert; hover names the turn with no resting tag paint, click
+     adds the copied acknowledgment). The hover assertion anchors on the counter
+     text (`verdicts · turn N`), so the why ledger's own turn furniture cannot
+     false-positive it. spec-check files=44 tests=965.
+428. Honest limits: dots are 1-cell targets — deliberately, the trail is a dense
+     timeline, and individual-turn precision is the entire point; there is nothing
+     new to click away from the reason text itself. No keyboard twin is added (the
+     dialog's ↑/↓/Home/End scroll and the three plugin chords are unchanged; the
+     timeline stays a pointer surface like every unadvertised affordance). The trail
+     still shows at most the 24 most recent verdicts by its pre-existing window;
+     older verdicts remain reachable through the rail's expand fold and the why
+     ledger cap, not through a pagination claim this surface never made.

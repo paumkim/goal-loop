@@ -424,17 +424,55 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
   const mono = () => props.mono === true
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const trail = () => trailWindow(props.history, 24)
+  // The timeline is a control, not a picture: hovering a dot names its turn, clicking copies that
+  // turn's exact evaluator reason. The why ledger inline-quotes only the last three reasons; this
+  // is the deep scrub surface for the rest. Dots without a reason (or without the host wiring) stay
+  // inert pictures. The hover tag paints words only, so the 80-column floor is unaffected and the
+  // resting frame is byte-identical to the historical paint.
+  const [hovered, setHovered] = createSignal<number | null>(null)
+  const [copiedTurn, setCopiedTurn] = createSignal<number | null>(null)
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined
+  onCleanup(() => {
+    if (copiedTimer) clearTimeout(copiedTimer)
+  })
+  const interactive = () => props.onCopyReason !== undefined
+  const hoveredEntry = () => trail().shown.find((entry) => entry.turn === hovered())
+  const copyAt = (entry: VerdictEntry) => {
+    if (!props.onCopyReason || entry.reason.trim().length === 0) return
+    try {
+      props.onCopyReason(entry.reason)
+      setCopiedTurn(entry.turn)
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => setCopiedTurn(null), 1600)
+    } catch {
+      // Best-effort.
+    }
+  }
+  const copyHint = (entry: VerdictEntry): boolean => entry.reason.trim().length > 0
   return (
     <Show when={trail().shown.length > 0}>
       <box flexDirection="column" gap={1}>
         <box flexDirection="row" gap={2}>
           {label(props.theme, "trail")}
           <box flexDirection="row" flexShrink={0}>
-            <For each={trail().shown}>{(entry) => <text wrapMode="none" fg={colorFor(props.theme, entry, mono())}>{verdictEntryGlyph(entry, ascii())}</text>}</For>
+            <For each={trail().shown}>{(entry) => {
+              const copyable = interactive() && copyHint(entry)
+              return (
+                <box flexDirection="row" onMouseUp={copyable ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copyAt(entry) } : undefined} onMouseOver={() => setHovered(entry.turn)} onMouseOut={() => setHovered(null)}>
+                  <text wrapMode="none" fg={colorFor(props.theme, entry, mono())} attributes={hovered() === entry.turn ? TextAttributes.BOLD : undefined}>{verdictEntryGlyph(entry, ascii())}</text>
+                </box>
+              )
+            }}</For>
           </box>
           <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
             {" "}
             {trail().shown.length} of {trail().total} verdict{trail().total === 1 ? "" : "s"}
+            {(() => {
+              const h = hoveredEntry()
+              if (!h) return ""
+              const ack = copiedTurn() === h.turn ? (ascii() ? " · + copied" : " · ✓ copied") : ""
+              return ` · turn ${h.turn}${ack}`
+            })()}
           </text>
         </box>
         <WhyLedger theme={props.theme} history={props.history} mono={props.mono} ascii={props.ascii} onCopyReason={props.onCopyReason} nowMs={props.nowMs} />
