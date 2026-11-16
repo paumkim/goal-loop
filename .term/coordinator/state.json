@@ -1746,6 +1746,17 @@
       "submittedAt": "2026-11-16T10:13:11Z",
       "mergedAt": "2026-11-16T10:13:41Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-reason-chord": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,SPEC.md,dist",
+      "branch": "wt/tui-dialog-reason-chord",
+      "worktree": "worktrees/wt-tui-dialog-reason-chord",
+      "status": "done",
+      "createdAt": "2026-11-16T10:17:37Z",
+      "submittedAt": "2026-11-16T10:21:12Z",
+      "mergedAt": "2026-11-16T10:22:51Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
