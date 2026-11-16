@@ -5,7 +5,7 @@
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
 import stringWidth from "string-width"
-import { COMPACT_MISS_CAP, type GoalSnapshot, type LoopCompactState } from "./types.ts"
+import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type LoopCompactState } from "./types.ts"
 import { formatDurationCoarse, goalGlyph, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
@@ -194,6 +194,32 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
   const text = fitLadder([`${core}${turns}${retrying}`, `${core}${turns}`, core], budget, ascii ? "..." : "\u2026")
   return { text, tone }
 }
+
+/**
+ * A cached live snapshot older than this is re-pulled on the TUI tick. The ambient pill paints from
+ * the entries cache and nothing else: one dropped `changed` event strands "goal checking · Nm" on the
+ * jump row forever, because the cache never re-pulls on its own. Thirty seconds is far longer than the
+ * events a working goal emits (turn boundaries, tool-call commit hooks) yet short enough that a stale
+ * "checking" line converges to the server's terminal truth within a tick or two.
+ */
+export const STALE_LIVE_ENTRY_MS = 30_000
+
+/**
+ * Sessions whose cached snapshot still reads live (active or paused) and has not been refreshed for
+ * `minAgeMs`. Pure: the caller decides what to do with the ids — tui.tsx re-pulls them through the
+ * normal `changed` intake, so a terminal (or cleared, null) response arms the acknowledgment pill
+ * and the stale chrome converges instead of lying indefinitely. `receivedAt` absent counts as infinitely
+ * stale — never proven fresh, always worth one re-pull. Fresh live snapshots are left alone, so healthy
+ * chatty goals cost nothing.
+ */
+export const staleLiveSessionIDs = (
+  entries: Readonly<Record<string, { readonly goal?: GoalSnapshot | null | undefined; readonly receivedAt?: number | undefined }>>,
+  nowMs: number,
+  minAgeMs: number = STALE_LIVE_ENTRY_MS,
+): string[] =>
+  Object.entries(entries)
+    .filter(([, entry]) => entry?.goal != null && isLive(entry.goal.status) && nowMs - (entry.receivedAt ?? 0) >= minAgeMs)
+    .map(([sessionID]) => sessionID)
 
 /**
  * How long a terminal acknowledgment pill lingers on the jump row after a live→terminal transition.

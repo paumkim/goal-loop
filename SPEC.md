@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1308 -->
+<!-- spec-check files=59 tests=1314 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5600,3 +5600,33 @@ family's exported artifacts and writes ONE O_EXCL markdown index — file name, 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=57 tests=1270.
 <!-- spec-check files=59 tests=1307 -->
+
+## Workstream EL — the jump row stops lying once the goal ends (2026-11-16)
+
+Interpretation of the mouse-first clause: the ambient pill on the jump row paints from the TUI's
+entries cache and nothing else. The cache refreshes on mount and on `changed` events, never on its
+own; one dropped event (bus gap, missed subscription, a terminal payload the client could not parse)
+and the row shows `goal checking · Nm` — extrapolation of a pre-terminal snapshot, growing forever —
+long after the goal achieved and the acknowledgment window closed. The 2026-11-16 17:24 screenshot is
+exactly that: the transcript says `Goal achieved (turn 1, 7m 21s).` while the pill still reads
+`goal checking · 56m`.
+507. src/core/hud.ts — `STALE_LIVE_ENTRY_MS` (30s) and the pure `staleLiveSessionIDs(entries, nowMs,
+     minAgeMs?)`: sessions whose cached snapshot still reads live (active or paused) and has not been
+     refreshed for the floor. `receivedAt` absent counts as infinitely stale (never proven fresh,
+     always worth one re-pull); fresh live snapshots cost nothing. Pure, unit-tested headlessly.
+508. src/tui.tsx — the existing fifteen-second tick re-pulls those sessions through the normal
+     `refresh`/`changed` intake (`void refresh(sessionID).catch(() => {})`). A server-side terminal
+     (or cleared, null) response flows through the same intake that already arms the acknowledgment
+     pill — `put` sees the live→terminal transition, `noteTerminal` keeps the 45s acknowledgment, then
+     the pill converges. No new socket, no new state; the stale chrome can no longer outlive one tick
+     plus one RPC.
+509. Tests: +6 unit (staleLiveSessionIDs — stale active re-pulled, fresh left alone, paused included,
+     terminal/null excluded, missing receivedAt infinitely stale, floor configurable). The pre-terminal
+     extrapolation (`elapsedOf`) is unchanged — it stays correct for fresh caches; the guard bounds how
+     long the cache may stay unproven. Tests: 1314 pass, 0 fail (52 files). Marker re-counted 59/1314.
+510. Honest limits: convergence within one tick plus one round-trip is not instantaneous; a server
+     that is reachable but answers with a still-live snapshot honestly keeps the pill (it IS live);
+     a server that never answers keeps the last cache — no chrome is invented, none is hidden either;
+     the fix rides the 15s tick, so a paused goal re-pulls at the same cadence as an active one.
+
+<!-- spec-check files=59 tests=1314 -->
