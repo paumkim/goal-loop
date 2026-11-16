@@ -682,6 +682,13 @@ var verdictEntryAccentColor = (theme, entry, mono) => {
     return theme.text.feedback.warning.base;
   return verdictAccentColor(theme, entry.verdict, false);
 };
+var achievedAckAccentColor = (theme, history, mono = false) => {
+  if (mono)
+    return theme.text.base;
+  const last = history && history.length > 0 ? history[history.length - 1] : undefined;
+  const worked = last?.verdict === "met" && typeof last.toolCalls === "number" && last.toolCalls > 0;
+  return worked ? theme.text.feedback.success?.base ?? theme.text.feedback.info.base : theme.text.feedback.info.base;
+};
 var fixAccentColor = (theme, tone, mono) => {
   if (mono)
     return theme.text.base;
@@ -3629,8 +3636,10 @@ var tui_default = Plugin.define({
             return context.theme.text.feedback.warning.base;
           if (tone === "failed")
             return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base;
-          if (tone === "achieved" || tone === "evaluating" || tone === "waiting")
+          if (tone === "evaluating" || tone === "waiting")
             return context.theme.text.feedback.info.base;
+          if (tone === "achieved")
+            return achievedAckAccentColor(context.theme, (terminal() ?? goal())?.history, false);
           return context.theme.text.muted;
         };
         const cardFor = () => {

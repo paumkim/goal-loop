@@ -280,6 +280,20 @@ export const verdictEntryAccentColor = <C>(theme: NeutralTheme<C>, entry: { verd
   return verdictAccentColor(theme, entry.verdict, false)
 }
 
+/**
+ * The just-achieved acknowledgment pill — the split second the user watches for. A recorded met verdict that MEASURED work flashes green on hosts exposing success (the pre-existing info blue everywhere else); a zero-work satisfaction at HEAD, an absent/unreadable history, or a non-met final verdict all stay info blue — the flash never claims work it cannot see. Mono paints base (met's mono posture in the accent mappers); reduced-color callers short-circuit before this runs.
+ */
+export const achievedAckAccentColor = <C>(
+  theme: NeutralTheme<C>,
+  history: readonly { readonly verdict: string; readonly toolCalls?: number }[] | undefined,
+  mono: boolean = false,
+): C => {
+  if (mono) return theme.text.base
+  const last = history && history.length > 0 ? history[history.length - 1] : undefined
+  const worked = last?.verdict === "met" && typeof last.toolCalls === "number" && last.toolCalls > 0
+  return worked ? (theme.text.feedback.success?.base ?? theme.text.feedback.info.base) : theme.text.feedback.info.base
+}
+
 /** Remediation (`fix`) row accent. Mono: `base` — the remedy is exact either way, the tone never is. */
 export const fixAccentColor = <C>(theme: NeutralTheme<C>, tone: "warning" | "error", mono: boolean): C => {
   if (mono) return theme.text.base

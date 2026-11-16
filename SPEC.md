@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=883 -->
+<!-- spec-check files=43 tests=884 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3760,3 +3760,30 @@ Verification (all run in the worktree): bun test (883 pass, 0 fail, snapshots by
 bun run compile, bun run check end-to-end green incl. spec-check (43/883). Evidence is source +
 test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: spend in
 the goal-dialog verdict sections; the pill's landing-flash ledger hue.
+
+## Workstream CQ — the completion flash speaks the ledger grammar (2026-11-16)
+
+Interpretation of this iteration: CO moved the three-way work-ledger grammar (work produced green,
+already-satisfied-at-HEAD blue, state-inspection amber) onto every verdict surface — the trail,
+the why ledger, the rail glyph, the card's last-verdict row — but the one surface the user
+watches MOST at the win moment, the ambient pill's just-achieved acknowledgment flash, still
+painted plain info blue regardless of whether the loop produced evidence.
+
+360. src/core/hud.ts — new exported achievedAckAccentColor(theme, history, mono): the last
+     recorded verdict decides. A met verdict with MEASURED toolCalls > 0 paints success green
+     (info fallback on hosts without the token — the CO idiom); a zero-tool met, absent or empty
+     history, an absent toolCalls count, or a non-met final verdict all stay info blue; mono
+     paints base. Never fabricates work.
+361. src/tui.tsx — the pill's achieved arm of color() splits from evaluating/waiting (both stay
+     info) and resolves the achieved ack from the frozen acknowledgment snapshot
+     (terminal() ?? goal()).history through achievedAckAccentColor, host-theme double-cast per
+     the file's existing idiom. The bold-flip pulse, the ACK_FLASH_MS window, and the reduced-color
+     short-circuit are untouched — hue only, motion unchanged.
+362. Tests: tui-hud.test.tsx accent mappers +1 (worked met green / absent-success fallback info /
+     satisfied-at-HEAD info / unknown toolCalls info / absent and empty history info / non-met
+     final verdict info / mono base). Spec-check marker files=43 tests=883 -> 884.
+
+Verification (all run in the worktree): bun test (884 pass, 0 fail, snapshots byte-stable),
+bun run compile, bun run check end-to-end green incl. spec-check (43/884). Evidence is source +
+test-render layers; live TUI remains unverifiable. Follow-ups NOT done in this slice: the
+explicit success tone on the pill pulse cadence itself (motion untouched by design).
