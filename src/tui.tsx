@@ -104,6 +104,12 @@ export default Plugin.define({
     const showStatusDialogInner = (sessionID: string, fallback: string) => {
       setScrollRef(undefined)
       setStatusEscHovered(false)
+      // The dialog is the deeper zoom level: the card is redundant chrome behind it (and its
+      // priority-100 Esc layer must not compete with the modal's own), so opening the dialog
+      // takes the card down here at the one point every caller passes through — openDashboard,
+      // and the /goal / palette `status` notice path, which bypasses openDashboard entirely.
+      setContextOpen(false)
+      setHudSession(undefined)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       void refresh(sessionID).catch(() => {})
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
@@ -487,7 +493,7 @@ export default Plugin.define({
       if (!sessionID) return
       try {
         const g = entries()[sessionID]?.goal
-        setHudSession(undefined)
+        // showStatusDialog disarms the card at the choke point; nothing to reset here.
         showStatusDialog(sessionID, g?.condition ?? "goal")
       } catch {
         // Dialog reporting handles its own errors.
