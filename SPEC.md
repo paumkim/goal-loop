@@ -2538,3 +2538,25 @@ No docs line references were touched by this workstream.
 
 Verification (all run in the worktree): bun run compile, bun run check green (769 tests),
 coordinator submit + merge-next, and bun run check on dev shown green at the end.
+
+## Workstream CE — dialog condition row hover grammar (2026-11-16)
+
+Interpretation of this iteration: craft details, affordance honesty. Every clickable text affordance
+in the plugin advertises itself the same way — faint static chrome that lifts on hover (hint appears,
+background swaps, underline draws). The /goal dialog's condition row was the one exception: it drew a
+permanent underline whenever the copy callback was wired, so a static hyperlink lied about interactivity
+and never changed on hover. One look at the sibling grammar (evaluator/reason row, card condition row,
+summary rail, fold row, esc chord — all hover-gated) shows the intended shape.
+
+251. src/status-dialog.tsx: the condition row's underline is now gated on conditionHovered() — the
+     exact grammar the evaluator/reason row already uses. Hover still reveals the faint copy hint
+     (pinned by the existing hover-grammar render test, green unchanged); the underline now joins it.
+252. No behavioral change beyond the attribute; no new chrome, layout or motion; no test files
+     touched (char frames carry no attribute state, so nothing frame-level to pin); marker unchanged
+     (files=43 tests=769). Evidence is source-layer plus the existing render-layer hover tests.
+
+No version bump, no tag, no push; v1.1.0 remains the live public artifact; all work is local on dev.
+No docs line references were touched by this workstream.
+
+Verification (all run in the worktree): bun run compile, bun run check green (769 tests),
+coordinator submit + merge-next, and bun run check on dev shown green at the end.

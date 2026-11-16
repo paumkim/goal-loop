@@ -108,7 +108,7 @@ export const StatusDialogBody = (props: {
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={() => copyCondition(goal().condition)} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
-            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={props.onCopyCondition ? TextAttributes.UNDERLINE : undefined}>
+            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={conditionHovered() ? TextAttributes.UNDERLINE : undefined}>
               {goal().condition}{copiedSuffix("condition")}
             </text>
             <Show when={conditionHovered()}>
