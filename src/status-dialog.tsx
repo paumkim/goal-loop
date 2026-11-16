@@ -8,7 +8,7 @@ import { Show } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { TextAttributes } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens } from "./core/format.ts"
-import { remediationFor, stateAccentColor, fixAccentColor } from "./core/hud.ts"
+import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint } from "./core/hud.ts"
 import { contextMeter } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
@@ -49,6 +49,11 @@ export const StatusDialogBody = (props: {
     const goal = g()
     return goal ? remediationFor(goal) : undefined
   }
+  // A freshly armed goal teaches one thing: the evaluator reads only the transcript. Gone after turn 1.
+  const hint = () => {
+    const goal = g()
+    return goal ? evaluatorHint(goal) : null
+  }
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
@@ -77,6 +82,17 @@ export const StatusDialogBody = (props: {
             </text>
           </box>
           <Show when={goal().reason}>{(reason) => field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}</Show>
+          {/* teaching empty state — freshly armed goal, gone after the first turn */}
+          <Show when={hint()}>
+            {(h) => (
+              <box flexDirection="row" gap={2}>
+                {label("hint")}
+                <text wrapMode="word" flexGrow={1} fg={theme().text.muted}>
+                  {h().full}
+                </text>
+              </box>
+            )}
+          </Show>
           {/* failure is a first-class screen: exact remediation, never a vague warning */}
           <Show when={remediation()}>
             {(fix) => (

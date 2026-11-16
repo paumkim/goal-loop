@@ -10,7 +10,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
-import { DialogFooter } from "../src/hud-card.tsx"
+import { DialogFooter, HudCard, hudCardRows } from "../src/hud-card.tsx"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, VerdictEntry } from "../src/core/types.ts"
 
@@ -408,5 +408,29 @@ describe("reduced-color surfaces", () => {
     expect(frame).toContain("history")
     expect(frame).toContain("met")
     expect(frame).toContain("trail")
+  })
+})
+
+describe("evaluator teaching hint (fresh goal)", () => {
+  const fresh = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => plainGoal({ turns: 0, history: [], reason: undefined, spend: undefined, ...overrides })
+
+  test("the dialog shows the hint row while the goal is fresh", async () => {
+    const frame = await render(() => <StatusDialogBody goal={fresh()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />)
+    expect(frame).toContain("hint")
+    expect(frame).toContain("the evaluator reads only the transcript")
+    expect(frame).toContain("it cannot run commands")
+  })
+
+  test("the dialog drops the hint once a turn is recorded", async () => {
+    const frame = await render(() => <StatusDialogBody goal={plainGoal({ turns: 1 })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 2} nowMs={() => now} />)
+    expect(frame).not.toContain("it cannot run commands")
+  })
+
+  test("the loop card hint fits a fresh looped goal — and the card renders it", async () => {
+    const freshLoop = loopedGoal({ turns: 0, history: [], loopIteration: 1, loopHistory: [], reason: undefined, spend: undefined })
+    expect(hudCardRows(freshLoop)).toBe(6)
+    const frame = await render(() => <HudCard goal={freshLoop} theme={theme} elapsedMs={() => 1000 * 60 * 2} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
+    expect(frame).toContain("hint")
+    expect(frame).toContain("the evaluator reads only the transcript")
   })
 })

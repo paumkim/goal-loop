@@ -19,7 +19,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, GOAL_GLYPH, truncate } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictGlyph } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictAccentColor, evaluatorHint } from "./core/hud.ts"
 import type { GoalSnapshot, Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
@@ -63,7 +63,7 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 
 /** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal)}`. */
 export const hudCardRows = (goal: GoalSnapshot): number =>
-  5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0)
+  5 + (lastVerdict(goal.history ?? []) ? 1 : 0) + (remediationFor(goal) ? 2 : 0) + (evaluatorHint(goal) ? 1 : 0)
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text (both in cells). */
 export const pinBudget = (terminalWidth: number, pillTextLength: number): number =>
@@ -180,6 +180,8 @@ export const HudCard = (props: {
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0
   }
   const remediation = () => remediationFor(g())
+  // A freshly armed goal teaches one thing: the evaluator reads only the transcript. Gone after turn 1.
+  const hint = () => evaluatorHint(g())
   const copyCondition = () => {
     try {
       props.onCopyCondition(g().condition)
@@ -234,6 +236,19 @@ export const HudCard = (props: {
           {`${looped() ? `v${iteration()}${cap()}${pips() ? ` ${pips()}` : ""} · ` : ""}${turns()} turn${turns() === 1 ? "" : "s"} · ${formatDurationCoarse(props.elapsedMs())}`}
         </text>
       </box>
+      {/* teaching empty state — freshly armed goal, gone after the first turn */}
+      <Show when={hint()}>
+        {(h) => (
+          <box flexDirection="row" gap={1}>
+            <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
+              hint
+            </text>
+            <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
+              {h().card}
+            </text>
+          </box>
+        )}
+      </Show>
       {/* last verdict — the evaluator's most recent call */}
       <Show when={last()}>
         {(entry) => (
