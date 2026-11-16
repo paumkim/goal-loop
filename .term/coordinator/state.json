@@ -1515,6 +1515,17 @@
       "submittedAt": "2026-11-16T08:08:02Z",
       "mergedAt": "2026-11-16T08:08:30Z",
       "mergedInto": "dev"
+    },
+    "tui-condition-underline": {
+      "agent": "orchestrator",
+      "paths": "src/status-dialog.tsx,SPEC.md,dist",
+      "branch": "wt/tui-condition-underline",
+      "worktree": "worktrees/wt-tui-condition-underline",
+      "status": "done",
+      "createdAt": "2026-11-16T08:13:06Z",
+      "submittedAt": "2026-11-16T08:13:41Z",
+      "mergedAt": "2026-11-16T08:14:06Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
