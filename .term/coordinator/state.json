@@ -1273,6 +1273,17 @@
       "submittedAt": "2026-11-16T05:32:36Z",
       "mergedAt": "2026-11-16T05:33:22Z",
       "mergedInto": "dev"
+    },
+    "tui-ledger-80col": {
+      "agent": "orchestrator",
+      "paths": "src/tui-history.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-ledger-80col",
+      "worktree": "worktrees/wt-tui-ledger-80col",
+      "status": "done",
+      "createdAt": "2026-11-16T05:37:34Z",
+      "submittedAt": "2026-11-16T05:39:57Z",
+      "mergedAt": "2026-11-16T05:40:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
