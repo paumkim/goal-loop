@@ -1878,6 +1878,17 @@
       "submittedAt": "2026-11-16T12:04:00Z",
       "mergedAt": "2026-11-16T12:05:41.000Z",
       "mergedInto": "dev"
+    },
+    "tui-verdict-zero-work": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts src/core/wire.ts src/core/history.ts src/runtime/controller.ts src/tui-history.tsx test/history.test.ts test/wire.test.ts test/tui-hud.test.tsx test/loop.test.ts SPEC.md dist/tui.js docs/changelog.html src/hud-card.tsx",
+      "branch": "wt/tui-verdict-zero-work",
+      "worktree": "worktrees/wt-tui-verdict-zero-work",
+      "status": "done",
+      "createdAt": "2026-11-16T12:07:46Z",
+      "submittedAt": "2026-11-16T12:11:33Z",
+      "mergedAt": "2026-11-16T12:12:16.000Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
