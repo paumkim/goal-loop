@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=800 -->
+<!-- spec-check files=43 tests=802 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2753,5 +2753,38 @@ remains the live public artifact; all work is local on dev. No docs line referen
 this workstream.
 
 Verification (all run in the worktree): bun run compile, bun test (800 pass, 20 snapshots),
+bun run check green, coordinator submit + merge-next, and bun run check on dev shown green at the
+end.
+
+## Workstream CN — the pill says whether the card is open (2026-11-16)
+
+Interpretation of this iteration: mouse-first ergonomics and information hierarchy — the ambient
+zoom level was the one surface with a hidden state. The pill is the pill AND the card's one-button
+toggle, but nothing in it distinguished "card closed, click to expand" from "card open, click to
+fold". A stranger watching the screen for five seconds could see the card but never learn how it
+got there, or how to put it away. Audit finding #7 — the last ranked finding from the hostile review.
+
+271. src/core/hud.ts: a new exported pillCaret(open, ascii = false) — the leading affordance glyph.
+     Unicode ▾ while the card is painted, ▸ while it is not; ASCII v/> under NO_COLOR / TERM=dumb
+     (the same motionDisabled predicate the pips, bar and sparkline demote under). Unit-tested in
+     test/tui-hud.test.tsx (both glyphs × both color modes).
+272. src/tui.tsx (pill mount): the label budget reserves two more cells for the caret + separating
+     space (80-column floor: width − 4, still minus the landing suffix and still walked down the
+     degradation ladder before truncating). The caret prefixes the pinned/unpinned label and the
+     pin budget sees the true prefix length, so the pin suffix can never overpaint the right margin.
+     It rides the same <text> node as the label, so the hover underline and the evaluating/hot pulse
+     bold span the caret — the pill reads as one control it has always been. The caret's open state
+     is keyed to the card actually rendering (getHudSession() === sessionID AND cardFor() yields a
+     snapshot), never to the bare hud slot, so "▾" can never claim open over a missing card after
+     the goal finishes.
+273. No chrome beyond the two cells; the pill's click behavior, colors, z-order and hit area are
+     untouched; the card is unchanged. Evidence is unit-layer for the glyph selection and source-layer
+     for the mount wiring (the slot cannot mount headlessly). Live TUI remains unverifiable (dead provider).
+
+Marker bumped files=43 tests=800 to files=43 tests=802. No version bump, no tag, no push; v1.1.0
+remains the live public artifact; all work is local on dev. No docs line references were touched by
+this workstream.
+
+Verification (all run in the worktree): bun run compile, bun test tui-hud.test.tsx (91 pass),
 bun run check green, coordinator submit + merge-next, and bun run check on dev shown green at the
 end.

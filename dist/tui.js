@@ -507,6 +507,7 @@ var isCompactHot = (goal) => {
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
+var pillCaret = (open, ascii = false) => open ? ascii ? "v" : "\u25BE" : ascii ? ">" : "\u25B8";
 var fitLadder = (rungs, budget) => {
   for (const rung of rungs) {
     if (stringWidth(rung) <= budget)
@@ -2941,7 +2942,7 @@ var tui_default = Plugin.define({
         const pill = () => {
           try {
             const g = goal();
-            const budget = Math.max(1, dimensions().width - 2 - (landingNow() ? LANDING_SUFFIX.length : 0));
+            const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? LANDING_SUFFIX.length : 0));
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget);
             const t = terminal();
@@ -2953,15 +2954,17 @@ var tui_default = Plugin.define({
         const dimensions = useTerminalDimensions2();
         const pinnedNow = () => isPinned(props.sessionID);
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID);
+        const caret = () => pillCaret(getHudSession() === props.sessionID && cardFor() !== undefined, motionDisabled(process.env)) + " ";
         const pillText = () => {
           const model = pill();
           if (!model)
             return "";
           const landed = landingNow() ? LANDING_SUFFIX : "";
+          const prefix = caret();
           if (!pinnedNow())
-            return model.text + landed;
+            return prefix + model.text + landed;
           const g = goal();
-          const base = model.text + landed;
+          const base = prefix + model.text + landed;
           return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base.length)) : base;
         };
         const animated = () => {
