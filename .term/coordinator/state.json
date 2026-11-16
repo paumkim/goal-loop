@@ -2043,6 +2043,17 @@
       "submittedAt": "2026-11-16T13:52:26Z",
       "mergedAt": "2026-11-16T13:55:16Z",
       "mergedInto": "dev"
+    },
+    "tui-ledger-sha-transcript": {
+      "agent": "orchestrator",
+      "paths": "src/core/types.ts src/runtime/controller.ts src/tui-history.tsx src/status-dialog.tsx src/tui.tsx scripts/render-dialog.tsx test/tui-snapshots.test.tsx test/tui-render.test.tsx test/verify.test.ts test/render-scripts.test.ts SPEC.md docs/changelog.html",
+      "branch": "wt/tui-ledger-sha-transcript",
+      "worktree": "worktrees/wt-tui-ledger-sha-transcript",
+      "status": "done",
+      "createdAt": "2026-11-16T13:59:26Z",
+      "submittedAt": "2026-11-16T14:08:46Z",
+      "mergedAt": "2026-11-16T14:11:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
