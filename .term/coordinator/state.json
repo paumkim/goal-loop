@@ -937,14 +937,14 @@
       "mergedInto": "dev"
     },
     "release-checklist-refresh": {
-      "agent": "orchestrator",
-      "paths": "RELEASE-CHECKLIST.md",
+      "agent": "opencode",
+      "paths": "README.md,RELEASE-CHECKLIST.md,docs/changelog.html",
       "branch": "wt/release-checklist-refresh",
       "worktree": "worktrees/wt-release-checklist-refresh",
       "status": "done",
-      "createdAt": "2026-11-16T00:09:08Z",
-      "submittedAt": "2026-11-16T00:09:39Z",
-      "mergedAt": "2026-11-16T00:09:58Z",
+      "createdAt": "2026-11-16T02:11:57Z",
+      "submittedAt": "2026-11-16T02:13:39Z",
+      "mergedAt": "2026-11-16T02:14:03Z",
       "mergedInto": "dev"
     },
     "github-single-channel": {
