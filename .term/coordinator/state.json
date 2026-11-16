@@ -1218,6 +1218,17 @@
       "submittedAt": "2026-11-16T04:34:26Z",
       "mergedAt": "2026-11-16T04:34:46Z",
       "mergedInto": "dev"
+    },
+    "tui-terminal-ack": {
+      "agent": "opencode-goal",
+      "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,dist/tui.js",
+      "branch": "wt/tui-terminal-ack",
+      "worktree": "worktrees/wt-tui-terminal-ack",
+      "status": "done",
+      "createdAt": "2026-11-16T04:37:31Z",
+      "submittedAt": "2026-11-16T04:48:10Z",
+      "mergedAt": "2026-11-16T04:51:32Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
