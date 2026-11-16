@@ -146,7 +146,6 @@ export const LoopSection = (props: {
     return ascii() ? ` · ${mix.met}+ ${mix.not_met}x${mix.impossible > 0 ? ` ${mix.impossible}!` : ""}` : ` · ${mix.met}✓ ${mix.not_met}✗${mix.impossible > 0 ? ` ${mix.impossible}⊘` : ""}`
   }
   const endedSuffix = (entry: { endedAt: number }) => ` · ended ${relativeTime(entry.endedAt, nowMs())} at ${localTime(entry.endedAt)}`
-  const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.slice(0, 7)}` : "")
   const paused = () => props.goal.status === "paused"
   const stateWord = () => {
     const s = props.goal.status
@@ -346,11 +345,13 @@ export const LoopSection = (props: {
 /** The evaluator verdict trail: ✓ met / ✗ not_met / ⊘ impossible, oldest → newest. Shared by looped and non-looped goals. */
 // Spend attribution, one grammar everywhere: the loop rail stamps the arm→advance delta on each completed iteration; the why ledger stamps the per-turn delta on each verdict. Render the cost only. Omitted when the host could not measure (or the turn cost nothing).
 const spendSuffix = (entry: { spend?: { readonly cost: number } }) => (entry.spend && entry.spend.cost > 0 ? ` · ${formatCost(entry.spend.cost)}` : "")
+const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.slice(0, 7)}` : "")
 
 /**
  * The why ledger: at most the three most recent verdicts whose reason text is non-empty,
  * oldest first (the trail's own direction). One row per verdict — glyph, verdict word,
- * turn, relative time, reason — the evaluator's *why* at a glance, without scrolling the
+ * turn, relative time, the commit sha the verdict landed on (when the host stamped one),
+ * reason — the evaluator's *why* at a glance, without scrolling the
  * dialog to the last evaluator row. Click-to-copy when the caller wires onCopyReason;
  * hover boldens the reason (the affordance grammar shared with the condition/summary/
  * reason rows). The copied acknowledgment rides the row for a beat, like every other row.
@@ -385,7 +386,7 @@ const WhyLedger = (props: {
   })
   const rows = () => props.history.filter((entry) => entry.reason.trim().length > 0).slice(-WHY_LIMIT)
   const now = () => props.nowMs?.() ?? Date.now()
-  const furniture = (entry: VerdictEntry) => `${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${spendSuffix(entry)}`
+  const furniture = (entry: VerdictEntry) => `${entry.verdict.replace("_", " ")} · turn ${entry.turn} · ${relativeTime(entry.at, now())}${shaSuffix(entry)}${spendSuffix(entry)}`
   // The reason column hangs off the end of the muted furniture; verdict word, turn digits and relative time vary across rows, which used to shift the reason. Pin the furniture cell to the widest visible row (stringWidth — the row carries multibyte glyphs) so reasons land on one x.
   const furnitureWidth = () => rows().reduce((max, entry) => Math.max(max, stringWidth(furniture(entry))), 0)
   return (

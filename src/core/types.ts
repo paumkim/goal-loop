@@ -64,6 +64,8 @@ export interface VerdictEntry {
   /** Tool calls the evaluating turn used (0 = the turn produced nothing — at a met verdict that means the condition already held at HEAD). Absent on records written before this field landed; never fabricated. */
   readonly toolCalls?: number  /** Marginal usage this turn consumed (delta against the previous turn's measurement; the first turn diffs against the arm-time reading). Absent on records written before this field landed or when the host cannot measure — never estimated. */
   readonly spend?: UsageSnapshot
+  /** The sha HEAD resolved to when this turn was evaluated (the loop rail stamps it at advance; the per-verdict ledger matches). Absent outside a repository or when HEAD could not be read — never guessed. */
+  readonly sha?: string
 }
 
 /** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */

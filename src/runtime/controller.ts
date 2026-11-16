@@ -711,7 +711,16 @@ export class GoalController {
     record.verdict = result.verdict
     record.reason = result.reason || undefined
     // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}) })
+    // The why ledger stamps the same HEAD sha the loop rail stamps at advance — the verdict lands on a commit the reader can inspect. Guarded like headAtAdvance: outside a repository or when HEAD cannot be read, the sha is absent, never guessed.
+    const shaAtEvaluation = (() => {
+      try {
+        const repo = findRepository(this.deps.directory)
+        return repo ? headSha(repo.gitDir) : undefined
+      } catch {
+        return undefined
+      }
+    })()
+    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}) })
     if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
 
     if (result.verdict === "met") {

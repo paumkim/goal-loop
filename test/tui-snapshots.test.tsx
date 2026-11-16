@@ -181,6 +181,24 @@ describe("full-frame snapshots (named layout states)", () => {
     )
     expect(snapshot).toMatchSnapshot()
   })
+
+  test("StatusDialogBody · why ledger (each verdict row carries the commit sha it landed on)", async () => {
+    const shaA = "a3f5c8e91d4b6f7061728394a5b6c7d8e9f0a1b2"
+    const shaB = "b1e4d7a20f3c5968778394a5b6c7d8e9f0a1b2c3d"
+    const stamped = loopedGoal({
+      history: [
+        { turn: 1, verdict: "met", reason: "done", at: now - 1000 * 60 * 26, toolCalls: 14, sha: shaB },
+        { turn: 2, verdict: "not_met", reason: "no evidence of work toward the condition", at: now - 1000 * 60 * 14, toolCalls: 0, sha: shaA },
+        { turn: 3, verdict: "met", reason: "evidence filed", at: now - 1000 * 60 * 4, toolCalls: 9, sha: shaA },
+      ],
+    })
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={stamped} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />,
+      100,
+      44,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
 })
 
 describe("full-frame snapshots (waiting and remediation states)", () => {

@@ -32,6 +32,8 @@ export const StatusDialogBody = (props: {
   onCopySummary?: (summary: string, version: number) => void
   /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section boldens on hover. */
   onCopyVerify?: (tail: string) => void
+  /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
+  onViewTranscript?: (sessionID: string) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded`. */
@@ -63,8 +65,10 @@ export const StatusDialogBody = (props: {
   // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
   const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted)
   const g = () => props.goal
-  // elsewhere — live goals held by other sessions in this directory. Read-only on purpose: switching
-  // sessions is the host's business, so rows carry no handlers and no key chords. Live means the same
+  // elsewhere — live goals held by other sessions in this directory. Switching sessions is the host's
+  // business, so with no handler rows paint inert and carry no key chords; when the host wires
+  // onViewTranscript a left-click asks the host's router to open that session's transcript route and
+  // the condition boldens on hover (keyboard focus stays with the host prompt). Live means the same
   // predicate the controller and the store use (active | paused) — failed/cleared are terminal, never listed.
   const OTHERS_VISIBLE = 4
   const OTHERS_CONDITION_MAX = 34
@@ -103,6 +107,7 @@ export const StatusDialogBody = (props: {
   const [reasonHovered, setReasonHovered] = createSignal(false)
   const [conditionHovered, setConditionHovered] = createSignal(false)
   const [verifyHovered, setVerifyHovered] = createSignal(false)
+  const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const copyCondition = (condition: string) => {
     try {
       props.onCopyCondition?.(condition)
@@ -279,12 +284,15 @@ export const StatusDialogBody = (props: {
                 <box flexDirection="row" gap={2}>
                   {label("elsewhere")}
                   <text fg={theme().text.faint} wrapMode="none">
-                    {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals`}
+                    {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " · hover a row to open its transcript" : ""}`}
                   </text>
                 </box>
                 <For each={rows().slice(0, OTHERS_VISIBLE)}>
-                  {(other) => (
-                    <box flexDirection="row" gap={2}>
+                  {(other) => {
+                    const jump = props.onViewTranscript
+                    const hovered = () => othersHovered() === other.sessionID
+                    return (
+                    <box flexDirection="row" gap={2} onMouseUp={jump ? (event) => { if (event.button !== 0) return; event.stopPropagation(); try { jump(other.sessionID) } catch { /* the host discarded the navigation — nothing to undo */ } } : undefined} onMouseOver={jump ? () => setOthersHovered(other.sessionID) : undefined} onMouseOut={jump ? () => setOthersHovered(null) : undefined}>
                       {label("")}
                       <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, false, mono())}>
                         {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
@@ -295,11 +303,17 @@ export const StatusDialogBody = (props: {
                       <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
                         {other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status}
                       </text>
-                      <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
+                      <text wrapMode="none" flexGrow={1} fg={theme().text.muted} attributes={jump !== undefined && hovered() ? TextAttributes.BOLD : undefined}>
                         {truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026")}
                       </text>
+                      <Show when={jump !== undefined && hovered()}>
+                        <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
+                          {ascii ? "-> transcript" : "\u2192 transcript"}
+                        </text>
+                      </Show>
                     </box>
-                  )}
+                    )
+                  }}
                 </For>
                 <Show when={rows().length > OTHERS_VISIBLE}>
                   <box flexDirection="row" gap={2}>
