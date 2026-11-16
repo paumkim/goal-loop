@@ -1559,6 +1559,17 @@
       "submittedAt": "2026-11-16T08:28:32Z",
       "mergedAt": "2026-11-16T08:29:00Z",
       "mergedInto": "dev"
+    },
+    "tui-pill-width": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-pill-width",
+      "worktree": "worktrees/wt-tui-pill-width",
+      "status": "done",
+      "createdAt": "2026-11-16T08:31:16Z",
+      "submittedAt": "2026-11-16T08:32:46Z",
+      "mergedAt": "2026-11-16T08:33:12Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null
