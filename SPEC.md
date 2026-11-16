@@ -384,7 +384,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=41 tests=465 -->
+<!-- spec-check files=41 tests=484 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -2051,3 +2051,9 @@ Marker bumped `files=41 tests=456` → `files=41 tests=464` (test-only addition;
 200. `bin/opencode-goal.mjs` exports `PLUGIN_SPEC = "github:paumkim/opencode-goalv2#v<version>"`; it previously had no test tying it to `package.json`, so a version bump that missed the constant would ship an installer pointing at a stale tag with no gate to catch it. New regression test in `test/cli-installer.test.ts` asserts `PLUGIN_SPEC` equals `github:paumkim/opencode-goalv2#v` + `pkg.version`, where `pkg` is read from `package.json` at test time (and asserts the version looks like semver). Mutation-verified: forcing `PLUGIN_SPEC` to `#v9.9.9` makes the test fail; reverting makes it pass.
 201. `package.json` version is 1.1.0 and `PLUGIN_SPEC` currently reads `#v1.1.0`, so no behavior change in this workstream — the gate is new, the value is unchanged.
 Marker bumped `files=41 tests=464` → `files=41 tests=465` (test-only addition; no shipped file changed).
+
+## Workstream BJ — headless render edge-path tests for the dialog components (2026-11-15)
+
+202. `test/tui-render.test.tsx` grows from 8 to 27 tests covering the previously unrendered branches of `src/tui-history.tsx` and `src/status-dialog.tsx`: the fresh loop with no verdicts (no trail row, `v1 of at most 5 · 0 complete`, no pace row), the uncapped loop (no `of at most` caption, no pace row), trail-window truncation past 24 verdicts (`24 of 30 verdicts` caption), rail-summary truncation past the 400-char cap (ellipsis, full text absent), blank rail summaries rendering no `│` connector, the current-iteration `last` suffix (`this turn` and `N turns since`), the two-in-a-row streak suffix in the now row, the final-tally row appearing when the cap is reached with a non-terminal status, the `⊘`/`✗` final glyphs for `impossible`/`cleared`/`failed` loops, the pending boundary-compaction row (age, `miss 2/4`, `~182k at request`), the landed compaction row (no miss counter), impossible verdicts in the non-looped counts line, the non-looped streak suffix, the `checking`/`waiting` state words in the dialog body, and the spend row omitted when no spend snapshot is present. The uncapped-loop and spend-absent tests destructure the field out rather than pass an explicit `undefined` (exactOptionalPropertyTypes-safe).
+203. No source behavior changed; the work is test-only. One honest caveat: these remain character-grid render assertions — they pin what is painted, not interaction (keypresses) behavior.
+Marker bumped `files=41 tests=465` → `files=41 tests=484` (test-only addition; no shipped file changed).
