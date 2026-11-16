@@ -10,6 +10,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
+import { DialogFooter } from "../src/hud-card.tsx"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, VerdictEntry } from "../src/core/types.ts"
 
@@ -311,5 +312,48 @@ describe("retry watch", () => {
   test("a nominal goal renders no fix row", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).not.toContain("fix")
+  })
+})
+
+
+describe("DialogFooter (80-column floor)", () => {
+  const renderFooter = (width: number, pinned = false) =>
+    render(
+      () => <DialogFooter theme={theme} pinned={() => pinned} onCopy={() => {}} onTogglePin={() => {}} onClear={() => {}} />,
+      width,
+      3,
+    )
+
+  test("at 80 cells the short hint and compact labels render unclipped", async () => {
+    const frame = await renderFooter(80)
+    expect(frame).toContain("up/down scroll · p pin · esc close")
+    expect(frame).toContain("[copy]")
+    expect(frame).toContain("[pin]")
+    expect(frame).toContain("[clear]")
+    expect(frame).not.toContain("pgup")
+    expect(frame).not.toContain("[copy condition]")
+  })
+
+  test("at 96 cells the full labels come back with the short hint", async () => {
+    const frame = await renderFooter(96)
+    expect(frame).toContain("[copy condition]")
+    expect(frame).toContain("[pin condition]")
+    expect(frame).toContain("[clear goal]")
+    expect(frame).not.toContain("pgup")
+  })
+
+  test("at 140 cells the full key hint returns", async () => {
+    const frame = await renderFooter(140)
+    expect(frame).toContain("pgup/pgdn")
+    expect(frame).toContain("[copy condition]")
+    expect(frame).toContain("[clear goal]")
+  })
+
+  test("a pinned goal renders [unpin] at every width tier", async () => {
+    for (const width of [80, 96, 160]) {
+      const frame = await renderFooter(width, true)
+      expect(frame).toContain("[unpin]")
+      expect(frame).not.toContain("[pin]")
+    }
   })
 })
