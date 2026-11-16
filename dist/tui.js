@@ -12,7 +12,6 @@ import { createElement as _$createElement4 } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
-import { createMemo as createMemo2, createSignal as createSignal4, createEffect, onCleanup as onCleanup3, Show as Show4 } from "solid-js";
 
 // ../../node_modules/ansi-regex/index.js
 function ansiRegex({ onlyFirst = false } = {}) {
@@ -168,6 +167,9 @@ function stringWidth(string, options = {}) {
   }
   return width;
 }
+
+// src/tui.tsx
+import { createMemo as createMemo2, createSignal as createSignal4, createEffect, onCleanup as onCleanup3, Show as Show4 } from "solid-js";
 
 // src/core/types.ts
 var LIVE_STATUSES = new Set(["active", "paused"]);
@@ -580,7 +582,7 @@ var LANDING_SUFFIX = " \xB7 landed \u2713";
 var LANDING_SUFFIX_ASCII = " \xB7 landed +";
 var landingSuffix = (ascii = false) => ascii ? LANDING_SUFFIX_ASCII : LANDING_SUFFIX;
 var pillMotionNeeded = (args) => args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true;
-var terminalPill = (goal, elapsed, ascii = false) => {
+var terminalPill = (goal, elapsed, ascii = false, budget) => {
   const glyph = goalGlyph(ascii);
   const tone = goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined;
   if (!tone)
@@ -588,12 +590,17 @@ var terminalPill = (goal, elapsed, ascii = false) => {
   const word = goal.status === "achieved" ? goal.loopEnabled ? "complete" : "achieved" : goal.status;
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
   const span = `${formatDurationCoarse(elapsed)}${turns}`;
-  if (goal.loopEnabled) {
+  const text = goal.loopEnabled ? (() => {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
     const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1);
-    return { text: `${glyph} loop ${word} \xB7 v${iteration}${cap} \xB7 ${span}`, tone };
+    return `${glyph} loop ${word} \xB7 v${iteration}${cap} \xB7 ${span}`;
+  })() : `${glyph} goal ${word} \xB7 ${span}`;
+  if (budget !== undefined && Number.isFinite(budget)) {
+    const cap = Math.max(1, Math.floor(budget));
+    if (stringWidth(text) > cap)
+      return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone };
   }
-  return { text: `${glyph} goal ${word} \xB7 ${span}`, tone };
+  return { text, tone };
 };
 var PIN_MIN_WIDTH = 12;
 var PIN_PREFIX = " \xB7 pin: ";
@@ -3206,22 +3213,22 @@ var tui_default = Plugin.define({
             return 0;
           }
         };
+        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID);
         const pill = () => {
           try {
             const g = goal();
-            const landing = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? landing().length : 0));
+            const landingSfx = () => landingSuffix(motionDisabled(process.env));
+            const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? stringWidth(landingSfx()) : 0));
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget);
             const t = terminal();
-            return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env)) : undefined;
+            return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env), budget) : undefined;
           } catch {
             return;
           }
         };
         const dimensions = useTerminalDimensions2();
         const pinnedNow = () => isPinned(props.sessionID);
-        const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID);
         const caret = () => pillCaret(getHudSession() === props.sessionID && cardFor() !== undefined, motionDisabled(process.env)) + " ";
         const pillText = () => {
           const model = pill();

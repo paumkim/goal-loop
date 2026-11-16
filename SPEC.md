@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=43 tests=826 -->
+<!-- spec-check files=43 tests=827 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -3270,3 +3270,29 @@ artifact; all work is local on dev. No docs line references were touched by this
 
 Verification (all run in the worktree): bun run compile, bun run check (826 pass, spec-check ok),
 coordinator submit + merge-next, bun run check on dev shown green at the end.
+## Workstream DF — the pill budget is measured, not guessed (2026-11-16)
+
+Interpretation of this iteration: the fresh re-audit at 156ac95 (ses_e1c165f9bffeO63MgcCyzplP0z) was
+re-run in full by the parent; its three verifiable findings were all in the pill's cell-budget accounting
+and all three are closed here. Nothing else was shipped; the reduced-color sweep (DE) and every earlier
+slice stay untouched.
+
+322. The ambient pill's landing-suffix deduction is measured in CELLS, never code units:
+     tui.tsx computes the budget with stringWidth(landingSuffix()) instead of landing().length, and the
+     landingNow()/landingSfx() helpers are hoisted ABOVE pill() so pill()'s closure no longer reaches a
+     const declared after it (a definition-order fragility — any future createMemo(pill) would have hit a
+     TDZ ReferenceError). The suffix is all 1-cell glyphs in both arms, so paint output is unchanged at
+     every width; the contract now matches the measurement used everywhere else.
+323. terminalPill() (src/core/hud.ts) gains an optional 4th parameter `budget` (cells). When provided and
+     the armed acknowledgment text would exceed it, the text truncates to the budget with the surface's
+     ellipsis (`\u2026`, or `...` under ASCII) instead of painting past the row — the same contract
+     pillModel honors. tui.tsx passes the SAME budget it computes for the live pill, so the frozen
+     acknowledgment gets the same cell guarantee. Absent budget keeps the byte-compatible output.
+324. New render-adjacent unit test pins the budget arm: over-budget acks end with the surface ellipsis
+     and measure <= budget cells (both arms); a fitting budget and an absent budget are byte-identical.
+     Marker files=43 tests=827 (one NEW test function; the landingSuffix arms assertion is extended in
+     place and adds no function).
+
+Verification (all run in the worktree): bun run compile, bun test test/tui-hud.test.tsx (100 pass),
+bun run check (0 fail, spec-check ok at 43/827), coordinator submit + merge-next, bun run check on dev
+shown green at the end. Evidence is source + predicate layers only; live TUI remains unverifiable.
