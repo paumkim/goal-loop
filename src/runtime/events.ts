@@ -68,29 +68,34 @@ export function createRouter(input: { controller: GoalController; background: Ba
         if (!sessionID) return
         guard(() => background.executionEnded(sessionID))
         guard(() => compactor.maybeCompact(sessionID))
-        return guard(() => controller.onExecutionSucceeded(sessionID))
+        guard(() => controller.onExecutionSucceeded(sessionID))
+        // Background work may have just ended — re-run any evaluation this session deferred on it.
+        return guard(() => controller.onBackgroundDrained())
       case "session.execution.failed":
         if (!sessionID) return
-        return guard(() => {
+        guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.execution.interrupted":
         if (!sessionID) return
-        return guard(() => {
+        guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.created":
         if (sessionID) guard(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
         return
       case "session.deleted":
         if (!sessionID) return
-        return guard(() => {
+        guard(() => {
           background.sessionDeleted(sessionID)
           controller.onSessionDeleted(sessionID)
           compactor.onSessionDeleted(sessionID)
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.compaction.started":
         if (sessionID) guard(() => compactor.noteCompactionStarted(sessionID))
         return
@@ -123,7 +128,7 @@ export function createRouter(input: { controller: GoalController; background: Ba
         const id = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
         const owner = asRecord(info.metadata).sessionID ?? asRecord(data.metadata).sessionID
         if (id) guard(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), owner))
-        return
+        return guard(() => controller.onBackgroundDrained())
       }
       case "shell.exited":
       case "shell.deleted": {
@@ -131,7 +136,7 @@ export function createRouter(input: { controller: GoalController; background: Ba
         const info = asRecord(data.info)
         const id = typeof data.id === "string" ? data.id : typeof info.id === "string" ? info.id : undefined
         if (id) guard(() => background.shellEnded(id))
-        return
+        return guard(() => controller.onBackgroundDrained())
       }
     }
   }

@@ -1630,7 +1630,7 @@ describe("/goal-loop background work counting", () => {
 })
 
 describe("RPC read-through after a reload", () => {
-  test("restoreOne adopts a live record from storage with an empty in-memory map", async () => {
+  test("peekSnapshot serves a stored live record without adopting it", async () => {
     const h1 = harness()
     await h1.setLoop("objective")
     h1.verdicts.push(met("v1 done"))
@@ -1642,15 +1642,22 @@ describe("RPC read-through after a reload", () => {
     // Fresh controller with an empty goals map — exactly the post-reload state.
     const h2 = harness({}, h1.storage)
     expect(h2.controller.get(SID)).toBeUndefined()
-    expect(await h2.controller.restoreOne(SID)).toBe(true)
-    const record = h2.controller.get(SID)!
-    expect(record.loopIteration).toBe(2)
-    expect(record.condition).toBe("v2 condition")
-    expect(record.loopEnabled).toBe(true)
-    expect(h2.controller.snapshot(SID)?.status).toBe("active")
+    const key = "goal/v1/ses_1"
+    const storedBefore = structuredClone(h1.storage.data.get(key))
+    const s = await h2.controller.peekSnapshot(SID)
+    expect(s).not.toBeNull()
+    expect(s!.loopIteration).toBe(2)
+    expect(s!.condition).toBe("v2 condition")
+    expect(s!.loopEnabled).toBe(true)
+    // The arm reset per-iteration turns in storage; the peek must serve exactly what storage holds.
+    expect(s!.turns).toBe(0)
+    expect(s!.status).toBe("active")
+    // Still nothing adopted: the peek never writes the record back (no turns/baseline reset).
+    expect(h2.controller.get(SID)).toBeUndefined()
+    expect(h1.storage.data.get(key)).toEqual(storedBefore)
   })
 
-  test("restoreOne leaves finished records un-restored and missing ones alone", async () => {
+  test("peekSnapshot serves terminal records as stored truth", async () => {
     const h1 = harness()
     await h1.setLoop("objective")
     h1.verdicts.push(met("v1 done"))
@@ -1662,15 +1669,18 @@ describe("RPC read-through after a reload", () => {
     await h1.controller.dispose()
 
     const h2 = harness({}, h1.storage)
-    expect(await h2.controller.restoreOne(SID)).toBe(false)
+    const s = await h2.controller.peekSnapshot(SID)
+    expect(s).not.toBeNull()
+    expect(s!.status).toBe("cleared")
     expect(h2.controller.get(SID)).toBeUndefined()
-    expect(await h2.controller.restoreOne("ses_missing")).toBe(false)
+    expect(await h2.controller.peekSnapshot("ses_missing")).toBeNull()
   })
 
-  test("restoreOne does not adopt a record owned by another directory", async () => {
+  test("peekSnapshot returns null for missing records and for records from another directory", async () => {
     const h1 = harness()
     await h1.setLoop("objective")
     await h1.controller.dispose()
+    expect(await h1.controller.peekSnapshot("ses_missing")).toBeNull()
     // Simulate a record written by another plugin instance for the same storage.
     const key = "goal/v1/ses_1"
     const stored = structuredClone(h1.storage.data.get(key)) as { directory: string }
@@ -1678,8 +1688,44 @@ describe("RPC read-through after a reload", () => {
     h1.storage.data.set(key, stored)
 
     const h2 = harness({}, h1.storage)
-    expect(await h2.controller.restoreOne(SID)).toBe(false)
+    expect(await h2.controller.peekSnapshot(SID)).toBeNull()
     expect(h2.controller.get(SID)).toBeUndefined()
+  })
+
+  test("peekList serves stored live records without adopting anything", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    await h1.controller.dispose()
+
+    const h2 = harness({}, h1.storage)
+    const listed = await h2.controller.peekList()
+    expect(listed.map((s) => s.sessionID)).toEqual([SID])
+    expect(listed[0]!.status).toBe("active")
+    // A peek adopts nothing: the in-memory map stays empty.
+    expect(h2.controller.get(SID)).toBeUndefined()
+  })
+
+  test("peekList omits terminal records", async () => {
+    const h1 = harness()
+    await h1.setLoop("objective")
+    h1.controller.clear(SID)
+    await h1.controller.dispose()
+
+    const h2 = harness({}, h1.storage)
+    expect(await h2.controller.peekList()).toEqual([])
+  })
+
+  test("spend falls back to the stored record for sessions this instance never adopted", async () => {
+    const h1 = harness()
+    await h1.setGoal("all tests pass")
+    await h1.controller.dispose()
+
+    const h2 = harness({}, h1.storage)
+    expect(h2.controller.get(SID)).toBeUndefined()
+    const spend = await h2.controller.spend(SID)
+    expect(spend).toBeDefined()
+    // Default usage (input 100) minus the arm-time baseline (input 100): a zero diff, not undefined.
+    expect(spend!.input).toBe(0)
   })
 
   test("list() falls back to a storage restore when memory is empty", async () => {
@@ -1695,6 +1741,40 @@ describe("RPC read-through after a reload", () => {
     expect(listed[0]!.sessionID).toBe(SID)
   })
 
+})
+
+describe("background drain", () => {
+  test("a deferred turn evaluates as soon as the background work drains", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet("keep going"))
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(1)        // defers evaluation; verdict NOT consumed
+    expect(h.verdicts).toHaveLength(1)
+    h.setWork({ subagents: 0, shells: 0 })
+    await h.controller.onBackgroundDrained()
+    expect(h.verdicts).toHaveLength(0)   // the queued verdict was consumed now, not at the check-in
+    expect(h.controller.get(SID)!.turns).toBe(1)
+  })
+
+  test("onBackgroundDrained is a no-op when nothing deferred", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    await h.controller.onBackgroundDrained()  // must not consume verdicts nor throw
+    h.verdicts.push(notMet())
+    await h.controller.onBackgroundDrained()
+    expect(h.verdicts).toHaveLength(1)
+  })
+
+  test("onBackgroundDrained waits for remaining work", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet())
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(1)
+    await h.controller.onBackgroundDrained()  // still busy: verdict not consumed
+    expect(h.verdicts).toHaveLength(1)
+  })
 })
 
 describe("goal-loop command syntax (/goal-loop-<N>)", () => {

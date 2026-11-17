@@ -5,13 +5,11 @@ import type { Logger } from "./runtime/ports.ts"
 
 /** Structural view of the controller surface the RPC handlers need (GoalController satisfies it). */
 export interface RpcGoalController {
-  restoreOne(sessionID: string): Promise<boolean>
-  restore(options?: { boundaryCompact?: boolean }): Promise<number>
-  snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null
+  peekSnapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): Promise<GoalSnapshot | null>
+  peekList(): Promise<GoalSnapshot[]>
   spend(sessionID: string): Promise<UsageSnapshot | undefined>
   /** Absolute estimated prompt tokens; implementations without a context estimate simply omit it. */
   contextSize?(sessionID: string): Promise<number | undefined>
-  list(): GoalSnapshot[]
   status(sessionID: string): Promise<void>
   clear(sessionID: string): boolean
 }
@@ -34,12 +32,11 @@ export function createRpcHandlers(deps: { controller: RpcGoalController; log: Lo
   const get = async (input: unknown): Promise<{ goal: GoalSnapshot | null }> => {
     try {
       const sessionID = sessionIDOf(input)
-      // Read-through: after a plugin reload the in-memory map can miss a live goal that storage still holds.
-      await controller.restoreOne(sessionID).catch((error) => warn("restore-one", error))
+      // Reads never adopt: peekSnapshot reads storage fresh (or memory) and writes nothing.
       const spend = await controller.spend(sessionID).catch(() => undefined)
       // Optional so lightweight implementations of the controller surface keep working.
       const contextSize = await controller.contextSize?.(sessionID).catch(() => undefined)
-      return { goal: controller.snapshot(sessionID, spend, contextSize) }
+      return { goal: await controller.peekSnapshot(sessionID, spend, contextSize).catch(() => null) }
     } catch (error) {
       warn("get", error)
       return { goal: null }
@@ -48,14 +45,7 @@ export function createRpcHandlers(deps: { controller: RpcGoalController; log: Lo
 
   const list = async (): Promise<{ goals: GoalSnapshot[] }> => {
     try {
-      let goals = controller.list()
-      // Empty list can mean in-memory records only (post-reload): restore from storage once before answering.
-      if (goals.length === 0) {
-        // Read-only answer: adopt records from storage without asking the host to compact anything.
-        await controller.restore({ boundaryCompact: false }).catch((error) => warn("restore", error))
-        goals = controller.list()
-      }
-      return { goals }
+      return { goals: await controller.peekList() }
     } catch (error) {
       warn("list", error)
       return { goals: [] }

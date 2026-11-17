@@ -649,6 +649,9 @@ describe("event router", () => {
       onExecutionInterrupted: () => {
         throw new Error("boom interrupted")
       },
+      onBackgroundDrained: () => {
+        throw new Error("boom drain")
+      },
       onSessionDeleted: () => {
         throw new Error("boom deleted")
       },
@@ -671,6 +674,9 @@ describe("event router", () => {
       onCompactionLanded: async () => {
         throw new Error("boom landing")
       },
+      onBackgroundDrained: async () => {
+        throw new Error("boom drain")
+      },
     } as any
     const failingCompactor = (() => {
       const inner = testCompactor([]) as any
@@ -689,7 +695,8 @@ describe("event router", () => {
     route({ id: "a1", type: "session.execution.succeeded", data: { sessionID: SID } })
     route({ id: "a2", type: "session.compaction.ended", data: { sessionID: SID } })
     await flush()
-    expect(errors.length).toBe(3)
+    // 4 reports: the succeeded rejection, the compaction rejection, the landing rejection, and the drain hook's own rejection — the drain is wired and its failures are reported, never escaping the router.
+    expect(errors.length).toBe(4)
   })
 
   test("grandchildren count as background work", async () => {

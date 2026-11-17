@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleLiveSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleLiveSessionIDs, staleUnprovenSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -1433,5 +1433,48 @@ describe("staleLiveSessionIDs", () => {
     const achieved = { goal: loopedGoal({ status: "achieved", evaluating: false, endedAt: now - 30_000 }), receivedAt: now }
     expect(staleLiveSessionIDs({ ses_check: checking }, now)).toEqual(["ses_check"])
     expect(staleLiveSessionIDs({ ses_check: achieved }, now)).toEqual([])
+  })
+})
+
+describe("staleUnprovenSessionIDs", () => {
+  const liveEntry = (overrides: Partial<GoalSnapshot> = {}, receivedAt: number | undefined = now) =>
+    ({ goal: loopedGoal(overrides), receivedAt })
+  test("returns sessions whose live snapshot is older than the floor", () => {
+    const entries = {
+      ses_1: liveEntry({}, now - STALE_LIVE_ENTRY_MS),
+      ses_2: liveEntry({}, now - STALE_LIVE_ENTRY_MS - 1),
+    }
+    expect(staleUnprovenSessionIDs(entries, now).sort()).toEqual(["ses_1", "ses_2"])
+  })
+  test("excludes terminal goals", () => {
+    const entries = {
+      ses_achieved: liveEntry({ status: "achieved" }, now - STALE_LIVE_ENTRY_MS - 1),
+      ses_cleared: liveEntry({ status: "cleared" }, now - STALE_LIVE_ENTRY_MS - 1),
+    }
+    expect(staleUnprovenSessionIDs(entries, now)).toEqual([])
+  })
+  test("leaves fresh live snapshots alone", () => {
+    const entries = { ses_fresh: liveEntry({}, now - STALE_LIVE_ENTRY_MS + 1000) }
+    expect(staleUnprovenSessionIDs(entries, now)).toEqual([])
+  })
+  test("a missing receivedAt counts as infinitely stale", () => {
+    const entries = { ses_untimed: { goal: loopedGoal() } }
+    expect(staleUnprovenSessionIDs(entries, now)).toEqual(["ses_untimed"])
+  })
+  test("includes a stale null-goal entry — the changed stream may have missed the arm", () => {
+    const entries = { ses_null: { goal: null, receivedAt: now - STALE_LIVE_ENTRY_MS - 1 } }
+    expect(staleUnprovenSessionIDs(entries, now)).toEqual(["ses_null"])
+  })
+  test("leaves a fresh null-goal entry alone", () => {
+    const entries = { ses_null: { goal: null, receivedAt: now - STALE_LIVE_ENTRY_MS + 1000 } }
+    expect(staleUnprovenSessionIDs(entries, now)).toEqual([])
+  })
+  test("the floor is configurable", () => {
+    const entries = {
+      ses_live: liveEntry({}, now - 5000),
+      ses_null: { goal: null, receivedAt: now - 5000 },
+    }
+    expect(staleUnprovenSessionIDs(entries, now, 4000).sort()).toEqual(["ses_live", "ses_null"])
+    expect(staleUnprovenSessionIDs(entries, now, 10_000)).toEqual([])
   })
 })

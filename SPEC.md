@@ -399,16 +399,22 @@ runs at plugin setup and only for the instance's own directory, so a reloaded or
 instance served the RPC from an empty in-memory map.
 
 38. `GoalStore.load(sessionID)` reads one record (undefined when missing/malformed). `GoalController`
-    factors its restore body into `adoptRestored` (shared by the bulk `restore()` and a new
-    `restoreOne(sessionID)`), which adopts one live record from storage with the same reset semantics
-    (fresh `startedAt`/`turns`/`stall`/`retries`/`checkins`, fresh baseline, in-memory record created,
-    durable write). `restoreOne` returns `false` for missing or non-live records.
-39. The RPC handlers read through: `goal.get` calls `restoreOne` before answering (early-out when the
-    record is in memory), and `goal.list` restores from storage when the in-memory list is empty.
-    A live goal is never reported as missing while a live record exists in plugin storage.
+    factors its restore body into `adoptRestored` (used by the bulk `restore()` only), which adopts one
+    live record from storage with the same reset semantics (fresh `startedAt`/`turns`/`stall`/`retries`/
+    `checkins`, fresh baseline, in-memory record created). Adoption normalizes in memory only — since
+    Workstream HH it performs no durable write. For RPC reads the controller serves a read-only peek
+    instead: `peekSnapshot(sessionID)` serves the in-memory record when present, otherwise reads
+    storage fresh (terminal records included) and returns null for missing or foreign-directory records;
+    `peekList()` merges stored live records with in-memory ones (the in-memory copy wins per sessionID).
+    The peek never adopts and never writes.
+39. The RPC handlers answer from the peek: `goal.get` spends then `peekSnapshot`, `goal.list` calls
+    `peekList` — no adoption, no storage write. A live goal is never reported as missing while a live
+    record exists in plugin storage or in memory; see Workstream HH.
 40. Tests prove it: `test/store.test.ts` "GoalStore.load" (missing/malformed/valid),
-    `test/loop.test.ts` "RPC read-through after a reload" (restoreOne adopts a live record with an
-    empty map; finished records stay un-restored; list falls back to a storage restore). All 214 tests pass.
+    `test/loop.test.ts` "RPC read-through after a reload" (peekSnapshot serves a stored live record
+    with an empty map without adopting it; terminal records serve as stored truth; missing/foreign
+    records yield null; peekList serves stored live records and omits terminal ones; `restore()` keeps
+    its bulk-adopt semantics). All 214 tests pass.
 
 Verification: `bun run check` green (214 pass, `docs freshness check passed`), coordinator submit +
 merge-next, then commit state.json to dev.
@@ -423,15 +429,15 @@ storage failures, mid-restore state); any throw escaped the plugin as an unhandl
 41. The RPC handlers are built by `createRpcHandlers` (`src/rpc-handlers.ts`) and are total: every
     handler catches any failure and returns a benign fallback matching the `GoalRpc` contract —
     `get` → `{ goal: null }`, `list` → `{ goals: [] }`, `status` → `{}`, `clear` → `{ cleared: false }`.
-    `get` performs the storage read-through (`restoreOne`) inside its own guarded path, and a failure
-    there or inside `snapshot`/`spend` still yields `goal: null`, never an exception.
+    `get` performs the storage peek (`peekSnapshot`) inside its own guarded path, and a failure
+    there or inside `peekSnapshot`/`spend` still yields `goal: null`, never an exception.
 42. Malformed or missing inputs never throw: `undefined`, `null`, `{}`, empty/non-string `sessionID`
     all return `{ goal: null }` at the handler layer. Two layers reject before the handler ever runs,
     both verified live on 2026-11-15: the RPC schema (`sessionInput`, `additionalProperties: false`)
     answers `rpc.invalid_input` (`Missing key at ["sessionID"]`, `Expected string`, `Expected object`,
     `Expected never` for extra props) and a non-JSON body answers `InvalidRequestError` — all
     structured 400s, never a 500. `test/rpc-handlers.test.ts` proves the handler layer plus
-    double-failure paths (spend throws AND snapshot throws; restoreOne throws; list explodes;
+    double-failure paths (spend throws AND peekSnapshot throws; peekList explodes;
     status explodes; clear explodes) and the `GoalRpc` output shape. `src/index.ts` registers
     exactly these handlers.
 43. `bun run check` stays green (228 tests) and dev is green after merge.
@@ -457,7 +463,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=60 tests=1460 -->
+<!-- spec-check files=60 tests=1476 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1261,9 +1267,7 @@ A-28 (folds into A-12), A-29 (heuristic by design), A-30 (verified correct), A-1
 
 `restore()` fans out a boundary compaction for every active record (A-4), and the armed loop's settle re-checks the same pending marker at
 every arm — the two never stack because `loopCompact.landedAt`/`misses` persist on the record; restore skips a pending request and a landing
-newer than 10 minutes. The double-count (A-1) is the one real defect in this grid. `adoptRestored` is re-entrant-safe (`goals.has` short-circuit);
-the RPC `restoreOne` path shares it. A concurrent `adoptRestored` pair can both pass the `has` check and both commit the same record — benign
-(idempotent writes, same values) — noted, not fixed.
+newer than 10 minutes. The double-count (A-1) is the one real defect in this grid. `adoptRestored` is re-entrant-safe (`goals.has` short-circuit) and is reached only from the bulk `restore()` now — RPC reads peek and never adopt. A concurrent `adoptRestored` pair can both pass the `has` check and both adopt the same record — benign (in-memory normalization only since Workstream HH; idempotent) — noted, not fixed.
 
 ### Epoch staleness sweep (Phase 1 item 2)
 
@@ -1707,8 +1711,8 @@ rejection today); the evaluator calls and every `stale()` re-check were audited 
      `GoalStore`'s own saves resolve with a boolean (storage faults inside its queue land as `false`), but a
      `save()` that itself rejects — a storage fault at the port boundary, e.g. `structuredClone` failing on the
      port — propagated out of `commit()`. Every un-awaited `this.commit(record)` in the state machine
-     (`evaluate` not_met path, `evaluationFailed`, `handleFailure`, `checkin`, `adoptRestored`,
-     `onUserPrompt`, the final-spend re-save in `finish()`) became an unhandled rejection, and the `lastCommit`
+     (`evaluate` not_met path, `evaluationFailed`, `handleFailure`, `checkin`, `onUserPrompt`,
+     `restore()`'s boundary fan-out, the final-spend re-save in `finish()`) became an unhandled rejection, and the `lastCommit`
      no-op marker was never dropped, so a later identical commit would skip the durable write believing it had
      landed. Fix: `commit()` normalizes a rejecting save to `false` (plus a `log.warn`), so the promise never
      rejects for storage reasons and the existing `!ok → lastCommit.delete` path arms the retry, exactly as
@@ -6204,3 +6208,20 @@ Source: a read-only survey of the live `changed`/carry/settle machinery (no comm
 718. Honest limits: the identity guard keys on the record's additive `id` field only (not `startedAt`); identity is pinned at the controller/TUI-harness level, not at a live TUI frame; the planner-retry commit persists the verdict but does not persist the summarized loop iteration (still local by design until the arm lands); the two pre-existing `evaluating` finally-blocks still flip the flag without an emit of their own and rely on the following commit — acceptable because every path after them commits.
 
 <!-- spec-check files=60 tests=1460 -->
+
+## Workstream HH — live-stream cross-process truth: peek reads, background drain, null re-pull (2026-11-17)
+
+Source: a survey of the goal plugin's server↔TUI live path (`GoalController.commit` → `emitter.changed` → host RPC event bus → TUI `rpc.events.on("changed")` → `put()` → entries cache, plus the TUI's 15s-tick stale-chrome guard) found five connected defects: RPC reads adopted foreign records and rewrote shared storage; a deferral painted `waiting` forever because nothing fired when the background work actually finished; the TUI's unchanged-snapshot branch never refreshed `receivedAt`, so a paused/null goal re-pulled at every tick; the stale-chrome guard could not see null entries at all; and `spend` answered only for in-memory sessions. The fixes were designed together and are implemented as one pass. No redesign; no test weakened. Cross-process (two opencode windows on one directory) writes the same `goal/v1/*` storage; there is no file watch anywhere — truth rides storage reads on the pull path and the event push on the write path. Docs untouched (the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`).
+
+719. src/runtime/controller.ts — `snapshot()` split into a private `snapshotRecord(record, runtime, spend?, contextSize?)` (the former body minus the map lookups) plus a thin `snapshot()` that looks the record up and delegates. Two read-only peeks on top: `peekSnapshot(sessionID, spend?, contextSize?)` serves the in-memory record with runtime truth when present; otherwise reads storage fresh (terminal records included — a dropped `changed` event converges through the next pull) and returns null for missing or foreign-directory records. `peekList()` merges `store.loadLive(directory)` with the in-memory live records (the in-memory copy wins per sessionID — this instance's copy is newer than the stored one). Neither peek adopts nor writes.
+720. src/runtime/controller.ts — `restoreOne` removed entirely (controller + every caller). `adoptRestored` (now reachable only from the bulk `restore()` at server setup) no longer commits: adoption normalizes in memory only — writing the stored record on a read/adopt path is what zeroed turns/baseline for the other process sharing the storage. The next real commit persists the normalized state.
+721. src/rpc-handlers.ts — the `RpcGoalController` surface is now `peekSnapshot`/`peekList`/`spend`/`contextSize?`/`status`/`clear`; `restoreOne`/`restore`/`snapshot`/`list` are gone. `get` spends then peeks (a failure inside the peek yields `goal: null` through its own `.catch(() => null)`; the outer try/catch still guards the whole handler); `list` peeks. Reads never adopt, never restore, never write.
+722. src/runtime/controller.ts — new public `onBackgroundDrained()` (placed next to `checkin`): for every runtime whose evaluation deferred on background work (`deferredSince !== undefined`, not evaluating, not running, record `active`) and whose session reports no remaining background work (`busy` → 0 subagents + shells), it carries the deferred tool calls, clears the deferral (`deferredSince = undefined`), bumps the epoch and re-runs the evaluation now — instead of at the next idle check-in, which may be 30+ minutes away or never (`checkinMinutes === 0` / `maxIdleCheckins` exhausted).
+723. src/runtime/events.ts — `onBackgroundDrained()` is fired (guarded) after the existing controller call on `session.execution.succeeded`, `session.execution.failed`, `session.execution.interrupted`, `session.deleted`, `shell.exited`/`shell.deleted`, and `shell.updated` (a non-running status ends the shell there too; the call is a no-op when nothing deferred). Direct call, never optional: the router test stubs grew a rejecting `onBackgroundDrained` (`test/controller.test.ts`, the pre-existing "async handlers that reject" pin went 3 → 4 reported errors) so the drain's own failures are pinned as reported-never-escaping. Not wired into `session.execution.started`, `session.created`, `shell.created`, `session.tool.called`.
+724. src/core/entries.ts + src/tui.tsx — new `bumpReceivedAt(entries, sessionID, now)` returns a NEW map (new entry object, SAME goal reference) with the entry's `receivedAt` set to now; the `put()` intake's unchanged-snapshot branch (`goalsEqual(existing.goal, mergedGoal)`) returns it instead of the previous map reference. The stale-chrome guard keys on `receivedAt`, and an identical snapshot never reaches the fresh branch, so a never-changing paused/null entry would otherwise re-pull at every tick forever. Goal-identical memos and the render tree stay untouched (the goal reference is shared).
+725. src/core/hud.ts — new `staleUnprovenSessionIDs(entries, nowMs, minAgeMs?)` next to `staleLiveSessionIDs` (which is unchanged; its tests pin it): every entry older than the cadence whose goal is live OR absent is re-pulled. The null arm closes the hole a live-only guard cannot see — a goal armed since the last pull (the `changed` event was dropped, it was armed by the other process on the same directory, or this TUI latched its one-shot fetch while the goal did not exist yet). `src/tui.tsx`'s tick re-pulls through it, so a goal armed elsewhere appears within ~STALE_LIVE_ENTRY_MS (30s).
+726. src/runtime/controller.ts — `spend(sessionID)` falls back to the stored record when the session is not in memory (unadopted foreign/post-reload sessions still get a ledger). `contextSize()` stays memory-gated on purpose: a foreign session must not trigger the expensive context estimate (documented in its doc comment).
+727. Tests — `test/rpc-handlers.test.ts` rewritten to the peek contract (the stub carries no restore/restoreOne/snapshot/list surface at all — that is the assertion of the read-only posture; plus the peek-throws / double-failure / contextSize passthrough cases). `test/loop.test.ts` swaps the four `restoreOne` tests for the peek contract (peekSnapshot live record without adopting — storage byte-identical before/after; peekSnapshot terminal records as stored truth; peekSnapshot null for missing and foreign-directory records; peekList serves stored live records / omits terminal ones; spend falls back to the stored record) and adds a `background drain` describe block (deferred turn evaluates as soon as background work drains; no-op when nothing deferred; waits for remaining work) — the design's `expect(h.verdicts).toHaveLength(0)` drain assertion matches the existing defer test pattern. `test/tui-hud.test.tsx` gains `staleUnprovenSessionIDs` pins (stale live included, terminal excluded, fresh live excluded, missing `receivedAt` included, stale `null` included, fresh null excluded, custom floor). `test/entries.test.ts` gains `bumpReceivedAt` pins (new map, same goal reference, siblings untouched, unknown session same reference, null-goal entry). Suite 1460 → 1476 pass, 0 fail (58 files).
+728. Honest limits: a second instance's SETUP-time `restore()` still adopts live records in memory — it cannot distinguish foreign ownership at that point — but can no longer rewrite the stored record, so the cross-window turn/baseline zeroing is gone; cross-process convergence rides the TUI tick (~30s worst case) for event drops — the push path is unchanged; the drain re-runs the normal `evaluate()` path (epoch bumped, deferred tool calls carried), so a not_met verdict there arms a continuation steer like any turn; `shell.updated` fires the drain unconditionally (no-op when nothing deferred); `peekList()` serves in-memory records with their runtime truth and stored ones without; `dist/tui.js` recompiled by `bun run compile`.
+
+<!-- spec-check files=60 tests=1476 -->

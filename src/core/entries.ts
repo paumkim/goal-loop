@@ -55,6 +55,18 @@ export function pruneSnapshotEntries(
 }
 
 /**
+ * Marks an unchanged cache entry as freshly checked. The stale-chrome guard keys on `receivedAt`, and a
+ * snapshot that compares equal never reaches the `setEntries` updater's fresh branch — so without this
+ * the guard would re-pull a never-changing paused/null entry at every tick forever. Returns a NEW map
+ * (new entry object, SAME goal reference) so the signal re-evaluates but goal-identical memos do not.
+ */
+export function bumpReceivedAt(entries: Readonly<Record<string, GoalSnapshotCacheEntry>>, sessionID: string, now: number): Readonly<Record<string, GoalSnapshotCacheEntry>> {
+  const existing = entries[sessionID]
+  if (!existing) return entries
+  return { ...entries, [sessionID]: { ...existing, receivedAt: now } }
+}
+
+/**
  * The `get` RPC carries the last-known context estimate and spend; `changed` event snapshots usually do
  * not (both need a host call the hot path avoids). When an event snapshot arrives without one, carry the
  * cached value forward so the dialog's context meter and spend row do not flicker to `unknown` on every

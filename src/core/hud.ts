@@ -222,6 +222,24 @@ export const staleLiveSessionIDs = (
     .map(([sessionID]) => sessionID)
 
 /**
+ * Everything the tick's re-pull should cover: entries older than the cadence whose goal is live OR
+ * absent. The null arm closes the hole staleLiveSessionIDs cannot see: a goal armed (or disarmed)
+ * since the last pull — the `changed` stream missed the event, it happened in another process on the
+ * same directory, or this TUI latched its one-shot fetch while the goal did not exist yet. `receivedAt`
+ * rides every re-pull (see bumpReceivedAt in entries.ts), so an unchanged null or live entry costs one
+ * pull per window, not one per tick.
+ */
+export const staleUnprovenSessionIDs = (
+  entries: Readonly<Record<string, { readonly goal?: GoalSnapshot | null | undefined; readonly receivedAt?: number | undefined }>>,
+  nowMs: number,
+  minAgeMs: number = STALE_LIVE_ENTRY_MS,
+): string[] =>
+  Object.entries(entries)
+    .filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs)
+    .filter(([, entry]) => entry?.goal == null || isLive(entry.goal.status))
+    .map(([sessionID]) => sessionID)
+
+/**
  * How long a terminal acknowledgment pill lingers on the jump row after a live→terminal transition.
  * Long enough to notice without becoming furniture; the entries cache may evict the goal itself sooner.
  */
