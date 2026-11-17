@@ -7184,10 +7184,6 @@ var tui_default = Plugin.define({
           const g = showing();
           return g && getHudSession() === props.sessionID ? g : undefined;
         };
-        const cardReady = () => {
-          const g = cardFor();
-          return g !== undefined && (mountWidth() ?? 0) > 0 ? g : undefined;
-        };
         const maxCardRows = () => Math.max(8, dimensions().height - 2);
         const cardRows = () => {
           const g = cardFor();
@@ -7244,7 +7240,7 @@ var tui_default = Plugin.define({
                   return _el$12;
                 })(), _$createComponent4(Show4, {
                   get when() {
-                    return cardReady();
+                    return cardFor();
                   },
                   children: (g) => (() => {
                     var _el$15 = _$createElement4("box");
@@ -7262,61 +7258,68 @@ var tui_default = Plugin.define({
                     _$setProp4(_el$15, "left", 0);
                     _$setProp4(_el$15, "right", 0);
                     _$setProp4(_el$15, "zIndex", 10);
-                    _$insert4(_el$15, _$createComponent4(HudCard, {
-                      get goal() {
-                        return g();
+                    _$insert4(_el$15, _$createComponent4(Show4, {
+                      get when() {
+                        return mountWidth() !== undefined;
                       },
-                      get width() {
-                        return mountWidthOr();
-                      },
-                      get theme() {
-                        return context.theme;
-                      },
-                      mono: reducedColor,
-                      elapsedMs: elapsed,
-                      onClose: () => {
-                        setContextOpen(false);
-                        setHudSession(undefined);
-                      },
-                      onDetails: () => {
-                        setContextOpen(false);
-                        openDashboard(props.sessionID);
-                      },
-                      onClear: () => {
-                        setContextOpen(false);
-                        setHudSession(undefined);
-                        requestClearGoal(props.sessionID);
-                      },
-                      onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID),
-                      get contextOpen() {
-                        return contextOpen();
-                      },
-                      get maxRows() {
-                        return maxCardRows();
-                      },
-                      onToggleContext: () => setContextOpen((v) => {
-                        const next = !v;
-                        if (next)
-                          setContextIndex(0);
-                        return next;
-                      }),
-                      menuSelected: () => contextIndex(),
-                      onCloseMenu: () => {
-                        setContextOpen(false);
-                        setContextIndex(0);
-                      },
-                      onCopyReason: (reason) => copyToClipboard(reason, props.sessionID, "reason"),
-                      onCopySummary: (summary) => copyToClipboard(summary, props.sessionID, "summary"),
-                      onCopyDossier: () => {
-                        const g = entries()[props.sessionID]?.goal;
-                        if (g)
-                          copyToClipboard(buildLoopDossier(g, Date.now()), props.sessionID, "dossier");
-                      },
-                      onSaveDossier: () => exportDossier(props.sessionID, entries()[props.sessionID]?.goal),
-                      get pinned() {
-                        return pinnedNow();
-                      },
-                      onTogglePin: () => togglePin(props.sessionID)
+                      get children() {
+                        return _$createComponent4(HudCard, {
+                          get goal() {
+                            return g();
+                          },
+                          get width() {
+                            return mountWidthOr();
+                          },
+                          get theme() {
+                            return context.theme;
+                          },
+                          mono: reducedColor,
+                          elapsedMs: elapsed,
+                          onClose: () => {
+                            setContextOpen(false);
+                            setHudSession(undefined);
+                          },
+                          onDetails: () => {
+                            setContextOpen(false);
+                            openDashboard(props.sessionID);
+                          },
+                          onClear: () => {
+                            setContextOpen(false);
+                            setHudSession(undefined);
+                            requestClearGoal(props.sessionID);
+                          },
+                          onCopyCondition: (condition) => copyToClipboard(condition, props.sessionID),
+                          get contextOpen() {
+                            return contextOpen();
+                          },
+                          get maxRows() {
+                            return maxCardRows();
+                          },
+                          onToggleContext: () => setContextOpen((v) => {
+                            const next = !v;
+                            if (next)
+                              setContextIndex(0);
+                            return next;
+                          }),
+                          menuSelected: () => contextIndex(),
+                          onCloseMenu: () => {
+                            setContextOpen(false);
+                            setContextIndex(0);
+                          },
+                          onCopyReason: (reason) => copyToClipboard(reason, props.sessionID, "reason"),
+                          onCopySummary: (summary) => copyToClipboard(summary, props.sessionID, "summary"),
+                          onCopyDossier: () => {
+                            const g = entries()[props.sessionID]?.goal;
+                            if (g)
+                              copyToClipboard(buildLoopDossier(g, Date.now()), props.sessionID, "dossier");
+                          },
+                          onSaveDossier: () => exportDossier(props.sessionID, entries()[props.sessionID]?.goal),
+                          get pinned() {
+                            return pinnedNow();
+                          },
+                          onTogglePin: () => togglePin(props.sessionID)
+                        });
+                      }
                     }));
                     _$effect4((_p$) => {
                       var _v$9 = -cardRows(), _v$0 = cardRows();

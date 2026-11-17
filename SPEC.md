@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1337 -->
+<!-- spec-check files=59 tests=1339 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5760,3 +5760,26 @@ fixed at the seam that feeds it, and the card is pinned to the mount it actually
      both ErrorBoundaries are unchanged; a recurrence of the dialog crash now fails loudly in-dialog with the
      real stack, not in the host.
 <!-- spec-check files=59 tests=1337 -->
+
+## Workstream EO — the mount-width probe mounts before the card (2026-11-17)
+
+Interpretation of the armed condition: EM2's width fix was merged broken — the measuring absolute
+box sat INSIDE the `<Show>` gated on the width it itself produces, so the card never mounted and the
+live HUD showed nothing (verified in a standalone tmux repro at 100/140/160/200 columns). The premise
+of the gate was inverted. This workstream fixes the structure, not the sign.
+528. src/tui.tsx — the absolute box is the probe and mounts on `cardFor()` (the toggle), never behind
+     the width gate; only `HudCard` inside it waits for `mountWidth() !== undefined`. The probe
+     resolves to exactly the mount (`left={0} right={0}` across the slot), snapped at ref time and via
+     `onSizeChange` on every layout pass. Verified live in a standalone tmux session: the armed card
+     paints inside the composer boundary at 100 and 140 columns with ellipsis truncation (the sidebar
+     visible on the right, the card clear of it), and the detail dialog opens without the crash
+     fallback.
+529. test/tui-hud-width-measure.test.tsx — +2 tests pin the opentui contract the fix relies on: an
+     absolute `left={0} right={0}` box resolves to its parent's width and reports it through
+     `onSizeChange` after the first layout (not at ref time — ref sees width 0). An opentui upgrade
+     that breaks either fails here instead of zeroing the card in the host.
+530. Honest limits: the card waits one layout pass after arming before painting (by design — an empty
+     probe box paints nothing); the probe resolves width but not height-row alignment beyond the
+     `cardRows()` contract; headless coverage pins the mechanism, not the host's slot placement, which
+     remains verified in the standalone tmux repro only.
+<!-- spec-check files=59 tests=1339 -->
