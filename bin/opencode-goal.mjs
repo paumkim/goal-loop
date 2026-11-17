@@ -61,11 +61,12 @@ import {
   unlinkSync,
   readdirSync,
   renameSync,
+  statSync,
+  constants,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
 import { realpathSync } from "node:fs";
 
 const PKG = (() => {
@@ -80,15 +81,7 @@ export const PLUGIN_PACKAGE = "opencode-goalv2"; // legacy spec; kept for uninst
 export const PLUGIN_SPEC = `github:paumkim/opencode-goalv2#v${typeof PKG.version === "string" ? PKG.version : "unknown"}`;
 const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
 const SCHEMA_URL = "https://opencode.ai/config.json";
-
-const VERSION = (() => {
-  try {
-    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-    return typeof pkg.version === "string" ? pkg.version : "unknown";
-  } catch {
-    return "unknown";
-  }
-})();
+const VERSION = typeof PKG.version === "string" ? PKG.version : "unknown";
 
 class CliError extends Error {}
 
@@ -173,7 +166,13 @@ function parseJsonc(text) {
     const t = peek();
     if (!t) throw new CliError("unexpected end of file");
     if (t.type === "string") { pos++; return { type: "string", start: t.start, end: t.end, value: t.value }; }
-    if (t.type === "literal") { pos++; return { type: "literal", start: t.start, end: t.end, value: t.value }; }
+    if (t.type === "literal") {
+      if (!/^(-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?|true|false|null)$/.test(t.value)) {
+        throw new CliError(`invalid literal '${t.value}' at offset ${t.start}`);
+      }
+      pos++;
+      return { type: "literal", start: t.start, end: t.end, value: t.value };
+    }
     if (t.value === "{") return parseObject();
     if (t.value === "[") return parseArray();
     throw new CliError(`unexpected token '${t.value}' at offset ${t.start}`);
@@ -224,7 +223,11 @@ function parseJsonc(text) {
 
 function findPluginsProperty(root) {
   if (root.type !== "object") throw new CliError("top-level value is not an object; not touching it");
-  return root.properties.find((p) => p.key === "plugins") ?? null;
+  const matches = root.properties.filter((p) => p.key === "plugins");
+  if (matches.length > 1) {
+    throw new CliError(`duplicate "plugins" keys at offsets ${matches.map((m) => m.keyStart).join(", ")}; refusing to edit`);
+  }
+  return matches[0] ?? null;
 }
 
 function elementMatchesSpec(el, spec) {
@@ -240,7 +243,26 @@ function matchesPluginEntry(el) {
   return SPECS.some((spec) => elementMatchesSpec(el, spec));
 }
 
-/** Insert (or detect) the plugin in the config text. Returns { text, already, created }. */
+/**
+ * Split the span between an array's last element (or `[`) and `]` into the
+ * comment/comma material to keep and the newline+indent that sits on the
+ * `]` line. Comments between the last element and `]` must survive (line 40),
+ * so the insertion preserves `head` verbatim instead of deleting it.
+ */
+function splitClosingBracketSpan(inner) {
+  const indentM = inner.match(/(\r?\n[ \t]*)$/);
+  const head = indentM ? inner.slice(0, -indentM[1].length) : inner;
+  const bracketLine = indentM ? indentM[1] : "\n  ";
+  return { head, bracketLine };
+}
+
+/** True when `head` (text between the last element and `]`) carries no top-level comma. Comments are stripped before the check. */
+function headCarriesComma(head) {
+  const noBlock = head.replace(/\/\*[\s\S]*?\*\//g, "");
+  return noBlock.replace(/\/\/[^\n]*/g, "").includes(",");
+}
+
+/** Insert (or detect) the plugin in the config text. Returns { text, already }. */
 export function addPluginText(text) {
   const root = parseJsonc(text);
   const prop = findPluginsProperty(root);
@@ -257,10 +279,20 @@ export function addPluginText(text) {
   if (arr.type !== "array") throw new CliError(`"plugins" is not an array; not touching it`);
   if (arr.elements.some(matchesPluginEntry)) return { text, already: true };
   if (arr.elements.length === 0) {
+    const inner = text.slice(arr.start + 1, arr.end - 1);
+    const kept = inner.trim();
+    if (kept) {
+      // preserve comments between [ and ]: keep them on the entry line
+      const { bracketLine } = splitClosingBracketSpan(inner);
+      return { text: text.slice(0, arr.start + 1) + `\n    ${entry} ${kept}` + bracketLine + text.slice(arr.end - 1), already: false };
+    }
     return { text: text.slice(0, arr.start + 1) + `\n    ${entry}\n  ` + text.slice(arr.end - 1), already: false };
   }
   const lastEl = arr.elements[arr.elements.length - 1];
-  return { text: text.slice(0, lastEl.end) + `,\n    ${entry}\n  ` + text.slice(arr.end - 1), already: false };
+  const inner = text.slice(lastEl.end, arr.end - 1);
+  const { head, bracketLine } = splitClosingBracketSpan(inner);
+  // add the separating comma right after the last element when the head has none (comment-only), then re-emit the head verbatim
+  return { text: text.slice(0, lastEl.end) + (headCarriesComma(head) ? "" : ",") + head + `\n    ${entry}` + bracketLine + text.slice(arr.end - 1), already: false };
 }
 
 /** Remove a span plus one adjacent comma (following comma preferred, else preceding). */
@@ -269,10 +301,11 @@ function removeSpanWithComma(text, start, end) {
   while (i < text.length && /\s/.test(text[i])) i++;
   if (text[i] === ",") {
     let j = i + 1;
-    // swallow the rest of the line's trailing whitespace+newline when the whole line is consumed
+    // swallow the rest of the line's trailing whitespace (including CR for CRLF) plus the line ending when the whole line is consumed
     let k = j;
     while (k < text.length && (text[k] === " " || text[k] === "\t")) k++;
-    if (text[k] === "\n") j = k + 1;
+    if (text[k] === "\r" && text[k + 1] === "\n") j = k + 2; // CRLF line ending
+    else if (text[k] === "\n" || text[k] === "\r") j = k + 1; // LF or lone CR line ending
     return text.slice(0, start) + text.slice(j);
   }
   let p = start;
@@ -322,7 +355,7 @@ export function removePluginText(text) {
 export function resolveScope(args, opts = {}) {
   const env = opts.env ?? process.env;
   const cwd = opts.cwd ?? process.cwd();
-  const home = opts.homedir ?? env.HOME ?? homedir();
+  const home = opts.homedir ?? (env.HOME || undefined) ?? homedir(); // empty HOME falls back like unset
   const project = args.includes("--project");
   const global = args.includes("--global");
   if (project && global) throw new CliError("--global and --project are mutually exclusive");
@@ -337,7 +370,7 @@ export function resolveScope(args, opts = {}) {
     return { scope: "project", dir: cwd, file: candidates[0] };
   }
   const xdg = env.XDG_CONFIG_HOME;
-  const dir = xdg ? join(xdg, "opencode") : join(home, ".config", "opencode");
+  const dir = xdg && isAbsolute(xdg) ? join(xdg, "opencode") : join(home, ".config", "opencode"); // non-absolute XDG is ignored (XDG spec), never resolved against CWD
   const json = join(dir, "opencode.json");
   const jsonc = join(dir, "opencode.jsonc");
   if (existsSync(jsonc)) return { scope: "global", dir, file: jsonc };
@@ -345,35 +378,85 @@ export function resolveScope(args, opts = {}) {
   return { scope: "global", dir, file: jsonc };
 }
 
-/** Write a file atomically: temp file in the same directory, then rename into place. */
+/**
+ * Write a file atomically: temp file in the same directory, then rename into place.
+ * Operates on the realpath when the file exists (a symlinked config is replaced
+ * atomically through the link rather than the link itself being replaced) and
+ * preserves the existing file's mode (a 0600 config stays 0600).
+ */
 function writeFileAtomic(file, contents) {
-  const tmp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tmp, contents);
-  renameSync(tmp, file);
+  let target = file;
+  try {
+    target = realpathSync(file); // the bytes live there; keep the user's symlink intact
+  } catch {
+    // file does not exist yet: write at the given path (parent dir is created by the caller)
+  }
+  const tmp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    let mode;
+    try {
+      mode = statSync(target).mode & 0o7777;
+    } catch {
+      mode = undefined;
+    }
+    writeFileSync(tmp, contents, mode === undefined ? {} : { mode });
+    try {
+      renameSync(tmp, target);
+    } catch (err) {
+      try { unlinkSync(tmp); } catch { /* best effort; do not mask the rename error */ }
+      throw err;
+    }
+  } catch (err) {
+    // writeFileSync itself threw: no tmp left behind in the common case, but be sure
+    try { unlinkSync(tmp); } catch { /* tmp may never have been created */ }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Backups
 // ---------------------------------------------------------------------------
 
-function backupFile(file) {
+/**
+ * Back up a file next to the original, <file>.<stamp>[-N].bak, never overwritten.
+ * When `contents` is given (the exact bytes that were parsed as the edit base),
+ * the backup is written from them instead of re-copying the live file — the
+ * backup then matches the pre-edit state byte-for-byte even if another process
+ * edits the file in between. Exclusive creation (COPYFILE_EXCL/wx) closes the
+ * existsSync→copy race.
+ */
+function backupFile(file, contents) {
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + "Z";
   let dest = `${file}.${stamp}.bak`;
   let n = 2;
-  while (existsSync(dest)) dest = `${file}.${stamp}-${n++}.bak`;
-  copyFileSync(file, dest);
-  return dest;
+  for (;;) {
+    try {
+      if (contents !== undefined) writeFileSync(dest, contents, { flag: "wx" });
+      else copyFileSync(file, dest, constants.COPYFILE_EXCL);
+      return dest;
+    } catch (err) {
+      if (err && err.code === "EEXIST") {
+        dest = `${file}.${stamp}-${n++}.bak`;
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
-function backupChronologyKey(f) {
-  // <file>.<yyyy-MM-DD-HH-mm-ss>Z[-N].bak — collision suffix -N sorts AFTER the plain backup of the same second
-  const m = f.match(/\.(\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2})Z(?:-(\d+))?\.bak$/);
-  return m ? [m[1], m[2] ? Number(m[2]) : 0] : [f, 0];
-}
+// Stamp exactly as backupFile emits: <file>.<yyyy-MM-DD-HH-mm-ss>Z[-N].bak — collision suffix -N sorts AFTER the plain backup of the same second.
+// Foreign <base>.*.bak files that do not match this exact, range-checked shape are never restore candidates.
+const DATE_STAMP = String.raw`\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])-(?:[01]\d|2[0-3])-[0-5]\d-[0-5]\d`;
+const BACKUP_NAME = String.raw`${DATE_STAMP}Z(?:-(\d+))?\.bak$`;
+const backupChronologyKey = (f) => {
+  const m = f.match(new RegExp(`\\.(${DATE_STAMP})Z(?:-(\\d+))?\\.bak$`));
+  return m ? [m[1], m[2] ? Number(m[2]) : 0] : null;
+};
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function compareBackupsChronologically(a, b) {
-  const [ta, ia] = backupChronologyKey(a);
-  const [tb, ib] = backupChronologyKey(b);
+  const [ta, ia] = backupChronologyKey(a) ?? ["9999", 0];
+  const [tb, ib] = backupChronologyKey(b) ?? ["9999", 0];
   return ta < tb ? -1 : ta > tb ? 1 : ia - ib;
 }
 
@@ -381,8 +464,9 @@ function listBackups(file) {
   const dir = resolve(file, "..");
   const base = file.slice(dir.length + 1);
   if (!existsSync(dir)) return [];
+  const re = new RegExp(`^${escapeRegExp(base)}\\.${BACKUP_NAME}`);
   return readdirSync(dir)
-    .filter((f) => f.startsWith(`${base}.`) && f.endsWith(".bak"))
+    .filter((f) => re.test(f)) // exactly the format backupFile emits; foreign backups never match
     .map((f) => join(dir, f))
     .sort(compareBackupsChronologically); // ascending by true creation time
 }
@@ -393,7 +477,7 @@ function backupPluginFree(bak) {
     const root = parseJsonc(readFileSync(bak, "utf8"));
     const prop = findPluginsProperty(root);
     if (!prop) return true; // parsed, no plugins key at all
-    if (prop.value.type !== "array") return true; // parsed, no resolvable plugin element
+    if (prop.value.type !== "array") return null; // unverifiable, never auto-restore
     return !prop.value.elements.some(matchesPluginEntry);
   } catch {
     return null; // unparseable backup — never restore from it
@@ -459,7 +543,7 @@ export function install(args, opts = {}) {
   const out = [];
   if (!existsSync(file)) {
     if (!dryRun) {
-      mkdirSync(scope.dir === file ? "." : scopeDirOf(file), { recursive: true });
+      mkdirSync(scopeDirOf(file), { recursive: true });
       writeFileAtomic(file, skeleton());
     }
     out.push(dryRun
@@ -474,7 +558,7 @@ export function install(args, opts = {}) {
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
   if (!dryRun) {
-    const bak = backupFile(file);
+    const bak = backupFile(file, text); // bytes identical to the edit base
     writeFileAtomic(file, result.text);
     out.push(`installed ${PLUGIN_SPEC} in ${file}; restart opencode (backup: ${bak})`);
   } else {
@@ -484,8 +568,7 @@ export function install(args, opts = {}) {
 }
 
 function scopeDirOf(file) {
-  const idx = file.lastIndexOf("/");
-  return idx === -1 ? "." : file.slice(0, idx);
+  return dirname(file);
 }
 
 export function uninstall(args, opts = {}) {
@@ -499,13 +582,13 @@ export function uninstall(args, opts = {}) {
     const candidate = preInstallBackup(file);
     if (!candidate) return { code: 1, stdout: "", stderr: `opencode-goal: no pre-install (plugin-free) backup found for ${file}\n` };
     if (!dryRun) {
-      if (existsSync(file)) backupFile(file); // keep a safety copy of the current state
-      else mkdirSync(scopeDirOf(file), { recursive: true });
+      const safety = existsSync(file) ? backupFile(file) : null; // keep a safety copy of the current state
+      if (!safety) mkdirSync(scopeDirOf(file), { recursive: true });
       copyFileSync(candidate, file); // the pre-install config, byte for byte
+      out.push(`restored ${candidate} over ${file}${safety ? ` (backup of the pre-restore state: ${safety})` : ""}`);
+      return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
     }
-    out.push(dryRun
-      ? `dry-run: would restore ${candidate} over ${file}`
-      : `restored ${candidate} over ${file}`);
+    out.push(`dry-run: would restore ${candidate} over ${file}`);
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
 
@@ -515,7 +598,7 @@ export function uninstall(args, opts = {}) {
   const result = removePluginText(text);
   if (!result.removed) return missingEntryOutcome(file, dryRun);
   if (!dryRun) {
-    const bak = backupFile(file);
+    const bak = backupFile(file, text); // bytes identical to the edit base
     if (result.emptyRoot || result.skeletonRoot) {
       unlinkSync(file);
       out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (created by install); restart opencode (backup: ${bak})`);

@@ -13,7 +13,7 @@ export interface ScopeResolution {
 }
 
 export interface CliOptions {
-  env?: NodeJS.ProcessEnv;
+  env?: { [key: string]: string | undefined };
   cwd?: string;
   homedir?: string;
 }

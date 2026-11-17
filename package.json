@@ -22,9 +22,18 @@
     "loop"
   ],
   "exports": {
-    ".": "./index.ts",
-    "./tui": "./dist/tui.js",
-    "./rpc": "./rpc.ts"
+    ".": {
+      "types": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.js"
+    },
+    "./rpc": {
+      "types": "./rpc.ts",
+      "default": "./rpc.ts"
+    }
   },
   "files": [
     "index.ts",
@@ -40,17 +49,20 @@
     "opencode": ">=2.0.29"
   },
   "scripts": {
-    "test": "bun test",
+    "test": "cd test && bun test",
     "typecheck": "tsc --noEmit",
     "e2e": "bun scripts/e2e.ts",
     "check": "tsc --noEmit && (cd test && bun test) && bun run compile && bun run check:tui && bun run docs:check && bun run check:spec",
     "check:tui": "bun scripts/tui-load-check.ts ./tui.ts",
     "docs:check": "bun scripts/docs-watch.ts check",
     "check:spec": "bun scripts/spec-check.ts",
-    "prepublishOnly": "bun run compile && bun test",
+    "prepublishOnly": "bun run compile && cd test && bun test",
     "compile": "bun scripts/build.ts",
     "docs:watch": "bun scripts/docs-watch.ts watch",
     "docs:once": "bun scripts/docs-watch.ts once"
+  },
+  "dependencies": {
+    "string-width": "7.2.0"
   },
   "peerDependencies": {
     "@opencode/plugin": ">=2.0.29",
@@ -79,8 +91,7 @@
     "@opentui/solid": "0.5.17",
     "@types/bun": "1.4.0",
     "solid-js": "1.9.15",
-    "typescript": "5.8.2",
-    "string-width": "7.2.0"
+    "typescript": "5.8.2"
   },
   "publishConfig": {
     "access": "public"

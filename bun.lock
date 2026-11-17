@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "opencode-goal",
+      "dependencies": {
+        "string-width": "7.2.0",
+      },
       "devDependencies": {
         "@opencode/client": "2.0.29",
         "@opencode/plugin": "2.0.29",
@@ -11,7 +14,6 @@
         "@opentui/solid": "0.5.17",
         "@types/bun": "1.4.0",
         "solid-js": "1.9.15",
-        "string-width": "7.2.0",
         "typescript": "5.8.2",
       },
       "peerDependencies": {

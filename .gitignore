@@ -5,6 +5,9 @@ worktrees/
 .term/coordinator/*.lock
 .term/coordinator/.claim-lock-file
 .term/coordinator/.merge-lock-file
+.term/coordinator/.claim-lock/
+.term/coordinator/.merge-lock/
+.term/coordinator/.state-stash.*
 .term/coordinator/.state.*
 worktrees/wt-*
 .docs-watch-state.json
