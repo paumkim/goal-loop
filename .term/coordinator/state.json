@@ -2717,6 +2717,22 @@
       "submittedAt": "2026-11-17T20:14:28Z",
       "mergedAt": "2026-11-17T20:15:45Z",
       "mergedInto": "dev"
+    },
+    "tui-emit-hygiene-ii": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/core/entries.ts,src/core/wire.ts,src/runtime/store.ts,src/tui.tsx,test/loop.test.ts,test/entries.test.ts,SPEC.md",
+      "branch": "wt/tui-emit-hygiene-ii",
+      "worktree": "worktrees/wt-tui-emit-hygiene-ii",
+      "status": "done",
+      "createdAt": "2026-11-17T20:26:58Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T20:32:13Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-17T20:32:13Z",
+      "mergedAt": "2026-11-17T20:33:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
