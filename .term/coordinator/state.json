@@ -2404,8 +2404,11 @@
       "paths": "SPEC.md,src,test,scripts",
       "branch": "wt/em2-first-class-channel",
       "worktree": "worktrees/wt-em2-first-class-channel",
-      "status": "claimed",
-      "createdAt": "2026-11-17T00:20:30Z"
+      "status": "done",
+      "createdAt": "2026-11-17T00:20:30Z",
+      "submittedAt": "2026-11-17T01:06:45Z",
+      "mergedAt": "2026-11-17T01:12:25Z",
+      "mergedInto": "dev"
     },
     "opencode-real-clone-path": {
       "agent": "orchestrator",
