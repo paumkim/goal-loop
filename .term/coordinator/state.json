@@ -2761,6 +2761,24 @@
       "submittedAt": "2026-11-17T20:47:29Z",
       "mergedAt": "2026-11-17T20:48:46Z",
       "mergedInto": "dev"
+    },
+    "tui-intake-converge-v5": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/entries.ts,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,docs",
+      "branch": "wt/tui-intake-converge-v5",
+      "worktree": "worktrees/wt-tui-intake-converge-v5",
+      "status": "done",
+      "createdAt": "2026-11-17T20:58:43Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T21:04:06Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/entries.test.ts",
+        "test/wire.test.ts"
+      ],
+      "submittedAt": "2026-11-17T21:04:06Z",
+      "mergedAt": "2026-11-17T21:05:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
