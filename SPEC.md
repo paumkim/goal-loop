@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1328 -->
+<!-- spec-check files=59 tests=1334 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5662,3 +5662,61 @@ instruction.
      a model that needs the verdict finds it on disk in the goal record and the dossier; non-tagged
      goal notes still ride the context by design (they carry live instructions).
 <!-- spec-check files=59 tests=1326 -->
+
+## Workstream EM2 — the crash report closes: the card speaks the v2 composer's grammar, and the dialog can no longer take the session down (2026-11-17)
+
+Interpretation of the mouse-first clause: the HUD card was a floating, bordered popup —
+a chrome shape the opencode v2 composer itself never paints. Meanwhile the live session
+reported `opencode-goal.tui crashed in dialog: undefined is not an object (evaluating 'e.length')`.
+The report could not be reproduced: both real persisted goal records render every tab of the real
+dialog body headlessly without throwing. The honest responses are a reframed card (the composer's
+own grammar, full width, the state accent as the one bar), two ErrorBoundary placements so a render
+frame exception degrades the chrome instead of killing the session, and a regression test that
+inlines the two records so the outcome is pinned byte-for-byte rather than asserted from memory.
+516. src/hud-card.tsx — the card is reframed in the opencode v2 composer's grammar: a 1-cell left
+     bar in the state accent (`border={["left"]}`, single line), no top/bottom/right frame, the
+     raised dark surface underneath, and the title as an in-card bold row (state glyph + loop
+     position), paddingLeft/Right 2 replacing the popup's 1. `cardRowPlan`'s base drops 5 → 4
+     (title row + condition + now + actions; the two border rows are gone) with an unchanged drop
+     order otherwise — teaching hint, spend, context meter, why, last verdict, remediation.
+     The doc comment's layout sketch is updated to the new grammar.
+517. src/tui.tsx — the mount renders the card at full terminal width (`right={0}` on the absolute
+     box plus `width={dimensions().width}` on the card), and the anchor measures the same width the
+     card paints with (the `hudCardRows` call no longer clamps to `cardWidth`, which drifted the
+     remediation's wrap estimate from the painted rows); `cardWidth` is no longer imported here.
+     Two ErrorBoundary placements: (a) the /goal detail dialog body — a render-frame exception
+     lands as an in-dialog fallback (`goal detail failed to render`, the error text capped at 600
+     cells, `esc to close · your session is unaffected`) instead of the host's
+     "plugin crashed in dialog" banner; the session stays alive and esc stays reachable. (b) The
+     `session.composer.top` HUD fragment (pill + card mount) is wrapped with a `<box />` fallback —
+     a card-side render exception unmounts the HUD, never the prompt. Both boundaries contain;
+     neither diagnoses.
+518. src/hud-card.tsx — the card's own `cardRowPlan` call inside `HudCard` now passes the resolved
+     live `width()` (it previously took the 64-cell default), so the painted rows equal the anchored
+     rows at every width, aligning with the doc's "rows the mount anchors with == rows painted
+     here" contract and the mount fix in 517. (No test-visible change: every headless render
+     resolves `width()` to cardWidth(80) = 64, the former default.)
+519. test/dialog-crash-records.test.tsx — the two real persisted goal records inlined as fixtures
+     (captured from the live sessions on 2026-11-16; inlined 2026-11-17): the Extract opencode
+     v2.3.0 session record (fresh `/goal-loop`, iteration 1 of 5, boundary compaction landed, very
+     long condition) and the Coordinator stale works record (met, non-loop, one-turn ledger with a
+     per-turn spend and landing sha). Each record renders the overview, ledger and dossier tabs
+     through the real `StatusDialogBody` without throwing — +6 tests. The scratch repro
+     (`test/tmp-repro-dialog-crash.test.tsx`, which read `/tmp/opencode/*.json` at test time) and
+     the three fuzz scratch files (`tmp-fuzz-dialog.tsx`, `tmp-fuzz-hud.tsx`, `tmp-fuzz2.tsx`) are
+     deleted.
+520. Tests: the 26 failing reconciled to the new frame — every `cardRowPlan`/`hudCardRows`
+     expectation shifted by the one-row base saving, and every `maxRows` ceiling argument in the
+     cap tests shifted down by one so exactly the same drop stages are exercised (hint, then spend,
+     then context, then why, then last, then remediation; the irreducible core and the never-dropping
+     menu rows unchanged). The 9 HudCard full-frame snapshots were regenerated with `bun test -u`
+     and inspected: each shows the left accent bar, the in-card title row, no top/bottom frame, and
+     the same row content as before; the dialog/footer snapshots are byte-identical. Suite: 1332
+     pass, 0 fail (54 files). Marker re-counted below.
+521. Honest limits: the `e.length` crash itself was never root-caused — the ErrorBoundary is the
+     mitigation that keeps the session alive when it recurs, and the inlined records pin that both
+     real shapes render. A recurrence is a bug to chase with the next live capture, not a solved
+     problem. The full-width card paints every terminal row (the composer's own grammar, by design),
+     where the 64-cell design used to centre/clamp the panel. The teaching-hint and ceiling
+     behavior at exactly `maxRows` is unchanged in kind — only the arithmetic moved one row.
+<!-- spec-check files=59 tests=1332 -->
