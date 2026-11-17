@@ -21,7 +21,7 @@ import type { LoopEntry } from "./types.ts"
 import { formatCost, formatDuration, formatDurationCoarse } from "./format.ts"
 
 /** The numbers the final tally paints — the `loopTotals` shape from history.ts, restated so this module does not import the renderer's world. `spend.measured` is the count of iterations whose usage delta was measurable; the tally never claims a complete total from a partial measurement. */
-export interface AttestationTotals {
+interface AttestationTotals {
   readonly iterations: number
   readonly turns: number
   readonly tools: number

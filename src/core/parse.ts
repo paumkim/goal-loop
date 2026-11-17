@@ -29,7 +29,7 @@ function unquote(text: string) {
 }
 
 /** A leading `/goal-loop[-N|=N]` directive in a raw user prompt (the unknown-slash-command path). */
-export interface GoalLoopDirective {
+interface GoalLoopDirective {
   /** Everything after the directive token, trimmed: the objective/context. The directive and N are never part of it. */
   readonly objective: string
   /** Valid per-run override from the token (1..1000). Absent means the configured/default limit applies. */

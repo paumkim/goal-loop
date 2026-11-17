@@ -102,7 +102,7 @@ const totalsOf = (entries: readonly LoopEntry[]): SpendTotals => {
   return { iterations: entries.length, measured, turns, tools, cost, input, output, reasoning, cacheRead, cacheWrite }
 }
 
-export interface BuiltSpendLedger {
+interface BuiltSpendLedger {
   /** The complete report document. */
   readonly markdown: string
   /** Landed iterations on the record. */
@@ -187,7 +187,7 @@ export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendL
   }
 }
 
-export interface SpendLedgerExportResult {
+interface SpendLedgerExportResult {
   /** Absolute path of the written file. */
   readonly path: string
   /** Bytes written (UTF-8). */

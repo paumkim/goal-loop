@@ -59,7 +59,7 @@ export const dossierIndexName = (nowMs: number, attempt = 0): string => {
   return `goal-dossier-index-${stamp}${suffix}.md`
 }
 
-export type DossierArtifactKind = "dossier" | "review" | "sealed" | "spend ledger" | "index"
+type DossierArtifactKind = "dossier" | "review" | "sealed" | "spend ledger" | "index"
 
 /** The stamp the exporters write: `<YYYYMMDD>-<HHMMSS>` plus an optional `-n` retry suffix (1-based, never `-0` or `-01`). */
 const STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`
@@ -93,7 +93,7 @@ export interface DossierIndexEntry {
   readonly sha256: string
 }
 
-export interface ScannedDossierArtifacts {
+interface ScannedDossierArtifacts {
   /** The readable artifacts, sorted by name (a timestamped order). */
   readonly entries: readonly DossierIndexEntry[]
   /** Candidates that matched the artifact shape but could not be read (I/O error). Never listed; always counted. */
@@ -130,7 +130,7 @@ export function scanDossierArtifacts(dir: string): ScannedDossierArtifacts {
   return { entries, skipped }
 }
 
-export interface BuiltDossierIndex {
+interface BuiltDossierIndex {
   /** The complete index document. */
   readonly markdown: string
   /** Artifacts listed (the readable ones). */
@@ -194,7 +194,7 @@ export function buildDossierIndex(
   }
 }
 
-export interface DossierIndexExportResult {
+interface DossierIndexExportResult {
   /** Absolute path of the written file. */
   readonly path: string
   /** Bytes written (UTF-8). */

@@ -25,7 +25,7 @@ import type { GoalSnapshot } from "./types.ts"
 /** The probe contract: true = the object exists, false = git answered and it does not, "unknown" = git could not answer. */
 export type RecordProbe = (sha: string) => boolean | "unknown"
 
-export const GIT_TIMEOUT_MS = 10_000
+const GIT_TIMEOUT_MS = 10_000
 
 /**
  * The real probe: one `git cat-file -e` per sha. The record holds a handful of shas; one process each
@@ -46,9 +46,9 @@ export function gitCatFileProbe(cwd: string): RecordProbe {
   }
 }
 
-export type RecordCheckStatus = "present" | "missing" | "unknown"
+type RecordCheckStatus = "present" | "missing" | "unknown"
 
-export interface RecordCheck {
+interface RecordCheck {
   readonly sha: string
   readonly shortSha: string
   /** 1-based loop iterations that quote this sha (oldest first). */

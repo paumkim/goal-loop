@@ -6,8 +6,7 @@ above the input prompt, claimed through the host's `session.composer.top` slot w
 left click toggles the card, right click opens the detail view; when the condition is pinned (card `pin` button
 or `p` in the dialog) the pill appends the condition truncated to the remaining width so it stays visible while
 the conversation scrolls; a soft bold pulse marks an in-flight evaluation and never runs while idle or when
-reduced motion is requested (NO_COLOR, TERM=dumb). (b) A compact HUD card: a
-bordered floating panel painted above the jump row (absolute box, theme tokens only) with the condition (click
+reduced motion is requested (NO_COLOR, TERM=dumb). (b) A compact HUD card: a composer-grammar card painted above the jump row (absolute box, 1-cell left accent border, theme tokens only) with the condition (click
 to copy), the state row (live or terminal), the spend row when the server can estimate it (same
 `formatSpend` grammar and the same omit-when-unknown contract as the detail view's spend row — tokens in
 flow plus outflow plus cost), the last verdict, failure-first-class remediation when the loop is hot or failed,
@@ -70,7 +69,7 @@ user abort; legacy paused records without a cause fall back to `paused · send a
 `cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
 (`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
 wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
-title border and remediation row all reflect the outcome). `cleared` stays silent — a deliberate reset is not
+title row and remediation row all reflect the outcome). `cleared` stays silent — a deliberate reset is not
 an announcement. State transitions also surface as host toasts; outcome toasts
 (`achieved` / `impossible` / `failed` / `Loop complete`) open with the story — turns, wall time, and
 completed iterations for loops (`34 turns · 12m 05s · 4 iterations · <reason>`). The
@@ -5735,7 +5734,9 @@ fixed at the seam that feeds it, and the card is pinned to the mount it actually
      host's option-clone read `.length` off an undefined channel and threw at dialog open. New
      `scrollbarTrackOptions(theme, mono)` reads the nested palette the way hud-card.tsx paints the card
      surface (`background?.raised?.high`) and returns a thumb-only track when the host exposes no raised
-     token — never a non-color. `scrollbarChrome` stays for the flat, unit-tested fixture path.
+     token — never a non-color. `scrollbarChrome` stays for the flat, unit-tested fixture path at this
+     point in history — superseded by the review-follow-ups workstream (deleted; the mechanism tests
+     rewired to the nested `background.raised.high` fixture).
 523. src/tui.tsx — the dialog wiring passes `scrollbarTrackOptions(context.theme as unknown as
      HostScrollbarTheme<ColorInput>, reducedColor)` as the scrollbox's `trackOptions`.
 524. src/tui.tsx — the HUD card paints the mount, not the terminal. The opencode v2 sidebar sits beside the
@@ -5805,7 +5806,9 @@ grammar. This workstream fixes them; no new behavior is introduced.
      `dimensions().width` — the same full-screen-vs-composer overflow class the card fix closed.
 534. src/core/scrollbar.ts — the module doc now names the two entry points and which is production
      (`scrollbarTrackOptions`, the host's nested palette) and which is the flat fixture path
-     (`scrollbarChrome`, kept for the mechanism tests).
+     (`scrollbarChrome`, kept for the mechanism tests — superseded by the review-follow-ups workstream:
+     `scrollbarChrome` and its types were deleted and the mechanism tests rewired to the nested-palette
+     fixture).
 535. test/tui-hud.test.tsx and test/tui-render.test.tsx — two ellipsis-landing expectations re-pinned
      to the corrected budgets (64-cell card: condition/why truncates at 41 cells, 40 x's + …). No tests
      added or removed; the suite count is unchanged.
@@ -5813,7 +5816,9 @@ grammar. This workstream fixes them; no new behavior is introduced.
      (falls back to `dimensions().width` in tests, so the suite is unchanged); review item L2 (the
      mount width intentionally bypasses `CARD_WIDTH_MAX`, the documented full-composer contract from
      workstreams 517/EN) was deliberately not clamped; the nested-raised track paint assertion flagged
-     in review was not added (the no-throw mount test stays the coverage). Date stamps elsewhere were
+     in review was not added at EP time — it landed in the review-follow-ups workstream (bd70ddd): the
+     overflow mechanism test asserts the raised token paints the whole track column (8 cells) and that
+     no cell paints the flat pre-EN background. Date stamps elsewhere were
      left as authored.
 ## Workstream EQ — the <opencode-cli> guide tightened (2026-11-17)
 
@@ -5833,7 +5838,7 @@ things in roughly half the cells; the operational invariants the test pins are u
 <!-- spec-check files=59 tests=1339 -->
 
 
-## Workstream EQ — the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept (2026-11-16)
+## Workstream ER — the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept (2026-11-16)
 
 Interpretation of the armed condition: a whole-repo consistency sweep after EP — the EP review's
 open items (the missing nested-raised track paint assertion, the test-only `scrollbarChrome`
@@ -5904,4 +5909,52 @@ new test-count delta is the wiring pins in the width-measure suite.
      the repository's docs claim "UTC" times that are not UTC until the lease owner lands the fix.
      Date stamps in the three incident-named files keep the UTC convention SPEC.md uses.
      Suite: 1341 pass, 0 fail (55 files). Marker re-counted below and at the Workstream J marker.
+<!-- spec-check files=59 tests=1341 -->
+
+## Workstream ES — the SPEC honesty sweep and the unused-export audit (2026-11-17)
+
+Interpretation of the armed condition: two statement-level defects remained after the review
+follow-ups landed — SPEC.md still asserted, as current fact, things HEAD contradicts (the EP
+honest-limits line said the nested-raised track paint assertion was never added, though bd70ddd
+added it; the EN/EP module docs said `scrollbarChrome` stays/kept for the fixture path, though it
+was deleted), and source carried 70 exported symbols that nothing outside their declaring module
+references. Both are fixed here; no behavior changes.
+545. SPEC.md (current-truth claims only — historical workstream records keep their authored
+     stamps): the Status overview's "bordered floating panel" is now "a composer-grammar card
+     (absolute box, 1-cell left accent border, theme tokens only)" and its "title border and
+     remediation row" is now "title row and remediation row" — the card has painted a single
+     left accent since EM2, never a floating panel frame. The EP honest-limits line now records
+     that the nested-raised track paint assertion landed in the review-follow-ups workstream
+     (bd70ddd: raised token on all 8 track cells, negative control against the flat pre-EN
+     `#101010`) instead of claiming it was never added. The two EN/EP lines asserting
+     `scrollbarChrome` "stays for the flat, unit-tested fixture path" now carry the superseded
+     pointer (deleted; mechanism tests rewired to the nested `background.raised.high` fixture).
+     A duplicate workstream label was found and fixed: two sections both claimed "Workstream EQ"
+     (the opencode-cli guide entry and the review-follow-ups entry, which landed concurrently
+     from a sibling claim); the review-follow-ups section is now Workstream ER. All historical
+     dated entries, their counts, and the spec-check markers keep their authored values.
+546. src — 70 exported symbols with zero references outside their declaring file were made
+     module-local (the `export` keyword dropped; declarations and uses unchanged): the dossier
+     family type exports (attest/review/seal/index/export/view/dossier), the record-check
+     modules' types and `*_TIMEOUT_MS` constants, the history/hud/format glyph constants
+     (`BAR_*`, `PIP_*`, `SPARK_*_ASCII`, `VERDICT_*_ASCII`, `LANDING_SUFFIX_ASCII`,
+     `GOAL_GLYPH_ASCII`, `CONTEXT_HOT_RATIO`, `RETRY_HOT_THRESHOLD`), `ContextSpark`,
+     `HudTone`/`PillModel`/`CompactMarker`/`ContextMenuId`/`ContextMenuRow`/`Remediation`,
+     `DialogStatusCommand`, `FindSegment`, `GoalLoopDirective`, `ScrollbarTrackOptions`,
+     `AttestationTotals`, the hud-card exports (`CARD_WIDTH_MIN`, `CARD_WIDTH_MAX`,
+     `remediationWidth`, `spendWidth`, `conditionWidth`, `CardRowPlan`, `HudButton`) and the
+     spend-ledger results. Entry surfaces (`src/index.ts` default export, `src/rpc.ts` GoalRpc)
+     were excluded as by design. Method: name-reference scan across src/ + root *.ts + test/ +
+     scripts/ (word-boundary, including `.tsx`), declaration lines only rewritten. No symbol was
+     deleted; `bun x tsc --noEmit` clean.
+547. Counts: shipped file count unchanged (59) and test count unchanged (1341) — the downgrades
+     and edits create and remove no files — so the spec-check marker is re-affirmed, not bumped:
+     the Workstream J marker above reads `files=59 tests=1341` as before.
+548. Honest limits: the unused-export audit is a name-reference scan, not a type-directed
+     analysis — a symbol re-exported under a different name or reached only through a
+     string-based plugin boundary would read as unused (none exist in this tree today); and the
+     docs/stamp mislabel remains under the stale github-single-channel lease (see Workstream ER,
+     item 542) — untouched here. Date stamps in the three incident-named files keep the UTC
+     convention SPEC.md uses.
+     Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below and at the Workstream J marker.
 <!-- spec-check files=59 tests=1341 -->

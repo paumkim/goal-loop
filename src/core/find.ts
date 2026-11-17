@@ -14,7 +14,7 @@
  */
 
 /** One piece of a line, flagged for the paint. Segments always tile the original text in order. */
-export interface FindSegment {
+interface FindSegment {
   readonly text: string
   readonly match: boolean
 }

@@ -13,7 +13,7 @@
 
 export type DossierLineKind = "title" | "section" | "quote" | "fence" | "table" | "bullet" | "blank" | "body"
 
-export interface DossierLine {
+interface DossierLine {
   readonly kind: DossierLineKind
   readonly text: string
 }
