@@ -2679,6 +2679,28 @@
       "submittedAt": "2026-11-17T19:24:10Z",
       "mergedAt": "2026-11-17T19:25:31Z",
       "mergedInto": "dev"
+    },
+    "live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md": {
+      "agent": "inkling",
+      "paths": "src/core/wire.ts",
+      "branch": "wt/live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md",
+      "worktree": "worktrees/wt-live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md",
+      "status": "done",
+      "createdAt": "2026-11-17T19:26:59Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T19:36:42Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js",
+        "src/core/entries.ts",
+        "src/runtime/controller.ts",
+        "test/entries.test.ts",
+        "test/loop.test.ts",
+        "test/wire.test.ts"
+      ],
+      "submittedAt": "2026-11-17T19:36:42Z",
+      "mergedAt": "2026-11-17T19:37:59Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
