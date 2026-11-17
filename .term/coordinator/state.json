@@ -2447,6 +2447,17 @@
       "submittedAt": "2026-11-17T01:12:58Z",
       "mergedAt": "2026-11-17T01:14:05Z",
       "mergedInto": "dev"
+    },
+    "hud-card-mount-width": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/hud-card.tsx,src/core/scrollbar.ts,test/scrollbar.test.tsx,SPEC.md,dist/tui.js",
+      "branch": "wt/hud-card-mount-width",
+      "worktree": "worktrees/wt-hud-card-mount-width",
+      "status": "done",
+      "createdAt": "2026-11-17T01:43:09Z",
+      "submittedAt": "2026-11-17T01:47:22Z",
+      "mergedAt": "2026-11-17T01:48:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
