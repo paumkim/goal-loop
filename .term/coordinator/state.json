@@ -2480,6 +2480,24 @@
       "submittedAt": "2026-11-17T02:10:05Z",
       "mergedAt": "2026-11-17T02:11:09Z",
       "mergedInto": "dev"
+    },
+    "hud-card-width-fix": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,src/core/scrollbar.ts,SPEC.md",
+      "branch": "wt/hud-card-width-fix",
+      "worktree": "worktrees/wt-hud-card-width-fix",
+      "status": "done",
+      "createdAt": "2026-11-17T02:38:31Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T02:44:20Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/tui-hud.test.tsx",
+        "test/tui-render.test.tsx"
+      ],
+      "submittedAt": "2026-11-17T02:44:20Z",
+      "mergedAt": "2026-11-17T02:45:36Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
