@@ -67,6 +67,8 @@ interface ControllerDeps {
 
 /** Volatile per-session state that never needs persisting. */
 interface Runtime {
+  /** Owning session — lets invalidate() emit the evaluating:false flip it causes (the in-flight evaluate() would otherwise return silently into the 30s stale window). */
+  readonly sessionID: string
   /** Bumped by anything that invalidates in-flight async work (new turn, prompt, clear, replace). */
   epoch: number
   toolCalls: number
@@ -526,7 +528,7 @@ export class GoalController {
       // after one turn. An armed /goal-loop resumes on a message even past the cap.
       // Stay paused; the user must clear or set a new goal (a restart resets the turn counter).
       if (!record.loopEnabled && this.deps.config.maxTurns > 0 && record.turns >= this.deps.config.maxTurns) {
-        this.clearDeferred(runtime)
+        this.clearDeferred(runtime, record)
         // One courtesy warning per freeze; later prompts in the same pause stay silent.
         if (!runtime.capFreezeNotified) {
           runtime.capFreezeNotified = true
@@ -535,7 +537,7 @@ export class GoalController {
         this.commit(record)
         return
       }
-      this.clearDeferred(runtime)
+      this.clearDeferred(runtime, record)
       record.status = "active"
       record.reason = undefined
       record.pauseCause = undefined
@@ -545,7 +547,7 @@ export class GoalController {
       if (record.loopEnabled) record.loopNotProgress = 0
       this.notify(sessionID, "resumed", "info", "Goal resumed", record.condition)
     } else {
-      this.clearDeferred(runtime)
+      this.clearDeferred(runtime, record)
     }
     this.commit(record)
   }
@@ -578,7 +580,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
-    this.clearDeferred(runtime)
+    this.clearDeferred(runtime, record)
     runtime.toolCalls = 0
     // The execution is over; a straggler succeeded for it must not evaluate. The retry steer re-arms evaluation.
     runtime.awaitingExecution = true
@@ -591,7 +593,7 @@ export class GoalController {
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
     this.invalidate(runtime)
-    this.clearDeferred(runtime)
+    this.clearDeferred(runtime, record)
     if (reason === "user") return this.pause(record, "Interrupted.", "user")
     if (reason === "inactivity") {
       runtime.awaitingExecution = true
@@ -1077,7 +1079,7 @@ export class GoalController {
     record.verdict = undefined
     record.reason = undefined
     record.startedAt = clock.now()
-    this.clearDeferred(runtime)
+    this.clearDeferred(runtime, record)
     runtime.iterationToolCalls = 0
     runtime.iterationDeferred = false
     runtime.armUsage = advanceUsage
@@ -1336,7 +1338,7 @@ export class GoalController {
   private pause(record: GoalRecord, reason: string, cause: PauseCause): Promise<void> {
     const runtime = this.runtime(record.sessionID)
     this.invalidate(runtime)
-    this.clearDeferred(runtime)
+    this.clearDeferred(runtime, record)
     record.status = "paused"
     record.reason = reason
     record.pauseCause = cause
@@ -1365,7 +1367,7 @@ export class GoalController {
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
-      this.clearDeferred(runtime)
+      this.clearDeferred(runtime, record)
     }
     record.status = status
     if (reason) record.reason = reason
@@ -1414,7 +1416,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, iterationDeferred: false }
+      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, iterationDeferred: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -1425,6 +1427,7 @@ export class GoalController {
     const previous = this.runtimes.get(sessionID)
     if (previous) this.invalidate(previous)
     this.runtimes.set(sessionID, {
+      sessionID,
       epoch: (previous?.epoch ?? 0) + 1,
       toolCalls: previous?.toolCalls ?? 0,
       iterationToolCalls: 0,
@@ -1435,20 +1438,33 @@ export class GoalController {
     })
   }
 
-  /** Deferred background-wait state must not survive resume, failure, interrupt, pause or finish. */
-  private clearDeferred(runtime: Runtime) {
+  /**
+   * Deferred background-wait state must not survive resume, failure, interrupt, pause or finish.
+   * `waiting` rides the snapshot off `deferredSince`; several interrupt paths flip it with no record
+   * mutation for commit() to notice, so announce the flip when one actually happened.
+   */
+  private clearDeferred(runtime: Runtime, record?: GoalRecord) {
+    const wasWaiting = runtime.deferredSince !== undefined
     runtime.deferredSince = undefined
     runtime.carriedToolCalls = 0
     runtime.lastCheckinAt = undefined
+    if (wasWaiting && record && this.goals.get(record.sessionID) === record) this.emit(record)
   }
 
   private invalidate(runtime: Runtime) {
     runtime.epoch++
     runtime.abort?.abort()
     runtime.abort = undefined
+    const wasEvaluating = runtime.evaluating
     runtime.evaluating = false
     if (runtime.timer !== undefined) this.deps.clock.clearTimeout(runtime.timer)
     runtime.timer = undefined
+    if (wasEvaluating) {
+      // The in-flight evaluate() will epoch-guard into a silent early return; without this emit the TUI
+      // keeps painting "checking" until the stale re-pull. emit() no-ops when the record is no longer ours.
+      const record = this.goals.get(runtime.sessionID)
+      if (record) this.emit(record)
+    }
   }
 
   private schedule(runtime: Runtime, ms: number, callback: () => void) {

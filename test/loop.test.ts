@@ -59,12 +59,13 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const summaryRequests: LoopSummaryRequest[] = []
   const nextGoalRequests: NextGoalRequest[] = []
   // Test hook: when set, the next-goal generator awaits this gate before replying (simulates an in-flight planner).
-  const gate: { nextGoal?: Promise<void> } = {}
+  const gate: { nextGoal?: Promise<void>; evaluate?: Promise<void> } = {}
   // Test hook: when set, the first matching synthetic call awaits this gate before delivering (simulates a slow steer round-trip).
   const syntheticGate: { promise?: Promise<void>; match?: string } = {}
   // Test hook: when set, every synthetic call throws (simulates the host rejecting the dispatch).
   const syntheticFail: { error?: Error } = {}
   const notices: Notice[] = []
+  const changed: Array<{ sessionID: string; goal: GoalSnapshot | null }> = []
   const logs: Array<{ level: string; message: string }> = []
   const testLog = {
     info: (message: unknown) => void logs.push({ level: "info", message: String(message) }),
@@ -106,6 +107,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     },
     evaluator: {
       evaluate: async (_request: EvaluationRequest) => {
+        if (gate.evaluate) await gate.evaluate
         const next = verdicts.shift()
         if (!next) throw new Error("no verdict queued")
         if (next instanceof Error) throw next
@@ -126,7 +128,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
       },
     },
     background: { busy: async (): Promise<BackgroundWork> => ({ ...work }) },
-    emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+    emitter: { changed: (sessionID: string, goal: GoalSnapshot | null) => void changed.push({ sessionID, goal }), notice: (n) => void notices.push(n) },
     compactAtBoundary: async (sessionID, opts) => {
       compactCalls.push(opts ? { sessionID, opts } : { sessionID })
       return compactOutcome
@@ -144,6 +146,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     calls,
     notices,
     logs,
+    changed,
     verdicts,
     summaries,
     nextGoals,
@@ -1774,6 +1777,35 @@ describe("background drain", () => {
     await h.turn(1)
     await h.controller.onBackgroundDrained()  // still busy: verdict not consumed
     expect(h.verdicts).toHaveLength(1)
+  })
+})
+
+describe("snapshot convergence (epoch-invalidated work must not strand the TUI chrome)", () => {
+  test("an epoch-invalidated in-flight evaluation emits changed(evaluating:false)", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    let release!: () => void
+    h.gate.evaluate = new Promise<void>((resolve) => { release = resolve })
+    h.verdicts.push(notMet("keep going"))
+    const turnPromise = h.turn()
+    await flush()
+    await flush()
+    expect(h.changed.some((e) => e.goal?.evaluating === true)).toBe(true)
+    h.controller.onUserPrompt(SID) // supersedes the in-flight evaluation: epoch++, abort, flag flip
+    expect(h.changed.findLast((e) => e.goal?.evaluating === false)).toBeDefined()
+    release()
+    await turnPromise // must resolve cleanly: the stale verdict is discarded, nothing throws
+  })
+
+  test("an execution interrupted while a turn defers on background work emits changed(waiting:false)", async () => {
+    const h = harness()
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet("keep going"))
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(0) // evaluation deferred on background work; firstDefer emits waiting:true
+    expect(h.changed.some((e) => e.goal?.waiting === true)).toBe(true)
+    h.controller.onExecutionInterrupted(SID, "superseded")
+    expect(h.changed.findLast((e) => e.goal?.waiting === false)).toBeDefined()
   })
 })
 
