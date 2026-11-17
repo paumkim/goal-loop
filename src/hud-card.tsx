@@ -6,7 +6,7 @@
  * headlessly testable — every side effect (copy, open dialog, clear, dismiss) is a callback wired up
  * in `src/tui.tsx`.
  *
- * Layout (full terminal width, left bar in the state accent):
+ * Layout (the composer mount's width, left bar in the state accent):
  *   ▎ ◎ /goal-loop · v3/5
  *   ▎ condition  ship the release notes…        (copy)
  *   ▎ now        active · v3/5 ○○○○● · 4 turns · 12m

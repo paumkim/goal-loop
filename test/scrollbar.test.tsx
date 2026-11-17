@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA, type ScrollBoxRenderable } from "@opentui/core"
-import { scrollbarChrome, type ScrollbarTheme } from "../src/core/scrollbar.ts"
+import { scrollbarChrome, scrollbarTrackOptions, type HostScrollbarTheme, type ScrollbarTheme } from "../src/core/scrollbar.ts"
 
 const theme: ScrollbarTheme<RGBA> = {
   text: {
@@ -139,6 +139,59 @@ describe("the dialog scrollbox, wired the way tui.tsx wires it (mechanism layer)
     await setup.mockMouse.click(47, 7)
     await setup.renderOnce()
     expect(sb!.scrollTop).toBeGreaterThan(before)
+    await setup.renderer.destroy()
+  })
+})
+
+/**
+ * 2026-11-17 live crash, reproduced as a regression: the host passes its theme to the dialog
+ * scrollbox with a NESTED palette (`background.raised.high`), not a flat color. Passing that
+ * palette object as `trackOptions.backgroundColor` crashed the host's scrollbar-options clone at
+ * dialog open ("TypeError: undefined is not an object (evaluating 'e.length')" out of the
+ * options-assignment path). The fixtures above use a flat RGBA background; this block pins the
+ * host shape at the seam where the two meet.
+ */
+const hostTheme: HostScrollbarTheme<RGBA> = {
+  text: { base: RGBA.fromHex("#e8e8e8"), muted: RGBA.fromHex("#a0a0a0") },
+  background: { raised: { high: RGBA.fromHex("#1c1c1c") } },
+}
+
+describe("scrollbarTrackOptions (the host palette shape)", () => {
+  test("a nested raised token becomes the track color; the thumb keeps the muted/base rule", () => {
+    const color = scrollbarTrackOptions(hostTheme, false)
+    expect(color.backgroundColor?.equals(hostTheme.background!.raised!.high!)).toBe(true)
+    expect(color.foregroundColor.equals(hostTheme.text.muted)).toBe(true)
+    const mono = scrollbarTrackOptions(hostTheme, true)
+    expect(mono.foregroundColor.equals(hostTheme.text.base)).toBe(true)
+    expect(mono.backgroundColor?.equals(hostTheme.background!.raised!.high!)).toBe(true)
+  })
+
+  test("a host with no raised token omits the track color entirely — never a non-color", () => {
+    const noRaised = scrollbarTrackOptions({ text: hostTheme.text, background: {} }, false)
+    expect("backgroundColor" in noRaised).toBe(false)
+    expect(noRaised.foregroundColor.equals(hostTheme.text.muted)).toBe(true)
+    const noBackground = scrollbarTrackOptions({ text: hostTheme.text }, true)
+    expect("backgroundColor" in noBackground).toBe(false)
+    expect(noBackground.foregroundColor.equals(hostTheme.text.base)).toBe(true)
+  })
+
+  test("the dialog's real mount shape renders a nested-palette theme without throwing", async () => {
+    let sb: ScrollBoxRenderable | undefined
+    const setup = await testRender(() => (
+      <scrollbox
+        ref={(el) => { sb = el }}
+        scrollX={false}
+        height={8}
+        width={48}
+        contentOptions={{ minHeight: 0 }}
+        verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, false), showArrows: false }}
+      >
+        <text wrapMode="none">{RAIL}</text>
+      </scrollbox>
+    ), { width: 48, height: 10 })
+    await setup.renderOnce()
+    expect(sb).toBeDefined()
+    expect(setup.captureCharFrame().length).toBeGreaterThan(0)
     await setup.renderer.destroy()
   })
 })
