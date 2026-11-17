@@ -2636,6 +2636,22 @@
       "submittedAt": "2026-11-17T15:00:07Z",
       "mergedAt": "2026-11-17T15:01:23Z",
       "mergedInto": "dev"
+    },
+    "ex-nits": {
+      "agent": "pauk",
+      "paths": "bin/opencode-goal.mjs,test/cli-installer.test.ts,SPEC.md",
+      "branch": "wt/ex-nits",
+      "worktree": "worktrees/wt-ex-nits",
+      "status": "done",
+      "createdAt": "2026-11-17T15:08:57Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T15:14:57Z",
+      "forcedScopeFiles": [
+        "bin/opencode-goal.d.mts"
+      ],
+      "submittedAt": "2026-11-17T15:14:57Z",
+      "mergedAt": "2026-11-17T15:16:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
