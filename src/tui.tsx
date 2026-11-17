@@ -48,10 +48,15 @@ const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", 
 const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: number) =>
   g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs
 
+// `elapsedMs` is recomputed from `now - startedAt` by every server snapshot, so two pulls of an
+// otherwise-identical live goal never deep-equal — strip it or the unchanged-snapshot arm (and its
+// bumpReceivedAt dedup) never engages for live goals. Everything else on the snapshot is either
+// user-visible state or derived from the record's fields, so it stays part of the comparison.
+const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
 const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
   if (a === b) return true
   if (!a || !b) return false
-  return JSON.stringify(a) === JSON.stringify(b)
+  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
 }
 
 /**
@@ -375,9 +380,9 @@ export default Plugin.define({
       return setEntries((previous) => {
         const existing = previous[sessionID]
         // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick. The cap still applies here — steady null entries ride the cap eviction (oldest non-live first) but are never dropped outright, or the tick would lose the re-pull target.
-        if (existing && goalsEqual(existing.goal, mergedGoal)) return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP, { dropNulls: false })
+        if (existing && goalsEqual(existing.goal, mergedGoal)) return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP)
         const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: Date.now() } }
-        // Drop null entries (unless a dialog is rendering that session) and cap the map.
+        // Null entries are retained (the stale-chrome tick re-pulls them); only the cap evicts.
         return pruneSnapshotEntries(next, statusDialogSession())
       })
     }

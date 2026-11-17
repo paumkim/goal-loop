@@ -205,25 +205,8 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
 export const STALE_LIVE_ENTRY_MS = 30_000
 
 /**
- * Sessions whose cached snapshot still reads live (active or paused) and has not been refreshed for
- * `minAgeMs`. Pure: the caller decides what to do with the ids — tui.tsx re-pulls them through the
- * normal `changed` intake, so a terminal (or cleared, null) response arms the acknowledgment pill
- * and the stale chrome converges instead of lying indefinitely. `receivedAt` absent counts as infinitely
- * stale — never proven fresh, always worth one re-pull. Fresh live snapshots are left alone, so healthy
- * chatty goals cost nothing.
- */
-export const staleLiveSessionIDs = (
-  entries: Readonly<Record<string, { readonly goal?: GoalSnapshot | null | undefined; readonly receivedAt?: number | undefined }>>,
-  nowMs: number,
-  minAgeMs: number = STALE_LIVE_ENTRY_MS,
-): string[] =>
-  Object.entries(entries)
-    .filter(([, entry]) => entry?.goal != null && isLive(entry.goal.status) && nowMs - (entry.receivedAt ?? 0) >= minAgeMs)
-    .map(([sessionID]) => sessionID)
-
-/**
  * Everything the tick's re-pull should cover: entries older than the cadence whose goal is live OR
- * absent. The null arm closes the hole staleLiveSessionIDs cannot see: a goal armed (or disarmed)
+ * absent. The null arm closes the hole a live-only predicate cannot see: a goal armed (or disarmed)
  * since the last pull — the `changed` stream missed the event, it happened in another process on the
  * same directory, or this TUI latched its one-shot fetch while the goal did not exist yet. `receivedAt`
  * rides every re-pull (see bumpReceivedAt in entries.ts), so an unchanged null or live entry costs one

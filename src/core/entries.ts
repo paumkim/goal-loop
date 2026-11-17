@@ -1,9 +1,10 @@
 /**
  * Bounded cache of per-session goal snapshots for the TUI. The "changed" RPC stream pushes a `changed`
  * event per session; over a long TUI session the map would grow without bound. Pruning runs inline in
- * the put path (no timers): null-valued entries are dropped unless an open dialog is rendering that
- * session, and the map is capped — oldest non-live entries are evicted first, live (active/paused)
- * entries are never evicted by the cap.
+ * the put path (no timers): the map is capped — oldest non-live entries are evicted first, live
+ * (active/paused) entries are never evicted by the cap. Null-valued entries are retained on every
+ * branch — the stale-chrome tick re-pulls them to notice a goal armed since the last pull — and only
+ * the cap bounds how long a null entry lingers.
  */
 import { isLive, type GoalSnapshot } from "./types.ts"
 
@@ -17,25 +18,19 @@ export const ENTRY_CAP = 64
 
 /**
  * Returns the pruned map, or the same reference when nothing changed (keeps Solid's signal from
- * re-rendering). `keep` is the session an open dialog is rendering; it is never dropped or evicted.
- * `options.dropNulls` defaults to true (the fresh intake path drops delivered nulls); the unchanged-
- * snapshot path passes false so steady null entries — which the stale-chrome tick re-pulls to notice
- * a goal armed since the last pull — are retained and only the cap evicts them (oldest non-live first).
+ * re-rendering). `keep` is the session an open dialog is rendering; it is never evicted. Null-valued
+ * entries are always retained — the stale-chrome tick re-pulls them to notice a goal armed since the
+ * last pull — and only the cap evicts them (oldest non-live first), so an observed clear stays a
+ * re-pull target until real cap pressure pushes it out.
  */
 export function pruneSnapshotEntries(
   entries: Readonly<Record<string, GoalSnapshotCacheEntry>>,
   keep: string | undefined,
   cap: number = ENTRY_CAP,
-  { dropNulls = true }: { readonly dropNulls?: boolean } = {},
 ): Readonly<Record<string, GoalSnapshotCacheEntry>> {
   let changed = false
   const out: Record<string, GoalSnapshotCacheEntry> = {}
   for (const [sessionID, entry] of Object.entries(entries)) {
-    // A null-valued entry carries no information anymore; drop it unless a dialog is rendering it.
-    if (dropNulls && entry.goal === null && sessionID !== keep) {
-      changed = true
-      continue
-    }
     out[sessionID] = entry
   }
   const keys = Object.keys(out)
