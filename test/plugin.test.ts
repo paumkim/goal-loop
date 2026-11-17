@@ -14,6 +14,13 @@ function repository(): string {
   writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
   return dir
 }
+/** A throwaway git repository that ships the coordinator package, i.e. a coordinator repository. */
+function coordinatorRepository(): string {
+  const dir = repository()
+  mkdirSync(join(dir, "packages/coordinator/bin"), { recursive: true })
+  writeFileSync(join(dir, "packages/coordinator/bin/coordinator"), "#!/bin/sh\n")
+  return dir
+}
 
 /**
  * A stand-in for the OpenCode plugin context.
@@ -235,9 +242,9 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
 })
 
 describe("plugin setup", () => {
-  test("a fresh git repository resolves to the coordinator flow on first /goal", async () => {
-    // First-run bootstrap creates .term/coordinator, so a fresh repo is coordinator-detected.
-    const directory = repository()
+  test("a fresh coordinator repository resolves to the coordinator flow on first /goal", async () => {
+    // First-run bootstrap creates .term/coordinator, so a fresh coordinator repo is coordinator-detected.
+    const directory = coordinatorRepository()
     const { ctx, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
@@ -257,6 +264,21 @@ describe("plugin setup", () => {
     }
   })
 
+  test("a plain git repository is not switched to the coordinator flow", async () => {
+    const directory = repository()
+    const { ctx, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(false)
+      const goal = calls.commands.find((command) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
+      const directive = calls.prompts.at(-1)
+      expect(directive.text).toContain("all tests pass")
+      expect(directive.text).not.toContain("Coordinator repo")
+    } finally {
+      await dispose?.()
+    }
+  })
   test("no commit rule outside a git repository", async () => {
     const directory = mkdtempSync(join(tmpdir(), "goal-plain-"))
     process.on("exit", () => rmSync(directory, { recursive: true, force: true }))
