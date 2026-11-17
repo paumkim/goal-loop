@@ -12,8 +12,16 @@ function scratch(): string {
   return dir
 }
 
-/** A minimal git repository: a `.git` directory is all the bootstrap looks for. */
+/** A minimal coordinator repository: the `.git` directory and the coordinator binary the bootstrap looks for. */
 function repo(): string {
+  const dir = scratch()
+  mkdirSync(join(dir, ".git"), { recursive: true })
+  mkdirSync(join(dir, "packages/coordinator/bin"), { recursive: true })
+  writeFileSync(join(dir, "packages/coordinator/bin/coordinator"), "#!/bin/sh\n")
+  return dir
+}
+/** A plain git repository that does not ship the coordinator. */
+function plainRepo(): string {
   const dir = scratch()
   mkdirSync(join(dir, ".git"), { recursive: true })
   return dir
@@ -55,6 +63,14 @@ describe("ensureCoordinatorLayout", () => {
     const root = scratch()
     const result = ensureCoordinatorLayout(root)
     expect(result).toEqual({ created: [], skipped: ["not a git repository"] })
+  })
+  test("leaves an unrelated repository untouched", () => {
+    const root = plainRepo()
+    writeFileSync(join(root, ".gitignore"), "node_modules\n")
+    const result = ensureCoordinatorLayout(root)
+    expect(result).toEqual({ created: [], skipped: ["not a coordinator repository"] })
+    expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe("node_modules\n")
+    expect(() => readFileSync(join(root, ".term/coordinator/config.json"), "utf8")).toThrow()
   })
   test("appends to .gitignore once", () => {
     const root = repo()
