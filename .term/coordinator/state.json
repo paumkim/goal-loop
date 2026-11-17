@@ -2417,6 +2417,22 @@
       "submittedAt": "2026-11-17T00:45:43Z",
       "mergedAt": "2026-11-17T00:47:11Z",
       "mergedInto": "dev"
+    },
+    "bootstrap-coordinator-scope": {
+      "agent": "orchestrator",
+      "paths": "src/core/bootstrap.ts,test/bootstrap.test.ts",
+      "branch": "wt/bootstrap-coordinator-scope",
+      "worktree": "worktrees/wt-bootstrap-coordinator-scope",
+      "status": "done",
+      "createdAt": "2026-11-17T00:50:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T00:54:51Z",
+      "forcedScopeFiles": [
+        "test/plugin.test.ts"
+      ],
+      "submittedAt": "2026-11-17T00:54:51Z",
+      "mergedAt": "2026-11-17T00:56:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
