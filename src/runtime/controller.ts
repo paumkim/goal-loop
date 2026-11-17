@@ -978,7 +978,9 @@ export class GoalController {
       if (this.stale(record, runtime, epoch)) return
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
       // The summary and history stay local until the arm lands, so a retry recomputes them identically;
-      // record.loopNotProgress is untouched here on purpose.
+      // record.loopNotProgress is untouched here on purpose. The turn verdict and its spend are NOT local:
+      // persist them now, or storage and other clients stay blind until the arm lands (forever, on a crash).
+      await this.commit(record)
       const attempt = runtime.loopRetries ?? 0
       const delay = backoffMs(RETRY_BASE_MS, 4, attempt)
       runtime.loopRetries = attempt + 1

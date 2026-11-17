@@ -5699,15 +5699,16 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
 function preserveCarriedFields(previous, next) {
   if (next === null)
     return next;
-  const landed = compactionJustLanded(previous, next);
+  const sameRecord = previous !== null && previous !== undefined && previous.id === next.id ? previous : undefined;
+  const landed = compactionJustLanded(sameRecord, next);
   let merged = next;
   if (merged.contextSize === undefined && !landed) {
-    const carried = previous?.contextSize;
+    const carried = sameRecord?.contextSize;
     if (typeof carried === "number" && Number.isFinite(carried) && carried >= 0)
       merged = { ...merged, contextSize: carried };
   }
   if (merged.spend === undefined) {
-    const carried = previous?.spend;
+    const carried = sameRecord?.spend;
     if (carried)
       merged = { ...merged, spend: carried };
   }
@@ -6069,7 +6070,9 @@ var parseChangedEvent = (value) => {
   if (!isString(sessionID) || sessionID === "")
     return;
   const goal = value.goal;
-  if (goal === null || goal === undefined)
+  if (goal === undefined)
+    return;
+  if (goal === null)
     return { sessionID, goal: null };
   const parsed = parseGoalSnapshot(goal);
   return parsed ? { sessionID, goal: parsed } : undefined;

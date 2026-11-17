@@ -501,6 +501,26 @@ describe("/goal-loop", () => {
     expect(record.loopObjective).toBe("objective")
   })
 
+  test("a planner retry persists the met turn's verdict to storage before the arm lands", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("the summary")
+    // No nextGoal queued → the planner throws → the retry branch runs. Before the fix this path
+    // persisted nothing: the turn verdict (and its evidence) only reached storage when a later
+    // arm landed, or never on a crash.
+    await h.turn()
+    expect(h.logs.some((l) => l.level === "error" && l.message.includes("loop next-goal generation failed"))).toBe(true)
+    expect(h.controller.get(SID)!.loopIteration).toBe(1)
+
+    await h.controller.dispose()
+    const h2 = harness({}, h.storage)
+    expect(await h2.controller.restore()).toBe(1)
+    const restored = h2.controller.get(SID)!
+    expect(restored.history).toHaveLength(1)
+    expect(restored.history[0]!.verdict).toBe("met")
+    expect(restored.history[0]!.reason).toBe("v1 done")
+  })
+
   test("snapshot exposes loop state for the TUI", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("done"))

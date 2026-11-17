@@ -58,7 +58,9 @@ export function pruneSnapshotEntries(
  * The `get` RPC carries the last-known context estimate and spend; `changed` event snapshots usually do
  * not (both need a host call the hot path avoids). When an event snapshot arrives without one, carry the
  * cached value forward so the dialog's context meter and spend row do not flicker to `unknown` on every
- * background tick. Spend is cumulative-since-baseline and monotonically non-decreasing within a goal run,
+ * background tick. The carry only applies within the same record (matched by `id`): a cleared-then-re-armed
+ * goal in the same session never inherits the old record's figures. Spend is cumulative-since-baseline and
+ * monotonically non-decreasing within a goal run,
  * so the carried figure is a lower bound, never a lie; the next `get` pull (dialog open, stale-chrome
  * re-pull) replaces it with the settled one. Returns the same reference when there is nothing to carry
  * (keeps the hot path allocation-free).
@@ -70,14 +72,17 @@ export function pruneSnapshotEntries(
  */
 export function preserveCarriedFields(previous: GoalSnapshot | null | undefined, next: GoalSnapshot | null): GoalSnapshot | null {
   if (next === null) return next
-  const landed = compactionJustLanded(previous, next)
+  // Only the same record may lend its cached figures to the next snapshot; a cleared-then-armed goal
+  // reuses the sessionID with a fresh id, and the old record's estimate must never paint the new one.
+  const sameRecord = previous !== null && previous !== undefined && previous.id === next.id ? previous : undefined
+  const landed = compactionJustLanded(sameRecord, next)
   let merged = next
   if (merged.contextSize === undefined && !landed) {
-    const carried = previous?.contextSize
+    const carried = sameRecord?.contextSize
     if (typeof carried === "number" && Number.isFinite(carried) && carried >= 0) merged = { ...merged, contextSize: carried }
   }
   if (merged.spend === undefined) {
-    const carried = previous?.spend
+    const carried = sameRecord?.spend
     if (carried) merged = { ...merged, spend: carried }
   }
   return merged
