@@ -5815,4 +5815,20 @@ grammar. This workstream fixes them; no new behavior is introduced.
      workstreams 517/EN) was deliberately not clamped; the nested-raised track paint assertion flagged
      in review was not added (the no-throw mount test stays the coverage). Date stamps elsewhere were
      left as authored.
+## Workstream EQ — the <opencode-cli> guide tightened (2026-11-17)
+
+Interpretation of the armed condition: the first-turn <opencode-cli> block had grown past its
+operative value — full paragraphs where a directive needed lines. The guide now says the same
+things in roughly half the cells; the operational invariants the test pins are unchanged.
+
+537. src/core/opencode-cli.ts — `opencodeCliGuide()` rewritten leaner: each numbered step loses its
+     explanatory scaffolding (failure-ladder prose folded into step 6, the build/mount step and the
+     smoke-test step compressed, the two honest limits folded into step 6 and the Rules line).
+     The content contract is unchanged: opencode --version, the ~/Projects/opencode clone caveat,
+     never rebuild the installed binary, the context.d.ts SlotMap contract, @opentui/core/testing +
+     createTestRenderer + captureCharFrame(), tmux capture-pane -p smoke route, the --standalone /
+     XDG_CONFIG_HOME requirement, ~/.config/opencode/opencode.jsonc mount flow, the
+     binary / source / test-render / live TUI reporting rule, no stable documented tool, never
+     commit to the host repo. `test/opencode-cli.test.ts` passes unchanged.
 <!-- spec-check files=59 tests=1339 -->
+
