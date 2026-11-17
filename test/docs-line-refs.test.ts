@@ -1,15 +1,16 @@
 /**
- * Docs line-reference guard: extracts every `file.ts[x]:N` (and `file.ts[x]:N-M`) reference from
- * docs/*.html and SPEC.md, and asserts the cited file resolves on disk and the cited lines are in
- * range — catching the silent drift class where a `file.ts:NNN` reference points at nothing after the
- * source moves. Line refs whose file cannot be resolved fail loudly.
+ * Docs citation guard. SPEC.md still cites `file.ts[x]:N` (Appendix A is explicitly frozen to the
+ * Phase-1 commit, so its ranges are asserted structurally: file exists, range in bounds, range
+ * contains code; single-line refs must land on a non-empty line). SPEC.md refs keep that guard.
  *
- * Appendix A of SPEC.md is explicitly frozen to the Phase-1 commit ("Line numbers refer to the tree at
- * the Phase 1 commit"), so ranges from it are asserted structurally (file exists, range in bounds, range
- * contains code), never on content. Single-line refs must land on a non-empty line.
+ * docs/*.html cites `file · symbol` instead of file:line (re-anchored 2026-11-17): line citations
+ * drifted semantically on every workstream — lines existed but pointed at the wrong constructs —
+ * while the docs:check freshness gate only verifies stamps and the changelog, so the rot passed CI
+ * invisibly. This test therefore forbids `file.ts[x]:N` citations in docs/*.html outright: if one
+ * reappears, point it at a symbol instead of a line.
  *
- * Bare `:NNN` fragments without an attached `file.ts[x]` token (e.g. `coordinatorFlow `:65``) cannot be
- * attributed to a file and are skipped by design; that is a docs-style choice, not an oversight.
+ * Bare `:NNN` fragments without an attached `file.ts[x]` token cannot be attributed to a file and are
+ * ignored by both scopes.
  */
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
@@ -28,12 +29,10 @@ const resolve = (ref: string): string | undefined => {
   return undefined
 }
 
-const docFiles = [
-  ...readdirSync(join(ROOT, "docs"))
-    .filter((name) => name.endsWith(".html"))
-    .map((name) => join("docs", name)),
-  "SPEC.md",
-].sort()
+const docHtml = readdirSync(join(ROOT, "docs"))
+  .filter((name) => name.endsWith(".html"))
+  .map((name) => join("docs", name))
+const docFiles = [...docHtml, "SPEC.md"].sort()
 
 interface Ref {
   readonly where: string
@@ -59,23 +58,26 @@ const collectRefs = (): Ref[] => {
 }
 
 const refs = collectRefs()
+const docsRefs = refs.filter((ref) => ref.where.startsWith("docs/"))
+const specRefs = refs.filter((ref) => ref.where === "SPEC.md")
 
 describe("docs line references", () => {
-  test("the extraction itself finds a meaningful number of refs", () => {
-    // Guards against an over-strict regex silently passing by finding zero references.
-    expect(refs.length).toBeGreaterThanOrEqual(70)
-    expect(refs.some((r) => r.where.startsWith("docs/"))).toBe(true)
-    expect(refs.some((r) => r.where === "SPEC.md")).toBe(true)
+  test("docs/*.html cite file · symbol, never file:line (SPEC.md keeps its frozen Appendix A refs)", () => {
+    // The line-ref class drifted semantically between workstreams while the freshness gate stayed green;
+    // symbol citations cannot. Forbid it here so it cannot creep back in through edits.
+    expect(docsRefs.map((ref) => `${ref.where}: ${ref.source}`)).toEqual([])
+    // Guards against the SPEC.md extraction silently going empty (Appendix A is frozen: refs must not shrink).
+    expect(specRefs.length).toBeGreaterThanOrEqual(20)
   })
 
-  test("every cited file exists on disk", () => {
-    const missing = refs.filter((ref) => resolve(ref.file) === undefined)
+  test("every cited SPEC.md file exists on disk", () => {
+    const missing = specRefs.filter((ref) => resolve(ref.file) === undefined)
     expect(missing.map((ref) => `${ref.where}: ${ref.source}`)).toEqual([])
   })
 
-  test("every cited range is ordered and in bounds", () => {
+  test("every cited SPEC.md range is ordered and in bounds", () => {
     const out: string[] = []
-    for (const ref of refs) {
+    for (const ref of specRefs) {
       const resolved = resolve(ref.file)
       if (!resolved) continue // reported by the exists test
       if (ref.start < 1) out.push(`${ref.where}: ${ref.source} -> line numbers start at 1`)
@@ -86,9 +88,9 @@ describe("docs line references", () => {
     expect(out).toEqual([])
   })
 
-  test("every single-line ref lands on a non-empty line", () => {
+  test("every single-line SPEC.md ref lands on a non-empty line", () => {
     const out: string[] = []
-    for (const ref of refs) {
+    for (const ref of specRefs) {
       if (ref.start !== ref.end) continue // ranges handled below
       const resolved = resolve(ref.file)
       if (!resolved) continue
@@ -98,9 +100,9 @@ describe("docs line references", () => {
     expect(out).toEqual([])
   })
 
-  test("every ranged ref covers at least one non-empty line", () => {
+  test("every ranged SPEC.md ref covers at least one non-empty line", () => {
     const out: string[] = []
-    for (const ref of refs) {
+    for (const ref of specRefs) {
       if (ref.start === ref.end) continue
       const resolved = resolve(ref.file)
       if (!resolved) continue
