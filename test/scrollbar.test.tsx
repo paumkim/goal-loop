@@ -88,7 +88,7 @@ describe("the dialog scrollbox, wired the way tui.tsx wires it (nested palette)"
 
   test("mono arm paints the thumb in base, never muted — weight of tone, not hue", async () => {
     const setup = await testRender(() => (
-      <scrollbox ref={(el) => { }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, true), showArrows: false }}>
+      <scrollbox ref={(_el) => { }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, true), showArrows: false }}>
         <text wrapMode="none">{RAIL}</text>
       </scrollbox>
     ), { width: 48, height: 10 })

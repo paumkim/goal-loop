@@ -46,8 +46,6 @@ export interface HudCardTheme {
   readonly background?: { readonly raised?: { readonly high?: ColorInput } }
 }
 
-/** The 64-cell default's condition/why budget; the live component derives this from its resolved width instead. */
-const CONDITION_MAX = 42
 const stateWord = (goal: GoalSnapshot): string =>
   goal.status === "paused"
     ? "paused"

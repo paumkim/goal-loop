@@ -1284,7 +1284,7 @@ describe("per-turn spend in the why ledger", () => {
 
 describe("HudCard context menu — keyboard selection paints like hover", () => {
   test("a controlled menuSelected paints exactly that row bold; leaving the menu unwired defaults the first row", async () => {
-    const { frame, setup } = await render(() => (
+    const { setup } = await render(() => (
       <HudCard goal={loopedGoal({ reason: "evaluator stuck" })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} onCopyReason={() => {}} contextOpen={true} menuSelected={() => 1} />
     ))
     const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
@@ -1300,7 +1300,7 @@ describe("HudCard context menu — keyboard selection paints like hover", () => 
   })
 
   test("the clear row paints bold under the selection, hue stays the danger contract (mono keeps the word)", async () => {
-    const { frame, setup } = await render(() => (
+    const { setup } = await render(() => (
       <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono={true} contextOpen={true} menuSelected={() => 5} />
     ))
     const spans = setup.captureSpans().lines.flatMap((line) => line.spans)

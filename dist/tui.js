@@ -1159,7 +1159,7 @@ var cleanShaCount = (verification, reach, sign) => {
   }
   return clean;
 };
-function attestationAppendix(goal, verification, reach, sign, nowMs, directory) {
+function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
   const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
   const lines = [
     "## Attestation (freshly probed at seal time)",
@@ -6167,7 +6167,7 @@ var tui_default = Plugin.define({
           const g = entries()[sessionID]?.goal;
           return sealRecordAction(sessionID, g);
         },
-        onCopyDossierSection: (label, raw) => copyToClipboard(raw, sessionID, "section"),
+        onCopyDossierSection: (_label, raw) => copyToClipboard(raw, sessionID, "section"),
         onViewTranscript: (target) => {
           try {
             context.ui.router.navigate({

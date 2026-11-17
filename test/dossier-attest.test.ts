@@ -64,7 +64,7 @@ const loopGoal = (loopHistory: GoalSnapshot["loopHistory"]): GoalSnapshot =>
     waiting: false,
   }) as GoalSnapshot
 
-const allYes = (sha: string) => true
+const allYes = (_sha: string) => true
 const jailed = (answer: Record<string, boolean | "unknown">) => (sha: string) => answer[sha] ?? "unknown"
 
 /** A sealed document over shaA quoted at v1 and shaB quoted at v1-v2, with seal-time probes all-yes by default. */
