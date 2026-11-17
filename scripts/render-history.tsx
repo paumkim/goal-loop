@@ -18,10 +18,23 @@ import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
-const width = Number(process.argv[2] ?? 112)
-const height = Number(process.argv[3] ?? 34)
-const empty = process.argv.includes("--empty")
-const mono = process.argv.includes("--mono")
+/** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
+const rawArgv = process.argv.slice(2)
+const positional = rawArgv.filter(a => !a.startsWith("--"))
+const flagArgs = rawArgv.filter(a => a.startsWith("--"))
+const positiveFinite = (value: string | undefined, dflt: number, name: string): number => {
+  if (value === undefined) return dflt
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) {
+    console.error(`render-history.tsx: ${name} must be a positive finite number (got "${value}")`)
+    process.exit(2)
+  }
+  return n
+}
+const width = positiveFinite(positional[0], 112, "width")
+const height = positiveFinite(positional[1], 34, "height")
+const empty = flagArgs.includes("--empty")
+const mono = flagArgs.includes("--mono")
 if (mono) process.env.NO_COLOR = "1"
 
 const theme: HistoryTheme = {

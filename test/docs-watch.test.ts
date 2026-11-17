@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -96,5 +96,34 @@ describe("docs-watch check", () => {
     expect(html).toContain("2026-11-01 10:00 UTC")
     // Re-running the check in a clean tree passes.
     expect(run("check").status).toBe(0)
+  })
+})
+
+describe("docs-watch in an empty repository (zero commits)", () => {
+  test("once completes instead of crashing mid-scan; state is written and stamps become unknown", () => {
+    const empty = mkdtempSync(join(tmpdir(), "docs-watch-empty-test-"))
+    try {
+      execFileSync("git", ["init", "-q", "-b", "dev"], { cwd: empty, env: GIT_ENV })
+      mkdirSync(join(empty, "docs"), { recursive: true })
+      writeFileSync(join(empty, "docs", "page.html"), page("1999-01-01 00:00 UTC"))
+      writeFileSync(join(empty, "docs", "changelog.html"), changelog)
+      const result = spawnSync("bun", [SCRIPT, "once"], { cwd: empty, encoding: "utf8", env: GIT_ENV })
+      expect(result.status).toBe(0)
+      expect(`${result.stderr}`).not.toContain("Command failed")
+      // the scan completed: state file written, changelog re-rendered, stamp degraded to the sentinel
+      expect(readdirSync(empty)).toContain(".docs-watch-state.json")
+      expect(readFileSync(join(empty, "docs", "page.html"), "utf8")).toContain("unknown")
+      // a second once run does not duplicate the baseline log line
+      const again = spawnSync("bun", [SCRIPT, "once"], { cwd: empty, encoding: "utf8", env: GIT_ENV })
+      expect(again.status).toBe(0)
+      const logLines = readFileSync(join(empty, ".docs-watch.log"), "utf8").trim().split("\n")
+      expect(logLines.filter((l) => l.includes("baseline")).length).toBeLessThanOrEqual(1)
+      // and check does not crash with a stack trace
+      const check = spawnSync("bun", [SCRIPT, "check"], { cwd: empty, encoding: "utf8", env: GIT_ENV })
+      expect(check.status === 0 || check.status === 1).toBe(true)
+      expect(`${check.stderr}${check.stdout}`).not.toContain("node:child_process")
+    } finally {
+      rmSync(empty, { recursive: true, force: true })
+    }
   })
 })

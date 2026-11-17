@@ -121,6 +121,11 @@ describe("sliceChangelogRows", () => {
   test("undefined when the end marker precedes the start marker", () => {
     expect(sliceChangelogRows(`${CHANGE_END}\nmiddle\n${CHANGE_START}`)).toBeUndefined()
   })
+
+  test("normalizes CRLF line endings inside the table body (autocrlf checkouts)", () => {
+    const crlf = [`<!-- changes:start -->`, `<tr><td>one</td></tr>`, `<tr><td>two</td></tr>`, `<!-- changes:end -->`].join("\r\n")
+    expect(sliceChangelogRows(crlf)).toBe("<tr><td>one</td></tr>\n<tr><td>two</td></tr>")
+  })
 })
 
 describe("changelogVerdict", () => {

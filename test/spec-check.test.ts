@@ -4,7 +4,7 @@
  * only runs under `import.meta.main`, so these tests never shell out to npm or bun test.
  */
 import { describe, expect, test } from "bun:test"
-import { BUN_RED_ERROR, NO_MARKER_ERROR, diagnose, formatFailures, formatOk, parseMarker } from "../scripts/spec-check.ts"
+import { BUN_RED_ERROR, NO_MARKER_ERROR, diagnose, formatFailures, formatOk, parseBunTestPassCount, parseMarker } from "../scripts/spec-check.ts"
 
 const SPEC_FRAGMENT = [
   "# SPEC",
@@ -105,5 +105,43 @@ describe("report formatting", () => {
 
   test("NO_MARKER_ERROR names the exact marker syntax", () => {
     expect(NO_MARKER_ERROR).toContain("<!-- spec-check files=N tests=N -->")
+  })
+})
+
+describe("parseBunTestPassCount", () => {
+  test("parses the summary line from merged reporter output", () => {
+    expect(parseBunTestPassCount("\n 1373 pass\n 0 fail\n 28 snapshots, 4658 expect() calls\n")).toBe(1373)
+  })
+
+  test("a stray 'N passed'-like substring before the summary does not win", () => {
+    const out = "test foo: 2 passed\n  somewhere else 5 pass\n\n  900 pass\n  0 fail\n"
+    expect(parseBunTestPassCount(out)).toBe(900)
+  })
+
+  test("'passed' as a suffix never matches (word boundary)", () => {
+    expect(parseBunTestPassCount("3 passed\n")).toBeUndefined()
+  })
+
+  test("takes the last anchored summary when more than one is printed", () => {
+    expect(parseBunTestPassCount(" 1 pass\n 2 fail\n  42 pass\n 0 fail\n")).toBe(42)
+  })
+
+  test("returns undefined when the reporter output is unparseable", () => {
+    expect(parseBunTestPassCount("")).toBeUndefined()
+    expect(parseBunTestPassCount("no summary here\n")).toBeUndefined()
+  })
+})
+
+describe("diagnose with a bun launch failure", () => {
+  const claimed = { files: 41, tests: 488 }
+
+  test("a launch failure is named as such, not as 'a test failed'", () => {
+    expect(diagnose(claimed, { files: 41, testsGreen: false, bunLaunchError: "spawn bun ENOENT" })).toEqual([
+      "bun test failed to launch: spawn bun ENOENT",
+    ])
+  })
+
+  test("without bunLaunchError the red-suite message is unchanged", () => {
+    expect(diagnose(claimed, { files: 41, testsGreen: false })).toEqual([BUN_RED_ERROR])
   })
 })
