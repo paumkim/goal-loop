@@ -2663,6 +2663,22 @@
       "submittedAt": "2026-11-17T15:25:13Z",
       "mergedAt": "2026-11-17T15:26:28Z",
       "mergedInto": "dev"
+    },
+    "tui-spend-carryforward": {
+      "agent": "inkling",
+      "paths": "src/core/entries.ts,src/tui.tsx,src/runtime/controller.ts,test/entries.test.ts,test/wire.test.ts,test/context-size.test.ts,test/tui-context-render.test.tsx,SPEC.md,dist",
+      "branch": "wt/tui-spend-carryforward",
+      "worktree": "worktrees/wt-tui-spend-carryforward",
+      "status": "done",
+      "createdAt": "2026-11-17T19:18:37Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T19:24:10Z",
+      "forcedScopeFiles": [
+        "test/controller.test.ts"
+      ],
+      "submittedAt": "2026-11-17T19:24:10Z",
+      "mergedAt": "2026-11-17T19:25:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
