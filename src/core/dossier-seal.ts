@@ -29,7 +29,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier } from "./dossier.ts"
+import { buildLoopDossier, stampOf } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import {
   gitCatFileProbe,
@@ -113,7 +113,7 @@ export function attestationAppendix(
   nowMs: number,
   directory: string,
 ): string[] {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString()
+  const stamp = stampOf(nowMs)
   const lines: string[] = [
     "## Attestation (freshly probed at seal time)",
     "",

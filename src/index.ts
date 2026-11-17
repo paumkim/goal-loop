@@ -55,8 +55,19 @@ function toUsage(info: { cost?: number; tokens?: Partial<{ input: number; output
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true })
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener("abort", onAbort, { once: true })
   })
 
 /** Env flag: `1/true/yes/on` (case-insensitive) enables; anything else is off. Probe mode makes plugin storage read-only. */
@@ -78,22 +89,23 @@ function createVerifier() {
         env: process.env,
       })
       let output = ""
+      // One streaming decoder so a multi-byte sequence split across chunks is not corrupted.
+      const decoder = new TextDecoder()
       const append = (chunk: Uint8Array) => {
-        output = (output + new TextDecoder().decode(chunk)).slice(-MAX)
+        output = (output + decoder.decode(chunk, { stream: true })).slice(-MAX)
       }
-      const drain = async () => {
-        for (const stream of [child.stdout, child.stderr]) {
-          if (!stream) continue
-          const reader = stream.getReader()
-          try {
-            for (;;) {
-              const { done, value } = await reader.read()
-              if (done) break
-              if (value) append(value)
-            }
-          } catch {
-            // stream closed by kill
+      // Both streams are drained concurrently: an unread pipe fills the OS buffer and blocks the child.
+      const read = async (stream: typeof child.stdout) => {
+        if (!stream) return
+        const reader = stream.getReader()
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value) append(value)
           }
+        } catch {
+          // stream closed by kill
         }
       }
       let timedOut = false
@@ -104,7 +116,7 @@ function createVerifier() {
       const onAbort = () => child.kill("SIGKILL")
       signal.addEventListener("abort", onAbort, { once: true })
       try {
-        const [code] = await Promise.all([child.exited, drain()])
+        const [code] = await Promise.all([child.exited, read(child.stdout), read(child.stderr)])
         return { code, output, timedOut }
       } finally {
         clearTimeout(timer)

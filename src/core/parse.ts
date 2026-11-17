@@ -17,8 +17,10 @@ export function parseGoalCommand(raw: string, maxChars: number): GoalCommand {
   const condition = unquote(text)
   if (condition === "") return { type: "status" }
   const unlimited = !Number.isFinite(maxChars) || maxChars >= Number.MAX_SAFE_INTEGER
-  if (!unlimited && condition.length > maxChars)
-    return { type: "invalid", message: `Goal condition is ${condition.length} characters; the limit is ${maxChars}.` }
+  // Count characters (code points), not UTF-16 code units: lone surrogates and astral pairs are one character each.
+  const count = [...condition].length
+  if (!unlimited && count > maxChars)
+    return { type: "invalid", message: `Goal condition is ${count} characters; the limit is ${maxChars}.` }
   return { type: "set", condition }
 }
 

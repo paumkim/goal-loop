@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { GoalSnapshot, UsageSnapshot } from "../src/core/types.ts"
-import { buildLoopDossier, fenceBlock, inlineCode, isoOf, quote, shortSha, GAP } from "../src/core/dossier.ts"
+import { buildLoopDossier, fenceBlock, inlineCode, isoOf, quote, shortSha, stampOf, GAP } from "../src/core/dossier.ts"
 
 const now = 1_800_000_000_000
 const zero: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
@@ -186,5 +186,15 @@ describe("buildLoopDossier", () => {
     expect(inlineCode("a`b")).toBe("`` a`b ``")
     expect(fenceBlock("has ``` inside")[0]).toBe("````")
     expect(quote("a\n\nb")).toEqual(["> a", ">", "> b"])
+  })
+})
+
+describe("stampOf regression: unrepresentable clocks", () => {
+  test("stamps the epoch instead of throwing on RangeError", () => {
+    expect(stampOf(1e20)).toBe("1970-01-01T00:00:00.000Z")
+    expect(stampOf(Number.POSITIVE_INFINITY)).toBe("1970-01-01T00:00:00.000Z")
+    expect(stampOf(Number.NaN)).toBe("1970-01-01T00:00:00.000Z")
+    expect(stampOf(0)).toBe("1970-01-01T00:00:00.000Z")
+    expect(stampOf(1_800_000_000_000)).toBe(new Date(1_800_000_000_000).toISOString())
   })
 })

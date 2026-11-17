@@ -56,7 +56,7 @@ const GOAL_GLYPH_ASCII = "*"
 export const goalGlyph = (ascii: boolean = false): string => (ascii ? GOAL_GLYPH_ASCII : GOAL_GLYPH)
 
 export function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.floor(ms / 1000))
+  const total = Number.isFinite(ms) ? Math.max(0, Math.floor(ms / 1000)) : 0
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60

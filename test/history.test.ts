@@ -560,3 +560,32 @@ describe("verdictEntryGlyph", () => {
     expect(verdictEntryGlyph({ verdict: "impossible", toolCalls: 0 })).toBe("⊘")
   })
 })
+
+describe("iterationVerdictMix regression: non-finite endedAt", () => {
+  const setAt = 1_000
+
+  test("a non-finite endedAt falls back to filter semantics — no verdict painted into the wrong iteration", () => {
+    const nanEntries = [entry(1, Number.NaN), entry(2, 21_000)]
+    const history = [{ ...verdict(1, "met"), at: 15_000 }]
+    // The monotone sweep used to bucket this into iteration 2 (at <= NaN is false); the filter read buckets it nowhere.
+    expect(iterationVerdictMix(history, nanEntries, setAt)).toEqual([undefined, undefined])
+  })
+
+  test("an infinite endedAt is a never-closing window under filter semantics", () => {
+    const infiniteEntries = [entry(1, Number.POSITIVE_INFINITY), entry(2, Number.POSITIVE_INFINITY)]
+    const mixes = iterationVerdictMix([{ ...verdict(1, "met"), at: 5_000 }], infiniteEntries, setAt)
+    expect(mixes[0]).toEqual({ met: 1, not_met: 0, impossible: 0, total: 1 })
+    expect(mixes[1]).toBeUndefined()
+  })
+})
+
+describe("currentIterationVerdict regression: non-finite last endedAt", () => {
+  const setAt = 1_000
+
+  test("falls back to setAt as the window edge instead of hiding the live verdict", () => {
+    const entries = [entry(1, Number.NaN)]
+    const history = [{ ...verdict(7, "not_met"), at: 5_000 }]
+    expect(currentIterationVerdict(history, entries, setAt)?.turn).toBe(7)
+  })
+})
+

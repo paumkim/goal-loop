@@ -16,7 +16,15 @@ export const sameDirectory = (a: string, b: string) => {
 function isRecord(value: unknown): value is GoalRecord {
   if (typeof value !== "object" || value === null) return false
   const r = value as Partial<GoalRecord>
-  return r.version === 1 && typeof r.sessionID === "string" && typeof r.condition === "string" && typeof r.status === "string"
+  // `directory` is required by the type but absent on corrupt/legacy records; an unvalidated
+  // `sameDirectory()` call would throw and kill the whole bulk restore.
+  return (
+    r.version === 1 &&
+    typeof r.sessionID === "string" &&
+    typeof r.condition === "string" &&
+    typeof r.status === "string" &&
+    typeof r.directory === "string"
+  )
 }
 
 /**

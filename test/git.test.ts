@@ -151,3 +151,11 @@ describe("headSha", () => {
     expect(headSha(join(scratch(), ".git"))).toBeUndefined()
   })
 })
+
+describe("headSha regression: sha256 repositories", () => {
+  test("resolves an attached HEAD through a packed-refs file with 64-hex (sha256) shas", () => {
+    const packed = repo([], "dev")
+    writeFileSync(join(packed, ".git", "packed-refs"), "# pack-refs with: peeled fully-peeled sorted\n" + "d".repeat(64) + " refs/heads/dev\n")
+    expect(headSha(join(packed, ".git"))).toBe("d".repeat(64))
+  })
+})

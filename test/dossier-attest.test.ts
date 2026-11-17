@@ -321,3 +321,34 @@ describe("attestSummaryLine", () => {
     expect(attestSummaryLine(at({}))).toBe("attestation holds: 2 of 2 sealed-clean shas still clean")
   })
 })
+
+describe("attestation regression: a tampered appendix repeating a sha", () => {
+  const duplicateDoc = [
+    "## Attestation (freshly probed at seal time)",
+    "",
+    "_The bookkeeping above is the record's own and was not re-verified; the shas the record quotes were re-probed here, fresh, against `/tmp/attest`, at 2027-01-15T08:00:00.000Z: existence._",
+    "",
+    "| sha | iterations | exists | on this line | under seal |",
+    "| --- | --- | --- | --- | --- |",
+    `| ${shortB} | v1 | yes | yes | yes |`,
+    `| ${shortB} | v2 | yes | yes | yes |`,
+    "",
+  ].join("\n")
+
+  test("counts shas once: unique, sealedClean, held and the rows are per unique sha", () => {
+    const result = attestSealedDossier(duplicateDoc, "/tmp/attest", { verify: allYes, reach: allYes, sign: allYes })
+    expect(result.kind).toBe("attested")
+    if (result.kind !== "attested") return
+    expect(result.unique).toBe(1)
+    expect(result.sealedClean).toBe(1)
+    expect(result.held).toBe(1)
+    expect(result.rows).toHaveLength(1)
+  })
+
+  test("an unrepresentable clock renders the epoch stamp instead of throwing", () => {
+    const result = attestSealedDossier(sealedFixture(), "/tmp/attest", { verify: allYes, reach: allYes, sign: allYes })
+    if (result.kind !== "attested") throw new Error("fixture must attest")
+    const md = attestationReportMarkdown(result, 1e20, "/tmp/attest", "goal-dossier-sealed-20270115-080000.md")
+    expect(md).toContain("Generated: 1970-01-01T00:00:00.000Z")
+  })
+})

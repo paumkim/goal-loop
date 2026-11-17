@@ -110,7 +110,7 @@ export function resolveConfig(
   env: Readonly<Record<string, string | undefined>> = {},
 ): GoalConfig {
   const evaluator = (typeof options.evaluator === "object" && options.evaluator !== null ? options.evaluator : {}) as Record<string, unknown>
-  const model = parseModelRef(env.OPENCODE_GOAL_MODEL ?? evaluator.model ?? options.model)
+  const model = parseModelRef([env.OPENCODE_GOAL_MODEL, evaluator.model, options.model].find((v) => (typeof v === "string" ? v.trim() !== "" : v != null))) // empty/whitespace strings read as unset — the `str`/`int` posture
   const requested = evaluator.mode === "session" || evaluator.mode === "independent" ? evaluator.mode : "auto"
   const mode = requested === "auto" ? (model ? "independent" : "session") : requested === "independent" && !model ? "session" : requested
   return {

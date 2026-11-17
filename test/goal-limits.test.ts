@@ -102,3 +102,14 @@ describe("goal condition limits", () => {
     expect(notices.some((n) => n.kind === "error")).toBeTrue()
   })
 })
+
+describe("condition length regression: astral characters", () => {
+  test("an astral-plane condition counts each character once, not two UTF-16 units", () => {
+    const limit = 4_000
+    const over = `${"𝄞".repeat(limit)}𝄞`
+    const result = parseGoalCommand(over, limit)
+    expect(result.type).toBe("invalid")
+    if (result.type === "invalid") expect(result.message).toContain("4001 characters")
+    expect(parseGoalCommand("𝄞".repeat(limit), limit).type).toBe("set")
+  })
+})
