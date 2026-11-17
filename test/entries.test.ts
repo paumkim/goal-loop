@@ -161,3 +161,33 @@ describe("preserveCarriedFields spend carry-forward", () => {
     expect(preserveCarriedFields(withSpend(0.42), null)).toBeNull()
   })
 })
+
+describe("preserveCarriedFields record identity", () => {
+  const usage = { cost: 0.42, input: 1000, output: 500, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+
+  test("a cleared-then-re-armed goal in the same session inherits nothing from the old record", () => {
+    const old = { ...snap("achieved"), id: "goal_old", contextSize: 95_000, spend: usage } as unknown as GoalSnapshot
+    const fresh = { ...snap("active"), id: "goal_new" } as unknown as GoalSnapshot
+    const merged = preserveCarriedFields(old, fresh)!
+    expect(merged.contextSize).toBeUndefined()
+    expect(merged.spend).toBeUndefined()
+    // A pending→landed flip recorded on the old record is not applied to the new one either.
+    const freshLanded = { ...fresh, loopCompact: { requestedAt: 9, iteration: 1, misses: 0, landedAt: 10 } } as unknown as GoalSnapshot
+    const kept = preserveCarriedFields(old, freshLanded)
+    expect(kept).toBe(freshLanded)
+  })
+
+  test("the same record id keeps carrying its figures", () => {
+    const old = { ...snap("active"), id: "goal_a", contextSize: 95_000, spend: usage } as unknown as GoalSnapshot
+    const next = { ...snap("active"), id: "goal_a" } as unknown as GoalSnapshot
+    const merged = preserveCarriedFields(old, next)!
+    expect(merged.contextSize).toBe(95_000)
+    expect(merged.spend?.cost).toBe(0.42)
+  })
+
+  test("a pending→landed flip is still honored within one record", () => {
+    const old = { ...snap("active"), id: "goal_a", contextSize: 185_000, loopCompact: { requestedAt: 1, iteration: 2, misses: 0 } } as unknown as GoalSnapshot
+    const next = { ...snap("active"), id: "goal_a", loopCompact: { requestedAt: 1, iteration: 2, misses: 0, landedAt: 2 } } as unknown as GoalSnapshot
+    expect(preserveCarriedFields(old, next)?.contextSize).toBeUndefined()
+  })
+})

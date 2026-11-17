@@ -457,7 +457,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=60 tests=1456 -->
+<!-- spec-check files=60 tests=1460 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6189,3 +6189,18 @@ Interpretation of the armed condition ("live stream update if things change in t
 710. Honest limits: the carried spend between a `get` pull and the next event can lag the true ledger by one evaluation turn (same contract as the context estimate); the final-spend event is pinned at the controller harness, not at a live TUI frame; the rename is mechanical but any external fork importing `preserveContextSize` from `src/core/entries.ts` must rename (the module is internal — not in package.json `exports`). Marker re-counted at the first marker and below.
 
 <!-- spec-check files=60 tests=1456 -->
+
+## Workstream GG — record identity on the carry, drop events with no goal key, commit on the planner-retry path (2026-11-17)
+
+Source: a read-only survey of the live `changed`/carry/settle machinery (no commands run by the surveyor). Three of its findings were real and small enough to fix in one pass; the rest were dismissed below with reasons. No redesign; no test weakened. Docs untouched (the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`).
+
+711. src/core/wire.ts — `parseChangedEvent` narrowed a payload with a missing goal key to `{ sessionID, goal: null }`, blanking the TUI's cached entry on any malformed `changed` event. Now only an explicit `goal: null` clears the entry; a missing key drops the event (the consumer at `src/tui.tsx` already treats `undefined` as "drop"). Present-but-malformed payloads still drop the event, unchanged.
+712. src/core/entries.ts — `preserveCarriedFields` carried `contextSize`, `spend`, and applied the pending→landed `loopCompact` invalidation without comparing record identity. A cleared-then-re-armed goal reuses the sessionID, so the old record's figures could paint the new goal until the next `get` pull. Both carries and the landing detection now require `previous.id === next.id`. Same-reference fast path for the no-carry case is unchanged.
+713. src/runtime/controller.ts — `evaluate()` routes a met verdict on an armed loop into `loopAdvance`, which returns before the shared `commit`. When the planner's `nextGoal` call then failed, the retry branch re-armed a timer but never persisted the turn verdict or its spend: storage (and any other client) stayed blind until the arm landed, or forever on a crash. The retry branch now `await this.commit(record)` before scheduling the retry. The loop bookkeeping (`loopHistory`, `loopNotProgress`) remains local until the arm lands, exactly as before.
+714. test/wire.test.ts — the missing-goal-key expectation flips to `undefined` (drop), with a comment stating the explicit-null rule.
+715. test/entries.test.ts — +3 pins: a cleared-then-re-armed goal inherits nothing from the old record (figures and pending→landed detection), the same record id keeps carrying its figures, and a pending→landed flip is still honored within one record. Suite 1456 → 1460 pass, 0 fail (58 files).
+716. test/loop.test.ts — +1 pin: a met loop verdict whose planner throws is persisted before the retry is scheduled — after dispose + restore into a fresh controller, the stored record carries the met history entry and its reason.
+717. Dismissed with reason: the survey's docs line-ref items (docs/runtime.html, docs/index.html) touch `docs/` (owned by the stale `github-single-channel` lease) — not touched; `.docs-watch.log` is already git-ignored via `*.log` and untracked; the `evaluating=false`-without-emit paths converge through the normal commit, and the one true hole (the planner-retry path emitting nothing) is closed by 713; the `git-tracked`/`dist freshness` unverified items were verified this iteration (`bun run check` green end-to-end in this worktree).
+718. Honest limits: the identity guard keys on the record's additive `id` field only (not `startedAt`); identity is pinned at the controller/TUI-harness level, not at a live TUI frame; the planner-retry commit persists the verdict but does not persist the summarized loop iteration (still local by design until the arm lands); the two pre-existing `evaluating` finally-blocks still flip the flag without an emit of their own and rely on the following commit — acceptable because every path after them commits.
+
+<!-- spec-check files=60 tests=1460 -->

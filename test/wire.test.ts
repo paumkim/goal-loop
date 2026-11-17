@@ -181,8 +181,9 @@ describe("parseChangedEvent", () => {
   test("narrows sessionID and goal", () => {
     expect(parseChangedEvent({ sessionID: "ses_a", goal: snapshot() })).toEqual({ sessionID: "ses_a", goal: snapshot() })
     expect(parseChangedEvent({ sessionID: "ses_a", goal: null })).toEqual({ sessionID: "ses_a", goal: null })
-    // An absent goal key means the goal was cleared (parity with the previous `?? null` behavior).
-    expect(parseChangedEvent({ sessionID: "ses_a" })).toEqual({ sessionID: "ses_a", goal: null })
+    // An absent goal key is dropped with the event (an explicit null is the only clear signal);
+    // narrowing undefined to null here would blank a live entry on a malformed payload.
+    expect(parseChangedEvent({ sessionID: "ses_a" })).toBeUndefined()
   })
 
   test("drops the event when sessionID is missing or malformed", () => {

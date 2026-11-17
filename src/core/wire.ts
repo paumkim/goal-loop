@@ -163,15 +163,16 @@ export const parseGetGoalOutput = (value: unknown): { readonly goal: GoalSnapsho
 
 /**
  * Narrows a `changed` event payload. `undefined` means drop the event. An explicitly null goal narrows to
- * null (the session's goal was cleared); a present-but-malformed snapshot drops the event rather than
- * blanking a live entry.
+ * null (the session's goal was cleared); a missing goal key and a present-but-malformed snapshot both drop
+ * the event rather than blanking a live entry.
  */
 export const parseChangedEvent = (value: unknown): { readonly sessionID: string; readonly goal: GoalSnapshot | null } | undefined => {
   if (!isRecord(value)) return undefined
   const sessionID = value.sessionID
   if (!isString(sessionID) || sessionID === "") return undefined
   const goal = value.goal
-  if (goal === null || goal === undefined) return { sessionID, goal: null }
+  if (goal === undefined) return undefined
+  if (goal === null) return { sessionID, goal: null }
   const parsed = parseGoalSnapshot(goal)
   return parsed ? { sessionID, goal: parsed } : undefined
 }
