@@ -30,7 +30,7 @@ import { join } from "node:path"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
-import { scrollbarChrome } from "./core/scrollbar.ts"
+import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleLiveSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -203,7 +203,7 @@ export default Plugin.define({
               </box>
             </box>
             <scrollbox ref={(el) => setScrollRef(el)} scrollX={false} flexGrow={1} stickyScroll={false} contentOptions={{ minHeight: 0 }}
-              verticalScrollbarOptions={{ trackOptions: scrollbarChrome(context.theme, reducedColor), showArrows: false }}>
+              verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(context.theme as unknown as HostScrollbarTheme<ColorInput>, reducedColor), showArrows: false }}>
               {statusBody(sessionID, fallback)}
             </scrollbox>
             <DialogFooter
@@ -908,18 +908,32 @@ export default Plugin.define({
           if (tone === "achieved") return achievedAckAccentColor(context.theme as unknown as NeutralTheme<ColorInput>, (terminal() ?? goal())?.history, false)
           return context.theme.text.muted
         }
+        // The card mounts inside the composer (the v2 sidebar sits beside it), so the width is the
+        // mount's own resolved width — measured off the outer absolute box and snapped on every layout
+        // change (sidebar toggle, terminal resize). useTerminalDimensions() is the full screen, sidebar
+        // included; painting at that width ran the card out past the composer into the sidebar region,
+        // flush-clipped mid-sentence with no ellipsis. The anchor (top={-cardRows()}), the row plan and
+        // the painted card all agree on this number.
+        const [mountWidth, setMountWidth] = createSignal<number | undefined>(undefined)
+        const mountWidthOr = () => mountWidth() ?? dimensions().width
         const cardFor = () => {
           const g = showing()
           return g && getHudSession() === props.sessionID ? g : undefined
         }
+        // Same truthy-value contract as cardFor, gated on the mount width being known: the first paint
+        // after arming waits one layout pass rather than overflowing at the terminal's width.
+        const cardReady = () => {
+          const g = cardFor()
+          return g !== undefined && (mountWidth() ?? 0) > 0 ? g : undefined
+        }
         // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
         // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
         const maxCardRows = () => Math.max(8, dimensions().height - 2)
-        // The anchor must measure the same width the card paints with (full terminal width since the
-        // left-accent redesign) or the reserved rows drift from the painted rows on wide terminals.
+        // The anchor must measure the same width the card paints with (the mount's width) or the reserved
+        // rows drift from the painted rows on wide terminals.
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g, contextOpen(), maxCardRows(), dimensions().width) : 0
+          return g ? hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr()) : 0
         }
         const toggleHud = () => {
           try {
@@ -955,12 +969,28 @@ export default Plugin.define({
                 {pillText()}
               </text>
             </box>
-            <Show when={cardFor()}>
+            <Show when={cardReady()}>
               {(g) => (
-                <box position="absolute" top={-cardRows()} left={0} right={0} height={cardRows()} zIndex={10}>
+                <box
+                  position="absolute"
+                  top={-cardRows()}
+                  left={0}
+                  right={0}
+                  height={cardRows()}
+                  zIndex={10}
+                  ref={(el) => {
+                    // Snap the mount's own width on every layout pass (sidebar toggle, terminal resize).
+                    el.onSizeChange = () => {
+                      const w = el.width
+                      if (w > 0) setMountWidth(w)
+                    }
+                    const w = el.width
+                    if (w > 0) setMountWidth(w)
+                  }}
+                >
                   <HudCard
                     goal={g()}
-                    width={dimensions().width}
+                    width={mountWidthOr()}
                     theme={context.theme as unknown as HudCardTheme}
                     mono={reducedColor}
                     elapsedMs={elapsed}

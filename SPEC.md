@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1334 -->
+<!-- spec-check files=59 tests=1337 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5720,3 +5720,43 @@ inlines the two records so the outcome is pinned byte-for-byte rather than asser
      where the 64-cell design used to centre/clamp the panel. The teaching-hint and ceiling
      behavior at exactly `maxRows` is unchanged in kind — only the arithmetic moved one row.
 <!-- spec-check files=59 tests=1332 -->
+
+## Workstream EN — the live crash root-caused, and the card paints the mount, not the terminal (2026-11-17)
+
+Interpretation of the armed condition: the v2 composer layout and the dialog's scrollbar are the two host
+contracts EM2 leaned on, and a live session proved both wrong in one report. The crash boundary landed; the
+width assumption landed with it. This workstream closes the loop: the crash's root cause is identified and
+fixed at the seam that feeds it, and the card is pinned to the mount it actually paints into.
+522. src/core/scrollbar.ts — the live crash ("opencode-goal.tui crashed in dialog", captured verbatim
+     2026-11-17: `TypeError: undefined is not an object (evaluating 'e.length')` out of the host's
+     scrollbar-options assignment, `verticalScrollbarOptions → trackOptions → setOption → clone → new R`)
+     was root-caused: `scrollbarChrome` handed the host `theme.background` as `trackOptions.backgroundColor`
+     — but the host theme's `background` is a nested palette (`background.raised.high`), not a color, so the
+     host's option-clone read `.length` off an undefined channel and threw at dialog open. New
+     `scrollbarTrackOptions(theme, mono)` reads the nested palette the way hud-card.tsx paints the card
+     surface (`background?.raised?.high`) and returns a thumb-only track when the host exposes no raised
+     token — never a non-color. `scrollbarChrome` stays for the flat, unit-tested fixture path.
+523. src/tui.tsx — the dialog wiring passes `scrollbarTrackOptions(context.theme as unknown as
+     HostScrollbarTheme<ColorInput>, reducedColor)` as the scrollbox's `trackOptions`.
+524. src/tui.tsx — the HUD card paints the mount, not the terminal. The opencode v2 sidebar sits beside the
+     composer's main column, so `useTerminalDimensions().width` (the full screen, sidebar included) ran the
+     card out past the composer: rows flush-clipped mid-sentence past the composer boundary with no ellipsis
+     (measured live: composer ends ~94–154 cells from the mount origin depending on terminal width and
+     sidebar state, while the card painted the full screen width). The outer absolute box (`left={0}
+     right={0}`) now snapshots its own resolved width via a `ref` + `onSizeChange` into a `mountWidth`
+     signal; `HudCard`'s `width` prop, `hudCardRows` (the `cardRows()` anchor) and `cardReady()` (the card
+     mount, gating the first paint on a known mount width) all consume it. One layout pass after arming, the
+     card and its reserved rows agree exactly at every terminal width and sidebar state.
+525. test/scrollbar.test.tsx — +3 tests pin the host shape at the seam: the nested-palette theme becomes
+     the raised-token track with the muted/base thumb rule; a host with no raised token omits
+     `backgroundColor` entirely (never a non-color); and the dialog's real mount shape (overflowing
+     `scrollbox` with `scrollbarTrackOptions` over a nested-palette theme) renders through
+     `@opentui/solid`'s test renderer without throwing — the fixture path that could never catch this crash,
+     because it used a flat RGBA background. Suite: 1337 pass, 0 fail (54 files). Marker re-counted below.
+526. src/hud-card.tsx — the doc comment's layout width line reads "the composer mount's width".
+527. Honest limits: the fix relies on the host's `onSizeChange` firing for the absolute box's initial layout
+     (it does; verified across 100/140/160/200-column tmux sessions with and without the sidebar) — before
+     that first resolution the card does not paint rather than overflow at a guessed width. The EM2 card and
+     both ErrorBoundaries are unchanged; a recurrence of the dialog crash now fails loudly in-dialog with the
+     real stack, not in the host.
+<!-- spec-check files=59 tests=1337 -->

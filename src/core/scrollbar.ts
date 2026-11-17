@@ -42,3 +42,28 @@ export const scrollbarChrome = <C>(theme: ScrollbarTheme<C>, mono: boolean): Scr
   backgroundColor: theme.background,
   foregroundColor: mono ? theme.text.base : theme.text.muted,
 })
+
+/**
+ * The tones to hand the host scrollbox as `trackOptions`, read from the host theme's REAL shape: a
+ * nested palette (`background.raised.high`), never a flat color. An earlier wiring passed the whole
+ * `background` palette object as `backgroundColor`; the host's scrollbar-options clone crashed on it
+ * at dialog open ("TypeError: undefined is not an object (evaluating 'e.length')" out of the options
+ * assignment path, reproduced live 2026-11-17). The raised token is the same surface the HUD card
+ * paints, so the track recedes into the dialog chrome. A host that exposes no raised token gets the
+ * thumb only — never a non-color handed to the host.
+ */
+export interface HostScrollbarTheme<C> {
+  readonly text: { readonly base: C; readonly muted: C }
+  readonly background?: { readonly raised?: { readonly high?: C } }
+}
+
+export type ScrollbarTrackOptions<C> = { readonly foregroundColor: C; readonly backgroundColor?: C }
+
+export const scrollbarTrackOptions = <C>(
+  theme: HostScrollbarTheme<C>,
+  mono: boolean,
+): ScrollbarTrackOptions<C> => {
+  const raised = theme.background?.raised?.high
+  const thumb = mono ? theme.text.base : theme.text.muted
+  return raised === undefined ? { foregroundColor: thumb } : { backgroundColor: raised, foregroundColor: thumb }
+}

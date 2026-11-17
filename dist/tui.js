@@ -5644,10 +5644,11 @@ var HudCard = (props) => {
 };
 
 // src/core/scrollbar.ts
-var scrollbarChrome = (theme, mono) => ({
-  backgroundColor: theme.background,
-  foregroundColor: mono ? theme.text.base : theme.text.muted
-});
+var scrollbarTrackOptions = (theme, mono) => {
+  const raised = theme.background?.raised?.high;
+  const thumb = mono ? theme.text.base : theme.text.muted;
+  return raised === undefined ? { foregroundColor: thumb } : { backgroundColor: raised, foregroundColor: thumb };
+};
 
 // src/core/entries.ts
 var ENTRY_CAP = 64;
@@ -6316,7 +6317,7 @@ var tui_default = Plugin.define({
                 });
                 _$insert4(_el$8, () => statusBody(sessionID, fallback));
                 _$effect4((_$p) => _$setProp4(_el$8, "verticalScrollbarOptions", {
-                  trackOptions: scrollbarChrome(context.theme, reducedColor),
+                  trackOptions: scrollbarTrackOptions(context.theme, reducedColor),
                   showArrows: false
                 }, _$p));
                 return _el$8;
@@ -7177,14 +7178,20 @@ var tui_default = Plugin.define({
             return achievedAckAccentColor(context.theme, (terminal() ?? goal())?.history, false);
           return context.theme.text.muted;
         };
+        const [mountWidth, setMountWidth] = createSignal4(undefined);
+        const mountWidthOr = () => mountWidth() ?? dimensions().width;
         const cardFor = () => {
           const g = showing();
           return g && getHudSession() === props.sessionID ? g : undefined;
         };
+        const cardReady = () => {
+          const g = cardFor();
+          return g !== undefined && (mountWidth() ?? 0) > 0 ? g : undefined;
+        };
         const maxCardRows = () => Math.max(8, dimensions().height - 2);
         const cardRows = () => {
           const g = cardFor();
-          return g ? hudCardRows(g, contextOpen(), maxCardRows(), dimensions().width) : 0;
+          return g ? hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr()) : 0;
         };
         const toggleHud = () => {
           try {
@@ -7237,10 +7244,20 @@ var tui_default = Plugin.define({
                   return _el$12;
                 })(), _$createComponent4(Show4, {
                   get when() {
-                    return cardFor();
+                    return cardReady();
                   },
                   children: (g) => (() => {
                     var _el$15 = _$createElement4("box");
+                    _$use2((el) => {
+                      el.onSizeChange = () => {
+                        const w = el.width;
+                        if (w > 0)
+                          setMountWidth(w);
+                      };
+                      const w = el.width;
+                      if (w > 0)
+                        setMountWidth(w);
+                    }, _el$15);
                     _$setProp4(_el$15, "position", "absolute");
                     _$setProp4(_el$15, "left", 0);
                     _$setProp4(_el$15, "right", 0);
@@ -7250,7 +7267,7 @@ var tui_default = Plugin.define({
                         return g();
                       },
                       get width() {
-                        return dimensions().width;
+                        return mountWidthOr();
                       },
                       get theme() {
                         return context.theme;
