@@ -2750,6 +2750,17 @@
       "submittedAt": "2026-11-17T20:42:02Z",
       "mergedAt": "2026-11-17T20:43:22Z",
       "mergedInto": "dev"
+    },
+    "docs-readme-staleness-sweep": {
+      "agent": "orchestrator",
+      "paths": "README.md,RELEASE-CHECKLIST.md",
+      "branch": "wt/docs-readme-staleness-sweep",
+      "worktree": "worktrees/wt-docs-readme-staleness-sweep",
+      "status": "done",
+      "createdAt": "2026-11-17T20:44:37Z",
+      "submittedAt": "2026-11-17T20:47:29Z",
+      "mergedAt": "2026-11-17T20:48:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
