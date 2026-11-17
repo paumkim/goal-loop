@@ -1962,6 +1962,8 @@ var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY
 };
 var STALE_LIVE_ENTRY_MS = 30000;
 var staleUnprovenSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS) => Object.entries(entries).filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs).filter(([, entry]) => entry?.goal == null || isLive(entry.goal.status)).map(([sessionID]) => sessionID);
+var RECENT_TERMINAL_WINDOW_MS = 10 * 60000;
+var staleRecentlyTerminalSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS, windowMs = RECENT_TERMINAL_WINDOW_MS) => Object.entries(entries).filter(([, entry]) => entry?.goal != null && !isLive(entry.goal.status)).filter(([, entry]) => entry?.terminalAt !== undefined && nowMs - entry.terminalAt <= windowMs).filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs).map(([sessionID]) => sessionID);
 var TERMINAL_ACK_MS = 45000;
 var ACK_FLASH_MS = 1700;
 var LANDING_ACK_MS = 3000;
@@ -5692,6 +5694,11 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
+function terminalStampOf(existing, goal, now) {
+  if (goal !== null && !isLive(goal.status))
+    return existing?.terminalAt ?? now;
+  return;
+}
 function bumpReceivedAt(entries, sessionID, now) {
   const existing = entries[sessionID];
   if (!existing)
@@ -6507,6 +6514,7 @@ var tui_default = Plugin.define({
           noteLanding(sessionID);
       } catch {}
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal);
+      const mergedNow = Date.now();
       return setEntries((previous) => {
         const existing = previous[sessionID];
         if (existing && goalsEqual(existing.goal, mergedGoal))
@@ -6515,7 +6523,8 @@ var tui_default = Plugin.define({
           ...previous,
           [sessionID]: {
             goal: mergedGoal,
-            receivedAt: Date.now()
+            receivedAt: mergedNow,
+            terminalAt: terminalStampOf(existing, mergedGoal, mergedNow)
           }
         };
         return pruneSnapshotEntries(next, statusDialogSession());
@@ -6624,7 +6633,10 @@ var tui_default = Plugin.define({
     const timer = setInterval(() => {
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active"))
         setNow(Date.now());
-      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now()))
+      const staleNow = Date.now();
+      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow))
+        refresh(sessionID).catch(() => {});
+      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow))
         refresh(sessionID).catch(() => {});
       if (statusDialogOpen())
         refreshOthers();

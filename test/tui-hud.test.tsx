@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -1434,5 +1434,47 @@ describe("staleUnprovenSessionIDs", () => {
     }
     expect(staleUnprovenSessionIDs(entries, now, 4000).sort()).toEqual(["ses_live", "ses_null"])
     expect(staleUnprovenSessionIDs(entries, now, 10_000)).toEqual([])
+  })
+})
+
+describe("staleRecentlyTerminalSessionIDs", () => {
+  const terminalEntry = (overrides: Partial<GoalSnapshot> = {}, receivedAt: number | undefined = now - STALE_LIVE_ENTRY_MS - 1, terminalAt: number | undefined = now - 1000) =>
+    ({ goal: loopedGoal({ ...overrides, status: "achieved" }), receivedAt, terminalAt })
+  test("selects a stale terminal entry inside the recent-terminal window", () => {
+    const entries = { ses_done: terminalEntry() }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual(["ses_done"])
+  })
+  test("a terminal entry past the window is never selected, however stale it looks", () => {
+    const entries = { ses_done: terminalEntry({}, now - STALE_LIVE_ENTRY_MS - 1, now - RECENT_TERMINAL_WINDOW_MS - 1) }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual([])
+  })
+  test("a fresh terminal entry (inside the cadence) is left alone", () => {
+    const entries = { ses_done: terminalEntry({}, now - STALE_LIVE_ENTRY_MS + 1000, now - 1000) }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual([])
+  })
+  test("an entry without a terminalAt stamp is never selected", () => {
+    const entries = { ses_unstamped: { goal: loopedGoal({ status: "achieved" }), receivedAt: now - STALE_LIVE_ENTRY_MS - 1 } }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual([])
+  })
+  test("null entries are never selected (the unproven predicate owns them), even with a stray stamp", () => {
+    const entries = {
+      ses_null: { goal: null, receivedAt: now - STALE_LIVE_ENTRY_MS - 1, terminalAt: now - 1000 },
+    }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual([])
+  })
+  test("live entries are never selected, even with a stray stamp", () => {
+    const entries = {
+      ses_live: { goal: loopedGoal({ status: "active" }), receivedAt: now - STALE_LIVE_ENTRY_MS - 1, terminalAt: now - 1000 },
+    }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual([])
+  })
+  test("the window edge is inclusive — and excludes one ms past it", () => {
+    const entries = { ses_edge: terminalEntry({}, now - STALE_LIVE_ENTRY_MS - 1, now - RECENT_TERMINAL_WINDOW_MS) }
+    expect(staleRecentlyTerminalSessionIDs(entries, now)).toEqual(["ses_edge"])
+  })
+  test("the floor and window are configurable", () => {
+    const entries = { ses_done: terminalEntry({}, now - 5000, now - 60_000) }
+    expect(staleRecentlyTerminalSessionIDs(entries, now, 4000, 120_000)).toEqual(["ses_done"])
+    expect(staleRecentlyTerminalSessionIDs(entries, now, 4000, 30_000)).toEqual([])
   })
 })
