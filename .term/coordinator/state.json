@@ -2598,6 +2598,17 @@
       "submittedAt": "2026-11-17T14:09:21Z",
       "mergedAt": "2026-11-17T14:10:44Z",
       "mergedInto": "dev"
+    },
+    "state-lock-ignore": {
+      "agent": "orchestrator",
+      "paths": "packages/coordinator/**",
+      "branch": "wt/state-lock-ignore",
+      "worktree": "worktrees/wt-state-lock-ignore",
+      "status": "done",
+      "createdAt": "2026-11-17T14:11:47Z",
+      "submittedAt": "2026-11-17T14:13:31Z",
+      "mergedAt": "2026-11-17T14:14:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
