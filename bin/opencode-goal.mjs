@@ -44,8 +44,8 @@
  *     config unchanged (taking a fresh safety backup of the current state
  *     first), and is a clean no-op when the config already matches it.
  *     Uninstall never auto-restores a backup containing the plugin. If the
- *     config file was created by install and nothing but install's skeleton
- *     remains, the file is deleted. `uninstall --restore` copies that same
+ *     nothing but install's skeleton remains in the config file, the file is
+ *     deleted (the message reports the skeleton, not who created it). `uninstall --restore` copies that same
  *     pre-install backup back over the config on demand (also taking a fresh
  *     safety backup of the current state first).
  *   - Never writes outside the selected scope.
@@ -63,6 +63,10 @@ import {
   renameSync,
   statSync,
   constants,
+  openSync,
+  writeSync,
+  fsyncSync,
+  closeSync,
 } from "node:fs";
 import { join, resolve, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
@@ -399,7 +403,15 @@ function writeFileAtomic(file, contents) {
     } catch {
       mode = undefined;
     }
-    writeFileSync(tmp, contents, mode === undefined ? {} : { mode });
+    // Open, write, fsync, close BEFORE the rename: the rename must not make
+    // the new bytes visible on disk before they are durable.
+    const fd = mode === undefined ? openSync(tmp, "w") : openSync(tmp, "w", mode);
+    try {
+      writeSync(fd, contents);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     try {
       renameSync(tmp, target);
     } catch (err) {
@@ -407,7 +419,7 @@ function writeFileAtomic(file, contents) {
       throw err;
     }
   } catch (err) {
-    // writeFileSync itself threw: no tmp left behind in the common case, but be sure
+    // open/write/fsync threw: the tmp may exist and be half-written — remove it
     try { unlinkSync(tmp); } catch { /* tmp may never have been created */ }
     throw err;
   }
@@ -601,7 +613,7 @@ export function uninstall(args, opts = {}) {
     const bak = backupFile(file, text); // bytes identical to the edit base
     if (result.emptyRoot || result.skeletonRoot) {
       unlinkSync(file);
-      out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (created by install); restart opencode (backup: ${bak})`);
+      out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (only install's skeleton remained); restart opencode (backup: ${bak})`);
     } else {
       writeFileAtomic(file, result.text);
       out.push(`removed ${PLUGIN_SPEC} from ${file}; restart opencode (backup: ${bak})`);
@@ -612,12 +624,33 @@ export function uninstall(args, opts = {}) {
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
 
+/**
+ * Classify a spawnSync("opencode", ["--version"]) result into one line of prose.
+ * A non-zero exit, an error other than ENOENT, and a timeout are distinct
+ * states — collapsing them into "not found on PATH" hides real failures.
+ */
+export function probeOpencodeVersion(v) {
+  if (v.error) {
+    const e = v.error;
+    const code = e && typeof e === "object" && "code" in e ? String(e.code) : "";
+    if (code === "ENOENT") return "not found on PATH";
+    if (code === "ETIMEDOUT") return "--version timed out";
+    return `failed to run (${code || (e instanceof Error ? e.message : String(e))})`;
+  }
+  if (v.signal) return `--version killed by signal ${v.signal}`;
+  if (v.status === 0 && v.stdout && String(v.stdout).trim()) return String(v.stdout).trim();
+  if (v.status === 0) return "--version produced no output";
+  if (typeof v.status === "number") return `--version exited with code ${v.status}`;
+  return "--version outcome unknown";
+}
+
 export function status(args, opts = {}) {
   const scope = resolveScope(args, opts);
   const { file } = scope;
-  const out = [`scope:    ${scope.scope}`, `config:   ${file}`];
+  const out = [`scope:    ${scope.scope}`];
   let installed = false;
   if (existsSync(file)) {
+    out.push(`config:   ${file}`);
     try {
       const root = parseJsonc(readFileSync(file, "utf8"));
       const prop = findPluginsProperty(root);
@@ -629,15 +662,15 @@ export function status(args, opts = {}) {
       throw err;
     }
   } else {
-    out.push(`config:   (does not exist)`);
+    out.push(`config:   ${file} (does not exist)`);
   }
   out.push(installed ? `installed: yes (${PLUGIN_SPEC})` : "not installed");
   try {
     const v = spawnSync("opencode", ["--version"], { encoding: "utf8", timeout: 5000 });
-    if (v.status === 0 && v.stdout) out.push(`opencode: ${v.stdout.trim()}`);
-    else out.push(`opencode: not found on PATH`);
-  } catch {
-    out.push(`opencode: not found on PATH`);
+    out.push(`opencode: ${probeOpencodeVersion(v)}`);
+  } catch (err) {
+    const code = err && typeof err === "object" && "code" in err ? String(err.code) : String(err);
+    out.push(`opencode: failed to run (${code})`);
   }
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }

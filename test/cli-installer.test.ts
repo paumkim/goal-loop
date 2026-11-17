@@ -18,6 +18,7 @@ import {
   uninstall,
   status,
   runCli,
+  probeOpencodeVersion,
 } from "../bin/opencode-goal.mjs";
 
 function fakeHome(): string {
@@ -693,6 +694,107 @@ describe("--restore reporting (regression)", () => {
     const r = uninstall(["--restore"], { env: envFor(home), cwd: home });
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("backup of the pre-restore state:");
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("writeFileAtomic syncs before the rename (regression)", () => {
+  test("the atomic write fsyncs the temp file before renameSync", () => {
+    const src = readFileSync(new URL("../bin/opencode-goal.mjs", import.meta.url), "utf8");
+    const start = src.indexOf("function writeFileAtomic");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = src.indexOf("\n}\n", start);
+    expect(end).toBeGreaterThan(start);
+    const body = src.slice(start, end);
+    const fsync = body.indexOf("fsyncSync(");
+    const rename = body.indexOf("renameSync(");
+    expect(fsync).toBeGreaterThanOrEqual(0); // the durable-write step exists
+    expect(rename).toBeGreaterThanOrEqual(0);
+    expect(fsync).toBeLessThan(rename); // durability is established BEFORE the rename publishes the bytes
+  });
+});
+
+describe("status prints exactly one config line (regression)", () => {
+  test("a missing config yields one 'config:' line naming the path and '(does not exist)'", () => {
+    const home = fakeHome();
+    const r = status([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const lines = r.stdout.split("\n").filter((l) => l.startsWith("config:"));
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain(join(home, ".config", "opencode"));
+    expect(lines[0]).toContain("(does not exist)");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("an existing config yields one 'config:' line with the path and no '(does not exist)'", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    const r = status([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const lines = r.stdout.split("\n").filter((l) => l.startsWith("config:"));
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toContain(file);
+    expect(lines[0]).not.toContain("(does not exist)");
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("uninstall delete message claims only what it observed (regression)", () => {
+  test("deleting an install-skeleton config reports the skeleton, not its provenance", () => {
+    const home = fakeHome();
+    install([], { env: envFor(home), cwd: home }); // fresh home -> install writes its skeleton
+    const { file } = resolveScope([], { env: envFor(home), cwd: home });
+    expect(existsSync(file)).toBe(true);
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("(only install's skeleton remained)");
+    expect(r.stdout).not.toContain("created by install");
+    expect(existsSync(file)).toBe(false);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("status classifies the opencode probe honestly (regression)", () => {
+  test("probeOpencodeVersion maps ENOENT, timeout, spawn errors, exit codes, signals and success", () => {
+    expect(probeOpencodeVersion({ error: { code: "ENOENT" } } as never)).toBe("not found on PATH");
+    expect(probeOpencodeVersion({ error: { code: "ETIMEDOUT" } } as never)).toContain("timed out");
+    expect(probeOpencodeVersion({ error: { code: "EACCES" } } as never)).toContain("failed to run");
+    expect(probeOpencodeVersion({ status: 3, signal: null, stdout: "" } as never)).toBe("--version exited with code 3");
+    expect(probeOpencodeVersion({ status: null, signal: "SIGTERM" } as never)).toContain("SIGTERM");
+    expect(probeOpencodeVersion({ status: 0, stdout: "opencode 2.0.29\n" } as never)).toBe("opencode 2.0.29");
+  });
+
+  test("a non-zero opencode shim is reported as an exit code, never as 'not found on PATH'", () => {
+    const home = fakeHome();
+    const bin = join(home, "bin");
+    mkdirSync(bin, { recursive: true });
+    const shim = join(bin, "opencode");
+    writeFileSync(shim, "#!/bin/sh\nexit 3\n");
+    chmodSync(shim, 0o755);
+    const saved = process.env.PATH;
+    process.env.PATH = bin;
+    try {
+      const r = status([], { env: envFor(home), cwd: home });
+      expect(r.stdout).toContain("exited with code 3");
+      expect(r.stdout).not.toContain("not found on PATH");
+    } finally {
+      process.env.PATH = saved;
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("no opencode on PATH is reported as not found", () => {
+    const home = fakeHome();
+    const empty = join(home, "empty-path");
+    mkdirSync(empty, { recursive: true });
+    const saved = process.env.PATH;
+    process.env.PATH = empty;
+    try {
+      const r = status([], { env: envFor(home), cwd: home });
+      expect(r.stdout).toContain("opencode: not found on PATH");
+    } finally {
+      process.env.PATH = saved;
+    }
     rmSync(home, { recursive: true, force: true });
   });
 });
