@@ -25,7 +25,7 @@ export const DIALOG_PAGE_CELLS = 15
 export const SCROLL_END = Number.MAX_SAFE_INTEGER
 
 /** Structural twin of the host's KeymapCommand (run signature included). */
-export interface DialogStatusCommand {
+interface DialogStatusCommand {
   readonly id: string
   readonly title: string
   readonly group: string

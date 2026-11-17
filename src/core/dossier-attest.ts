@@ -39,10 +39,10 @@ import { shortSha } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** One answer cell, exactly as the appendix prints it. */
-export type AttestationAnswer = "yes" | "no" | "unknown"
+type AttestationAnswer = "yes" | "no" | "unknown"
 
 /** One parsed appendix row — the shas and the seal-time answers as the file records them. */
-export interface AttestationRow {
+interface AttestationRow {
   /** The sha exactly as the file spells it (full or abbreviated — git resolves either). */
   readonly sha: string
   /** 1-based loop iterations that quoted the sha at seal time, oldest first. */
@@ -52,7 +52,7 @@ export interface AttestationRow {
   readonly underSeal: AttestationAnswer
 }
 
-export type ParsedAttestation =
+type ParsedAttestation =
   | {
       readonly kind: "sealed"
       /** The seal-time stamp as the file prints it, when present. */
@@ -134,7 +134,7 @@ export function parseAttestationAppendix(markdown: string): ParsedAttestation {
 }
 
 /** The probe trio, injectable for tests; the defaults are the real synchronous probes at `directory`. */
-export interface AttestProbes {
+interface AttestProbes {
   readonly verify?: RecordProbe
   readonly reach?: ReachProbe
   readonly sign?: SignProbe
@@ -143,7 +143,7 @@ export interface AttestProbes {
 export type Verdict = "held" | "regressed" | "unknown" | "was-not-clean"
 
 /** One re-probed appendix row: the seal-time answers, the fresh answers, and the verdict. */
-export interface AttestationRowVerdict {
+interface AttestationRowVerdict {
   readonly sha: string
   readonly shortSha: string
   readonly iterations: readonly number[]
@@ -157,7 +157,7 @@ export interface AttestationRowVerdict {
   readonly flipped: readonly string[]
 }
 
-export interface SealedAttestation {
+interface SealedAttestation {
   readonly rows: readonly AttestationRowVerdict[]
   /** Unique shas the appendix names (malformed rows excluded, counted separately). */
   readonly unique: number
@@ -178,7 +178,7 @@ export interface SealedAttestation {
   readonly malformed: number
 }
 
-export type AttestationResult =
+type AttestationResult =
   | ({ readonly kind: "attested" } & SealedAttestation)
   | { readonly kind: "unsealed" }
   | { readonly kind: "unparsable" }

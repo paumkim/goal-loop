@@ -51,7 +51,7 @@ export function stripControls(text: string): string {
 
 export const GOAL_GLYPH = "\u25CE"
 /** ASCII demotion for dumb terminals (NO_COLOR / TERM=dumb): the goal marker becomes a plain asterisk. */
-export const GOAL_GLYPH_ASCII = "*"
+const GOAL_GLYPH_ASCII = "*"
 /** The goal marker for the current surface — demoted under reduced color, never a broken glyph. */
 export const goalGlyph = (ascii: boolean = false): string => (ascii ? GOAL_GLYPH_ASCII : GOAL_GLYPH)
 

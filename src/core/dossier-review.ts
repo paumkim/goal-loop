@@ -46,19 +46,19 @@ import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** The probe trio, injectable for tests; the defaults are the real synchronous probes at `directory`. */
-export interface ReviewProbes {
+interface ReviewProbes {
   readonly verify?: RecordProbe
   readonly reach?: ReachProbe
   readonly sign?: SignProbe
 }
 
 /** One answer cell, exactly as the appendix prints it. */
-export type ReviewAnswer = "yes" | "no" | "unknown"
+type ReviewAnswer = "yes" | "no" | "unknown"
 
 /** `clean`: yes on all three. `gaps`: at least one no. `unknown`: no no, but at least one question git could not answer. */
-export type ReviewVerdict = "clean" | "gaps" | "unknown"
+type ReviewVerdict = "clean" | "gaps" | "unknown"
 
-export interface ReviewRow {
+interface ReviewRow {
   readonly sha: string
   readonly shortSha: string
   readonly iterations: readonly number[]
@@ -68,7 +68,7 @@ export interface ReviewRow {
   readonly verdict: ReviewVerdict
 }
 
-export interface ReviewedRecord {
+interface ReviewedRecord {
   /** The complete review file's bytes: the dossier, then the appendix. */
   readonly markdown: string
   readonly verification: RecordVerification
@@ -184,7 +184,7 @@ export function buildReview(goal: GoalSnapshot, directory: string, nowMs: number
   return { markdown, verification, reach, sign, unique: verification.unique, clean, gaps, unknown }
 }
 
-export interface ReviewExportResult {
+interface ReviewExportResult {
   /** Absolute path of the written file. */
   readonly path: string
   /** Bytes written (UTF-8). */

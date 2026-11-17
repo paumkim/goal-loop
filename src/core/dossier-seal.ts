@@ -42,14 +42,14 @@ import { gitSignProbe, signRecord, type SignProbe, type SignVerification } from 
 import type { GoalSnapshot } from "./types.ts"
 
 /** The probe trio, injectable for tests; the defaults are the real synchronous probes at `directory`. */
-export interface SealProbes {
+interface SealProbes {
   readonly verify?: RecordProbe
   readonly reach?: ReachProbe
   readonly sign?: SignProbe
 }
 
 /** The sealed document plus the sweeps behind it — the host needs the counts for the toast and the row ack. */
-export interface SealedDossier {
+interface SealedDossier {
   readonly markdown: string
   readonly verification: RecordVerification
   readonly reach: ReachVerification
@@ -171,7 +171,7 @@ export function sealRecord(goal: GoalSnapshot, directory: string, nowMs: number,
   return { markdown, verification, reach, sign, unique: verification.unique, clean }
 }
 
-export interface SealedExportResult {
+interface SealedExportResult {
   /** Absolute path of the written file. */
   readonly path: string
   /** Bytes written (UTF-8). */

@@ -38,7 +38,7 @@ export const dossierExportName = (nowMs: number, attempt = 0): string => {
   return `goal-dossier-${stamp}${suffix}.md`
 }
 
-export interface DossierExportResult {
+interface DossierExportResult {
   /** Absolute path of the written file. */
   readonly path: string
   /** Bytes written (UTF-8). */

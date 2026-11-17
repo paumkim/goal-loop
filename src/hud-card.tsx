@@ -73,9 +73,9 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 const CONTEXT_MENU_ROWS = 6
 
 /** Narrowest card the layout serves: left accent border (1) + padding (4) + LABEL (10) leaves a 37-cell content lane at the floor. */
-export const CARD_WIDTH_MIN = 52
+const CARD_WIDTH_MIN = 52
 /** Widest card the layout serves: past this the condition stops being a glance and the card stops being a HUD. */
-export const CARD_WIDTH_MAX = 88
+const CARD_WIDTH_MAX = 88
 
 /**
  * The card's width for a terminal of `terminalWidth` columns. The 64-cell design is preserved exactly at
@@ -91,14 +91,14 @@ export const cardWidth = (terminalWidth: number): number => {
 }
 
 /** Cells available to the remediation text for a card of `width` (left border 1, padding 4, LABEL 10, gap 1 = 16). `wrapMode="word"` wraps at this width. */
-export const remediationWidth = (width: number): number => Math.max(24, Math.floor(width) - 16)
+const remediationWidth = (width: number): number => Math.max(24, Math.floor(width) - 16)
 /** Cells available to the spend line at `width` (left border 1, padding 4, LABEL 10, gap 1). Under the budget the spend line degrades by dropping cached, then out, then in — the cost is the anchor and never clips mid-figure. */
-export const spendWidth = (width: number): number => Math.max(5, Math.floor(width) - 16)
+const spendWidth = (width: number): number => Math.max(5, Math.floor(width) - 16)
 
 /** Cells available to the condition / why reason at `width` (the 23-cell fixed furniture: left border 1, padding 4, LABEL 10, gap 1, right hint slot 7). */
-export const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 23)
+const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 23)
 
-export interface CardRowPlan {
+interface CardRowPlan {
   /** Rows the card occupies (the 1-cell left accent is a full-height column, never a row). */
   readonly rows: number
   /** Whether the teaching hint row fits the budget. */
@@ -244,7 +244,7 @@ export const DialogFooter = (props: {
 }
 
 /** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label boldens instead. */
-export const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void }): JSX.Element => {
+const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const mono = () => props.mono === true
   return (

@@ -10,11 +10,11 @@ export const BAR_CELLS = 18
 export const LABEL = 10
 
 /** Unicode bar pair — the default everywhere UTF-8 renders. */
-export const BAR_FILLED = "█"
-export const BAR_EMPTY = "░"
+const BAR_FILLED = "█"
+const BAR_EMPTY = "░"
 /** ASCII bar pair — selected under NO_COLOR / TERM=dumb (the same predicate as reduced motion), where eighth-block glyphs are not guaranteed to exist. */
-export const BAR_FILLED_ASCII = "#"
-export const BAR_EMPTY_ASCII = "-"
+const BAR_FILLED_ASCII = "#"
+const BAR_EMPTY_ASCII = "-"
 
 /** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. `ascii` swaps the pair for the same swap the sparkline does. */
 export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS, ascii: boolean = false): { filled: number; text: string } {
@@ -36,9 +36,9 @@ export function barCaption(current: number, max: number | undefined, done: numbe
     : `v${v} · ${safeDone} complete`
 }
 
-export const VERDICT_MET_ASCII = "+"
-export const VERDICT_IMPOSSIBLE_ASCII = "!"
-export const VERDICT_NOT_MET_ASCII = "x"
+const VERDICT_MET_ASCII = "+"
+const VERDICT_IMPOSSIBLE_ASCII = "!"
+const VERDICT_NOT_MET_ASCII = "x"
 
 /**
  * The verdict glyph — shape carries the verdict when NO_COLOR strips hue. `ascii` swaps the
@@ -117,11 +117,11 @@ export function lastVerdict(history: readonly VerdictEntry[]): VerdictEntry | un
 }
 
 /** Unicode pip pair — the default everywhere UTF-8 renders. */
-export const PIP_FILLED = "●"
-export const PIP_EMPTY = "○"
+const PIP_FILLED = "●"
+const PIP_EMPTY = "○"
 /** ASCII pip pair — selected under NO_COLOR / TERM=dumb, where the bullet glyphs are not guaranteed to exist. Matches the bar demotion pair so the two read as one family. */
-export const PIP_FILLED_ASCII = "#"
-export const PIP_EMPTY_ASCII = "-"
+const PIP_FILLED_ASCII = "#"
+const PIP_EMPTY_ASCII = "-"
 
 /**
  * Iteration pips for the prompt-footer loop indicator: one pip per completed iteration, one per
@@ -294,15 +294,15 @@ export function durationShares(durations: readonly number[]): number[] {
 
 const SPARK_GLYPHS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"] as const
 /** ASCII level ramp for dumb terminals — ascending ink density, the same shape as eighth-blocks without the font requirement. */
-export const SPARK_GLYPHS_ASCII = [".", ":", "-", "=", "+", "*", "#", "@"] as const
+const SPARK_GLYPHS_ASCII = [".", ":", "-", "=", "+", "*", "#", "@"] as const
 /** Gap in the sparkline: an unmeasurable arm renders as a void (space) in ASCII mode, `·` otherwise. */
-export const SPARK_GAP_ASCII = " "
+const SPARK_GAP_ASCII = " "
 /** Truncation lead-in for the sparkline: `>` in ASCII mode, `…` otherwise. */
-export const SPARK_TRUNC_ASCII = ">"
+const SPARK_TRUNC_ASCII = ">"
 /** Bars the per-iteration context sparkline renders; older estimates fall off the left behind a leading … marker. */
 export const SPARK_MAX_CELLS = 16
 
-export interface ContextSpark {
+interface ContextSpark {
   /** One glyph per recent entry, oldest → newest; `·` marks an entry whose arm could not measure the context. A leading `…` marks truncation past SPARK_MAX_CELLS. */
   readonly bars: string
   /** Highest estimate across ALL completed iterations (not just the visible window). */
@@ -352,7 +352,7 @@ export function contextSparkline(entries: readonly { readonly contextTokens?: nu
 
 export const CONTEXT_BAR_CELLS = 16
 /** Fill ratio at/past which the context meter renders in the warning tone. Matches the boundary-compaction arming signal (the loop needs headroom before the threshold is reached). */
-export const CONTEXT_HOT_RATIO = 0.8
+const CONTEXT_HOT_RATIO = 0.8
 
 /**
  * The context-size meter behind the status dialog: the estimated prompt size as a share of the

@@ -34,7 +34,7 @@ export interface HostScrollbarTheme<C> {
   readonly background?: { readonly raised?: { readonly high?: C } }
 }
 
-export type ScrollbarTrackOptions<C> = { readonly foregroundColor: C; readonly backgroundColor?: C }
+type ScrollbarTrackOptions<C> = { readonly foregroundColor: C; readonly backgroundColor?: C }
 
 export const scrollbarTrackOptions = <C>(
   theme: HostScrollbarTheme<C>,

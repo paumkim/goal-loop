@@ -33,7 +33,7 @@ import type { GoalSnapshot } from "./types.ts"
 /** The probe contract: true = git verified a signature on the commit at the probed directory, false = git answered and the signature did not verify (object present, verify-commit exit non-zero), "unknown" = git could not answer (or there is no object to judge). */
 export type SignProbe = (sha: string) => boolean | "unknown"
 
-export const SIGN_TIMEOUT_MS = 10_000
+const SIGN_TIMEOUT_MS = 10_000
 
 /**
  * The real probe: one `git cat-file -e <sha>` then one `git verify-commit <sha>` per sha. The
@@ -64,9 +64,9 @@ export function gitSignProbe(cwd: string): SignProbe {
   }
 }
 
-export type SignCheckStatus = "verified" | "unverified" | "unknown"
+type SignCheckStatus = "verified" | "unverified" | "unknown"
 
-export interface SignCheck {
+interface SignCheck {
   readonly sha: string
   readonly shortSha: string
   /** 1-based loop iterations that quote this sha (oldest first). */

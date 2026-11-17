@@ -14,15 +14,15 @@ import { renderPips, verdictStreak } from "./history.ts"
  * transient (provider hiccups, rate-limit windows); at this count the goal is almost certainly stuck — nothing
  * has executed — and the surface says so, the same way two compaction misses say so.
  */
-export const RETRY_HOT_THRESHOLD = 3
+const RETRY_HOT_THRESHOLD = 3
 
 /** Tone drives the pill/card accent color. `hot` means a compaction request keeps missing — amber, the "running hot" state. `retrying` means every turn keeps failing — amber, the "nothing is executing" state. `achieved`/`impossible`/`failed` are terminal acknowledgment tones (see `terminalPill`). */
-export type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying" | "achieved" | "impossible" | "failed"
+type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying" | "achieved" | "impossible" | "failed"
 
 /** Every turn keeps failing at the retry threshold or beyond: the goal is stuck, not merely slow. */
 export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RETRY_HOT_THRESHOLD
 
-export interface PillModel {
+interface PillModel {
   readonly text: string
   readonly tone: HudTone
 }
@@ -34,7 +34,7 @@ export const isCompactHot = (goal: GoalSnapshot): boolean => {
 }
 
 export type CompactMarkerTone = "landed" | "missed" | "pending" | "unknown"
-export interface CompactMarker {
+interface CompactMarker {
   /** Trailing clause; callers prepend their own separator. The ascii arm is plain words — no glyph dependence. */
   readonly text: string
   readonly tone: CompactMarkerTone
@@ -109,9 +109,9 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
  * swallowed. The keyboard twin skips disabled rows by the same contract — selection can rest on a
  * disabled row only transiently if every row is disabled (index stays put).
  */
-export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
+type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
 
-export interface ContextMenuRow {
+interface ContextMenuRow {
   readonly id: ContextMenuId
   readonly text: string
   readonly enabled: boolean
@@ -246,7 +246,7 @@ export const LANDING_ACK_MS = 3_000
 
 export const LANDING_SUFFIX = " · landed \u2713"
 /** ASCII arm of the landing acknowledgment suffix (NO_COLOR / TERM=dumb): `+` stands in for the tick. Same 11-cell width — the pill budget math is unchanged. */
-export const LANDING_SUFFIX_ASCII = " · landed +"
+const LANDING_SUFFIX_ASCII = " · landed +"
 /** The landing suffix for the current surface; identical cell width in both arms. */
 export const landingSuffix = (ascii: boolean = false): string => (ascii ? LANDING_SUFFIX_ASCII : LANDING_SUFFIX)
 
@@ -406,7 +406,7 @@ export const fixAccentColor = <C>(theme: NeutralTheme<C>, tone: "warning" | "err
   return tone === "error" ? theme.text.feedback.error?.base ?? theme.text.feedback.warning.base : theme.text.feedback.warning.base
 }
 
-export interface Remediation {
+interface Remediation {
   /** `warning` renders amber, `error` renders the faint/red family the theme exposes for failures. */
   readonly tone: "warning" | "error"
   readonly text: string

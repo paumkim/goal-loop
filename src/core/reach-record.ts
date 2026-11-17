@@ -29,7 +29,7 @@ import type { GoalSnapshot } from "./types.ts"
 /** The probe contract: true = an ancestor of HEAD at the probed directory, false = git answered and it is not, "unknown" = git could not answer. */
 export type ReachProbe = (sha: string) => boolean | "unknown"
 
-export const REACH_TIMEOUT_MS = 10_000
+const REACH_TIMEOUT_MS = 10_000
 
 /**
  * The real probe: one `git merge-base --is-ancestor <sha> HEAD` per sha. Numeric exit 0 means yes,
@@ -51,9 +51,9 @@ export function gitAncestorProbe(cwd: string): ReachProbe {
   }
 }
 
-export type ReachCheckStatus = "ancestor" | "unreached" | "unknown"
+type ReachCheckStatus = "ancestor" | "unreached" | "unknown"
 
-export interface ReachCheck {
+interface ReachCheck {
   readonly sha: string
   readonly shortSha: string
   /** 1-based loop iterations that quote this sha (oldest first). */
