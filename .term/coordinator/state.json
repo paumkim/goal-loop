@@ -2542,6 +2542,17 @@
       "submittedAt": "2026-11-17T03:39:27Z",
       "mergedAt": "2026-11-17T03:40:37Z",
       "mergedInto": "dev"
+    },
+    "docs-prose-simplify": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs,dist/tui.js",
+      "branch": "wt/docs-prose-simplify",
+      "worktree": "worktrees/wt-docs-prose-simplify",
+      "status": "done",
+      "createdAt": "2026-11-17T05:31:10Z",
+      "submittedAt": "2026-11-17T05:32:21Z",
+      "mergedAt": "2026-11-17T05:34:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
