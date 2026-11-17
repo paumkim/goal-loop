@@ -2625,6 +2625,17 @@
       "submittedAt": "2026-11-17T14:47:14Z",
       "mergedAt": "2026-11-17T14:48:35Z",
       "mergedInto": "dev"
+    },
+    "e2e-audit": {
+      "agent": "orchestrator",
+      "paths": "scripts/e2e.ts,scripts/e2e-lib.ts,test/e2e-lib.test.ts,SPEC.md",
+      "branch": "wt/e2e-audit",
+      "worktree": "worktrees/wt-e2e-audit",
+      "status": "done",
+      "createdAt": "2026-11-17T14:55:22Z",
+      "submittedAt": "2026-11-17T15:00:07Z",
+      "mergedAt": "2026-11-17T15:01:23Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
