@@ -2436,6 +2436,17 @@
       "submittedAt": "2026-11-17T00:54:51Z",
       "mergedAt": "2026-11-17T00:56:10Z",
       "mergedInto": "dev"
+    },
+    "em2-dist-rebuild": {
+      "agent": "orchestrator",
+      "paths": "dist/tui.js",
+      "branch": "wt/em2-dist-rebuild",
+      "worktree": "worktrees/wt-em2-dist-rebuild",
+      "status": "done",
+      "createdAt": "2026-11-17T01:12:35Z",
+      "submittedAt": "2026-11-17T01:12:58Z",
+      "mergedAt": "2026-11-17T01:14:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
