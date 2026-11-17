@@ -1,14 +1,14 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│  [details]   [pin]   [clear goal]                     [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│   [details]   [pin]   [clear goal]                    [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -29,14 +29,14 @@ exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · evaluating (the evaluator is thinking) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        checking v3/5 ●●○○○ · 4 turns · 12m               │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        checking v3/5 ●●○○○ · 4 turns · 12m                               
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -57,16 +57,16 @@ exports[`full-frame snapshots (named layout states) HudCard · evaluating (the e
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · hot (compaction keeps missing — exact remediation, never a vague warning) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│ fix        compact pending 2/4 · send a message for a safe   │                
-│            point · else set evaluator.verifyCommand          │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│  fix        compact pending 2/4 · send a message for a safe                   
+│             point · else set evaluator.verifyCommand                          
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -87,15 +87,15 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · failed (failure is a first-class screen) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        failed v3/5 ●●○○○ · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│ fix        provider error - /goal clear to reset             │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        failed v3/5 ●●○○○ · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│  fix        provider error - /goal clear to reset                             
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -607,14 +607,14 @@ why         ✓  met · turn 1 · 26m ago · b1e4d7a      done
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · waiting (background work is holding evaluation back — the pill's fifth word) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        waiting v3/5 ●●○○○ · 4 turns · 12m                │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        waiting v3/5 ●●○○○ · 4 turns · 12m                                
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -635,16 +635,16 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · waitin
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · paused at the turn cap (exact remediation: clear or re-arm — never 'try again') 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        paused v3/5 ●●○○○ · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│ fix        turn cap reached · /goal clear or set a new goal  │                
-│            - a message will not extend it                    │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        paused v3/5 ●●○○○ · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│  fix        turn cap reached · /goal clear or set a new goal                  
+│             - a message will not extend it                                    
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -665,16 +665,16 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · judged impossible (remediation rides two rows of the anchor budget) 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        impossible v3/5 ●●○○○ · 4 turns · 12m             │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│ fix        judged impossible · rephrase the condition, else  │                
-│            /goal clear                                       │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        impossible v3/5 ●●○○○ · 4 turns · 12m                             
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│  fix        judged impossible · rephrase the condition, else                  
+│             /goal clear                                                       
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -825,20 +825,20 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · context menu open — all six rows live 1`] = `
-"┌─ ◎ /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        active v3/5 ●●○○○ · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       ✗ not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│  [details]   [clear goal]                             [esc]  │                
-│ menu       copy condition                                    │                
-│            copy evaluator reason                             │                
-│            copy latest summary                               │                
-│            copy dossier                                      │                
-│            save dossier file                                 │                
-│            clear goal                                        │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  ◎ /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       ✗ not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│   [details]   [clear goal]                            [esc]                   
+│  menu       copy condition                                                    
+│             copy evaluator reason                                             
+│             copy latest summary                                               
+│             copy dossier                                                      
+│             save dossier file                                                 
+│             clear goal                                                        
+                                                                                
                                                                                 
                                                                                 
                                                                                 
@@ -859,14 +859,14 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · mono (NO_COLOR / TERM=dumb — weight and glyphs carry meaning) 1`] = `
-"┌─ * /goal-loop · v3/5 ────────────────────────────────────────┐                
-│ condition  ship the release notes                            │                
-│ now        active v3/5 ##--- · 4 turns · 12m                 │                
-│ spend      278k in · 25k out · 96k cached · $0.42            │                
-│ last       x not met · this turn                             │                
-│ why        Evaluator: docs build still fails                 │                
-│  [details]   [clear goal]                             [esc]  │                
-└──────────────────────────────────────────────── esc dismiss ─┘                
+"│  * /goal-loop · v3/5                                                          
+│  condition  ship the release notes                                            
+│  now        active v3/5 ##--- · 4 turns · 12m                                 
+│  spend      278k in · 25k out · 96k cached · $0.42                            
+│  last       x not met · this turn                                             
+│  why        Evaluator: docs build still fails                                 
+│   [details]   [clear goal]                            [esc]                   
+                                                                                
                                                                                 
                                                                                 
                                                                                 

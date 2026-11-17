@@ -13,7 +13,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
 import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
-import { createMemo, createSignal, createEffect, onCleanup, Show } from "solid-js"
+import { createMemo, createSignal, createEffect, onCleanup, Show, ErrorBoundary } from "solid-js"
 import { goalGlyph } from "./core/format.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { exportLoopDossier } from "./core/dossier-export.ts"
@@ -29,7 +29,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
-import { HudCard, hudCardRows, cardWidth, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
+import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarChrome } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleLiveSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
@@ -166,6 +166,21 @@ export default Plugin.define({
       // Set the flag after show() so the onClose of a dialog replaced by this call cannot flip it back off.
       context.ui.dialog.show(
         () => (
+          // A render-frame exception in the dialog must land as an in-dialog fallback, never as the
+          // host's "plugin crashed in dialog" banner — the session stays alive either way.
+          <ErrorBoundary
+            fallback={(error) => (
+              <ClampedColumn>
+                <text attributes={TextAttributes.BOLD} fg={context.theme.text.feedback.warning.base}>
+                  goal detail failed to render
+                </text>
+                <text fg={context.theme.text.muted} wrapMode="word">
+                  {String(error instanceof Error ? (error.stack ?? error.message ?? error) : error).slice(0, 600)}
+                </text>
+                <text fg={context.theme.text.faint}>esc to close · your session is unaffected</text>
+              </ClampedColumn>
+            )}
+          >
           <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
               <text attributes={TextAttributes.BOLD} fg={context.theme.text.base}>
@@ -204,6 +219,7 @@ export default Plugin.define({
               onClear={() => requestClearGoal(sessionID)}
             />
           </ClampedColumn>
+          </ErrorBoundary>
         ),
         () => {
           setStatusDialogOpen(false)
@@ -899,9 +915,11 @@ export default Plugin.define({
         // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
         // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
         const maxCardRows = () => Math.max(8, dimensions().height - 2)
+        // The anchor must measure the same width the card paints with (full terminal width since the
+        // left-accent redesign) or the reserved rows drift from the painted rows on wide terminals.
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g, contextOpen(), maxCardRows(), cardWidth(dimensions().width)) : 0
+          return g ? hudCardRows(g, contextOpen(), maxCardRows(), dimensions().width) : 0
         }
         const toggleHud = () => {
           try {
@@ -913,6 +931,7 @@ export default Plugin.define({
           } catch {}
         }
         return (
+          <ErrorBoundary fallback={() => <box />}>
           <Show when={showing()}>
             <box
               position="absolute"
@@ -938,9 +957,10 @@ export default Plugin.define({
             </box>
             <Show when={cardFor()}>
               {(g) => (
-                <box position="absolute" top={-cardRows()} left={0} height={cardRows()} zIndex={10}>
+                <box position="absolute" top={-cardRows()} left={0} right={0} height={cardRows()} zIndex={10}>
                   <HudCard
                     goal={g()}
+                    width={dimensions().width}
                     theme={context.theme as unknown as HudCardTheme}
                     mono={reducedColor}
                     elapsedMs={elapsed}
@@ -968,6 +988,7 @@ export default Plugin.define({
               )}
             </Show>
           </Show>
+          </ErrorBoundary>
         )
       },
     })

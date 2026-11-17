@@ -1,20 +1,21 @@
 /**
- * The compact HUD card (level b of the goal TUI's progressive disclosure): a floating,
- * bordered panel painted above the jump-to-latest row by `session.composer.top` (absolute box,
- * same mount as the ambient pill). Presentational and headlessly testable — every side effect
- * (copy, open dialog, clear, dismiss) is a callback wired up in `src/tui.tsx`.
+ * The compact HUD card (level b of the goal TUI's progressive disclosure): a hanging-bar panel in the
+ * opencode v2 composer's grammar — a 1-cell state-accent bar on the left, no frame on the other three
+ * sides, the raised dark surface, and the title as an in-card row — painted above the jump-to-latest
+ * row by `session.composer.top` (absolute box, same mount as the ambient pill). Presentational and
+ * headlessly testable — every side effect (copy, open dialog, clear, dismiss) is a callback wired up
+ * in `src/tui.tsx`.
  *
- * Layout (width 64, fits the 80-column floor):
- *   ╭─ ◎ /goal-loop · v3/5 ──────────────────── [esc] ─╮
- *   │ condition  ship the release notes…        (copy) │
- *   │ now        v3 · checking · 4 turns · 12m elapsed │
- *   │ spend      $0.42 · 182k in · 21k out            │
- *   │ context    ████████░░░░░░░░ ~95k of 150k · 63%   │  (when the server can estimate)
- *   │ last       ✓ met · this turn                     │
- *   │ why        docs build still fails\u2026           │  (evaluator's reason; click to copy)
- *   │ ! compact pending 1/4 · …verifyCommand           │  (only when hot / failed)
- *   │ [details] [pin] [clear goal]               esc      │
- *   ╰──────────────────────────────────────────────────╯
+ * Layout (full terminal width, left bar in the state accent):
+ *   ▎ ◎ /goal-loop · v3/5
+ *   ▎ condition  ship the release notes…        (copy)
+ *   ▎ now        active · v3/5 ○○○○● · 4 turns · 12m
+ *   ▎ spend      $0.42 · 182k in · 21k out
+ *   ▎ context    ████████░░░░░░░░ ~95k of 150k · 63%  (when the server can estimate)
+ *   ▎ last       ✓ met · this turn
+ *   ▎ why        docs build still fails…              (evaluator's reason; click to copy)
+ *   ▎ fix        2x not_met in a row · consider evaluator.verifyCommand  (only when remediation exists)
+ *   ▎ [details] [pin] [clear goal]                                     esc
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import stringWidth from "string-width"
@@ -135,8 +136,9 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
   const whyAvailable = Boolean(goal.reason && goal.reason.trim())
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
+  // Base rows: title row + condition + now + buttons (the left-accent card paints no top/bottom border).
   const fit = (hint: boolean, spend: boolean, context: boolean, why: boolean, last: boolean, fix: boolean): number =>
-    5 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
+    4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
   let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted
   let rows = fit(hint, spend, context, why, last, fix)
   if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
@@ -381,7 +383,9 @@ export const HudCard = (props: {
     return entry ? turnsSinceVerdict(turns(), entry.turn) : 0
   }
   // One plan, same arithmetic as hudCardRows(): rows the mount anchors with == rows painted here.
-  const plan = () => cardRowPlan(g(), props.contextOpen === true, props.maxRows ?? Number.POSITIVE_INFINITY)
+  // Measured against the same resolved width the rows paint at, so a wide card reserves the rows
+  // its remediation actually wraps to, not the 64-cell default's.
+  const plan = () => cardRowPlan(g(), props.contextOpen === true, props.maxRows ?? Number.POSITIVE_INFINITY, width())
   const remediation = () => remediationFor(g())
   // A freshly armed goal teaches one thing: the evaluator reads only the transcript. Gone after turn 1.
   const hint = () => (plan().hint ? evaluatorHint(g()) : undefined)
@@ -401,22 +405,20 @@ export const HudCard = (props: {
       // Collapse best-effort.
     }
   }
+  // Left-accent grammar (the opencode v2 composer's own shape): a 1-cell hanging bar in the state
+  // accent, no top/bottom/right frame, a dark raised surface underneath, and the title as an in-card
+  // row — the composer's grammar, not a floating bordered popup.
   return (
     <box
       flexDirection="column"
       width={width()}
       flexShrink={0}
-      border
+      border={["left"]}
       borderStyle="single"
       borderColor={borderColor()}
       backgroundColor={theme().background?.raised?.high}
-      title={` ${title()} `}
-      titleColor={stateColor()}
-      bottomTitle=" esc dismiss "
-      bottomTitleAlignment="right"
-      titleAlignment="left"
-      paddingLeft={1}
-      paddingRight={1}
+      paddingLeft={2}
+      paddingRight={2}
       onMouseUp={(event) => {
         // Right-click anywhere on the card toggles the context menu; left clicks fall through to the rows/buttons.
         if (event.button === 2) {
@@ -428,6 +430,12 @@ export const HudCard = (props: {
         }
       }}
     >
+      {/* title row — the state glyph and the loop position, bold, left aligned; the card is framed by the hanging bar, not by a border */}
+      <box flexDirection="row" height={1} flexShrink={0} gap={1}>
+        <text wrapMode="none" flexShrink={0} fg={stateColor()} attributes={TextAttributes.BOLD}>
+          {title()}
+        </text>
+      </box>
       {/* condition — click to copy */}
       <box
         flexDirection="row"
