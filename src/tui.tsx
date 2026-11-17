@@ -32,7 +32,7 @@ import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./statu
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleLiveSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice } from "./core/wire.ts"
@@ -366,8 +366,8 @@ export default Plugin.define({
       } catch {
         // The acknowledgment is chrome; a failed probe must not break snapshot intake.
       }
-      // The `get` RPC pull carries the context estimate; `changed` events usually do not — carry it forward.
-      const mergedGoal = preserveContextSize(entries()[sessionID]?.goal, goal)
+      // The `get` RPC pull carries the context estimate and spend; `changed` events usually do not — carry both forward.
+      const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       return setEntries((previous) => {
         const existing = previous[sessionID]
         // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -63,37 +63,37 @@ describe("pruneSnapshotEntries", () => {
   })
 })
 
-describe("preserveContextSize", () => {
+describe("preserveCarriedFields", () => {
   const withCtx = (contextSize: number | undefined): GoalSnapshot => ({ ...snap("active"), contextSize }) as unknown as GoalSnapshot
 
   test("carries the cached estimate forward when an event snapshot drops it", () => {
-    const merged = preserveContextSize(withCtx(95_000), snap("active"))
+    const merged = preserveCarriedFields(withCtx(95_000), snap("active"))
     expect(merged?.contextSize).toBe(95_000)
   })
 
   test("an event snapshot carrying its own estimate wins over the cache", () => {
-    const merged = preserveContextSize(withCtx(95_000), withCtx(120_000))
+    const merged = preserveCarriedFields(withCtx(95_000), withCtx(120_000))
     expect(merged?.contextSize).toBe(120_000)
   })
 
   test("returns the next reference untouched when there is nothing to carry", () => {
     const next = snap("active")
-    expect(preserveContextSize(undefined, next)).toBe(next)
-    expect(preserveContextSize(withCtx(undefined), next)).toBe(next)
-    expect(preserveContextSize(null, next)).toBe(next)
+    expect(preserveCarriedFields(undefined, next)).toBe(next)
+    expect(preserveCarriedFields(withCtx(undefined), next)).toBe(next)
+    expect(preserveCarriedFields(null, next)).toBe(next)
   })
 
   test("null stays null (session cleared)", () => {
-    expect(preserveContextSize(withCtx(95_000), null)).toBeNull()
+    expect(preserveCarriedFields(withCtx(95_000), null)).toBeNull()
   })
 
   test("a cached estimate that is not a finite non-negative number is ignored", () => {
-    expect(preserveContextSize(withCtx(Number.NaN), snap("active"))?.contextSize).toBeUndefined()
-    expect(preserveContextSize(withCtx(-10), snap("active"))?.contextSize).toBeUndefined()
+    expect(preserveCarriedFields(withCtx(Number.NaN), snap("active"))?.contextSize).toBeUndefined()
+    expect(preserveCarriedFields(withCtx(-10), snap("active"))?.contextSize).toBeUndefined()
   })
 })
 
-describe("preserveContextSize across a compaction landing", () => {
+describe("preserveCarriedFields across a compaction landing", () => {
   const withCtx = (contextSize: number | undefined): GoalSnapshot => ({ ...snap("active"), contextSize }) as unknown as GoalSnapshot
   const withCompact = (landedAt: number | undefined, base: GoalSnapshot): GoalSnapshot =>
     ({ ...base, loopCompact: { requestedAt: 1, iteration: 2, misses: 0, ...(landedAt !== undefined ? { landedAt } : {}) } }) as unknown as GoalSnapshot
@@ -101,31 +101,63 @@ describe("preserveContextSize across a compaction landing", () => {
   test("a pending→landed flip drops the cached pre-compaction total", () => {
     const prev = withCompact(undefined, withCtx(185_000))
     const next = withCompact(2, snap("active"))
-    expect(preserveContextSize(prev, next)?.contextSize).toBeUndefined()
+    expect(preserveCarriedFields(prev, next)?.contextSize).toBeUndefined()
   })
 
   test("a fresh landing event with no prior pending still drops the cache", () => {
     // First snapshot observed after the TUI (re)starts can already carry landedAt; dropping the
     // cache costs nothing when there is nothing worth carrying from a replaced context.
     const next = withCompact(2, snap("active"))
-    expect(preserveContextSize(withCtx(185_000), next)?.contextSize).toBeUndefined()
+    expect(preserveCarriedFields(withCtx(185_000), next)?.contextSize).toBeUndefined()
   })
 
   test("a re-delivered landed record keeps the carried (post-landing) value", () => {
     const prev = withCompact(2, withCtx(9_500))
     const next = withCompact(2, snap("active"))
-    expect(preserveContextSize(prev, next)?.contextSize).toBe(9_500)
+    expect(preserveCarriedFields(prev, next)?.contextSize).toBe(9_500)
   })
 
   test("an unchanged pending still carries the total forward (no landing, no invalidation)", () => {
     const prev = withCompact(undefined, withCtx(185_000))
     const next = withCompact(undefined, snap("active"))
-    expect(preserveContextSize(prev, next)?.contextSize).toBe(185_000)
+    expect(preserveCarriedFields(prev, next)?.contextSize).toBe(185_000)
   })
 
   test("a snapshot carrying its own estimate wins over the invalidation", () => {
     const prev = withCompact(undefined, withCtx(185_000))
     const next = withCompact(2, withCtx(9_500))
-    expect(preserveContextSize(prev, next)?.contextSize).toBe(9_500)
+    expect(preserveCarriedFields(prev, next)?.contextSize).toBe(9_500)
+  })
+})
+
+describe("preserveCarriedFields spend carry-forward", () => {
+  const usage = (cost: number) => ({ cost, input: 1000, output: 500, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+  const withSpend = (cost: number | undefined): GoalSnapshot =>
+    ({ ...snap("active"), ...(cost !== undefined ? { spend: usage(cost) } : {}) }) as unknown as GoalSnapshot
+
+  test("carries the cached spend forward when an event snapshot drops it", () => {
+    const merged = preserveCarriedFields(withSpend(0.42), snap("active"))
+    expect(merged?.spend?.cost).toBe(0.42)
+  })
+
+  test("an event snapshot carrying its own spend wins over the cache", () => {
+    const merged = preserveCarriedFields(withSpend(0.42), withSpend(0.87))
+    expect(merged?.spend?.cost).toBe(0.87)
+  })
+
+  test("no cached spend means no spend on the merged snapshot", () => {
+    expect(preserveCarriedFields(snap("active"), snap("active"))?.spend).toBeUndefined()
+  })
+
+  test("spend is carried even across a compaction landing (only the context total is invalidated)", () => {
+    const prev = { ...snap("active"), spend: usage(0.42), contextSize: 185_000, loopCompact: { requestedAt: 1, iteration: 2, misses: 0 } } as unknown as GoalSnapshot
+    const next = { ...snap("active"), loopCompact: { requestedAt: 1, iteration: 2, misses: 0, landedAt: 2 } } as unknown as GoalSnapshot
+    const merged = preserveCarriedFields(prev, next)
+    expect(merged?.contextSize).toBeUndefined()
+    expect(merged?.spend?.cost).toBe(0.42)
+  })
+
+  test("null stays null even when a spend was cached", () => {
+    expect(preserveCarriedFields(withSpend(0.42), null)).toBeNull()
   })
 })

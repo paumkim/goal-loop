@@ -5696,15 +5696,22 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
-function preserveContextSize(previous, next) {
+function preserveCarriedFields(previous, next) {
   if (next === null)
     return next;
-  if (next.contextSize !== undefined)
-    return next;
-  if (compactionJustLanded(previous, next))
-    return next;
-  const carried = previous?.contextSize;
-  return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next;
+  const landed = compactionJustLanded(previous, next);
+  let merged = next;
+  if (merged.contextSize === undefined && !landed) {
+    const carried = previous?.contextSize;
+    if (typeof carried === "number" && Number.isFinite(carried) && carried >= 0)
+      merged = { ...merged, contextSize: carried };
+  }
+  if (merged.spend === undefined) {
+    const carried = previous?.spend;
+    if (carried)
+      merged = { ...merged, spend: carried };
+  }
+  return merged;
 }
 function compactionJustLanded(previous, next) {
   const landed = next.loopCompact?.landedAt;
@@ -6489,7 +6496,7 @@ var tui_default = Plugin.define({
         if (!unchanged && goal && goal.loopCompact?.landedAt !== undefined && wasPending)
           noteLanding(sessionID);
       } catch {}
-      const mergedGoal = preserveContextSize(entries()[sessionID]?.goal, goal);
+      const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal);
       return setEntries((previous) => {
         const existing = previous[sessionID];
         if (existing && goalsEqual(existing.goal, mergedGoal))

@@ -50,7 +50,7 @@ prompt size: a 16-cell bar against the configured auto-compact threshold (`compa
 bare `~N tokens` estimate when the threshold is disabled or unavailable), `~N of M · P%` where P is unclamped —
 the warning tone at ≥80% of the threshold, so the dial the boundary compaction reads is visible before the
 loop runs hot. The estimate rides only the `get` RPC (like `spend`); `changed` event snapshots carry the last
-known value forward (`preserveContextSize`) instead of flickering the row to unknown. An amber shimmer marks
+known value forward (`preserveCarriedFields` in `src/core/entries.ts`) instead of flickering the row to unknown — the same carry-forward covers `spend`, so the card's spend row and the dialog's `spend` row no longer vanish on every background `changed` event; spend is cumulative-since-baseline and monotone within a goal run, so the carried figure is a lower bound, never a lie, and a pending→landed `loopCompact.landedAt` flip invalidates only the context total, never spend. The final-spend re-save at `finish` (`src/runtime/controller.ts`) emits one extra `changed` snapshot carrying the settled spend vs baseline: terminal goals are never re-pulled by the TUI's stale-chrome guard, so that event is the only push an open card/dialog gets with the settled figure. An amber shimmer marks
 the ambient pill while a boundary compaction request is running hot (≥2 misses) in addition to its amber tone —
 a bold flip on a slow tick, never while idle, and off entirely under reduced motion. Every hard cap on rendered text (the pill's appended condition, the card's 42-cell condition, rail summaries, history lines) truncates by terminal cells between graphemes — CJK costs 2 cells, an emoji 2, a combining mark 0 — never by code unit, so a boundary never leaks half an emoji or splits a flag; the ellipsis always fits the budget and never leaves a dangling space. The same first-class
 treatment covers a goal whose turns all keep failing: `retries` (automatic turns retried since the last success)
@@ -457,7 +457,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=60 tests=1450 -->
+<!-- spec-check files=60 tests=1456 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -4549,14 +4549,14 @@ Interpretation (the bug, as located by grep):
    `compact pending`. Once a post-compaction assistant does land, the old estimator returned it correctly, yet
    the TUI's anti-flicker carry-forward (`preserveContextSize`) would keep the PRE-compaction total alive
    forever whenever a snapshot arrived without the field — the stale total the user kept seeing.
-3. `preserveContextSize` (`src/core/entries.ts`) carried `previous.contextSize` forward with no invalidation
+3. `preserveCarriedFields` (`src/core/entries.ts`) carried `previous.contextSize` forward with no invalidation
    across a detected landing, so the card/dialog could never fall back to the fresh post-compaction count.
 
 Acceptance criteria:
 - `estimateContextTokens` reads only the post-compaction window (messages after the last `status: "completed"`
   compaction message) when one is present; assistant messages without usable token figures are skipped, not
   fatal; no assistant inside the window → `undefined` (never fabricated, never the pre-compaction total).
-- `preserveContextSize` no longer carries the cached total across a pending→landed `loopCompact.landedAt`
+- `preserveCarriedFields` no longer carries the cached total across a pending→landed `loopCompact.landedAt`
   flip; the next snapshot without the field drops it (renders nothing) until the server sends a fresh count —
   which the fixed estimator produces as soon as a post-compaction assistant exists.
 - After a simulated compaction (compaction message + fresh assistant with usage) the estimate is the fresh
@@ -6175,4 +6175,17 @@ Interpretation of the armed condition: `bin/opencode-goal.d.mts` is hand-maintai
 703. test/cli-installer.test.ts — new regression test "the declarations declare every export of the .mjs and carry no stale value extras". It compares, in exact set equality, the runtime export keys of the dynamically imported `../bin/opencode-goal.mjs` against the value declarations (`export const|let|var|function|class`, optional `declare`, line-anchored) published by `../bin/opencode-goal.d.mts`: every real export must be declared, and every declared value export must exist — nothing missing, nothing stale. A second leg source-scans the .mjs's own line-anchored `export` declarations and requires each to appear as a value declaration in the .d.mts. Negative control performed in this worktree: appending a stale `export function staleHelper(): void;` to the .d.mts fails the new test (61 pass / 1 fail), then the file was restored with `git checkout --`. Interfaces and type aliases in the .d.mts (`ScopeResolution`, `CliOptions`, `CliResult`, `OpencodeProbeResult`, `AddPluginResult`, `RemovePluginResult`) are supporting types for the values and are deliberately out of the comparison.
 704. Verification: `bun run check` green in this worktree (tsc, full suite, docs freshness, spec-check after the marker bump). Honest limits: the pin compares value exports only — a wrong signature on an existing declaration (e.g. wrong argument type on `status`) still passes, because nothing type-checks the .mjs source against its declarations and `tsc --noEmit` does not include `bin/`; interface-only staleness (an unused exported interface) is not detected mechanically; the source scan, like the fsync pin, is structural and line-anchored. Marker re-counted at the first marker and below.
 
-<!-- spec-check files=60 tests=1450 -->
+<!-- spec-check files=60 tests=1456 -->
+
+## Workstream FF — spend rides the stream: carry-forward on `changed` + a settled-spend event at finish (2026-11-17)
+
+Interpretation of the armed condition ("live stream update if things change in the backend it to be reflect on the terminal tui right away"): one class of backend change was provably invisible to the TUI between `get` pulls — `spend`. The `changed` event snapshot carries no spend (a `usage()` call per event is not affordable on the hot path), so every background event landed in the TUI's `put` intake with `spend: undefined` and the merged entry dropped the cached figure: the card's spend row and the dialog's `spend` row vanished on the next event after any `get` pull, then re-appeared on the following pull — flicker by construction. The context estimate already had the carry-forward treatment (`preserveContextSize`); spend did not. Terminal goals are never re-pulled by the stale-chrome guard (live entries only), so after `finish` even an open dialog kept the pre-final figure forever. No redesign; no test weakened. Docs untouched (the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`).
+
+705. src/core/entries.ts — `preserveContextSize` renamed to `preserveCarriedFields` and generalized: it carries `contextSize` forward with the unchanged pending→landed `loopCompact.landedAt` invalidation, and now also carries `spend` forward whenever the incoming snapshot lacks one. Spend is cumulative-since-baseline and monotone within a goal run, so the carried figure is a lower bound, never a lie; the compaction-landing invalidation does NOT touch spend (a compaction replaces the prompt context, not the ledger). Same-reference hot path preserved when nothing is carried. All call sites and tests renamed mechanically.
+706. src/tui.tsx — the `put` intake comment updated; the carry-forward now covers both fields through the same call. No other TUI change.
+707. src/runtime/controller.ts — `finish`'s background usage block, after routing the final snapshot through `commit` (unchanged), emits one extra `changed` snapshot carrying the settled spend vs baseline (`diffUsage(usage, record.baseline)`). That event is the only push a terminal goal ever gets — the stale-chrome guard re-pulls live entries only. Costs one emit per goal termination; the hot path is untouched.
+708. test/entries.test.ts — +5 spend pins: carry-forward on event intake, event-carries-own-spend wins, no-cache means no-spend, spend survives a compaction landing while the context total is invalidated, null stays null. Suite 1450 → 1456 pass, 0 fail (58 files).
+709. test/controller.test.ts — +1 pin: after a met verdict settles the goal, the final `changed` event carries the settled spend vs baseline (`cost` 4 = 5 − 1 baseline). `tsc --noEmit` clean; `bun run check` green in this worktree.
+710. Honest limits: the carried spend between a `get` pull and the next event can lag the true ledger by one evaluation turn (same contract as the context estimate); the final-spend event is pinned at the controller harness, not at a live TUI frame; the rename is mechanical but any external fork importing `preserveContextSize` from `src/core/entries.ts` must rename (the module is internal — not in package.json `exports`). Marker re-counted at the first marker and below.
+
+<!-- spec-check files=60 tests=1456 -->

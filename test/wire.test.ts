@@ -9,7 +9,7 @@ import {
   parseNotice,
 } from "../src/core/wire.ts"
 import { isLive } from "../src/core/types.ts"
-import { preserveContextSize, pruneSnapshotEntries } from "../src/core/entries.ts"
+import { preserveCarriedFields, pruneSnapshotEntries } from "../src/core/entries.ts"
 import { staleLiveSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 
 const snapshot = (): GoalSnapshot => ({
@@ -223,7 +223,7 @@ describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
   test("the stale guard's re-pull converges the cache: pre-terminal entry replaced, live predicate disarmed", () => {
     const parsed = parseGetGoalOutput({ goal: achievedSnapshot() })
     expect(parsed).toBeDefined()
-    const merged = preserveContextSize(checkingSnapshot(), parsed!.goal)
+    const merged = preserveCarriedFields(checkingSnapshot(), parsed!.goal)
     const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
     expect(merged && isLive(merged.status)).toBe(false)
     expect(entries["ses_test"]?.goal?.status).toBe("achieved")
@@ -232,7 +232,7 @@ describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
 
   test("the intake's live→terminal transition fires on a re-pulled terminal snapshot (ack pill arms, live chrome disarms)", () => {
     const previous = checkingSnapshot()
-    const merged = preserveContextSize(previous, achievedSnapshot())
+    const merged = preserveCarriedFields(previous, achievedSnapshot())
     expect(isLive(previous.status)).toBe(true)
     expect(merged && !isLive(merged.status) && merged.status !== "cleared").toBe(true)
   })
@@ -247,7 +247,7 @@ describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
   test("a null re-pull (the server cleared the goal) drops the entry and the stale predicate empties", () => {
     const parsed = parseGetGoalOutput({ goal: null })
     expect(parsed).toEqual({ goal: null })
-    const merged = preserveContextSize(checkingSnapshot(), parsed!.goal)
+    const merged = preserveCarriedFields(checkingSnapshot(), parsed!.goal)
     expect(merged).toBeNull()
     const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
     expect(entries["ses_test"]).toBeUndefined()

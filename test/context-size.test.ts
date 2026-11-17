@@ -8,7 +8,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import { estimateContextTokens } from "../src/core/context-size.ts"
-import { preserveContextSize } from "../src/core/entries.ts"
+import { preserveCarriedFields } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const assistant = (input: number, cacheRead = 0, cacheWrite = 0) => ({
@@ -74,7 +74,7 @@ describe("after a simulated compaction", () => {
       loopCompact: { requestedAt: 1, iteration: 2, misses: 0, landedAt: 2 },
     } as unknown as GoalSnapshot
     // The landing flip drops the stale total — nothing paints as current until the server sends a count.
-    const afterLanding = preserveContextSize(stale, landed)
+    const afterLanding = preserveCarriedFields(stale, landed)
     expect(afterLanding?.contextSize).toBeUndefined()
     // The server then re-derives the count from the post-compaction window: known and finite.
     const post = estimateContextTokens([assistant(180_000, 5_000), compaction(), assistant(9_000, 500)])
@@ -82,7 +82,7 @@ describe("after a simulated compaction", () => {
     expect(Number.isFinite(post)).toBe(true)
     expect(post as number).toBeLessThan(185_000)
     // And the fresh count flows through the snapshot unchanged.
-    const fresh = preserveContextSize(afterLanding, { ...landed, contextSize: post } as GoalSnapshot)
+    const fresh = preserveCarriedFields(afterLanding, { ...landed, contextSize: post } as GoalSnapshot)
     expect(fresh?.contextSize).toBe(9_500)
   })
 })

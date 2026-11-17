@@ -558,6 +558,20 @@ describe("GoalController", () => {
     expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 
+  test("the final spend re-save emits a changed snapshot carrying the settled spend", async () => {
+    await h.set()
+    h.setUsage({ cost: 5, input: 500, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    h.verdicts.push(met("done"))
+    await h.turn()
+    await flush()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    // The last changed event must carry the settled spend vs baseline — terminal goals are never
+    // re-pulled by the TUI's stale-chrome guard, so this event is the only push they get.
+    const last = h.changes.at(-1)
+    expect(last?.spend).toBeDefined()
+    expect(last?.spend?.cost).toBe(4)
+  })
+
   test("terminal spend snapshot failure is handled, goal still finishes", async () => {
     await h.set()
     h.verdicts.push(met("done"))

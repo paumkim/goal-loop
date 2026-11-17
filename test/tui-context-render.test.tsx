@@ -12,7 +12,7 @@ import { HudCard } from "../src/hud-card.tsx"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import { estimateContextTokens } from "../src/core/context-size.ts"
-import { preserveContextSize } from "../src/core/entries.ts"
+import { preserveCarriedFields } from "../src/core/entries.ts"
 import type { GoalSnapshot, VerdictEntry } from "../src/core/types.ts"
 
 const theme: HistoryTheme = {
@@ -94,7 +94,7 @@ describe("context size after a simulated compaction", () => {
   })
 
   test("card: the landing snapshot paints no context row — not the stale 185k, not 'unknown'", async () => {
-    const merged = preserveContextSize(stale, landed)
+    const merged = preserveCarriedFields(stale, landed)
     expect(merged?.contextSize).toBeUndefined()
     const frame = await render(() => <HudCard goal={merged!} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
     expect(frame).not.toContain("185k")
@@ -103,7 +103,7 @@ describe("context size after a simulated compaction", () => {
   })
 
   test("card: once the count is re-derived, the finite post-compaction size paints", async () => {
-    const merged = preserveContextSize(stale, landed)
+    const merged = preserveCarriedFields(stale, landed)
     const fresh = { ...merged!, contextSize: freshSize }
     const frame = await render(() => <HudCard goal={fresh} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
     expect(frame).toContain("9.5k")
