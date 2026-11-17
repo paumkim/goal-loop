@@ -2498,6 +2498,17 @@
       "submittedAt": "2026-11-17T02:44:20Z",
       "mergedAt": "2026-11-17T02:45:36Z",
       "mergedInto": "dev"
+    },
+    "opencode-cli-guide-tighten": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-cli.ts,SPEC.md",
+      "branch": "wt/opencode-cli-guide-tighten",
+      "worktree": "worktrees/wt-opencode-cli-guide-tighten",
+      "status": "done",
+      "createdAt": "2026-11-17T03:03:12Z",
+      "submittedAt": "2026-11-17T03:04:57Z",
+      "mergedAt": "2026-11-17T03:06:30Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
