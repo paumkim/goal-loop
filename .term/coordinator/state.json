@@ -2779,6 +2779,17 @@
       "submittedAt": "2026-11-17T21:04:06Z",
       "mergedAt": "2026-11-17T21:05:22Z",
       "mergedInto": "dev"
+    },
+    "spec-item-747-accuracy": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-item-747-accuracy",
+      "worktree": "worktrees/wt-spec-item-747-accuracy",
+      "status": "done",
+      "createdAt": "2026-11-17T21:06:33Z",
+      "submittedAt": "2026-11-17T21:07:42Z",
+      "mergedAt": "2026-11-17T21:08:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
