@@ -2387,6 +2387,17 @@
       "submittedAt": "2026-11-16T23:33:04Z",
       "mergedAt": "2026-11-16T23:34:18Z",
       "mergedInto": "dev"
+    },
+    "goal-note-context-strip": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,src/index.ts,src/runtime/controller.ts,test/**,SPEC.md,dist",
+      "branch": "wt/goal-note-context-strip",
+      "worktree": "worktrees/wt-goal-note-context-strip",
+      "status": "done",
+      "createdAt": "2026-11-16T23:47:19Z",
+      "submittedAt": "2026-11-17T00:04:32Z",
+      "mergedAt": "2026-11-17T00:05:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
