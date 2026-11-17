@@ -2701,6 +2701,22 @@
       "submittedAt": "2026-11-17T19:36:42Z",
       "mergedAt": "2026-11-17T19:37:59Z",
       "mergedInto": "dev"
+    },
+    "live-stream-cross-process-truth-drain-and-repull-hh": {
+      "agent": "inkling-hh",
+      "paths": "src/rpc-handlers.ts,src/runtime/controller.ts,src/runtime/events.ts,src/core/entries.ts,src/core/hud.ts,src/tui.tsx,test/loop.test.ts,test/rpc-handlers.test.ts,test/tui-hud.test.tsx,test/entries.test.ts,SPEC.md,dist/tui.js",
+      "branch": "wt/live-stream-cross-process-truth-drain-and-repull-hh",
+      "worktree": "worktrees/wt-live-stream-cross-process-truth-drain-and-repull-hh",
+      "status": "done",
+      "createdAt": "2026-11-17T19:52:11Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T20:14:28Z",
+      "forcedScopeFiles": [
+        "test/controller.test.ts"
+      ],
+      "submittedAt": "2026-11-17T20:14:28Z",
+      "mergedAt": "2026-11-17T20:15:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
