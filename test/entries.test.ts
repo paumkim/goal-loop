@@ -11,9 +11,9 @@ const entry = (status: GoalStatus | null, receivedAt = 1000): GoalSnapshotCacheE
 })
 
 describe("pruneSnapshotEntries", () => {
-  test("null-valued entries are dropped, others kept", () => {
+  test("null-valued entries are retained — the stale-chrome tick re-pulls them; only the cap evicts", () => {
     const out = pruneSnapshotEntries({ a: entry("achieved"), b: entry(null), c: entry(null, 2000) }, undefined)
-    expect(Object.keys(out)).toEqual(["a"])
+    expect(Object.keys(out)).toEqual(["a", "b", "c"])
   })
 
   test("the session kept for an open dialog is never dropped, even when null-valued", () => {
@@ -220,14 +220,14 @@ describe("bumpReceivedAt", () => {
   })
 })
 
-describe("steady null entries and the cap (the unchanged-snapshot intake path)", () => {
-  test("dropNulls:false retains steady null entries below the cap", () => {
+describe("steady null entries and the cap", () => {
+  test("steady null entries are retained below the cap", () => {
     const input: Record<string, GoalSnapshotCacheEntry> = { a: entry(null, 1000), b: entry(null, 2000) }
-    const out = pruneSnapshotEntries(input, undefined, ENTRY_CAP, { dropNulls: false })
+    const out = pruneSnapshotEntries(input, undefined, ENTRY_CAP)
     expect(out).toBe(input)
   })
 
-  test("dropNulls:false still enforces the cap: oldest non-live (null) entries are evicted, freshly bumped survive, live goals never evicted", () => {
+  test("the cap still evicts oldest non-live (null) entries, freshly bumped survive, live goals never evicted", () => {
     const map: Record<string, GoalSnapshotCacheEntry> = {}
     // ENTRY_CAP null entries, oldest first — the shape a long-lived TUI reaches over months of session churn.
     for (let i = 0; i < ENTRY_CAP; i++) map[`ses_${i}`] = entry(null, 1000 + i)
@@ -235,7 +235,7 @@ describe("steady null entries and the cap (the unchanged-snapshot intake path)",
     map.live_b = entry("paused", 2)
     // The freshly re-pulled entry: receivedAt is bumped to NOW before the cap runs.
     const bumped = bumpReceivedAt(map, "ses_0", 99999)
-    const out = pruneSnapshotEntries(bumped, undefined, ENTRY_CAP, { dropNulls: false })
+    const out = pruneSnapshotEntries(bumped, undefined, ENTRY_CAP)
     expect(Object.keys(out)).toHaveLength(ENTRY_CAP)
     expect(out.ses_0?.receivedAt).toBe(99999) // the freshly checked entry survives the eviction
     expect(out.live_a?.goal).not.toBeNull()

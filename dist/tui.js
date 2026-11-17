@@ -5666,14 +5666,10 @@ var scrollbarTrackOptions = (theme, mono) => {
 
 // src/core/entries.ts
 var ENTRY_CAP = 64;
-function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP, { dropNulls = true } = {}) {
+function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   let changed = false;
   const out = {};
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (dropNulls && entry.goal === null && sessionID !== keep) {
-      changed = true;
-      continue;
-    }
     out[sessionID] = entry;
   }
   const keys = Object.keys(out);
@@ -6115,12 +6111,13 @@ var makeGoalRefresh = (deps) => async (sessionID) => {
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
 var elapsedOf = (g, receivedAt, nowMs) => g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs;
+var stripVolatile = (key, value) => key === "elapsedMs" ? undefined : value;
 var goalsEqual = (a, b) => {
   if (a === b)
     return true;
   if (!a || !b)
     return false;
-  return JSON.stringify(a) === JSON.stringify(b);
+  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile);
 };
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions2();
@@ -6513,9 +6510,7 @@ var tui_default = Plugin.define({
       return setEntries((previous) => {
         const existing = previous[sessionID];
         if (existing && goalsEqual(existing.goal, mergedGoal))
-          return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP, {
-            dropNulls: false
-          });
+          return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP);
         const next = {
           ...previous,
           [sessionID]: {

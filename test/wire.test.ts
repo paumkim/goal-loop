@@ -10,7 +10,7 @@ import {
 } from "../src/core/wire.ts"
 import { isLive } from "../src/core/types.ts"
 import { preserveCarriedFields, pruneSnapshotEntries } from "../src/core/entries.ts"
-import { staleLiveSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
+import { staleUnprovenSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 
 const snapshot = (): GoalSnapshot => ({
   version: 1,
@@ -228,7 +228,7 @@ describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
     const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
     expect(merged && isLive(merged.status)).toBe(false)
     expect(entries["ses_test"]?.goal?.status).toBe("achieved")
-    expect(staleLiveSessionIDs(entries, 2_000_000)).toEqual([])
+    expect(staleUnprovenSessionIDs(entries, 2_000_000 + STALE_LIVE_ENTRY_MS)).toEqual([])
   })
 
   test("the intake's live→terminal transition fires on a re-pulled terminal snapshot (ack pill arms, live chrome disarms)", () => {
@@ -242,17 +242,17 @@ describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
     const broken = { ...achievedSnapshot(), turns: Number.NaN }
     expect(parseChangedEvent({ sessionID: "ses_test", goal: broken })).toBeUndefined()
     const entries = { ses_test: { goal: checkingSnapshot(), receivedAt: 1_000 } }
-    expect(staleLiveSessionIDs(entries, 1_000 + STALE_LIVE_ENTRY_MS)).toEqual(["ses_test"])
+    expect(staleUnprovenSessionIDs(entries, 1_000 + STALE_LIVE_ENTRY_MS)).toEqual(["ses_test"])
   })
 
-  test("a null re-pull (the server cleared the goal) drops the entry and the stale predicate empties", () => {
+  test("a null re-pull (the server cleared the goal) is retained as a re-pull target — a later cross-process re-arm is still noticed", () => {
     const parsed = parseGetGoalOutput({ goal: null })
     expect(parsed).toEqual({ goal: null })
     const merged = preserveCarriedFields(checkingSnapshot(), parsed!.goal)
     expect(merged).toBeNull()
     const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
-    expect(entries["ses_test"]).toBeUndefined()
-    expect(staleLiveSessionIDs(entries, 2_000_000)).toEqual([])
+    expect(entries["ses_test"]?.goal).toBeNull()
+    expect(staleUnprovenSessionIDs(entries, 2_000_000 + STALE_LIVE_ENTRY_MS)).toEqual(["ses_test"])
   })
 })
 
