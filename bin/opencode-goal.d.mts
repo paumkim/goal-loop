@@ -24,6 +24,13 @@ export interface CliResult {
   stderr: string;
 }
 
+export interface OpencodeProbeResult {
+  error?: Error & { code?: string } | null;
+  status?: number | null;
+  signal?: string | null;
+  stdout?: string | Buffer;
+}
+
 export interface AddPluginResult {
   text: string;
   already: boolean;
@@ -41,5 +48,6 @@ export function removePluginText(text: string): RemovePluginResult;
 export function resolveScope(args: string[], opts?: CliOptions): ScopeResolution;
 export function install(args: string[], opts?: CliOptions): CliResult;
 export function uninstall(args: string[], opts?: CliOptions): CliResult;
+export function probeOpencodeVersion(v: OpencodeProbeResult): string;
 export function status(args: string[], opts?: CliOptions): CliResult;
 export function runCli(argv: string[], opts?: CliOptions): CliResult;
