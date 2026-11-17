@@ -2,7 +2,7 @@
  * Narrow interfaces the controller depends on. The plugin entry adapts OpenCode's context to them;
  * tests substitute fakes. Nothing in here imports OpenCode, so the core stays host-agnostic.
  */
-import type { FailureInfo, GoalSnapshot, LoopEntry, Notice, UsageSnapshot, Verdict } from "../core/types.ts"
+import type { GoalSnapshot, LoopEntry, Notice, UsageSnapshot, Verdict } from "../core/types.ts"
 
 export type Delivery = "steer" | "queue"
 

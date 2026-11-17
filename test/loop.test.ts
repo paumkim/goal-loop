@@ -5,9 +5,7 @@ import { join } from "node:path"
 import { resolveConfig } from "../src/core/config.ts"
 import * as Prompt from "../src/core/prompts.ts"
 import type { CommitPolicy, GoalSnapshot, LoopEntry, Notice, UsageSnapshot } from "../src/core/types.ts"
-import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
-import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BoundaryCompactResult } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
@@ -51,8 +49,6 @@ class MemoryStorage implements StoragePort {
     entries: [...this.data].filter(([key]) => key.startsWith(prefix)).map(([key, value]) => ({ key, value: structuredClone(value) })),
   })
 }
-
-const silentLog = { info() {}, warn() {}, error() {} }
 
 function harness(options: Record<string, unknown> = {}, storage = new MemoryStorage()) {
   const clock = new FakeClock()

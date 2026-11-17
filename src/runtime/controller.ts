@@ -1060,7 +1060,6 @@ export class GoalController {
     // that just observed the landing: every arm stacking a request is what piled up "Nothing to compact yet"
     // dividers and their re-anchor notes. The loop keeps running throughout.
     if (this.deps.compactAtBoundary) {
-      const now = clock.now()
       const pending = record.loopCompact && !record.loopCompact.landedAt ? record.loopCompact : undefined
       let force = false
       let misses = 0

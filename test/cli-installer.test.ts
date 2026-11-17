@@ -9,7 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, basename } from "node:path";
+import { join } from "node:path";
 import {
   PLUGIN_PACKAGE,
   PLUGIN_SPEC,
@@ -372,7 +372,7 @@ describe("uninstall with a missing entry and a pre-install backup", () => {
 
   test("a fresh safety backup of the drifted state is taken before restoring", () => {
     const home = fakeHome();
-    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    writeGlobalConfig(home, "opencode.jsonc", STRICT);
     install([], { env: envFor(home), cwd: home });
     const drifted = STRICT.replace("test/model", "test/other");
     writeGlobalConfig(home, "opencode.jsonc", drifted);

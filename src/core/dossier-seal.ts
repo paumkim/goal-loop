@@ -106,7 +106,7 @@ export const cleanShaCount = (
  * A record with no quoted shas renders the GAP case: one honest sentence, no table.
  */
 export function attestationAppendix(
-  goal: GoalSnapshot,
+  _goal: GoalSnapshot,
   verification: RecordVerification,
   reach: ReachVerification,
   sign: SignVerification,

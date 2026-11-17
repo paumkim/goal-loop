@@ -38,7 +38,6 @@
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
-  mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
@@ -184,7 +183,7 @@ export function renderRows(rows: ChangelogRow[]): string {
     .join("\n");
 }
 
-const changelogRows = (root: string): string => {
+const changelogRows = (): string => {
   let out = "";
   try {
     out = git([
@@ -267,7 +266,7 @@ const staleChangelog = (root: string): string | undefined => {
   const actual = sliceChangelogRows(html);
   if (actual === undefined)
     return "docs/changelog.html is missing the <!-- changes:start/end --> markers";
-  return changelogVerdict(actual, changelogRows(root));
+  return changelogVerdict(actual, changelogRows());
 };
 
 const check = (root: string): number => {
@@ -289,7 +288,7 @@ const renderChangelog = (root: string): boolean => {
   const start = html.indexOf(CHANGE_START);
   const end = html.indexOf(CHANGE_END);
   if (start === -1 || end === -1 || end < start) return false;
-  const rows = changelogRows(root);
+  const rows = changelogRows();
   const next = `${html.slice(0, start + CHANGE_START.length)}\n${rows}\n${html.slice(end)}`;
   if (next !== html) writeFileSync(page, next);
   return true;

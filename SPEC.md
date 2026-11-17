@@ -5958,3 +5958,41 @@ references. Both are fixed here; no behavior changes.
      convention SPEC.md uses.
      Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below and at the Workstream J marker.
 <!-- spec-check files=59 tests=1341 -->
+
+## Workstream ET — noUnusedLocals / noUnusedParameters landed (2026-11-17)
+
+Interpretation of the armed condition: `tsconfig.json` now enables `noUnusedLocals` and
+`noUnusedParameters` for the whole include set (`*.ts` at the root, `src`, `test`, `scripts`),
+and every error the flags produced is fixed in-tree. No behavior changes; no files created or
+removed; no tests added or deleted; no `@ts-ignore` anywhere.
+
+549. tsconfig.json — `noUnusedLocals` and `noUnusedParameters` added next to the existing
+     strict-family flags. The include set is unchanged.
+550. Fixes — 18 flagged sites, each resolved honestly: unused imports deleted
+     (`mkdirSync` in scripts/docs-watch.ts; `FailureInfo` in src/runtime/ports.ts; `basename`
+     in test/cli-installer.test.ts; `beforeEach` in test/coordinator.test.ts and
+     test/coordinator-merge-safety.test.ts; `BackgroundTracker`/`AutoCompactor` in
+     test/loop.test.ts); unused module-private consts deleted (`CONDITION_MAX` stale constant
+     in src/hud-card.tsx; `silentLog` in test/loop.test.ts; `const now = clock.now()` in
+     src/runtime/controller.ts, the enclosing `clock` binding stays in use elsewhere);
+     unused parameters underscore-prefixed where the signature is API or call-site stable
+     (`_goal` in the exported `attestationAppendix` signature, src/core/dossier-seal.ts;
+     `_label` in the `onCopyDossierSection` JSX prop, src/tui.tsx; `_sha` in the `allYes`
+     fixture probe, test/dossier-attest.test.ts; `_el` in the scrollbox ref callback,
+     test/scrollbar.test.tsx); unused parameters deleted where the signature is module-private
+     (`changelogRows(root)` -> `changelogRows()`, two call sites updated,
+     scripts/docs-watch.ts); unused locals deleted (`const file =` at the safety-backup test in
+     test/cli-installer.test.ts — the first occurrence in that file is still used and keeps its
+     binding; `frame` destructured but never read in two tests in test/tui-hud.test.tsx).
+     No symbol was deleted that anything references; `bun x tsc --noEmit` is clean with the
+     flags on.
+551. Counts: shipped file count unchanged (59) and test count unchanged (1341) — no files were
+     created or removed and no tests were added or deleted — so the spec-check marker is
+     re-affirmed, not bumped: the Workstream J marker above reads `files=59 tests=1341`.
+552. Honest limits: the flags cover only what tsc can see — dynamically dispatched references,
+     string-keyed plugin boundaries, and JSX-factory magic are outside its reach; and the
+     underscore-prefixed parameters above remain in their signatures (unused but API-stable)
+     rather than being removed, which the condition explicitly permits. The docs/stamp
+     mislabel remains under the stale github-single-channel lease — untouched here.
+     Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below.
+<!-- spec-check files=59 tests=1341 -->
