@@ -271,3 +271,38 @@ describe("plugin setup", () => {
     }
   })
 })
+
+describe("the context hook strips end-of-record notes", () => {
+  const noteMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+
+  test("a terminal <goal-note final> message is removed; everything else survives in order", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const keep1 = noteMessage("real user task")
+      const terminal = noteMessage("<goal-note final>\nGoal achieved (turn 1, 7m 21s).\ndone\n</goal-note>")
+      const keep2 = noteMessage("<goal-note>\nLoop 1 of 3 achieved (turn 9); goal v2 armed.\nv2 armed\n</goal-note>")
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [keep1, terminal, keep2], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([keep1, keep2])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("messages without terminal notes pass through untouched (same contents, same order)", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const keep1 = noteMessage("alpha")
+      const keep2 = noteMessage("beta")
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [keep1, keep2], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([keep1, keep2])
+    } finally {
+      await dispose?.()
+    }
+  })
+})

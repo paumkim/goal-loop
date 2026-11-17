@@ -182,6 +182,8 @@ describe("GoalController", () => {
     expect(goal.endedAt).toBeDefined()
     // The verdict note is recorded without waking the session.
     expect(h.calls.synthetic.at(-1).resume).toBe(false)
+    // End-of-record notes carry the terminal tag so the context hook strips them from later model requests.
+    expect(h.calls.synthetic.at(-1).text).toContain("<goal-note final>")
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
   })
 
