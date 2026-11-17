@@ -98,7 +98,7 @@ state_jq() {
   local tmp
   tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
   (
-    exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 1
+    exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 1
     if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
     if ! jq "$@" "$STATE_FILE" > "$tmp"; then
       rm -f "$tmp"
@@ -584,7 +584,7 @@ restore_state_stash() {
     # cp and the write are serialized on the state mutex with every other writer: restoring the
     # pre-merge live copy must never land on top of a claim/submit that wrote in between.
     if (
-      exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 1
+      exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 1
       if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
       cp "$STATE_STASH" "$STATE_FILE"
     ); then
@@ -685,7 +685,7 @@ do_merge_next() {
       # the stale holder died without releasing: clear its mergeLock so `doctor` stops failing forever
       # (best-effort; never fail the reclaim over bookkeeping)
       (
-        exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+        exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 0
         if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
         _ml_tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null) || exit 0
         if jq '.mergeLock = null' "$STATE_FILE" > "$_ml_tmp" 2>/dev/null; then
@@ -725,7 +725,7 @@ do_merge_next() {
     restore_state_stash
     if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
       (
-        exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+        exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 0
         if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
         local _tmp
         _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null) || exit 0
@@ -987,7 +987,7 @@ finish_merged_lease() {
   # This chore commit is part of the merge flow (the only path to dev), not a direct dev commit by an agent.
   if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
     (
-      exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+      exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 0
       if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
       _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
       _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
