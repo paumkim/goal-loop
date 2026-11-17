@@ -2609,6 +2609,22 @@
       "submittedAt": "2026-11-17T14:13:31Z",
       "mergedAt": "2026-11-17T14:14:55Z",
       "mergedInto": "dev"
+    },
+    "root-surfaces": {
+      "agent": "orchestrator",
+      "paths": "index.ts,rpc.ts,tui.ts,bin/**,.github/**,package.json,tsconfig.json,.gitignore,.gitattributes,opencode.json.example,test/**,SPEC.md",
+      "branch": "wt/root-surfaces",
+      "worktree": "worktrees/wt-root-surfaces",
+      "status": "done",
+      "createdAt": "2026-11-17T14:20:08Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T14:47:14Z",
+      "forcedScopeFiles": [
+        "bun.lock"
+      ],
+      "submittedAt": "2026-11-17T14:47:14Z",
+      "mergedAt": "2026-11-17T14:48:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
