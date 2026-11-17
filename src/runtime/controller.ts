@@ -1329,6 +1329,10 @@ export class GoalController {
         // Route the final snapshot through commit so the no-op cache mirrors the stored record exactly;
         // a direct store.save left lastCommit holding the pre-`final` serialized string.
         void this.commit(record)
+        // The commit-path `changed` event carries no spend (a usage() call per event is not affordable on the
+        // hot path), and terminal goals are never re-pulled by the TUI's stale-chrome guard. Emit one more
+        // snapshot with the settled spend so an open card/dialog shows the final figure immediately.
+        this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID, diffUsage(usage, record.baseline)))
       })
       .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
       .finally(() => this.pendingUsage.delete(usageSnapshot))

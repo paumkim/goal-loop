@@ -55,23 +55,34 @@ export function pruneSnapshotEntries(
 }
 
 /**
- * The `get` RPC carries the last-known context estimate; `changed` event snapshots usually do not.
- * When an event snapshot arrives without one, carry the cached value forward so the dialog's context
- * meter does not flicker to `unknown` on every background tick. Returns the same reference when there
- * is nothing to carry (keeps the hot path allocation-free).
+ * The `get` RPC carries the last-known context estimate and spend; `changed` event snapshots usually do
+ * not (both need a host call the hot path avoids). When an event snapshot arrives without one, carry the
+ * cached value forward so the dialog's context meter and spend row do not flicker to `unknown` on every
+ * background tick. Spend is cumulative-since-baseline and monotonically non-decreasing within a goal run,
+ * so the carried figure is a lower bound, never a lie; the next `get` pull (dialog open, stale-chrome
+ * re-pull) replaces it with the settled one. Returns the same reference when there is nothing to carry
+ * (keeps the hot path allocation-free).
  *
- * A pending→landed `loopCompact.landedAt` flip invalidates the cached total: it described the
+ * A pending→landed `loopCompact.landedAt` flip invalidates the cached context total: it described the
  * pre-compaction context, which the host just replaced. The carried number is dropped instead of
  * painted as current; the meter renders nothing until the server sends the post-compaction count
- * (the estimate of the first assistant step after the landing).
+ * (the estimate of the first assistant step after the landing). Spend is unaffected by a compaction.
  */
-export function preserveContextSize(previous: GoalSnapshot | null | undefined, next: GoalSnapshot | null): GoalSnapshot | null {
+export function preserveCarriedFields(previous: GoalSnapshot | null | undefined, next: GoalSnapshot | null): GoalSnapshot | null {
   if (next === null) return next
-  if (next.contextSize !== undefined) return next
-  if (compactionJustLanded(previous, next)) return next
-  const carried = previous?.contextSize
-  return typeof carried === "number" && Number.isFinite(carried) && carried >= 0 ? { ...next, contextSize: carried } : next
+  const landed = compactionJustLanded(previous, next)
+  let merged = next
+  if (merged.contextSize === undefined && !landed) {
+    const carried = previous?.contextSize
+    if (typeof carried === "number" && Number.isFinite(carried) && carried >= 0) merged = { ...merged, contextSize: carried }
+  }
+  if (merged.spend === undefined) {
+    const carried = previous?.spend
+    if (carried) merged = { ...merged, spend: carried }
+  }
+  return merged
 }
+
 
 /** True when `next` shows a boundary compaction landed that `previous` had pending (or unnoticed). */
 function compactionJustLanded(previous: GoalSnapshot | null | undefined, next: GoalSnapshot): boolean {
