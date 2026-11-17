@@ -2790,6 +2790,22 @@
       "submittedAt": "2026-11-17T21:07:42Z",
       "mergedAt": "2026-11-17T21:08:56Z",
       "mergedInto": "dev"
+    },
+    "tui-recent-terminal-repull": {
+      "agent": "orchestrator",
+      "paths": "src/core/entries.ts,src/core/hud.ts,src/tui.tsx,test/entries.test.ts,test/tui-hud.test.tsx,SPEC.md",
+      "branch": "wt/tui-recent-terminal-repull",
+      "worktree": "worktrees/wt-tui-recent-terminal-repull",
+      "status": "done",
+      "createdAt": "2026-11-17T21:13:34Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T21:18:51Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-17T21:18:51Z",
+      "mergedAt": "2026-11-17T21:20:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
