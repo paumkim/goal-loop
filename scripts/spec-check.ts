@@ -48,10 +48,24 @@ export interface ProbeResult {
   readonly testsGreen: boolean;
   /** Pass count parsed from the reporter output; undefined when the reporter was unparseable. */
   readonly tests?: number;
+  /** Set when `bun test` could not even start (binary missing); the failure report names it as such. */
+  readonly bunLaunchError?: string;
 }
 
 export const NO_MARKER_ERROR = "spec-check: no `<!-- spec-check files=N tests=N -->` marker found in SPEC.md";
 export const BUN_RED_ERROR = "bun test exits non-zero (a test failed); SPEC.md must not claim green while the suite is red";
+
+/**
+ * Parse the `  N pass` summary line out of bun test's merged output. Anchored to line start so a
+ * stray substring (an earlier "N passed"-like token anywhere in the stream) cannot win; the last
+ * match is the reporter's own summary when it prints more than one.
+ */
+export function parseBunTestPassCount(out: string): number | undefined {
+  const matches = [...out.matchAll(/(?:^|\n)\s*(\d+) pass\b/g)];
+  const last = matches[matches.length - 1];
+  const digits = last?.[1];
+  return digits === undefined ? undefined : Number(digits);
+}
 
 /**
  * Parse the `<!-- spec-check files=N tests=N -->` marker out of the SPEC text.
@@ -78,7 +92,7 @@ export function diagnose(claimed: SpecCounts, probe: ProbeResult, probeErrors: r
     failures.push(`npm pack lists ${probe.files} files, SPEC.md claims ${claimed.files}`);
   }
   if (!probe.testsGreen) {
-    failures.push(BUN_RED_ERROR);
+    failures.push(probe.bunLaunchError ? `bun test failed to launch: ${probe.bunLaunchError}` : BUN_RED_ERROR);
   } else {
     const reported = probe.tests ?? -1;
     if (reported !== claimed.tests) {
@@ -133,17 +147,18 @@ function main(): void {
 
   // tests: run bun test from inside test/ so a repo carrying opencode worktrees under worktrees/
   // cannot double-count the suite; the reporter summary goes to stderr, not stdout; merge both.
+  // A bun that fails to start is reported as such, not as "a test failed".
   const run = spawnSync("bun", ["test"], { cwd: join(ROOT, "test"), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const launchError = run.error?.message;
   const out = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
-  const match = out.match(/(\d+) pass/);
-  const tests = match ? Number(match[1]) : undefined;
+  const tests = parseBunTestPassCount(out);
 
-  const failures = diagnose(claimed, { files, testsGreen: run.status === 0, tests }, probeErrors);
+  const failures = diagnose(claimed, { files, testsGreen: run.status === 0, tests, bunLaunchError: launchError }, probeErrors);
 
   if (write) {
     // --write: never convict, always heal. But never heal over a red suite or a failed probe.
     if (run.status !== 0) {
-      console.error(formatFailures([BUN_RED_ERROR, ...probeErrors]));
+      console.error(formatFailures([launchError ? `bun test failed to launch: ${launchError}` : BUN_RED_ERROR, ...probeErrors]));
       process.exit(1);
     }
     if (files === undefined || tests === undefined) {

@@ -172,3 +172,32 @@ describe("render script smoke tests", () => {
     expect(gridChars(result.stdout)).toBeGreaterThan(100)
   }, 30_000)
 })
+
+describe("render script argument validation", () => {
+  test("render-history.tsx with only flags in any slot uses default dimensions", () => {
+    const result = run("scripts/render-history.tsx", ["--empty"])
+    expect(result.status).toBe(0) // flags-only is fine: defaults are used
+  }, 30_000)
+
+  test("render-history.tsx rejects a non-numeric width positional", () => {
+    const result = run("scripts/render-history.tsx", ["abc"])
+    expect(result.status).toBe(2)
+    expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
+  }, 30_000)
+
+  test("render-history.tsx rejects a zero width", () => {
+    const result = run("scripts/render-history.tsx", ["0"])
+    expect(result.status).toBe(2)
+  }, 30_000)
+
+  test("render-dialog.tsx rejects a non-numeric --width", () => {
+    const result = run("scripts/render-dialog.tsx", ["--width=abc"])
+    expect(result.status).toBe(2)
+    expect(`${result.stderr}${result.stdout}`).toContain("--width must be a positive finite number")
+  }, 30_000)
+
+  test("render-dialog.tsx rejects an empty --width value", () => {
+    const result = run("scripts/render-dialog.tsx", ["--width="])
+    expect(result.status).toBe(2)
+  }, 30_000)
+})

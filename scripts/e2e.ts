@@ -18,6 +18,12 @@ import { GoalRpc } from "../src/rpc.ts"
 
 const [projectArg, modelArg = process.env.E2E_MODEL ?? "opencode/deepseek-v4.1-flash-free", conditionArg] = process.argv.slice(2)
 if (!projectArg) throw new Error("usage: bun scripts/e2e.ts <empty-project-dir> [provider/model] [condition]")
+// The model must be "provider/model" — a bare word used to parse as provider "openroute" + id "openrouter"
+// (and a trailing slash as an empty model id), failing much later with an opaque server error.
+const slash = modelArg.indexOf("/")
+if (slash <= 0 || slash === modelArg.length - 1) {
+  throw new Error(`model must be "provider/model" (got "${modelArg}")`)
+}
 const project = path.resolve(projectArg)
 const pluginRoot = path.resolve(import.meta.dir, "..")
 const port = 4700 + Math.floor(Math.random() * 200)
@@ -28,9 +34,19 @@ const condition =
 const TIMEOUT_MS = 10 * 60_000
 const password = crypto.randomUUID()
 const headers = { authorization: `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}` }
+const e2ePlugin = process.env.E2E_PLUGIN ?? pluginRoot.replaceAll("\\", "/")
+
+// The documented contract is an empty project dir. A differing .opencode/opencode.json already in
+// place is never rewritten: a rerun with the identical payload is idempotent, anything else stops
+// with a clear message instead of silently dropping the project's existing plugin configuration.
+const opencodeJson = path.join(project, ".opencode", "opencode.json")
+const intendedJson = JSON.stringify({ plugins: [e2ePlugin] }, null, 2)
+if (existsSync(opencodeJson) && readFileSync(opencodeJson, "utf8") !== intendedJson) {
+  throw new Error(`refusing to overwrite ${opencodeJson}: the target project already carries a different opencode.json; point the harness at an empty directory instead`)
+}
 
 mkdirSync(path.join(project, ".opencode"), { recursive: true })
-writeFileSync(path.join(project, ".opencode", "opencode.json"), JSON.stringify({ plugins: [process.env.E2E_PLUGIN ?? pluginRoot.replaceAll("\\", "/")] }, null, 2))
+writeFileSync(opencodeJson, intendedJson)
 
 const log = createWriteStream(path.join(project, "server.log"))
 const server = spawn("opencode", ["serve", "--hostname", "127.0.0.1", "--port", String(port), "--print-logs", "--log-level", "info"], {
@@ -56,7 +72,6 @@ try {
   }
   say(`server up on ${baseUrl}`)
   const location = { directory: project }
-  const slash = modelArg.indexOf("/")
   const session = await client.session.create({
     location,
     title: "goal e2e",

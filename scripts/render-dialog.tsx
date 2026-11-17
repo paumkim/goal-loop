@@ -24,8 +24,19 @@ import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const buggy = process.argv.includes("--buggy")
-const height = Number(process.argv.find(a => a.startsWith("--height="))?.slice(9) ?? 46)
-const width = Number(process.argv.find(a => a.startsWith("--width="))?.slice(8) ?? 150)
+/** --width=/--height=: must parse to a positive finite number; a bare "--width=abc" used to paint a NaN-wide frame silently. */
+const positiveFiniteFlag = (name: string, dflt: number): number => {
+  const raw = process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
+  if (raw === undefined) return dflt
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) {
+    console.error(`render-dialog.tsx: --${name} must be a positive finite number (got "${raw}")`)
+    process.exit(2)
+  }
+  return n
+}
+const height = positiveFiniteFlag("height", 46)
+const width = positiveFiniteFlag("width", 150)
 const pinned = process.argv.includes("--pinned")
 const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")

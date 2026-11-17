@@ -70,10 +70,18 @@ export const esc = (s: string): string =>
 const ANCHOR_ARGS = ["--no-merges", "--grep=^docs: refresh", "--invert-grep", "-i"];
 const STAMP_FORMAT = "--date=format:%Y-%m-%d %H:%M UTC";
 
-const stampFor = (pageRel: string): string =>
-  git(["log", "-1", "--format=%cd", STAMP_FORMAT, ...ANCHOR_ARGS, "--", pageRel]) ||
-  git(["log", "-1", "--format=%cd", STAMP_FORMAT, "--", pageRel]) ||
-  "unknown";
+// A repo with zero commits (or a git that fails) yields "unknown" instead of throwing — the
+// historical behavior crashed `once` mid-scan, leaving the log appended but the state file
+// never written (duplicating "baseline" forever).
+const stampFor = (pageRel: string): string => {
+  try {
+    return git(["log", "-1", "--format=%cd", STAMP_FORMAT, ...ANCHOR_ARGS, "--", pageRel]) ||
+      git(["log", "-1", "--format=%cd", STAMP_FORMAT, "--", pageRel]) ||
+      "unknown";
+  } catch {
+    return "unknown";
+  }
+};
 
 const walk = (dir: string): string[] => {
   const out: string[] = [];
@@ -224,7 +232,11 @@ export function sliceChangelogRows(html: string): string | undefined {
   const start = html.indexOf(CHANGE_START);
   const end = html.indexOf(CHANGE_END);
   if (start === -1 || end === -1 || end < start) return undefined;
-  return html.slice(start + CHANGE_START.length, end).replace(/^\n+/, "").replace(/\n+$/, "");
+  return html
+    .slice(start + CHANGE_START.length, end)
+    .replace(/\r\n/g, "\n")
+    .replace(/^\n+/, "")
+    .replace(/\n+$/, "");
 }
 
 /** Changelog freshness verdict; undefined when the committed rows match git history. */
@@ -348,7 +360,13 @@ const watchDirs = (root: string): string[] => {
 
 const main = (): void => {
   const cmd = process.argv[2] ?? "once";
-  const root = repoRoot();
+  let root: string;
+  try {
+    root = repoRoot();
+  } catch {
+    console.error("docs-watch: not a git repo (git rev-parse --show-toplevel failed)");
+    process.exit(2);
+  }
 
   if (cmd === "log") {
     const p = join(root, LOG);
@@ -364,16 +382,31 @@ const main = (): void => {
   if (cmd === "watch") {
     scan(root, { quiet: true });
     let timer: ReturnType<typeof setTimeout> | null = null;
+    // fs.watch is not recursive and reports nothing for directories created after startup,
+    // so the watch set is re-derived and topped up on every debounced trigger. A shallow
+    // watch on .git catches the index swap-via-rename that orphans a plain .git/index handle;
+    // .git/refs/heads rides along for ref updates. Nested ref writes (refs/remotes, packed-refs)
+    // are still out of scope — commits that rewrite neither the index nor a refs/heads ref need
+    // a manual `docs-watch once`.
+    const watched = new Set<string>(watchDirs(root));
     const trigger = (): void => {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => scan(root, { quiet: true }), 300);
+      timer = setTimeout(() => {
+        scan(root, { quiet: true });
+        for (const d of watchDirs(root)) {
+          if (!watched.has(d)) {
+            watched.add(d);
+            watch(d, { persistent: true }, trigger);
+          }
+        }
+      }, 300);
     };
-    for (const d of watchDirs(root)) watch(d, { persistent: true }, trigger);
-    for (const f of ["README.md", ".git/index"]) {
+    for (const d of watched) watch(d, { persistent: true }, trigger);
+    for (const f of ["README.md", ".git", join(".git", "index"), join(".git", "refs", "heads")]) {
       const full = join(root, f);
       if (existsSync(full)) watch(full, { persistent: true }, trigger);
     }
-    console.log(`docs-watch: watching ${watchDirs(root).length} dirs + git index; Ctrl-C to stop`);
+    console.log(`docs-watch: watching ${watched.size} dirs + git metadata; Ctrl-C to stop`);
     return; // never resolves; the watchers keep the process alive
   }
 

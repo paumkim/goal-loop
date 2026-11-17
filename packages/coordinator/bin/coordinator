@@ -76,21 +76,47 @@ ensure_state() {
   if [ ! -f "$STATE_FILE" ]; then
     local tmp
     tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
-    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$tmp" && chmod 644 "$tmp" 2>/dev/null; mv "$tmp" "$STATE_FILE"
+    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$tmp" || {
+      rm -f "$tmp"
+      printf 'error: could not initialize %s (write failed)\n' "$STATE_FILE" >&2
+      exit 1
+    }
+    chmod 644 "$tmp" 2>/dev/null || true
+    mv "$tmp" "$STATE_FILE" || {
+      rm -f "$tmp"
+      printf 'error: could not initialize %s (rename failed)\n' "$STATE_FILE" >&2
+      exit 1
+    }
   fi
 }
 
 # Atomic state write: jq args + filter, STATE_FILE is appended here. Uses mktemp + mv in DATA_DIR.
+# Every read-modify-write of state.json is serialized on one short-lived mutex so a claim, a
+# submit or a merging lease-finish cannot overwrite another writer's lease record. Blocking flock;
+# without flock there is no exclusion (same posture as the lock-file mkdir paths).
 state_jq() {
   local tmp
   tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
-  if ! jq "$@" "$STATE_FILE" > "$tmp"; then
-    rm -f "$tmp"
-    printf 'error: failed to update coordinator state\n' >&2
+  (
+    exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 1
+    if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
+    if ! jq "$@" "$STATE_FILE" > "$tmp"; then
+      rm -f "$tmp"
+      printf 'error: failed to update coordinator state\n' >&2
+      exit 1
+    fi
+    chmod 644 "$tmp" 2>/dev/null || true
+    mv "$tmp" "$STATE_FILE" || {
+      rm -f "$tmp"
+      printf 'error: failed to move coordinator state into place\n' >&2
+      exit 1
+    }
+  )
+  local rc=$?
+  if [ "$rc" -ne 0 ]; then
     exit 1
   fi
-  chmod 644 "$tmp" 2>/dev/null || true
-  mv "$tmp" "$STATE_FILE"
+  return 0
 }
 
 slugify() {
@@ -130,7 +156,7 @@ trim() {
 # A scope's trailing "/**" or "/*" is stripped before comparing.
 path_in_scopes() {
   local f="$1" raw s
-  local IFS=','
+  local IFS=$', \t\n'
   read -ra scopes <<<"$2"
   for raw in "${scopes[@]}"; do
     s=$(trim "$raw")
@@ -265,10 +291,10 @@ check_overlap() {
     local -a n_arr o_arr raw
     local p q tok
     n_arr=()
-    IFS=',' read -r -a raw <<<"$new_paths"
+    IFS=$', \t\n' read -r -a raw <<<"$new_paths"
     for tok in "${raw[@]}"; do tok="$(trim "$tok")"; [ -n "$tok" ] && n_arr+=("$tok"); done
     o_arr=()
-    IFS=',' read -r -a raw <<<"$other_paths"
+    IFS=$', \t\n' read -r -a raw <<<"$other_paths"
     for tok in "${raw[@]}"; do tok="$(trim "$tok")"; [ -n "$tok" ] && o_arr+=("$tok"); done
     for p in "${n_arr[@]}"; do
       for q in "${o_arr[@]}"; do
@@ -314,6 +340,17 @@ do_claim() {
         if [ -z "$task" ]; then task="$1"; else task="$task $1"; fi; shift ;;
     esac
   done
+  # canonicalize the scope list: accept comma- and/or whitespace-separated input and store
+  # comma-joined. Paths in this repo never contain spaces; a space in --paths used to
+  # silently become one bogus scope token, disabling the overlap check for it.
+  if [ -n "$paths" ]; then
+    local -a _ptoks=() _out_paths=()
+    local _p
+    IFS=$', \t\n' read -r -a _ptoks <<<"$paths"
+    for _p in "${_ptoks[@]}"; do [ -n "$_p" ] && _out_paths+=("$_p"); done
+    paths=$(IFS=','; printf '%s' "${_out_paths[*]}")
+  fi
+
   if [ -z "$task" ]; then
     printf 'usage: coordinator claim <task> --agent <you> --paths <scope> [--force]\n' >&2
     exit 1
@@ -350,7 +387,15 @@ do_claim() {
   if ! mkdir "$claim_lock_dir" 2>/dev/null; then
     if [ -d "$claim_lock_dir" ] && [ -n "$(find "$claim_lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
       printf 'warning: removing stale claim lock\n' >&2
-      rmdir "$claim_lock_dir" 2>/dev/null || rm -rf "$claim_lock_dir"
+      # mv is atomic: exactly one contender renames the stale dir aside; the rest fail and exit,
+      # so a stale-reclaim can never delete the dir another process just created for itself.
+      if mv "$claim_lock_dir" "${claim_lock_dir}.stale.$$" 2>/dev/null; then
+        rm -rf "${claim_lock_dir}.stale.$$"
+      else
+        printf 'error: claim lock held\n' >&2
+        exec 9>&- 2>/dev/null || true
+        exit 1
+      fi
       if ! mkdir "$claim_lock_dir" 2>/dev/null; then
         printf 'error: claim lock held\n' >&2
         exec 9>&- 2>/dev/null || true
@@ -482,7 +527,10 @@ do_submit() {
   # Enforce the lease's claimed paths against the commits on this branch.
   # Base: merge-base with the dev branch (fallback: repo root commit).
   local base
-  base=$(git merge-base "$DEV_BRANCH" HEAD 2>/dev/null || git rev-list --max-parents=0 HEAD 2>/dev/null || printf '')
+  base=$(git merge-base "$DEV_BRANCH" HEAD 2>/dev/null | head -n1 || true)
+  if [ -z "$base" ]; then
+    base=$(git rev-list --max-parents=0 HEAD 2>/dev/null | head -n1 || true)
+  fi
   local files f violations=()
   if [ -n "$base" ]; then
     files=$(git diff --name-only "$base"...HEAD 2>/dev/null || true)
@@ -533,10 +581,21 @@ do_submit() {
 STATE_STASH=""
 restore_state_stash() {
   if [ -n "$STATE_STASH" ] && [ -f "$STATE_STASH" ]; then
-    cp "$STATE_STASH" "$STATE_FILE" 2>/dev/null || true
-    rm -f "$STATE_STASH"
+    # cp and the write are serialized on the state mutex with every other writer: restoring the
+    # pre-merge live copy must never land on top of a claim/submit that wrote in between.
+    if (
+      exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 1
+      if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
+      cp "$STATE_STASH" "$STATE_FILE"
+    ); then
+      rm -f "$STATE_STASH"
+    else
+      printf 'error: could not restore %s over %s; the stashed live state is kept at %s\n' "$STATE_STASH" "$STATE_FILE" "$STATE_STASH" >&2
+      return 1
+    fi
   fi
   STATE_STASH=""
+  return 0
 }
 
 # Verify the main checkout is on dev and tracked-clean (exempt: the coordinator's
@@ -615,7 +674,27 @@ do_merge_next() {
       holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'slug=? (no holder was recorded)')
       reclaimed_age=$(( ( $(now_epoch) - $(stat -c %Y "$lock_dir" 2>/dev/null || printf '0') ) / 60 ))
       printf 'warning: reclaiming stale merge lock; it held: %s (lock dir age %s min)\n' "${holder%$'\n'}" "$reclaimed_age" >&2
-      rmdir "$lock_dir" 2>/dev/null || rm -rf "$lock_dir"
+      # mv is atomic: exactly one contender renames the stale dir aside; the rest fail and exit.
+      if mv "$lock_dir" "${lock_dir}.stale.$$" 2>/dev/null; then
+        rm -rf "${lock_dir}.stale.$$"
+      else
+        printf 'error: merge lock held\n' >&2
+        exec 9>&- 2>/dev/null || true
+        exit 1
+      fi
+      # the stale holder died without releasing: clear its mergeLock so `doctor` stops failing forever
+      # (best-effort; never fail the reclaim over bookkeeping)
+      (
+        exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+        if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
+        _ml_tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null) || exit 0
+        if jq '.mergeLock = null' "$STATE_FILE" > "$_ml_tmp" 2>/dev/null; then
+          chmod 644 "$_ml_tmp" 2>/dev/null || true
+          mv "$_ml_tmp" "$STATE_FILE"
+        else
+          rm -f "$_ml_tmp"
+        fi
+      ) || true
       if ! mkdir "$lock_dir" 2>/dev/null; then
         printf 'error: merge lock held\n' >&2
         exec 9>&- 2>/dev/null || true
@@ -645,16 +724,18 @@ do_merge_next() {
   release_merge_lock() {
     restore_state_stash
     if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
-      local _tmp
-      _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null || mktemp) || true
-      if [ -n "${_tmp:-}" ]; then
+      (
+        exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+        if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
+        local _tmp
+        _tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null) || exit 0
         if jq '.mergeLock = null' "$STATE_FILE" > "$_tmp" 2>/dev/null; then
           chmod 644 "$_tmp" 2>/dev/null || true
           mv "$_tmp" "$STATE_FILE"
         else
           rm -f "$_tmp"
         fi
-      fi
+      )
     fi
     rm -f "$lock_file" 2>/dev/null || true
     rm -f "$lock_dir/holder" 2>/dev/null || true
@@ -662,6 +743,7 @@ do_merge_next() {
     if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
     exec 9>&- 2>/dev/null || true
     trap - EXIT
+    return 0
   }
   # fail(): leave dev untouched, clean up the scratch machinery, print recovery. $1=message, $2=recovery hint (optional)
   fail() {
@@ -677,18 +759,22 @@ do_merge_next() {
     exit 1
   }
   trap 'release_merge_lock' EXIT
+  trap 'release_merge_lock; exit 143' TERM
+  trap 'release_merge_lock; exit 130' INT
+  trap 'release_merge_lock; exit 129' HUP
   # record lock owner in state (atomic): object form, with the scratch branch it pinned
   state_jq --arg s "$slug" --arg b "$branch" --arg scratch "$scratch" --arg pid "$$" --arg ts "$started_iso" \
     '.mergeLock = {slug: $s, branch: $b, scratch: $scratch, pid: ($pid|tonumber), startedAt: $ts}'
 
   # Prune scratch branches from interrupted merges only once they are definitively stale (last commit
-  # older than the 60-minute stale-lock window). A fresher scratch may hold a verified-green merged
-  # result whose merge was interrupted; deleting it would discard that state, so keep it for recovery.
+  # older than the 60-minute stale-lock window) AND fully contained in dev — i.e. there is nothing
+  # left to recover. A scratch not on dev may hold a verified-green merged result whose merge was
+  # interrupted; deleting it would discard the advertised recovery path, so keep it.
   local _scratch _ts_now _ts_branch
   _ts_now=$(now_epoch)
   for _scratch in $(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list 'merge-check-*'); do
     _ts_branch=$(git -C "$MAIN_ROOT" log -1 --format=%ct "$_scratch" 2>/dev/null || printf '0')
-    if [ $((_ts_now - _ts_branch)) -gt 3600 ]; then
+    if [ $((_ts_now - _ts_branch)) -gt 3600 ] && git -C "$MAIN_ROOT" merge-base --is-ancestor "$_scratch" "$DEV_BRANCH" 2>/dev/null; then
       git -C "$MAIN_ROOT" branch -D "$_scratch" >/dev/null 2>&1 || true
     fi
   done
@@ -751,8 +837,12 @@ do_merge_next() {
   if [ "${COORDINATOR_SKIP_SPEC_WRITE:-0}" != "1" ] && command -v bun >/dev/null 2>&1 && [ -f "$merge_wt/scripts/spec-check.ts" ]; then
     if (cd "$merge_wt" && bun scripts/spec-check.ts --write); then
       if ! git -C "$merge_wt" diff --quiet HEAD -- SPEC.md; then
-        git -C "$merge_wt" add SPEC.md && git -C "$merge_wt" commit -q -m "chore(spec): re-count marker on the merged tree"
-        spec_note="spec-check: SPEC.md marker re-counted and committed on $scratch"
+        if git -C "$merge_wt" add SPEC.md && git -C "$merge_wt" commit -q -m "chore(spec): re-count marker on the merged tree"; then
+          spec_note="spec-check: SPEC.md marker re-counted and committed on $scratch"
+        else
+          fail "could not commit the SPEC re-count on $scratch; dev untouched" \
+            "inspect the merge worktree $merge_wt (git status), fix the cause, then re-run coordinator merge-next"
+        fi
       else
         spec_note="spec-check: SPEC.md marker already accurate on the merged tree"
       fi
@@ -768,11 +858,17 @@ do_merge_next() {
   # The changelog is pipeline-owned too: regenerate it (and page stamps) on the merged tree and
   # commit the result on the scratch branch, so parallel agents never race docs/changelog.html.
   if [ "${COORDINATOR_SKIP_DOCS_WATCH:-0}" != "1" ] && command -v bun >/dev/null 2>&1 && [ -f "$merge_wt/scripts/docs-watch.ts" ]; then
+    local local_docs_out local_docs_rc
     local_docs_out=$(cd "$merge_wt" && bun scripts/docs-watch.ts once 2>&1)
-    if [ $? -eq 0 ]; then
+    local_docs_rc=$?
+    if [ "$local_docs_rc" -eq 0 ]; then
       if ! git -C "$merge_wt" diff --quiet -- docs/; then
-        git -C "$merge_wt" add docs/ && git -C "$merge_wt" commit -q -m "docs: refresh changelog and stamps on the merged tree"
-        printf 'docs: changelog and page stamps refreshed on %s\n' "$scratch"
+        if git -C "$merge_wt" add docs/ && git -C "$merge_wt" commit -q -m "docs: refresh changelog and stamps on the merged tree"; then
+          printf 'docs: changelog and page stamps refreshed on %s\n' "$scratch"
+        else
+          fail "could not commit the docs refresh on $scratch; dev untouched" \
+            "inspect the merge worktree $merge_wt (git status), fix the cause, then re-run coordinator merge-next"
+        fi
       else
         printf 'docs: changelog and stamps already accurate on the merged tree\n'
       fi
@@ -786,7 +882,9 @@ do_merge_next() {
   # Preflight: say, BEFORE the gate runs, what this merge touches and which in-flight leases it invalidates.
   local touched others other ostatus overlap_found=0
   touched=$(git -C "$MAIN_ROOT" diff --name-only "$DEV_BRANCH"..."$scratch" 2>/dev/null || true)
-  printf 'preflight: merge touches %s file(s)\n' "$(printf '%s\n' "$touched" | grep -c . || printf '0')"
+  local touched_count
+  touched_count=$(printf '%s' "$touched" | grep -c . || true)
+  printf 'preflight: merge touches %s file(s)\n' "${touched_count:-0}"
   printf '%s\n' "$touched" | sed 's/^/  /'
   others=$(jq -r '.leases | to_entries | map(select(.value.status != "done")) | .[].key' "$STATE_FILE" 2>/dev/null || true)
   for other in $others; do
@@ -888,22 +986,32 @@ finish_merged_lease() {
   # auto-commit revert an entry the merge just landed. mergeLock is forced to null (the merge is closing).
   # This chore commit is part of the merge flow (the only path to dev), not a direct dev commit by an agent.
   if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
-    _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
-    _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
-    if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null \
-      && jq -n --slurpfile head "$_head_tmp" --slurpfile live "$STATE_FILE" \
-        '$head[0] + { version: ($live[0].version // 1), leases: (($head[0].leases // {}) * ($live[0].leases // {})), mergeLock: null }' \
-        > "$_union_tmp" 2>/dev/null; then
-      cp "$_union_tmp" "$STATE_FILE"
-    fi
-    rm -f "$_head_tmp" "$_union_tmp"
+    (
+      exec 8<>"$DATA_DIR/.state-lock-file" 2>/dev/null || exit 0
+      if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
+      _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
+      _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
+      if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null \
+        && jq -n --slurpfile head "$_head_tmp" --slurpfile live "$STATE_FILE" \
+          '$head[0] * $live[0] * { version: ($live[0].version // $head[0].version // 1), leases: (($head[0].leases // {}) * ($live[0].leases // {})), mergeLock: null }' \
+          > "$_union_tmp" 2>/dev/null; then
+        cp "$_union_tmp" "$STATE_FILE"
+      fi
+      rm -f "$_head_tmp" "$_union_tmp"
+    )
   fi
-  if git -C "$MAIN_ROOT" add -- .term/coordinator/state.json >/dev/null 2>&1; then
+  # The bookkeeping commit must land on DEV_BRANCH only; on any other checkout the union stays as
+  # exempt dirt instead of committing to the wrong branch.
+  local cur_main
+  cur_main=$(git -C "$MAIN_ROOT" branch --show-current 2>/dev/null || printf '')
+  if [ "$cur_main" = "$DEV_BRANCH" ] && git -C "$MAIN_ROOT" add -- .term/coordinator/state.json >/dev/null 2>&1; then
     if ! git -C "$MAIN_ROOT" diff --cached --quiet -- .term/coordinator/state.json; then
       if ! git -C "$MAIN_ROOT" commit -q -m "chore(coordinator): record ${slug} lease done after merge" >/dev/null 2>&1; then
         printf 'warning: could not commit .term/coordinator/state.json bookkeeping; it remains as exempt dirt\n' >&2
       fi
     fi
+  elif [ "$cur_main" != "$DEV_BRANCH" ]; then
+    printf 'warning: main checkout is on %s, expected %s; state.json bookkeeping left as exempt dirt (not committed)\n' "${cur_main:-<detached>}" "$DEV_BRANCH" >&2
   fi
 }
 
@@ -925,14 +1033,23 @@ do_merge_done() {
     exit 1
   fi
   local branch="wt/$slug"
-  local scratch
-  scratch=$(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list "merge-check-${slug}-*" | head -1)
-  if [ -n "$scratch" ]; then
-    if ! git -C "$MAIN_ROOT" merge-base --is-ancestor "$scratch" "$DEV_BRANCH" 2>/dev/null; then
-      printf 'error: scratch branch %s is not contained in %s; fast-forward dev first (git -C %s merge --ff-only %s)\n' "$scratch" "$DEV_BRANCH" "$MAIN_ROOT" "$scratch" >&2
-      exit 1
+  local scratch match=""
+  local list
+  list=$(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list "merge-check-${slug}-*")
+  # accept ANY scratch that turned out to be an ancestor of dev (dev may have been fast-forwarded
+  # onto the newest one), not just the alphabetically-oldest leftover
+  for scratch in $list; do
+    if git -C "$MAIN_ROOT" merge-base --is-ancestor "$scratch" "$DEV_BRANCH" 2>/dev/null; then
+      match="$scratch"
+      break
     fi
-    git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
+  done
+  if [ -n "$match" ]; then
+    git -C "$MAIN_ROOT" branch -D "$match" >/dev/null 2>&1 || true
+  elif [ -n "$list" ]; then
+    printf 'error: no merge-check scratch for %s is contained in %s (found: %s)\n' "$slug" "$DEV_BRANCH" "$(printf '%s' "$list" | tr '\n' ' ')" >&2
+    printf 'recovery: git -C %s merge --ff-only <scratch>   (pick one of: %s)\n' "$MAIN_ROOT" "$(printf '%s' "$list" | tr '\n' ' ')" >&2
+    exit 1
   fi
   finish_merged_lease "$slug" "$branch"
   printf 'merged into %s\n' "$DEV_BRANCH"
