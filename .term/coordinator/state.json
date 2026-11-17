@@ -2733,6 +2733,23 @@
       "submittedAt": "2026-11-17T20:32:13Z",
       "mergedAt": "2026-11-17T20:33:34Z",
       "mergedInto": "dev"
+    },
+    "docs-line-refs-reanchor": {
+      "agent": "orchestrator",
+      "paths": "docs",
+      "branch": "wt/docs-line-refs-reanchor",
+      "worktree": "worktrees/wt-docs-line-refs-reanchor",
+      "status": "done",
+      "createdAt": "2026-11-17T20:35:46Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T20:42:02Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "test/docs-line-refs.test.ts"
+      ],
+      "submittedAt": "2026-11-17T20:42:02Z",
+      "mergedAt": "2026-11-17T20:43:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
