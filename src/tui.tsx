@@ -920,12 +920,6 @@ export default Plugin.define({
           const g = showing()
           return g && getHudSession() === props.sessionID ? g : undefined
         }
-        // Same truthy-value contract as cardFor, gated on the mount width being known: the first paint
-        // after arming waits one layout pass rather than overflowing at the terminal's width.
-        const cardReady = () => {
-          const g = cardFor()
-          return g !== undefined && (mountWidth() ?? 0) > 0 ? g : undefined
-        }
         // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
         // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
         const maxCardRows = () => Math.max(8, dimensions().height - 2)
@@ -969,7 +963,7 @@ export default Plugin.define({
                 {pillText()}
               </text>
             </box>
-            <Show when={cardReady()}>
+            <Show when={cardFor()}>
               {(g) => (
                 <box
                   position="absolute"
@@ -979,7 +973,10 @@ export default Plugin.define({
                   height={cardRows()}
                   zIndex={10}
                   ref={(el) => {
-                    // Snap the mount's own width on every layout pass (sidebar toggle, terminal resize).
+                    // This box is the mount's width probe: left=0 right=0 resolves to exactly the
+                    // mount, so snapshot it at creation and snap it on every layout pass (sidebar
+                    // toggle, terminal resize). It must NOT sit behind the width-dependent gate —
+                    // mounting it is what sets the width.
                     el.onSizeChange = () => {
                       const w = el.width
                       if (w > 0) setMountWidth(w)
@@ -988,6 +985,9 @@ export default Plugin.define({
                     if (w > 0) setMountWidth(w)
                   }}
                 >
+                  {/* The card itself waits for the mount's own width: painting at the terminal's
+                      width while the composer sits beside the sidebar is the bug this fixes. */}
+                  <Show when={mountWidth() !== undefined}>
                   <HudCard
                     goal={g()}
                     width={mountWidthOr()}
@@ -1014,6 +1014,7 @@ export default Plugin.define({
                     pinned={pinnedNow()}
                     onTogglePin={() => togglePin(props.sessionID)}
                   />
+                  </Show>
                 </box>
               )}
             </Show>
