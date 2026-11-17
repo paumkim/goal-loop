@@ -2652,6 +2652,17 @@
       "submittedAt": "2026-11-17T15:14:57Z",
       "mergedAt": "2026-11-17T15:16:14Z",
       "mergedInto": "dev"
+    },
+    "dmts-export-pin": {
+      "agent": "orchestrator",
+      "paths": "test/cli-installer.test.ts,SPEC.md",
+      "branch": "wt/dmts-export-pin",
+      "worktree": "worktrees/wt-dmts-export-pin",
+      "status": "done",
+      "createdAt": "2026-11-17T15:22:50Z",
+      "submittedAt": "2026-11-17T15:25:13Z",
+      "mergedAt": "2026-11-17T15:26:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
