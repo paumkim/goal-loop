@@ -35,7 +35,8 @@ import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEn
 import { preserveContextSize, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
-import { parseChangedEvent, parseGetGoalOutput, parseListGoalOutput, parseNotice } from "./core/wire.ts"
+import { parseChangedEvent, parseListGoalOutput, parseNotice } from "./core/wire.ts"
+import { makeGoalRefresh } from "./core/repull.ts"
 
 type Entry = GoalSnapshotCacheEntry
 
@@ -234,8 +235,21 @@ export default Plugin.define({
 
     /** RPC calls are routed to the plugin instance of the session's location. */
     const at = (sessionID: string) => {
-      const location = context.data.session.get(sessionID)?.location ?? context.location
-      return location ? { location } : undefined
+      try {
+        const location = context.data.session.get(sessionID)?.location ?? context.location
+        return location ? { location } : undefined
+      } catch {
+        // The host's session lookup is the one unguarded call on the refresh path. A throw here must not
+        // escape `refresh` at call time: the stale-chrome guard in the tick re-pulls through `refresh`
+        // and a synchronous throw would break the for-loop before `.catch` is ever reached, stranding the
+        // "goal checking" pill forever. Fall back to the plugin's own location, then to none (the RPC
+        // routes to the default location).
+        try {
+          return context.location ? { location: context.location } : undefined
+        } catch {
+          return undefined
+        }
+      }
     }
 
     /**
@@ -316,14 +330,19 @@ export default Plugin.define({
       })
     }
 
-    /** Pull a fresh snapshot from the server and cache it. Resolves false when the payload is malformed — the caller treats it exactly like a rejection (stale chrome must never pass as fresh). */
-    const refresh = (sessionID: string): Promise<boolean> =>
-      rpc.get({ sessionID }, at(sessionID)).then((result) => {
-        const output = parseGetGoalOutput(result)
-        if (!output) return false
-        put(sessionID, output.goal)
-        return true
-      })
+    /**
+     * Pull a fresh snapshot from the server and cache it. Never throws synchronously: every failure mode —
+     * the host lookup in `at()` (guarded above), the RPC rejection, an unparseable payload — folds into the
+     * promise, so a caller's `.catch(() => {})` — the stale-chrome guard in the tick — is the real boundary.
+     * A synchronous escape used to break the guard's re-pull for-loop at the first affected session and
+     * silently strand the ambient pill on "goal checking" forever (the 2026-11-16 23:35 live session).
+     * Resolves false when the payload is malformed — the caller treats it exactly like a rejection (stale
+     * chrome must never pass as fresh), and the next tick retries.
+     */
+    const refresh = makeGoalRefresh({
+      get: (sessionID) => rpc.get({ sessionID }, at(sessionID)),
+      put: (sessionID, goal) => put(sessionID, goal),
+    })
 
     const put = (sessionID: string, goal: GoalSnapshot | null) => {
       // Completion-moment detection runs before the entries update: a live→terminal transition

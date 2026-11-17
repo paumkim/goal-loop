@@ -8,6 +8,9 @@ import {
   parseGoalSnapshot,
   parseNotice,
 } from "../src/core/wire.ts"
+import { isLive } from "../src/core/types.ts"
+import { preserveContextSize, pruneSnapshotEntries } from "../src/core/entries.ts"
+import { staleLiveSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 
 const snapshot = (): GoalSnapshot => ({
   version: 1,
@@ -193,6 +196,62 @@ describe("parseChangedEvent", () => {
     expect(parseChangedEvent({ sessionID: "ses_a", goal: { version: 1 } })).toBeUndefined()
     expect(parseChangedEvent({ sessionID: "ses_a", goal: "active" })).toBeUndefined()
     expect(parseChangedEvent({ sessionID: "ses_a", goal: 0 })).toBeUndefined()
+  })
+})
+
+describe("the dropped `changed` event and the terminal re-pull (EU)", () => {
+  /** The snapshot the server emits at finish: status flipped to achieved, evaluating cleared, endedAt set, final spend folded in. */
+  const achievedSnapshot = (): GoalSnapshot => ({
+    ...snapshot(),
+    status: "achieved",
+    reason: "the condition is met",
+    endedAt: 61_000,
+    turns: 1,
+    elapsedMs: 60_000,
+    evaluating: false,
+    waiting: false,
+    final: { cost: 0.75, input: 15, output: 25, reasoning: 5, cacheRead: 1, cacheWrite: 2 },
+  })
+  /** The snapshot the TUI caches at the moment the evaluator STARTS: still active, evaluating — the screenshot's strand. */
+  const checkingSnapshot = (): GoalSnapshot => ({ ...snapshot(), evaluating: true })
+  test("the terminal payload the server emits at finish parses — a lost event, not a malformed one, is what stranded the pill", () => {
+    const event = parseChangedEvent({ sessionID: "ses_test", goal: achievedSnapshot() })
+    expect(event?.goal?.status).toBe("achieved")
+    expect(event?.goal && isLive(event.goal.status)).toBe(false)
+  })
+
+  test("the stale guard's re-pull converges the cache: pre-terminal entry replaced, live predicate disarmed", () => {
+    const parsed = parseGetGoalOutput({ goal: achievedSnapshot() })
+    expect(parsed).toBeDefined()
+    const merged = preserveContextSize(checkingSnapshot(), parsed!.goal)
+    const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
+    expect(merged && isLive(merged.status)).toBe(false)
+    expect(entries["ses_test"]?.goal?.status).toBe("achieved")
+    expect(staleLiveSessionIDs(entries, 2_000_000)).toEqual([])
+  })
+
+  test("the intake's live→terminal transition fires on a re-pulled terminal snapshot (ack pill arms, live chrome disarms)", () => {
+    const previous = checkingSnapshot()
+    const merged = preserveContextSize(previous, achievedSnapshot())
+    expect(isLive(previous.status)).toBe(true)
+    expect(merged && !isLive(merged.status) && merged.status !== "cleared").toBe(true)
+  })
+
+  test("a malformed terminal payload is dropped whole — and the stale predicate keeps flagging the session for the next tick", () => {
+    const broken = { ...achievedSnapshot(), turns: Number.NaN }
+    expect(parseChangedEvent({ sessionID: "ses_test", goal: broken })).toBeUndefined()
+    const entries = { ses_test: { goal: checkingSnapshot(), receivedAt: 1_000 } }
+    expect(staleLiveSessionIDs(entries, 1_000 + STALE_LIVE_ENTRY_MS)).toEqual(["ses_test"])
+  })
+
+  test("a null re-pull (the server cleared the goal) drops the entry and the stale predicate empties", () => {
+    const parsed = parseGetGoalOutput({ goal: null })
+    expect(parsed).toEqual({ goal: null })
+    const merged = preserveContextSize(checkingSnapshot(), parsed!.goal)
+    expect(merged).toBeNull()
+    const entries = pruneSnapshotEntries({ ses_test: { goal: merged, receivedAt: 2_000_000 } }, undefined)
+    expect(entries["ses_test"]).toBeUndefined()
+    expect(staleLiveSessionIDs(entries, 2_000_000)).toEqual([])
   })
 })
 

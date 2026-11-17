@@ -457,7 +457,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1341 -->
+<!-- spec-check files=60 tests=1354 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5996,3 +5996,61 @@ removed; no tests added or deleted; no `@ts-ignore` anywhere.
      mislabel remains under the stale github-single-channel lease — untouched here.
      Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below.
 <!-- spec-check files=59 tests=1341 -->
+## Workstream EU — the stale guard can no longer be defeated at its own refresh boundary (2026-11-16)
+
+Interpretation of the armed condition: the EL workstream (2026-11-16, c326baf) added the 30s stale-live
+re-pull so a dropped `changed` event cannot strand the jump row on `goal checking · Nm`. The 2026-11-16
+23:35 live session showed the strand again, one minute after the merge: the transcript carried the terminal
+note `◎ Goal achieved (turn 1, 30s).` while the pill below it kept painting `◎ goal checking · 1m` and
+counting. Root cause, with evidence:
+
+1. The TUI that painted the screenshot started at ~23:30:54 (the top bar read `4m 41s` at capture,
+   23:35:35); the EL fix was committed at 23:31:21 and merged to dev at 23:34:18, and TUI plugins load
+   `dist/tui.js` at process start — this process ran the PRE-GUARD code, where the fifteen-second tick only
+   advanced the minute hand (`setNow`) for active goals and never re-pulled anything. The pill extrapolated
+   `elapsedMs` off the cached snapshot emitted at evaluator start (`status: "active"`, `evaluating: true` —
+   the source of the word "checking") forever.
+2. The EL guard's convergence depends on `void refresh(sessionID).catch(() => {})` being the real boundary —
+   but pre-fix `refresh` was an arrow whose body evaluated `rpc.get({ sessionID }, at(sessionID))` at CALL
+   time. `at()` performs the one unguarded host lookup on the path (`context.data.session.get(sessionID)`);
+   a synchronous host throw escaped `refresh` before `.catch` was ever reached, broke the tick's re-pull
+   `for`-loop at the first affected session, and re-stranded the pill — invisibly, every tick. On EL code
+   this was a latent strand class exactly where the screenshot showed one.
+3. The achievement note (`note()` → `session.synthetic`) is a different stream than `changed`
+   (`snapshot()` on the record); the note's presence in the transcript proves nothing about the entries
+   cache — the cache is only written by `put`, which is fed by `changed` events and `refresh`.
+
+617. src/core/repull.ts (new) — `makeGoalRefresh(deps)`: the re-pull, extracted pure. The returned function
+     is async by construction and never throws synchronously; an RPC rejection, an unparseable payload
+     (resolves false, entry kept, next tick retries), a host-lookup throw and a `put` failure all surface
+     inside the promise. tui.tsx wires `get: (sessionID) => rpc.get(...)` / `put` through it.
+618. src/tui.tsx — `at()` is now total: the host session lookup is try-wrapped with a fall-through to the
+     plugin's own `context.location` (and to no options at all); every other host call on the refresh path
+     was already guarded. `refresh` is `makeGoalRefresh({...})` — the tick keeps its `.catch(() => {})`,
+     which is now the real boundary rather than a promise that might never get there.
+619. Tests: +13 — test/repull.test.ts (+7: call-time throw never escapes, RPC rejection folds into the
+     promise, malformed payload resolves false and never reaches put, terminal re-pull feeds the intake,
+     explicit null reaches put, live re-pull passes through, put-side throw surfaces in the promise),
+     test/wire.test.ts (+5, the EU-dropped-changed chain: the finish-time terminal payload parses; the
+     re-pull converges the cache and disarms the live predicate; the intake live→terminal transition fires;
+     a malformed terminal payload is dropped whole and the stale predicate keeps flagging for the next
+     tick; a null re-pull drops the entry and empties the predicate), test/tui-hud.test.tsx (+1: the
+     screenshot shape — active with `evaluating: true` and ancient `receivedAt` is flagged; its achieved
+     replacement is not). The repull regression pin was verified to FAIL before the fix (the pre-fix
+     synchronous shape makes `a call-time (synchronous) throw …` red) and PASS after.
+620. Counts: `npm pack --dry-run --json` = 60 files (src/core/repull.ts ships; package-integrity test
+     re-pinned 59 → 60). `bun test` from inside `test/` (the gate's cwd — test/bunfig.toml preloads the
+     @opentui/solid server→client mapping, which is why ET could claim green) reports 1354 pass / 0 fail
+     across 56 files — 1341 + 13 new, all green. The 245 failures seen when `bun test` is run from the
+     repository root (1096 pass / 245 fail at dev HEAD → 1109 pass / 245 fail with this workstream) are the
+     same pre-existing environment artifact: without the test/-scoped preload, solid-js resolves its server
+     build and the render tests throw "Orphan text"; they are unrelated to this workstream and were
+     explicitly not chased. Marker re-counted 60/1354 (first marker in this file, the one spec-check reads).
+621. Honest limits: the fix makes the re-pull boundary total and unit-pins it; it cannot resurrect a
+     `changed` event the server failed to emit or the bus dropped (it re-pulls instead — bounded by the 15s
+     tick plus one RPC round-trip, exactly as EL documented); a server that answers with a still-live
+     snapshot keeps the pill (it IS live); a `put` that throws is surfaced to the tick's catch, not retried
+     within the tick; the pre-fix process had to restart for ANY of this to load (plugins load `dist/tui.js`
+     at process start) — this session itself still paints from pre-merge code until the TUI restarts.
+
+<!-- spec-check files=60 tests=1354 -->

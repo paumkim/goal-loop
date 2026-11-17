@@ -1428,4 +1428,10 @@ describe("staleLiveSessionIDs", () => {
     expect(staleLiveSessionIDs(entries, now, 4000)).toEqual(["ses_1"])
     expect(staleLiveSessionIDs(entries, now, 10_000)).toEqual([])
   })
+  test("the 2026-11-16 23:35 screenshot shape — active with evaluating: true and an ancient receivedAt — is re-pulled; its achieved replacement is not", () => {
+    const checking = { goal: loopedGoal({ evaluating: true }), receivedAt: now - STALE_LIVE_ENTRY_MS * 10 }
+    const achieved = { goal: loopedGoal({ status: "achieved", evaluating: false, endedAt: now - 30_000 }), receivedAt: now }
+    expect(staleLiveSessionIDs({ ses_check: checking }, now)).toEqual(["ses_check"])
+    expect(staleLiveSessionIDs({ ses_check: achieved }, now)).toEqual([])
+  })
 })
