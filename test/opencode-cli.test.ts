@@ -36,7 +36,7 @@ describe("opencodeCliGuide", () => {
   test("pins the operational invariants agents need", () => {
     // How to learn what is installed; never touch the installed harness.
     expect(guide).toContain("opencode --version")
-    expect(guide).toContain("~/Projects/opencode-v2-fake")
+    expect(guide).toContain("~/Projects/opencode")
     expect(guide).toContain("Never rebuild or replace the installed binary")
     // The stable extension surface for TUI UI.
     expect(guide).toContain("node_modules/@opencode/plugin/dist/tui/context.d.ts")
