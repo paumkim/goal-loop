@@ -4,43 +4,42 @@
  * drag the thumb, click the track to page, wheel scrolls as before — this suite pins the two
  * things we own: which tones the two cells paint, and that the drag/jump grammar actually
  * moves the viewport through the real opentui event pipeline (mockMouse, real coordinates).
- * Requires the solid preload (test/bunfig.toml).
+ *
+ * Every render here wires the nested host theme through `scrollbarTrackOptions` — the exact
+ * path and palette shape `tui.tsx` feeds the host's scrollbox — never a flat RGBA background,
+ * which the pre-EN host crashed on. Requires the solid preload (test/bunfig.toml).
  */
 import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA, type ScrollBoxRenderable } from "@opentui/core"
-import { scrollbarChrome, scrollbarTrackOptions, type HostScrollbarTheme, type ScrollbarTheme } from "../src/core/scrollbar.ts"
+import { scrollbarTrackOptions, type HostScrollbarTheme } from "../src/core/scrollbar.ts"
 
-const theme: ScrollbarTheme<RGBA> = {
-  text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
-    feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-    },
-  },
-  background: RGBA.fromHex("#101010"),
+/** The host's real palette shape: a nested `background.raised.high`, not a flat color. */
+const hostTheme: HostScrollbarTheme<RGBA> = {
+  text: { base: RGBA.fromHex("#e8e8e8"), muted: RGBA.fromHex("#a0a0a0") },
+  background: { raised: { high: RGBA.fromHex("#1c1c1c") } },
 }
 
-describe("scrollbarChrome (the tones the bar paints)", () => {
-  test("color arm: invisible track (the theme background), muted thumb — quiet chrome, never a hue", () => {
-    const chrome = scrollbarChrome(theme, false)
-    expect(chrome.backgroundColor.equals(theme.background)).toBe(true)
-    expect(chrome.foregroundColor.equals(theme.text.muted)).toBe(true)
+/** What a flat-background wiring would paint — the pre-EN seam failure, kept as a negative control. */
+const flatBackground = RGBA.fromHex("#101010")
+
+describe("scrollbarTrackOptions (the tones the bar paints)", () => {
+  test("color arm: raised-token track, muted thumb — quiet chrome, never a hue", () => {
+    const chrome = scrollbarTrackOptions(hostTheme, false)
+    expect(chrome.backgroundColor?.equals(hostTheme.background!.raised!.high!)).toBe(true)
+    expect(chrome.foregroundColor.equals(hostTheme.text.muted)).toBe(true)
   })
 
-  test("mono arm (NO_COLOR): track stays invisible, thumb reaches for the brightest tone the palette has", () => {
-    const chrome = scrollbarChrome(theme, true)
-    expect(chrome.backgroundColor.equals(theme.background)).toBe(true)
-    expect(chrome.foregroundColor.equals(theme.text.base)).toBe(true)
+  test("mono arm (NO_COLOR): track stays the raised token, thumb reaches for the brightest tone the palette has", () => {
+    const chrome = scrollbarTrackOptions(hostTheme, true)
+    expect(chrome.backgroundColor?.equals(hostTheme.background!.raised!.high!)).toBe(true)
+    expect(chrome.foregroundColor.equals(hostTheme.text.base)).toBe(true)
   })
 
   test("the two arms differ only in thumb tone — the mono contract drops hue, never contrast", () => {
-    const color = scrollbarChrome(theme, false)
-    const mono = scrollbarChrome(theme, true)
-    expect(color.backgroundColor.equals(mono.backgroundColor)).toBe(true)
+    const color = scrollbarTrackOptions(hostTheme, false)
+    const mono = scrollbarTrackOptions(hostTheme, true)
+    expect(color.backgroundColor?.equals(mono.backgroundColor!)).toBe(true)
     expect(color.foregroundColor.equals(mono.foregroundColor)).toBe(false)
   })
 })
@@ -65,11 +64,11 @@ const collectColumn = (
 
 const RAIL = Array.from({ length: 60 }, (_, i) => `rail row ${String(i + 1).padStart(2, "0")} · verdict trail`).join("\n")
 
-describe("the dialog scrollbox, wired the way tui.tsx wires it (mechanism layer)", () => {
-  test("overflow paints the themed thumb (muted fg over background track) in the bar's last column", async () => {
+describe("the dialog scrollbox, wired the way tui.tsx wires it (nested palette)", () => {
+  test("overflow paints the raised track and the muted thumb in the bar's last column", async () => {
     let sb: ScrollBoxRenderable | undefined
     const setup = await testRender(() => (
-      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarChrome(theme, false), showArrows: false }}>
+      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, false), showArrows: false }}>
         <text wrapMode="none">{RAIL}</text>
       </scrollbox>
     ), { width: 48, height: 10 })
@@ -77,44 +76,46 @@ describe("the dialog scrollbox, wired the way tui.tsx wires it (mechanism layer)
     expect(sb).toBeDefined()
     const cells = collectColumn(setup.captureSpans(), 47, 8)
     expect(cells.length).toBe(8)
-    // the whole bar column paints the invisible track
-    for (const cell of cells) expect(cell.bg.equals(theme.background)).toBe(true)
+    // the whole bar column paints the raised token — the same surface the HUD card paints
+    for (const cell of cells) expect(cell.bg.equals(hostTheme.background!.raised!.high!)).toBe(true)
+    // and it is NOT the flat pre-EN background the host crashed on
+    expect(cells.some((cell) => cell.bg.equals(flatBackground))).toBe(false)
     // the thumb is the only cell painted with the thumb tone — and it carries a block-edge glyph
-    const thumb = cells.filter((cell) => cell.fg.equals(theme.text.muted) && cell.glyph)
+    const thumb = cells.filter((cell) => cell.fg.equals(hostTheme.text.muted) && cell.glyph)
     expect(thumb.length).toBeGreaterThan(0)
     await setup.renderer.destroy()
   })
 
   test("mono arm paints the thumb in base, never muted — weight of tone, not hue", async () => {
     const setup = await testRender(() => (
-      <scrollbox ref={(el) => { }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarChrome(theme, true), showArrows: false }}>
+      <scrollbox ref={(el) => { }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, true), showArrows: false }}>
         <text wrapMode="none">{RAIL}</text>
       </scrollbox>
     ), { width: 48, height: 10 })
     await setup.renderOnce()
     const cells = collectColumn(setup.captureSpans(), 47, 8)
-    const thumb = cells.filter((cell) => cell.fg.equals(theme.text.base) && cell.glyph)
+    const thumb = cells.filter((cell) => cell.fg.equals(hostTheme.text.base) && cell.glyph)
     expect(thumb.length).toBeGreaterThan(0)
-    expect(cells.some((cell) => cell.fg.equals(theme.text.muted) && cell.glyph)).toBe(false)
+    expect(cells.some((cell) => cell.fg.equals(hostTheme.text.muted) && cell.glyph)).toBe(false)
     await setup.renderer.destroy()
   })
 
   test("content that fits paints no bar at all — the overlay recedes completely", async () => {
     const setup = await testRender(() => (
-      <scrollbox scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarChrome(theme, false), showArrows: false }}>
+      <scrollbox scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, false), showArrows: false }}>
         <text wrapMode="none">short rail</text>
       </scrollbox>
     ), { width: 48, height: 10 })
     await setup.renderOnce()
     const cells = collectColumn(setup.captureSpans(), 47, 8)
-    expect(cells.every((cell) => !cell.bg.equals(theme.background))).toBe(true)
+    expect(cells.every((cell) => !cell.bg.equals(hostTheme.background!.raised!.high!))).toBe(true)
     await setup.renderer.destroy()
   })
 
   test("dragging the thumb down pages the viewport — the mouse-first grammar through the real event pipeline", async () => {
     let sb: ScrollBoxRenderable | undefined
     const setup = await testRender(() => (
-      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarChrome(theme, false), showArrows: false }}>
+      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, false), showArrows: false }}>
         <text wrapMode="none">{RAIL}</text>
       </scrollbox>
     ), { width: 48, height: 10 })
@@ -130,7 +131,7 @@ describe("the dialog scrollbox, wired the way tui.tsx wires it (mechanism layer)
   test("a left-click on the track below the thumb pages toward the click — not a no-op, not a full jump", async () => {
     let sb: ScrollBoxRenderable | undefined
     const setup = await testRender(() => (
-      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarChrome(theme, false), showArrows: false }}>
+      <scrollbox ref={(el) => { sb = el }} scrollX={false} height={8} width={48} contentOptions={{ minHeight: 0 }} verticalScrollbarOptions={{ trackOptions: scrollbarTrackOptions(hostTheme, false), showArrows: false }}>
         <text wrapMode="none">{RAIL}</text>
       </scrollbox>
     ), { width: 48, height: 10 })
@@ -148,14 +149,9 @@ describe("the dialog scrollbox, wired the way tui.tsx wires it (mechanism layer)
  * scrollbox with a NESTED palette (`background.raised.high`), not a flat color. Passing that
  * palette object as `trackOptions.backgroundColor` crashed the host's scrollbar-options clone at
  * dialog open ("TypeError: undefined is not an object (evaluating 'e.length')" out of the
- * options-assignment path). The fixtures above use a flat RGBA background; this block pins the
- * host shape at the seam where the two meet.
+ * options-assignment path). The fixtures above wire the nested shape everywhere; this block pins
+ * the host shape at the seam where the two meet.
  */
-const hostTheme: HostScrollbarTheme<RGBA> = {
-  text: { base: RGBA.fromHex("#e8e8e8"), muted: RGBA.fromHex("#a0a0a0") },
-  background: { raised: { high: RGBA.fromHex("#1c1c1c") } },
-}
-
 describe("scrollbarTrackOptions (the host palette shape)", () => {
   test("a nested raised token becomes the track color; the thumb keeps the muted/base rule", () => {
     const color = scrollbarTrackOptions(hostTheme, false)

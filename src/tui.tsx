@@ -485,7 +485,7 @@ export default Plugin.define({
 
     // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
     // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. Left click
-    // toggles the compact HUD card (level b — bordered floating panel above the jump row); right click
+    // toggles the compact HUD card (level b — the composer-grammar card above the jump row); right click
     // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). Pinning the condition
     // (card `[pin]` button or `p` in the dialog) appends it to the pill so it survives conversation scroll.
     // The card is dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.

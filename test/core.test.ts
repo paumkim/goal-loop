@@ -503,8 +503,8 @@ describe("formatSpend", () => {
   })
 
   test("a tight budget drops cached first, then out — the cost is the anchor", () => {
-    // 37 cells is the clamp-floor card's spend budget (width 52 - border 2 - padding 2 - LABEL 10 - gap 1)
-    expect(formatSpend(spend, 37)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
+    // 36 cells is the clamp-floor card's spend budget (width 52 - left border 1 - padding 4 - LABEL 10 - gap 1)
+    expect(formatSpend(spend, 36)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
     // 28-cell budget forces out as well
     expect(formatSpend(spend, 28)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
     expect(formatSpend(spend, 26)).toBe("2.22M in \u00B7 $0.90")
