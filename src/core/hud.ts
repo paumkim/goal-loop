@@ -223,6 +223,37 @@ export const staleUnprovenSessionIDs = (
     .map(([sessionID]) => sessionID)
 
 /**
+ * How long after its FIRST observed terminal stamp a terminal entry stays in the tick's re-pull
+ * window. Ten minutes: the realistic clear-after-terminal moment (glance at the result, tidy up,
+ * start the next task) usually lands inside it, while permanent terminal history — which nothing
+ * will clear — stops costing a pull per window once the window lapses. Past the window the record
+ * can still be cleared silently, but the residue is the entries cache's own bound (ENTRY_CAP) and
+ * every dialog open re-pulls anyway; only a never-opened stale view past the window can linger.
+ */
+export const RECENT_TERMINAL_WINDOW_MS = 10 * 60_000
+
+/**
+ * The terminal arm of the stale-chrome guard: entries observed terminal recently (first-observation
+ * `terminalAt` within `RECENT_TERMINAL_WINDOW_MS`) that are older than the cadence and not live or
+ * null — `staleUnprovenSessionIDs` deliberately covers only those. A record cleared in another
+ * process right after the goal went terminal used to strand its terminal snapshot forever (no re-pull
+ * was ever scheduled; the `changed(null)` might be dropped). Re-pulling inside the window lets the
+ * normal intake store the null and every chrome path converges. Entries without a `terminalAt`
+ * (cached before this stamp existed, or cleared since) are skipped — never stamped, never polled.
+ */
+export const staleRecentlyTerminalSessionIDs = (
+  entries: Readonly<Record<string, { readonly goal?: GoalSnapshot | null | undefined; readonly receivedAt?: number | undefined; readonly terminalAt?: number | undefined }>>,
+  nowMs: number,
+  minAgeMs: number = STALE_LIVE_ENTRY_MS,
+  windowMs: number = RECENT_TERMINAL_WINDOW_MS,
+): string[] =>
+  Object.entries(entries)
+    .filter(([, entry]) => entry?.goal != null && !isLive(entry.goal.status))
+    .filter(([, entry]) => entry?.terminalAt !== undefined && nowMs - entry.terminalAt <= windowMs)
+    .filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs)
+    .map(([sessionID]) => sessionID)
+
+/**
  * How long a terminal acknowledgment pill lingers on the jump row after a live→terminal transition.
  * Long enough to notice without becoming furniture; the entries cache may evict the goal itself sooner.
  */

@@ -31,8 +31,8 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, ENTRY_CAP, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, terminalStampOf, ENTRY_CAP, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice, sameDirectory } from "./core/wire.ts"
@@ -377,11 +377,12 @@ export default Plugin.define({
       }
       // The `get` RPC pull carries the context estimate and spend; `changed` events usually do not — carry both forward.
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
+      const mergedNow = Date.now()
       return setEntries((previous) => {
         const existing = previous[sessionID]
         // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick. The cap still applies here — steady null entries ride the cap eviction (oldest non-live first) but are never dropped outright, or the tick would lose the re-pull target.
         if (existing && goalsEqual(existing.goal, mergedGoal)) return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP)
-        const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: Date.now() } }
+        const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: mergedNow, terminalAt: terminalStampOf(existing, mergedGoal, mergedNow) } }
         // Null entries are retained (the stale-chrome tick re-pulls them); only the cap evicts.
         return pruneSnapshotEntries(next, statusDialogSession())
       })
@@ -502,8 +503,12 @@ export default Plugin.define({
       // dropped `changed` event strands "goal checking · Nm" on the jump row forever. Re-pull entries older
       // than STALE_LIVE_ENTRY_MS whose goal is live OR null (goal armed in another process on the same
       // directory, or the `changed` event was dropped); a terminal/null response flows through the normal
-      // intake, arms the acknowledgment pill, and the stale chrome converges.
-      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now())) void refresh(sessionID).catch(() => {})
+      // intake, arms the acknowledgment pill, and the stale chrome converges. Recently-terminal entries
+      // get the same treatment inside RECENT_TERMINAL_WINDOW_MS: a record cleared in another process
+      // right after the goal went terminal re-arms the intake instead of painting phantom chrome forever.
+      const staleNow = Date.now()
+      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow)) void refresh(sessionID).catch(() => {})
+      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow)) void refresh(sessionID).catch(() => {})
       // A kept-open dialog's foreign-goals block comes solely from the `others()` signal; the tick used to
       // refresh cached session entries but not this list, so a dropped `changed` event left it stale forever.
       if (statusDialogOpen()) void refreshOthers()

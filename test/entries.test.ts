@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -243,5 +243,38 @@ describe("steady null entries and the cap", () => {
     expect(out.ses_1).toBeUndefined() // oldest null evicted first
     expect(out.ses_2).toBeUndefined()
     expect(out.ses_3?.goal).toBeNull() // overflow is 2 (66 entries, cap 64); ses_3 is the newest survivor of the null tail
+  })
+})
+
+describe("terminalStampOf", () => {
+  test("a terminal goal stamps first-observation time", () => {
+    expect(terminalStampOf(undefined, snap("achieved"), 5000)).toBe(5000)
+  })
+
+  test("re-observation retains the original stamp, not the latest pull", () => {
+    const existing = { goal: snap("achieved"), receivedAt: 1000, terminalAt: 4000 }
+    expect(terminalStampOf(existing, snap("achieved"), 9000)).toBe(4000)
+  })
+
+  test("a live goal drops the stamp entirely", () => {
+    const existing = { goal: snap("achieved"), receivedAt: 1000, terminalAt: 4000 }
+    expect(terminalStampOf(existing, snap("active"), 9000)).toBeUndefined()
+  })
+
+  test("a null goal drops the stamp entirely", () => {
+    const existing = { goal: snap("achieved"), receivedAt: 1000, terminalAt: 4000 }
+    expect(terminalStampOf(existing, null, 9000)).toBeUndefined()
+  })
+
+  test("every non-live status stamps, not only achieved (failed, impossible, cleared)", () => {
+    for (const status of ["failed", "impossible", "cleared"] as const) {
+      expect(terminalStampOf(undefined, snap(status), 5000)).toBe(5000)
+    }
+  })
+
+  test("bumpReceivedAt keeps the terminal stamp (re-pulls do not age the window)", () => {
+    const input: Record<string, GoalSnapshotCacheEntry> = { a: { goal: snap("achieved"), receivedAt: 1000, terminalAt: 4000 } }
+    const out = bumpReceivedAt(input, "a", 9999)
+    expect(out.a!.terminalAt).toBe(4000)
   })
 })

@@ -4,7 +4,9 @@
  * the put path (no timers): the map is capped — oldest non-live entries are evicted first, live
  * (active/paused) entries are never evicted by the cap. Null-valued entries are retained on every
  * branch — the stale-chrome tick re-pulls them to notice a goal armed since the last pull — and only
- * the cap bounds how long a null entry lingers.
+ * the cap bounds how long a null entry lingers. Recently-terminal entries carry `terminalAt` (first
+ * observed terminal stamp) so the tick can re-pull them inside a short window — a record cleared in
+ * another process right after terminal converges instead of painting phantom chrome forever.
  */
 import { isLive, type GoalSnapshot } from "./types.ts"
 
@@ -12,6 +14,13 @@ export interface GoalSnapshotCacheEntry {
   readonly goal: GoalSnapshot | null
   /** Client clock when the snapshot arrived; elapsed time is extrapolated from it to avoid clock skew. */
   readonly receivedAt: number
+  /**
+   * Client clock when this entry's goal was FIRST observed non-live (`terminalStampOf`). Retained across
+   * re-pulls and `bumpReceivedAt`, dropped when the goal is live or null. Anchors the recent-terminal
+   * re-pull window (see `RECENT_TERMINAL_WINDOW_MS` in hud.ts) — the window ages from first sight of
+   * terminal truth, not from the latest pull.
+   */
+  readonly terminalAt?: number | undefined
 }
 
 export const ENTRY_CAP = 64
@@ -54,10 +63,27 @@ export function pruneSnapshotEntries(
 }
 
 /**
+ * The `terminalAt` stamp for a fresh snapshot: the FIRST time this entry observed a non-live goal,
+ * retained across re-pulls and `bumpReceivedAt`, dropped when the goal is live or null. A terminal
+ * record can only move to cleared (and then a fresh goal may arm), so first-observation is the right
+ * anchor: the recent-terminal re-pull window ages from when the TUI first saw terminal truth, not from
+ * the latest pull (which would postpone the window on every tick). A live-again goal clears the stamp —
+ * the terminal arc is over; a later terminal transition stamps afresh.
+ */
+export function terminalStampOf(
+  existing: GoalSnapshotCacheEntry | undefined,
+  goal: GoalSnapshot | null,
+  now: number,
+): number | undefined {
+  if (goal !== null && !isLive(goal.status)) return existing?.terminalAt ?? now
+  return undefined
+}
+
+/**
  * Marks an unchanged cache entry as freshly checked. The stale-chrome guard keys on `receivedAt`, and a
  * snapshot that compares equal never reaches the `setEntries` updater's fresh branch — so without this
- * the guard would re-pull a never-changing paused/null entry at every tick forever. Returns a NEW map
- * (new entry object, SAME goal reference) so the signal re-evaluates but goal-identical memos do not.
+ * the guard would re-pull a never-changing paused/null/terminal entry at every tick forever. Returns a
+ * NEW map (new entry object, SAME goal reference) so the signal re-evaluates but goal-identical memos do not.
  */
 export function bumpReceivedAt(entries: Readonly<Record<string, GoalSnapshotCacheEntry>>, sessionID: string, now: number): Readonly<Record<string, GoalSnapshotCacheEntry>> {
   const existing = entries[sessionID]
