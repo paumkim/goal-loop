@@ -22,7 +22,7 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { shortSha } from "./dossier.ts"
+import { shortSha, stampOf } from "./dossier.ts"
 import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
 
@@ -110,7 +110,7 @@ const statusCell = (status: ReachCheckStatus): string =>
  * check; the honesty footer states exactly what "not on this line" does and does not imply.
  */
 export function reachReportMarkdown(goal: GoalSnapshot, reach: ReachVerification, nowMs: number, directory: string): string {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString()
+  const stamp = stampOf(nowMs)
   const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim()
   const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}…` : condition || GAP
   const lines: string[] = [

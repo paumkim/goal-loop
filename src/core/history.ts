@@ -156,8 +156,9 @@ export function paceEstimate(durations: readonly number[], max: number | undefin
  * O(h + n): verdicts are bucketed in a single pass with a sliding window pointer (windows are
  * contiguous and in `entries` array order, so a verdict belongs to the first window whose `endedAt`
  * it does not precede). A verdict whose `at` exceeds the last window's `endedAt` belongs to no
- * window — exactly as the filter-based read of the same rule. A non-monotone history falls back to
- * the filter read, so pathological input can never paint a different frame than before.
+ * window — exactly as the filter-based read of the same rule. A non-monotone history (or an entry
+ * with a non-finite `endedAt`) falls back to the filter read, so pathological input can never
+ * paint a different frame than before.
  *
  * Pure: no module-global cache. Callers that re-render on a cadence (LoopSection) hold the result in a
  * scoped solid-js `createMemo` keyed on the same snapshot refs — cache lifetime is the component's, the
@@ -169,7 +170,9 @@ export function iterationVerdictMix(history: readonly VerdictEntry[], entries: r
   let window = 0
   const span = entries.length
   let previous = Number.NEGATIVE_INFINITY
-  let monotone = true
+  // A non-finite `endedAt` is unusable as a window edge; fall back to the filter read so the
+  // monotone sweep cannot bucket a verdict into the wrong iteration.
+  let monotone = ended.every((end) => Number.isFinite(end))
   for (const verdict of history) {
     const at = verdict.at
     if (at < previous) { monotone = false; break }
@@ -270,7 +273,9 @@ export function localTime(ms: number): string {
 
 /** The most recent verdict inside the current iteration's window — `(last endedAt | setAt, ∞)`. Undefined when the current iteration has no verdict yet. */
 export function currentIterationVerdict(history: readonly VerdictEntry[], entries: readonly LoopEntry[], setAt: number): VerdictEntry | undefined {
-  const from = entries.length > 0 ? entries[entries.length - 1]!.endedAt : setAt
+  const last = entries.length > 0 ? entries[entries.length - 1] : undefined
+  // A non-finite `endedAt` on the last entry cannot open the window; fall back to the record's set time.
+  const from = last && Number.isFinite(last.endedAt) ? last.endedAt : setAt
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const entry = history[index]!
     if (entry.at > from) return entry

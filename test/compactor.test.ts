@@ -331,3 +331,44 @@ describe("AutoCompactor.compactAtBoundary", () => {
     expect(h.compactCalls).toEqual([])
   })
 })
+
+describe("AutoCompactor regression: work that starts during the context read", () => {
+  test("maybeCompact defers when the session starts work during the context fetch", async () => {
+    const h = harness()
+    let busy = false
+    const compactor = new AutoCompactor({
+      config: resolveConfig({ compactAtTokens: 260_000 }),
+      compact: async (sessionID) => void h.compactCalls.push(sessionID),
+      context: async () => {
+        busy = true // the turn starts while the context read is in flight
+        return [assistant({ input: 10_000, cache: { read: 255_000, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void h.notices.push(n) },
+      clock: h.clock,
+      log: { info() {}, warn() {}, error() {} },
+      isBusy: async () => busy,
+    })
+    await compactor.maybeCompact(SID)
+    expect(h.compactCalls).toEqual([])
+  })
+
+  test("compactAtBoundary reports busy when the session starts work during the context fetch", async () => {
+    const h = harness({ compactOnLoopIteration: true })
+    let busy = false
+    const compactor = new AutoCompactor({
+      config: resolveConfig({ compactOnLoopIteration: true }),
+      compact: async (sessionID) => void h.compactCalls.push(sessionID),
+      context: async () => {
+        busy = true
+        return [assistant({ input: 10_000, cache: { read: 100, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void h.notices.push(n) },
+      clock: h.clock,
+      log: { info() {}, warn() {}, error() {} },
+      isBusy: async () => busy,
+    })
+    const result = await compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "busy" })
+    expect(h.compactCalls).toEqual([])
+  })
+})

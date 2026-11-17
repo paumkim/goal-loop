@@ -245,12 +245,18 @@ export class GoalController {
       this.deps.log.info("compaction landed via the compaction-ended event", { sessionID })
       this.notify(sessionID, "compact", "success", "Compaction landed", "The host compacted the session (compaction-ended event); loop boundary state reset.")
     }
+    // The await above can span a `session.deleted` event: the record would have been removed from the
+    // map and storage, and re-anchoring now would re-create it. Only continue for the adopted record.
+    if (this.goals.get(sessionID) !== record) return
     // A landed compaction replaces history with a lossy summary; a live loop re-states its ground truth
     // so the armed condition, the objective and the completed iterations survive the cut. Queued
     // (resume: false): never wakes the session, never interrupts an in-flight turn — the arm/continuation
     // steers that keep the loop moving carry it into the model's view.
     if (record && record.loopEnabled && record.status === "active") this.reanchor(record)
   }
+
+  /** Final-usage snapshots in flight; dispose() awaits them so the last record write is durable before flush. */
+  private readonly pendingUsage = new Set<Promise<void>>()
 
   /** Re-anchor texts awaiting the next model request; one-shot, volatile (a restart drops a pending one — the next landing re-arms it). */
   private readonly pendingAnchors = new Map<string, string>()
@@ -269,6 +275,8 @@ export class GoalController {
 
   /** Arm the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
   private reanchor(record: GoalRecord) {
+    // Never arm (or commit) for a record that is no longer the adopted one — deleted mid-flight above.
+    if (this.goals.get(record.sessionID) !== record) return
     const now = this.deps.clock.now()
     const last = this.lastReanchorAt.get(record.sessionID)
     if (last !== undefined && now - last < REANCHOR_MIN_INTERVAL_MS) {
@@ -593,6 +601,10 @@ export class GoalController {
     // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
     // with its previous baseline rather than deleting it.
     const now = this.deps.clock.now()
+    // A legacy record missing `history` would throw on the first `record.history.push(...)` in
+    // evaluate() — after the bookkeeping mutations but before the commit, so the goal wedged
+    // silently, forever. Normalize on adoption instead.
+    if (!Array.isArray(record.history)) record.history = []
     Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
     this.goals.set(record.sessionID, record)
     // Create the runtime up front so tool events that arrive before the first execution-end are counted.
@@ -659,6 +671,8 @@ export class GoalController {
   async dispose(): Promise<void> {
     this.disposed = true
     for (const runtime of this.runtimes.values()) this.invalidate(runtime)
+    // Let final-usage snapshots land first; their commits enqueue store writes that flush() must see.
+    await Promise.allSettled([...this.pendingUsage])
     await this.deps.store.flush()
   }
 
@@ -1303,7 +1317,7 @@ export class GoalController {
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
     const saved = this.commit(record)
-    void this.deps.session
+    const usageSnapshot = this.deps.session
       .usage(record.sessionID)
       .then((usage) => {
         if (this.goals.get(record.sessionID) !== record) return
@@ -1317,6 +1331,8 @@ export class GoalController {
         void this.commit(record)
       })
       .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
+      .finally(() => this.pendingUsage.delete(usageSnapshot))
+    this.pendingUsage.add(usageSnapshot)
     return saved
   }
 

@@ -85,6 +85,12 @@ export class AutoCompactor {
       return
     }
     if (size < config.compactAtTokens) return
+    // The context read above can take seconds; a turn started during that window would be compacted
+    // mid-work. Re-check the busy gate before firing, the same invariant the first gate enforces.
+    if (await this.isBusy(sessionID)) {
+      log.info("auto-compact deferred: session has work in flight", { sessionID })
+      return
+    }
 
     this.requestedAt.set(sessionID, now)
     this.inFlight.set(sessionID, now)
@@ -140,6 +146,11 @@ export class AutoCompactor {
     if (size !== undefined && size < BOUNDARY_MIN_TOKENS) {
       log.info("boundary compact skipped: context is small", { sessionID, size })
       return { requested: false, reason: "too-small" }
+    }
+    // Same post-read re-check as maybeCompact: never fire over work that started during the context fetch.
+    if (await this.isBusy(sessionID)) {
+      log.info("boundary compact deferred: session has work in flight", { sessionID })
+      return { requested: false, reason: "busy" }
     }
     this.requestedAt.set(sessionID, now)
     this.inFlight.set(sessionID, now)

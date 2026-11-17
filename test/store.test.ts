@@ -109,3 +109,25 @@ describe("GoalStore probe mode (read-only)", () => {
     expect((await probe.loadLive("/work/project")).map((entry) => entry.sessionID)).toEqual(["ses_live"])
   })
 })
+
+describe("GoalStore.loadLive regression: under-validated records", () => {
+  test("a live record missing `directory` is skipped, not fatal to the whole restore", async () => {
+    const storage = new MemoryStorage()
+    const store = new GoalStore(storage, () => {})
+    const broken = record({ sessionID: "ses_no_dir" }) as unknown as Record<string, unknown>
+    delete broken.directory
+    storage.data.set(keyFor("ses_no_dir"), broken)
+    storage.data.set(keyFor("ses_ok"), record({ sessionID: "ses_ok", status: "paused" }))
+    const found = await store.loadLive("/work/project")
+    expect(found.map((entry) => entry.sessionID)).toEqual(["ses_ok"])
+  })
+
+  test("a live record with a non-string `directory` is skipped too", async () => {
+    const storage = new MemoryStorage()
+    const store = new GoalStore(storage, () => {})
+    storage.data.set(keyFor("ses_dir_42"), { ...record({ sessionID: "ses_dir_42" }), directory: 42 })
+    storage.data.set(keyFor("ses_ok"), record({ sessionID: "ses_ok", status: "paused" }))
+    const found = await store.loadLive("/work/project")
+    expect(found.map((entry) => entry.sessionID)).toEqual(["ses_ok"])
+  })
+})

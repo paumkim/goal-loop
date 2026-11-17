@@ -382,7 +382,13 @@ export default Plugin.define({
     const ensure = (sessionID: string) => {
       if (requested.has(sessionID)) return
       requested.add(sessionID)
-      refresh(sessionID).catch(() => requested.delete(sessionID))
+      // makeGoalRefresh resolves false on a malformed payload — release the marker on either failure
+      // so the next render retries instead of black-holing this session's pill forever.
+      refresh(sessionID)
+        .then((ok) => {
+          if (!ok) requested.delete(sessionID)
+        })
+        .catch(() => requested.delete(sessionID))
     }
 
     const live = (sessionID: string | undefined) => {
@@ -442,12 +448,14 @@ export default Plugin.define({
       })
       if (important)
         try {
+          // Best-effort like the toast: a host-side notify failure (renderer gone, OS notification
+          // refused, attention subsystem detached) must never surface as an unhandled rejection.
           void context.attention.notify({
             title: `OpenCode \u00B7 ${notice.title}`,
             message: notice.message,
             notification: { when: "blurred" },
             sound: { name: notice.kind === "achieved" ? "done" : "error", when: "blurred" },
-          })
+          }).catch(() => {})
         } catch {
           // Attention is best-effort; the toast already landed.
         }

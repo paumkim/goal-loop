@@ -1937,3 +1937,32 @@ describe("per-iteration spend attribution", () => {
     expect(record.loopHistory![0]!.spend).toBeUndefined()
   })
 })
+
+describe("compaction-landed write-after-delete regression", () => {
+  test("a landed compaction cannot resurrect a record deleted mid-flight", async () => {
+    const h = harness()
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    // Boundary compaction is pending on the record. Gate the next storage write so the
+    // session can be deleted while onCompactionLanded's commit is parked in flight.
+    let release: (() => void) | undefined
+    const originalSet = h.storage.set
+    h.storage.set = async (key: string, value: unknown) => {
+      if (release === undefined)
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      return originalSet(key, value)
+    }
+    const landing = h.controller.onCompactionLanded(SID)
+    await flush()
+    h.controller.onSessionDeleted(SID)
+    release!()
+    await landing
+    await flush()
+    expect(h.storage.data.has(`goal/v1/${SID}`)).toBe(false)
+  })
+})

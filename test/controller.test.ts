@@ -769,3 +769,62 @@ describe("context meter snapshot fields", () => {
     expect(await h.controller.contextSize(SID)).toBeUndefined()
   })
 })
+
+describe("restore of under-validated records regression", () => {
+  test("a legacy record missing `history` is normalized and evaluates without wedging", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("legacy record")
+    await first.store.flush()
+    const key = `goal/v1/${SID}`
+    const raw = structuredClone(storage.data.get(key)) as Record<string, unknown>
+    delete raw.history
+    storage.data.set(key, raw)
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    second.verdicts.push(notMet())
+    await second.turn()
+    expect(second.controller.get(SID)?.status).toBe("active")
+    expect(second.controller.get(SID)?.history).toHaveLength(1)
+  })
+
+  test("dispose awaits the final spend snapshot and flushes it to storage", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.set()
+    h.verdicts.push(met("done"))
+    const usageNow = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
+    let parked: ((value: typeof usageNow) => void) | undefined
+    let call = 0
+    h.setUsageFn(() => {
+      call += 1
+      if (call === 1) return Promise.resolve(usageNow) // the per-turn measurement
+      return new Promise((resolve) => {
+        parked = resolve as (value: typeof usageNow) => void // the final snapshot, parked by the test
+      })
+    })
+    await h.turn()
+    const disposing = h.controller.dispose()
+    await flush()
+    parked!({ cost: 7, input: 5, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    await disposing
+    const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
+    expect(stored.status).toBe("achieved")
+    expect((stored.final as { cost: number }).cost).toBe(7)
+  })
+})
+
+describe("event router status-less shell.updated regression", () => {
+  test("a shell.updated with no status anywhere keeps tracking the shell; shell.exited ends it", async () => {
+    const h = harness()
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const route = createRouter({ controller: h.controller, background, log: silentLog, compactor: testCompactor([]) })
+    await h.set()
+    route({ type: "shell.created", data: { info: { id: "sh1", status: "running", metadata: { sessionID: SID } } } })
+    expect((await background.busy(SID)).shells).toBe(1)
+    route({ type: "shell.updated", data: { info: { id: "sh1" } } })
+    expect((await background.busy(SID)).shells).toBe(1)
+    route({ type: "shell.exited", data: { id: "sh1" } })
+    expect((await background.busy(SID)).shells).toBe(0)
+  })
+})

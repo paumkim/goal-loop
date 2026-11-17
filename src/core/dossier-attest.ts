@@ -35,7 +35,7 @@ import {
 } from "./verify-record.ts"
 import { gitAncestorProbe, reachRecord, type ReachProbe, type ReachVerification } from "./reach-record.ts"
 import { gitSignProbe, signRecord, type SignProbe, type SignVerification } from "./sign-record.ts"
-import { shortSha } from "./dossier.ts"
+import { shortSha, stampOf } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** One answer cell, exactly as the appendix prints it. */
@@ -208,14 +208,22 @@ export function attestSealedDossier(markdown: string, directory: string, probes:
   const verifyProbe = probes.verify ?? gitCatFileProbe(directory)
   const reachProbe = probes.reach ?? gitAncestorProbe(directory)
   const signProbe = probes.sign ?? gitSignProbe(directory)
-  const synthetic = shasAsGoal(parsed.rows)
+  // The appendix is parsed, not trusted: a hand-assembled or tampered file can repeat a sha.
+  // Counts and the report are per unique sha — keep the first row spelling, drop repeats.
+  const seen = new Set<string>()
+  const uniqRows = parsed.rows.filter((row) => {
+    if (seen.has(row.sha)) return false
+    seen.add(row.sha)
+    return true
+  })
+  const synthetic = shasAsGoal(uniqRows)
   const verification: RecordVerification = verifyRecord(synthetic, verifyProbe)
   const reach: ReachVerification = reachRecord(synthetic, reachProbe)
   const sign: SignVerification = signRecord(synthetic, signProbe)
   const reachBySha = new Map<string, string>(reach.checks.map((check) => [check.sha, check.status]))
   const signBySha = new Map<string, string>(sign.checks.map((check) => [check.sha, check.status]))
   const verifyBySha = new Map<string, string>(verification.checks.map((check) => [check.sha, check.status]))
-  const rows: AttestationRowVerdict[] = parsed.rows.map((row) => {
+  const rows: AttestationRowVerdict[] = uniqRows.map((row) => {
     const now = {
       exists: verifyCell(verifyBySha.get(row.sha) ?? "unknown"),
       onThisLine: reachCell(reachBySha.get(row.sha) ?? "unknown"),
@@ -281,7 +289,7 @@ export function attestationReportMarkdown(
   directory: string,
   fileName: string,
 ): string {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString()
+  const stamp = stampOf(nowMs)
   const lines: string[] = [
     "# /goal-loop sealed dossier attestation",
     "",

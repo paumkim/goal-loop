@@ -23,7 +23,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha } from "./dossier.ts"
+import { buildLoopDossier, shortSha, stampOf } from "./dossier.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -128,7 +128,7 @@ export function buildReview(goal: GoalSnapshot, directory: string, nowMs: number
   const reach = reachRecord(goal, reachProbe)
   const sign = signRecord(goal, signProbe)
   const base = buildLoopDossier(goal, nowMs)
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString()
+  const stamp = stampOf(nowMs)
 
   const reachBySha = new Map<string, string>(reach.checks.map((check) => [check.sha, check.status]))
   const signBySha = new Map<string, string>(sign.checks.map((check) => [check.sha, check.status]))

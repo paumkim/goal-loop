@@ -299,8 +299,9 @@ export const StatusDialogBody = (props: {
     }
   }
   const copyCondition = (condition: string) => {
+    if (!props.onCopyCondition) return
     try {
-      props.onCopyCondition?.(condition)
+      props.onCopyCondition(condition)
       acknowledge("condition")
     } catch {
       // Best-effort.

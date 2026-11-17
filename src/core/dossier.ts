@@ -26,6 +26,16 @@ export const isoOf = (ms: number): string => {
   return Number.isNaN(date.getTime()) ? GAP : date.toISOString()
 }
 
+/**
+ * ISO-8601 UTC for a generated stamp line. A non-finite or unrepresentable clock stamps the epoch
+ * rather than throwing — the generated artifacts promise a stamp, never a guess. Matches the
+ * file-name builders' posture.
+ */
+export const stampOf = (ms: number): string => {
+  const date = new Date(Number.isFinite(ms) ? ms : 0)
+  return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString()
+}
+
 /** First 7 chars of a hex sha; non-hex shas (legacy/odd writers) print whole rather than invented. */
 export const shortSha = (sha: string | undefined): string => {
   if (!sha) return GAP

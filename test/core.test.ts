@@ -525,3 +525,42 @@ describe("formatSpend", () => {
     }
   })
 })
+
+describe("formatDuration regression: non-finite input", () => {
+  test("NaN and Infinity render 0s, never NaNs", () => {
+    expect(formatDuration(Number.NaN)).toBe("0s")
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe("0s")
+    expect(formatDuration(Number.NEGATIVE_INFINITY)).toBe("0s")
+  })
+})
+
+describe("renderTranscript regression: a zero per-tool budget", () => {
+  const toolHeavy = [
+    { type: "user", text: "run the tests" },
+    {
+      type: "assistant",
+      content: [
+        { type: "tool", name: "shell", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: `${"noise\n".repeat(2000)}12 pass 0 fail` }] } },
+      ],
+    },
+  ]
+
+  test("renders the cut marker with a bounded tail, never the whole tool output", () => {
+    const text = renderTranscript(toolHeavy, { maxChars: 8_000, maxToolChars: 0 })
+    expect(text).toContain("chars cut]")
+    expect(text).not.toContain("12 pass 0 fail")
+    expect(text.length).toBeLessThan(400)
+  })
+})
+
+describe("config regression: an empty env model", () => {
+  test("reads as unset and falls back to the configured model, never discards it", () => {
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "   " }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(resolveConfig({ model: "a/b" }, { OPENCODE_GOAL_MODEL: "" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    // An empty option model falls back past it to a valid top-level one too.
+    expect(resolveConfig({ evaluator: { model: "" }, model: "a/b" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    // A non-empty invalid env value still yields no model (unchanged semantics).
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "nope" }).evaluator.model).toBeUndefined()
+  })
+})

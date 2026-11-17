@@ -111,7 +111,10 @@ export function headSha(gitDir: string): string | undefined {
       if (!packed) continue
       for (const line of packed.split("\n")) {
         const parts = line.trim().split(/\s+/)
-        if (parts.length === 2 && parts[1] === ref && /^[0-9a-f]{40}$/i.test(parts[0] ?? "")) return (parts[0] as string).toLowerCase()
+        const packedSha = parts[0] ?? ""
+        // SHA-1 repos pack 40-hex shas; SHA-256 repos pack 64-hex shas.
+        if (parts.length === 2 && parts[1] === ref && (/^[0-9a-f]{40}$/i.test(packedSha) || /^[0-9a-f]{64}$/i.test(packedSha)))
+          return packedSha.toLowerCase()
       }
     }
     return undefined

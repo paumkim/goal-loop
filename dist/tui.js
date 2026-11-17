@@ -205,7 +205,7 @@ var GOAL_GLYPH = "\u25CE";
 var GOAL_GLYPH_ASCII = "*";
 var goalGlyph = (ascii = false) => ascii ? GOAL_GLYPH_ASCII : GOAL_GLYPH;
 function formatDuration(ms) {
-  const total = Math.max(0, Math.floor(ms / 1000));
+  const total = Number.isFinite(ms) ? Math.max(0, Math.floor(ms / 1000)) : 0;
   const h = Math.floor(total / 3600);
   const m = Math.floor(total % 3600 / 60);
   const s = total % 60;
@@ -396,7 +396,7 @@ function iterationVerdictMix(history, entries, setAt) {
   let window = 0;
   const span = entries.length;
   let previous = Number.NEGATIVE_INFINITY;
-  let monotone = true;
+  let monotone = ended.every((end) => Number.isFinite(end));
   for (const verdict of history) {
     const at = verdict.at;
     if (at < previous) {
@@ -493,7 +493,8 @@ function localTime(ms) {
   return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 function currentIterationVerdict(history, entries, setAt) {
-  const from = entries.length > 0 ? entries[entries.length - 1].endedAt : setAt;
+  const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
+  const from = last && Number.isFinite(last.endedAt) ? last.endedAt : setAt;
   for (let index = history.length - 1;index >= 0; index -= 1) {
     const entry = history[index];
     if (entry.at > from)
@@ -575,6 +576,10 @@ var isoOf = (ms) => {
     return GAP;
   const date = new Date(ms);
   return Number.isNaN(date.getTime()) ? GAP : date.toISOString();
+};
+var stampOf = (ms) => {
+  const date = new Date(Number.isFinite(ms) ? ms : 0);
+  return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 };
 var shortSha = (sha) => {
   if (!sha)
@@ -904,7 +909,7 @@ var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var GAP2 = "\u2014";
 var statusCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 function verifyReportMarkdown(goal, verification, nowMs, directory) {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
   const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP2;
   const lines = [
@@ -996,7 +1001,7 @@ var iterationList2 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var GAP3 = "\u2014";
 var statusCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 function reachReportMarkdown(goal, reach, nowMs, directory) {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
   const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP3;
   const lines = [
@@ -1089,7 +1094,7 @@ var iterationList3 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var GAP4 = "\u2014";
 var statusCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 function signReportMarkdown(goal, sign, nowMs, directory) {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
   const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP4;
   const lines = [
@@ -1160,7 +1165,7 @@ var cleanShaCount = (verification, reach, sign) => {
   return clean;
 };
 function attestationAppendix(_goal, verification, reach, sign, nowMs, directory) {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const lines = [
     "## Attestation (freshly probed at seal time)",
     "",
@@ -1278,7 +1283,7 @@ function buildReview(goal, directory, nowMs, probes = {}) {
   const reach = reachRecord(goal, reachProbe);
   const sign = signRecord(goal, signProbe);
   const base = buildLoopDossier(goal, nowMs);
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
   const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
   const rows = verification.checks.map((check) => {
@@ -1697,14 +1702,21 @@ function attestSealedDossier(markdown, directory, probes = {}) {
   const verifyProbe = probes.verify ?? gitCatFileProbe(directory);
   const reachProbe = probes.reach ?? gitAncestorProbe(directory);
   const signProbe = probes.sign ?? gitSignProbe(directory);
-  const synthetic = shasAsGoal(parsed.rows);
+  const seen = new Set;
+  const uniqRows = parsed.rows.filter((row) => {
+    if (seen.has(row.sha))
+      return false;
+    seen.add(row.sha);
+    return true;
+  });
+  const synthetic = shasAsGoal(uniqRows);
   const verification = verifyRecord(synthetic, verifyProbe);
   const reach = reachRecord(synthetic, reachProbe);
   const sign = signRecord(synthetic, signProbe);
   const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
   const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
   const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
-  const rows = parsed.rows.map((row) => {
+  const rows = uniqRows.map((row) => {
     const now = {
       exists: verifyCell3(verifyBySha.get(row.sha) ?? "unknown"),
       onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
@@ -1756,7 +1768,7 @@ function attestSummaryLine(attestation) {
   return `attestation holds: ${attestation.held} of ${attestation.sealedClean} sealed-clean shas still clean`;
 }
 function attestationReportMarkdown(result, nowMs, directory, fileName) {
-  const stamp = new Date(Number.isFinite(nowMs) ? nowMs : 0).toISOString();
+  const stamp = stampOf(nowMs);
   const lines = [
     "# /goal-loop sealed dossier attestation",
     "",
@@ -3404,8 +3416,10 @@ var StatusDialogBody = (props) => {
     } catch {}
   };
   const copyCondition = (condition) => {
+    if (!props.onCopyCondition)
+      return;
     try {
-      props.onCopyCondition?.(condition);
+      props.onCopyCondition(condition);
       acknowledge("condition");
     } catch {}
   };
@@ -6494,7 +6508,10 @@ var tui_default = Plugin.define({
       if (requested.has(sessionID))
         return;
       requested.add(sessionID);
-      refresh(sessionID).catch(() => requested.delete(sessionID));
+      refresh(sessionID).then((ok) => {
+        if (!ok)
+          requested.delete(sessionID);
+      }).catch(() => requested.delete(sessionID));
     };
     const live = (sessionID) => {
       try {
@@ -6563,7 +6580,7 @@ var tui_default = Plugin.define({
               name: notice.kind === "achieved" ? "done" : "error",
               when: "blurred"
             }
-          });
+          }).catch(() => {});
         } catch {}
     };
     const offChanged = rpc.events.on("changed", (event) => {
