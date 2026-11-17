@@ -2587,6 +2587,17 @@
       "submittedAt": "2026-11-17T13:31:08Z",
       "mergedAt": "2026-11-17T13:33:33Z",
       "mergedInto": "dev"
+    },
+    "scripts-audit": {
+      "agent": "orchestrator",
+      "paths": "scripts/**,packages/coordinator/**,test/**,SPEC.md",
+      "branch": "wt/scripts-audit",
+      "worktree": "worktrees/wt-scripts-audit",
+      "status": "done",
+      "createdAt": "2026-11-17T13:42:05Z",
+      "submittedAt": "2026-11-17T14:09:21Z",
+      "mergedAt": "2026-11-17T14:10:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
