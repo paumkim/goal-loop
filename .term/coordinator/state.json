@@ -2520,6 +2520,17 @@
       "submittedAt": "2026-11-17T03:16:30Z",
       "mergedAt": "2026-11-17T03:18:55Z",
       "mergedInto": "dev"
+    },
+    "spec-honesty-unused-exports": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,src,dist",
+      "branch": "wt/spec-honesty-unused-exports",
+      "worktree": "worktrees/wt-spec-honesty-unused-exports",
+      "status": "done",
+      "createdAt": "2026-11-17T03:25:14Z",
+      "submittedAt": "2026-11-17T03:28:26Z",
+      "mergedAt": "2026-11-17T03:29:38Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
