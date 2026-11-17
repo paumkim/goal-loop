@@ -1961,7 +1961,7 @@ var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY
   return { text, tone };
 };
 var STALE_LIVE_ENTRY_MS = 30000;
-var staleLiveSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS) => Object.entries(entries).filter(([, entry]) => entry?.goal != null && isLive(entry.goal.status) && nowMs - (entry.receivedAt ?? 0) >= minAgeMs).map(([sessionID]) => sessionID);
+var staleUnprovenSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS) => Object.entries(entries).filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs).filter(([, entry]) => entry?.goal == null || isLive(entry.goal.status)).map(([sessionID]) => sessionID);
 var TERMINAL_ACK_MS = 45000;
 var ACK_FLASH_MS = 1700;
 var LANDING_ACK_MS = 3000;
@@ -5696,6 +5696,12 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
+function bumpReceivedAt(entries, sessionID, now) {
+  const existing = entries[sessionID];
+  if (!existing)
+    return entries;
+  return { ...entries, [sessionID]: { ...existing, receivedAt: now } };
+}
 function preserveCarriedFields(previous, next) {
   if (next === null)
     return next;
@@ -6503,7 +6509,7 @@ var tui_default = Plugin.define({
       return setEntries((previous) => {
         const existing = previous[sessionID];
         if (existing && goalsEqual(existing.goal, mergedGoal))
-          return previous;
+          return bumpReceivedAt(previous, sessionID, Date.now());
         const next = {
           ...previous,
           [sessionID]: {
@@ -6612,7 +6618,7 @@ var tui_default = Plugin.define({
     const timer = setInterval(() => {
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active"))
         setNow(Date.now());
-      for (const sessionID of staleLiveSessionIDs(entries(), Date.now()))
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now()))
         refresh(sessionID).catch(() => {});
     }, TICK_MS);
     const [pinned, setPinned] = createSignal4(new Set);

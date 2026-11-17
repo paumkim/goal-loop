@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -189,5 +189,33 @@ describe("preserveCarriedFields record identity", () => {
     const old = { ...snap("active"), id: "goal_a", contextSize: 185_000, loopCompact: { requestedAt: 1, iteration: 2, misses: 0 } } as unknown as GoalSnapshot
     const next = { ...snap("active"), id: "goal_a", loopCompact: { requestedAt: 1, iteration: 2, misses: 0, landedAt: 2 } } as unknown as GoalSnapshot
     expect(preserveCarriedFields(old, next)?.contextSize).toBeUndefined()
+  })
+})
+
+describe("bumpReceivedAt", () => {
+  test("returns a NEW map; the entry gets receivedAt=now with the SAME goal reference; siblings untouched", () => {
+    const goal = snap("active")
+    const other = entry("paused", 111)
+    const input: Record<string, GoalSnapshotCacheEntry> = { a: { goal, receivedAt: 1000 }, b: other }
+    const out = bumpReceivedAt(input, "a", 5000)
+    expect(out).not.toBe(input)
+    expect(out.a).not.toBe(input.a)
+    expect(out.a!.receivedAt).toBe(5000)
+    expect(out.a!.goal).toBe(goal) // same reference: goal-identical memos do not re-evaluate
+    expect(out.b).toBe(other) // same reference: siblings untouched
+    expect(input.a!.receivedAt).toBe(1000) // input not mutated
+  })
+
+  test("an unknown session returns the same reference", () => {
+    const input = { a: entry("active") }
+    expect(bumpReceivedAt(input, "ses_missing", 5000)).toBe(input)
+  })
+
+  test("works for a null-goal entry", () => {
+    const input: Record<string, GoalSnapshotCacheEntry> = { a: { goal: null, receivedAt: 1000 } }
+    const out = bumpReceivedAt(input, "a", 7000)
+    expect(out).not.toBe(input)
+    expect(out.a!.receivedAt).toBe(7000)
+    expect(out.a!.goal).toBeNull()
   })
 })

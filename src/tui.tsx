@@ -31,8 +31,8 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleLiveSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, pruneSnapshotEntries, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice } from "./core/wire.ts"
@@ -370,8 +370,8 @@ export default Plugin.define({
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       return setEntries((previous) => {
         const existing = previous[sessionID]
-        // Keep the old entry (and its receivedAt) when nothing changed: elapsed time still extrapolates correctly, and the render tree stays untouched.
-        if (existing && goalsEqual(existing.goal, mergedGoal)) return previous
+        // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick.
+        if (existing && goalsEqual(existing.goal, mergedGoal)) return bumpReceivedAt(previous, sessionID, Date.now())
         const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: Date.now() } }
         // Drop null entries (unless a dialog is rendering that session) and cap the map.
         return pruneSnapshotEntries(next, statusDialogSession())
@@ -483,10 +483,11 @@ export default Plugin.define({
     const timer = setInterval(() => {
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active")) setNow(Date.now())
       // Stale-chrome guard: the pill paints from the entries cache and never re-pulls otherwise, so one
-      // dropped `changed` event strands "goal checking · Nm" on the jump row forever. Re-pull live
-      // snapshots older than STALE_LIVE_ENTRY_MS; a terminal/null response flows through the normal
+      // dropped `changed` event strands "goal checking · Nm" on the jump row forever. Re-pull entries older
+      // than STALE_LIVE_ENTRY_MS whose goal is live OR null (goal armed in another process on the same
+      // directory, or the `changed` event was dropped); a terminal/null response flows through the normal
       // intake, arms the acknowledgment pill, and the stale chrome converges.
-      for (const sessionID of staleLiveSessionIDs(entries(), Date.now())) void refresh(sessionID).catch(() => {})
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now())) void refresh(sessionID).catch(() => {})
     }, TICK_MS)
 
     // One-per-session pin registry: a pinned condition is appended (truncated) to the ambient pill so it

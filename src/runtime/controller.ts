@@ -173,10 +173,8 @@ export class GoalController {
     return record?.status === "active" ? record.condition : undefined
   }
 
-  snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null {
-    const record = this.goals.get(sessionID)
-    if (!record) return null
-    const runtime = this.runtimes.get(sessionID)
+  /** Builds a snapshot from a record the caller already holds. Freshness is the record's; runtime may be undefined (a foreign-snapshot read serves no runtime truth). */
+  private snapshotRecord(record: GoalRecord, runtime: Runtime | undefined, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot {
     // The auto-compact threshold is constant per session, so it rides every snapshot — cheap, and it lets
     // the dialog render the context meter without knowing anything about the server's configuration.
     const compactAtTokens = this.deps.config.compactAtTokens
@@ -189,6 +187,40 @@ export class GoalController {
       ...(typeof compactAtTokens === "number" && compactAtTokens > 0 ? { compactAtTokens } : {}),
       ...(contextSize !== undefined && Number.isFinite(contextSize) && contextSize >= 0 ? { contextSize } : {}),
     }
+  }
+
+  snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null {
+    const record = this.goals.get(sessionID)
+    if (!record) return null
+    return this.snapshotRecord(record, this.runtimes.get(sessionID), spend, contextSize)
+  }
+
+  /**
+   * Read-only peek: serves a snapshot without adopting anything. A record in memory is served with its
+   * runtime truth; otherwise storage is read fresh and the stored record is served as-is (terminal
+   * records included — a `changed` event that never arrived converges through the next pull). Never
+   * writes, never adopts, never resets turns/baseline. Returns null for missing records and for
+   * records owned by another directory.
+   */
+  async peekSnapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): Promise<GoalSnapshot | null> {
+    const inMemory = this.goals.get(sessionID)
+    if (inMemory) return this.snapshotRecord(inMemory, this.runtimes.get(sessionID), spend, contextSize)
+    const stored = await this.deps.store.load(sessionID).catch(() => undefined)
+    if (!stored) return null
+    if (!sameDirectory(stored.directory, this.deps.directory)) return null
+    return this.snapshotRecord(stored, undefined, spend, contextSize)
+  }
+
+  /**
+   * Read-only list: stored live records merged with in-memory ones (the in-memory copy wins for the same
+   * sessionID — this instance's copy is newer than the stored one). Never adopts, never writes.
+   */
+  async peekList(): Promise<GoalSnapshot[]> {
+    const stored = await this.deps.store.loadLive(this.deps.directory).catch(() => [])
+    const merged = new Map<string, GoalRecord>()
+    for (const record of stored) merged.set(record.sessionID, this.goals.get(record.sessionID) ?? record)
+    for (const record of this.goals.values()) if (isLive(record.status) && !merged.has(record.sessionID)) merged.set(record.sessionID, record)
+    return [...merged.values()].map((record) => this.snapshotRecord(record, this.runtimes.get(record.sessionID)))
   }
 
   list(): GoalSnapshot[] {
@@ -300,14 +332,19 @@ export class GoalController {
   }
 
   async spend(sessionID: string): Promise<UsageSnapshot | undefined> {
-    const record = this.goals.get(sessionID)
+    // In-memory first; an unadopted session (a second window's goal on the same directory, or this instance
+    // post-reload) falls back to the stored record so the ledger still answers — storage reads are cheap.
+    const record = this.goals.get(sessionID) ?? await this.deps.store.load(sessionID).catch(() => undefined)
     if (!record) return undefined
     if (record.final) return diffUsage(record.final, record.baseline)
     const usage = await this.deps.session.usage(sessionID).catch(() => undefined)
     return usage && diffUsage(usage, record.baseline)
   }
 
-  /** Absolute estimated prompt tokens; undefined when unestimable. Pure passthrough — never estimated on the hot path. */
+  /**
+   * Absolute estimated prompt tokens; undefined when unestimable. Pure passthrough — never estimated on the hot path.
+   * Memory-gated on purpose: a foreign session must not trigger the expensive context estimate (a host round-trip per poll).
+   */
   async contextSize(sessionID: string): Promise<number | undefined> {
     if (!this.goals.has(sessionID)) return undefined
     if (!this.deps.estimateContext) return undefined
@@ -581,7 +618,7 @@ export class GoalController {
 
   /**
    * Adopts one live record from storage into memory, resetting turn count, timer and spend baseline.
-   * Returns true when the record was adopted. Used by the bulk restore and by the RPC read-through.
+   * Returns true when the record was adopted. Used by the bulk restore only.
    */
   private async adoptRestored(record: GoalRecord): Promise<boolean> {
     if (this.goals.has(record.sessionID)) return true
@@ -609,13 +646,16 @@ export class GoalController {
     this.goals.set(record.sessionID, record)
     // Create the runtime up front so tool events that arrive before the first execution-end are counted.
     this.runtime(record.sessionID)
-    this.commit(record)
+    // Adoption normalizes in memory only; no commit here. Writing the stored record on a read/adopt path is
+    // what zeroed turns/baseline for other processes sharing the storage; the next real commit persists the
+    // normalized state (the record's JSON differs from the no-op cache marker anyway, since adopt mutates
+    // the record before returning).
     return true
   }
 
   /**
    * Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity).
-   * `boundaryCompact: false` adopts only (the read-only RPC list path): no host side effects are triggered.
+   * `boundaryCompact: false` adopts only: no host side effects are triggered.
    * The default keeps the restart fan-out, restricted to armed loops: compact live loop sessions once so a
    * restarted loop resumes on a fresh context. Plain `/goal` goals never reach the boundary-compaction path;
    * the request is recorded as pending so the next arm can detect where it landed.
@@ -651,21 +691,6 @@ export class GoalController {
       }
     }
     return this.goals.size
-  }
-
-  /**
-   * RPC read-through: adopt one live record from storage when it is not in memory.
-   * After a plugin reload the in-memory map can be empty for a directory while an active record
-   * exists in plugin storage; the goal RPC uses this so `get`/`list` never report a live goal as missing.
-   */
-  async restoreOne(sessionID: string): Promise<boolean> {
-    if (this.goals.has(sessionID)) return true
-    const record = await this.deps.store.load(sessionID).catch(() => undefined)
-    // Like the bulk restore, only adopt records owned by this instance's directory; a foreign-directory
-    // record belongs to another plugin instance and must not be driven twice.
-    if (!record || !isLive(record.status)) return false
-    if (!sameDirectory(record.directory, this.deps.directory)) return false
-    return this.adoptRestored(record)
   }
 
   async dispose(): Promise<void> {
@@ -1243,6 +1268,33 @@ export class GoalController {
       description: `goal \u00B7 check-in ${record.checkins}`,
       turn: record.turns + 1,
     })
+  }
+
+  /**
+   * Background work ended (an execution or a shell completed). The deferral that painted `waiting`
+   * clears as soon as no background work remains for the session: re-runs the deferred evaluation
+   * now instead of at the next idle check-in — which may be 30+ minutes away, or never, when
+   * check-ins are disabled. No-op for sessions that never deferred.
+   */
+  async onBackgroundDrained(): Promise<void> {
+    for (const [sessionID, runtime] of this.runtimes) {
+      if (this.disposed) return
+      if (runtime.deferredSince === undefined) continue
+      if (runtime.evaluating || this.running.has(sessionID)) continue
+      const record = this.goals.get(sessionID)
+      if (!record || record.status !== "active") continue
+      const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+      if (!work || work.subagents + work.shells > 0) continue
+      const carried = runtime.carriedToolCalls
+      runtime.carriedToolCalls = 0
+      runtime.deferredSince = undefined
+      const epoch = ++runtime.epoch
+      try {
+        await this.evaluate(record, runtime, epoch, carried)
+      } catch (error) {
+        this.deps.log.error("background drain evaluation failed", { error: errorMessage(error) })
+      }
+    }
   }
 
   // ---------------------------------------------------------------- transitions
