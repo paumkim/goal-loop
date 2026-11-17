@@ -2398,6 +2398,25 @@
       "submittedAt": "2026-11-17T00:04:32Z",
       "mergedAt": "2026-11-17T00:05:50Z",
       "mergedInto": "dev"
+    },
+    "em2-first-class-channel": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,src,test,scripts",
+      "branch": "wt/em2-first-class-channel",
+      "worktree": "worktrees/wt-em2-first-class-channel",
+      "status": "claimed",
+      "createdAt": "2026-11-17T00:20:30Z"
+    },
+    "opencode-real-clone-path": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-cli.ts,test/opencode-cli.test.ts",
+      "branch": "wt/opencode-real-clone-path",
+      "worktree": "worktrees/wt-opencode-real-clone-path",
+      "status": "done",
+      "createdAt": "2026-11-17T00:44:15Z",
+      "submittedAt": "2026-11-17T00:45:43Z",
+      "mergedAt": "2026-11-17T00:47:11Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
