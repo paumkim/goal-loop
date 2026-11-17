@@ -49,6 +49,14 @@ describe("CI workflow (.github/workflows/check.yml)", () => {
     expect(setupBun).toBeGreaterThan(checkout)
   })
 
+  test("fetches full history (docs:check derives stamps and the changelog from git log)", () => {
+    expect(hasLine(/^\s+fetch-depth:\s*0\s*$/)).toBe(true)
+  })
+
+  test("pins the bun version the dist byte-compare gate was verified with", () => {
+    expect(hasLine(/^\s+bun-version:\s*1\.4\.2\s*$/)).toBe(true)
+  })
+
   test("installs with a frozen lockfile", () => {
     expect(hasLine(/run:\s*bun install --frozen-lockfile\s*$/)).toBe(true)
   })

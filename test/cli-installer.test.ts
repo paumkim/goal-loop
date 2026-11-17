@@ -7,9 +7,9 @@
  * detection are driven by an injected env, never by process.env.
  */
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, chmodSync, statSync, symlinkSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, isAbsolute } from "node:path";
 import {
   PLUGIN_PACKAGE,
   PLUGIN_SPEC,
@@ -510,5 +510,189 @@ describe("PLUGIN_SPEC pins the package version (regression)", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(PLUGIN_SPEC).toBe(`github:paumkim/opencode-goalv2#v${pkg.version}`);
+  });
+});
+
+describe("install preserves comments between the last element and ] (regression)", () => {
+  test("a comment after the last element survives install", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", `{\n  "plugins": [\n    "some-other-plugin", // production plugin, do not remove\n    // audit note\n  ],\n}\n`);
+    const r = install([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).toContain("production plugin, do not remove");
+    expect(text).toContain("audit note");
+    expect(text).toContain(PLUGIN_SPEC);
+    // the result must still parse as JSONC and report the plugin installed
+    const s = status([], { env: envFor(home), cwd: home });
+    expect(s.stdout.toLowerCase()).toContain("installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a comment-only empty plugins array survives install", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", `{\n  "plugins": [ /* keep this comment */ ],\n}\n`);
+    const r = install([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toContain("keep this comment");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a comment with no comma after the last element still yields a valid config", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", `{\n  "plugins": [\n    "some-other-plugin" /* trailing comment, no comma */\n  ]\n}\n`);
+    const r = install([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).toContain("trailing comment, no comma");
+    const s = status([], { env: envFor(home), cwd: home });
+    expect(s.stdout.toLowerCase()).toContain("installed");
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("writeFileAtomic keeps file modes and symlinks (regression)", () => {
+  test("a 0600 config stays 0600 across install", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    chmodSync(file, 0o600);
+    install([], { env: envFor(home), cwd: home });
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a 0600 config stays 0600 across uninstall", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    install([], { env: envFor(home), cwd: home });
+    chmodSync(file, 0o600);
+    uninstall([], { env: envFor(home), cwd: home });
+    expect(statSync(file).mode & 0o777).toBe(0o600);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a symlinked config is edited through the link, not replaced", () => {
+    const home = fakeHome();
+    const xdg = join(home, "xdg");
+    mkdirSync(join(xdg, "opencode"), { recursive: true });
+    const dotfiles = join(home, "dotfiles");
+    mkdirSync(dotfiles, { recursive: true });
+    const target = join(dotfiles, "opencode.jsonc");
+    writeFileSync(target, STRICT);
+    chmodSync(target, 0o600);
+    const link = join(xdg, "opencode", "opencode.jsonc");
+    symlinkSync(target, link);
+    const r = install([], { env: envFor(home, xdg), cwd: home });
+    expect(r.code).toBe(0);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    const text = readFileSync(target, "utf8");
+    expect(text).toContain(PLUGIN_SPEC);
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("backup chronology rejects foreign backups (regression)", () => {
+  test("a stray .bak with an invalid stamp never shadows the real pre-install original", () => {
+    const home = fakeHome();
+    const proj = join(home, "proj");
+    mkdirSync(proj, { recursive: true });
+    const file = join(proj, "opencode.json");
+    writeFileSync(file, '{"model":"drift"}\n');
+    writeFileSync(`${file}.1999-99-99-00-00-00Z.bak`, '{"model":"FOREIGN-INVALID-MONTH"}\n'); // \d range-invalid
+    writeFileSync(`${file}.mine.bak`, '{"model":"FOREIGN-SHAPE"}\n');                        // not the backupFile format
+    writeFileSync(`${file}.2026-01-01-00-00-00Z.bak`, '{"model":"ORIGINAL"}\n');
+    const r = uninstall(["--project"], { env: envFor(home), cwd: proj });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe('{"model":"ORIGINAL"}\n');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a backup whose plugins value is a string (off-contract) is never an auto-restore candidate", () => {
+    const home = fakeHome();
+    const proj = join(home, "proj");
+    mkdirSync(proj, { recursive: true });
+    const file = join(proj, "opencode.json");
+    writeFileSync(file, '{"model":"drift"}\n'); // entry missing, plugins string form in the backup
+    writeFileSync(`${file}.2026-01-01-00-00-00Z.bak`, '{"plugins":"github:paumkim/opencode-goalv2#v1.1.0"}\n');
+    const r = uninstall(["--project"], { env: envFor(home), cwd: proj });
+    expect(r.code).toBe(0);
+    expect(r.stdout).not.toContain("restored");
+    expect(readFileSync(file, "utf8")).toBe('{"model":"drift"}\n');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("the backup taken during install captures the exact bytes of the parsed edit base", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    const before = readFileSync(file, "utf8");
+    const r = install([], { env: envFor(home), cwd: home });
+    const m = r.stdout.match(/backup: ([^)]+)\)/);
+    expect(m).not.toBeNull();
+    expect(readFileSync(m?.[1] ?? "", "utf8")).toBe(before);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("JSONC validation is strict about literals and duplicate keys (regression)", () => {
+  test("an invalid literal fails with exit 1 instead of round-tripping silently", () => {
+    const home = fakeHome();
+    writeGlobalConfig(home, "opencode.jsonc", '{"model": nul}\n');
+    const r = status([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("invalid literal");
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test('a duplicate "plugins" key is refused, not silently first-wins', () => {
+    const home = fakeHome();
+    writeGlobalConfig(home, "opencode.jsonc", '{\n  "plugins": ["a"],\n  "plugins": ["b"]\n}\n');
+    // via the CLI entrypoint: caught, one-line error, exit 1, nothing written
+    const r = runCli(["install"], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('duplicate "plugins"');
+    // as a library call: addPluginText throws CliError instead of editing the first array
+    expect(() => install([], { env: envFor(home), cwd: home })).toThrow('duplicate "plugins"');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("CRLF configs lose no content when the entry line is removed", () => {
+    const home = fakeHome();
+    const crlf = '{\r\n  "model": "x",\r\n  "plugins": [\r\n    "github:paumkim/opencode-goalv2#v1.1.0",\r\n    "keep"\r\n  ]\r\n}\r\n';
+    const file = writeGlobalConfig(home, "opencode.jsonc", crlf);
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).toContain("keep");
+    expect(text).not.toContain("\r\r");
+    expect(text.split("\n").every((l) => !l.endsWith("\r\r"))).toBe(true);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("scope resolution is cwd-proof (regression)", () => {
+  test("an empty HOME falls back to the OS home directory instead of CWD", () => {
+    const r = resolveScope([], { env: { HOME: "", PATH: "/usr/bin" }, cwd: "/tmp/elsewhere" });
+    expect(isAbsolute(r.dir)).toBe(true);
+    expect(join(r.dir).endsWith(join(".config", "opencode"))).toBe(true);
+  });
+
+  test("a non-absolute XDG_CONFIG_HOME is ignored, never resolved against CWD", () => {
+    const home = fakeHome();
+    const r = resolveScope([], { env: { HOME: home, XDG_CONFIG_HOME: "rel/dir", PATH: "/usr/bin" }, cwd: home });
+    expect(r.dir).toBe(join(home, ".config", "opencode"));
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("--restore reporting (regression)", () => {
+  test("the success message names the safety backup of the pre-restore state", () => {
+    const home = fakeHome();
+    writeGlobalConfig(home, "opencode.jsonc", STRICT);
+    writeGlobalConfig(home, "opencode.jsonc.2026-01-01-00-00-00Z.bak", STRICT); // plugin-free pre-install original
+    const r = uninstall(["--restore"], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("backup of the pre-restore state:");
+    rmSync(home, { recursive: true, force: true });
   });
 });
