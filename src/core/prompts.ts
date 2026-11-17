@@ -250,9 +250,45 @@ export function checkin(
   ].join("\n")
 }
 
-export function note(input: { title: string; body: string }): string {
-  return `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
+/**
+ * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
+ * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
+ * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
+ * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
+ * hook matches on (see `stripTerminalGoalNotes`). Loop advance notes stay plain `<goal-note>`: the
+ * next armed iteration still needs them.
+ */
+export const TERMINAL_NOTE_TAG = "<goal-note final>"
+
+export function note(input: { title: string; body: string; final?: boolean }): string {
+  return input.final
+    ? `${TERMINAL_NOTE_TAG}\n${input.title}\n${escape(input.body)}\n</goal-note>`
+    : `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
 }
+
+/** Structural view of a model-bound message: the `context` hook sees host-shaped messages, so match on the text content parts rather than any metadata the host may or may not propagate. */
+interface NoteMessageLike {
+  readonly content?: unknown
+}
+
+/** True when any text content part carries a terminal goal note. Unknown shapes never match. */
+export const isTerminalGoalNoteMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const content = (message as NoteMessageLike).content
+  if (!Array.isArray(content)) return false
+  return content.some((part) => {
+    if (typeof part !== "object" || part === null) return false
+    const { type, text } = part as { type?: unknown; text?: unknown }
+    return type === "text" && typeof text === "string" && text.includes(TERMINAL_NOTE_TAG)
+  })
+}
+
+/**
+ * Drop terminal goal notes from a model-bound message list. Mutating in place would share an array
+ * with the host, so callers that must signal removals through an array the host holds can splice the
+ * result back; this returns a fresh array and never touches its input.
+ */
+export const stripTerminalGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isTerminalGoalNoteMessage(m))
 
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [

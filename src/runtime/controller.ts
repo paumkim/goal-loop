@@ -742,13 +742,13 @@ export class GoalController {
       this.finish(record, "achieved", result.reason)
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, `${story} · ${result.reason || record.condition}`)
-      return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason)
+      return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason, { final: true })
     }
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", `${story} · ${result.reason || record.condition}`)
-      return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason)
+      return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason, { final: true })
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
       return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`, "cap")
@@ -899,7 +899,7 @@ export class GoalController {
       await this.finish(record, "achieved", reason)
       const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt, iterations: history.length })
       this.notify(sessionID, "achieved", "success", "Loop complete", `${story} · ${reason}`)
-      return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason)
+      return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason, { final: true })
     }
 
     if (!this.deps.evaluator.summarize && !this.deps.evaluator.nextGoal) {
@@ -1322,12 +1322,12 @@ export class GoalController {
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
-  private async note(record: GoalRecord, title: string, body: string) {
+  private async note(record: GoalRecord, title: string, body: string, opts?: { final?: boolean }) {
     if (!this.deps.config.transcriptNotes) return
     await this.deps.session
       .synthetic({
         sessionID: record.sessionID,
-        text: Prompt.note({ title, body: body || record.condition }),
+        text: Prompt.note({ title, body: body || record.condition, ...(opts?.final ? { final: true } : {}) }),
         description: title,
         metadata: { source: Prompt.MARKER, goal: record.id, final: true },
         delivery: "queue",

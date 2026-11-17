@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1314 -->
+<!-- spec-check files=59 tests=1326 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5630,3 +5630,35 @@ exactly that: the transcript says `Goal achieved (turn 1, 7m 21s).` while the pi
      the fix rides the 15s tick, so a paused goal re-pulls at the same cadence as an active one.
 
 <!-- spec-check files=59 tests=1314 -->
+
+## Workstream EM — the outcome line stays on the terminal, stops riding the context (2026-11-16)
+
+Interpretation of the mouse-first clause: the session keeps every `<goal-note>` the loop emits —
+the transcript renders each outcome line and the durable log stays auditable — but OpenCode folds
+durable session input into the model's context on every later turn. The `<goal-note final>` line the
+loop emits when the goal lands (achieved, impossible, loop complete) asks for nothing of the model,
+yet it rode the context and earned a ceremonial acknowledgement each turn (observed: a full agent
+turn answering "Goal achieved (turn 1, 7m 21s)."). The loop-arm note stays plain `<goal-note>`: the
+armed iteration still needs it. The record stays in the log and on the terminal; it stops being an
+instruction.
+511. src/core/prompts.ts — `TERMINAL_NOTE_TAG` (`<goal-note final>`); `note()` gains `final?: boolean`
+     and emits the tagged wrapper when set. `isTerminalGoalNoteMessage(message)` matches the tag in any
+     text content part (structural, host-shape-tolerant; unknown shapes never match). `stripTerminalGoalNotes(messages)`
+     returns a fresh array without the terminal notes — never mutates its input; callers that must signal
+     removals through the host's array splice the result back.
+512. src/runtime/controller.ts — `note()` gains `opts.final`; the three end-of-record call sites
+     (achieved, impossible, loop complete) pass `{ final: true }`; the loop-arm note does not.
+     `<goal-note final>` is the only behavioral change; plain notes are byte-identical to before.
+513. src/index.ts — the `context` hook splices terminal notes out of `event.messages` in place (the
+     host holds the caller's array reference, so a rebound property could go unseen). System-part
+     handling is unchanged; records are untouched; the `/goal` dialog, pill and dossier read the log
+     as before.
+514. Tests: +8 unit (notes.test.ts — wrapper grammar, predicate over text/non-text/malformed parts,
+     strip order and purity) + +2 plugin (the context hook removes a terminal note and keeps a plain
+     loop-arm note; note-free lists pass through untouched) + 1 controller assertion (the achieved note
+     carries the terminal tag). Tests: marker re-counted by spec-check --write after the suite lands.
+515. Honest limits: the host folds session input into context at its own discretion — this removes the
+     note from the bound request it observes, not from the durable log (it is not deletable by API);
+     a model that needs the verdict finds it on disk in the goal record and the dossier; non-tagged
+     goal notes still ride the context by design (they carry live instructions).
+<!-- spec-check files=59 tests=1326 -->
