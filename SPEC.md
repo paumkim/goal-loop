@@ -458,7 +458,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=59 tests=1339 -->
+<!-- spec-check files=59 tests=1341 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5832,3 +5832,76 @@ things in roughly half the cells; the operational invariants the test pins are u
      commit to the host repo. `test/opencode-cli.test.ts` passes unchanged.
 <!-- spec-check files=59 tests=1339 -->
 
+
+## Workstream EQ — the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept (2026-11-16)
+
+Interpretation of the armed condition: a whole-repo consistency sweep after EP — the EP review's
+open items (the missing nested-raised track paint assertion, the test-only `scrollbarChrome`
+duplication, the near-duplicate width-measure pins, the stale 2-cell furniture and floating-panel
+grammar in comments) plus drift found by the sweep itself. All fixes are no new behavior; the one
+new test-count delta is the wiring pins in the width-measure suite.
+
+537. src/core/scrollbar.ts — `scrollbarChrome` and its `ScrollbarTheme`/`ScrollbarChrome` types are
+     deleted. The module now has exactly one entry point (`scrollbarTrackOptions`) serving one
+     decision: the track is the host's nested `background.raised.high` (the same surface the HUD card
+     paints) or omitted when the host exposes no raised token; the thumb is `text.muted` in color and
+     `text.base` in mono. The module doc names the nested-palette shape as the only shape and the
+     raised-token track rule up front. No shipped path used `scrollbarChrome` (production always wired
+     `scrollbarTrackOptions`); nothing else imported it.
+538. test/scrollbar.test.tsx — the mechanism suite (overflow paint / mono thumb / fit-hides / drag /
+     click-page) is rewired from the flat-RGBA `scrollbarChrome` fixture to the production path:
+     `scrollbarTrackOptions` over a nested `background.raised.high` fixture — the exact palette shape
+     `tui.tsx` feeds the host. The overflow test now asserts the raised token paints on the whole
+     track column (8 cells) AND that no cell paints the flat pre-EN background — the raised-token
+     paint assertion EP's review flagged as missing. The header comment no longer claims the wiring
+     is "the way tui.tsx wires it" while wiring a different path. The flat-arm unit tests became the
+     nested-arm equivalents (same three pins, nested fixture). Test count unchanged (11).
+539. test/tui-hud-width-measure.test.tsx — the two near-duplicate tests pinning the same opentui
+     contract are consolidated into one stronger pin (ref-time width 0; onSizeChange reports the
+     parent's resolved width after the first layout; the capture shows the child paints), and a new
+     source-contract describe adds three wiring assertions against `src/tui.tsx`: the probe assigns
+     `el.onSizeChange` and re-snaps `mountWidth` on every layout pass; the disarm `createEffect`
+     resets `mountWidth` to undefined; the `<Show>` width gate sits inside the probe box and the
+     anchor (`hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr())`) and the card's
+     `width={mountWidthOr()}` consume the measured mount width, never the full terminal. Suite:
+     2 → 4 tests.
+540. Stale 2-cell / floating-panel furniture swept (comments only, no behavior): `src/hud-card.tsx`
+     CARD_WIDTH_MIN's doc now reads "left accent border (1) + padding (4) + LABEL (10) leaves a
+     37-cell content lane" (was "border (2) + padding (2) ... 38-cell"); the two "Rows the card
+     occupies including the border" docs now state the 1-cell left accent consumes a column, not a
+     row; "eats the title border" → "eats the title row". `src/tui.tsx`'s pill comment no longer calls
+     the card a "bordered floating panel" (it is the composer-grammar card since EM2). `test/core.test.ts`
+     pins the clamp-floor spend budget at 36 cells (52 − left border 1 − padding 4 − LABEL 10 − gap 1,
+     was the border-2 arithmetic giving 37).
+541. Date-stamp sweep (findings; the three named files are consistent with SPEC.md's UTC convention
+     for the 2026-11-17 crash/incident work and were left as authored): the real mixed convention is
+     `docs/` — `scripts/docs-watch.ts` formats committer dates with `--date=format:` (the commit's
+     own offset, not the `TZ=UTC` it sets) and labels the wall-clock as "UTC", so every docs stamp
+     and changelog row is local time mislabeled UTC (e.g. `2026-11-16 20:43 UTC` for a commit at
+     2026-11-17T02:43Z); the fix is `--date=format-local:` plus regenerating `docs/`, but `docs/` is
+     claimed by the stale `github-single-channel` lease (see 542) — left for that lease's owner.
+     RELEASE-CHECKLIST.md's "dev @ 3efc3d5 (2026-11-17) ... Since the 2026-11-16 stamp" line mixes
+     the two conventions in one line and is stale for the same reason — also under that lease.
+     Historical SPEC.md/EP markers and the `469cee8` commit message keep their authored stamps.
+542. Coordination finding (not a repo artifact): the `github-single-channel` lease (agent
+     orchestrator, `wt/github-single-channel`, paths `README.md,docs,RELEASE-CHECKLIST.md`, claimed
+     2026-11-16T00:30Z, status `claimed`) is stale — its worktree does not exist, its branch matches
+     nothing in `git branch -a`, no commits reference it, and no PR is open. Its claimed paths
+     genuinely overlap the docs/stamp fixes in 541, so those are flagged, not forced; the lease
+     cannot be reconciled by rebase or merge (nothing to rebase) and no coordinator subcommand
+     releases a claim. Maintainer action needed: release or close the stale lease, then land
+     `format-local:` + `bun scripts/docs-watch.ts once` (docs/ regeneration) and the
+     RELEASE-CHECKLIST.md evidence re-sync together.
+543. github-single-channel overlap with this workstream: none — every file touched here
+     (src/core/scrollbar.ts, src/hud-card.tsx, src/tui.tsx, test/scrollbar.test.tsx,
+     test/tui-hud-width-measure.test.tsx, test/core.test.ts, SPEC.md) sits outside the lease's
+     claimed paths, and the claim passed the overlap check cleanly.
+544. Honest limits: the wiring assertions in 539 are source-scan pins — they catch the probe branch,
+     the disarm reset and the mount-width consumption being removed or rewired to terminal width,
+     but they do not render the host; the render pin (one mechanism test) stays the behavioral
+     guard. The pill/pin `mountWidthOr()` budget remains headless-unverified against a real sidebar
+     host (EP's limit, unchanged). The docs/ stamp mislabel (541) remains in the committed tree —
+     the repository's docs claim "UTC" times that are not UTC until the lease owner lands the fix.
+     Date stamps in the three incident-named files keep the UTC convention SPEC.md uses.
+     Suite: 1341 pass, 0 fail (55 files). Marker re-counted below and at the Workstream J marker.
+<!-- spec-check files=59 tests=1341 -->

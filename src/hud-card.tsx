@@ -72,7 +72,7 @@ const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 6
 
-/** Narrowest card the layout serves: border (2) + padding (2) + LABEL (10) leaves a 38-cell content lane at the floor. */
+/** Narrowest card the layout serves: left accent border (1) + padding (4) + LABEL (10) leaves a 37-cell content lane at the floor. */
 export const CARD_WIDTH_MIN = 52
 /** Widest card the layout serves: past this the condition stops being a glance and the card stops being a HUD. */
 export const CARD_WIDTH_MAX = 88
@@ -99,7 +99,7 @@ export const spendWidth = (width: number): number => Math.max(5, Math.floor(widt
 export const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 23)
 
 export interface CardRowPlan {
-  /** Rows the card occupies including the border. */
+  /** Rows the card occupies (the 1-cell left accent is a full-height column, never a row). */
   readonly rows: number
   /** Whether the teaching hint row fits the budget. */
   readonly hint: boolean
@@ -123,7 +123,7 @@ export interface CardRowPlan {
  * meter, then the why row, then the last verdict, then the remediation. The context menu and the actions row never drop, so under a brutal
  * ceiling with the menu open (5 core rows + 6 menu rows > maxRows) the anchor still exceeds the ceiling;
  * rows are deliberately left unclamped in that pathological case — the absolute box is anchored
- * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title border, never Esc.
+ * bottom-up at the dismiss affordance, so terminal-edge clipping eats the title row, never Esc.
  * Below maxRows = 9 the card always keeps enough rows to stay dismissible.
  */
 export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): CardRowPlan => {
@@ -162,7 +162,7 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
   return { rows, hint, spend, context, why, last, remediation: fix }
 }
 
-/** Rows the card occupies including the border; the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
+/** Rows the card occupies (the 1-cell left accent consumes a column, not a row); the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
 export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): number => cardRowPlan(goal, contextOpen, maxRows, width).rows
 
 /** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (stringWidth on both sides; the pill carries multibyte glyphs). */
