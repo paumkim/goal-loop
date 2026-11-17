@@ -798,3 +798,37 @@ describe("status classifies the opencode probe honestly (regression)", () => {
     rmSync(home, { recursive: true, force: true });
   });
 });
+
+describe("bin/opencode-goal.d.mts stays in sync with opencode-goal.mjs (regression)", () => {
+  test("the declarations declare every export of the .mjs and carry no stale value extras", async () => {
+    const mjs = readFileSync(new URL("../bin/opencode-goal.mjs", import.meta.url), "utf8");
+    const dts = readFileSync(new URL("../bin/opencode-goal.d.mts", import.meta.url), "utf8");
+
+    // Runtime truth: what a consumer importing the .mjs actually observes.
+    const ns = await import("../bin/opencode-goal.mjs");
+    const runtimeExports = Object.keys(ns).sort();
+
+    // Value declarations the .d.mts publishes. Interfaces and type aliases are
+    // supporting types for those values, not value exports, and are
+    // deliberately out of the comparison.
+    const declared = new Set<string>();
+    for (const m of dts.matchAll(/^export\s+(?:declare\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)) {
+      declared.add(m[1]!);
+    }
+    expect(declared.size).toBeGreaterThan(0);
+
+    // Exact set equality in both directions: every real export is declared,
+    // and every declared value export actually exists — nothing missing,
+    // nothing stale.
+    expect([...declared].sort()).toEqual(runtimeExports);
+
+    // Source scan as a second leg: every `export ...` the .mjs text publishes
+    // (line-anchored, so comments and calls cannot false-positive) appears as
+    // a value declaration in the .d.mts.
+    const mjsExports = [...mjs.matchAll(/^export\s+(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)].map((m) => m[1]!);
+    expect(mjsExports.length).toBeGreaterThan(0);
+    for (const name of mjsExports) {
+      expect(dts).toMatch(new RegExp(`^export\\s+(?:declare\\s+)?(?:const|let|var|function|class)\\s+${name}\\b`, "m"));
+    }
+  });
+});

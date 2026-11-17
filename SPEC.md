@@ -457,7 +457,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=60 tests=1449 -->
+<!-- spec-check files=60 tests=1450 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6167,3 +6167,12 @@ Interpretation of the armed condition: iteration 3 (EX) deferred four reviewer-g
 702. Verification: `bun run check` green in this worktree (tsc, full suite, docs freshness, spec-check after the marker bump). Honest limits: the fsync pin is a source scan, not a crash-injection durability test; the shim pins assume `/bin/sh`; signal-forwarding style behavioral risk (spawnSync's own `error` on timeout arrives with `signal` set) is handled by checking `error` before `signal` in the classifier. Marker re-counted at the first marker and below.
 
 <!-- spec-check files=60 tests=1449 -->
+
+## Workstream EW — the .d.mts export-drift pin (2026-11-17)
+
+Interpretation of the armed condition: `bin/opencode-goal.d.mts` is hand-maintained to mirror the exports of `bin/opencode-goal.mjs`; add one regression test that keeps the two from drifting silently. No production-code change; `bun run check` stays green. Docs untouched (the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`).
+
+703. test/cli-installer.test.ts — new regression test "the declarations declare every export of the .mjs and carry no stale value extras". It compares, in exact set equality, the runtime export keys of the dynamically imported `../bin/opencode-goal.mjs` against the value declarations (`export const|let|var|function|class`, optional `declare`, line-anchored) published by `../bin/opencode-goal.d.mts`: every real export must be declared, and every declared value export must exist — nothing missing, nothing stale. A second leg source-scans the .mjs's own line-anchored `export` declarations and requires each to appear as a value declaration in the .d.mts. Negative control performed in this worktree: appending a stale `export function staleHelper(): void;` to the .d.mts fails the new test (61 pass / 1 fail), then the file was restored with `git checkout --`. Interfaces and type aliases in the .d.mts (`ScopeResolution`, `CliOptions`, `CliResult`, `OpencodeProbeResult`, `AddPluginResult`, `RemovePluginResult`) are supporting types for the values and are deliberately out of the comparison.
+704. Verification: `bun run check` green in this worktree (tsc, full suite, docs freshness, spec-check after the marker bump). Honest limits: the pin compares value exports only — a wrong signature on an existing declaration (e.g. wrong argument type on `status`) still passes, because nothing type-checks the .mjs source against its declarations and `tsc --noEmit` does not include `bin/`; interface-only staleness (an unused exported interface) is not detected mechanically; the source scan, like the fsync pin, is structural and line-anchored. Marker re-counted at the first marker and below.
+
+<!-- spec-check files=60 tests=1450 -->
