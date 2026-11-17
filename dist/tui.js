@@ -4702,9 +4702,9 @@ var cardWidth = (terminalWidth) => {
   const fitted = Math.floor(terminalWidth) - 16;
   return Math.max(CARD_WIDTH_MIN, Math.min(CARD_WIDTH_MAX, fitted));
 };
-var remediationWidth = (width) => Math.max(24, Math.floor(width) - 15);
-var spendWidth = (width) => Math.max(5, Math.floor(width) - 15);
-var conditionWidth = (width) => Math.max(20, Math.floor(width) - 22);
+var remediationWidth = (width) => Math.max(24, Math.floor(width) - 16);
+var spendWidth = (width) => Math.max(5, Math.floor(width) - 16);
+var conditionWidth = (width) => Math.max(20, Math.floor(width) - 23);
 var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => {
   const remediation = remediationFor(goal);
   const remediationWanted = Boolean(remediation);
@@ -7115,7 +7115,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? stringWidth(landingSfx()) : 0));
+            const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0));
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget);
             const t = terminal();
@@ -7137,7 +7137,7 @@ var tui_default = Plugin.define({
             return prefix + model.text + landed;
           const g = goal();
           const base = prefix + model.text + landed;
-          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base), motionDisabled(process.env)) : base;
+          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
         const animated = () => {
           const g = goal();
@@ -7184,6 +7184,10 @@ var tui_default = Plugin.define({
           const g = showing();
           return g && getHudSession() === props.sessionID ? g : undefined;
         };
+        createEffect2(() => {
+          if (!cardFor())
+            setMountWidth(undefined);
+        });
         const maxCardRows = () => Math.max(8, dimensions().height - 2);
         const cardRows = () => {
           const g = cardFor();

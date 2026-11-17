@@ -846,7 +846,7 @@ export default Plugin.define({
           // the same line (cells, not .length). Walks the degradation ladder (retry → compact → turns → pips)
           // before truncating the core, so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(1, dimensions().width - 4 - (landingNow() ? stringWidth(landingSfx()) : 0))
+          const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0))
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -873,7 +873,7 @@ export default Plugin.define({
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
           const base = prefix + model.text + landed
-          return g ? base + pinSuffix(g.condition, pinBudget(dimensions().width, base), motionDisabled(process.env)) : base
+          return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
         }
         // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
         // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced
@@ -920,6 +920,13 @@ export default Plugin.define({
           const g = showing()
           return g && getHudSession() === props.sessionID ? g : undefined
         }
+        // Drop the measured mount width when the card disarms: the probe box unmounts with the card,
+        // so a composer resize while the HUD is closed goes unobserved. Without the reset, re-arming
+        // paints one layout pass at the stale width (the card into the sidebar region on a shrink)
+        // until the probe's first onSizeChange snaps it back. With it, re-open waits for a fresh measure.
+        createEffect(() => {
+          if (!cardFor()) setMountWidth(undefined)
+        })
         // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
         // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
         const maxCardRows = () => Math.max(8, dimensions().height - 2)

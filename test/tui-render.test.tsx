@@ -564,10 +564,10 @@ describe("HUD card why row", () => {
   })
 
   test("a reason longer than the budget truncates with the ellipsis, never wraps", async () => {
-    // pinned to an 80-column terminal (cardWidth(80) = 64, the 64-cell design) so the ellipsis lands at the 42-cell condition budget
+    // pinned to an 80-column terminal (cardWidth(80) = 64, the 64-cell design) so the ellipsis lands at the 41-cell condition budget
     const frame = await render(() => <HudCard goal={loopedGoal({ reason: "x".repeat(60) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />, 80, 40)
-    expect(frame).toContain("x".repeat(41) + "…")
-    expect(frame).not.toContain("x".repeat(42))
+    expect(frame).toContain("x".repeat(40) + "…")
+    expect(frame).not.toContain("x".repeat(41))
   })
 
   test("under a ceiling the why row drops after context and before the last-verdict row", async () => {
