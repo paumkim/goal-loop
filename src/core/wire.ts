@@ -19,6 +19,14 @@ import type {
   VerdictEntry,
 } from "./types.ts"
 
+/** Normalizes paths for cross-platform equality (case-insensitive drive letters, separators). */
+export const sameDirectory = (a: string, b: string) => {
+  const norm = (p: string) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "")
+  const left = norm(a)
+  const right = norm(b)
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right
+}
+
 /** Plain (non-array) object check; the base narrow every other guard is built on. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)

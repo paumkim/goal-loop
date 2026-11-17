@@ -32,10 +32,10 @@ import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./statu
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, ENTRY_CAP, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
-import { parseChangedEvent, parseListGoalOutput, parseNotice } from "./core/wire.ts"
+import { parseChangedEvent, parseListGoalOutput, parseNotice, sameDirectory } from "./core/wire.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 
 type Entry = GoalSnapshotCacheEntry
@@ -103,6 +103,10 @@ export default Plugin.define({
     const [dialogNoticeStale, setDialogNoticeStale] = createSignal(false)
     const [scrollRef, setScrollRef] = createSignal<ScrollBoxRenderable | undefined>(undefined)
     const requested = new Set<string>()
+    // Bound the one-shot marker set: unlike the entries cache it has no cap, so a long-lived TUI over
+    // months of session churn would grow it without limit. Clearing wholesale is safe — a re-ensured
+    // session just re-pulls once through the same path.
+    const REQUESTED_CAP = 256
 
     const statusBody = (sessionID: string, fallback: string) => {
       const entry = () => entries()[sessionID]
@@ -154,7 +158,7 @@ export default Plugin.define({
       setDialogNoticeStale(false)
       // Pull a fresh snapshot (with spend) so the dialog renders current data; the notice text stays the fallback.
       // If the RPC rejects or the payload cannot be parsed, say so in the dialog — never let stale chrome pass as fresh.
-      void refresh(sessionID).then((fresh) => { if (!fresh) setDialogNoticeStale(true) }).catch(() => setDialogNoticeStale(true))
+      void refresh(sessionID).then((fresh) => setDialogNoticeStale(!fresh)).catch(() => setDialogNoticeStale(true))
       void refreshOthers()
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
       const loopPosition = () => {
@@ -370,8 +374,8 @@ export default Plugin.define({
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       return setEntries((previous) => {
         const existing = previous[sessionID]
-        // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick.
-        if (existing && goalsEqual(existing.goal, mergedGoal)) return bumpReceivedAt(previous, sessionID, Date.now())
+        // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick. The cap still applies here — steady null entries ride the cap eviction (oldest non-live first) but are never dropped outright, or the tick would lose the re-pull target.
+        if (existing && goalsEqual(existing.goal, mergedGoal)) return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP, { dropNulls: false })
         const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: Date.now() } }
         // Drop null entries (unless a dialog is rendering that session) and cap the map.
         return pruneSnapshotEntries(next, statusDialogSession())
@@ -381,6 +385,7 @@ export default Plugin.define({
     /** Lazily fetches a session's goal the first time a view asks for it; events keep it fresh afterwards. */
     const ensure = (sessionID: string) => {
       if (requested.has(sessionID)) return
+      if (requested.size >= REQUESTED_CAP) requested.clear()
       requested.add(sessionID)
       // makeGoalRefresh resolves false on a malformed payload — release the marker on either failure
       // so the next render retries instead of black-holing this session's pill forever.
@@ -464,6 +469,12 @@ export default Plugin.define({
     const offChanged = rpc.events.on("changed", (event) => {
       try {
         const parsed = parseChangedEvent(event?.data)
+        // Defense-in-depth: a bus that ever crosses processes/directories must not paint another
+        // project's record onto this one (the RPC read paths enforce the same directory scope).
+        // Fail open when this instance has no directory to compare against; null-goal clears carry
+        // no directory and pass through.
+        const local = context.location?.directory
+        if (parsed && parsed.goal && local && !sameDirectory(parsed.goal.directory, local)) return
         if (parsed) put(parsed.sessionID, parsed.goal)
         if (statusDialogOpen()) void refreshOthers()
       } catch {
@@ -488,6 +499,9 @@ export default Plugin.define({
       // directory, or the `changed` event was dropped); a terminal/null response flows through the normal
       // intake, arms the acknowledgment pill, and the stale chrome converges.
       for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now())) void refresh(sessionID).catch(() => {})
+      // A kept-open dialog's foreign-goals block comes solely from the `others()` signal; the tick used to
+      // refresh cached session entries but not this list, so a dropped `changed` event left it stale forever.
+      if (statusDialogOpen()) void refreshOthers()
     }, TICK_MS)
 
     // One-per-session pin registry: a pinned condition is appended (truncated) to the ambient pill so it

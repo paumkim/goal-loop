@@ -219,3 +219,29 @@ describe("bumpReceivedAt", () => {
     expect(out.a!.goal).toBeNull()
   })
 })
+
+describe("steady null entries and the cap (the unchanged-snapshot intake path)", () => {
+  test("dropNulls:false retains steady null entries below the cap", () => {
+    const input: Record<string, GoalSnapshotCacheEntry> = { a: entry(null, 1000), b: entry(null, 2000) }
+    const out = pruneSnapshotEntries(input, undefined, ENTRY_CAP, { dropNulls: false })
+    expect(out).toBe(input)
+  })
+
+  test("dropNulls:false still enforces the cap: oldest non-live (null) entries are evicted, freshly bumped survive, live goals never evicted", () => {
+    const map: Record<string, GoalSnapshotCacheEntry> = {}
+    // ENTRY_CAP null entries, oldest first — the shape a long-lived TUI reaches over months of session churn.
+    for (let i = 0; i < ENTRY_CAP; i++) map[`ses_${i}`] = entry(null, 1000 + i)
+    map.live_a = entry("active", 1)
+    map.live_b = entry("paused", 2)
+    // The freshly re-pulled entry: receivedAt is bumped to NOW before the cap runs.
+    const bumped = bumpReceivedAt(map, "ses_0", 99999)
+    const out = pruneSnapshotEntries(bumped, undefined, ENTRY_CAP, { dropNulls: false })
+    expect(Object.keys(out)).toHaveLength(ENTRY_CAP)
+    expect(out.ses_0?.receivedAt).toBe(99999) // the freshly checked entry survives the eviction
+    expect(out.live_a?.goal).not.toBeNull()
+    expect(out.live_b?.goal).not.toBeNull()
+    expect(out.ses_1).toBeUndefined() // oldest null evicted first
+    expect(out.ses_2).toBeUndefined()
+    expect(out.ses_3?.goal).toBeNull() // overflow is 2 (66 entries, cap 64); ses_3 is the newest survivor of the null tail
+  })
+})

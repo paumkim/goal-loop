@@ -5666,11 +5666,11 @@ var scrollbarTrackOptions = (theme, mono) => {
 
 // src/core/entries.ts
 var ENTRY_CAP = 64;
-function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
+function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP, { dropNulls = true } = {}) {
   let changed = false;
   const out = {};
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (entry.goal === null && sessionID !== keep) {
+    if (dropNulls && entry.goal === null && sessionID !== keep) {
       changed = true;
       continue;
     }
@@ -5961,6 +5961,12 @@ var dialogStatusCommands = (deps) => {
 };
 
 // src/core/wire.ts
+var sameDirectory = (a, b) => {
+  const norm = (p) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "");
+  const left = norm(a);
+  const right = norm(b);
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+};
 var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var isString = (value) => typeof value === "string";
 var isBoolean = (value) => typeof value === "boolean";
@@ -6158,6 +6164,7 @@ var tui_default = Plugin.define({
     const [dialogNoticeStale, setDialogNoticeStale] = createSignal4(false);
     const [scrollRef, setScrollRef] = createSignal4(undefined);
     const requested = new Set;
+    const REQUESTED_CAP = 256;
     const statusBody = (sessionID, fallback) => {
       const entry = () => entries()[sessionID];
       const goal = () => entry()?.goal ?? undefined;
@@ -6258,10 +6265,7 @@ var tui_default = Plugin.define({
       setHudSession(undefined);
       setIterationsExpanded(false);
       setDialogNoticeStale(false);
-      refresh(sessionID).then((fresh) => {
-        if (!fresh)
-          setDialogNoticeStale(true);
-      }).catch(() => setDialogNoticeStale(true));
+      refresh(sessionID).then((fresh) => setDialogNoticeStale(!fresh)).catch(() => setDialogNoticeStale(true));
       refreshOthers();
       const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
       const loopPosition = () => {
@@ -6509,7 +6513,9 @@ var tui_default = Plugin.define({
       return setEntries((previous) => {
         const existing = previous[sessionID];
         if (existing && goalsEqual(existing.goal, mergedGoal))
-          return bumpReceivedAt(previous, sessionID, Date.now());
+          return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP, {
+            dropNulls: false
+          });
         const next = {
           ...previous,
           [sessionID]: {
@@ -6523,6 +6529,8 @@ var tui_default = Plugin.define({
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
         return;
+      if (requested.size >= REQUESTED_CAP)
+        requested.clear();
       requested.add(sessionID);
       refresh(sessionID).then((ok) => {
         if (!ok)
@@ -6602,6 +6610,9 @@ var tui_default = Plugin.define({
     const offChanged = rpc.events.on("changed", (event) => {
       try {
         const parsed = parseChangedEvent(event?.data);
+        const local = context.location?.directory;
+        if (parsed && parsed.goal && local && !sameDirectory(parsed.goal.directory, local))
+          return;
         if (parsed)
           put(parsed.sessionID, parsed.goal);
         if (statusDialogOpen())
@@ -6620,6 +6631,8 @@ var tui_default = Plugin.define({
         setNow(Date.now());
       for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now()))
         refresh(sessionID).catch(() => {});
+      if (statusDialogOpen())
+        refreshOthers();
     }, TICK_MS);
     const [pinned, setPinned] = createSignal4(new Set);
     const isPinned = (sessionID) => Boolean(sessionID && pinned().has(sessionID));
