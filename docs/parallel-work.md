@@ -44,7 +44,7 @@ The rules below are enforced by the binary, not by trust.
 Any path that deletes a worktree first stashes the non-exempt dirt into
 `refs/coordinator/saved/<slug>-<epoch>` (a real stash commit, also listed in `git stash list`)
 and prints recovery commands, e.g. `git stash apply refs/coordinator/saved/<slug>-<epoch>`.
-The only exempt dirt is `.term/coordinator/state.json` — claim and submit leave it dirty
+The only exempt dirt is `.term/coordinator/state.json`. Claim and submit leave it dirty
 by design, and the merge flow restores it. Your uncommitted work never vanishes with a
 worktree.
 
@@ -66,7 +66,7 @@ The merge pipeline never force-lands a red tree. If your lease is the loser of a
 1. `git -C worktrees/wt-<slug> rebase dev`
 2. resolve the conflict
 3. re-run the gate in your worktree (`bun run check`)
-4. `coordinator merge-next` again — your lease is still submitted, no need to re-submit
+4. `coordinator merge-next` again. Your lease is still submitted; no need to re-submit
 
 If the gate fails on the merged result, `dev` is untouched and the error prints the fix
 and the exact recovery. Fix the branch, then re-run `merge-next`. If you only need the SPEC
