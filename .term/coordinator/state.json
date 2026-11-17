@@ -2458,6 +2458,17 @@
       "submittedAt": "2026-11-17T01:47:22Z",
       "mergedAt": "2026-11-17T01:48:56Z",
       "mergedInto": "dev"
+    },
+    "hud-card-measure": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,test/tui-hud-width-measure.test.tsx,SPEC.md,dist/tui.js",
+      "branch": "wt/hud-card-measure",
+      "worktree": "worktrees/wt-hud-card-measure",
+      "status": "done",
+      "createdAt": "2026-11-17T01:52:12Z",
+      "submittedAt": "2026-11-17T02:03:52Z",
+      "mergedAt": "2026-11-17T02:04:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
