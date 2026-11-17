@@ -5783,3 +5783,36 @@ of the gate was inverted. This workstream fixes the structure, not the sign.
      `cardRows()` contract; headless coverage pins the mechanism, not the host's slot placement, which
      remains verified in the standalone tmux repro only.
 <!-- spec-check files=59 tests=1339 -->
+
+## Workstream EP — post-merge review fixes: one-cell border arithmetic, stale mount width (2026-11-17)
+
+Interpretation of the armed condition: a read-only review of the EM/EP-width workstreams' merged
+diffs (b4a286d~1..HEAD, src/ and test/) surfaced low-severity defects in the freshly landed width
+grammar. This workstream fixes them; no new behavior is introduced.
+
+531. src/hud-card.tsx — the left-accent redesign paints a 1-cell left border, but `remediationWidth`,
+     `spendWidth` and `conditionWidth` still budgeted for the old 2-cell frame. All three now subtract
+     the painted furniture exactly: remediation/spend 16 (left border 1, padding 4, LABEL 10, gap 1),
+     condition/why 23 (the same plus the 7-cell right hint slot). The remediation wrap estimate no
+     longer reserves a row short; the spend anchor cannot clip mid-figure; the condition line no
+     longer overruns the hint slot on hover.
+532. src/tui.tsx — `mountWidth` is reset to undefined when the card disarms (`createEffect` on
+     `cardFor()`); the probe box unmounts with the card, so a composer resize while the HUD is closed
+     went unobserved and re-arming painted one layout pass at the stale width. Re-open now waits for a
+     fresh measure instead.
+533. src/tui.tsx — the pill label budget and the pinned-condition `pinBudget` now read
+     `mountWidthOr()` (the measured composer mount, terminal width as the fallback) instead of
+     `dimensions().width` — the same full-screen-vs-composer overflow class the card fix closed.
+534. src/core/scrollbar.ts — the module doc now names the two entry points and which is production
+     (`scrollbarTrackOptions`, the host's nested palette) and which is the flat fixture path
+     (`scrollbarChrome`, kept for the mechanism tests).
+535. test/tui-hud.test.tsx and test/tui-render.test.tsx — two ellipsis-landing expectations re-pinned
+     to the corrected budgets (64-cell card: condition/why truncates at 41 cells, 40 x's + …). No tests
+     added or removed; the suite count is unchanged.
+536. Honest limits: the pill/pin budget change is headless-unverified against a real sidebar host
+     (falls back to `dimensions().width` in tests, so the suite is unchanged); review item L2 (the
+     mount width intentionally bypasses `CARD_WIDTH_MAX`, the documented full-composer contract from
+     workstreams 517/EN) was deliberately not clamped; the nested-raised track paint assertion flagged
+     in review was not added (the no-throw mount test stays the coverage). Date stamps elsewhere were
+     left as authored.
+<!-- spec-check files=59 tests=1339 -->

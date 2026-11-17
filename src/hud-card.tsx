@@ -90,13 +90,13 @@ export const cardWidth = (terminalWidth: number): number => {
   return Math.max(CARD_WIDTH_MIN, Math.min(CARD_WIDTH_MAX, fitted))
 }
 
-/** Cells available to the remediation text for a card of `width` (border 2, padding 2, LABEL 10, gap 1 = 15). `wrapMode="word"` wraps at this width. */
-export const remediationWidth = (width: number): number => Math.max(24, Math.floor(width) - 15)
-/** Cells available to the spend line at `width` (border 2, padding 2, LABEL 10, gap 1). Under the budget the spend line degrades by dropping cached, then out, then in — the cost is the anchor and never clips mid-figure. */
-export const spendWidth = (width: number): number => Math.max(5, Math.floor(width) - 15)
+/** Cells available to the remediation text for a card of `width` (left border 1, padding 4, LABEL 10, gap 1 = 16). `wrapMode="word"` wraps at this width. */
+export const remediationWidth = (width: number): number => Math.max(24, Math.floor(width) - 16)
+/** Cells available to the spend line at `width` (left border 1, padding 4, LABEL 10, gap 1). Under the budget the spend line degrades by dropping cached, then out, then in — the cost is the anchor and never clips mid-figure. */
+export const spendWidth = (width: number): number => Math.max(5, Math.floor(width) - 16)
 
-/** Cells available to the condition / why reason at `width` (the 22-cell fixed furniture: border 2, padding 2, LABEL 10, gap 1, right hint slot 7). */
-export const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 22)
+/** Cells available to the condition / why reason at `width` (the 23-cell fixed furniture: left border 1, padding 4, LABEL 10, gap 1, right hint slot 7). */
+export const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 23)
 
 export interface CardRowPlan {
   /** Rows the card occupies including the border. */

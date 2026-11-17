@@ -9,6 +9,10 @@
  * grays that ignore light themes, mono arms, and NO_COLOR. Every color the bar paints is
  * decided here, once, so the mechanism layer stays a thin pass-through.
  *
+ * Two entry points, one decision: `scrollbarTrackOptions` is the production path (the host's
+ * nested palette, wired at the dialog's scrollbox in `tui.tsx`); `scrollbarChrome` is the flat-RGBA
+ * fixture path the mechanism tests wire the same way, kept until those tests move.
+ *
  * Honesty rules, same as the rest of the plugin:
  * - The thumb is the only meaning-bearing cell the bar paints. It maps to a single theme
  *   token per arm (muted in color, base in mono), so hue never encodes anything and the
