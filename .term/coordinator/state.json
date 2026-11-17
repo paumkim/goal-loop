@@ -2553,6 +2553,24 @@
       "submittedAt": "2026-11-17T05:32:21Z",
       "mergedAt": "2026-11-17T05:34:17Z",
       "mergedInto": "dev"
+    },
+    "tui-stale-pill-terminal": {
+      "agent": "inkling",
+      "paths": "src/tui.tsx,src/core/hud.ts,src/core/entries.ts,src/core/wire.ts,src/runtime/controller.ts,src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,test/tui-hud.test.tsx,test/wire.test.ts,SPEC.md,dist/tui.js",
+      "branch": "wt/tui-stale-pill-terminal",
+      "worktree": "worktrees/wt-tui-stale-pill-terminal",
+      "status": "done",
+      "createdAt": "2026-11-17T05:40:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-17T06:04:36Z",
+      "forcedScopeFiles": [
+        "src/core/repull.ts",
+        "test/package-integrity.test.ts",
+        "test/repull.test.ts"
+      ],
+      "submittedAt": "2026-11-17T06:04:36Z",
+      "mergedAt": "2026-11-17T12:42:12Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
