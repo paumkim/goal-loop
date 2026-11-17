@@ -2509,6 +2509,17 @@
       "submittedAt": "2026-11-17T03:04:57Z",
       "mergedAt": "2026-11-17T03:06:30Z",
       "mergedInto": "dev"
+    },
+    "review-ep-followups": {
+      "agent": "orchestrator",
+      "paths": "src/core/scrollbar.ts,test/scrollbar.test.tsx,src/hud-card.tsx,src/tui.tsx,test/core.test.ts,test/tui-hud-width-measure.test.tsx,SPEC.md",
+      "branch": "wt/review-ep-followups",
+      "worktree": "worktrees/wt-review-ep-followups",
+      "status": "done",
+      "createdAt": "2026-11-17T03:09:16Z",
+      "submittedAt": "2026-11-17T03:16:30Z",
+      "mergedAt": "2026-11-17T03:18:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
