@@ -328,3 +328,62 @@ describe("the context hook strips end-of-record notes", () => {
     }
   })
 })
+
+describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin)", () => {
+  const promptEvent = (text: string) => ({
+    sessionID: "ses_1",
+    messageID: "msg_1",
+    prompt: { text },
+    metadata: {},
+    delivery: "steer",
+  })
+
+  test("a /goal-loop whose objective near-duplicates the session's durable completed-condition ledger is refused; the admitted message is the user's raw line, not the directive", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    // A prior loop for this session completed and its ledger was persisted (iteration 1's condition == objective).
+    storage.set("goal/v1/ses_1", {
+      version: 1,
+      id: "goal_prior",
+      sessionID: "ses_1",
+      directory,
+      condition: "investigate the 12 failing tests",
+      status: "achieved",
+      setAt: 1_000_000,
+      startedAt: 1_000_000,
+      endedAt: 2_000_000,
+      reason: "Loop complete after 1 iteration.",
+      turns: 3,
+      stall: 0,
+      retries: 0,
+      checkins: 0,
+      baseline: { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+      history: [],
+      loopEnabled: true,
+      loopIteration: 2,
+      loopObjective: "investigate the 12 failing tests",
+      loopMaxLoops: 5,
+      loopHistory: [{ version: 1, condition: "investigate the 12 failing tests", summary: "fixed", reason: "met", turns: 3, toolCalls: 12, endedAt: 2_000_000 }],
+      completedConditions: ["investigate the 12 failing tests"],
+    })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop investigate the 12 failing tests")
+      await hooks.prompt!(event)
+      // The admitted message is restored to the user's raw line — never the armed-loop directive.
+      expect(event.prompt.text).toBe("/goal-loop investigate the 12 failing tests")
+      expect(event.prompt.text).not.toContain("iteration=")
+      // The persisted record is the refusal: terminal, with the explicit no-new-gap reason, ledger carried forward.
+      const stored = storage.get("goal/v1/ses_1") as any
+      expect(stored.status).toBe("achieved")
+      expect(stored.reason).toContain("no new gap")
+      expect(stored.loopNotProgress).toBe(1)
+      expect(stored.completedConditions).toContain("investigate the 12 failing tests")
+      // One warning toast on the loop channel names the refusal.
+      const toast = calls.notices.find((n: any) => n.kind === "loop")
+      expect(toast?.title).toBe("Loop not armed: no new gap")
+    } finally {
+      await dispose?.()
+    }
+  })
+})

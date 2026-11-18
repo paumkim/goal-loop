@@ -118,8 +118,9 @@ const CONTINUE_RETRY_MS = 60_000
 const tokensOf = (normalized: string): Set<string> => new Set(normalized.split(" ").filter(Boolean))
 /**
  * Near-duplicate test between two normalized token sets: containment (|A ∩ B| / min(|A|, |B|)) >= 0.7
- * or Jaccard >= 0.6. Empty token sets never match. Only meaningful for the loop planner gate, where the
- * history is bounded (MAX_VERDICT_HISTORY_ENTRIES <= 20), so the O(n) scan over the completed set stays trivial.
+ * or Jaccard >= 0.6. Empty token sets never match. Shared by the loop planner gate (scan bounded by
+ * MAX_VERDICT_HISTORY_ENTRIES <= 20 / MAX_LOOP_HISTORY_ENTRIES) and the arming-side no-new-gap gate (XLV),
+ * where the scanned ledger is bounded by MAX_COMPLETED_CONDITION_ENTRIES (100).
  */
 const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
   if (a.size === 0 || b.size === 0) return false

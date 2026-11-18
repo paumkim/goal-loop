@@ -113,3 +113,21 @@ describe("docs line references", () => {
     expect(out).toEqual([])
   })
 })
+
+describe("docs path references", () => {
+  test("every source path cited in docs/*.html exists on disk", () => {
+    // The docs re-anchor sweep (2026-11-17) moved line refs to symbols, but a symbol migration that
+    // mistypes a path (or renames a module) leaves a citation pointing at nothing. Pin the contract:
+    // any `src/...`/`packages/...` token ending in a source extension must resolve.
+    const pattern = /(?:src|packages)\/[A-Za-z0-9_.\-/]+\.(?:tsx|ts|js|mjs)/g
+    const offenders: string[] = []
+    for (const file of docFiles) {
+      if (!file.startsWith("docs/")) continue
+      const text = readFileSync(join(ROOT, file), "utf8")
+      for (const match of text.matchAll(pattern)) {
+        if (!existsSync(join(ROOT, match[0]))) offenders.push(`${file}: ${match[0]}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
