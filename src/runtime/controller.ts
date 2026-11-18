@@ -13,7 +13,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP, boundLoopHistory,
+  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -100,7 +100,6 @@ interface Runtime {
   figures?: { readonly spend?: UsageSnapshot; readonly contextSize?: number }
 }
 
-const HISTORY = 20
 const RETRY_BASE_MS = 15_000
 const RETRY_MAX_MS = 5 * 60_000
 const REEVALUATE_BASE_MS = 10_000
@@ -120,7 +119,7 @@ const tokensOf = (normalized: string): Set<string> => new Set(normalized.split("
 /**
  * Near-duplicate test between two normalized token sets: containment (|A ∩ B| / min(|A|, |B|)) >= 0.7
  * or Jaccard >= 0.6. Empty token sets never match. Only meaningful for the loop planner gate, where the
- * history is bounded (HISTORY <= 20), so the O(n) scan over the completed set stays trivial.
+ * history is bounded (MAX_VERDICT_HISTORY_ENTRIES <= 20), so the O(n) scan over the completed set stays trivial.
  */
 const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
   if (a.size === 0 || b.size === 0) return false
@@ -784,7 +783,13 @@ export class GoalController {
       }
     })()
     record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}) })
-    if (record.history.length > HISTORY) record.history.splice(0, record.history.length - HISTORY)
+    // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
+    const historyBound = boundVerdictHistory(record.history)
+    if (historyBound.dropped > 0) {
+      record.history = historyBound.retained
+      record.historyDropped = (record.historyDropped ?? 0) + historyBound.dropped
+      this.deps.log.info("verdict trail retention cap: dropped oldest evaluated-turn records", { sessionID, dropped: historyBound.dropped, retained: historyBound.retained.length, totalDropped: record.historyDropped })
+    }
 
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)

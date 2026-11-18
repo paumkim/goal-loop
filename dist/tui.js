@@ -770,7 +770,11 @@ function buildLoopDossier(goal, nowMs) {
     }
   }
   const history = goal.history ?? [];
-  lines.push(`## Verdict trail (${history.length} evaluated turn${history.length === 1 ? "" : "s"})`);
+  const historyDropped = goal.historyDropped ?? 0;
+  const totalTrail = history.length + historyDropped;
+  lines.push(historyDropped > 0 ? `## Verdict trail (${history.length} most recent of ${totalTrail} evaluated turns)` : `## Verdict trail (${history.length} evaluated turn${history.length === 1 ? "" : "s"})`);
+  if (historyDropped > 0)
+    lines.push(`_${historyDropped} earlier verdict${historyDropped === 1 ? "" : "s"} dropped by the verdict-trail retention cap; the tallies and rows below cover the retained turns only \u2014 the dropped ones are unknown, never inferred._`);
   lines.push("");
   if (history.length === 0) {
     lines.push("No turns have been evaluated yet.");
@@ -783,7 +787,7 @@ function buildLoopDossier(goal, nowMs) {
     const tally = [`met ${counts.met}`, `not_met ${counts.not_met}`, `impossible ${counts.impossible}`];
     if (zeroToolMet > 0)
       tally.push(`${zeroToolMet} met with zero tool calls (condition already held at HEAD)`);
-    lines.push(`Tallies: ${tally.join(" \xB7 ")}`);
+    lines.push(historyDropped > 0 ? `Tallies: ${tally.join(" \xB7 ")} \xB7 retained turns only` : `Tallies: ${tally.join(" \xB7 ")}`);
     lines.push("");
     lines.push(...verdictProse(history));
     lines.push("");
@@ -1177,6 +1181,16 @@ function attestationAppendix(_goal, verification, reach, sign, nowMs, directory)
     `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
     ""
   ];
+  const droppedLoop = _goal.loopHistoryDropped ?? 0;
+  const droppedVerdicts = _goal.historyDropped ?? 0;
+  if (droppedLoop > 0 || droppedVerdicts > 0) {
+    const bits = [];
+    if (droppedLoop > 0)
+      bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`);
+    if (droppedVerdicts > 0)
+      bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`);
+    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "");
+  }
   if (verification.unique === 0) {
     lines.push("The record quotes no sha \u2014 there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.", "");
     return lines;
@@ -2120,10 +2134,11 @@ var remediationFor = (goal) => {
     };
   }
   const streak = verdictStreak(goal.history ?? []);
+  const streakIsLowerBound = (goal.historyDropped ?? 0) > 0 && streak.count >= (goal.history?.length ?? 0);
   if (streak.verdict === "not_met" && streak.count >= 3) {
     return {
       tone: "warning",
-      text: `${streak.count}x not_met in a row \xB7 consider evaluator.verifyCommand`
+      text: streakIsLowerBound ? `at least ${streak.count} not_met in a row \xB7 consider evaluator.verifyCommand` : `${streak.count}x not_met in a row \xB7 consider evaluator.verifyCommand`
     };
   }
   return;
@@ -2953,7 +2968,10 @@ var LoopSection = (props) => {
       get onCopyReason() {
         return props.onCopyReason;
       },
-      nowMs
+      nowMs,
+      get dropped() {
+        return props.goal.historyDropped;
+      }
     }), null);
     _$effect((_p$) => {
       var _v$18 = props.marginTop, _v$19 = theme().text.base, _v$20 = TextAttributes.BOLD, _v$21 = theme().text.base;
@@ -3073,7 +3091,9 @@ var WhyLedger = (props) => {
 var VerdictTrail = (props) => {
   const mono = () => props.mono === true;
   const ascii = () => props.ascii?.() === true || motionDisabled(process.env);
+  const dropped = () => props.dropped ?? 0;
   const trail = () => trailWindow(props.history, 24);
+  const total = () => trail().total + dropped();
   const [copiedTurn, setCopiedTurn] = createSignal(null);
   let copiedTimer;
   onCleanup(() => {
@@ -3138,8 +3158,12 @@ var VerdictTrail = (props) => {
       _$setProp(_el$47, "wrapMode", "none");
       _$setProp(_el$47, "flexShrink", 0);
       _$insert(_el$47, () => trail().shown.length, _el$49);
-      _$insert(_el$47, () => trail().total, _el$50);
-      _$insert(_el$47, () => trail().total === 1 ? "" : "s", null);
+      _$insert(_el$47, total, _el$50);
+      _$insert(_el$47, () => total() === 1 ? "" : "s", null);
+      _$insert(_el$47, (() => {
+        var _c$6 = _$memo(() => dropped() > 0);
+        return () => _c$6() ? ` \xB7 ${dropped()} older dropped (retention cap)` : "";
+      })(), null);
       _$insert(_el$47, () => {
         const t = copiedTurn();
         return t === null ? "" : ascii() ? ` \xB7 turn ${t} \xB7 + copied` : ` \xB7 turn ${t} \xB7 \u2713 copied`;
@@ -3180,7 +3204,8 @@ var HistoryBlock = (props) => {
   const streak = () => verdictStreak(history());
   const streakSuffix = () => {
     const s = streak();
-    return s.count >= 2 && s.verdict ? ` \xB7 ${s.count}x ${s.verdict.replace("_", " ")} in a row` : "";
+    const lowerBound = (props.goal.historyDropped ?? 0) > 0 && s.count >= history().length;
+    return s.count >= 2 && s.verdict ? ` \xB7 ${lowerBound ? "at least " : ""}${s.count}x ${s.verdict.replace("_", " ")} in a row` : "";
   };
   const elapsed = () => formatDurationCoarse(props.elapsedMs());
   const countsText = () => {
@@ -3188,6 +3213,8 @@ var HistoryBlock = (props) => {
     const parts = [`${c.met} met`, `${c.not_met} not_met`];
     if (c.impossible > 0)
       parts.push(`${c.impossible} impossible`);
+    if ((props.goal.historyDropped ?? 0) > 0)
+      parts.push("retained turns only");
     return parts.join(" \xB7 ");
   };
   return (() => {
@@ -3254,7 +3281,10 @@ var HistoryBlock = (props) => {
       get onCopyReason() {
         return props.onCopyReason;
       },
-      nowMs
+      nowMs,
+      get dropped() {
+        return props.goal.historyDropped;
+      }
     }), null);
     _$effect((_$p) => _$setProp(_el$53, "marginTop", props.marginTop, _$p));
     return _el$53;

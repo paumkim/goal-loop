@@ -114,6 +114,28 @@ export const boundLoopHistory = (entries: readonly LoopEntry[]): { retained: Loo
     ? { retained: [...entries], dropped: 0 }
     : { retained: entries.slice(-MAX_LOOP_HISTORY_ENTRIES), dropped: entries.length - MAX_LOOP_HISTORY_ENTRIES }
 
+/**
+ * Evaluated-turn records (the verdict trail) retained on `history`. The splice was always there
+ * (oldest dropped past 20) but silent: no counter, so no display could say how much of the trail
+ * is gone. Lives here so the controller and every consumer agree on the bound. Sized so the trail
+ * stays useful on screen while the record stays small; a fresh goal needs a few turns before the cap matters.
+ */
+export const MAX_VERDICT_HISTORY_ENTRIES = 20
+
+/** Total evaluated turns a consumer should count: the retained entries plus the ones the cap dropped. */
+export const totalVerdictCount = (goal: { readonly history?: readonly VerdictEntry[]; readonly historyDropped?: number }): number =>
+  (goal.historyDropped ?? 0) + (goal.history?.length ?? 0)
+
+/**
+ * Bounds a verdict trail to the newest `MAX_VERDICT_HISTORY_ENTRIES` entries. Returns the retained slice
+ * and how many were dropped this call (0 at or below the cap). Callers add the drop count onto the
+ * record's `historyDropped` so displays can say "N most recent of M evaluated turns" honestly.
+ */
+export const boundVerdictHistory = (entries: readonly VerdictEntry[]): { retained: VerdictEntry[]; dropped: number } =>
+  entries.length <= MAX_VERDICT_HISTORY_ENTRIES
+    ? { retained: [...entries], dropped: 0 }
+    : { retained: entries.slice(-MAX_VERDICT_HISTORY_ENTRIES), dropped: entries.length - MAX_VERDICT_HISTORY_ENTRIES }
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 /**
  * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
@@ -191,7 +213,14 @@ export interface GoalRecord {
   checkins: number
   baseline: UsageSnapshot
   final?: UsageSnapshot
+  /** Evaluated turns, oldest first. Retained up to `MAX_VERDICT_HISTORY_ENTRIES` (newest kept); see `historyDropped`. */
   history: VerdictEntry[]
+  /**
+   * How many evaluated-turn records the retention cap dropped from `history` (oldest first).
+   * Additive; absent when the cap never engaged. Total evaluated turns = (this ?? 0) + history.length —
+   * use `totalVerdictCount`, never `history.length` alone, when a display means "total evaluated".
+   */
+  historyDropped?: number
   /** Loop fields (additive; absent on records written before `/goal-loop`). */
   /** True when this goal was armed by `/goal-loop`; the loop advances only on a `met` verdict. */
   loopEnabled?: boolean
