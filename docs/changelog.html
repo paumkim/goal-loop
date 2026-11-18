@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-18 10:07 UTC</code></td><td>feat(goal): retention cap on loopHistory — newest 50 kept, drops counted (XXXV)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 09:49 UTC</code></td><td>docs: stamp changelog and config page for the file log sink (XXXIV)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 09:49 UTC</code></td><td>feat(goal): opt-in file log sink — OPENCODE_GOAL_LOG_FILE (XXXIV)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 08:42 UTC</code></td><td>fix(goal): emit strict-JSON snapshots — host JSONValue gate 500 (XXXIII)</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-17 15:17 UTC</code></td><td>fix(tui): re-pull recently-terminal entries — a post-terminal clear converges instead of lingering</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 15:02 UTC</code></td><td>fix(tui): retain null re-pull targets, dedupe elapsedMs snapshots, drop dead guard</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 14:38 UTC</code></td><td>docs: re-anchor src/file:line citations to symbol names</td><td>commit</td></tr>
-<tr><td><code>2026-11-17 14:32 UTC</code></td><td>fix: convergence hygiene — silent evaluating/waiting flips announce themselves; tick refreshes open dialog; steady-null cap (II)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
