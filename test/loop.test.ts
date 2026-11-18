@@ -1216,6 +1216,20 @@ describe("loop prompts", () => {
     expect(text).toContain("(none — this is the first iteration)")
   })
 
+  test("loopReanchor carries only the newest completed iterations, with an honest omission count", () => {
+    const many: LoopEntry[] = Array.from({ length: 12 }, (_, i) => ({ version: i + 1, condition: `condition ${i + 1}`, summary: `summary ${i + 1}`, reason: "met", turns: 2, toolCalls: 3, endedAt: i + 1 }))
+    const text = Prompt.loopReanchor({ iteration: 13, maxLoops: 20, objective: "o", condition: "c", history: many })
+    expect(text).toContain("- v12:")
+    expect(text).toContain("- v11:")
+    expect(text).toContain("- v10:")
+    expect(text).not.toContain("- v9:")
+    expect(text).toContain("9 older completed iterations omitted")
+    // At or below the re-anchor window nothing is omitted and no omission line appears.
+    const few = Prompt.loopReanchor({ iteration: 3, maxLoops: 5, objective: "o", condition: "c", history: [{ version: 1, condition: "c1", summary: "s1", reason: "met", turns: 1, toolCalls: 1, endedAt: 1 }] })
+    expect(few).toContain("- v1:")
+    expect(few).not.toContain("omitted")
+  })
+
   test("loopReanchor requires the already-satisfied audit before working", () => {
     const text = Prompt.loopReanchor({ iteration: 3, maxLoops: 5, objective: "the object", condition: "next thing", history: [entry] })
     // Audit-and-stop: after a compaction the model must re-read the tree, audit the armed condition against HEAD, and stop when it holds.

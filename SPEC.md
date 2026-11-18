@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=64 tests=1723 -->
+<!-- spec-check files=64 tests=1724 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6996,3 +6996,16 @@ Audit at HEAD `22c5e1d` (fresh output this turn). `loopReanchor` already emitted
 Marker decision. A new test moves the enforced count, and `check:spec` fails unless the first-occurrence marker matches the tree in the same commit, so the enforced (first-occurrence) SPEC marker advances `files=64 tests=1722` → `files=64 tests=1723` here; `files=64` is unchanged. Historical section-local markers keep their own counts.
 
 Honest limits. (a) Prompt-text only; no controller change — the re-anchor is still queued (`resume: false`), never a steer, and still fires only for live active loops. (b) The pin asserts text presence and ordering, not model behavior; the evaluator rubric remains the judge of an "Already satisfied at HEAD" claim. (c) No new exports; `dist/tui.js` byte-unchanged. (d) Test count moved **1722 → 1723**; packed files stay **64**.
+
+## Workstream LVIII — the post-compaction re-anchor carries a bounded, honest history window (2026-11-18)
+
+User request (verbatim): "can you also not hold too much old history carry on after the compaction? especially a long running session. it is starting to build up too much old done goals."
+
+Audit at HEAD `b032347` (fresh output this turn). Everything durable was already bounded — verdict history 20, loop history 50 on the record, completed-condition ledger 100, in-memory terminal goals 20, terminal storage records 50 per directory plus a 30-day age prune — and the model-visible re-anchor is one-shot (`consumeAnchor` deletes on read). The one surface still growing with session length was the prompt-injected history block: `historyBlock` silently kept the newest 10 completed iterations (~100/160-character truncations each) in every loop prompt, and the post-compaction re-anchor — the prompt that lands right after the context was rebuilt from a lossy summary — carried all 10. For a long-running loop that is stale noise on the scarcest context the model has.
+
+1. `src/core/prompts.ts` — `historyBlock` gains a `limit` parameter (default `HISTORY_INJECT_LIMIT = 10`, unchanged for `directive`/`loopContinuation`/summarizer/next-goal planner). A new `REANCHOR_HISTORY_INJECT_LIMIT = 3` is used only by `loopReanchor`, whose header now reads `Completed iterations (newest 3; older ones ride the record's bounded ledger):`. Whenever more entries exist than the limit, the block now starts with `(N older completed iterations omitted — the bounded ledger rides the record)` instead of dropping them silently — that honesty line applies to the default-limit call sites too, and only when history actually exceeds the limit (≤ 10 entries: byte-identical output to before).
+2. `test/loop.test.ts` — one new case in `describe("loop prompts")` pinning the re-anchor's 3-entry window against a 12-entry history (v10–v12 present, v9 absent, `9 older completed iterations omitted`) and the no-omission-line case at or below the window. Loop suite 146 → 147 pass / 0 fail.
+
+Marker decision. A new test moves the enforced count, and `check:spec` fails unless the first-occurrence marker matches the tree in the same commit, so the enforced (first-occurrence) SPEC marker advances `files=64 tests=1723` → `files=64 tests=1724` here; `files=64` is unchanged. Historical section-local markers keep their own counts.
+
+Honest limits. (a) Injection-only change; the record caps (50/100/20/20/50) and their honest `*Dropped` counters are untouched, and the anti-repeat/near-duplicate gates still scan the persisted 100-entry ledger — no gate memory was reduced. (b) The omission line is text; the full ledger remains inspectable on the record, and the evaluator rubric is unchanged. (c) `dist/tui.js` byte-unchanged; no new exports. (d) Test count moved **1723 → 1724**; packed files stay **64**.
