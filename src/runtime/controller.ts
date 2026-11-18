@@ -619,7 +619,9 @@ export class GoalController {
   // ---------------------------------------------------------------- lifecycle
 
   /**
-   * Adopts one live record from storage into memory, resetting turn count, timer and spend baseline.
+   * Adopts one live record from storage into memory, resetting turn count and spend baseline. The record's
+   * `startedAt` is kept: it is the goal's original arm stamp and the TUI pill's time-tracking anchor, so
+   * an elapsed timer must survive a restore unchanged.
    * Returns true when the record was adopted. Used by the bulk restore only.
    */
   private async adoptRestored(record: GoalRecord): Promise<boolean> {
@@ -639,12 +641,11 @@ export class GoalController {
     }
     // Transient failure or unavailable usage (undefined) is not proof the session is gone: keep the goal
     // with its previous baseline rather than deleting it.
-    const now = this.deps.clock.now()
     // A legacy record missing `history` would throw on the first `record.history.push(...)` in
     // evaluate() — after the bookkeeping mutations but before the commit, so the goal wedged
     // silently, forever. Normalize on adoption instead.
     if (!Array.isArray(record.history)) record.history = []
-    Object.assign(record, { startedAt: now, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
+    Object.assign(record, { turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
     this.goals.set(record.sessionID, record)
     // Create the runtime up front so tool events that arrive before the first execution-end are counted.
     this.runtime(record.sessionID)
@@ -656,7 +657,8 @@ export class GoalController {
   }
 
   /**
-   * Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity).
+   * Restores live goals after a restart, resetting turn count and spend baseline (Claude Code parity). The
+   * goal's original `startedAt` is kept so the elapsed timer tracks from first arm across restores.
    * Adopt-only by design: a restore never asks the host to compact. Compaction is strictly per session — it is
    * requested for the specific session whose context crosses `compactAtTokens` (threshold path) or whose
    * `/goal-loop` arm boundary asks for one (arm-time path). A plugin (re)load must not compact every live
@@ -1052,7 +1054,8 @@ export class GoalController {
     record.checkins = 0
     record.verdict = undefined
     record.reason = undefined
-    record.startedAt = clock.now()
+    // `startedAt` is deliberately NOT advanced: it is the goal's original arm stamp. The pill's elapsed
+    // timer tracks start-to-end across every loop iteration; only the iteration counter advances.
     this.clearDeferred(runtime, record)
     runtime.iterationToolCalls = 0
     runtime.iterationDeferred = false

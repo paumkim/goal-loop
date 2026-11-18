@@ -133,7 +133,7 @@ export interface GoalRecord {
   reason?: string
   verdict?: Verdict
   readonly setAt: number
-  /** Timer origin. Reset when a goal is restored after a restart. */
+  /** Timer origin — the arm stamp of the FIRST iteration. Stable across loop re-arms and restores; the TUI pill's elapsed timer tracks from here to terminal state. */
   startedAt: number
   endedAt?: number
   /** Evaluated turns. */
