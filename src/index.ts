@@ -22,6 +22,7 @@ import { BackgroundTracker } from "./runtime/background.ts"
 import { AutoCompactor } from "./runtime/compactor.ts"
 import { GoalController } from "./runtime/controller.ts"
 import { Evaluator } from "./runtime/evaluator.ts"
+import { createGoalMirror } from "./core/mirror.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
@@ -228,8 +229,22 @@ export default Plugin.define({
     // ---- RPC for clients (status line, dialogs, palette actions)
     const rpc = await ctx.rpc.register(GoalRpc, createRpcHandlers({ controller, log }))
     const quiet = (error: unknown) => log.warn("goal event emit failed", { error: String(error) })
+    // Backstop mirror of the latest snapshot: the TUI reads it when both RPC paths are wedged (see core/mirror.ts).
+    // Disabled in probe mode (read-only storage) and by OPENCODE_GOAL_MIRROR=0; best-effort, never throws.
+    const mirrorEnabled = !probe && process.env.OPENCODE_GOAL_MIRROR !== "0"
+    const mirror = mirrorEnabled ? createGoalMirror() : undefined
     emit = {
-      changed: (sessionID, goal) => void rpc.events.emit("changed", { sessionID, goal }).catch(quiet),
+      changed: (sessionID, goal) => {
+        if (mirror) {
+          try {
+            if (goal) mirror.write(goal)
+            else mirror.remove(sessionID)
+          } catch (error) {
+            log.warn("goal mirror write failed", { error: String(error) })
+          }
+        }
+        return void rpc.events.emit("changed", { sessionID, goal }).catch(quiet)
+      },
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
