@@ -2911,11 +2911,14 @@
     },
     "tui-pill-timer-continuity": {
       "agent": "orchestrator",
-      "paths": "SPEC.md",
+      "paths": "src/runtime/controller.ts,src/core/entries.ts,src/core/hud.ts,src/core/types.ts,src/core/wire.ts,src/core/format.ts,test/loop.test.ts,test/controller.test.ts,test/entries.test.ts,test/pill-timer.test.tsx,dist/tui.js,dist/tui.d.ts,SPEC.md",
       "branch": "wt/tui-pill-timer-continuity",
       "worktree": "worktrees/wt-tui-pill-timer-continuity",
-      "status": "claimed",
-      "createdAt": "2026-11-18T02:29:38Z"
+      "status": "done",
+      "createdAt": "2026-11-18T02:32:23Z",
+      "submittedAt": "2026-11-18T02:32:29Z",
+      "mergedAt": "2026-11-18T02:33:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
