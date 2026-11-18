@@ -7,6 +7,7 @@ import {
   parseGetGoalOutput,
   parseGoalSnapshot,
   parseNotice,
+  stripUndefined,
 } from "../src/core/wire.ts"
 import { isLive } from "../src/core/types.ts"
 import { preserveCarriedFields, pruneSnapshotEntries } from "../src/core/entries.ts"
@@ -335,5 +336,54 @@ describe("per-turn spend on verdict entries", () => {
     expect(parseGoalSnapshot(spendSnapshot("0.42"))).toBeUndefined()
     expect(parseGoalSnapshot(spendSnapshot({ cost: Number.NaN, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 }))).toBeUndefined()
     expect(parseGoalSnapshot(spendSnapshot({ cost: 1 }))).toBeUndefined()
+  })
+})
+
+describe("stripUndefined (RPC payload strict-JSON hygiene)", () => {
+  test("drops explicit-undefined keys recursively and keeps null and real values", () => {
+    const dirty = {
+      version: 1,
+      condition: "work",
+      endedAt: undefined,
+      pauseCause: undefined,
+      verdict: null,
+      baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: undefined, cacheWrite: 2 },
+      history: [
+        { turn: 1, verdict: "met", reason: "done", at: 5, toolCalls: undefined },
+        { turn: 2, verdict: "not_met", reason: "close", at: 9 },
+      ],
+      loopCompact: { requestedAt: 1, iteration: 1, misses: 2, unmeasurableTicks: undefined, stalenessUnknown: undefined, nested: { a: undefined, b: [1, undefined, { c: undefined, d: 4 }] } },
+    }
+    const clean = stripUndefined(dirty) as Record<string, unknown>
+    expect("endedAt" in clean).toBe(false)
+    expect("pauseCause" in clean).toBe(false)
+    expect("cacheRead" in (clean.baseline as Record<string, unknown>)).toBe(false)
+    expect(clean.verdict).toBeNull()
+    expect(clean.baseline).toEqual({ cost: 0, input: 0, output: 0, reasoning: 0, cacheWrite: 2 })
+    expect((clean.history as unknown[])[0]).toEqual({ turn: 1, verdict: "met", reason: "done", at: 5 })
+    expect((clean.history as unknown[])[1]).toEqual({ turn: 2, verdict: "not_met", reason: "close", at: 9 })
+    expect("unmeasurableTicks" in (clean.loopCompact as Record<string, unknown>)).toBe(false)
+    expect((clean.loopCompact as Record<string, unknown>).nested).toEqual({ b: [1, undefined, { d: 4 }].map((v) => v) })
+    expect(JSON.stringify(clean)).not.toContain("undefined")
+  })
+
+  test("a snapshot with the exact shapes that produced the 500 survives strict JSON validation", () => {
+    const dirty = {
+      ...snapshot(),
+      pauseCause: undefined,
+      waitingSince: undefined,
+      loopCompact: { requestedAt: 3, iteration: 2, misses: 1, stalenessUnknown: undefined },
+    }
+    const clean = stripUndefined(dirty)
+    expect(JSON.parse(JSON.stringify(clean))).toEqual(clean as Record<string, unknown>)
+    expect(parseGoalSnapshot(clean)).toBeDefined()
+  })
+
+  test("non-plain objects pass through and arrays are mapped element-wise", () => {
+    const date = new Date(0)
+    const out = stripUndefined([undefined, { a: undefined, b: date, c: null }, "x"]) as unknown[]
+    expect(out[0]).toBeUndefined()
+    expect(out[1]).toEqual({ b: date, c: null })
+    expect(out[2]).toBe("x")
   })
 })

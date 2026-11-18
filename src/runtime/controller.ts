@@ -22,7 +22,7 @@ import {
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
-import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"
+import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 
 /**
  * Minimum gap between two re-anchors armed for the same session. A compaction can land for several
@@ -182,7 +182,12 @@ export class GoalController {
     // The auto-compact threshold is constant per session, so it rides every snapshot — cheap, and it lets
     // the dialog render the context meter without knowing anything about the server's configuration.
     const compactAtTokens = this.deps.config.compactAtTokens
-    return {
+    // Every outgoing snapshot must be strict JSON: the host rejects an explicit-undefined key ANYWHERE in
+    // the payload with a SchemaError, which surfaced to clients as HTTP 500 on the goal/get RPC and as
+    // silently dropped `changed` events. `= undefined` writes elsewhere in the state machine are cleaned at
+    // their sites (delete, never assign); this deep pass is the single choke point that makes no future
+    // un-cleaned write visible to the host again.
+    return stripUndefined({
       ...structuredClone(record),
       elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt,
       evaluating: runtime?.evaluating ?? false,
@@ -192,7 +197,7 @@ export class GoalController {
       ...(spend ? { spend } : {}),
       ...(typeof compactAtTokens === "number" && compactAtTokens > 0 ? { compactAtTokens } : {}),
       ...(contextSize !== undefined && Number.isFinite(contextSize) && contextSize >= 0 ? { contextSize } : {}),
-    }
+    }) as GoalSnapshot
   }
 
   snapshot(sessionID: string, spend?: UsageSnapshot, contextSize?: number): GoalSnapshot | null {
@@ -251,14 +256,16 @@ export class GoalController {
 
   /** Reset a pending boundary request to its just-landed form: bookkeeping cleared, misses reset, fresh requests re-enabled. */
   private landPending(record: GoalRecord, pending: LoopCompactState, freshContextSize?: number): void {
-    record.loopCompact = {
+    // Bookkeeping cleared for a fresh boundary: absence, never explicit undefined keys (the host rejects them).
+    const landed: LoopCompactState = {
       ...pending,
       landedAt: this.deps.clock.now(),
       misses: 0,
-      unmeasurableTicks: undefined,
-      stalenessUnknown: undefined,
-      unwillingWarned: undefined,
     }
+    delete landed.unmeasurableTicks
+    delete landed.stalenessUnknown
+    delete landed.unwillingWarned
+    record.loopCompact = landed
     // The cached context figure described the pre-compaction context the host just replaced. Replace it
     // with the fresh post-landing estimate when the caller has one, else drop it — the meter renders
     // nothing until the next evaluation measures the new context instead of painting a lie.
@@ -553,8 +560,9 @@ export class GoalController {
       }
       this.clearDeferred(runtime, record)
       record.status = "active"
-      record.reason = undefined
-      record.pauseCause = undefined
+      // Absence, not explicit undefined: the host rejects explicit-undefined keys in any RPC payload.
+      delete record.reason
+      delete record.pauseCause
       record.stall = 0
       record.retries = 0
       // A resumed /goal-loop starts the not-progress count fresh, so a benign zero-tool iteration cannot instantly re-pause it.
@@ -1076,8 +1084,9 @@ export class GoalController {
     record.stall = 0
     record.retries = 0
     record.checkins = 0
-    record.verdict = undefined
-    record.reason = undefined
+    // Absence, not explicit undefined: the host rejects explicit-undefined keys in any RPC payload.
+    delete record.verdict
+    delete record.reason
     // `startedAt` is deliberately NOT advanced: it is the goal's original arm stamp. The pill's elapsed
     // timer tracks start-to-end across every loop iteration; only the iteration counter advances.
     this.clearDeferred(runtime, record)
@@ -1140,7 +1149,11 @@ export class GoalController {
         } else {
           misses = pending.misses + 1
           const unwillingWarned = pending.unwillingWarned === true || misses >= COMPACT_MISS_RETRY
-          record.loopCompact = { ...pending, misses, unmeasurableTicks: undefined, stalenessUnknown: undefined, unwillingWarned }
+          const measurableLoopState = { ...pending, misses, unwillingWarned }
+          // A measurable arm CLEARS the unmeasurable/staleness streaks: absence, not explicit undefined keys.
+          delete measurableLoopState.unmeasurableTicks
+          delete measurableLoopState.stalenessUnknown
+          record.loopCompact = measurableLoopState
           if (misses === COMPACT_MISS_RETRY && pending.unwillingWarned !== true) {
             // The host will not compact (2 measurable arms, no landing): say it once, exactly.
             this.notify(sessionID, "compact", "warning", "Compaction not landing", "compaction did not land; loop is running hot; consider /compact manually")
@@ -1369,7 +1382,8 @@ export class GoalController {
    * The final spend snapshot still resolves in the background and re-saves the record.
    */
   private finish(record: GoalRecord, status: Exclude<GoalStatus, "active" | "paused">, reason?: string): Promise<void> {
-    record.pauseCause = undefined
+    // Absence, not explicit undefined: the host rejects explicit-undefined keys in any RPC payload.
+    delete record.pauseCause
     const runtime = this.runtimes.get(record.sessionID)
     if (runtime) {
       this.invalidate(runtime)
