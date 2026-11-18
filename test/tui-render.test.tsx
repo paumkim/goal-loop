@@ -573,10 +573,10 @@ describe("HUD card why row", () => {
   })
 
   test("a reason longer than the budget truncates with the ellipsis, never wraps", async () => {
-    // pinned to an 80-column terminal (cardWidth(80) = 64, the 64-cell design) so the ellipsis lands at the 41-cell condition budget
+    // pinned to an 80-column terminal (cardWidth(80) = 64, the 64-cell design) so the ellipsis lands at the 39-cell condition budget
     const frame = await render(() => <HudCard goal={loopedGoal({ reason: "x".repeat(60) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />, 80, 40)
-    expect(frame).toContain("x".repeat(40) + "…")
-    expect(frame).not.toContain("x".repeat(41))
+    expect(frame).toContain("x".repeat(38) + "…")
+    expect(frame).not.toContain("x".repeat(39))
   })
 
   test("under a ceiling the why row drops after context and before the last-verdict row", async () => {
@@ -1083,53 +1083,66 @@ describe("in-modal copy acknowledgment (rows flip ✓ copied)", () => {
   })
 })
 
-describe("dialog hover grammar (mouse over reveals the affordance)", () => {
-  test("hovering the condition row reveals the faint copy hint; leaving hides it", async () => {
+describe("dialog affordance cells (always mounted — hover never mounts, unmounts or reflows)", () => {
+  test("the resting frame paints a faint copy affordance on the condition row; hover brightens it; leaving restores the resting frame byte-for-byte", async () => {
     const setup = await testRender(
       () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyCondition={() => {}} />,
       { width: 112, height: 44 },
     )
     await setup.renderOnce()
-    let frame = setup.captureCharFrame()
-    expect(frame).not.toContain("copy")
-    const at = findIn(frame, "ship the release notes")
+    const rest = setup.captureCharFrame()
+    const restSpans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const restAffordance = restSpans.find((span) => span.text.trim() === "copy")
+    expect(restAffordance).toBeDefined()
+    expect(restAffordance!.attributes & TextAttributes.BOLD).toBe(0)
+    const restCondition = restSpans.find((span) => span.text.includes("ship the release notes"))
+    expect(restCondition).toBeDefined()
+    const at = findIn(rest, "ship the release notes")
     expect(at).toBeDefined()
     await setup.mockMouse.moveTo(at!.x + 4, at!.y)
     await setup.renderOnce()
-    frame = setup.captureCharFrame()
-    expect(frame.split("\n")[at!.y]!).toContain("copy")
-    // Move off the row: the hint disappears again (no lingering chrome).
-    await setup.mockMouse.moveTo(at!.x + 4, at!.y + 40 > 43 ? 0 : at!.y + 40)
+    const hovered = setup.captureCharFrame()
+    // Same cells, same text — the only change is the affordance cell's paint, never its width.
+    expect(hovered.split("\n").length).toBe(rest.split("\n").length)
+    expect(hovered.split("\n")[at!.y]!.length).toBe(rest.split("\n")[at!.y]!.length)
+    const hoveredSpans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const hoveredCondition = hoveredSpans.find((span) => span.text.includes("ship the release notes"))
+    expect(hoveredCondition!.attributes).toBe(restCondition!.attributes)
+    const hoveredAffordance = hoveredSpans.find((span) => span.text.trim() === "copy")
+    expect(hoveredAffordance).toBeDefined()
+    await setup.mockMouse.moveTo(at!.x + 4, 0)
     await setup.renderOnce()
-    frame = setup.captureCharFrame()
-    expect(frame.split("\n")[at!.y]!).not.toContain("copy")
+    expect(setup.captureCharFrame()).toBe(rest)
     await setup.renderer.destroy()
   })
 
-  test("hovering the evaluator row reveals the faint copy hint; leaving hides it", async () => {
+  test("the resting frame paints a faint copy affordance on the evaluator row; hover cannot change the row's text; leaving restores the resting frame byte-for-byte", async () => {
     const setup = await testRender(
       () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyReason={() => {}} />,
       { width: 112, height: 44 },
     )
     await setup.renderOnce()
-    let frame = setup.captureCharFrame()
-    expect(frame).not.toContain("copy")
-    const at = findIn(frame, "Evaluator: docs build still fails")
+    const rest = setup.captureCharFrame()
+    expect(rest).toContain("copy")
+    const restSpans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const restReason = restSpans.find((span) => span.text.includes("Evaluator: docs build still fails"))
+    expect(restReason).toBeDefined()
+    const at = findIn(rest, "Evaluator: docs build still fails")
     expect(at).toBeDefined()
     await setup.mockMouse.moveTo(at!.x + 4, at!.y)
     await setup.renderOnce()
-    frame = setup.captureCharFrame()
-    expect(frame.split("\n")[at!.y]!).toContain("copy")
+    const hoveredSpans = setup.captureSpans().lines.flatMap((line) => line.spans)
+    const hoveredReason = hoveredSpans.find((span) => span.text.includes("Evaluator: docs build still fails"))
+    expect(hoveredReason!.attributes).toBe(restReason!.attributes)
     await setup.mockMouse.moveTo(at!.x + 4, 0)
     await setup.renderOnce()
-    frame = setup.captureCharFrame()
-    expect(frame.split("\n")[at!.y]!).not.toContain("copy")
+    expect(setup.captureCharFrame()).toBe(rest)
     await setup.renderer.destroy()
   })
 })
 
 describe("hover grammar: weight, never underline (NO_COLOR-safe)", () => {
-  test("hovering the condition row paints bold and no span in the frame carries UNDERLINE; leaving restores resting attributes", async () => {
+  test("hovering the condition row leaves every span's attributes unchanged; no span carries UNDERLINE; the affordance cell never bolds at rest", async () => {
     const setup = await testRender(
       () => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} onCopyCondition={() => {}} />,
       { width: 112, height: 44 },
@@ -1147,7 +1160,7 @@ describe("hover grammar: weight, never underline (NO_COLOR-safe)", () => {
     expect(spans.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
     const condition = spans.find((span) => span.text.includes("ship the release notes"))
     expect(condition).toBeDefined()
-    expect(condition!.attributes & TextAttributes.BOLD).not.toBe(0)
+    expect(condition!.attributes & TextAttributes.BOLD).toBe(0)
     await setup.mockMouse.moveTo(at!.x + 4, 0)
     await setup.renderOnce()
     const left = setup.captureSpans().lines.flatMap((line) => line.spans)
@@ -1868,20 +1881,22 @@ describe("dossier outline rail (mouse — quote any section, one click)", () => 
     await setup.renderer.destroy()
   })
 
-  test("hovering a chip boldens it — weight, never hue alone or underline", async () => {
+  test("hovering a chip changes nothing — the resting frame is byte-identical under the mouse; no span ever underlines", async () => {
     const setup = await testRender(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={() => {}} />, { width: 112, height: 44 })
     await setup.renderOnce()
+    const restFrame = setup.captureCharFrame()
     const rest = setup.captureSpans().lines.flatMap((line) => line.spans)
     expect(rest.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
-    const at = chipAt(setup.captureCharFrame(), "verdicts")
+    const at = chipAt(restFrame, "verdicts")
     expect(at).toBeDefined()
     await setup.mockMouse.moveTo(at!.x, at!.y)
     await setup.renderOnce()
+    expect(setup.captureCharFrame()).toBe(restFrame)
     const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
     expect(spans.some((span) => (span.attributes & TextAttributes.UNDERLINE) !== 0)).toBe(false)
     const chip = spans.find((span) => span.text === "verdicts")
     expect(chip).toBeDefined()
-    expect(chip!.attributes & TextAttributes.BOLD).not.toBe(0)
+    expect(chip!.attributes & TextAttributes.BOLD).toBe(0)
     await setup.renderer.destroy()
   })
 
@@ -2003,19 +2018,18 @@ describe("verdict trail as a control (mouse — the timeline scrubs, not just re
     await setup.renderer.destroy()
   })
 
-  test("hover names the turn; the resting frame carries no hover tag; a click adds the copied acknowledgment", async () => {
+  test("the frame carries no hover tag under the mouse; a click adds the copied acknowledgment; the resting frame never changes", async () => {
     copied.length = 0
     const setup = await trailRender(trailGoal())
     await setup.renderOnce()
     const rest = setup.captureCharFrame()
-    expect(rest).not.toContain("verdicts · turn 2")
+    expect(rest).not.toContain("verdicts · turn")
     const x = dotX(rest, 1)
     const y = findIn(rest, "trail")!.y
     await setup.mockMouse.moveTo(x, y)
     await setup.renderOnce()
     const hovered = setup.captureCharFrame()
-    expect(hovered).toContain("verdicts · turn 2")
-    expect(hovered).not.toContain("✓ copied")
+    expect(hovered).toBe(rest)
     await setup.mockMouse.click(x, y)
     await setup.renderOnce()
     expect(setup.captureCharFrame()).toContain("verdicts · turn 2 · ✓ copied")

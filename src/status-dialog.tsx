@@ -51,6 +51,28 @@ const FixRow = (props: { theme: HistoryTheme; mono: () => boolean; fix: { readon
   </box>
 )
 
+/**
+ * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
+ * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
+ * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
+ * the widest in-cell payload (`✓ copied` / `+ copied` / `✓ saved`); wider verbs pass their own width.
+ */
+const Affordance = (props: { theme: HistoryTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
+  const ack = () => props.ack ?? null
+  const lit = () => props.hovered || ack() !== null
+  return (
+    <text
+      wrapMode="none"
+      flexShrink={0}
+      width={props.width ?? 8}
+      fg={lit() ? props.theme.text.base : props.theme.text.faint}
+      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
+    >
+      {ack() ?? props.verb}
+    </text>
+  )
+}
+
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined
   fallback: string
@@ -63,17 +85,17 @@ export const StatusDialogBody = (props: {
   onCopyCondition?: (condition: string) => void
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking the evaluator/reason row copies the raw reason. The row boldens on hover to advertise it (same pattern as the condition row). */
+  /** When set, clicking the evaluator/reason row copies the raw reason. The row carries an always-mounted faint `copy` affordance cell that brightens on hover; the text never changes. */
   onCopyReason?: (reason: string) => void
-  /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line boldens on hover). */
+  /** When set, clicking an iteration summary line in the loop rail copies the full summary (the line carries an always-mounted faint `copy` affordance cell that brightens on hover). */
   onCopySummary?: (summary: string, version: number) => void
-  /** When set, clicking a rail iteration row copies that iteration's attestation line — the receipt (`v3 · met · 9 turns · 41 tools · … · sha · cost`), verbatim. The row boldens on hover. */
+  /** When set, clicking a rail iteration row copies that iteration's attestation line — the receipt (`v3 · met · 9 turns · 41 tools · … · sha · cost`), verbatim. The row carries an always-mounted faint `copy` affordance cell that brightens on hover; the text never changes. */
   onCopyAttestation?: (line: string) => void
-  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. The row boldens on hover. */
+  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. The row carries an always-mounted faint `copy` affordance cell that brightens on hover; the text never changes. */
   onCopyTally?: (line: string) => void
-  /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section boldens on hover. */
+  /** When set, clicking the verification section copies the gate's output tail (the raw verifier output, click-to-copy). The section carries the same always-mounted affordance cell. */
   onCopyVerify?: (tail: string) => void
-  /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row boldens on hover. */
+  /** When set, clicking the dossier view's copy row copies the whole record as Markdown (the same document `goal.dossier.copy` writes). The row carries an always-mounted faint `copy` affordance cell that brightens on hover; the text never changes. */
   onCopyDossier?: (dossier: string) => void
   /** When set, the dossier view paints a save row under the copy row: the same document as a file, written once via O_EXCL by the host (`goal.dossier.export`) — never overwrites; the clicked row paints `✓ saved` (ascii `+ saved`) in place for the usual acknowledgment window. Unwired, the row does not paint (the document renders exactly as before). */
   onSaveDossier?: () => void
@@ -87,7 +109,7 @@ export const StatusDialogBody = (props: {
   onSealDossier?: () => SealOutcome | undefined
   /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
-  /** When set, hovering an "elsewhere" row reveals a `→ transcript` affordance and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
+  /** When set, an "elsewhere" row carries an always-mounted faint `→ transcript` affordance cell and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
   onViewTranscript?: (sessionID: string) => void
   /** Controlled expand state for the iteration rail's fold row (driven by the dialog's keymap layer for keyboard parity). Uncontrolled when absent. */
   expanded?: () => boolean
@@ -127,7 +149,6 @@ export const StatusDialogBody = (props: {
       setLocalView(next)
     }
   }
-  const [viewHovered, setViewHovered] = createSignal<"overview" | "ledger" | "dossier" | undefined>(undefined)
   const viewTab = (name: "overview" | "ledger" | "dossier") => (
     <box
       flexDirection="row"
@@ -136,10 +157,8 @@ export const StatusDialogBody = (props: {
         event.stopPropagation()
         if (view() !== name) setView(name)
       }}
-      onMouseOver={() => setViewHovered(name)}
-      onMouseOut={() => setViewHovered(undefined)}
     >
-      <text wrapMode="none" fg={view() === name || viewHovered() === name ? theme().text.base : theme().text.faint} attributes={view() === name || viewHovered() === name ? TextAttributes.BOLD : undefined}>
+      <text wrapMode="none" fg={view() === name ? theme().text.base : theme().text.faint} attributes={view() === name ? TextAttributes.BOLD : undefined}>
         {name}
       </text>
     </box>
@@ -158,8 +177,6 @@ export const StatusDialogBody = (props: {
   const [findOpen, setFindOpen] = createSignal(false)
   const [findQuery, setFindQuery] = createSignal("")
   const [findRef, setFindRef] = createSignal<InputRenderable | undefined>(undefined)
-  const [findHovered, setFindHovered] = createSignal(false)
-  const [findCloseHovered, setFindCloseHovered] = createSignal(false)
   const findQueryNow = () => (findOpen() ? findQuery() : "")
   // Per-line match flags and the running occurrence count, computed from the same classified lines the paint consumes — the count can never disagree with the highlight.
   const findLineMatch = createMemo(() => findMatches(dossierRows().map((line) => line.text), findQueryNow()))
@@ -200,7 +217,7 @@ export const StatusDialogBody = (props: {
   // elsewhere — live goals held by other sessions in this directory. Switching sessions is the host's
   // business, so with no handler rows paint inert and carry no key chords; when the host wires
   // onViewTranscript a left-click asks the host's router to open that session's transcript route and
-  // the condition boldens on hover (keyboard focus stays with the host prompt). Live means the same
+  // the row carries an always-mounted `→ transcript` affordance cell. Live means the same
   // predicate the controller and the store use (active | paused) — failed/cleared are terminal, never listed.
   const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE
   const OTHERS_CONDITION_MAX = 34
@@ -222,8 +239,9 @@ export const StatusDialogBody = (props: {
     const goal = g()
     return goal ? evaluatorHint(goal) : null
   }
-  // Host toasts do not render above the modal, so row copies acknowledge in place: a transient
-  // `✓ copied` suffix on the row that was clicked (same grammar as the footer's copy button).
+  // Host toasts do not render above the modal, so row copies acknowledge in place: the row's
+  // always-mounted affordance cell flips from its verb to `✓ copied` for the window (same grammar
+  // as the footer's copy button). The cell owns the ack — nothing else on the row changes.
   const [copied, setCopied] = createSignal<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | undefined
   const acknowledge = (key: string) => {
@@ -234,9 +252,6 @@ export const StatusDialogBody = (props: {
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer)
   })
-  const copiedSuffix = (key: string) => (copied() === key ? (ascii ? " + copied" : " ✓ copied") : "")
-  // The save row acknowledges in the same in-modal grammar, with its own verb — "copied" would lie about the side effect.
-  const savedSuffix = (key: string) => (copied() === key ? (ascii ? " + saved" : " ✓ saved") : "")
   // The verify row's ack carries the sweep's truth, not just a verb — the counts are all the host returns.
   const [verifyAck, setVerifyAck] = createSignal<string | null>(null)
   let verifyTimer: ReturnType<typeof setTimeout> | undefined
@@ -274,7 +289,6 @@ export const StatusDialogBody = (props: {
   const [reachDossierHovered, setReachDossierHovered] = createSignal(false)
   const [signDossierHovered, setSignDossierHovered] = createSignal(false)
   const [sealDossierHovered, setSealDossierHovered] = createSignal(false)
-  const [sectionHovered, setSectionHovered] = createSignal<string | undefined>(undefined)
   const [othersHovered, setOthersHovered] = createSignal<string | null>(null)
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
   // The boundary-compaction marker (compaction-landed indicator on the dial the boundary compaction reads). mono drops the hue, ascii demotions live in the text.
@@ -511,12 +525,10 @@ export const StatusDialogBody = (props: {
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
-            <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={conditionHovered() ? TextAttributes.BOLD : undefined}>
-              {goal().condition}{copiedSuffix("condition")}
+            <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
+              {goal().condition}
             </text>
-            <Show when={conditionHovered()}>
-              <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
-            </Show>
+            <Affordance theme={theme()} mono={mono} verb="copy" hovered={conditionHovered()} ack={copied() === "condition" ? (ascii ? "+ copied" : "✓ copied") : null} />
           </box>
           {/* evaluator/reason — click to copy the raw text (host wires clipboard + toast via onCopyReason) */}
           <Show when={goal().reason}>
@@ -527,12 +539,10 @@ export const StatusDialogBody = (props: {
               >
                 <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyReason(reason()) }} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
                   {label(goal().status === "active" ? "evaluator" : "reason")}
-                  <text wrapMode="word" fg={theme().text.base} flexGrow={1} attributes={reasonHovered() ? TextAttributes.BOLD : undefined}>
-                    {reason()}{copiedSuffix("reason")}
+                  <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
+                    {reason()}
                   </text>
-                  <Show when={reasonHovered()}>
-                    <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
-                  </Show>
+                  <Affordance theme={theme()} mono={mono} verb="copy" hovered={reasonHovered()} ack={copied() === "reason" ? (ascii ? "+ copied" : "✓ copied") : null} />
                 </box>
               </Show>
             )}
@@ -561,8 +571,8 @@ export const StatusDialogBody = (props: {
                 <box flexDirection="column" flexGrow={1}>
                   <box flexDirection="row" gap={1}>
                     <text wrapMode="none" fg={mono() ? theme().text.base : theme().text.faint}>$</text>
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={verifyHovered() ? TextAttributes.BOLD : undefined}>
-                      {verify().command}{copiedSuffix("verify")}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
+                      {verify().command}
                     </text>
                   </box>
                   <box flexDirection="row" gap={1}>
@@ -588,9 +598,7 @@ export const StatusDialogBody = (props: {
                   <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyVerify(verify().tail ?? "", verify().command) }} onMouseOver={() => setVerifyHovered(true)} onMouseOut={() => setVerifyHovered(false)}>
                     {label("verify")}
                     {inner()}
-                    <Show when={verifyHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="copy" hovered={verifyHovered()} ack={copied() === "verify" ? (ascii ? "+ copied" : "✓ copied") : null} />
                   </box>
                 </Show>
               )
@@ -637,12 +645,10 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyDossier() }} onMouseOver={() => setDossierHovered(true)} onMouseOut={() => setDossierHovered(false)}>
                     {label("dossier")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={dossierHovered() ? TextAttributes.BOLD : undefined}>
-                      {`the whole record as markdown${copiedSuffix("dossier")}`}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
+                      {"the whole record as markdown"}
                     </text>
-                    <Show when={dossierHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>copy</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="copy" hovered={dossierHovered()} ack={copied() === "dossier" ? (ascii ? "+ copied" : "✓ copied") : null} />
                   </box>
                 )
                 : (
@@ -658,12 +664,10 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); saveDossier() }} onMouseOver={() => setSaveHovered(true)} onMouseOut={() => setSaveHovered(false)}>
                     {label("save")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={saveHovered() ? TextAttributes.BOLD : undefined}>
-                      {`the whole record as a file${savedSuffix("save")}`}
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
+                      {"the whole record as a file"}
                     </text>
-                    <Show when={saveHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>save</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="save" hovered={saveHovered()} ack={copied() === "save" ? (ascii ? "+ saved" : "✓ saved") : null} />
                   </box>
                 )
                 : null}
@@ -672,12 +676,10 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); verifyDossier() }} onMouseOver={() => setVerifyDossierHovered(true)} onMouseOut={() => setVerifyDossierHovered(false)}>
                     {label("verify")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={verifyDossierHovered() ? TextAttributes.BOLD : undefined}>
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                       {`the shas the record quotes, checked${verifySuffix()}`}
                     </text>
-                    <Show when={verifyDossierHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>verify</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="verify" hovered={verifyDossierHovered()} width={6} />
                   </box>
                 )
                 : null}
@@ -686,12 +688,10 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); reachDossier() }} onMouseOver={() => setReachDossierHovered(true)} onMouseOut={() => setReachDossierHovered(false)}>
                     {label("reach")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={reachDossierHovered() ? TextAttributes.BOLD : undefined}>
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                       {`the shas the record quotes, on this line${reachSuffix()}`}
                     </text>
-                    <Show when={reachDossierHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>reach</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="reach" hovered={reachDossierHovered()} width={6} />
                   </box>
                 )
                 : null}
@@ -700,12 +700,10 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); signDossier() }} onMouseOver={() => setSignDossierHovered(true)} onMouseOut={() => setSignDossierHovered(false)}>
                     {label("sign")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={signDossierHovered() ? TextAttributes.BOLD : undefined}>
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                       {`the shas the record quotes, signed${signSuffix()}`}
                     </text>
-                    <Show when={signDossierHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>sign</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="sign" hovered={signDossierHovered()} width={6} />
                   </box>
                 )
                 : null}
@@ -714,20 +712,18 @@ export const StatusDialogBody = (props: {
                 ? (
                   <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); sealDossier() }} onMouseOver={() => setSealDossierHovered(true)} onMouseOut={() => setSealDossierHovered(false)}>
                     {label("seal")}
-                    <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={sealDossierHovered() ? TextAttributes.BOLD : undefined}>
+                    <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                       {`the record, sealed into a file${sealSuffix()}`}
                     </text>
-                    <Show when={sealDossierHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>seal</text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb="seal" hovered={sealDossierHovered()} width={6} />
                   </box>
                 )
                 : null}
               {/* the find row — the dossier's live spotlight. One click opens the bar (an inline input, a running count, and a close button); one click closes it and resets the query. Mouse-first, no chord — the row is the discovery surface */}
               {/* zIndex 1 — the sibling dossier rows above mount after this one in the hit grid's claim order and their text rects spill one cell past their painted line, shadowing this row's cells. The hit grid awards a cell to the last render pass over it, so this row sorts last on purpose */}
-              <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleFind() }} onMouseOver={() => setFindHovered(true)} onMouseOut={() => setFindHovered(false)}>
+              <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleFind() }}>
                 {label("find")}
-                <text wrapMode="word" flexGrow={1} fg={findOpen() || findHovered() ? theme().text.base : theme().text.faint} attributes={findHovered() ? TextAttributes.BOLD : undefined}>
+                <text wrapMode="word" flexGrow={1} fg={findOpen() ? theme().text.base : theme().text.faint}>
                   {findOpen() ? "hide find" : "find in the record"}
                 </text>
               </box>
@@ -738,21 +734,20 @@ export const StatusDialogBody = (props: {
                   <text wrapMode="none" flexShrink={0} fg={findCount() > 0 ? theme().text.base : theme().text.faint} attributes={findCount() > 0 ? TextAttributes.BOLD : undefined}>
                     {matchLabel(findCount())}
                   </text>
-                  <box flexDirection="row" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); closeFind() }} onMouseOver={() => setFindCloseHovered(true)} onMouseOut={() => setFindCloseHovered(false)}>
-                    <text wrapMode="none" fg={findCloseHovered() ? theme().text.base : theme().text.faint} attributes={findCloseHovered() ? TextAttributes.BOLD : undefined}>close</text>
+                  <box flexDirection="row" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); closeFind() }}>
+                    <text wrapMode="none" fg={theme().text.muted}>close</text>
                   </box>
                 </box>
               </Show>
               <box flexDirection="row" gap={2}>
-                {/* the outline rail — one chip per `## ` section; hover boldens (weight, the NO_COLOR contract), left-click quotes that section verbatim. Inert chrome when the host does not wire the callback: no rail, the document paints exactly as before. No `copy` suffix on the chip — the rail is 14 columns and the label is the affordance; the grammar is the same bolden-on-hover the other rows use */}
+                {/* the outline rail — one chip per `## ` section; left-click quotes that section verbatim. Inert chrome when the host does not wire the callback: no rail, the document paints exactly as before. The chip never changes on hover: its label is the affordance, the clicked chip paints `✓ copied` in place for the acknowledgment window */}
                 <Show when={props.onCopyDossierSection}>
                   <box flexDirection="column" gap={0} flexShrink={0} width={14}>
                     <For each={outline()}>{(entry) => {
                       const active = () => copied() === `section:${entry.id}`
-                      const hovered = () => sectionHovered() === entry.id
                       return (
-                        <box flexDirection="row" gap={1} flexShrink={0} width={14} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copySection(entry) }} onMouseOver={() => setSectionHovered(entry.id)} onMouseOut={() => setSectionHovered(undefined)}>
-                          <text wrapMode="none" fg={hovered() || active() ? theme().text.base : theme().text.faint} attributes={hovered() || active() ? TextAttributes.BOLD : undefined}>
+                        <box flexDirection="row" gap={1} flexShrink={0} width={14} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copySection(entry) }}>
+                          <text wrapMode="none" fg={active() ? theme().text.base : theme().text.faint} attributes={active() ? TextAttributes.BOLD : undefined}>
                             {active() ? (ascii ? "+ copied" : "✓ copied") : entry.label}
                           </text>
                         </box>
@@ -785,7 +780,7 @@ export const StatusDialogBody = (props: {
                 <box flexDirection="row" gap={2}>
                   {label("elsewhere")}
                   <text fg={theme().text.faint} wrapMode="none">
-                    {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " · hover a row to open its transcript" : ""}`}
+                    {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " · click a row to open its transcript" : ""}`}
                   </text>
                 </box>
                 <For each={othersExpanded() ? rows() : rows().slice(0, OTHERS_VISIBLE)}>
@@ -813,14 +808,12 @@ export const StatusDialogBody = (props: {
                       <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
                         {other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status}
                       </text>
-                      <text wrapMode="none" flexGrow={1} fg={theme().text.muted} attributes={jump !== undefined && hovered() ? TextAttributes.BOLD : undefined}>
+                      <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
                         {truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026")}
                       </text>
-                      <Show when={jump !== undefined && hovered()}>
-                        <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
-                          {ascii ? "-> transcript" : "\u2192 transcript"}
-                        </text>
-                      </Show>
+                      {jump !== undefined ? (
+                        <Affordance theme={theme()} mono={mono} verb={ascii ? "-> transcript" : "\u2192 transcript"} hovered={hovered()} width={13} />
+                      ) : null}
                     </box>
                     )
                   }}
@@ -829,14 +822,10 @@ export const StatusDialogBody = (props: {
                   <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleOthersExpanded() }} onMouseOver={() => setFoldHovered(true)} onMouseOut={() => setFoldHovered(false)}>
                     {label("")}
                     {/* click-to-expand, the rail-fold grammar: collapsed `+N more` expands the block in-flow; expanded folds back to the chord cap. Mouse-first — the hidden sessions are one click away; the `m` chord (dialog keymap, wired by the host) is the keyboard twin. */}
-                    <text wrapMode="none" fg={foldHovered() ? theme().text.base : theme().text.muted} attributes={foldHovered() && mono() ? TextAttributes.BOLD : undefined}>
+                    <text wrapMode="none" fg={theme().text.muted}>
                       {othersExpanded() ? `fold to ${FOREIGN_ROWS_VISIBLE}` : `+${rows().length - OTHERS_VISIBLE} more`}
                     </text>
-                    <Show when={foldHovered()}>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
-                        {props.onToggleExpandedOthers ? "click · m" : "click"}
-                      </text>
-                    </Show>
+                    <Affordance theme={theme()} mono={mono} verb={props.onToggleExpandedOthers ? "click · m" : "click"} hovered={foldHovered()} width={9} />
                   </box>
                 </Show>
               </box>

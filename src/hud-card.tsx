@@ -61,11 +61,27 @@ const stateWord = (goal: GoalSnapshot): string =>
 const verdictColor = (theme: HudCardTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
   verdictEntryAccentColor(theme, entry, mono)
 
-const Hint = (props: { theme: HudCardTheme; text: string }): JSX.Element => (
-  <text wrapMode="none" fg={props.theme.text.faint}>
-    {props.text}
-  </text>
-)
+/**
+ * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
+ * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
+ * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
+ * the widest payload (`✓ copied` / `+ copied` / `✓ saved`); the verb sits left, padding stays empty.
+ */
+const AffordanceCell = (props: { theme: HudCardTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
+  const ack = () => props.ack ?? null
+  const lit = () => props.hovered || ack() !== null
+  return (
+    <text
+      wrapMode="none"
+      flexShrink={0}
+      width={props.width ?? 8}
+      fg={lit() ? props.theme.text.base : props.theme.text.faint}
+      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
+    >
+      {ack() ?? props.verb}
+    </text>
+  )
+}
 
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 6
@@ -93,8 +109,8 @@ const remediationWidth = (width: number): number => Math.max(24, Math.floor(widt
 /** Cells available to the spend line at `width` (left border 1, padding 4, LABEL 10, gap 1). Under the budget the spend line degrades by dropping cached, then out, then in — the cost is the anchor and never clips mid-figure. */
 const spendWidth = (width: number): number => Math.max(5, Math.floor(width) - 16)
 
-/** Cells available to the condition / why reason at `width` (the 23-cell fixed furniture: left border 1, padding 4, LABEL 10, gap 1, right hint slot 7). */
-const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 23)
+/** Cells available to the condition / why reason at `width` (the 25-cell fixed furniture: left border 1, padding 4, LABEL 10, gap 1, right affordance cell 8 + its gap 1). */
+const conditionWidth = (width: number): number => Math.max(20, Math.floor(width) - 25)
 
 interface CardRowPlan {
   /** Rows the card occupies (the 1-cell left accent is a full-height column, never a row). */
@@ -449,12 +465,10 @@ export const HudCard = (props: {
         <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
           condition
         </text>
-        <text wrapMode="none" flexGrow={1} fg={theme().text.base} attributes={conditionHovered() ? TextAttributes.BOLD : undefined}>
+        <text wrapMode="none" flexGrow={1} fg={theme().text.base}>
           {truncate(g().condition, conditionCells(), ascii() ? "..." : "\u2026")}
         </text>
-        <Show when={conditionHovered()}>
-          <Hint theme={theme()} text="copy" />
-        </Show>
+        <AffordanceCell theme={theme()} mono={mono} verb="copy" hovered={conditionHovered()} />
       </box>
       {/* now — state, turns, elapsed, pips */}
       <box flexDirection="row" gap={1}>
@@ -573,12 +587,10 @@ export const HudCard = (props: {
               <text wrapMode="none" flexShrink={0} width={LABEL} fg={theme().text.faint}>
                 why
               </text>
-              <text wrapMode="none" flexGrow={1} fg={whyHovered() && copyable() ? theme().text.base : theme().text.muted} attributes={whyHovered() && copyable() ? TextAttributes.BOLD : undefined}>
+              <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
                 {truncate(whyReason(), conditionCells(), ascii() ? "..." : "\u2026")}
               </text>
-              <Show when={whyHovered() && copyable()}>
-                <Hint theme={theme()} text="copy" />
-              </Show>
+              {copyable() ? <AffordanceCell theme={theme()} mono={mono} verb="copy" hovered={whyHovered()} /> : null}
             </box>
           )
         })()}

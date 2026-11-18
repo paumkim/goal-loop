@@ -45,15 +45,37 @@ const label = (theme: HistoryTheme, text: string) => (
   </text>
 )
 
+/**
+ * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
+ * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
+ * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
+ * the widest in-cell payload (`✓ copied` / `+ copied`).
+ */
+const Affordance = (props: { theme: HistoryTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
+  const ack = () => props.ack ?? null
+  const lit = () => props.hovered || ack() !== null
+  return (
+    <text
+      wrapMode="none"
+      flexShrink={0}
+      width={props.width ?? 8}
+      fg={lit() ? props.theme.text.base : props.theme.text.faint}
+      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
+    >
+      {ack() ?? props.verb}
+    </text>
+  )
+}
+
 const colorFor = (theme: HistoryTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
   verdictEntryAccentColor(theme, entry, mono)
 
 /**
  * One completed iteration's summary line. Click-to-copy when the caller wires `onCopy`:
  * the summary is the payload a user most often wants verbatim (to paste into a prompt or
- * an issue), so the whole line is the click target — boldened on hover, like the condition row.
+ * an issue), so the whole line is the click target — an always-mounted affordance cell brightens on hover; the text never changes.
  */
-const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean; ascii?: () => boolean }): JSX.Element => {
+const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text: string) => void; copied?: () => boolean; ascii?: () => boolean; mono?: () => boolean }): JSX.Element => {
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const [hovered, setHovered] = createSignal(false)
   const copy = () => {
@@ -69,10 +91,10 @@ const RailSummary = (props: { theme: HistoryTheme; text: string; onCopy?: (text:
       <text fg={props.theme.text.faint} flexShrink={0} width={LABEL}>
         {ascii() ? "|" : "│"}
       </text>
-      <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1} attributes={props.onCopy && hovered() ? TextAttributes.BOLD : undefined}>
+      <text wrapMode="word" fg={props.theme.text.faint} flexGrow={1}>
         {`${ascii() ? "|" : "│"} ${truncate(props.text, SUMMARY_MAX, ascii() ? "..." : "\u2026")}`}
-        {props.copied?.() ? (ascii() ? " + copied" : " ✓ copied") : ""}
       </text>
+      {props.onCopy ? <Affordance theme={props.theme} mono={props.mono ?? (() => false)} verb="copy" hovered={hovered()} ack={props.copied?.() ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
     </box>
   )
 }
@@ -86,17 +108,17 @@ export const LoopSection = (props: {
   nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking a summary line copies that iteration's full summary. The line boldens on hover to advertise it. */
+  /** When set, clicking a summary line copies that iteration's full summary. The line carries an always-mounted affordance cell. */
   onCopySummary?: (summary: string, version: number) => void
-  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason boldens on hover to advertise it. */
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason carries an always-mounted affordance cell. */
   onCopyReason?: (reason: string) => void
   /** Controlled expand state for the iteration rail's fold row (the status dialog drives this from its keymap layer so keyboard users can expand). Uncontrolled when absent. */
   expanded?: () => boolean
   /** Fired on fold-row activation. Pair with `expanded` for controlled mode. */
   onToggleExpanded?: () => void
-  /** When set, clicking a rail iteration row copies that iteration's attestation line (the receipt: `v3 · met · 9 turns · 41 tools · … · sha · cost`). Hover boldens the row to advertise it. */
+  /** When set, clicking a rail iteration row copies that iteration's attestation line (the receipt: `v3 · met · 9 turns · 41 tools · … · sha · cost`). An always-mounted affordance cell marks the row. */
   onCopyAttestation?: (line: string) => void
-  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. Hover boldens the row to advertise it. */
+  /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. An always-mounted affordance cell marks the row. */
   onCopyTally?: (line: string) => void
   /** Applied to the root box. The dialog passes -1 to cancel the one-row gap the content column leaves above the section (the gap stays 1 — only this box pulls up). */
   marginTop?: number
@@ -131,8 +153,7 @@ export const LoopSection = (props: {
   const [localShowAll, setLocalShowAll] = createSignal(false)
   const showAll = () => props.expanded?.() ?? localShowAll()
   const toggleShowAll = () => { if (props.onToggleExpanded) { props.onToggleExpanded(); return } setLocalShowAll((v) => !v) }
-  const [railHovered, setRailHovered] = createSignal(false)
-  // The attestation/tally click targets: hover boldens the row (the NO_COLOR contract), a click copies the
+  // The attestation/tally click targets: an always-mounted affordance cell marks the row (weight, the NO_COLOR contract), a click copies the
   // row's own quotable payload, and the acknowledgment rides the row for a beat — the grammar the summary
   // copy established. Resting paint is byte-identical to the pre-click frame.
   const [attestHover, setAttestHover] = createSignal<number | null>(null)
@@ -300,11 +321,11 @@ export const LoopSection = (props: {
       </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; a met iteration with zero tool calls produced no work — the evaluator found the condition already satisfied at HEAD — so it paints the blue accent (info.base, the palette's info hue; mono keeps the ○ shape as the signal) with the 'already satisfied at HEAD' tag. Older iterations fold behind one click so a long loop never buries the live row. */}
       <Show when={done() > RAIL_VISIBLE}>
-        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }} onMouseOver={() => setRailHovered(true)} onMouseOut={() => setRailHovered(false)}>
+        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             {ascii() ? "..." : "…"}
           </text>
-          <text wrapMode="none" fg={theme().text.faint} attributes={railHovered() ? TextAttributes.BOLD : undefined}>
+          <text wrapMode="none" fg={theme().text.faint}>
             {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`}
           </text>
         </box>
@@ -325,15 +346,13 @@ export const LoopSection = (props: {
                 <text wrapMode="none" flexShrink={0} fg={verdictEntryAccentColor(theme(), { verdict: "met", toolCalls: entry.toolCalls }, mono())}>
                   {zeroTools ? (ascii() ? "." : "○") : (ascii() ? "+" : "✓")}
                 </text>
-                <text wrapMode="word" flexGrow={1} fg={rowColor} attributes={attestHovered ? TextAttributes.BOLD : undefined}>
+                <text wrapMode="word" flexGrow={1} fg={rowColor}>
                   {`met · ${entry.turns} turn${entry.turns === 1 ? "" : "s"} · ${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"} · ${formatDuration(attestDuration)}${zeroTools ? " · no tools · already satisfied at HEAD" : ""}${mixSuffix(fullIndex())}${endedSuffix(entry)}${shareSuffix(fullIndex())}${shaSuffix(entry)}${spendSuffix(entry)}`}
                 </text>
-                <Show when={attestCopied() === entry.version}>
-                  <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{ascii() ? "+ copied" : "✓ copied"}</text>
-                </Show>
+                {attestInteractive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={attestHovered} ack={attestCopied() === entry.version ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
               </box>
             <Show when={entry.summary.trim().length > 0}>
-              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} ascii={ascii} />
+              <RailSummary theme={theme()} text={entry.summary} onCopy={props.onCopySummary ? (text) => copySummary(text, entry.version) : undefined} copied={() => copiedVersion() === entry.version} ascii={ascii} mono={mono} />
             </Show>
           </box>
           )
@@ -373,12 +392,10 @@ export const LoopSection = (props: {
           <text wrapMode="none" flexShrink={0} fg={finalColor()} attributes={TextAttributes.BOLD}>
             {finalGlyph()}
           </text>
-          <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={tallyHover() ? TextAttributes.BOLD : undefined}>
+          <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
             {finalTallyLine(props.goal.status, totals())}
           </text>
-          <Show when={tallyCopied()}>
-            <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>{ascii() ? "+ copied" : "✓ copied"}</text>
-          </Show>
+          {props.onCopyTally ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={tallyHover()} ack={tallyCopied() ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
         </box>
       </Show>
       {/* evaluator verdict trail */}
@@ -398,7 +415,7 @@ const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.sli
  * turn, relative time, the commit sha the verdict landed on (when the host stamped one),
  * reason — the evaluator's *why* at a glance, without scrolling the
  * dialog to the last evaluator row. Click-to-copy when the caller wires onCopyReason;
- * hover boldens the reason (the affordance grammar shared with the condition/summary/
+ * an always-mounted affordance cell advertises the row (the grammar shared with the condition/summary/
  * reason rows). The copied acknowledgment rides the row for a beat, like every other row.
  */
 const WhyLedger = (props: {
@@ -448,15 +465,10 @@ const WhyLedger = (props: {
               <text wrapMode="none" flexShrink={0} fg={theme().text.muted} width={furnitureWidth()}>
                 {furniture(entry)}
               </text>
-              <text wrapMode="word" flexGrow={1} fg={theme().text.base} attributes={interactive && hovered() === entry.at ? TextAttributes.BOLD : undefined}>
+              <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                 {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
-                {copied() === entry.at ? (ascii() ? " + copied" : " ✓ copied") : ""}
               </text>
-              <Show when={interactive && hovered() === entry.at}>
-                <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
-                  copy
-                </text>
-              </Show>
+              {interactive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={hovered() === entry.at} ack={copied() === entry.at ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
             </box>
           )
         }}
@@ -469,19 +481,17 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
   const mono = () => props.mono === true
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
   const trail = () => trailWindow(props.history, 24)
-  // The timeline is a control, not a picture: hovering a dot names its turn, clicking copies that
-  // turn's exact evaluator reason. The why ledger inline-quotes only the last three reasons; this
-  // is the deep scrub surface for the rest. Dots without a reason (or without the host wiring) stay
-  // inert pictures. The hover tag paints words only, so the 80-column floor is unaffected and the
-  // resting frame is byte-identical to the historical paint.
-  const [hovered, setHovered] = createSignal<number | null>(null)
+  // The timeline is a control, not a picture: clicking a dot copies that turn's exact evaluator
+  // reason. The why ledger inline-quotes only the last three reasons; this is the deep scrub
+  // surface for the rest. Dots without a reason (or without the host wiring) stay inert pictures.
+  // The frame is byte-identical at rest and under the mouse — no hover tag, no weight swap; the
+  // click ack rides the trail line, transient, right of the verdict count.
   const [copiedTurn, setCopiedTurn] = createSignal<number | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | undefined
   onCleanup(() => {
     if (copiedTimer) clearTimeout(copiedTimer)
   })
   const interactive = () => props.onCopyReason !== undefined
-  const hoveredEntry = () => trail().shown.find((entry) => entry.turn === hovered())
   const copyAt = (entry: VerdictEntry) => {
     if (!props.onCopyReason || entry.reason.trim().length === 0) return
     try {
@@ -503,8 +513,8 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
             <For each={trail().shown}>{(entry) => {
               const copyable = interactive() && copyHint(entry)
               return (
-                <box flexDirection="row" onMouseUp={copyable ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copyAt(entry) } : undefined} onMouseOver={() => setHovered(entry.turn)} onMouseOut={() => setHovered(null)}>
-                  <text wrapMode="none" fg={colorFor(props.theme, entry, mono())} attributes={hovered() === entry.turn ? TextAttributes.BOLD : undefined}>{verdictEntryGlyph(entry, ascii())}</text>
+                <box flexDirection="row" onMouseUp={copyable ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copyAt(entry) } : undefined}>
+                  <text wrapMode="none" fg={colorFor(props.theme, entry, mono())}>{verdictEntryGlyph(entry, ascii())}</text>
                 </box>
               )
             }}</For>
@@ -513,10 +523,8 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
             {" "}
             {trail().shown.length} of {trail().total} verdict{trail().total === 1 ? "" : "s"}
             {(() => {
-              const h = hoveredEntry()
-              if (!h) return ""
-              const ack = copiedTurn() === h.turn ? (ascii() ? " · + copied" : " · ✓ copied") : ""
-              return ` · turn ${h.turn}${ack}`
+              const t = copiedTurn()
+              return t === null ? "" : (ascii() ? ` · turn ${t} · + copied` : ` · turn ${t} · ✓ copied`)
             })()}
           </text>
         </box>
@@ -540,7 +548,7 @@ export const HistoryBlock = (props: {
   nowMs?: () => number
   /** Reduced-color surface (NO_COLOR / TERM=dumb): drop chromatic accents; weight and glyphs carry meaning. */
   mono?: boolean
-  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason boldens on hover to advertise it. */
+  /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason carries an always-mounted affordance cell. */
   onCopyReason?: (reason: string) => void
   /** Applied to the root box. The dialog passes -1 to cancel the one-row gap the content column leaves above the section (the gap stays 1 — only this box pulls up). */
   marginTop?: number
