@@ -3324,6 +3324,17 @@
       "submittedAt": "2026-11-18T18:34:11Z",
       "mergedAt": "2026-11-18T18:35:36Z",
       "mergedInto": "dev"
+    },
+    "evaluator-novelty-rubric": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/core/verdict.ts,src/core/prompts.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md,dist/tui.js",
+      "branch": "wt/evaluator-novelty-rubric",
+      "worktree": "worktrees/wt-evaluator-novelty-rubric",
+      "status": "done",
+      "createdAt": "2026-11-18T18:46:58Z",
+      "submittedAt": "2026-11-18T18:53:35Z",
+      "mergedAt": "2026-11-18T18:55:09Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
