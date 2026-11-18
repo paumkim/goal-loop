@@ -2463,4 +2463,18 @@ describe("arming-side no-new-gap gate (XLV)", () => {
     await h.setLoop("tidy the changelog generator")
     expect(h.controller.get(SID)!.status).toBe("active")
   })
+
+  test("a fresh arm does NOT inherit the replaced record's completedConditions (XLV honest limit (e), by design)", async () => {
+    await completeLoop(h, "improve the parser")
+    // The terminal record really carries a ledger; the fresh arm must not seed itself from it.
+    expect(h.controller.get(SID)!.completedConditions).toContain("improve the parser")
+    await h.setLoop("add fuzz coverage for the search index")
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.completedConditions).toBeUndefined()
+    expect(record.completedConditionsDropped).toBeUndefined()
+    const persisted = h.storage.data.get(`goal/v1/${SID}`) as { completedConditions?: string[]; completedConditionsDropped?: number } | undefined
+    expect(persisted?.completedConditions).toBeUndefined()
+    expect(persisted?.completedConditionsDropped).toBeUndefined()
+  })
 })
