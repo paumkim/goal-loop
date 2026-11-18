@@ -7286,7 +7286,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(1, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0));
+            const budget = Math.max(8, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7323,7 +7323,7 @@ var tui_default = Plugin.define({
           });
         };
         createEffect2(() => {
-          if (animated() && !cardFor() && motionOk) {
+          if (animated() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
             onCleanup3(() => clearInterval(timer));
             return;
@@ -7373,9 +7373,10 @@ var tui_default = Plugin.define({
             setMountWidth(undefined);
         });
         const maxCardRows = () => Math.max(8, dimensions().height - 2);
+        const maxBodyRows = () => Math.max(8, maxCardRows() - 1);
         const cardRows = () => {
           const g = cardFor();
-          return g ? hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr()) : 0;
+          return g ? hudCardRows(g, contextOpen(), maxBodyRows(), mountWidthOr()) : 0;
         };
         const toggleHud = () => {
           try {
@@ -7393,50 +7394,51 @@ var tui_default = Plugin.define({
                 return showing();
               },
               get children() {
-                return [_$createComponent4(Show4, {
-                  get when() {
-                    return !cardFor();
-                  },
-                  get children() {
-                    var _el$12 = _$createElement4("box"), _el$13 = _$createElement4("text");
-                    _$insertNode4(_el$12, _el$13);
-                    _$setProp4(_el$12, "position", "absolute");
-                    _$setProp4(_el$12, "top", -1);
-                    _$setProp4(_el$12, "left", 0);
-                    _$setProp4(_el$12, "height", 1);
-                    _$setProp4(_el$12, "paddingLeft", 1);
-                    _$setProp4(_el$12, "flexDirection", "row");
-                    _$setProp4(_el$12, "onMouseOver", () => setHovered(true));
-                    _$setProp4(_el$12, "onMouseOut", () => setHovered(false));
-                    _$setProp4(_el$12, "onMouseUp", (event) => {
-                      try {
-                        if (!props.sessionID)
-                          return;
-                        if (event.button === 2)
-                          openDashboard(props.sessionID);
-                        else if (event.button === 0)
-                          toggleHud();
-                      } catch {}
-                    });
-                    _$setProp4(_el$13, "wrapMode", "none");
-                    _$insert4(_el$13, pillText);
-                    _$effect4((_p$) => {
-                      var _v$7 = color(), _v$8 = pillAttrs();
-                      _v$7 !== _p$.e && (_p$.e = _$setProp4(_el$13, "fg", _v$7, _p$.e));
-                      _v$8 !== _p$.t && (_p$.t = _$setProp4(_el$13, "attributes", _v$8, _p$.t));
-                      return _p$;
-                    }, {
-                      e: undefined,
-                      t: undefined
-                    });
-                    return _el$12;
-                  }
-                }), _$createComponent4(Show4, {
+                return [(() => {
+                  var _el$12 = _$createElement4("box"), _el$13 = _$createElement4("text"), _el$14 = _$createElement4("text");
+                  _$insertNode4(_el$12, _el$13);
+                  _$insertNode4(_el$12, _el$14);
+                  _$setProp4(_el$12, "position", "absolute");
+                  _$setProp4(_el$12, "top", -1);
+                  _$setProp4(_el$12, "left", 0);
+                  _$setProp4(_el$12, "height", 1);
+                  _$setProp4(_el$12, "paddingLeft", 1);
+                  _$setProp4(_el$12, "flexDirection", "row");
+                  _$setProp4(_el$12, "onMouseOver", () => setHovered(true));
+                  _$setProp4(_el$12, "onMouseOut", () => setHovered(false));
+                  _$setProp4(_el$12, "onMouseUp", (event) => {
+                    try {
+                      if (!props.sessionID)
+                        return;
+                      if (event.button === 2)
+                        openDashboard(props.sessionID);
+                      else if (event.button === 0)
+                        toggleHud();
+                    } catch {}
+                  });
+                  _$setProp4(_el$13, "wrapMode", "none");
+                  _$insert4(_el$13, pillText);
+                  _$setProp4(_el$14, "wrapMode", "none");
+                  _$setProp4(_el$14, "flexShrink", 0);
+                  _$insert4(_el$14, () => cardFor() ? " \u25BE" : " \u25B4");
+                  _$effect4((_p$) => {
+                    var _v$7 = color(), _v$8 = pillAttrs(), _v$9 = context.theme.text.faint;
+                    _v$7 !== _p$.e && (_p$.e = _$setProp4(_el$13, "fg", _v$7, _p$.e));
+                    _v$8 !== _p$.t && (_p$.t = _$setProp4(_el$13, "attributes", _v$8, _p$.t));
+                    _v$9 !== _p$.a && (_p$.a = _$setProp4(_el$14, "fg", _v$9, _p$.a));
+                    return _p$;
+                  }, {
+                    e: undefined,
+                    t: undefined,
+                    a: undefined
+                  });
+                  return _el$12;
+                })(), _$createComponent4(Show4, {
                   get when() {
                     return cardFor();
                   },
                   children: (g) => (() => {
-                    var _el$15 = _$createElement4("box");
+                    var _el$16 = _$createElement4("box");
                     _$use2((el) => {
                       el.onSizeChange = () => {
                         const w = el.width;
@@ -7446,12 +7448,12 @@ var tui_default = Plugin.define({
                       const w = el.width;
                       if (w > 0)
                         setMountWidth(w);
-                    }, _el$15);
-                    _$setProp4(_el$15, "position", "absolute");
-                    _$setProp4(_el$15, "left", 0);
-                    _$setProp4(_el$15, "right", 0);
-                    _$setProp4(_el$15, "zIndex", 10);
-                    _$insert4(_el$15, _$createComponent4(Show4, {
+                    }, _el$16);
+                    _$setProp4(_el$16, "position", "absolute");
+                    _$setProp4(_el$16, "left", 0);
+                    _$setProp4(_el$16, "right", 0);
+                    _$setProp4(_el$16, "zIndex", 10);
+                    _$insert4(_el$16, _$createComponent4(Show4, {
                       get when() {
                         return mountWidth() !== undefined;
                       },
@@ -7486,7 +7488,7 @@ var tui_default = Plugin.define({
                             return contextOpen();
                           },
                           get maxRows() {
-                            return maxCardRows();
+                            return maxBodyRows();
                           },
                           onToggleContext: () => setContextOpen((v) => {
                             const next = !v;
@@ -7515,15 +7517,15 @@ var tui_default = Plugin.define({
                       }
                     }));
                     _$effect4((_p$) => {
-                      var _v$9 = -cardRows(), _v$0 = cardRows();
-                      _v$9 !== _p$.e && (_p$.e = _$setProp4(_el$15, "top", _v$9, _p$.e));
-                      _v$0 !== _p$.t && (_p$.t = _$setProp4(_el$15, "height", _v$0, _p$.t));
+                      var _v$0 = -(1 + cardRows()), _v$1 = cardRows();
+                      _v$0 !== _p$.e && (_p$.e = _$setProp4(_el$16, "top", _v$0, _p$.e));
+                      _v$1 !== _p$.t && (_p$.t = _$setProp4(_el$16, "height", _v$1, _p$.t));
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined
                     });
-                    return _el$15;
+                    return _el$16;
                   })()
                 })];
               }

@@ -605,9 +605,11 @@ export default Plugin.define({
     const [breathPhase, setBreathPhase] = createSignal(0)
 
     // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
-    // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. Left click
-    // toggles the compact HUD card (level b — the composer-grammar card above the jump row); right click
-    // opens the full `/goal` dashboard (level c — same host dialog as `goal.status`). Pinning the condition
+    // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. The pill and
+    // the card are ONE accordion surface — the pill is the persistent stripe (the panel's bottom seam
+    // when open), and left click toggles the compact HUD card (level b — the composer-grammar card
+    // expanding upward above the jump row); right click opens the full `/goal` dashboard (level c —
+    // same host dialog as `goal.status`). Pinning the condition
     // (card `[pin]` button or `p` in the dialog) appends it to the pill so it survives conversation scroll.
     // The card is dismissible with Esc (keymap layer below), its esc button, or another left click on the pill.
     // When the goal ends, a live→terminal transition leaves a 45s acknowledgment pill on the jump row
@@ -963,11 +965,12 @@ export default Plugin.define({
           try {
             const g = goal()
             // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
-          // minus the landing acknowledgment suffix when it rides the same line (cells, not .length).
+          // minus the landing acknowledgment suffix when it rides the same line (cells, not .length),
+          // minus the caret cell (▴/▾) that trails the pill on the same row.
           // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
           // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(1, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0))
+          const budget = Math.max(8, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2) // -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -1008,9 +1011,9 @@ export default Plugin.define({
           return pillMotionNeeded({ working: workingNow(), evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
         }
         createEffect(() => {
-          // The pill is not painted while the card is open (see the mount gate below), so the breath
-          // must not advance either — a timer with no painter is pure wake-up work.
-          if (animated() && !cardFor() && motionOk) {
+          // The pill is always painted while showing() (it is the accordion's persistent stripe, see
+          // the mount below), so the breath advances whenever the loop is alive — open or closed.
+          if (animated() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS)
             onCleanup(() => clearInterval(timer))
             return
@@ -1047,7 +1050,7 @@ export default Plugin.define({
         // mount's own resolved width — measured off the outer absolute box and snapped on every layout
         // change (sidebar toggle, terminal resize). useTerminalDimensions() is the full screen, sidebar
         // included; painting at that width ran the card out past the composer into the sidebar region,
-        // flush-clipped mid-sentence with no ellipsis. The anchor (top={-cardRows()}), the row plan and
+        // flush-clipped mid-sentence with no ellipsis. The anchor (top={-(1 + cardRows())}), the row plan and
         // the painted card all agree on this number.
         const [mountWidth, setMountWidth] = createSignal<number | undefined>(undefined)
         const mountWidthOr = () => mountWidth() ?? dimensions().width
@@ -1065,11 +1068,14 @@ export default Plugin.define({
         // Viewport ceiling for the card: one row for the host slot above the prompt, one for the global status line;
         // the row plan drops teaching rows to fit (mirror of ClampedColumn's `height - 1`, with an 8-row floor).
         const maxCardRows = () => Math.max(8, dimensions().height - 2)
+        // The panel's body yields one row to the pill stripe beneath it (the accordion's bottom seam),
+        // so the total footprint (pill row + body) never exceeds the old one-budget ceiling.
+        const maxBodyRows = () => Math.max(8, maxCardRows() - 1)
         // The anchor must measure the same width the card paints with (the mount's width) or the reserved
         // rows drift from the painted rows on wide terminals.
         const cardRows = () => {
           const g = cardFor()
-          return g ? hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr()) : 0
+          return g ? hudCardRows(g, contextOpen(), maxBodyRows(), mountWidthOr()) : 0
         }
         const toggleHud = () => {
           try {
@@ -1083,40 +1089,42 @@ export default Plugin.define({
         return (
           <ErrorBoundary fallback={() => <box />}>
           <Show when={showing()}>
-            {/* While the card is open the card IS the pill: it is opaque and anchored over exactly
-                the row the pill paints (top={-cardRows()} + cardRows() rows of height includes the
-                pill's top={-1} row), so a mounted pill would land behind it — unseen, but still
-                laid out, still hit-tested, still breath-timed. Suppressed by construction instead:
-                one voice on the row, the card or the pill, never both stacked. */}
-            <Show when={!cardFor()}>
-              <box
-                position="absolute"
-                top={-1}
-                left={0}
-                height={1}
-                paddingLeft={1}
-                flexDirection="row"
-                onMouseOver={() => setHovered(true)}
-                onMouseOut={() => setHovered(false)}
-                onMouseUp={(event) => {
-                  try {
-                    if (!props.sessionID) return
-                    // Right click opens the dashboard directly; left click toggles the card; other buttons are inert.
-                    if (event.button === 2) openDashboard(props.sessionID)
-                    else if (event.button === 0) toggleHud()
-                  } catch {}
-                }}
-              >
-                <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
-                  {pillText()}
-                </text>
-              </box>
-            </Show>
+            {/* The accordion: the pill is the persistent stripe on the jump row and the panel's
+                bottom seam — always mounted while showing(). Left click toggles the card open or
+                closed (the panel expands upward from the pill, anchored at top={-(1 + cardRows())});
+                right click opens the dashboard. The caret cell rides the same row: ▴ when the panel
+                is collapsed (its content hidden above), ▾ when open (click again to collapse). */}
+            <box
+              position="absolute"
+              top={-1}
+              left={0}
+              height={1}
+              paddingLeft={1}
+              flexDirection="row"
+              onMouseOver={() => setHovered(true)}
+              onMouseOut={() => setHovered(false)}
+              onMouseUp={(event) => {
+                try {
+                  if (!props.sessionID) return
+                  // Right click opens the dashboard directly; left click toggles the card; other buttons are inert.
+                  if (event.button === 2) openDashboard(props.sessionID)
+                  else if (event.button === 0) toggleHud()
+                } catch {}
+              }}
+            >
+              <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
+                {pillText()}
+              </text>
+              <text fg={context.theme.text.faint} wrapMode="none" flexShrink={0}>{cardFor() ? " ▾" : " ▴"}</text>
+            </box>
+            {/* The accordion's expanding panel: collapses to the persistent pill stripe above, expands
+                upward from it. The pill is the panel's bottom seam when open — top={-(1 + cardRows())}
+                anchors the body one row above the pill's top={-1} stripe, zIndex=10 keeps it opaque. */}
             <Show when={cardFor()}>
               {(g) => (
                 <box
                   position="absolute"
-                  top={-cardRows()}
+                  top={-(1 + cardRows())}
                   left={0}
                   right={0}
                   height={cardRows()}
@@ -1152,7 +1160,7 @@ export default Plugin.define({
                     }}
                     onCopyCondition={(condition) => copyToClipboard(condition, props.sessionID)}
                     contextOpen={contextOpen()}
-                    maxRows={maxCardRows()}
+                    maxRows={maxBodyRows()}
                     onToggleContext={() => setContextOpen((v) => { const next = !v; if (next) setContextIndex(0); return next })}
                     menuSelected={() => contextIndex()}
                     onCloseMenu={() => { setContextOpen(false); setContextIndex(0) }}

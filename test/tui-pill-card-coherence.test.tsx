@@ -1,12 +1,13 @@
 /**
- * The pill and the HUD card both claim the row directly above the prompt through the host's
- * `session.composer.top` slot. Before this workstream they were stacked: the pill painted at
- * top={-1} on the very row the opaque, zIndex=10 card also covers — invisible, but still laid
- * out, hit-tested and breath-timed. Now the pill mount gate (`<Show when={!cardFor()}>` in
- * src/tui.tsx) suppresses it by construction while the card is open, and the breath timer is
- * gated the same way. This suite pins (a) the wiring in src/tui.tsx via source contract, and
- * (b) the painted outcome of the gated mount via a headless render of the real HudCard and the
- * real pill model. Requires the solid preload (test/bunfig.toml) for part (b).
+ * The pill and the HUD card are ONE accordion surface: the pill is the persistent stripe on the
+ * host's jump-to-latest row (the panel's bottom seam while open), and the card expands upward
+ * from it — left click toggles the panel, right click opens the dashboard. The pill mount in
+ * src/tui.tsx is no longer gated on the card being closed; the body anchors at
+ * top={-(1 + cardRows())} so the footprint never exceeds the old single-budget ceiling, and the
+ * breath timer advances whenever the loop is alive. This suite pins (a) the wiring in
+ * src/tui.tsx via source contract, and (b) the painted outcome of the accordion geometry via a
+ * headless render of the real HudCard and the real pill model. Requires the solid preload
+ * (test/bunfig.toml) for part (b).
  */
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
@@ -63,28 +64,43 @@ const goal = (): GoalSnapshot => ({
 const TERMINAL = 80
 const MAX_ROWS = 40
 
-describe("the src/tui.tsx wiring that keeps the pill out from behind the card (source contract)", () => {
+describe("the src/tui.tsx wiring that makes the pill the accordion header (source contract)", () => {
   const tui = readFileSync(join(import.meta.dir, "../src/tui.tsx"), "utf8")
 
-  test("the pill mount is gated on the card being closed — never painted behind it", () => {
-    // The pill's absolute box (top={-1}) must sit inside <Show when={!cardFor()}>: the card is
-    // opaque, zIndex 10 and anchored over exactly that row, so an ungated pill paints unseen.
-    expect(tui).toMatch(/<Show when=\{!cardFor\(\)\}>[\s\S]{0,600}top=\{-1\}/)
+  test("the pill mount is NOT gated on the card being closed — it is the persistent stripe", () => {
+    // The pill's absolute box (top={-1}) must never sit inside <Show when={!cardFor()}>: the pill
+    // is the accordion's persistent header and the panel's bottom seam while open.
+    expect(/<Show when=\{!cardFor\(\)\}>[\s\S]{0,400}top=\{-1\}/.test(tui)).toBe(false)
   })
 
-  test("the breath timer does not advance a pill that is not painted", () => {
-    expect(tui).toMatch(/if \(animated\(\) && !cardFor\(\) && motionOk\)/)
+  test("the panel body mounts one row above the pill stripe, anchored at top={-(1 + cardRows())}", () => {
+    expect(tui).toMatch(/top=\{-\(1 \+ cardRows\(\)\)\}/)
+  })
+
+  test("the breath timer no longer references the card gate — it advances whenever the loop is alive", () => {
+    expect(tui).toMatch(/if \(animated\(\) && motionOk\)/)
+    expect(/animated\(\) && !cardFor\(\)/.test(tui)).toBe(false)
+  })
+
+  test("the pill carries a trailing caret cell: ▴ collapsed, ▾ open", () => {
+    expect(tui).toContain('" ▴"')
+    expect(tui).toContain('" ▾"')
   })
 })
 
-describe("the gated mount, headless (the real pill model and the real HudCard through one mount)", () => {
+describe("the accordion geometry, headless (the real pill model and the real HudCard through one mount)", () => {
   const g = goal()
-  const cardRows = hudCardRows(g, false, Math.max(8, MAX_ROWS - 2), TERMINAL)
-  const pillLine = pillModel(g, 1000 * 60 * 42, false, TERMINAL - 2, 2)!.text
+  // Mirror of src/tui.tsx: the viewport ceiling feeds maxCardRows, the body yields one row to the
+  // pill stripe (maxBodyRows), and cardRows() is the plan under that cap.
+  const maxCardRows = Math.max(8, MAX_ROWS - 2)
+  const maxBodyRows = Math.max(8, maxCardRows - 1)
+  const cardRows = hudCardRows(g, false, maxBodyRows, TERMINAL)
+  const pillLine = pillModel(g, 1000 * 60 * 42, false, TERMINAL - 2 - 2, 2)!.text
 
   const compose = (cardOpen: boolean): JSX.Element => (
     <box flexDirection="column" width={TERMINAL} height={cardRows + 1}>
-      {cardOpen ? (
+      {/* The body, literally as src/tui.tsx anchors it: above the pill stripe, one row per cardRows(). */}
+      {cardOpen && (
         <box position="absolute" top={0} left={0} right={0} height={cardRows} zIndex={10}>
           <HudCard
             goal={g}
@@ -97,32 +113,37 @@ describe("the gated mount, headless (the real pill model and the real HudCard th
             onCopyCondition={() => {}}
             onTogglePin={() => {}}
             width={TERMINAL}
+            maxRows={maxBodyRows}
           />
         </box>
-      ) : (
-        <box />
       )}
-      {/* The gate, literally as src/tui.tsx writes it: the pill never mounts while the card is open. */}
-      {!cardOpen && (
-        <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={1} flexDirection="row">
-          <text fg={theme.text.muted} wrapMode="none">
-            {pillLine}
-          </text>
-        </box>
-      )}
+      {/* The pill, always mounted while showing(): the panel's bottom seam when open, the stripe when closed. */}
+      <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={1} flexDirection="row">
+        <text fg={theme.text.muted} wrapMode="none">
+          {pillLine}
+        </text>
+        <text fg={theme.text.faint} wrapMode="none" flexShrink={0}>
+          {cardOpen ? " ▾" : " ▴"}
+        </text>
+      </box>
     </box>
   )
 
-  test("card open: the pill text is nowhere in the frame; the card's affordance row is", async () => {
+  test("card open: the pill stripe paints below the card, and it is the last row of the column", async () => {
     const setup = await testRender(() => compose(true), { width: TERMINAL, height: cardRows + 1 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame.split("\n").some((row) => row.includes(pillLine))).toBe(false)
-    expect(frame).toContain("[details]")
+    const rows = frame.replace(/\n+$/, "").split("\n")
+    const pillRow = rows.findIndex((row) => row.includes(pillLine))
+    const actionsRow = rows.findIndex((row) => row.includes("[details]"))
+    expect(pillRow).toBeGreaterThanOrEqual(0)
+    expect(actionsRow).toBeGreaterThanOrEqual(0)
+    expect(pillRow).toBeGreaterThan(actionsRow)
+    expect(pillRow).toBe(rows.length - 1)
     await setup.renderer.destroy()
   })
 
-  test("card closed: the pill text paints; the card's affordance row does not", async () => {
+  test("card closed: the pill stripe paints; the card's affordance row does not", async () => {
     const setup = await testRender(() => compose(false), { width: TERMINAL, height: cardRows + 1 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
