@@ -208,3 +208,43 @@ export function truncate(text: string, max: number, ellipsis: string = "\u2026")
   // Never leave a dangling space before the ellipsis.
   return `${out.replace(/\s+$/, "")}${ellipsis}`
 }
+
+/**
+ * Hard character cap for text that feeds an LLM verbatim — the loop summary that rides the
+ * re-arm boundary into the next planner call (and, truncated the same way, into the armed
+ * kickoff). Unlike {@link truncate} this preserves the leading text byte-for-byte: no
+ * whitespace flattening, no cell math — the summary's lines are payload, not paint.
+ *
+ * Guarantees at `maxChars`:
+ * - input at or under `maxChars` code units is returned unchanged (identity, not a copy);
+ * - the output is at most `maxChars` code units and ends with the elision marker "…" (U+2026);
+ * - when a whitespace run exists within the cut window the cut lands on that whitespace, so
+ *   the last kept token is whole — never the mid-word raw cut the planner demonstrably read;
+ * - the boundary never splits a UTF-16 surrogate pair, so no lone surrogate ever leaks;
+ * - the marker is the only added character; no ellipsis is added when nothing was cut.
+ *
+ * A zero/negative budget returns "" — never a bare marker.
+ */
+export function elideAtWordBoundary(text: string, maxChars: number): string {
+  if (maxChars <= 0) return ""
+  if (text.length <= maxChars) return text
+  const budget = maxChars - 1 // reserve one code unit for the elision marker "…"
+  if (budget <= 0) return "…"
+  // Prefer the last whitespace at or before `budget` within the trailing quarter of the
+  // window: a cut near the front of a long line would drop more payload than it saves.
+  let cut = -1
+  for (let i = budget; i >= Math.max(0, budget - Math.floor(budget / 4)); i--) {
+    const code = text.charCodeAt(i)
+    if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) {
+      cut = i
+      break
+    }
+  }
+  if (cut !== -1) return `${text.slice(0, cut).replace(/\s+$/, "")}…`
+  // No whitespace in the window: cut at the budget, backing off a high surrogate so the
+  // pair stays whole (a low surrogate at the boundary is the split half — skip it too).
+  let end = budget
+  const before = text.charCodeAt(end - 1)
+  if (before >= 0xd800 && before <= 0xdbff) end -= 1
+  return `${text.slice(0, end)}…`
+}

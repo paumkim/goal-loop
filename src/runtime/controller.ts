@@ -1,7 +1,7 @@
 import { BOUNDARY_DROP_FACTOR, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
-import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
 import {
@@ -1128,20 +1128,23 @@ export class GoalController {
       const summarize = new AbortController()
       runtime.abort = summarize
       try {
-        summary = (
-          await this.deps.evaluator.summarize({
-            sessionID,
-            objective,
-            condition: record.condition,
-            reason: result.reason,
-            turn,
-            elapsedMs: now - record.startedAt,
-            toolCalls: iterationTools,
-            history,
-            maxSummaryTokens: config.maxLoopSummaryTokens,
-            signal: summarize.signal,
-          })
-        ).slice(0, Math.max(200, config.maxLoopSummaryTokens) * 4)
+        const summarized = await this.deps.evaluator.summarize({
+          sessionID,
+          objective,
+          condition: record.condition,
+          reason: result.reason,
+          turn,
+          elapsedMs: now - record.startedAt,
+          toolCalls: iterationTools,
+          history,
+          maxSummaryTokens: config.maxLoopSummaryTokens,
+          signal: summarize.signal,
+        })
+        // The planner reasons over this summary verbatim. A raw character slice can end mid-word
+        // (and split a surrogate pair) with no marker — the armed kickoff then carries a cut the
+        // planner reads as the whole story. Cap at the same budget, elide at a word boundary, and
+        // mark the cut with the same ellipsis the truncate helpers use.
+        summary = elideAtWordBoundary(summarized, Math.max(200, config.maxLoopSummaryTokens) * 4)
       } catch (error) {
         if (runtime.abort === summarize) runtime.abort = undefined
         if (this.stale(record, runtime, epoch)) return

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
@@ -321,6 +321,67 @@ describe("truncate", () => {
 
   test("whitespace collapses before measuring", () => {
     expect(truncate("a   b\n\tc", 10)).toBe("a b c")
+  })
+})
+
+describe("elideAtWordBoundary", () => {
+  test("input at or under the budget is returned unchanged (identity, marker not added)", () => {
+    const text = "v11: re-read the tree; fresh check green."
+    expect(elideAtWordBoundary(text, text.length)).toBe(text)
+    expect(elideAtWordBoundary(text, text.length + 10)).toBe(text)
+    expect(elideAtWordBoundary("", 100)).toBe("")
+  })
+
+  test("an over-budget summary lands on a word boundary with the elision marker, never mid-word", () => {
+    // The v12 regression shape: the summarizer's raw slice at 1600 chars ended mid-word at "bu…".
+    const sentence = "the planner reasons over exactly this summary verbatim "
+    const text = sentence.repeat(40) // 2240 chars, way over 1600
+    const out = elideAtWordBoundary(text, 1600)
+    expect(out.endsWith("…")).toBe(true)
+    expect(out.length).toBeLessThanOrEqual(1600)
+    // The last kept token is whole — the marker never glues onto a half-word.
+    const kept = out.slice(0, -1)
+    const lastToken = kept.split(" ").pop()!
+    expect(text.startsWith(kept)).toBe(true)
+    expect(sentence.includes(`${lastToken} `) || sentence.endsWith(lastToken)).toBe(true)
+    // Nothing was added except the single marker unit at the end.
+    expect(kept).toBe(text.slice(0, kept.length))
+  })
+
+  test("the boundary never splits a UTF-16 surrogate pair — no lone surrogate leaks", () => {
+    // Emoji astral plane: "🚀" is two code units. Place it so it straddles the budget.
+    const prefix = "x".repeat(1597)
+    const text = `${prefix}🚀deploy the rocket` // 1597 + 2 + 17 = 1616 chars, over 1600
+    const out = elideAtWordBoundary(text, 1600)
+    expect(out.endsWith("…")).toBe(true)
+    expect(out.length).toBeLessThanOrEqual(1600)
+    expect(() => encodeURIComponent(out)).not.toThrow()
+    expect(out.includes("�")).toBe(false)
+  })
+
+  test("a budget window with no whitespace cuts at the budget, backing off a high surrogate", () => {
+    const text = `${"a".repeat(2005)}` // single 2005-char token
+    const out = elideAtWordBoundary(text, 100)
+    expect(out.endsWith("…")).toBe(true)
+    expect(out).toBe(`${"a".repeat(99)}…`)
+    const astral = `${"a".repeat(1599)}🚀xyz`
+    const atAstral = elideAtWordBoundary(astral, 1601) // budget 1600 lands on the 🚀 high surrogate at 1599
+    expect(atAstral.endsWith("…")).toBe(true)
+    expect(() => encodeURIComponent(atAstral)).not.toThrow()
+    expect(atAstral).toBe(`${"a".repeat(1599)}…`)
+  })
+
+  test("trailing whitespace before the marker is stripped; marker is the only added unit", () => {
+    const text = `word one   ${"two ".repeat(600)}` // cut window falls inside a whitespace run
+    const out = elideAtWordBoundary(text, 100)
+    expect(out.endsWith("…")).toBe(true)
+    expect(out.includes(" …")).toBe(false) // no dangling space before the marker
+  })
+
+  test("a zero or negative budget returns empty, never a bare marker", () => {
+    expect(elideAtWordBoundary("hello world", 0)).toBe("")
+    expect(elideAtWordBoundary("hello world", -5)).toBe("")
+    expect(elideAtWordBoundary("hello world", 1)).toBe("…")
   })
 })
 
