@@ -233,16 +233,64 @@ describe("docs symbol-export contract", () => {
  *   - The citation's symbol portion is split on `·` and `/`; each alternative (`evaluate()/finish()`) and
  *     each additional `·`-separated symbol (`types.ts · A · B`, all drawn from the cited module) is a
  *     claim against the same module. A trailing `()` on a part is dropped.
- *   - A part may be dotted (`GoalStore.pruneAllDirectories`, `Runtime.epoch`); every dotted component
- *     must appear in the cited module's source. This is the strongest honest check available without
- *     resolving class membership per construct: each component of the citation must at least be present
- *     in the module, so a renamed or deleted symbol cannot hide behind its qualifier.
+ *   - A part may be dotted (`GoalStore.pruneAllDirectories`, `Runtime.epoch`). Every dotted component
+ *     must appear in the cited module's source (so a renamed or deleted symbol cannot hide behind its
+ *     qualifier). In addition, when the part's first component resolves to a class or interface declared
+ *     in the cited module, the LAST component must be defined in that construct's body — a field, method,
+ *     accessor, constructor parameter property, or interface member. The body is located by finding
+ *     `class|interface <Qualifier>` and brace-matching its opening `{` (skipping strings and comments).
+ *     Other dotted parts (a qualifier that names no class/interface in the module — e.g. a free-function
+ *     namespace or a re-export) keep the component-presence check.
  *   - The cited file must exist (root-relative to this repo).
  *
  * Adding a pass means the citation is checkable; a false offender means the citation is written in a
  * shape this test cannot attribute to the module — reword the citation to `file · symbol` form, not
  * the other way round.
  */
+/**
+ * Locate the body of `class <Name>` / `interface <Name>` in a TypeScript source text and return it
+ * (between the outer braces). Brace matching skips string literals and comments. Returns undefined
+ * when no such construct is declared in the module.
+ */
+const constructBody = (source: string, name: string): string | undefined => {
+  const decl = new RegExp(`\\b(?:abstract\\s+|declare\\s+|export\\s+)*(?:class|interface)\\s+${name}\\b`)
+  const match = decl.exec(source)
+  if (!match) return undefined
+  const open = source.indexOf("{", match.index)
+  if (open === -1) return undefined
+  let depth = 0
+  let i = open
+  let state: "code" | "sq" | "dq" | "tpl" | "line" | "block" = "code"
+  while (i < source.length) {
+    const ch = source[i] as string
+    const next = source[i + 1]
+    if (state === "code") {
+      if (ch === "/" && next === "/") { state = "line"; i += 2; continue }
+      if (ch === "/" && next === "*") { state = "block"; i += 2; continue }
+      if (ch === "'") { state = "sq"; i += 1; continue }
+      if (ch === '"') { state = "dq"; i += 1; continue }
+      if (ch === "`") { state = "tpl"; i += 1; continue }
+      if (ch === "{") depth += 1
+      else if (ch === "}") { depth -= 1; if (depth === 0) return source.slice(open + 1, i) }
+      i += 1
+      continue
+    }
+    if (state === "line") { if (ch === "\n") state = "code"; i += 1; continue }
+    if (state === "block") { if (ch === "*" && next === "/") { state = "code"; i += 2; continue } i += 1; continue }
+    const closer = state === "sq" ? "'" : state === "dq" ? '"' : "`"
+    if (ch === "\\") { i += 2; continue }
+    if (ch === closer) state = "code"
+    i += 1
+  }
+  return undefined
+}
+
+/** Is `member` defined in a class/interface body? Textual, anchored at line start / after `{` or `;`. */
+const memberDefinedInBody = (body: string, member: string): boolean => {
+  const pattern = new RegExp(`(?:^|[\n{;])\\s*(?:(?:public|private|protected|readonly|static|abstract|override|declare|async|get|set|accessor)\\s+)*${member}\\s*(?:[?(<:=;]|$)`, "m")
+  return pattern.test(body)
+}
+
 describe("docs inline-citation contract", () => {
   test("every `file · symbol` citation in docs/*.html resolves (file exists; symbol components appear in that module)", () => {
     const codePattern = /<code>([^<]+)<\/code>/g
@@ -276,6 +324,17 @@ describe("docs inline-citation contract", () => {
               }
               if (!source.includes(name)) {
                 offenders.push(`${file}: ${module} -> ${part} (component ${name} does not appear in the module's source)`)
+              }
+            }
+            // Membership-grade check: if the first component resolves to a class or interface in the
+            // cited module, the last component must be defined in that construct's body.
+            const dotted = part.split(".").map((c) => c.trim()).filter(Boolean)
+            if (dotted.length >= 2) {
+              const qualifier = dotted[0] as string
+              const member = dotted[dotted.length - 1] as string
+              const body = constructBody(source, qualifier)
+              if (body !== undefined && !memberDefinedInBody(body, member)) {
+                offenders.push(`${file}: ${module} -> ${part} (${qualifier} resolves to a class/interface there, but ${member} is not defined in its body — not a field, method, accessor, parameter property, or interface member)`)
               }
             }
           }
