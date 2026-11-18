@@ -77,6 +77,22 @@ export function pruneSnapshotEntries(
   return changed ? out : entries
 }
 
+/** Drops the given session entries outright (end-of-life terminal records); `keep` is never dropped. */
+export function dropSessions(
+  entries: Readonly<Record<string, GoalSnapshotCacheEntry>>,
+  ids: readonly string[],
+  keep?: string,
+): Readonly<Record<string, GoalSnapshotCacheEntry>> {
+  if (ids.length === 0) return entries
+  const out: Record<string, GoalSnapshotCacheEntry> = {}
+  for (const [sessionID, entry] of Object.entries(entries)) {
+    if (ids.includes(sessionID) && sessionID !== keep) continue
+    out[sessionID] = entry
+  }
+  if (Object.keys(out).length === Object.keys(entries).length) return entries
+  return out
+}
+
 /**
  * The `terminalAt` stamp for a fresh snapshot: the FIRST time this entry observed a non-live goal,
  * retained across re-pulls and `bumpReceivedAt`, dropped when the goal is live or null. A terminal

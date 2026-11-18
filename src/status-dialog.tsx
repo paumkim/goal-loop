@@ -14,6 +14,7 @@ import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts
 import type { GoalSnapshot } from "./core/types.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { dossierLines, type DossierLineKind } from "./core/dossier-view.ts"
+import { isLive } from "./core/types.ts"
 import { dossierOutline, type DossierOutlineEntry } from "./core/dossier-outline.ts"
 import { verifyAckSegment, type VerifyOutcome } from "./core/verify-record.ts"
 import { reachAckSegment, type ReachOutcome } from "./core/reach-record.ts"
@@ -192,9 +193,9 @@ export const StatusDialogBody = (props: {
       setFindQuery("")
     }
   })
-  // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter.
+  // vN/M for looped goals — null when the loop is uncapped or not a loop. Kept as a pure helper so the narrowing happens once, on a plain parameter. Terminal goals show no position chrome — the terminal word carries the outcome.
   const loopPosition = (goal: GoalSnapshot): string => {
-    if (!goal.loopEnabled) return ""
+    if (!goal.loopEnabled || !isLive(goal.status)) return ""
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
     return ` · v${goal.loopIteration ?? 1}${cap}`
   }

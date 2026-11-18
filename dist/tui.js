@@ -1963,6 +1963,7 @@ var STALE_LIVE_ENTRY_MS = 30000;
 var staleUnprovenSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS) => Object.entries(entries).filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs).filter(([, entry]) => entry?.goal == null || isLive(entry.goal.status)).map(([sessionID]) => sessionID);
 var RECENT_TERMINAL_WINDOW_MS = 10 * 60000;
 var staleRecentlyTerminalSessionIDs = (entries, nowMs, minAgeMs = STALE_LIVE_ENTRY_MS, windowMs = RECENT_TERMINAL_WINDOW_MS) => Object.entries(entries).filter(([, entry]) => entry?.goal != null && !isLive(entry.goal.status)).filter(([, entry]) => entry?.terminalAt !== undefined && nowMs - entry.terminalAt <= windowMs).filter(([, entry]) => nowMs - (entry?.receivedAt ?? 0) >= minAgeMs).map(([sessionID]) => sessionID);
+var expiredTerminalSessionIDs = (entries, nowMs, keep, windowMs = RECENT_TERMINAL_WINDOW_MS) => Object.entries(entries).filter(([sessionID]) => sessionID !== keep).filter(([, entry]) => entry?.goal != null && !isLive(entry.goal.status)).filter(([, entry]) => entry?.terminalAt !== undefined && nowMs - entry.terminalAt > windowMs).map(([sessionID]) => sessionID);
 var TERMINAL_ACK_MS = 45000;
 var ACK_FLASH_MS = 1700;
 var LANDING_ACK_MS = 3000;
@@ -3336,7 +3337,7 @@ var StatusDialogBody = (props) => {
     }
   });
   const loopPosition = (goal) => {
-    if (!goal.loopEnabled)
+    if (!goal.loopEnabled || !isLive(goal.status))
       return "";
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
     return ` \xB7 v${goal.loopIteration ?? 1}${cap}`;
@@ -5658,6 +5659,19 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
+function dropSessions(entries, ids, keep) {
+  if (ids.length === 0)
+    return entries;
+  const out = {};
+  for (const [sessionID, entry] of Object.entries(entries)) {
+    if (ids.includes(sessionID) && sessionID !== keep)
+      continue;
+    out[sessionID] = entry;
+  }
+  if (Object.keys(out).length === Object.keys(entries).length)
+    return entries;
+  return out;
+}
 function terminalStampOf(existing, goal, now) {
   if (goal !== null && !isLive(goal.status))
     return existing?.terminalAt ?? now;
@@ -6320,7 +6334,10 @@ var tui_default = Plugin.define({
       setDialogNoticeStale(false);
       refresh(sessionID).then((fresh) => setDialogNoticeStale(!fresh)).catch(() => setDialogNoticeStale(true));
       refreshOthers();
-      const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled);
+      const looped = () => {
+        const g = entries()[sessionID]?.goal;
+        return Boolean(g && isLive(g.status) && g.loopEnabled);
+      };
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal;
         if (!g?.loopEnabled)
@@ -6480,6 +6497,15 @@ var tui_default = Plugin.define({
       }, LANDING_ACK_MS);
       terminalTimers.add(timer);
     };
+    const releaseCompletion = (sessionID) => {
+      try {
+        if (getHudSession() === sessionID)
+          setHudSession(undefined);
+        setContextOpen(false);
+        setContextIndex(0);
+        dropPin(sessionID);
+      } catch {}
+    };
     const noteTerminal = (sessionID, goal) => {
       const ack = {
         goal,
@@ -6564,8 +6590,13 @@ var tui_default = Plugin.define({
       try {
         const previous = entries()[sessionID]?.goal;
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false;
-        if (!unchanged && goal && previous && isLive(previous.status) && !isLive(goal.status) && goal.status !== "cleared") {
-          noteTerminal(sessionID, goal);
+        const wasLive = previous != null && isLive(previous.status);
+        const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status);
+        const gone = goal === null || goal === undefined || nowTerminal;
+        if (!unchanged && wasLive && gone) {
+          releaseCompletion(sessionID);
+          if (goal && goal.status !== "cleared")
+            noteTerminal(sessionID, goal);
         } else if (goal && isLive(goal.status)) {
           dropTerminal(sessionID);
         }
@@ -6740,6 +6771,7 @@ var tui_default = Plugin.define({
         refresh(sessionID).catch(() => {});
         refreshFromStorage(sessionID).catch(() => {});
       }
+      setEntries((previous) => dropSessions(previous, expiredTerminalSessionIDs(previous, staleNow, statusDialogSession()), statusDialogSession()));
       if (statusDialogOpen())
         refreshOthers();
     }, TICK_MS);
@@ -6754,6 +6786,17 @@ var tui_default = Plugin.define({
           next.delete(sessionID);
         else
           next.add(sessionID);
+        return next;
+      });
+    };
+    const dropPin = (sessionID) => {
+      if (!sessionID)
+        return;
+      setPinned((previous) => {
+        if (!previous.has(sessionID))
+          return previous;
+        const next = new Set(previous);
+        next.delete(sessionID);
         return next;
       });
     };
@@ -7657,7 +7700,7 @@ var tui_default = Plugin.define({
         title: "Goal loop: show status",
         group: "Goal",
         palette: true,
-        enabled: () => Boolean(live(currentSession())?.loopEnabled ?? entries()[currentSession() ?? ""]?.goal?.loopEnabled),
+        enabled: () => Boolean(live(currentSession())?.loopEnabled),
         run: () => {
           const sessionID = currentSession();
           if (sessionID)
@@ -7670,7 +7713,7 @@ var tui_default = Plugin.define({
         title: "Goal HUD: toggle card",
         group: "Goal",
         palette: true,
-        enabled: () => hudArmEnabled(Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal), statusDialogOpen()),
+        enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
         run: () => {
           try {
             if (statusDialogOpen())
@@ -7685,7 +7728,7 @@ var tui_default = Plugin.define({
         title: "Goal: toggle pinned condition",
         group: "Goal",
         palette: true,
-        enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+        enabled: () => Boolean(live(currentSession())),
         run: () => {
           try {
             togglePin(currentSession());
