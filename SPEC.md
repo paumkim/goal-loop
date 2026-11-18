@@ -160,8 +160,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 13. Loop guards (all mandatory): `maxLoops` (default 5, env `OPENCODE_GOAL_MAX_LOOPS`; counts completed
     iterations) ends the loop cleanly as *achieved-complete*; the per-iteration turn cap reuses
     `maxTurns` (reset per iteration); evaluator failures exhaust `maxRetries` and pause as today; a hard
-    `impossible` verdict ends the loop as today; two consecutive iterations with zero tool calls pause
-    the loop with a clear notice; the summary/generation token budget is capped by
+    `impossible` verdict ends the loop as today; zero-tool-call iterations are recorded (`loopNotProgress`)
+    and never pause an armed loop (one notice, it keeps running; corrected 2026-11-18, Workstream XXXIX);
+    the summary/generation token budget is capped by
     `maxLoopSummaryTokens` (a generation that yields an unusable or >2000-char condition ends the loop
     cleanly, with a notice). Never an infinite silent loop.
 14. `LOOP_COMPLETE` ends the loop cleanly as *achieved-complete* (not an error, not infinite refinement).
@@ -182,7 +183,7 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     byte-identical to before.
 18. `bun run check` (tsc, tests, compile) passes. New tests cover: met → summary → v2 armed;
     `maxLoops` cap ends the loop; `LOOP_COMPLETE` ends the loop; impossible ends the loop; two
-    consecutive zero-tool-call iterations pause; restore keeps loop state; store round-trips loop
+    zero-tool iterations are recorded and never pause an armed loop (corrected 2026-11-18, Workstream XXXIX); restore keeps loop state; store round-trips loop
     fields; prompt builders carry the contract.
 
 ## Out of scope
@@ -515,9 +516,9 @@ guard, tests, and documentation. Follow-ups bigger than one iteration are listed
     `git branch --show-current` (plus `coordinator status --json` / `git worktree list` in coordinator repos)
     and the current check output *before* any work — the armed summary is labeled stale until then.
     Zero-progress is harness-verified: `iterationToolCalls` comes from the plugin's own tool events
-    (`onToolCalled`), never from model self-report; two consecutive zero-tool iterations pause the loop
-    (`loopNotProgress`). Regression test: a loop whose evaluator claims heavy work with zero harness tool
-    calls still pauses after two iterations, and both loop-history entries record `toolCalls: 0`.
+    (`onToolCalled`), never from model self-report; consecutive zero-tool iterations are recorded
+    (`loopNotProgress`) and never pause an armed loop. Regression test: a loop whose evaluator claims heavy work with zero harness tool
+    calls keeps arming (zero-tool iterations never pause an armed loop; corrected 2026-11-18, Workstream XXXIX), and both loop-history entries record `toolCalls: 0`.
 50. Audit trail: SPEC (this workstream), AGENTS.md (evidence requirements, probe isolation, bookkeeping
     policy, spec gate, re-arm hygiene), README.md ("Running the loop safely" checklist + options table),
     `docs/runtime.html` (verification gate and fresh-session promotion checklist), `docs/config.html`,
@@ -566,8 +567,9 @@ snapshot fields (no RPC, schema, storage or controller changes).
     <elapsed>` (elapsed extrapolated live by the dialog as today) in feedback.info when active /
     text.warning when paused. Rendered as the rail's last row; when the history is empty (a loop that
     has not completed v1 yet) it stands alone — just the bar, objective and now row render, no rail rows.
-55. The evaluator verdict trail renders below the rail from `GoalSnapshot.history`: up to the last 24
-    verdicts, one glyph each — `✓` met (feedback.info.base), `✗` not_met (text.faint), `⊘` impossible
+55. The evaluator verdict trail renders below the rail from `GoalSnapshot.history`: up to the last 20
+    verdicts (the retention cap `MAX_VERDICT_HISTORY_ENTRIES`, applied in Workstream XXXVI; the render window
+    constant in `trailWindow` is 24 and never binds), one glyph each — `✓` met (feedback.info.base), `✗` not_met (text.faint), `⊘` impossible
     (text.warning.base) — oldest first, then a `text.muted` caption `<shown> of <total> verdicts`.
     Renders nothing (section omitted) when `history` is empty. Long trails never wrap mid-glyph:
     trail + caption truncate from the left, keeping the newest verdicts.
@@ -1208,6 +1210,8 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   summary, ~1–2 KB) and every `commit()` `structuredClone`s the whole record, making persistence O(n²) in loop lifetime. Proposed fix:
   no functional change required for correctness, but note; waive formal trimming unless a measured problem appears (history is user-visible
   and drives TUI rendering).
+  Resolution: Workstream XXXV — `loopHistory` is bounded (`MAX_LOOP_HISTORY_ENTRIES = 50`, drops counted on `loopHistoryDropped`); the
+  persisted record and every snapshot clone are now O(bounded). This finding's "waive" stand was superseded when the cap landed.
 - **A-13 (low) — `src/core/types.ts:135` — stale comment: "Consecutive iterations with zero tool calls; two pause the loop."** Armed
   loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
   Proposed fix: rewrite the comment.
@@ -1265,7 +1269,8 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   docs. Proposed fix: keep the key parsing (backward compat) but flag in docs as inert, or remove with a SPEC/docs note; never silently drop.
   Resolution: Workstream AR — parsing retained, docs flag inert on all surfaces; superseded mentions noted as design history.
 - **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
-  verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped).
+  verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped; both caps landed — XXXV
+  `loopHistory` 50, XXXVI verdict trail 20 — so the record size, and this comparison, is bounded).
 - **A-29 (low) — `src/core/prompts.ts:isFuzzyCondition` — arbitrary keyword list ("rabbit", "look like").** Heuristic by design; waive with
   reason, but the list should move behind a named constant if it ever grows.
 - **A-30 (low) — `src/runtime/events.ts:RecentIds` — eviction deletes oldest inserted; correct.** Not a bug; noted so the audit shows it was
@@ -1282,7 +1287,8 @@ workstreams, each landing with `bun run check` green.
 
 A-7 (counts dropped with the superseded turn; no behavior), A-10 (spend snapshot best-effort), A-16 (no host replay support), A-17 (bounded
 one-shot walk), A-18 (provider accounting is ambiguous), A-19 (documented heuristic), A-20 (documented rounding), A-23 (compact footer by design),
-A-28 (folds into A-12), A-29 (heuristic by design), A-30 (verified correct), A-12 (user-visible history; no measured problem).
+A-28 (folds into A-12; fold-in condition resolved — XXXV/XXXVI caps), A-29 (heuristic by design), A-30 (verified correct).
+A-12 was waived here in the Phase-1 wave but the waiver was superseded when Workstream XXXV bounded `loopHistory`; see A-12's resolution above.
 
 ### Restore-vs-arm lease grid (Phase 1 item 2)
 
@@ -1568,7 +1574,8 @@ Verification: `bun run check` green (363 tests, 37 files, spec-check ok); coordi
 All 30 findings are resolved or waived. Resolved with workstreams: A-1 (AC), A-25 (AD), A-6/A-22 (AE), A-2 (AF),
 A-3 (AG), A-5 (AH), A-8 (AI), A-4 (AJ), A-9 (AK), A-24 (AL), A-21 (AM), A-13 (AN), A-14 (AO), A-15 (AP), A-26 (AQ),
 A-27 (AR), A-11 (AS). Waived with recorded reasons: A-7, A-10, A-12, A-16, A-17, A-18, A-19, A-20, A-23, A-28,
-A-29, A-30. Every fix shipped with a test that failed before the fix (pin tests; pre-fix failure verified by
+A-29, A-30. (A-12's waiver was later superseded — Workstream XXXV bounded `loopHistory`; A-28's fold-in resolved the
+same way. Recorded here so this summary stays honest about what actually ships.) Every fix shipped with a test that failed before the fix (pin tests; pre-fix failure verified by
 stashing), except the behavior-preserving dedup/comment/documentation resolutions A-13, A-15, A-21, A-27, which are
 stated as such. `bun run check` is green at dev with 363 tests / 37 files, and the end-to-end smoke
 (`bun run e2e /tmp/opencode/goal-e2e/proj`) completed: the `/goal` command registered, one turn ran, the
@@ -6726,7 +6733,7 @@ Armed condition of this iteration (verbatim from the loop): "Bound loopHistory g
 914. Tests. `test/loop.test.ts` gains three end-to-end cases: a 60-iteration loop under `maxLoops=100` lands active with exactly 50 retained entries (versions 11–60), `loopHistoryDropped=10`, the snapshot clone bounded, and a restore into a fresh controller reading the bounded persisted record; a 51-iteration loop under `maxLoops=51` exits cleanly at the cap with versions 2–51 retained and `loopHistoryDropped=1` (the `endClean` path bounded too); at/below the cap nothing is dropped and `loopHistoryDropped` stays absent. New `test/loop-history-retention.test.ts` (8 tests): the bounding helper at/below/beyond the cap, `completedIterationCount` with and without drops, the spend ledger's trimmed and untrimmed shapes, and the dossier's trimmed and untrimmed shapes. Test count moves 1637 → **1648 pass / 0 fail** (3 + 8 new); packed files stay **64**; the enforced (first-occurrence) SPEC marker and this workstream's trailing marker advance to `files=64 tests=1648` in this same commit.
 915. Scope and honesty. The verdict trail (`record.history`) was deliberately left unbounded this iteration — flagged, not silently skipped; bounded and labeled in Workstream XXXVI (`MAX_VERDICT_HISTORY_ENTRIES`, `historyDropped`). The anti-repeat and near-duplicate gates at the arm saw the retained window only; a planner re-offering a condition completed more than 50 iterations ago was not caught — fixed in Workstream XXXVII (the persisted completed-condition ledger). `loopHistoryDropped` is a count, not a manifest: the dropped entries are gone by design. Restore round-trips the additive field through plugin storage unaided (`isRecord` never validated optional fields). `bun run check` green before submit.
 
-Honest limits. (a) 50 is a fixed bound, not configurable — chosen so the planner window (10) is comfortably covered and the record stays small; a config knob was rejected as unjustified surface area. (b) No live 100-iteration session was driven; the cap is unit- and integration-tested at the controller level, including the persisted-bytes restore path. (c) Cumulative sums (spend, turns, tool calls) shown by the dossier/ledger after trimming cover retained iterations only and say so; there is no pre-drop grand total anywhere (it was never recorded). (d) `record.history` remains unbounded; see item 915.
+Honest limits. (a) 50 is a fixed bound, not configurable — chosen so the planner window (10) is comfortably covered and the record stays small; a config knob was rejected as unjustified surface area. (b) No live 100-iteration session was driven; the cap is unit- and integration-tested at the controller level, including the persisted-bytes restore path. (c) Cumulative sums (spend, turns, tool calls) shown by the dossier/ledger after trimming cover retained iterations only and say so; there is no pre-drop grand total anywhere (it was never recorded). (d) `record.history` was unbounded at the time this workstream landed; it was bounded in Workstream XXXVI (`MAX_VERDICT_HISTORY_ENTRIES`, `historyDropped`) and this line is corrected accordingly (2026-11-18, Workstream XXXIX).
 
 <!-- spec-check files=64 tests=1648 -->
 
@@ -6763,6 +6770,18 @@ Armed condition of this iteration (verbatim from the loop): "Bound persisted goa
 924. Behavior. `src/core/types.ts` gains `MAX_TERMINAL_RECORD_ENTRIES = 50` (per directory, newest kept), `TERMINAL_RECORD_MAX_AGE_MS = 30 days`, and the pure `selectTerminalRecordsToPrune(records, nowMs)` (age first by `endedAt` falling back to `startedAt`, then count cap on the survivors; live records are never offered; terminal records with no usable stamp are kept and counted as `unstampedKept`, never pruned). `GoalStore.pruneTerminal(directory, nowMs)` scans `goal/v1/` (same paging as `loadLive`), scopes to this directory only, and removes the selection through the normal per-session remove queue; in probe/readOnly mode it removes nothing and returns `readOnly: true` with the scanned count. `restore()` runs the prune before adopting live records; it is best-effort (a prune failure is logged and never blocks adoption) and logs one counts-only line (`scanned`/`pruned`/`kept`/`droppedAged`/`droppedBeyondCap`/`unstampedKept`) only when terminal records were seen. The log is the report; there is no hidden counter and the dropped records are not implied retained.
 925. Tests. New `test/terminal-record-prune.test.ts` (7 unit tests: live-never-offered, age boundary strictness, count cap keeps newest 50, age-before-count interaction, unstamped kept, endedAt-wins-over-startedAt). `test/controller.test.ts` gains five restore-level cases in a new describe block: restore prunes aged terminal records while the active record is adopted and a counts-only log line is emitted; the count cap drops the oldest fresh terminal records; foreign-directory terminal records are untouched; unstamped terminal records are kept and reported; a probe-mode (readOnly) store removes nothing and reports `readOnly: true`. Test count moves 1671 → **1683 pass / 0 fail**; packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1683` in this same commit. `docs/runtime.html` gains a "Storage hygiene" section stating the caps, the scoping, and the probe-mode behavior.
 
-Honest limits. (a) The caps are fixed constants, not config knobs — by design; widening them is a reviewed code change, not a silent drift. (b) A terminal record pruned by the cap is gone by design and is not enumerated anywhere; `pruned` is a count, not a manifest. (c) Records with no `endedAt`/`startedAt` are kept forever by the age rule (their age can never be judged) — they are reported via `unstampedKept`, not silently absorbed. (d) The prune is per-directory: terminal records of other directories at the same plugin storage are untouched; cross-directory GC is out of scope. (e) Live records (active/paused) are never pruned, even if ancient — paused is resumable and is not terminal.
+Honest limits. (a) The caps are fixed constants, not config knobs — by design; widening them is a reviewed code change, not a silent drift. (b) A terminal record pruned by the cap is gone by design and is not enumerated anywhere; `pruned` is a count, not a manifest. (c) Records with no `endedAt`/`startedAt` are kept forever by the age rule (their age can never be judged) — they are reported via `unstampedKept`, not silently absorbed. (d) The prune is per-directory: terminal records of other directories at the same plugin storage are untouched; cross-directory GC is out of scope. (e) Live records (active/paused) are never pruned, even if ancient — paused is resumable and is not terminal. (f) This workstream's rebuilt `dist/tui.js` (core constants bundle into it) was committed but was not claimed in the lease; the submit used `--force` as the sanctioned scope override, logged to the lease (`forcedScope: true`). Recorded in the XXXIX re-audit (2026-11-18) so the next rebuild of `dist/tui.js` is claimed up front.
+
+<!-- spec-check files=64 tests=1683 -->
+
+## Workstream XXXIX — SPEC/docs honesty re-audit against the tree (2026-11-18)
+
+Armed condition of this iteration (verbatim from the loop): "Re-audit SPEC.md honesty items and docs/ claims against the tree; correct any contradictions (stale caps, 'unbounded'/'deliberately not' claims for now-bounded surfaces, unlabeled retention); keep stamps/marker honest; bun run check green; commit on wt branch and submit via coordinator."
+
+926. Method. Every hit for the now-bounded surfaces (verdict trail, `loopHistory`, completed-condition ledger, terminal records, file log) was re-checked against the tree at dev HEAD `7306615` with fresh command output; hits whose claims were false at HEAD were corrected in place, each with an explicit dated note (never a silent rewrite). Findings corrected: item 13 and item 18 (original `/goal-loop` spec, "two consecutive zero-tool-call iterations pause the loop" — superseded by the never-pause policy; current tests pin the never-pause behavior); item 49 (re-arm hygiene section, same supersession and the same regression expectation rewritten); item 55 ("up to the last 24 verdicts" — retention capped at 20 in Workstream XXXVI; the 24 in `trailWindow` is the render window and never binds); the A-12 audit finding (gains a Resolution note: `loopHistory` bounded in XXXV; its Phase-1 "waive" stand was superseded); A-28 (the "folds into A-12" note records that both caps landed, so the record size — and this comparison — is bounded); the Phase-1 Waivers list and the Resolution summary (both now state the A-12 waiver was superseded, not current fact); the XXXV Honest limits line that still said `record.history` "remains unbounded" (bounded in XXXVI; line corrected); the XXXVIII Honest limits block (gains item (f): the rebuilt `dist/tui.js` was not claimed and the submit used `--force` as the sanctioned scope override, logged to the lease with `forcedScope: true` — recorded so the next rebuild is claimed up front).
+927. Docs. `docs/runtime.html`: the "On this page" TOC gains the Storage hygiene anchor (the section shipped in XXXVIII but was never added to the TOC); the Retry and limits table gains rows for the retained loop history (newest 50, drops counted) and the completed-condition ledger (newest 100, deduped consecutively), so the table no longer under-documents the caps it implies are exhaustive. `docs/core.html`: the types.ts card now lists the retention constants it exports (`MAX_LOOP_HISTORY_ENTRIES`, `MAX_VERDICT_HISTORY_ENTRIES`, `MAX_COMPLETED_CONDITION_ENTRIES`, `MAX_TERMINAL_RECORD_ENTRIES`, `TERMINAL_RECORD_MAX_AGE_MS`). No behavior changed; no tests changed; marker stays `files=64 tests=1683`.
+928. Verified honest rather than changed (checked, no contradiction found): docs/config.html `maxRetries` row (documented inert, matches code and README); docs/runtime.html "History kept: last 20 verdicts" row; README options table (`maxConditionChars` unlimited, `maxRetries` inert); docs/config.html probe-mode paragraph (read-only storage, restore has no side effects — matches probe/readOnly behavior); SPEC item 915 (already corrected in XXXVII to state XXXVI bounded the verdict trail); SPEC Workstream V/AJ items (explicitly SUPERSEDED-noted); the `unlimited` retry rows (true — retries are unlimited with capped backoff, by design).
+
+Honest limits. (a) This audit corrects claims it could disprove from the tree and its docs; it does not re-verify every historical evidence log or pasted transcript in this file (those are dated records of what was observed at the time, kept as history). (b) In-place corrections are dated notes, not silent rewrites; the pre-correction text remains visible in git history at the parent of this workstream's commit. (c) The docs freshness stamp regenerates via `docs-watch` on the merged tree; `docs/changelog.html` rows are a pure function of git history and regenerate — they are never hand-edited to claim work that is not in history. (d) No code, test, or marker changes; `bun run check` (1683 tests) is the gate.
 
 <!-- spec-check files=64 tests=1683 -->
