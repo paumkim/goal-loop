@@ -3154,8 +3154,11 @@
       "paths": "SPEC.md,src,test,docs",
       "branch": "wt/live-completion-release-verify",
       "worktree": "worktrees/wt-live-completion-release-verify",
-      "status": "claimed",
-      "createdAt": "2026-11-18T10:45:32Z"
+      "status": "done",
+      "createdAt": "2026-11-18T10:45:32Z",
+      "submittedAt": "2026-11-18T11:48:28Z",
+      "mergedAt": "2026-11-18T12:56:57Z",
+      "mergedInto": "dev"
     },
     "opencode-cli-headless": {
       "agent": "orchestrator",
