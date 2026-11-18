@@ -3450,6 +3450,17 @@
       "submittedAt": "2026-11-18T20:45:19Z",
       "mergedAt": "2026-11-18T20:46:44Z",
       "mergedInto": "dev"
+    },
+    "xlv-e-fresh-arm-ledger-pin": {
+      "agent": "orchestrator",
+      "paths": "test/loop.test.ts,SPEC.md",
+      "branch": "wt/xlv-e-fresh-arm-ledger-pin",
+      "worktree": "worktrees/wt-xlv-e-fresh-arm-ledger-pin",
+      "status": "done",
+      "createdAt": "2026-11-18T20:54:13Z",
+      "submittedAt": "2026-11-18T20:56:30Z",
+      "mergedAt": "2026-11-18T20:57:55Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
