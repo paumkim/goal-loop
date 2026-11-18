@@ -98,6 +98,8 @@ export const LoopSection = (props: {
   onCopyAttestation?: (line: string) => void
   /** When set, clicking the final tally row (painted once the loop is over) copies the tally line verbatim. Hover boldens the row to advertise it. */
   onCopyTally?: (line: string) => void
+  /** Applied to the root box. The dialog passes -1 to cancel the one-row gap the content column leaves above the section (the gap stays 1 — only this box pulls up). */
+  marginTop?: number
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -226,7 +228,7 @@ export const LoopSection = (props: {
     return theme().text.faint
   }
   return (
-    <box flexDirection="column" gap={0}>
+    <box flexDirection="column" gap={0} marginTop={props.marginTop}>
       {/* progress: vN of at most M, followed inline by the block bar */}
       <box flexDirection="row" gap={2}>
         {label(theme(), "loop")}
@@ -540,6 +542,8 @@ export const HistoryBlock = (props: {
   mono?: boolean
   /** When set, clicking a why-ledger row copies that verdict's raw reason. The reason boldens on hover to advertise it. */
   onCopyReason?: (reason: string) => void
+  /** Applied to the root box. The dialog passes -1 to cancel the one-row gap the content column leaves above the section (the gap stays 1 — only this box pulls up). */
+  marginTop?: number
 }): JSX.Element => {
   const theme = () => props.theme
   const mono = () => props.mono === true
@@ -561,7 +565,7 @@ export const HistoryBlock = (props: {
     return parts.join(" · ")
   }
   return (
-    <box flexDirection="column" gap={0}>
+    <box flexDirection="column" gap={0} marginTop={props.marginTop}>
       <box flexDirection="row" gap={2}>
         {label(theme(), "history")}
         <Show

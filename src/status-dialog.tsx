@@ -477,6 +477,26 @@ export const StatusDialogBody = (props: {
         return run(theme().text.base, false, "word")
     }
   }
+  // The view strip, rendered inside EACH view branch (the branches unmount and remount the whole subtree on a tab flip, and remounted rows paint correctly — a strip with no remounting sibling co-paints at a stale absolute position after the flip). Painted identically in every view: tabs left, status right. The gapped content column spends no gap row on a sibling above the strip because there is none.
+  const stripRow = (goalSnap: GoalSnapshot): JSX.Element => (
+    /* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else); dossier is the whole record as rendered Markdown (strip, the state row, the copy row and the document, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */
+    <box flexDirection="row" gap={2}>
+      {viewTab("overview")}
+      <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
+      {viewTab("ledger")}
+      <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
+      {viewTab("dossier")}
+      <box flexGrow={1} />
+      <text fg={stateColor()} attributes={TextAttributes.BOLD}>
+        {goalSnap.status}
+      </text>
+      <text fg={theme().text.muted}>
+        {formatDurationCoarse(props.elapsedMs())} · {goalSnap.turns} turn{goalSnap.turns === 1 ? "" : "s"}
+        {loopPosition(goalSnap)}
+        {goalSnap.evaluating ? " · checking" : goalSnap.waiting ? " · waiting" : ""}
+      </text>
+    </box>
+  )
   return (
     <box flexDirection="column" gap={0}>
       <Show when={props.noticeStale?.()}>
@@ -485,25 +505,9 @@ export const StatusDialogBody = (props: {
       <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
         {(goal) => (
         <box flexDirection="column" gap={1} paddingRight={1}>
-          {/* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else); dossier is the whole record as rendered Markdown (strip, the state row, the copy row and the document, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */}
-          <box flexDirection="row" gap={2}>
-            {viewTab("overview")}
-            <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
-            {viewTab("ledger")}
-            <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
-            {viewTab("dossier")}
-            <box flexGrow={1} />
-            <text fg={stateColor()} attributes={TextAttributes.BOLD}>
-              {goal().status}
-            </text>
-            <text fg={theme().text.muted}>
-              {formatDurationCoarse(props.elapsedMs())} · {goal().turns} turn{goal().turns === 1 ? "" : "s"}
-              {loopPosition(goal())}
-              {goal().evaluating ? " · checking" : goal().waiting ? " · waiting" : ""}
-            </text>
-          </box>
           <Show when={view() === "overview"}>
             <box flexDirection="column" gap={0}>
+          {stripRow(goal())}
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
@@ -628,6 +632,7 @@ export const StatusDialogBody = (props: {
           {/* the dossier — the whole record as rendered Markdown: the copy row rides the same click grammar as the other rows, then the document itself, line for line, structural markers lifted into weight/tone. Everything the other views paint scatters as chrome; this is the record, whole. The scrollbox (host-owned) gives the wheel/keys their say. */}
           <Show when={dossier()}>
             <box flexDirection="column" gap={1}>
+              {stripRow(goal())}
               {props.onCopyDossier
                 ? (
                   <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyDossier() }} onMouseOver={() => setDossierHovered(true)} onMouseOut={() => setDossierHovered(false)}>
@@ -761,13 +766,15 @@ export const StatusDialogBody = (props: {
               </box>
             </box>
           </Show>
+          {/* the strip for the ledger view — same grammar, painted under the ledger's own Show so the tab flip remounts it with the rest of the branch; absent in dossier (the record is whole) and in overview (painted by the overview branch). It sits directly above the loop/history Show; the section's marginTop=-1 cancels the gap row the column would otherwise leave. */}
+          <Show when={ledger()}>{stripRow(goal())}</Show>
           {/* the history — the overview paints it (the bar defines level (c) as condition + history + timeline + verify tail + context meter); the ledger tab is the focus view: the state row, the strip and exactly this block, nothing else; the dossier tab does not paint it — the document carries the same bookkeeping whole */}
           <Show when={!dossier()}>
             <Show when={goal().loopEnabled}>
-              <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} onCopyAttestation={props.onCopyAttestation} onCopyTally={props.onCopyTally} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} />
+              <LoopSection goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopySummary={props.onCopySummary} onCopyReason={props.onCopyReason} onCopyAttestation={props.onCopyAttestation} onCopyTally={props.onCopyTally} expanded={props.expanded} onToggleExpanded={props.onToggleExpanded} marginTop={-1} />
             </Show>
             <Show when={!goal().loopEnabled}>
-              <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} />
+              <HistoryBlock goal={goal()} theme={theme()} elapsedMs={props.elapsedMs} nowMs={props.nowMs} mono={mono()} onCopyReason={props.onCopyReason} marginTop={-1} />
             </Show>
           </Show>
           {/* elsewhere — live goals held by OTHER sessions in this directory; read-only awareness, the host owns session switching, so rows carry no handlers. Overview only; the ledger is a history-focus view, the dossier is the record, whole */}
