@@ -2502,3 +2502,65 @@ describe("arming-side no-new-gap gate (XLV)", () => {
     expect(persisted?.completedConditionsDropped).toBeUndefined()
   })
 })
+
+describe("arm→execution transition observability (LX)", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("the arm steer dispatches with resume: true and the snapshot paints queued until execution starts", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("parser rewritten and tests green")
+    h.nextGoals.push("add fuzz coverage for the parser")
+    await h.turn()
+    // The armed kickoff (not the note) is the last synthetic in flight, carried by delivery:"steer".
+    const arm = h.calls.synthetic.find((s) => String(s.description).includes("arming v2"))
+    expect(arm).toBeDefined()
+    expect(arm.resume).toBe(true)
+    expect(arm.delivery).toBe("steer")
+    // The note stays admit-only (resume: false) — notes never wake the session.
+    const note = h.calls.synthetic.find((s) => String(s.description).startsWith("Loop 1 of"))
+    expect(note).toBeDefined()
+    expect(note.resume).toBe(false)
+    // Between the dispatch and the host's execution-started event, the record is honestly "queued".
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
+    // The host reports the kickoff execution started: the flag clears and a snapshot is emitted after this point.
+    const changedBefore = h.changed.length
+    h.controller.onExecutionStarted(SID)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    const cleared = h.changed.slice(changedBefore).find((e) => e.goal?.queued === false && e.goal !== null)
+    expect(cleared).toBeDefined()
+  })
+
+  test("the dispatch emits a queued snapshot before the host accepts the steer", async () => {
+    await h.setLoop("improve the parser")
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("parser rewritten")
+    h.nextGoals.push("add fuzz coverage")
+    await h.turn()
+    // A `changed` event with queued:true must already exist at dispatch time, not only on the next unrelated flush.
+    expect(h.changed.some((e) => e.goal?.queued === true)).toBe(true)
+  })
+
+  test("a plain-goal continuation dispatches with resume: true as well", async () => {
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet("2 tests still fail"))
+    await h.turn()
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.calls.synthetic[0].resume).toBe(true)
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
+    h.controller.onExecutionStarted(SID)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+  })
+
+  test("a paused record never reports queued, even with a dispatch in flight", async () => {
+    await h.setGoal("all tests pass")
+    h.verdicts.push(notMet("not yet"))
+    await h.turn()
+    // The continuation is dispatched; a user clear mid-flight ends the record as paused/cleared.
+    h.controller.clear(SID)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+  })
+})

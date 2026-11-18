@@ -368,6 +368,13 @@ export interface GoalSnapshot extends GoalRecord {
   readonly evaluating: boolean
   /** Background work is holding evaluation back. */
   readonly waiting: boolean
+  /**
+   * A synthetic continuation/arm steer was dispatched and the host has not started the execution yet
+   * (the arm→execution transition, or a retry/check-in steer in flight). Runtime-truth: always boolean
+   * on snapshots built by this server; absent on mirrors/records written by older builds (never guessed).
+   * A live goal with `queued: true` is not stuck and not evaluating — the kickoff is in the host's inbox.
+   */
+  readonly queued?: boolean
   readonly spend?: UsageSnapshot
   /**
    * Estimated prompt tokens, present when the server could compute them (the `get` RPC does; `changed`

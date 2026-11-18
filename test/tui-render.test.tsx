@@ -416,6 +416,11 @@ describe("StatusDialogBody edge paths", () => {
     expect(frame).toContain("waiting")
   })
 
+  test("an armed goal whose kickoff is in flight shows 'queued' in the state line", async () => {
+    const frame = await render(() => <StatusDialogBody goal={loopedGoal({ queued: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("queued")
+  })
+
   test("a goal without a spend snapshot omits the spend row", async () => {
     const { spend: _spend, ...noSpend } = loopedGoal()
     const frame = await render(() => <StatusDialogBody goal={noSpend} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)

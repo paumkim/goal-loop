@@ -234,6 +234,10 @@ export class GoalController {
       // Runtime truth wins when present (fresh); the persisted `waitingSince` covers restored waits whose
       // runtime was rebuilt empty by a restart/plugin reload.
       waiting: runtime?.deferredSince !== undefined || record.waitingSince !== undefined,
+      // Arm→execution transition visibility (Workstream LX): true from the moment the kickoff steer is
+      // dispatched until the host reports the execution started. Absence on records adopted before this
+      // field landed — never coerced. Only meaningful on a live record; terminal/paused records say false.
+      queued: record.status === "active" ? (runtime?.awaitingExecution ?? false) : false,
       ...(spend ? { spend } : {}),
       ...(typeof compactAtTokens === "number" && compactAtTokens > 0 ? { compactAtTokens } : {}),
       ...(contextSize !== undefined && Number.isFinite(contextSize) && contextSize >= 0 ? { contextSize } : {}),
@@ -630,9 +634,16 @@ export class GoalController {
     // and every tool event before the first execution-end would otherwise be dropped.
     const runtime = this.goals.has(sessionID) ? this.runtime(sessionID) : this.runtimes.get(sessionID)
     if (!runtime) return
+    const wasQueued = runtime.awaitingExecution
     this.invalidate(runtime)
     runtime.toolCalls = 0
     runtime.awaitingExecution = false
+    if (wasQueued) {
+      // The execution is in flight; the kickoff is no longer in the host's inbox. Emit so the pill
+      // clears "queued" instead of holding it until an unrelated event flushes the mirror.
+      const live = this.goals.get(sessionID)
+      if (live) this.emit(live)
+    }
   }
 
   onToolCalled(sessionID: string) {
@@ -714,6 +725,7 @@ export class GoalController {
     runtime.toolCalls = 0
     // The execution is over; a straggler succeeded for it must not evaluate. The retry steer re-arms evaluation.
     runtime.awaitingExecution = true
+    this.emit(record)
     this.handleFailure(record, runtime, classifyFailure(error))
   }
 
@@ -727,10 +739,14 @@ export class GoalController {
     if (reason === "user") return this.pause(record, "Interrupted.", "user")
     if (reason === "inactivity") {
       runtime.awaitingExecution = true
+      this.emit(record)
       return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
     }
     // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn, its events must evaluate.
-    if (reason !== "superseded") runtime.awaitingExecution = true
+    if (reason !== "superseded") {
+      runtime.awaitingExecution = true
+      this.emit(record)
+    }
   }
 
   onSessionDeleted(sessionID: string) {
@@ -1480,6 +1496,7 @@ export class GoalController {
     // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
     // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.
     runtime.awaitingExecution = true
+    if (this.goals.get(record.sessionID) === record) this.emit(record)
     try {
       await this.deps.session.synthetic({
         sessionID: record.sessionID,
@@ -1487,12 +1504,18 @@ export class GoalController {
         description: input.description,
         metadata: { source: Prompt.MARKER, goal: record.id, turn: input.turn },
         delivery: "steer",
+        // Explicit `resume: true` (Workstream LX): the kickoff must wake the session. The host contract
+        // (session.synthetic) admits with `resume` omitted/true → `SessionExecution.wake` is scheduled;
+        // `false` records the input with no wake. Omitting it left the arm's fate to the host default,
+        // and the armed loop could park with the pill reading "active" — indistinguishable from stuck.
+        resume: true,
       })
     } catch (error) {
       // A synthetic steer that fails to land must not stop the goal: drop the straggler flag and retry the dispatch.
       // onUserPrompt/clear/isDisposed all call invalidate(runtime), which clears runtime.timer, so a user prompt
       // cancels the pending retry.
       runtime.awaitingExecution = false
+      if (this.goals.get(record.sessionID) === record) this.emit(record)
       if (this.goals.get(record.sessionID) === record && record.status === "active") {
         this.notify(record.sessionID, "retry", "warning", "Goal still active", `Could not continue (${truncate(errorMessage(error), 160)}); retrying in ${formatDuration(CONTINUE_RETRY_MS)}.`)
         this.schedule(runtime, CONTINUE_RETRY_MS, () => {

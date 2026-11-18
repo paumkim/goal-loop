@@ -66,9 +66,11 @@ const stateWord = (goal: GoalSnapshot): string =>
       ? "checking"
       : goal.waiting
         ? "waiting"
-        : isRetryStuck(goal)
-          ? "stuck"
-          : "active"
+        : goal.queued
+          ? "queued"
+          : isRetryStuck(goal)
+            ? "stuck"
+            : "active"
 
 /**
  * May the HUD card arm right now? A goal must be eligible to paint (live record on disk or in cache),
@@ -386,7 +388,7 @@ export const breathCrest = (phase: number | undefined): boolean =>
 const stateGlyph = (goal: GoalSnapshot, ascii: boolean, phase: number | undefined): string => {
   if (goal.status === "paused") return ascii ? "|" : "\u2016" // ‖
   if (isRetryStuck(goal)) return ascii ? "*" : "\u25CF" // ●
-  if (goal.waiting === true && goal.evaluating !== true) return ascii ? "o" : "\u25EF" // ◯ — large empty ring, distinct from the wave
+  if ((goal.waiting === true || goal.queued === true) && goal.evaluating !== true) return ascii ? "o" : "\u25EF" // ◯ — large empty ring, distinct from the wave; also the queued kickoff's face: nothing is executing yet
   return breathGlyph(phase, ascii)
 }
 

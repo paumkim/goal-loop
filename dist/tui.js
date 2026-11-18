@@ -1926,7 +1926,7 @@ var compactMarker = (compact, ascii = false) => {
     return { text: "unmeasurable", tone: "unknown" };
   return { text: "pending", tone: "pending" };
 };
-var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
+var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active";
 var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
 var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   for (const rung of rungs) {
@@ -2032,7 +2032,7 @@ var stateGlyph = (goal, ascii, phase) => {
     return ascii ? "|" : "\u2016";
   if (isRetryStuck(goal))
     return ascii ? "*" : "\u25CF";
-  if (goal.waiting === true && goal.evaluating !== true)
+  if ((goal.waiting === true || goal.queued === true) && goal.evaluating !== true)
     return ascii ? "o" : "\u25EF";
   return breathGlyph(phase, ascii);
 };
@@ -2545,7 +2545,7 @@ var LoopSection = (props) => {
       return "paused";
     if (s !== "active")
       return s;
-    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active";
+    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : props.goal.queued ? "queued" : "active";
   };
   const nowMs = () => props.nowMs?.() ?? Date.now();
   const iterVerdict = () => currentIterationVerdict(props.goal.history ?? [], history(), props.goal.setAt);
@@ -4713,7 +4713,7 @@ import { createElement as _$createElement3 } from "@opentui/solid";
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 import { createSignal as createSignal3, Show as Show3 } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
-var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
+var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
 var verdictColor = (theme, entry, mono) => verdictEntryAccentColor(theme, entry, mono);
 var AffordanceCell = (props) => {
   const ack = () => props.ack ?? null;

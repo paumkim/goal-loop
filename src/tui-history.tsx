@@ -219,7 +219,7 @@ export const LoopSection = (props: {
     const s = props.goal.status
     if (s === "paused") return "paused"
     if (s !== "active") return s
-    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : "active"
+    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : props.goal.queued ? "queued" : "active"
   }
   const nowMs = () => props.nowMs?.() ?? Date.now()
   const iterVerdict = () => currentIterationVerdict(props.goal.history ?? [], history(), props.goal.setAt)
