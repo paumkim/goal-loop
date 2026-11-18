@@ -54,9 +54,11 @@ const stateWord = (goal: GoalSnapshot): string =>
         ? "checking"
         : goal.waiting
           ? "waiting"
-          : isRetryStuck(goal)
-            ? "stuck"
-            : "active"
+          : goal.queued
+            ? "queued"
+            : isRetryStuck(goal)
+              ? "stuck"
+              : "active"
       : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
 const verdictColor = (theme: HudCardTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
   verdictEntryAccentColor(theme, entry, mono)

@@ -94,6 +94,13 @@ describe("pillModel", () => {
     expect(pill.tone).toBe("armed")
   })
 
+  test("an armed goal whose kickoff is in flight paints 'queued', not 'active'", () => {
+    const pill = pillModel(loopedGoal({ queued: true }), 1000 * 60 * 12)
+    expect(pill.text).toContain("queued")
+    expect(pill.text).not.toContain("active")
+    expect(pill.tone).toBe("armed")
+  })
+
   test("a budget walks the degradation ladder — retry drops first, then compact, then turns, then pips — and never exceeds the cells given", () => {
     const distress = loopedGoal({ loopIteration: 5, loopMaxLoops: 5, turns: 123, retries: 12, loopCompact: { requestedAt: now - 60_000, iteration: 3, misses: 4 } })
     const full = pillModel(distress, 1000 * 60 * 45)
