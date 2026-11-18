@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -1550,5 +1550,43 @@ describe("staleRecentlyTerminalSessionIDs", () => {
     const entries = { ses_done: terminalEntry({}, now - 5000, now - 60_000) }
     expect(staleRecentlyTerminalSessionIDs(entries, now, 4000, 120_000)).toEqual(["ses_done"])
     expect(staleRecentlyTerminalSessionIDs(entries, now, 4000, 30_000)).toEqual([])
+  })
+})
+
+describe("expiredTerminalSessionIDs", () => {
+  const terminalEntry = (overrides: Partial<GoalSnapshot> = {}, receivedAt: number | undefined = now - 20 * 60_000, terminalAt: number | undefined = now - 11 * 60_000) =>
+    ({ goal: loopedGoal({ status: "achieved", ...overrides }), receivedAt, ...(terminalAt !== undefined ? { terminalAt } : {}) })
+
+  test("a terminal entry past the window is expired", () => {
+    const entries = { ses_done: terminalEntry() }
+    expect(expiredTerminalSessionIDs(entries, now)).toEqual(["ses_done"])
+  })
+
+  test("an entry inside the window is kept (it is still re-pulled until the window lapses)", () => {
+    const entries = { ses_done: terminalEntry({}, now - STALE_LIVE_ENTRY_MS - 1, now - RECENT_TERMINAL_WINDOW_MS) }
+    expect(expiredTerminalSessionIDs(entries, now)).toEqual([])
+  })
+
+  test("the window edge is respected — one ms past it expires", () => {
+    const entries = { ses_done: terminalEntry({}, now - 20 * 60_000, now - RECENT_TERMINAL_WINDOW_MS - 1) }
+    expect(expiredTerminalSessionIDs(entries, now)).toEqual(["ses_done"])
+  })
+
+  test("the kept (dialog) session is never expired", () => {
+    const entries = { ses_done: terminalEntry() }
+    expect(expiredTerminalSessionIDs(entries, now, "ses_done")).toEqual([])
+  })
+
+  test("null entries and live entries are never expired", () => {
+    const entries = {
+      ses_null: { goal: null, receivedAt: now - 20 * 60_000, terminalAt: now - 11 * 60_000 },
+      ses_live: { goal: loopedGoal({ status: "active" }), receivedAt: now - 20 * 60_000, terminalAt: now - 11 * 60_000 },
+    }
+    expect(expiredTerminalSessionIDs(entries, now)).toEqual([])
+  })
+
+  test("an entry without a terminalAt stamp is never expired on a guess", () => {
+    const entries = { ses_unstamped: { goal: loopedGoal({ status: "achieved" }), receivedAt: now - 20 * 60_000 } }
+    expect(expiredTerminalSessionIDs(entries, now)).toEqual([])
   })
 })

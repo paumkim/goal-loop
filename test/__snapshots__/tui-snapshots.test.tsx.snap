@@ -743,7 +743,7 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · judged impossible (the dialog shows why, not a generic failure) 1`] = `
-"overview  ·  ledger  ·  dossier                                    impossible  12m · 4 turns · v3/5 
+"overview  ·  ledger  ·  dossier                                           impossible  12m · 4 turns 
 goal        ship the release notes                                                         copy     
 reason      Evaluator: docs build still fails                                                       
 fix         judged impossible · rephrase the condition, else /goal clear                            
