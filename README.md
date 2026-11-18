@@ -1,6 +1,6 @@
-# opencode-goal
+# opencode-goalv2
 
-Claude Code's `/goal` for OpenCode v2. Give the agent a finish line. It works turn after turn until an evaluator confirms the condition is met. This is a standalone MIT-licensed fork. If you want the original, installed by its author: `npm i -g @el4cteo/opencode-goal`.
+Claude Code's `/goal` for OpenCode v2, rebuilt as its own project. Give the agent a finish line. It works turn after turn until an evaluator confirms the condition is met. MIT licensed.
 
 ![/goal in the OpenCode CLI](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-status.png)
 
@@ -28,7 +28,7 @@ opencode-goal status             # scope, config path, installed yes/no
 opencode-goal install --project  # target the project's config instead of global
 ```
 
-The installer only edits the `plugins` array in the global config opencode itself picks. It backs the file up first (timestamped `.bak`, never overwritten) and is idempotent. Uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists. It picks the oldest backup whose parsed content provably lacks the plugin, and it takes a safety backup of the current state first. `uninstall --restore` puts the pre-install backup back over the config, also taking a fresh safety backup first. Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goal"] }`).
+The installer only edits the `plugins` array in the global config opencode itself picks. It backs the file up first (timestamped `.bak`, never overwritten) and is idempotent. Uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists. It picks the oldest backup whose parsed content provably lacks the plugin, and it takes a safety backup of the current state first. `uninstall --restore` puts the pre-install backup back over the config, also taking a fresh safety backup first. Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goalv2"] }`).
 
 ## Use
 
@@ -272,6 +272,4 @@ All files are plain `.html` + `styles.css` + vanilla `app.js` and work by openin
 
 MIT. See [LICENSE](LICENSE).
 
-This project is based on the original `/goal` plugin by EL4CTEO, at https://github.com/EL4CTEO/opencode-goal. This fork is maintained by paumkim at https://github.com/paumkim/opencode-goalv2.
-
-The original copyright notice is preserved verbatim in [LICENSE](LICENSE); the modifications and maintenance in this fork are copyright 2026 paumkim. The MIT license covers both.
+Originally derived from [`opencode-goal`](https://github.com/EL4CTEO/opencode-goal) by EL4CTEO. This is now an independent project, maintained by paumkim at https://github.com/paumkim/opencode-goalv2 — its own codebase, behavior, and interface. The original copyright notice is preserved verbatim in [LICENSE](LICENSE); the modifications and maintenance are copyright 2026 paumkim. The MIT license covers both.
