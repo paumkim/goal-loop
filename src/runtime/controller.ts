@@ -1211,7 +1211,7 @@ export class GoalController {
     ])
     if (completed.has(normalize(condition))) {
       log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
-      return endClean(`Loop complete: no new gap — the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; ending instead of arming.`)
+      return endClean(`no new gap: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; ending instead of arming.`)
     }
     // Near-duplicate gate: a planner proposing work that materially overlaps an already-completed condition
     // would burn the iteration on a no-op. Token containment >= 0.7 or Jaccard >= 0.6 is a near-duplicate.
@@ -1222,7 +1222,7 @@ export class GoalController {
         if (entryTokens.size === 0) continue
         if (isNearDuplicate(candidateTokens, entryTokens)) {
           log.warn("loop next-goal generator offered a near-duplicate of an already-completed condition", { sessionID, iteration })
-          return endClean(`Loop complete: no new gap — the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); ending instead of arming.`)
+          return endClean(`no new gap: the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); ending instead of arming.`)
         }
       }
     }
