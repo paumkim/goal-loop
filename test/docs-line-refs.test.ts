@@ -14,7 +14,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 
 const ROOT = join(import.meta.dir, "..")
 
@@ -338,6 +338,89 @@ describe("docs inline-citation contract", () => {
               }
             }
           }
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
+/**
+ * The src-wide wildcard re-export absence pin.
+ *
+ * The symbol-export and inline-citation contracts above read a cited module's *source text*. A
+ * wildcard re-export (`export * from`, `export * as ns from`, `export type * from`) would let a
+ * module export a symbol its own text never names, which is the one shape neither contract can
+ * see — the recorded blind spot in both ("none exist in src/ today", a future one would need the
+ * tests taught re-export resolution). Closing the hole by resolution would mean teaching both pins
+ * to walk re-export chains; closing it by absence is simpler and just as strong: the construct
+ * cannot land unnoticed, and if a module ever genuinely needs one, this pin forces the citation
+ * contracts to be taught re-export resolution in the same change instead of silently weakening
+ * them. Root entry surfaces (`index.ts` re-exports `src/index.ts`, `rpc.ts` wildcard-re-exports
+ * `src/rpc.ts`) are out of scope because docs citations only ever name `src/`/`packages/` modules.
+ *
+ * Textual by design, like the rest of this file: strings and comments are blanked before the scan
+ * so prose mentioning the construct (or a commented-out example) cannot trip it — only code can.
+ * Named re-exports (`export { A } from "./a.ts"`, with or without `as`) are deliberately allowed:
+ * the symbol-export contract already honors their aliasing.
+ */
+const SOURCE_FILE = /\.(?:ts|tsx)$/
+
+const walkSources = (dir: string): string[] => {
+  const out: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const abs = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue
+      out.push(...walkSources(abs))
+      continue
+    }
+    if (entry.isFile() && SOURCE_FILE.test(entry.name)) out.push(abs)
+  }
+  return out
+}
+
+/** Blank string literals and comments (newlines preserved) so only code tokens remain. */
+const codeOnly = (source: string): string => {
+  let out = ""
+  let i = 0
+  let state: "code" | "sq" | "dq" | "tpl" | "line" | "block" = "code"
+  while (i < source.length) {
+    const ch = source[i] as string
+    const next = source[i + 1]
+    if (state === "code") {
+      if (ch === "/" && next === "/") { state = "line"; out += "  "; i += 2; continue }
+      if (ch === "/" && next === "*") { state = "block"; out += "  "; i += 2; continue }
+      if (ch === "'") { state = "sq"; out += " "; i += 1; continue }
+      if (ch === '"') { state = "dq"; out += " "; i += 1; continue }
+      if (ch === "`") { state = "tpl"; out += " "; i += 1; continue }
+      out += ch
+      i += 1
+      continue
+    }
+    if (state === "line") { out += ch === "\n" ? "\n" : " "; if (ch === "\n") state = "code"; i += 1; continue }
+    if (state === "block") { out += ch === "\n" ? "\n" : " "; if (ch === "*" && next === "/") { state = "code"; out += " "; i += 2; continue } i += 1; continue }
+    const closer = state === "sq" ? "'" : state === "dq" ? '"' : "`"
+    if (ch === "\\") { out += next === "\n" ? "\n" : "  "; i += 2; continue }
+    if (ch === closer) { state = "code"; out += " "; i += 1; continue }
+    out += ch === "\n" ? "\n" : " "
+    i += 1
+  }
+  return out
+}
+
+describe("src-wide wildcard re-export absence", () => {
+  test("no module in src/ or packages/ wildcard-re-exports (`export * from` / `export * as ns from` / `export type * from`)", () => {
+    const wildcard = /\bexport\s+(?:type\s+)?\*/
+    const offenders: string[] = []
+    const roots = [join(ROOT, "src"), join(ROOT, "packages")].filter((dir) => existsSync(dir))
+    for (const root of roots) {
+      for (const abs of walkSources(root)) {
+        const code = codeOnly(readFileSync(abs, "utf8"))
+        const at = code.search(wildcard)
+        if (at !== -1) {
+          const line = code.slice(0, at).split("\n").length
+          offenders.push(`${relative(ROOT, abs)}:${line}`)
         }
       }
     }
