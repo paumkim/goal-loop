@@ -5,7 +5,7 @@ import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, str
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
 import {
-  EMPTY_USAGE,
+  EMPTY_USAGE, MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES,
   isLive,
   type CommitPolicy,
   type FailureInfo,
@@ -1437,6 +1437,8 @@ export class GoalController {
     record.status = status
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
+    // Bound the in-memory map before committing: the just-finished record is the newest, so it is never evicted here.
+    this.evictTerminalGoalsBeyondRetention()
     const saved = this.commit(record)
     // Opportunistic storage hygiene: once the just-finished record is durable, prune this directory's other
     // terminal records under the same age/count caps the restore path applies — no restart required.
@@ -1482,6 +1484,38 @@ export class GoalController {
       .finally(() => this.pendingUsage.delete(usageSnapshot))
     this.pendingUsage.add(usageSnapshot)
     return saved
+  }
+
+  /**
+   * Bounds the in-memory map for very long plugin-lifetimes: once more than
+   * {@link MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES} terminal records accumulate, the oldest (by `endedAt`,
+   * falling back to `startedAt`) are dropped from `goals` — durable storage stays the source of truth, so
+   * a dropped record is still served by `peekSnapshot`/`spend` via a fresh storage read, exactly like after
+   * a restart. Live records (active/paused) are never dropped, whatever the cap. The just-finished record is
+   * by construction the newest, so it is never a victim. Dropping is silent on purpose: the terminal snapshot
+   * was already announced at finish time, and re-announcing an eviction would flash a stale card. Best-effort,
+   * synchronous, no durable writes: a failure here can never break the finish path.
+   */
+  private evictTerminalGoalsBeyondRetention(): void {
+    const terminals: Array<{ sessionID: string; at: number }> = []
+    for (const record of this.goals.values()) {
+      if (isLive(record.status)) continue
+      const at = typeof record.endedAt === "number" && Number.isFinite(record.endedAt)
+        ? record.endedAt
+        : typeof record.startedAt === "number" && Number.isFinite(record.startedAt)
+          ? record.startedAt
+          : 0
+      terminals.push({ sessionID: record.sessionID, at })
+    }
+    if (terminals.length <= MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES) return
+    terminals.sort((a, b) => a.at - b.at)
+    const victims = terminals.slice(0, terminals.length - MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES)
+    for (const { sessionID } of victims) {
+      this.goals.delete(sessionID)
+      this.lastCommit.delete(sessionID)
+      this.lastReanchorAt.delete(sessionID)
+      this.pendingAnchors.delete(sessionID)
+    }
   }
 
   /** Records a verdict in the transcript without waking the session (like a shell notification). */
