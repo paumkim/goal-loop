@@ -879,3 +879,47 @@ describe("event router status-less shell.updated regression", () => {
     expect((await background.busy(SID)).shells).toBe(0)
   })
 })
+
+describe("background wait persists across a restart (Workstream XXVII)", () => {
+  test("a deferred wait is persisted on the record and painted again after restore", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore me")
+    first.setWork({ subagents: 1, shells: 0 })
+    await first.turn()
+    expect(first.controller.snapshot(SID)?.waiting).toBeTrue()
+    await first.store.flush()
+    const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
+    expect(typeof stored.waitingSince).toBe("number")
+
+    // A fresh process: runtime state is gone, so only the record can paint the wait.
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+  })
+
+  test("the background-drain path clears a restored wait and drops the persisted twin", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore me")
+    first.setWork({ subagents: 1, shells: 0 })
+    await first.turn()
+    await first.store.flush()
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    second.setWork({ subagents: 0, shells: 0 })
+    second.verdicts.push(notMet())
+    // The child's end event routes here: the drain must find the restored deferral, clear it and evaluate.
+    await second.controller.onBackgroundDrained()
+    expect(second.requests).toHaveLength(1)
+    expect(second.controller.snapshot(SID)?.waiting).toBeFalse()
+    await second.store.flush()
+    const stored = storage.data.get(`goal/v1/${SID}`) as Record<string, unknown>
+    expect(stored.waitingSince).toBeUndefined()
+    // A third process sees no wait.
+    const third = harness({}, storage)
+    expect(await third.controller.restore()).toBe(1)
+    expect(third.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+})

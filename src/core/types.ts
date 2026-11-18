@@ -190,6 +190,14 @@ export interface GoalRecord {
    * Additive; absent on legacy records (treated as 0).
    */
   reanchorCount?: number
+  /**
+   * Persisted twin of the runtime `deferredSince`: the ms at which the evaluation was deferred because
+   * background work (subagents/shells) is in flight. Additive; absent on legacy records and whenever no
+   * deferral is in flight. Lets a restart/plugin reload restore the `waiting` pill state the runtime-only
+   * flag would otherwise drop mid-wait (observed live: the pill flipped back to `active` after a plugin
+   * reload while the background subagent kept running).
+   */
+  waitingSince?: number
 }
 
 /** Read model shared with clients over RPC. */
