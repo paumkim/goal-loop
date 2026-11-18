@@ -1100,3 +1100,161 @@ describe("terminal record pruning at restore", () => {
     expect(report?.extra).toMatchObject({ scanned: 1, pruned: 0, readOnly: true })
   })
 })
+
+describe("terminal record pruning after finish (opportunistic)", () => {
+  const NOW = 2_000_000_000_000
+  const DAY = 24 * 60 * 60 * 1000
+  let seq = 10_000
+  const terminalRecord = (status: GoalStatus, endedAt?: number): GoalRecord => ({
+    version: 1,
+    id: `goal_opp_${++seq}`,
+    sessionID: `ses_opp_${seq}`,
+    directory: DIR,
+    condition: "done thing",
+    status,
+    setAt: (endedAt ?? NOW) - 2 * DAY,
+    startedAt: (endedAt ?? NOW) - 2 * DAY,
+    ...(endedAt !== undefined ? { endedAt } : {}),
+    turns: 3,
+    stall: 0,
+    retries: 0,
+    checkins: 0,
+    baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    history: [],
+  })
+  const seedTerminal = async (storage: MemoryStorage, records: GoalRecord[]) => {
+    for (const r of records) await storage.set(`goal/v1/${r.sessionID}`, structuredClone(r))
+  }
+
+  test("finish() prunes aged terminal records opportunistically, without a restart", async () => {
+    const logs: Array<{ level: string; message: string; extra?: { scanned?: number; pruned?: number; droppedAged?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { scanned?: number; pruned?: number; droppedAged?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const storage = new MemoryStorage()
+    await seedTerminal(storage, [
+      terminalRecord("achieved", NOW - 40 * DAY),
+      terminalRecord("failed", NOW - 90 * DAY),
+      terminalRecord("cleared", NOW - 2 * DAY),
+    ])
+    const h = harness({ log: capturingLog }, storage)
+    h.clock.t = NOW
+    await h.set("active thing")
+    h.verdicts.push(met())
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    await h.controller.dispose()
+    const survivors = [...storage.data.keys()].filter((k) => k.startsWith("goal/v1/ses_opp_"))
+    expect(survivors).toHaveLength(1) // only the fresh seeded record survives; both aged ones are pruned
+    expect(storage.data.has("goal/v1/ses_1")).toBe(true) // the just-finished record survives (it is the newest)
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ scanned: 4, pruned: 2, droppedAged: 2, droppedBeyondCap: 0 })
+  })
+
+  test("the finish path drops the oldest fresh records beyond the count cap, newest survive", async () => {
+    const logs: Array<{ level: string; message: string; extra?: { pruned?: number; droppedBeyondCap?: number; droppedAged?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { pruned?: number; droppedBeyondCap?: number; droppedAged?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const storage = new MemoryStorage()
+    const records = Array.from({ length: MAX_TERMINAL_RECORD_ENTRIES + 4 }, (_, i) => terminalRecord("achieved", NOW - i * 60_000))
+    await seedTerminal(storage, records)
+    const h = harness({ log: capturingLog }, storage)
+    h.clock.t = NOW
+    await h.set("active thing")
+    h.verdicts.push(met())
+    await h.turn()
+    await h.controller.dispose()
+    const survivors = [...storage.data.keys()].filter((k) => k.startsWith("goal/v1/"))
+    expect(survivors).toHaveLength(MAX_TERMINAL_RECORD_ENTRIES)
+    expect(storage.data.has(`goal/v1/${records.at(-1)!.sessionID}`)).toBe(false) // oldest fresh seeded record dropped
+    expect(storage.data.has(`goal/v1/${records[0]!.sessionID}`)).toBe(true) // newest seeded record kept
+    expect(storage.data.has("goal/v1/ses_1")).toBe(true) // just-finished record kept
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ pruned: 5, droppedBeyondCap: 5, droppedAged: 0 })
+  })
+
+  test("the finish path never prunes live records", async () => {
+    const storage = new MemoryStorage()
+    const ancientLive = { ...terminalRecord("active", NOW - 400 * DAY), endedAt: undefined } as GoalRecord
+    delete (ancientLive as { endedAt?: number }).endedAt
+    const agedTerminal = terminalRecord("achieved", NOW - 400 * DAY)
+    await seedTerminal(storage, [ancientLive, agedTerminal])
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    await h.set("active thing")
+    h.verdicts.push(met())
+    await h.turn()
+    await h.controller.dispose()
+    expect(storage.data.has(`goal/v1/${ancientLive.sessionID}`)).toBe(true) // live record untouched however old
+    expect(storage.data.has(`goal/v1/${agedTerminal.sessionID}`)).toBe(false) // the aged terminal record pruned
+  })
+
+  test("a prune failure never breaks the finish path", async () => {
+    const logs: Array<{ level: string; message: string; extra?: unknown }> = []
+    const capturingLog = {
+      info: () => {},
+      warn: (message: string, extra?: unknown) => void logs.push({ level: "warn", message, extra }),
+      error: () => {},
+    }
+    const storage = new MemoryStorage()
+    const aged = terminalRecord("achieved", NOW - 400 * DAY)
+    await seedTerminal(storage, [aged])
+    const h = harness({ log: capturingLog }, storage)
+    h.clock.t = NOW
+    ;(h.storage as { scan: StoragePort["scan"] }).scan = async () => {
+      throw new Error("storage boom")
+    }
+    await h.set("active thing")
+    h.verdicts.push(met())
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved") // finish landed despite the prune blowing up
+    await h.controller.dispose()
+    const warn = logs.find((l) => l.message === "terminal goal record prune failed")
+    expect(warn).toBeDefined()
+    expect(storage.data.has(`goal/v1/${aged.sessionID}`)).toBe(true) // nothing was removed
+  })
+
+  test("an unstamped terminal record is kept, and a probe-mode store removes nothing", async () => {
+    const storage = new MemoryStorage()
+    const unstamped = terminalRecord("achieved") // endedAt absent: age can never be judged
+    delete (unstamped as { startedAt?: number }).startedAt
+    await seedTerminal(storage, [unstamped])
+    const logs: Array<{ level: string; message: string; extra?: { unstampedKept?: number; pruned?: number; readOnly?: boolean } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { unstampedKept?: number; pruned?: number; readOnly?: boolean }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const probeStore = new GoalStore(storage, () => {}, { readOnly: true })
+    const probe = new GoalController({
+      config: resolveConfig({}),
+      directory: DIR,
+      commit: { required: false, branch: "dev", reason: "test" },
+      clock: new (class extends FakeClock {})(),
+      store: probeStore,
+      log: capturingLog,
+      newId: () => "goal_probe_prune",
+      session: {
+        prompt: async () => {},
+        synthetic: async () => {},
+        usage: async () => ({ cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
+        compact: async () => {},
+      },
+      evaluator: { evaluate: async () => ({ verdict: "met" as const, reason: "done" }) },
+      background: { busy: async () => ({ subagents: 0, shells: 0 }) },
+      emitter: { changed: () => {}, notice: () => {} },
+    })
+    await probe.command({ sessionID: SID, text: "active thing", delivery: "steer" })
+    probe.onExecutionStarted(SID)
+    await probe.onExecutionSucceeded(SID)
+    await probe.dispose()
+    expect(storage.data.has(`goal/v1/${unstamped.sessionID}`)).toBe(true) // removed nothing
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ scanned: 1, pruned: 0, readOnly: true, unstampedKept: 1 })
+  })
+})
