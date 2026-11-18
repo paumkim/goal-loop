@@ -1905,7 +1905,6 @@ var compactMarker = (compact, ascii = false) => {
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : isRetryStuck(goal) ? "stuck" : "active";
 var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
-var pillCaret = (open, ascii = false) => open ? ascii ? "v" : "\u25BE" : ascii ? ">" : "\u25B8";
 var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   for (const rung of rungs) {
     if (stringWidth(rung) <= budget)
@@ -1994,8 +1993,8 @@ var terminalPill = (goal, elapsed, ascii = false, budget) => {
 var PIN_MIN_WIDTH = 12;
 var BREATH_PERIOD_MS = 2400;
 var BREATH_PHASE_MS = BREATH_PERIOD_MS / 4;
-var BREATH_WAVE = ["\xB7", "\u2022", "\u25CF", "\u2022"];
-var BREATH_REST = "\u2022";
+var BREATH_WAVE = ["\u25E6", "\u25CB", "\u25CE", "\u25CB"];
+var BREATH_REST = "\u25CB";
 var breathGlyph = (phase, ascii = false) => {
   if (ascii)
     return "*";
@@ -2010,7 +2009,7 @@ var stateGlyph = (goal, ascii, phase) => {
   if (isRetryStuck(goal))
     return ascii ? "*" : "\u25CF";
   if (goal.waiting === true && goal.evaluating !== true)
-    return ascii ? "o" : "\u25CB";
+    return ascii ? "o" : "\u25EF";
   return breathGlyph(phase, ascii);
 };
 var terminalGlyph = (status, ascii) => {
@@ -7287,7 +7286,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0));
+            const budget = Math.max(1, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0));
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7298,17 +7297,15 @@ var tui_default = Plugin.define({
         };
         const dimensions = useTerminalDimensions2();
         const pinnedNow = () => isPinned(props.sessionID);
-        const caret = () => pillCaret(getHudSession() === props.sessionID && cardFor() !== undefined, motionDisabled(process.env)) + " ";
         const pillText = () => {
           const model = pill();
           if (!model)
             return "";
           const landed = landingNow() ? landingSuffix(motionDisabled(process.env)) : "";
-          const prefix = caret();
+          const base = model.text + landed;
           if (!pinnedNow())
-            return prefix + model.text + landed;
+            return base;
           const g = goal();
-          const base = prefix + model.text + landed;
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
         const workingNow = () => {

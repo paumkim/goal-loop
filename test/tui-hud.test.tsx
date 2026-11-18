@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -196,15 +196,15 @@ describe("the breath — the ambient dot (workstream XII)", () => {
     expect(BREATH_PERIOD_MS / BREATH_PHASE_MS).toBe(4)
   })
 
-  test("the wave swells and eases back symmetrically — · • ● •", () => {
-    expect([0, 1, 2, 3].map((p) => breathGlyph(p))).toEqual(["\u00B7", "\u2022", "\u25CF", "\u2022"])
+  test("the wave swells and eases back symmetrically — ◦ ○ ◎ ○", () => {
+    expect([0, 1, 2, 3].map((p) => breathGlyph(p))).toEqual(["\u25E6", "\u25CB", "\u25CE", "\u25CB"])
     expect(breathGlyph(4)).toBe(breathGlyph(0))
     expect(breathGlyph(-1)).toBe(breathGlyph(3))
   })
 
   test("an undefined or non-finite phase paints the static resting face — the reduced-motion contract", () => {
     expect(breathGlyph(undefined)).toBe(BREATH_REST)
-    expect(BREATH_REST).toBe("\u2022")
+    expect(BREATH_REST).toBe("\u25CB")
     expect(breathGlyph(Number.NaN)).toBe(BREATH_REST)
   })
 
@@ -232,12 +232,12 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("the resting (reduced-motion) frame is itself legible — a working pill at rest reads goal active", () => {
     const text = pillModel(working(), 1000 * 60 * 41).text
-    expect(text).toBe("\u2022 goal active · 41m · 3 turns")
+    expect(text).toBe("\u25CB goal active · 41m · 3 turns")
   })
 
   test("waiting, paused and stuck paint static, distinct glyphs — never the wave, in any phase", () => {
     for (const phase of [0, 1, 2, 3] as const) {
-      expect(pillModel(working({ waiting: true }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u25CB")).toBe(true) // ○
+      expect(pillModel(working({ waiting: true }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u25EF")).toBe(true) // ◯ — large empty ring, distinct from the wave
       expect(pillModel(working({ status: "paused" }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u2016")).toBe(true) // ‖
       expect(pillModel(working({ retries: 3 }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u25CF")).toBe(true) // ● — nothing executes, so no breath
     }
@@ -247,9 +247,18 @@ describe("the breath — the ambient dot (workstream XII)", () => {
     expect(pillModel(working({ retries: 3 }), 0, true).text.startsWith("*")).toBe(true)
   })
 
-  test("an evaluating goal paints the full wave at rest — the crest face is ●, and weight is the caller's lever", () => {
+  test("the waiting hollow ring (◯) is distinct from every breath face and the resting face", () => {
+    for (const phase of [0, 1, 2, 3] as const) {
+      const waiting = pillModel(working({ waiting: true }), 0, false, Number.POSITIVE_INFINITY, phase)
+      expect(waiting.text.startsWith("\u25EF")).toBe(true)
+      expect(waiting.text.startsWith(breathGlyph(phase))).toBe(false)
+    }
+    expect(breathGlyph(undefined)).not.toBe("\u25EF")
+  })
+
+  test("an evaluating goal paints the full wave at rest — the crest face is ◎, and weight is the caller's lever", () => {
     const text = pillModel(working({ evaluating: true }), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, 2).text
-    expect(text.startsWith("\u25CF goal checking · 41m · 3 turns")).toBe(true)
+    expect(text.startsWith("\u25CE goal checking · 41m · 3 turns")).toBe(true)
   })
 })
 
@@ -703,8 +712,8 @@ describe("footerButtonCells / dialogFooterTier", () => {
     expect(terminalPill(failed, 1000 * 60 * 12, true)?.text.startsWith("x goal failed")).toBe(true)
     const looped = loopedGoal({ status: "active" })
     expect(pillModel(looped, 1000 * 60 * 12, true).text.startsWith("* loop · v3/5")).toBe(true)
-    expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith("• loop · v3/5")).toBe(true)
-    expect(pillModel(looped, 1000 * 60 * 12, false, Number.POSITIVE_INFINITY, 2).text.startsWith("● loop · v3/5")).toBe(true)
+    expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith("\u25CB loop · v3/5")).toBe(true)
+    expect(pillModel(looped, 1000 * 60 * 12, false, Number.POSITIVE_INFINITY, 2).text.startsWith("\u25CE loop · v3/5")).toBe(true)
   })
 
   test("the compact band prices in BOTH ClampedColumn paddings (width−2) — the audit's A1 frame-accounting fix", () => {
@@ -1177,18 +1186,6 @@ describe("zero-tool iterations in the ledger", () => {
     expect(frame).toContain(".")   // ASCII ink-density glyph in the mono arm
     expect(frame).not.toContain("○")
     await setup.renderer.destroy()
-  })
-})
-
-describe("pillCaret", () => {
-  test("the glyph is ▾ while the card is painted, ▸ while it is not", () => {
-    expect(pillCaret(true)).toBe("▾")
-    expect(pillCaret(false)).toBe("▸")
-  })
-
-  test("ASCII demotes to v and > under NO_COLOR / TERM=dumb", () => {
-    expect(pillCaret(true, true)).toBe("v")
-    expect(pillCaret(false, true)).toBe(">")
   })
 })
 

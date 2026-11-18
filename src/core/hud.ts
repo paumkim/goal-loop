@@ -78,12 +78,6 @@ const stateWord = (goal: GoalSnapshot): string =>
  */
 export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): boolean => hasGoal && !statusDialogOpen
 
-/** The pill's open/closed affordance: a leading caret, `▾` while the card is painted, `▸` while it is not.
- * Truthful to the card's presence (the caller keys it to the card actually rendering, not merely to the session's
- * hud slot). ASCII demotes to `v`/`>` under NO_COLOR / TERM=dumb — the same predicate the pips, bar and sparkline use.
- */
-export const pillCaret = (open: boolean, ascii: boolean = false): string => open ? (ascii ? "v" : "▾") : (ascii ? ">" : "▸")
-
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
  * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with the
@@ -333,20 +327,20 @@ export const PIN_MIN_WIDTH = 12
 
 /**
  * The breath — the ambient dot's entire motion vocabulary. Four phases of 600ms (a 2.4s period,
- * about a quarter-minute per cycle): a sleeping-cat cadence, never a heartbeat. The dot swells from
- * `·` through `•` to a full `●` crest and eases back, nothing else on the line moves, and no phase
+ * about a quarter-minute per cycle): a sleeping-cat cadence, never a heartbeat. The ring swells from
+ * `◦` through `○` to a full `◎` bullseye crest and eases back, nothing else on the line moves, and no phase
  * is brighter-or-more-frantic than its neighbors. Reduced motion (NO_COLOR / TERM=dumb) never
- * advances the phase at all — the dot paints its resting face, static, and the glyph family
+ * advances the phase at all — the ring paints its resting face, static, and the glyph family
  * (plus weight) carries every state.
  */
 export const BREATH_PERIOD_MS = 2_400
 export const BREATH_PHASE_MS = BREATH_PERIOD_MS / 4
-/** The four faces of the dot, indexed by phase: exhale floor, rising, crest, falling. */
-const BREATH_WAVE = ["\u00B7", "\u2022", "\u25CF", "\u2022"] as const
+/** The four faces of the ring, indexed by phase: exhale floor, rising, crest (the bullseye), falling. */
+const BREATH_WAVE = ["\u25E6", "\u25CB", "\u25CE", "\u25CB"] as const
 /** The static resting face — painted whenever the phase is not advanced (reduced motion) and as the frame the motion dissolves into. */
-export const BREATH_REST = "\u2022"
+export const BREATH_REST = "\u25CB"
 
-/** The dot's face at breath phase `phase` (any number; wraps). An undefined or non-finite phase paints the static resting face — the reduced-motion contract. ASCII demotes the whole family to `*`. */
+/** The ring's face at breath phase `phase` (any number; wraps). An undefined or non-finite phase paints the static resting face — the reduced-motion contract. ASCII demotes the whole family to `*`. */
 export const breathGlyph = (phase: number | undefined, ascii: boolean = false): string => {
   if (ascii) return "*"
   if (phase === undefined || !Number.isFinite(phase)) return BREATH_REST
@@ -361,7 +355,8 @@ export const breathCrest = (phase: number | undefined): boolean =>
  * The leading state glyph for the pill, by state family — shape carries the state before color or
  * word ever get a say, so the family holds under NO_COLOR:
  *   - a live goal that is working (armed, or the evaluator is thinking) swells through the breath wave;
- *   - `waiting` (background work holding evaluation back) paints a hollow `○` — nothing is in flight;
+ *   - `waiting` (background work holding evaluation back) paints a hollow `◯` (U+25EF) — nothing is in flight;
+ *     the large empty ring stays distinct from every face of the wave (◦ ○ ◎) and from the resting face (○);
  *   - `paused` paints `‖` — stopped, two bars, the same metaphor as every media key;
  *   - a stuck-retrying goal paints a solid-but-static `●` — nothing executes, so nothing breathes;
  * the terminal acknowledgments paint `●` / `◌` / `✕` (achieved / impossible / failed), static.
@@ -369,7 +364,7 @@ export const breathCrest = (phase: number | undefined): boolean =>
 const stateGlyph = (goal: GoalSnapshot, ascii: boolean, phase: number | undefined): string => {
   if (goal.status === "paused") return ascii ? "|" : "\u2016" // ‖
   if (isRetryStuck(goal)) return ascii ? "*" : "\u25CF" // ●
-  if (goal.waiting === true && goal.evaluating !== true) return ascii ? "o" : "\u25CB" // ○
+  if (goal.waiting === true && goal.evaluating !== true) return ascii ? "o" : "\u25EF" // ◯ — large empty ring, distinct from the wave
   return breathGlyph(phase, ascii)
 }
 
