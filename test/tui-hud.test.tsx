@@ -630,24 +630,24 @@ describe("footerButtonCells / dialogFooterTier", () => {
     expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith(`${GOAL_GLYPH} loop · v3/5`)).toBe(true)
   })
 
-  test("the compact band prices in BOTH ClampedColumn paddings (width−6) — the audit's A1 frame-accounting fix", () => {
-    expect(dialogFooterTier(96, false, false)).toEqual({ wide: false, roomy: false })
-    expect(dialogFooterTier(96, false, true)).toEqual({ wide: false, roomy: false })
-    // the copied label is narrower than "copy condition", so a copied button already fits at 94
-    expect(dialogFooterTier(94, true, false).roomy).toBe(true)
-    expect(dialogFooterTier(99, false, false).roomy).toBe(false)
-    expect(dialogFooterTier(100, false, false).roomy).toBe(true)  // 41 + 53 == width−6
-    expect(dialogFooterTier(101, false, true).roomy).toBe(false)  // unpin condition costs two more cells
-    expect(dialogFooterTier(102, false, true).roomy).toBe(true)   // 41 + 55 == width−6
+  test("the compact band prices in BOTH ClampedColumn paddings (width−2) — the audit's A1 frame-accounting fix", () => {
+    expect(dialogFooterTier(92, false, false)).toEqual({ wide: false, roomy: false })
+    expect(dialogFooterTier(92, false, true)).toEqual({ wide: false, roomy: false })
+    // the copied label is narrower than "copy condition", so a copied button already fits at 90
+    expect(dialogFooterTier(90, true, false).roomy).toBe(true)
+    expect(dialogFooterTier(95, false, false).roomy).toBe(false)
+    expect(dialogFooterTier(96, false, false).roomy).toBe(true)  // 41 + 53 == width−2
+    expect(dialogFooterTier(97, false, true).roomy).toBe(false)  // unpin condition costs two more cells
+    expect(dialogFooterTier(98, false, true).roomy).toBe(true)   // 41 + 55 == width−2
   })
 
-  test("the full hint unlocks only when the whole row fits the budget (width−6)", () => {
-    expect(dialogFooterTier(116, true, false).wide).toBe(false)
-    expect(dialogFooterTier(117, true, false).wide).toBe(true)   // copied: 64 + 47 == width−6
-    expect(dialogFooterTier(122, false, false).wide).toBe(false)
-    expect(dialogFooterTier(123, false, false).wide).toBe(true)  // 64 + 53 == width−6
-    expect(dialogFooterTier(124, false, true).wide).toBe(false)  // unpin condition costs two more cells
-    expect(dialogFooterTier(125, false, true).wide).toBe(true)   // 64 + 55 == width−6
+  test("the full hint unlocks only when the whole row fits the budget (width−2)", () => {
+    expect(dialogFooterTier(112, true, false).wide).toBe(false)
+    expect(dialogFooterTier(113, true, false).wide).toBe(true)   // copied: 64 + 47 == width−2
+    expect(dialogFooterTier(118, false, false).wide).toBe(false)
+    expect(dialogFooterTier(119, false, false).wide).toBe(true)  // 64 + 53 == width−2
+    expect(dialogFooterTier(120, false, true).wide).toBe(false)  // unpin condition costs two more cells
+    expect(dialogFooterTier(121, false, true).wide).toBe(true)   // 64 + 55 == width−2
     expect(dialogFooterTier(140, false, false)).toEqual({ wide: true, roomy: true })
   })
 })

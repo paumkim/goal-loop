@@ -943,10 +943,10 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFoot
 "
 `;
 
-exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 96 columns (short hint · compact labels — the noun labels overflow at 96) 1`] = `
-"up/down scroll · p pin · c copy · x older                              [copy]   [pin]   [clear] 
-                                                                                                
-                                                                                                
+exports[`full-frame snapshots (chrome tiers and reduced-color frames) DialogFooter · 92 columns (short hint · compact labels — the noun labels overflow at 92) 1`] = `
+"up/down scroll · p pin · c copy · x older                          [copy]   [pin]   [clear] 
+                                                                                            
+                                                                                            
 "
 `;
 

@@ -57,7 +57,7 @@ const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: numbe
 const ClampedColumn = (props: { children?: JSX.Element }) => {
   const dimensions = useTerminalDimensions()
   return (
-    <box flexDirection="column" height="100%" maxHeight={Math.max(8, dimensions().height - 1)} paddingLeft={3} paddingRight={3} paddingBottom={1} gap={1}>
+    <box flexDirection="column" height="100%" maxHeight={Math.max(8, dimensions().height - 1)} paddingLeft={1} paddingRight={1} paddingBottom={0} gap={1}>
       {props.children}
     </box>
   )
