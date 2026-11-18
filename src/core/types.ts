@@ -91,6 +91,29 @@ export interface LoopEntry {
 /** Consecutive unlanded boundary compactions after which the plugin emits one final backstop warning. 2 misses arm a forced re-request; past 4 re-requests drop to a trickle every 3rd arm. Lives here so core formatters can display it. */
 export const COMPACT_MISS_CAP = 4
 
+/**
+ * Completed-iteration records retained on `loopHistory`. A very long `/goal-loop` would otherwise grow the
+ * persisted record — and every outbound snapshot, which `structuredClone`s the record — without bound, one
+ * entry per landed iteration. The planner only ever injected the last 10 iterations into the prompt, so
+ * retaining the newest 50 loses nothing it used. Oldest entries past the cap are dropped at the single
+ * write point (`loopAdvance`). Lives here so core formatters and the controller agree on the bound.
+ */
+export const MAX_LOOP_HISTORY_ENTRIES = 50
+
+/** Total landed iterations a display should count: the retained entries plus the ones the cap dropped. */
+export const completedIterationCount = (goal: { readonly loopHistory?: readonly LoopEntry[]; readonly loopHistoryDropped?: number }): number =>
+  (goal.loopHistoryDropped ?? 0) + (goal.loopHistory?.length ?? 0)
+
+/**
+ * Bounds a completed-iteration history to the newest `MAX_LOOP_HISTORY_ENTRIES` entries. Returns the retained
+ * slice and how many were dropped this call (0 at or below the cap). Callers add the drop count onto the
+ * record's `loopHistoryDropped` so displays and ledgers can say "N most recent of M landed" honestly.
+ */
+export const boundLoopHistory = (entries: readonly LoopEntry[]): { retained: LoopEntry[]; dropped: number } =>
+  entries.length <= MAX_LOOP_HISTORY_ENTRIES
+    ? { retained: [...entries], dropped: 0 }
+    : { retained: entries.slice(-MAX_LOOP_HISTORY_ENTRIES), dropped: entries.length - MAX_LOOP_HISTORY_ENTRIES }
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 /**
  * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
@@ -178,8 +201,14 @@ export interface GoalRecord {
   loopObjective?: string
   /** The loop cap captured when the loop was set (from config at that time). */
   loopMaxLoops?: number
-  /** Completed iterations, oldest first. */
+  /** Completed iterations, oldest first. Retained up to `MAX_LOOP_HISTORY_ENTRIES` (newest kept); see `loopHistoryDropped`. */
   loopHistory?: LoopEntry[]
+  /**
+   * How many completed-iteration records the retention cap dropped from `loopHistory` (oldest first).
+   * Additive; absent when the cap never engaged. Total landed iterations = (this ?? 0) + loopHistory.length —
+   * use `completedIterationCount`, never `loopHistory.length` alone, when a display means "total landed".
+   */
+  loopHistoryDropped?: number
   /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */
   loopNotProgress?: number
   /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */

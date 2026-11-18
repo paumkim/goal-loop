@@ -25,7 +25,7 @@ import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type CompactMarkerTone } from "./core/hud.ts"
-import type { GoalSnapshot, Verdict } from "./core/types.ts"
+import { completedIterationCount, type GoalSnapshot, type Verdict } from "./core/types.ts"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
 export interface HudCardTheme {
@@ -380,8 +380,8 @@ export const HudCard = (props: {
     const max = g().loopMaxLoops
     return typeof max === "number" && max > 0 ? `/${max}` : ""
   }
-  const iteration = () => Math.max(1, g().loopIteration ?? (g().loopHistory?.length ?? 0) + 1)
-  const pips = () => (looped() ? renderPips(g().loopHistory?.length ?? 0, g().loopMaxLoops, mono()) : "")
+  const iteration = () => Math.max(1, g().loopIteration ?? completedIterationCount(g()) + 1)
+  const pips = () => (looped() ? renderPips(completedIterationCount(g()), g().loopMaxLoops, mono()) : "")
   const title = () =>
     looped() ? `${goalGlyph(ascii())} /goal-loop · v${iteration()}${cap()}` : `${goalGlyph(ascii())} /goal`
   // A stuck-retrying goal joins the amber family, mirroring a hot compaction: the card border is the one accent the eye scans first. Under mono the border override or faint — chrome never carries the signal.

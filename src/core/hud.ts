@@ -5,7 +5,7 @@
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
 import stringWidth from "string-width"
-import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type LoopCompactState } from "./types.ts"
+import { COMPACT_MISS_CAP, isLive, completedIterationCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
 import { formatDurationCoarse, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
@@ -173,7 +173,7 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
   const glyph = stateGlyph(goal, ascii, phase)
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
-    const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii)
+    const pips = renderPips(completedIterationCount(goal), goal.loopMaxLoops, ascii)
     const pending = goal.loopCompact && !goal.loopCompact.landedAt ? goal.loopCompact : undefined
     const compacting = pending ? ` · compact pending${pending.misses > 0 ? ` (${pending.misses}/${COMPACT_MISS_CAP})` : ""}` : ""
     const core = `${glyph} loop · v${goal.loopIteration ?? 1}${cap}`
@@ -333,7 +333,7 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean
   const text = goal.loopEnabled
     ? (() => {
         const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
-        const iteration = Math.max(1, goal.loopIteration ?? (goal.loopHistory?.length ?? 0) + 1)
+        const iteration = Math.max(1, goal.loopIteration ?? completedIterationCount(goal) + 1)
         return `${glyph} loop ${word} · v${iteration}${cap} · ${span}`
       })()
     : `${glyph} goal ${word} · ${span}`
