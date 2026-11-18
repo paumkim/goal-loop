@@ -1440,12 +1440,14 @@ export class GoalController {
     // Bound the in-memory map before committing: the just-finished record is the newest, so it is never evicted here.
     this.evictTerminalGoalsBeyondRetention()
     const saved = this.commit(record)
-    // Opportunistic storage hygiene: once the just-finished record is durable, prune this directory's other
-    // terminal records under the same age/count caps the restore path applies — no restart required.
+    // Opportunistic storage hygiene: once the just-finished record is durable, prune terminal records
+    // across every directory at plugin storage under the same per-directory age/count caps the restore
+    // path applies (`pruneAllDirectories`, exactly as `restore()`) — no restart required, and the two
+    // paths no longer disagree about scope. Workstream XLIII.
     // Fire-and-forget: the finish path never waits on the prune (the returned promise is exactly `saved`).
-    // Best-effort: a prune failure is logged with the session id and changes nothing. Live records and other
-    // directories' records are untouched by construction; the report is counts only.
-    const prune = saved.then(() => this.deps.store.pruneTerminal(this.deps.directory, this.deps.clock.now()))
+    // Best-effort: a prune failure is logged with the session id and changes nothing. Live records are
+    // never touched, in any directory; each directory's cap is applied independently. The report is counts only.
+    const prune = saved.then(() => this.deps.store.pruneAllDirectories(this.deps.clock.now()))
     const settle = prune.then((report) => {
       if (report.scanned > 0)
         this.deps.log.info("terminal goal records at plugin storage", {
@@ -1456,6 +1458,7 @@ export class GoalController {
           droppedBeyondCap: report.droppedBeyondCap,
           unstampedKept: report.unstampedKept,
           ...(report.readOnly ? { readOnly: true } : {}),
+          directories: report.directories,
         })
     }).catch((error) => this.deps.log.warn("terminal goal record prune failed", { sessionID: record.sessionID, error: errorMessage(error) }))
     this.pendingPrunes.add(settle)
