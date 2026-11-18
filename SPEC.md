@@ -16,20 +16,19 @@ the conversation; the row disappears forever after turn 1. The card also answers
 toggles an in-card context menu (four fixed rows, appended below the permanent actions row so the absolute-mount
 anchor grows with it — `hudCardRows(goal, contextOpen)`): `copy condition`, `copy evaluator reason` (inert and
 faint when the snapshot carries no `reason`), `copy latest summary` (inert when no `loopHistory` entry exists),
-and `clear goal` (warning tone). Menu rows share the button hover grammar (raised background, underline under
+and `clear goal` (warning tone). Menu rows share the button hover grammar (raised background, weight under
 mono); inert rows never light up and swallow the click; any action collapses the menu; Esc or another
 right-click toggles it shut. (c) The `/goal` detail view: a
 
 host dialog (`ui.dialog.show` chrome: backdrop, Esc dismissal, xlarge centered sizing) with wrapped fields, a
 clickable condition row, the same remediation block, the same teaching line (`hint  the evaluator reads only the
 transcript — it cannot run commands; prove the condition with visible output`) while the goal is fresh, two more
-one-click copy affordances (each underlines on hover, like the condition row): the `evaluator`/`reason` row
+one-click copy affordances (each carries an always-mounted faint `copy` cell that brightens on hover, like the condition row — the text itself never changes on hover): the `evaluator`/`reason` row
 copies the raw evaluator text, and an
 iteration summary line in the loop rail copies that iteration's full (untruncated) summary — the two texts a user
 most wants verbatim when pasting into a follow-up prompt; both are omitted (rendered plain) when the caller does
 not wire the callbacks. Copying from inside the dialog acknowledges in place — host toasts do not render above
-the modal, so each row (condition, evaluator/reason, summary) flips a transient `✓ copied` suffix for ~1.6s
-on the clicked line, the same grammar as the footer's copy button (the host clipboard/OSC52 call still fires; the
+the modal, so each row (condition, evaluator/reason, summary) flips its always-mounted affordance cell to `✓ copied` for ~1.6s and nothing else on the row changes — the same grammar as the footer's copy button (the host clipboard/OSC52 call still fires; the
 host toast, where visible, still fires). Clickable `copy condition` / `pin condition` / `clear
 goal` footer buttons (`p` toggles the pin, `c` copies the condition — host toasts do not render above the
 modal, so the copy button acknowledges with a transient `✓ copied` label instead). The pin button keeps its
@@ -41,7 +40,7 @@ steps so it never clips mid-word: above
 floor always fits. No tier repeats the Esc chord: it stays in the host dialog chrome, and the full hint documents
 both plugin chords (`p pin · c copy`) the short hint does, plus paging. The same env guard governs color as motion: under `NO_COLOR` (or `TERM=dumb`) every
 chromatic accent is dropped from the plugin's own surfaces — the pill, card, dialog and history render with
-neutral tokens only, hover becomes an underline instead of a background fill, and status words, verdict
+neutral tokens only, hover becomes weight instead of a background fill, and status words, verdict
 glyphs (✓ / ⊘ / ○) and weight (bold) carry all meaning; meaning never depended on color alone. The host's
 own chrome is out of scope (opencode renders full color regardless of `NO_COLOR`). The dialog's state word carries the same accents as the HUD card in terminal states so the
 header never reads muted-gray on an outcome: `achieved` in feedback.info, `impossible` / `paused` in
@@ -75,6 +74,15 @@ an announcement. State transitions also surface as host toasts; outcome toasts
 completed iterations for loops (`34 turns · 12m 05s · 4 iterations · <reason>`). The
 exceptions to "host-owned layout" are the two absolute boxes (pill, card) of the slot claim; toasts, dialog
 chrome and sizing stay the host's.
+Hovered chrome never changes. Every click-to-copy/clickable row the plugin paints — the HUD card's
+condition and why rows, the dialog's condition/evaluator/verify/dossier/save/sweep rows, the dossier's
+elsewhere and fold rows, and the history rail's summary/attestation/tally rows — carries an always-mounted
+affordance cell (idle faint, fixed width; brightens on hover, weight under mono). Hovering never mounts,
+unmounts or resizes anything, and no text on a hovered row changes attributes, so nothing rewraps, nothing
+reflows and rows never flicker under the mouse; a click flips the cell to `✓ copied` for ~1.6s and nothing
+else changes. Buttons and context-menu rows keep the composer's raised-background hover grammar (weight
+under mono) — they are controls, not text rows.
+
 The project `opencode.json` points at the local checkout.
 
 This file is the acceptance spec for the plugin as it ships today. The how and why live in README.md and
@@ -6333,3 +6341,13 @@ Source: live end-to-end verification of Workstream VII, performed in a fresh sta
 777. Tests — `test/mirror.test.ts` (+9): write→read roundtrip; owner-only file and no stray tmp siblings; `remove()` unlinks; malformed/truncated mirror files dropped; wrong-session record dropped; foreign-directory record dropped; directory-guard fail-open without a local directory; path-like sessionIDs contained to the mirror dir; and the end-to-end seam: a stale evaluating entry converges to the terminal record through the mirror and `pillModel` leaves `checking` — the exact live symptom's pipeline, with RPC and bus disconnected. `test/package-integrity.test.ts` re-pinned to 62 packed paths. `OPENCODE_GOAL_MIRROR` documented in README.md and docs/config.html (the env-document test enforces parity).
 778. SPEC honesty gate — the enforced marker (line ~466, first occurrence) and this workstream's trailing marker are now `spec-check files=62 tests=1514` (`src/core/mirror.ts` ships; `test/` stays outside `package.json` `files`). `bun run check` green; `git status` clean after compile.
 779. Honest limits: (a) the mirror cannot tell cleared-from-terminal — a cleared record leaves no mirror file, so the unlocked case still needs the event or RPC to converge (unchanged semantics for that path; the tick still re-pulls it); (b) the mirror is per machine and per user tmp dir — a TUI and a server in different tmp roots (TMPDIR overrides differing between processes) never see each other's mirrors, degrading silently to the pre-fix behavior; (c) a snapshot older than the last `changed` event is all the mirror holds when events stop entirely — it converges to the last emitted truth, which is by construction at least as new as the entries cache; (d) the RPC 500s on `serve --stdio` standalone servers and the event-bus drop at the verdict moment remain harness-layer behavior, reported here, not patched around. The mirror makes the pill truthful without either path working; it does not fix the harness.
+
+## Workstream XI — hover stability: the affordance never moves (2026-11-18)
+
+Interpretation of this iteration, from the live TUI complaint: "mouse hover over it shows up copy. and that copy is flickering. and when mouse hover over the text it changes. i like things to be consistency. stay the same no flikering laggying those things." Every click-to-copy row on the plugin's own surfaces revealed a `copy` hint by mounting a new text node under the mouse (`<Show when={hovered()}>`), and the wrapping (`wrapMode="word"`) payload text changed attributes on hover — so hovering could rewrap the row, shift it under the pointer, unmount the hint, rewrap back and oscillate; the resting frame was never the painted frame. The fix is one grammar, applied everywhere: an always-mounted, fixed-width affordance cell.
+
+780. `src/hud-card.tsx`, `src/status-dialog.tsx`, `src/tui-history.tsx` — a shared in-file `Affordance` cell replaces every hover-revealed `copy`/`save`/`verify`/`reach`/`sign`/`seal`/`→ transcript`/`click[· m]` hint: width 8 (13 for `→ transcript`, 9 for `click · m`, 6 for the sweep verbs), idle faint, hover base (weight under mono), never mounted or unmounted, never resized. The click acknowledgment paints inside the same cell (`✓ copied` / `+ copied` / `✓ saved`, ~1.6s) — nothing outside the cell ever changes. The row's text never changes attributes on hover, so the `wrapMode="word"` payload never rewraps and the row never reflows. The condition/why width reserve drops from 23 to 25 cells (`conditionWidth`), two cells more truncation headroom, spent on the fixed cell. The hover-revealed turn tag on the verdict trail is gone; a click copies and the ack rides the trail line (`verdicts · turn N · ✓ copied`). The outline rail chips, the `find` row and its close button, the view tabs and the rail fold row paint static chrome — the words already say "click".
+781. Text leaves bolden-on-hover are deleted on every interactive row in scope, not just the wrapping ones: the affordance cell is the only thing hover may paint. Buttons and context-menu rows (`HudButton`, `HudMenuRow`) keep the composer's raised-background hover grammar (weight under mono) — geometry-stable controls, not text rows. `src/tui.tsx` hover sites (the pill, the dialog's `esc` cell, the palette footer button's label flip) are outside this lease's claimed paths and stay as they were.
+782. Tests re-pinned in place (suite count unchanged, 1514): the two "dialog hover reveals the hint" render tests became always-mounted-affordance tests (resting frame paints the cell, hover changes no span on the row, frame restored byte-for-byte on mouse-out); "hovering the condition row paints bold and no span carries UNDERLINE" became "hover leaves every span unchanged, never underlines"; the trail test pinned `rest === frame-under-mouse` plus the click ack; the dossier chip test pinned the identical resting frame under the mouse; `render-scripts.test.ts` expects "click a row to open its transcript" (the elsewhere header copy was corrected — it said "hover a row"). Snapshots regenerated: every frame gains the always-faint affordance cell on interactive rows; the elsewhere rows paint `→ transcript` and the fold paints `click` at rest; the fold-opened frame shows both at rest.
+783. SPEC honesty gate — marker unchanged at `<!-- spec-check files=62 tests=1514 -->` (no package or test-count change; `test/` stays outside `package.json` `files`). Verification: `tsc --noEmit` clean; `bun test` 1514 pass / 0 fail / 28 snapshots; snapshot diff reviewed cell-by-cell (only affordance cells and the elsewhere header string changed); `bun --preload @opentui/solid/preload scripts/render-card.tsx` and `scripts/render-dialog.tsx --width=100 --height=92` print frames with the affordance painted at rest (the code path is also green under the smoke tests); hover byte-stability is pinned by the render tests (resting frame === frame under the mouse). `bun run check` green before submit.
+784. Honest limits: (a) verification is render-layer (headless grid + mock mouse); nobody re-ran the live TUI on a real terminal this pass — the class of bug this fixes (mount-under-mouse) no longer has a single carrier in the claimed surfaces, but the live feel is unverified; (b) `src/tui.tsx`'s three hover sites remain (outside the claim: `src/tui.tsx` is held by the tui-storage-convergence-fallback lease); (c) click-time transient acks (`✓ 6/6 resolve`, `✓ copied` inline on the rail summary's sibling attestation row) were moved into the cell where a cell exists; the sweep-row counts stay inline in the payload by design (they are data, not chrome); (d) the `render-card.tsx` / `render-dialog.tsx` standalone scripts crash without `--preload @opentui/solid/preload` — pre-existing on dev, not introduced here.

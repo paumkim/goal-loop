@@ -2,7 +2,7 @@
 
 exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -30,7 +30,7 @@ exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 
 exports[`full-frame snapshots (named layout states) HudCard · evaluating (the evaluator is thinking) 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        checking v3/5 ●●○○○ · 4 turns · 12m                               
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -58,7 +58,7 @@ exports[`full-frame snapshots (named layout states) HudCard · evaluating (the e
 
 exports[`full-frame snapshots (named layout states) HudCard · hot (compaction keeps missing — exact remediation, never a vague warning) 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -88,7 +88,7 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 
 exports[`full-frame snapshots (named layout states) HudCard · failed (failure is a first-class screen) 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        failed v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -180,14 +180,14 @@ why         ✓  met · turn 3 · 3m ago      done
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · freshly armed (the teaching hint is on screen) 1`] = `
 "overview  ·  ledger  ·  dossier                                         active  3m · 0 turns · v1/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 hint        the evaluator reads only the transcript - it cannot run commands; prove the condition   
             with visible output                                                                     
+                                                                                                    
 loop        v1 of at most 5 · 0 complete  ░░░░░░░░░░░░░░░░░░                                        
 objective   make every loop iteration visible at a glance                                           
 now         ◎  v1 · active · 0 turns · 3m elapsed                                                   
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -224,11 +224,13 @@ now         ◎  v1 · active · 0 turns · 3m elapsed
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · hot (the remediation row rides the dialog, not just the card) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 evaluator   Evaluator: docs build still fails                                                       
 fix         compact pending 2/4 · send a message for a safe point · else set evaluator.             
             verifyCommand                                                                           
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -265,13 +267,12 @@ why         ✓  met · turn 3 · 3m ago      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab (the history focus view — strip, the state row, the rail, nothing else) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -314,15 +315,14 @@ why         ✓  met · turn 3 · 3m ago      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · dossier tab (the whole record in-screen — the copy row, the document's title, the objective; no dashboard chrome) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
-dossier     the whole record as markdown                                                            
-                                                                                                    
+dossier     the whole record as markdown                                                   copy     
 find        find in the record                                                                      
+                                                                                                    
 Goal loop dossier                                                                                   
                                                                                                     
 _Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record. Everything below is the 
@@ -368,9 +368,9 @@ Iteration v2 — met
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · dossier tab with the outline rail (the section chips paint left of the document; the document stays whole) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
-dossier     the whole record as markdown                                                            
-                                                                                                    
+dossier     the whole record as markdown                                                   copy     
 find        find in the record                                                                      
+                                                                                                    
 objective       Goal loop dossier                                                                   
 status                                                                                              
 iterations      _Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record.         
@@ -415,10 +415,11 @@ totals
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · ledger tab failure-first (a hot loop never hides its remedy — the fix row rides the focus view) 1`] = `
-"fix         compact pending 2/4 · send a message for a safe point · else set evaluator.             
+"overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
+                                                                                                    
+fix         compact pending 2/4 · send a message for a safe point · else set evaluator.             
             verifyCommand                                                                           
                                                                                                     
-overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -458,20 +459,21 @@ why         ✓  met · turn 3 · 3m ago      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 evaluator   Verification \`bun run check\` did not pass: exit 1: 1 fail                               
             error: expected true                                                                    
-verify      $ bun run check                                                                         
+verify      $ bun run check                                                                copy     
             ✗ exit 1 · 3m ago                                                                       
             1 fail                                                                                  
             error: expected true                                                                    
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -505,16 +507,16 @@ why         ✓  met · turn 3 · 3m ago      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · elsewhere overflow — the fold opened (every foreign session paints; digits stay on the first four rows) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  10m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 evaluator   Evaluator: docs build still fails                                                       
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -528,16 +530,14 @@ why         ✓  met · turn 3 · 3m ago      done
             ✓  met · turn 4 · 2m ago      done                                                      
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
-elsewhere   6 other sessions holding live goals · hover a row to open its transcript                
-1           ●  brisk-falcon  v2/5  ship the deploy pipeline before f…                               
-2           ‖  quiet-otter  paused  audit the whole tui surface                                     
-3           ●  shy-heron  v3/5  map the snapshot states                                             
-4           ●  grand-oyster  v3/5  harden the 80 column floor                                       
-            ●  still-bison  v3/5  wheel pin on the dialog                                           
-            ●  ember-crab  v3/5  fold affordance coverage                                           
-            fold to 4                                                                               
-                                                                                                    
-                                                                                                    
+elsewhere   6 other sessions holding live goals · click a row to open its transcript                
+1           ●  brisk-falcon  v2/5  ship the deploy pipeline before f…                 → transcript  
+2           ‖  quiet-otter  paused  audit the whole tui surface                       → transcript  
+3           ●  shy-heron  v3/5  map the snapshot states                               → transcript  
+4           ●  grand-oyster  v3/5  harden the 80 column floor                         → transcript  
+            ●  still-bison  v3/5  wheel pin on the dialog                             → transcript  
+            ●  ember-crab  v3/5  fold affordance coverage                             → transcript  
+            fold to 4  click                                                                        
                                                                                                     
                                                                                                     
                                                                                                     
@@ -560,9 +560,11 @@ elsewhere   6 other sessions holding live goals · hover a row to open its trans
 
 exports[`full-frame snapshots (named layout states) StatusDialogBody · why ledger (each verdict row carries the commit sha it landed on) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 evaluator   Evaluator: docs build still fails                                                       
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -601,14 +603,12 @@ why         ✓  met · turn 1 · 26m ago · b1e4d7a      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · waiting (background work is holding evaluation back — the pill's fifth word) 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        waiting v3/5 ●●○○○ · 4 turns · 12m                                
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -636,7 +636,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · waitin
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · paused at the turn cap (exact remediation: clear or re-arm — never 'try again') 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        paused v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -666,7 +666,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · judged impossible (remediation rides two rows of the anchor budget) 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        impossible v3/5 ●●○○○ · 4 turns · 12m                             
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
@@ -696,10 +696,12 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · judged
 
 exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · paused at the turn cap (the dialog carries the same exact remedy as the card) 1`] = `
 "overview  ·  ledger  ·  dossier                                        paused  12m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 reason      Evaluator: docs build still fails                                                       
 fix         turn cap reached · /goal clear or set a new goal - a message will not extend it         
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
@@ -737,17 +739,17 @@ why         ✓  met · turn 3 · 3m ago      done
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
 "
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) StatusDialogBody · judged impossible (the dialog shows why, not a generic failure) 1`] = `
 "overview  ·  ledger  ·  dossier                                    impossible  12m · 4 turns · v3/5 
-goal        ship the release notes                                                                  
+                                                                                                    
+goal        ship the release notes                                                         copy     
 reason      Evaluator: docs build still fails                                                       
 fix         judged impossible · rephrase the condition, else /goal clear                            
 spend       278k in · 25k out · 96k cached · $0.42                                                  
+                                                                                                    
 loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
 objective   make every loop iteration visible at a glance                                           
 v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
@@ -759,8 +761,6 @@ trail       ✓✗✓✓✗   5 of 5 verdicts
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
             ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -826,11 +826,11 @@ why         ✓  met · turn 3 · 3m ago      done
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · context menu open — all six rows live 1`] = `
 "│  ◎ /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
-│  why        Evaluator: docs build still fails                                 
+│  why        Evaluator: docs build still fails       copy                      
 │   [details]   [clear goal]                            [esc]                   
 │  menu       copy condition                                                    
 │             copy evaluator reason                                             
@@ -860,7 +860,7 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · mono (NO_COLOR / TERM=dumb — weight and glyphs carry meaning) 1`] = `
 "│  * /goal-loop · v3/5                                                          
-│  condition  ship the release notes                                            
+│  condition  ship the release notes                  copy                      
 │  now        active v3/5 ##--- · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       x not met · this turn                                             
@@ -891,9 +891,9 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) LoopSectio
 pace        ~15m/iteration · ~45m left at this pace                                                 
 objective   make every loop iteration visible at a glance                                           
 v1          +  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall            
-|           | Added an 18-cell block progress bar.                                                  
+|           | Added an 18-cell block progress bar.                                          copy    
 v2          +  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
-|           | Trail renders up to 24 verdicts.                                                      
+|           | Trail renders up to 24 verdicts.                                              copy    
 now         *  v3 · active · 4 turns · 12m elapsed                                · last x this turn
 trail       +x++x   5 of 5 verdicts                                                                 
 why         +  met · turn 3 · 3m ago      done                                                      

@@ -70,7 +70,7 @@ describe("render script smoke tests", () => {
     expect(result.error).toBeUndefined()
     expect(result.status).toBe(0)
     expect(result.stdout).toContain("elsewhere")
-    expect(result.stdout).toContain("hover a row to open its transcript")
+    expect(result.stdout).toContain("click a row to open its transcript")
     expect(result.stdout).toContain("brisk-falcon")
   }, 30_000)
 

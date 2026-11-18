@@ -1232,7 +1232,7 @@ describe("cardWidth — the fluid card", () => {
     const fixed = await testRender(() => <HudCard goal={loopedGoal({ condition })} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} width={64} />, { width: 120, height: 24 })
     await fixed.renderOnce()
     const fixedFrame = fixed.captureCharFrame()
-    expect(fixedFrame).toContain("x".repeat(40) + "…")   // explicit override keeps the 64-cell budget: truncates
+    expect(fixedFrame).toContain("x".repeat(38) + "…")   // explicit override keeps the 64-cell budget: truncates (25-cell furniture incl. the always-mounted affordance cell)
     await fixed.renderer.destroy()
   })
 })
