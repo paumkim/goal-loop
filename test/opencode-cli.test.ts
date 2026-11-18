@@ -42,17 +42,23 @@ describe("opencodeCliGuide", () => {
     expect(guide).toContain("node_modules/@opencode/plugin/dist/tui/context.d.ts")
     expect(guide).toContain("SlotMap")
     expect(guide).toContain("session.composer.top")
-    // Headless verification route: opentui test renderer + tmux/PTY scrape of the real binary.
+    // Headless verification route: opentui test renderer + opencode-headless drive of the real binary.
     expect(guide).toContain("@opentui/core/testing")
     expect(guide).toContain("createTestRenderer")
     expect(guide).toContain("captureCharFrame()")
+    // The headless plugin is the sanctioned way to drive the installed binary; tmux is the fallback.
+    expect(guide).toContain("opencode-headless")
+    expect(guide).toContain("headless_start")
+    expect(guide).toContain("headless_capture")
+    expect(guide).toContain("headless_permission")
+    expect(guide).toContain("pty")
     expect(guide).toContain("tmux capture-pane -p")
+    expect(guide).not.toContain("no stable, documented tool")
     // Build/mount flow.
     expect(guide).toContain("Plugin.define")
     expect(guide).toContain("~/.config/opencode/opencode.jsonc")
-    // Report the layer each claim was verified at; the two honest limits.
+    // Report the layer each claim was verified at; string extraction remains the binary-truth route.
     expect(guide).toContain("binary / source / test-render / live TUI")
-    expect(guide).toContain("no stable, documented tool")
     expect(guide).toContain("string extraction from the binary is often the only source of truth")
     expect(guide).toContain("never commit to the host repo")
   })
