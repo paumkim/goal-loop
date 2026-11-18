@@ -2310,3 +2310,109 @@ describe("compaction-landed write-after-delete regression", () => {
     expect(h.storage.data.has(`goal/v1/${SID}`)).toBe(false)
   })
 })
+
+describe("arming-side no-new-gap gate (XLV)", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  /** Run one loop to LOOP_COMPLETE and leave its terminal record with a persisted ledger behind. */
+  const completeLoop = async (h: ReturnType<typeof harness>, objective: string) => {
+    await h.setLoop(objective)
+    h.verdicts.push(met("done"))
+    h.summaries.push("work done")
+    h.nextGoals.push("LOOP_COMPLETE")
+    await h.turn()
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+  }
+
+  test("a re-issued objective is refused at the initial arm: terminal record, explicit no-new-gap reason, notice, no kickoff prompt", async () => {
+    await completeLoop(h, "improve the parser")
+    const promptsBefore = h.calls.prompts.length
+    const noticesBefore = h.notices.length
+    await h.setLoop("improve the parser")
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toContain("no new gap")
+    expect(record.reason).toContain("improve the parser")
+    // The harness measured the refusal: an armed loop would have loopIteration 1 with an empty history.
+    expect(record.loopNotProgress).toBe(1)
+    expect(record.loopHistory).toHaveLength(0)
+    // The kickoff prompt must NOT be sent — arming was refused.
+    expect(h.calls.prompts.length).toBe(promptsBefore)
+    // The user is told, on the loop channel, with the same reason.
+    const refusal = h.notices.slice(noticesBefore).find((n) => n.kind === "loop")
+    expect(refusal?.level).toBe("warning")
+    expect(refusal?.title).toBe("Loop not armed: no new gap")
+    // The dossier can still see why: the record is terminal and carries the ledger.
+    expect(record.completedConditions).toContain("improve the parser")
+  })
+
+  test("normalization-insensitive exact repeat is refused (case and punctuation)", async () => {
+    await completeLoop(h, "improve the parser")
+    await h.setLoop("Improve the PARSER!")
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    expect(h.controller.get(SID)!.reason).toContain("no new gap")
+  })
+
+  test("a containment >= 0.7 near-duplicate is refused at the initial arm", async () => {
+    await completeLoop(h, "improve the parser")
+    await h.setLoop("improve the parser and do it again")
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    expect(h.controller.get(SID)!.reason).toContain("no new gap")
+  })
+
+  test("a genuinely new objective arms normally after a completed loop", async () => {
+    await completeLoop(h, "improve the parser")
+    const promptsBefore = h.calls.prompts.length
+    await h.setLoop("add fuzz coverage for the search index")
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(1)
+    expect(h.calls.prompts.length).toBe(promptsBefore + 1)
+  })
+
+  test("the gate is loop-only: a plain /goal with the same completed objective still arms", async () => {
+    await completeLoop(h, "improve the parser")
+    await h.setGoal("improve the parser")
+    expect(h.controller.get(SID)!.status).toBe("active")
+    expect(h.controller.get(SID)!.loopEnabled).toBeUndefined()
+  })
+
+  test("the refusal persists; the ledger survives storage", async () => {
+    await completeLoop(h, "improve the parser")
+    await h.setLoop("improve the parser")
+    const persisted = h.storage.data.get("goal/v1/ses_1") as { status: string; reason?: string; completedConditions?: string[] } | undefined
+    expect(persisted?.status).toBe("achieved")
+    expect(persisted?.reason).toContain("no new gap")
+    expect(persisted?.completedConditions).toContain("improve the parser")
+  })
+
+  test("cross-restart: a fresh controller's arm reads the durable ledger and refuses", async () => {
+    const storage = new MemoryStorage()
+    const h1 = harness({}, storage)
+    await h1.setLoop("improve the parser")
+    h1.verdicts.push(met("done"))
+    h1.summaries.push("work done")
+    h1.nextGoals.push("LOOP_COMPLETE")
+    await h1.turn()
+    const h2 = harness({}, storage)
+    expect(await h2.controller.restore()).toBe(0) // a terminal record is not adopted as a goal
+    const promptsBefore = h2.calls.prompts.length
+    await h2.setLoop("improve the parser")
+    const record = h2.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toContain("no new gap")
+    expect(record.completedConditions).toContain("improve the parser")
+    expect(h2.calls.prompts.length).toBe(promptsBefore)
+  })
+
+  test("after a refusal, a genuinely new objective still arms (the refusal does not wedge the session)", async () => {
+    await completeLoop(h, "improve the parser")
+    await h.setLoop("improve the parser")
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    await h.setLoop("tidy the changelog generator")
+    expect(h.controller.get(SID)!.status).toBe("active")
+  })
+})
