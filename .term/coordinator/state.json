@@ -3406,6 +3406,17 @@
       "submittedAt": "2026-11-18T20:10:12Z",
       "mergedAt": "2026-11-18T20:11:37Z",
       "mergedInto": "dev"
+    },
+    "stale-plain-goal-notes-strip": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/core/prompts.ts,src/index.ts,test/notes.test.ts,test/plugin.test.ts,SPEC.md",
+      "branch": "wt/stale-plain-goal-notes-strip",
+      "worktree": "worktrees/wt-stale-plain-goal-notes-strip",
+      "status": "done",
+      "createdAt": "2026-11-18T20:13:40Z",
+      "submittedAt": "2026-11-18T20:16:25Z",
+      "mergedAt": "2026-11-18T20:17:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
