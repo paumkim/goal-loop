@@ -3021,6 +3021,17 @@
       "submittedAt": "2026-11-18T04:47:56Z",
       "mergedAt": "2026-11-18T04:49:17Z",
       "mergedInto": "dev"
+    },
+    "live-tui-smoke": {
+      "agent": "inkling",
+      "paths": "scripts/live-smoke.ts,test/live-smoke.test.ts,SPEC.md,package.json",
+      "branch": "wt/live-tui-smoke",
+      "worktree": "worktrees/wt-live-tui-smoke",
+      "status": "done",
+      "createdAt": "2026-11-18T05:02:44Z",
+      "submittedAt": "2026-11-18T05:13:55Z",
+      "mergedAt": "2026-11-18T05:15:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
