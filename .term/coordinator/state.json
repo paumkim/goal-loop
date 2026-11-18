@@ -3483,6 +3483,17 @@
       "submittedAt": "2026-11-18T21:10:16Z",
       "mergedAt": "2026-11-18T21:11:41Z",
       "mergedInto": "dev"
+    },
+    "spec-reanchor-stale-claims": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,docs/runtime.html,README.md",
+      "branch": "wt/spec-reanchor-stale-claims",
+      "worktree": "worktrees/wt-spec-reanchor-stale-claims",
+      "status": "done",
+      "createdAt": "2026-11-18T21:14:49Z",
+      "submittedAt": "2026-11-18T21:20:46Z",
+      "mergedAt": "2026-11-18T21:22:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
