@@ -74,6 +74,46 @@ describe("render script smoke tests", () => {
     expect(result.stdout).toContain("brisk-falcon")
   }, 30_000)
 
+  test("render-pill.tsx prints the breath frames; only the leading dot cell drifts across phases", () => {
+    const result = run("scripts/render-pill.tsx", ["--width=80"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("working · phase 0")
+    expect(result.stdout).toContain("checking · phase 2")
+    expect(result.stdout).toContain("checking · resting")
+    expect(result.stdout).toContain("waiting · static hollow")
+    expect(result.stdout).toContain("paused · static bars")
+    expect(result.stdout).toContain("stuck · static solid")
+    expect(result.stdout).toContain("achieved · terminal acknowledgment")
+    const rows = result.stdout.split("\n")
+    const pick = (label: string) => {
+      const i = rows.findIndex((l) => l.includes(`--- ${label} ---`))
+      expect(i).toBeGreaterThanOrEqual(0)
+      return rows[i + 1]!
+    }
+    const p0 = pick("working · phase 0")
+    for (const p of [1, 2, 3]) {
+      const row = pick(`working · phase ${p}`)
+      expect([...row].slice(0, 3).join("")).toBe([...p0].slice(0, 3).join(""))
+      expect([...row].slice(4).join("")).toBe([...p0].slice(4).join(""))
+    }
+    // the reduced-motion frame is the resting face, byte-identical to phase 1
+    expect(pick("working · resting (reduced motion)")).toBe(pick("working · phase 1"))
+  }, 30_000)
+
+  test("render-pill.tsx --mono demotes the whole family to ASCII — glyphs and words carry the state", () => {
+    const result = run("scripts/render-pill.tsx", ["--width=80", "--mono"])
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("> * goal active")
+    expect(result.stdout).toContain("> o goal waiting")
+    expect(result.stdout).toContain("> | goal paused")
+    expect(result.stdout).toContain("> + goal achieved")
+    expect(result.stdout).not.toContain("●")
+    expect(result.stdout).not.toContain("\u25CB")
+    expect(result.stdout).not.toContain("‖")
+  }, 30_000)
+
   test("render-dialog.tsx paints the verify section (the gate's output on screen, ASCII glyph under mono)", () => {
     const color = run("scripts/render-dialog.tsx", ["--width=80"])
     expect(color.error).toBeUndefined()
