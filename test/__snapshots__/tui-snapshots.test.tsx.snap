@@ -7,7 +7,7 @@ exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
-│   [details]   [pin]   [clear goal]                    [esc]                   
+│  [details]   [pin]   [clear goal]                      [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -35,7 +35,7 @@ exports[`full-frame snapshots (named layout states) HudCard · evaluating (the e
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -65,7 +65,7 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 │  why        Evaluator: docs build still fails                                 
 │  fix        compact pending 2/4 · send a message for a safe                   
 │             point · else set evaluator.verifyCommand                          
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -94,7 +94,7 @@ exports[`full-frame snapshots (named layout states) HudCard · failed (failure i
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
 │  fix        provider error - /goal clear to reset                             
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -613,7 +613,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · waitin
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -643,7 +643,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 │  why        Evaluator: docs build still fails                                 
 │  fix        turn cap reached · /goal clear or set a new goal                  
 │             - a message will not extend it                                    
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -673,7 +673,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · judged
 │  why        Evaluator: docs build still fails                                 
 │  fix        judged impossible · rephrase the condition, else                  
 │             /goal clear                                                       
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 
@@ -831,7 +831,7 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails       copy                      
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
 │  menu       copy condition                                                    
 │             copy evaluator reason                                             
 │             copy latest summary                                               
@@ -865,7 +865,7 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       x not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
-│   [details]   [clear goal]                            [esc]                   
+│  [details]   [clear goal]                              [esc]                  
                                                                                 
                                                                                 
                                                                                 

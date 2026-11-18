@@ -4862,8 +4862,6 @@ var HudButton = (props) => {
     _$setProp3(_el$5, "flexDirection", "row");
     _$setProp3(_el$5, "flexShrink", 0);
     _$setProp3(_el$5, "height", 1);
-    _$setProp3(_el$5, "paddingLeft", 1);
-    _$setProp3(_el$5, "paddingRight", 1);
     _$setProp3(_el$5, "onMouseOver", () => setHovered(true));
     _$setProp3(_el$5, "onMouseOut", () => setHovered(false));
     _$setProp3(_el$5, "onMouseUp", (event) => {
@@ -4877,15 +4875,19 @@ var HudButton = (props) => {
     _$setProp3(_el$6, "wrapMode", "none");
     _$insert3(_el$6, () => `[${props.label}]`);
     _$effect3((_p$) => {
-      var _v$4 = !mono() && hovered() ? props.theme.background?.raised?.high : undefined, _v$5 = hovered() ? props.theme.text.base : props.theme.text.muted, _v$6 = mono() && hovered() ? TextAttributes3.BOLD : undefined;
-      _v$4 !== _p$.e && (_p$.e = _$setProp3(_el$5, "backgroundColor", _v$4, _p$.e));
-      _v$5 !== _p$.t && (_p$.t = _$setProp3(_el$6, "fg", _v$5, _p$.t));
-      _v$6 !== _p$.a && (_p$.a = _$setProp3(_el$6, "attributes", _v$6, _p$.a));
+      var _v$4 = props.flushLeft === true ? 0 : 1, _v$5 = props.flushRight === true ? 0 : 1, _v$6 = !mono() && hovered() ? props.theme.background?.raised?.high : undefined, _v$7 = hovered() ? props.theme.text.base : props.theme.text.muted, _v$8 = mono() && hovered() ? TextAttributes3.BOLD : undefined;
+      _v$4 !== _p$.e && (_p$.e = _$setProp3(_el$5, "paddingLeft", _v$4, _p$.e));
+      _v$5 !== _p$.t && (_p$.t = _$setProp3(_el$5, "paddingRight", _v$5, _p$.t));
+      _v$6 !== _p$.a && (_p$.a = _$setProp3(_el$5, "backgroundColor", _v$6, _p$.a));
+      _v$7 !== _p$.o && (_p$.o = _$setProp3(_el$6, "fg", _v$7, _p$.o));
+      _v$8 !== _p$.i && (_p$.i = _$setProp3(_el$6, "attributes", _v$8, _p$.i));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
-      a: undefined
+      a: undefined,
+      o: undefined,
+      i: undefined
     });
     return _el$5;
   })();
@@ -4922,11 +4924,11 @@ var HudMenuRow = (props) => {
     _$setProp3(_el$9, "wrapMode", "none");
     _$insert3(_el$9, () => props.text);
     _$effect3((_p$) => {
-      var _v$7 = !mono() && active() ? props.theme.background?.raised?.high : undefined, _v$8 = props.theme.text.faint, _v$9 = fg(), _v$0 = mono() && active() ? TextAttributes3.BOLD : undefined;
-      _v$7 !== _p$.e && (_p$.e = _$setProp3(_el$7, "backgroundColor", _v$7, _p$.e));
-      _v$8 !== _p$.t && (_p$.t = _$setProp3(_el$8, "fg", _v$8, _p$.t));
-      _v$9 !== _p$.a && (_p$.a = _$setProp3(_el$9, "fg", _v$9, _p$.a));
-      _v$0 !== _p$.o && (_p$.o = _$setProp3(_el$9, "attributes", _v$0, _p$.o));
+      var _v$9 = !mono() && active() ? props.theme.background?.raised?.high : undefined, _v$0 = props.theme.text.faint, _v$1 = fg(), _v$10 = mono() && active() ? TextAttributes3.BOLD : undefined;
+      _v$9 !== _p$.e && (_p$.e = _$setProp3(_el$7, "backgroundColor", _v$9, _p$.e));
+      _v$0 !== _p$.t && (_p$.t = _$setProp3(_el$8, "fg", _v$0, _p$.t));
+      _v$1 !== _p$.a && (_p$.a = _$setProp3(_el$9, "fg", _v$1, _p$.a));
+      _v$10 !== _p$.o && (_p$.o = _$setProp3(_el$9, "attributes", _v$10, _p$.o));
       return _p$;
     }, {
       e: undefined,
@@ -5084,9 +5086,9 @@ var HudCard = (props) => {
         _$setProp3(_el$27, "wrapMode", "none");
         _$insert3(_el$27, () => formatSpend(spend(), spendWidth(width())));
         _$effect3((_p$) => {
-          var _v$20 = theme().text.faint, _v$21 = theme().text.muted;
-          _v$20 !== _p$.e && (_p$.e = _$setProp3(_el$25, "fg", _v$20, _p$.e));
-          _v$21 !== _p$.t && (_p$.t = _$setProp3(_el$27, "fg", _v$21, _p$.t));
+          var _v$22 = theme().text.faint, _v$23 = theme().text.muted;
+          _v$22 !== _p$.e && (_p$.e = _$setProp3(_el$25, "fg", _v$22, _p$.e));
+          _v$23 !== _p$.t && (_p$.t = _$setProp3(_el$27, "fg", _v$23, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -5148,9 +5150,9 @@ var HudCard = (props) => {
                   })()
                 }), null);
                 _$effect3((_p$) => {
-                  var _v$25 = theme().text.faint, _v$26 = theme().text.muted;
-                  _v$25 !== _p$.e && (_p$.e = _$setProp3(_el$34, "fg", _v$25, _p$.e));
-                  _v$26 !== _p$.t && (_p$.t = _$setProp3(_el$36, "fg", _v$26, _p$.t));
+                  var _v$27 = theme().text.faint, _v$28 = theme().text.muted;
+                  _v$27 !== _p$.e && (_p$.e = _$setProp3(_el$34, "fg", _v$27, _p$.e));
+                  _v$28 !== _p$.t && (_p$.t = _$setProp3(_el$36, "fg", _v$28, _p$.t));
                   return _p$;
                 }, {
                   e: undefined,
@@ -5189,10 +5191,10 @@ var HudCard = (props) => {
                 })()
               }), null);
               _$effect3((_p$) => {
-                var _v$22 = theme().text.faint, _v$23 = barFg(), _v$24 = trailFg();
-                _v$22 !== _p$.e && (_p$.e = _$setProp3(_el$29, "fg", _v$22, _p$.e));
-                _v$23 !== _p$.t && (_p$.t = _$setProp3(_el$31, "fg", _v$23, _p$.t));
-                _v$24 !== _p$.a && (_p$.a = _$setProp3(_el$32, "fg", _v$24, _p$.a));
+                var _v$24 = theme().text.faint, _v$25 = barFg(), _v$26 = trailFg();
+                _v$24 !== _p$.e && (_p$.e = _$setProp3(_el$29, "fg", _v$24, _p$.e));
+                _v$25 !== _p$.t && (_p$.t = _$setProp3(_el$31, "fg", _v$25, _p$.t));
+                _v$26 !== _p$.a && (_p$.a = _$setProp3(_el$32, "fg", _v$26, _p$.a));
                 return _p$;
               }, {
                 e: undefined,
@@ -5223,9 +5225,9 @@ var HudCard = (props) => {
         _$setProp3(_el$42, "flexGrow", 1);
         _$insert3(_el$42, () => h().card);
         _$effect3((_p$) => {
-          var _v$27 = theme().text.faint, _v$28 = theme().text.muted;
-          _v$27 !== _p$.e && (_p$.e = _$setProp3(_el$40, "fg", _v$27, _p$.e));
-          _v$28 !== _p$.t && (_p$.t = _$setProp3(_el$42, "fg", _v$28, _p$.t));
+          var _v$29 = theme().text.faint, _v$30 = theme().text.muted;
+          _v$29 !== _p$.e && (_p$.e = _$setProp3(_el$40, "fg", _v$29, _p$.e));
+          _v$30 !== _p$.t && (_p$.t = _$setProp3(_el$42, "fg", _v$30, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -5255,11 +5257,11 @@ var HudCard = (props) => {
         _$setProp3(_el$47, "wrapMode", "none");
         _$insert3(_el$47, () => `${entry().verdict.replace("_", " ")}${turnsSince() === 0 ? " \xB7 this turn" : ` \xB7 ${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}`);
         _$effect3((_p$) => {
-          var _v$29 = theme().text.faint, _v$30 = verdictColor(theme(), entry(), mono()), _v$31 = TextAttributes3.BOLD, _v$32 = theme().text.muted;
-          _v$29 !== _p$.e && (_p$.e = _$setProp3(_el$44, "fg", _v$29, _p$.e));
-          _v$30 !== _p$.t && (_p$.t = _$setProp3(_el$46, "fg", _v$30, _p$.t));
-          _v$31 !== _p$.a && (_p$.a = _$setProp3(_el$46, "attributes", _v$31, _p$.a));
-          _v$32 !== _p$.o && (_p$.o = _$setProp3(_el$47, "fg", _v$32, _p$.o));
+          var _v$31 = theme().text.faint, _v$32 = verdictColor(theme(), entry(), mono()), _v$33 = TextAttributes3.BOLD, _v$34 = theme().text.muted;
+          _v$31 !== _p$.e && (_p$.e = _$setProp3(_el$44, "fg", _v$31, _p$.e));
+          _v$32 !== _p$.t && (_p$.t = _$setProp3(_el$46, "fg", _v$32, _p$.t));
+          _v$33 !== _p$.a && (_p$.a = _$setProp3(_el$46, "attributes", _v$33, _p$.a));
+          _v$34 !== _p$.o && (_p$.o = _$setProp3(_el$47, "fg", _v$34, _p$.o));
           return _p$;
         }, {
           e: undefined,
@@ -5304,17 +5306,17 @@ var HudCard = (props) => {
               }) : null;
             })(), null);
             _$effect3((_p$) => {
-              var _v$33 = copyable() ? (event) => {
+              var _v$35 = copyable() ? (event) => {
                 if (event.button !== 0)
                   return;
                 event.stopPropagation();
                 props.onCopyReason?.(whyReason());
-              } : undefined, _v$34 = copyable() ? () => setWhyHovered(true) : undefined, _v$35 = copyable() ? () => setWhyHovered(false) : undefined, _v$36 = theme().text.faint, _v$37 = theme().text.muted;
-              _v$33 !== _p$.e && (_p$.e = _$setProp3(_el$48, "onMouseUp", _v$33, _p$.e));
-              _v$34 !== _p$.t && (_p$.t = _$setProp3(_el$48, "onMouseOver", _v$34, _p$.t));
-              _v$35 !== _p$.a && (_p$.a = _$setProp3(_el$48, "onMouseOut", _v$35, _p$.a));
-              _v$36 !== _p$.o && (_p$.o = _$setProp3(_el$49, "fg", _v$36, _p$.o));
-              _v$37 !== _p$.i && (_p$.i = _$setProp3(_el$51, "fg", _v$37, _p$.i));
+              } : undefined, _v$36 = copyable() ? () => setWhyHovered(true) : undefined, _v$37 = copyable() ? () => setWhyHovered(false) : undefined, _v$38 = theme().text.faint, _v$39 = theme().text.muted;
+              _v$35 !== _p$.e && (_p$.e = _$setProp3(_el$48, "onMouseUp", _v$35, _p$.e));
+              _v$36 !== _p$.t && (_p$.t = _$setProp3(_el$48, "onMouseOver", _v$36, _p$.t));
+              _v$37 !== _p$.a && (_p$.a = _$setProp3(_el$48, "onMouseOut", _v$37, _p$.a));
+              _v$38 !== _p$.o && (_p$.o = _$setProp3(_el$49, "fg", _v$38, _p$.o));
+              _v$39 !== _p$.i && (_p$.i = _$setProp3(_el$51, "fg", _v$39, _p$.i));
               return _p$;
             }, {
               e: undefined,
@@ -5346,9 +5348,9 @@ var HudCard = (props) => {
         _$setProp3(_el$55, "flexGrow", 1);
         _$insert3(_el$55, () => fix().text);
         _$effect3((_p$) => {
-          var _v$38 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$39 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
-          _v$38 !== _p$.e && (_p$.e = _$setProp3(_el$53, "fg", _v$38, _p$.e));
-          _v$39 !== _p$.t && (_p$.t = _$setProp3(_el$55, "fg", _v$39, _p$.t));
+          var _v$40 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono()), _v$41 = fixAccentColor(theme(), fix().tone === "error" ? "error" : "warning", mono());
+          _v$40 !== _p$.e && (_p$.e = _$setProp3(_el$53, "fg", _v$40, _p$.e));
+          _v$41 !== _p$.t && (_p$.t = _$setProp3(_el$55, "fg", _v$41, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -5369,6 +5371,7 @@ var HudCard = (props) => {
       get mono() {
         return mono();
       },
+      flushLeft: true,
       get onPress() {
         return props.onDetails;
       }
@@ -5413,6 +5416,7 @@ var HudCard = (props) => {
       get mono() {
         return mono();
       },
+      flushRight: true,
       get onPress() {
         return props.onClose;
       }
@@ -5582,18 +5586,18 @@ var HudCard = (props) => {
       }
     }), null);
     _$effect3((_p$) => {
-      var _v$1 = width(), _v$10 = borderColor(), _v$11 = theme().background?.raised?.high, _v$12 = stateColor(), _v$13 = TextAttributes3.BOLD, _v$14 = theme().text.faint, _v$15 = theme().text.base, _v$16 = theme().text.faint, _v$17 = stateColor(), _v$18 = TextAttributes3.BOLD, _v$19 = theme().text.muted;
-      _v$1 !== _p$.e && (_p$.e = _$setProp3(_el$0, "width", _v$1, _p$.e));
-      _v$10 !== _p$.t && (_p$.t = _$setProp3(_el$0, "borderColor", _v$10, _p$.t));
-      _v$11 !== _p$.a && (_p$.a = _$setProp3(_el$0, "backgroundColor", _v$11, _p$.a));
-      _v$12 !== _p$.o && (_p$.o = _$setProp3(_el$10, "fg", _v$12, _p$.o));
-      _v$13 !== _p$.i && (_p$.i = _$setProp3(_el$10, "attributes", _v$13, _p$.i));
-      _v$14 !== _p$.n && (_p$.n = _$setProp3(_el$12, "fg", _v$14, _p$.n));
-      _v$15 !== _p$.s && (_p$.s = _$setProp3(_el$14, "fg", _v$15, _p$.s));
-      _v$16 !== _p$.h && (_p$.h = _$setProp3(_el$16, "fg", _v$16, _p$.h));
-      _v$17 !== _p$.r && (_p$.r = _$setProp3(_el$18, "fg", _v$17, _p$.r));
-      _v$18 !== _p$.d && (_p$.d = _$setProp3(_el$18, "attributes", _v$18, _p$.d));
-      _v$19 !== _p$.l && (_p$.l = _$setProp3(_el$19, "fg", _v$19, _p$.l));
+      var _v$11 = width(), _v$12 = borderColor(), _v$13 = theme().background?.raised?.high, _v$14 = stateColor(), _v$15 = TextAttributes3.BOLD, _v$16 = theme().text.faint, _v$17 = theme().text.base, _v$18 = theme().text.faint, _v$19 = stateColor(), _v$20 = TextAttributes3.BOLD, _v$21 = theme().text.muted;
+      _v$11 !== _p$.e && (_p$.e = _$setProp3(_el$0, "width", _v$11, _p$.e));
+      _v$12 !== _p$.t && (_p$.t = _$setProp3(_el$0, "borderColor", _v$12, _p$.t));
+      _v$13 !== _p$.a && (_p$.a = _$setProp3(_el$0, "backgroundColor", _v$13, _p$.a));
+      _v$14 !== _p$.o && (_p$.o = _$setProp3(_el$10, "fg", _v$14, _p$.o));
+      _v$15 !== _p$.i && (_p$.i = _$setProp3(_el$10, "attributes", _v$15, _p$.i));
+      _v$16 !== _p$.n && (_p$.n = _$setProp3(_el$12, "fg", _v$16, _p$.n));
+      _v$17 !== _p$.s && (_p$.s = _$setProp3(_el$14, "fg", _v$17, _p$.s));
+      _v$18 !== _p$.h && (_p$.h = _$setProp3(_el$16, "fg", _v$18, _p$.h));
+      _v$19 !== _p$.r && (_p$.r = _$setProp3(_el$18, "fg", _v$19, _p$.r));
+      _v$20 !== _p$.d && (_p$.d = _$setProp3(_el$18, "attributes", _v$20, _p$.d));
+      _v$21 !== _p$.l && (_p$.l = _$setProp3(_el$19, "fg", _v$21, _p$.l));
       return _p$;
     }, {
       e: undefined,
