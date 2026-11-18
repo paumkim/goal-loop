@@ -180,7 +180,7 @@ describe("GoalController", () => {
     await h.turn()
     expect(h.calls.synthetic).toHaveLength(1)
     expect(h.calls.synthetic[0].text).toContain("2 tests still fail")
-    expect(h.calls.synthetic[0].resume).toBeUndefined()
+    expect(h.calls.synthetic[0].resume).toBe(true)
     expect(h.controller.get(SID)?.turns).toBe(1)
 
     h.verdicts.push(met("all 40 tests pass"))
