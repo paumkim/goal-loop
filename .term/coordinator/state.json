@@ -2994,8 +2994,11 @@
       "paths": "src/tui.tsx,src/core/hud.ts,scripts/render-pill.tsx,test/tui-hud.test.tsx,test/render-scripts.test.ts,test/pill-timer.test.tsx,SPEC.md,dist/",
       "branch": "wt/drop-pill-caret",
       "worktree": "worktrees/wt-drop-pill-caret",
-      "status": "claimed",
-      "createdAt": "2026-11-18T03:50:37Z"
+      "status": "done",
+      "createdAt": "2026-11-18T03:50:37Z",
+      "submittedAt": "2026-11-18T04:07:31Z",
+      "mergedAt": "2026-11-18T04:12:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
