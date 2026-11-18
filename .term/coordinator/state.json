@@ -2972,6 +2972,30 @@
       "submittedAt": "2026-11-18T03:38:07Z",
       "mergedAt": "2026-11-18T03:39:29Z",
       "mergedInto": "dev"
+    },
+    "tui-indication-alignment": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/hud-card.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
+      "branch": "wt/tui-indication-alignment",
+      "worktree": "worktrees/wt-tui-indication-alignment",
+      "status": "done",
+      "createdAt": "2026-11-18T03:41:58Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T03:56:13Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "submittedAt": "2026-11-18T03:56:13Z",
+      "mergedAt": "2026-11-18T03:58:57Z",
+      "mergedInto": "dev"
+    },
+    "drop-pill-caret": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/hud.ts,scripts/render-pill.tsx,test/tui-hud.test.tsx,test/render-scripts.test.ts,test/pill-timer.test.tsx,SPEC.md,dist/",
+      "branch": "wt/drop-pill-caret",
+      "worktree": "worktrees/wt-drop-pill-caret",
+      "status": "claimed",
+      "createdAt": "2026-11-18T03:50:37Z"
     }
   },
   "mergeLock": null,
