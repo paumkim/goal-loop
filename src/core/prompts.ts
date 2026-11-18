@@ -118,6 +118,15 @@ const TREE_TRUTH: ReadonlyArray<string> = [
   `equivalent). What these show is the ground truth; the summary is only a hint.`,
 ]
 
+/** Audit-and-stop lines, shared by every prompt that arms or re-arms a loop iteration. Kept byte-identical. */
+const AUDIT_AND_STOP: ReadonlyArray<string> = [
+  `Before working, audit the armed condition against CURRENT HEAD:`,
+  `(i) enumerate what the condition requires — files, tests, gates, docs;`,
+  `(ii) check each requirement against the tree at current HEAD using only fresh command output produced this turn — never summaries;`,
+  `(iii) if every requirement already holds, respond exactly: Already satisfied at HEAD <sha>. Evidence: <fresh command output>. No new work is produced by this iteration. — and stop; do not redo or fake the work.`,
+  `If something is missing, proceed and show evidence.`,
+]
+
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
 function loopPreamble(loop: LoopPreamble): string[] {
   return [
@@ -169,11 +178,7 @@ export function loopContinuation(
     ``,
     ...TREE_TRUTH,
     ``,
-    `Before working, audit the armed condition against CURRENT HEAD:`,
-    `(i) enumerate what the condition requires — files, tests, gates, docs;`,
-    `(ii) check each requirement against the tree at current HEAD using only fresh command output produced this turn — never summaries;`,
-    `(iii) if every requirement already holds, respond exactly: Already satisfied at HEAD <sha>. Evidence: <fresh command output>. No new work is produced by this iteration. — and stop; do not redo or fake the work.`,
-    `If something is missing, proceed and show evidence.`,
+    ...AUDIT_AND_STOP,
     ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
@@ -199,6 +204,8 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
     historyBlock(input.history),
     ``,
     ...TREE_TRUTH,
+    ``,
+    ...AUDIT_AND_STOP,
     ``,
     `The compaction cut the thread, not the loop: keep working toward the armed condition. After each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Do not wait for a user message.`,
     `</goal-loop-reanchor>`,

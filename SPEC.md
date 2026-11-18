@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=64 tests=1722 -->
+<!-- spec-check files=64 tests=1723 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6983,3 +6983,16 @@ Audit at HEAD `a2bc694` (fresh output this turn). XLV honest limit (e) re-ratifi
 Marker decision (stated plainly; the armed condition said "marker unchanged"). A new test moves the enforced count, and `check:spec` fails unless the first-occurrence marker matches the tree in the same commit, so the enforced (first-occurrence) SPEC marker advances `files=64 tests=1721` → `files=64 tests=1722` here; `files=64` is unchanged. The literal reading (marker untouched while a test was added) was impossible, and the no-test alternative was rejected. Historical section-local markers above keep their own counts.
 
 Honest limits. (a) Pin scope is the same-session fresh-arm boundary — the only place a different record could seed from, since `arm()` reads only the in-memory prior and the durable record for this session; cross-session leakage is structurally impossible today (sessions share no records) and remains XLV honest limit (a)'s territory. (b) The pin asserts absence of seeding, not the gate decision; the gate is pinned by the eight XLV cases and the prompt-hook path by XLVI. (c) No source change; `dist/tui.js` byte-unchanged; the only files edited are `test/loop.test.ts` and this note. (d) Test count moved **1721 → 1722**; packed files stay **64**.
+
+## Workstream LVII — the post-compaction re-anchor carries the audit-and-stop clause (2026-11-18)
+
+Armed condition of this iteration (verbatim from the loop): "Teach the post-compaction re-anchor the audit-and-stop clause: loopReanchor must direct the model to re-read the tree, audit the armed condition against HEAD, and respond exactly Already satisfied at HEAD <sha> when it holds — pin with a test; SPEC note; check green; marker same commit"
+
+Audit at HEAD `22c5e1d` (fresh output this turn). `loopReanchor` already emitted the shared `TREE_TRUTH` re-read mandate, but not the audit-and-stop block that `loopContinuation` carries: after a compaction the model was told to "keep working toward the armed condition" with no instruction to audit that condition against HEAD first, so an already-satisfied armed condition would be re-worked after every compaction — the exact failure the `loopContinuation` audit-and-stop clause exists to prevent, on the one path (post-compaction) where the model's context had just been replaced by a lossy summary.
+
+1. `src/core/prompts.ts` — the audit-and-stop lines extracted into one byte-identical shared constant `AUDIT_AND_STOP`, used by both `loopContinuation` and `loopReanchor` (same extraction pattern as `TREE_TRUTH`). `loopReanchor` now emits it after `TREE_TRUTH` and before the keep-working line, so the re-anchored model re-reads the tree, audits the armed condition against CURRENT HEAD, and answers exactly `Already satisfied at HEAD <sha>` when it holds. No other prompt text changed; `loopContinuation` output is byte-identical to before the extraction.
+2. `test/loop.test.ts` — one new case in the `describe("loop prompts")` block pinning that the re-anchor carries the tree re-read mandate (`git log --oneline -5`), the `audit the armed condition against CURRENT HEAD` line, the `Already satisfied at HEAD <sha>` wording, the `If something is missing, proceed and show evidence.` fallback, and that the audit block precedes the keep-working line. Loop suite 145 → 146 pass / 0 fail.
+
+Marker decision. A new test moves the enforced count, and `check:spec` fails unless the first-occurrence marker matches the tree in the same commit, so the enforced (first-occurrence) SPEC marker advances `files=64 tests=1722` → `files=64 tests=1723` here; `files=64` is unchanged. Historical section-local markers keep their own counts.
+
+Honest limits. (a) Prompt-text only; no controller change — the re-anchor is still queued (`resume: false`), never a steer, and still fires only for live active loops. (b) The pin asserts text presence and ordering, not model behavior; the evaluator rubric remains the judge of an "Already satisfied at HEAD" claim. (c) No new exports; `dist/tui.js` byte-unchanged. (d) Test count moved **1722 → 1723**; packed files stay **64**.

@@ -1216,6 +1216,16 @@ describe("loop prompts", () => {
     expect(text).toContain("(none — this is the first iteration)")
   })
 
+  test("loopReanchor requires the already-satisfied audit before working", () => {
+    const text = Prompt.loopReanchor({ iteration: 3, maxLoops: 5, objective: "the object", condition: "next thing", history: [entry] })
+    // Audit-and-stop: after a compaction the model must re-read the tree, audit the armed condition against HEAD, and stop when it holds.
+    expect(text).toContain("git log --oneline -5")
+    expect(text).toContain("audit the armed condition against CURRENT HEAD")
+    expect(text).toContain("Already satisfied at HEAD <sha>")
+    expect(text).toContain("If something is missing, proceed and show evidence.")
+    expect(text.indexOf("audit the armed condition")).toBeLessThan(text.indexOf("The compaction cut the thread"))
+  })
+
   test("loopContinuation tells the armed iteration to re-read repo state before trusting the armed summary", () => {
     const text = Prompt.loopContinuation({ iteration: 3, maxLoops: 5, condition: "next thing", previousSummary: "prev summary", reason: "r" }, { required: false, branch: "dev", reason: "t" })
     // Re-arm hygiene: ground truth is the tree (log/status/worktree), not the summary.
