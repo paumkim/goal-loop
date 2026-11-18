@@ -216,3 +216,72 @@ describe("docs symbol-export contract", () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * The docs inline-citation contract.
+ *
+ * The 2026-11-17 re-anchor made docs/*.html cite `file · symbol` instead of file:line, but until this
+ * pin nothing checked those citations: a citation could name a nonexistent module, or a symbol that no
+ * longer exists, and no gate would notice. The path contract above pins that the cited file exists; the
+ * symbol-export contract pins the `Exports:` card lines; this pins the inline `file · symbol` citations
+ * in prose — every problem a reader would hit when following them.
+ *
+ * Scope and semantics (deliberately textual, not an AST walk):
+ *   - Only citations inside <code>...</code> tags whose file part starts with `src/` or `packages/` and
+ *     carries a source extension are in scope. UI copy with a middle dot ("loop · vN/M", footer texts)
+ *     cites no module and is ignored.
+ *   - The citation's symbol portion is split on `·` and `/`; each alternative (`evaluate()/finish()`) and
+ *     each additional `·`-separated symbol (`types.ts · A · B`, all drawn from the cited module) is a
+ *     claim against the same module. A trailing `()` on a part is dropped.
+ *   - A part may be dotted (`GoalStore.pruneAllDirectories`, `Runtime.epoch`); every dotted component
+ *     must appear in the cited module's source. This is the strongest honest check available without
+ *     resolving class membership per construct: each component of the citation must at least be present
+ *     in the module, so a renamed or deleted symbol cannot hide behind its qualifier.
+ *   - The cited file must exist (root-relative to this repo).
+ *
+ * Adding a pass means the citation is checkable; a false offender means the citation is written in a
+ * shape this test cannot attribute to the module — reword the citation to `file · symbol` form, not
+ * the other way round.
+ */
+describe("docs inline-citation contract", () => {
+  test("every `file · symbol` citation in docs/*.html resolves (file exists; symbol components appear in that module)", () => {
+    const codePattern = /<code>([^<]+)<\/code>/g
+    const citationPattern = /((?:src|packages)\/[^<·]+?\.(?:tsx|ts|js|mjs))\s*·\s*([^<]+)/
+    const componentPattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+    const offenders: string[] = []
+    for (const file of docHtml) {
+      const text = readFileSync(join(ROOT, file), "utf8")
+      for (const codeMatch of text.matchAll(codePattern)) {
+        const inner = codeMatch[1] as string
+        const citation = inner.match(citationPattern)
+        if (!citation) continue // no file · symbol citation inside this code tag
+        const module = citation[1] as string
+        const modulePath = join(ROOT, module)
+        if (!existsSync(modulePath)) {
+          offenders.push(`${file}: cited module does not exist: ${module} (in <code>${inner.trim()}</code>)`)
+          continue
+        }
+        const source = readFileSync(modulePath, "utf8")
+        for (const rawPart of (citation[2] as string).split("·")) {
+          for (const rawAlternative of rawPart.split("/")) {
+            const part = rawAlternative.trim().replace(/\(\)/g, "").trim()
+            if (!part || part === ".") continue
+            for (const component of part.split(".")) {
+              const name = component.trim()
+              if (!name) continue
+              if (!componentPattern.test(name)) {
+                offenders.push(`${file}: ${module} -> ${part} (component ${JSON.stringify(name)} is not a plausible symbol; reword the citation)`)
+                continue
+              }
+              if (!source.includes(name)) {
+                offenders.push(`${file}: ${module} -> ${part} (component ${name} does not appear in the module's source)`)
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
