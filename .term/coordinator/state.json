@@ -3043,6 +3043,23 @@
       "submittedAt": "2026-11-18T05:39:49Z",
       "mergedAt": "2026-11-18T05:41:10Z",
       "mergedInto": "dev"
+    },
+    "accordion-pill": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,test/tui-pill-card-coherence.test.tsx,SPEC.md,src/hud-card.tsx",
+      "branch": "wt/accordion-pill",
+      "worktree": "worktrees/wt-accordion-pill",
+      "status": "done",
+      "createdAt": "2026-11-18T05:44:15Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T05:51:47Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/tui-hud-width-measure.test.tsx"
+      ],
+      "submittedAt": "2026-11-18T05:51:47Z",
+      "mergedAt": "2026-11-18T05:53:02Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
