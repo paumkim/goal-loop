@@ -2906,8 +2906,18 @@
       "paths": "src/tui.tsx,src/core/storage-pull.ts,test,SPEC.md,dist,docs",
       "branch": "wt/tui-storage-convergence-fallback",
       "worktree": "worktrees/wt-tui-storage-convergence-fallback",
-      "status": "claimed",
-      "createdAt": "2026-11-18T02:11:57Z"
+      "status": "done",
+      "createdAt": "2026-11-18T02:11:57Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T02:35:08Z",
+      "forcedScopeFiles": [
+        "README.md",
+        "src/core/mirror.ts",
+        "src/index.ts"
+      ],
+      "submittedAt": "2026-11-18T02:35:08Z",
+      "mergedAt": "2026-11-18T02:41:04Z",
+      "mergedInto": "dev"
     },
     "tui-pill-timer-continuity": {
       "agent": "orchestrator",
@@ -2919,6 +2929,14 @@
       "submittedAt": "2026-11-18T02:32:29Z",
       "mergedAt": "2026-11-18T02:33:52Z",
       "mergedInto": "dev"
+    },
+    "tui-dialog-gap-closure": {
+      "agent": "inkling",
+      "paths": "src/status-dialog.tsx,src/tui-history.tsx",
+      "branch": "wt/tui-dialog-gap-closure",
+      "worktree": "worktrees/wt-tui-dialog-gap-closure",
+      "status": "claimed",
+      "createdAt": "2026-11-18T02:37:52Z"
     }
   },
   "mergeLock": null,
