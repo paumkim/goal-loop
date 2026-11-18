@@ -23,6 +23,15 @@ if (!result.success) {
   for (const log of result.logs) console.error(log)
   process.exit(1)
 }
+
+// Bun writes module-path comments relative to the outdir, so a build from a worktree emits
+// `// ../../node_modules/...` while a build from the repo root emits `// node_modules/...`.
+// Normalize to outdir-independent paths so the artifact is byte-stable no matter where it is built.
+const outFile = path.join(root, "dist", "tui.js")
+const built = await Bun.file(outFile).text()
+const normalized = built.replace(/^\/\/ (?:[.\/]*\/)*node_modules\//gm, "// node_modules/")
+await Bun.write(outFile, normalized)
+
 for (const output of result.outputs) console.log(`built ${path.relative(root, output.path)} (${output.size} bytes)`)
 
 await Bun.write(
