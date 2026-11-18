@@ -166,6 +166,13 @@ export const boundCompletedConditions = (entries: readonly string[]): { retained
 }
 
 /**
+ * Bounds the controller's in-memory map of terminal goal records. Durable storage is the source of truth:
+ * a record evicted here is still served by `peekSnapshot` from storage, and reappears only on the next commit.
+ * Live records (active/paused) are never evicted.
+ */
+export const MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES = 20
+
+/**
  * Terminal goal records kept at plugin storage per directory. A goal that finished (achieved/impossible/cleared/failed)
  * leaves its record behind for `spend`/`peekSnapshot` to answer about; an unbounded backlog of those is dead weight.
  * Live records (active/paused) are never pruned. See `selectTerminalRecordsToPrune`.
