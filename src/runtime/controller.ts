@@ -311,6 +311,8 @@ export class GoalController {
 
   /** Final-usage snapshots in flight; dispose() awaits them so the last record write is durable before flush. */
   private readonly pendingUsage = new Set<Promise<void>>()
+  /** Fire-and-forget terminal-record prunes kicked off by `finish()`; awaited by `dispose()` so flush sees their removals. */
+  private readonly pendingPrunes = new Set<Promise<void>>()
 
   /** Re-anchor texts awaiting the next model request; one-shot, volatile (a restart drops a pending one — the next landing re-arms it). */
   private readonly pendingAnchors = new Map<string, string>()
@@ -716,7 +718,7 @@ export class GoalController {
     this.disposed = true
     for (const runtime of this.runtimes.values()) this.invalidate(runtime)
     // Let final-usage snapshots land first; their commits enqueue store writes that flush() must see.
-    await Promise.allSettled([...this.pendingUsage])
+    await Promise.allSettled([...this.pendingUsage, ...this.pendingPrunes])
     await this.deps.store.flush()
   }
 
@@ -1434,6 +1436,26 @@ export class GoalController {
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
     const saved = this.commit(record)
+    // Opportunistic storage hygiene: once the just-finished record is durable, prune this directory's other
+    // terminal records under the same age/count caps the restore path applies — no restart required.
+    // Fire-and-forget: the finish path never waits on the prune (the returned promise is exactly `saved`).
+    // Best-effort: a prune failure is logged with the session id and changes nothing. Live records and other
+    // directories' records are untouched by construction; the report is counts only.
+    const prune = saved.then(() => this.deps.store.pruneTerminal(this.deps.directory, this.deps.clock.now()))
+    const settle = prune.then((report) => {
+      if (report.scanned > 0)
+        this.deps.log.info("terminal goal records at plugin storage", {
+          scanned: report.scanned,
+          pruned: report.pruned,
+          kept: report.scanned - report.pruned,
+          droppedAged: report.droppedAged,
+          droppedBeyondCap: report.droppedBeyondCap,
+          unstampedKept: report.unstampedKept,
+          ...(report.readOnly ? { readOnly: true } : {}),
+        })
+    }).catch((error) => this.deps.log.warn("terminal goal record prune failed", { sessionID: record.sessionID, error: errorMessage(error) }))
+    this.pendingPrunes.add(settle)
+    void settle.finally(() => this.pendingPrunes.delete(settle))
     const usageSnapshot = this.deps.session
       .usage(record.sessionID)
       .then((usage) => {
