@@ -692,9 +692,10 @@ export class GoalController {
    */
   async restore(): Promise<number> {
     // Restore-time hygiene: prune terminal records past the explicit age/count cap before adopting live ones.
-    // Best-effort — a prune failure must never block a restore. The report is a log line with counts only;
-    // the dropped records are gone by design and are never implied retained.
-    const prune = await this.deps.store.pruneTerminal(this.deps.directory, this.deps.clock.now()).catch((error) => {
+    // Covers every directory at plugin storage (per-directory caps), not just this controller's own — a restart
+    // anywhere cleans up after every project. Best-effort — a prune failure must never block a restore. The
+    // report is a log line with counts only; the dropped records are gone by design and are never implied retained.
+    const prune = await this.deps.store.pruneAllDirectories(this.deps.clock.now()).catch((error) => {
       this.deps.log.warn("terminal goal record prune failed", { error: errorMessage(error) })
       return undefined
     })
@@ -707,6 +708,7 @@ export class GoalController {
         droppedBeyondCap: prune.droppedBeyondCap,
         unstampedKept: prune.unstampedKept,
         ...(prune.readOnly ? { readOnly: true } : {}),
+        directories: prune.directories,
       })
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))

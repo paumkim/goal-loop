@@ -1037,14 +1037,38 @@ describe("terminal record pruning at restore", () => {
     expect(storage.data.has(`goal/v1/${records[0]!.sessionID}`)).toBe(true) // newest kept
   })
 
-  test("records of another directory are never pruned", async () => {
+  test("restore prunes foreign-directory terminal records under the same caps; foreign live records survive", async () => {
     const storage = new MemoryStorage()
     const foreign = { ...terminalRecord("achieved", NOW - 400 * DAY), directory: "C:/work/elsewhere" }
-    await seedTerminal(storage, [foreign])
+    const foreignLive = { ...terminalRecord("paused", NOW - 400 * DAY), directory: "C:/work/elsewhere" }
+    delete (foreignLive as { endedAt?: number }).endedAt
+    const foreignFresh = { ...terminalRecord("cleared", NOW - 2 * DAY), directory: "C:/work/elsewhere" }
+    await seedTerminal(storage, [foreign, foreignLive, foreignFresh])
     const h = harness({}, storage)
     h.clock.t = NOW
     expect(await h.controller.restore()).toBe(0)
-    expect(storage.data.has(`goal/v1/${foreign.sessionID}`)).toBe(true)
+    expect(storage.data.has(`goal/v1/${foreign.sessionID}`)).toBe(false) // aged foreign terminal record pruned at restore
+    expect(storage.data.has(`goal/v1/${foreignLive.sessionID}`)).toBe(true) // live records are never pruned, whatever the directory
+    expect(storage.data.has(`goal/v1/${foreignFresh.sessionID}`)).toBe(true) // foreign fresh record kept
+  })
+
+  test("the count cap applies per directory independently across the whole store", async () => {
+    const storage = new MemoryStorage()
+    const dir = "C:/work/elsewhere"
+    const local = Array.from({ length: MAX_TERMINAL_RECORD_ENTRIES + 5 }, (_, i) => terminalRecord("achieved", NOW - i * 60_000))
+    const foreignDirs = Array.from({ length: 3 }, (_, i) =>
+      ({ ...terminalRecord("achieved", NOW - i * 60_000), directory: dir }),
+    )
+    await seedTerminal(storage, [...local, ...foreignDirs])
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    expect(await h.controller.restore()).toBe(0)
+    const localKeys = local.filter((r) => storage.data.has(`goal/v1/${r.sessionID}`))
+    const foreignKeys = foreignDirs.filter((r) => storage.data.has(`goal/v1/${r.sessionID}`))
+    expect(localKeys).toHaveLength(MAX_TERMINAL_RECORD_ENTRIES) // oldest local fresh records dropped
+    expect(foreignKeys).toHaveLength(3) // the other directory keeps all of its own records
+    expect(storage.data.has(`goal/v1/${local.at(-1)!.sessionID}`)).toBe(false) // oldest local one dropped
+    expect(storage.data.has(`goal/v1/${local[0]!.sessionID}`)).toBe(true) // newest local kept
   })
 
   test("unstamped terminal records are kept (age can never be judged) and reported, not pruned", async () => {
