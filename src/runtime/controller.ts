@@ -96,6 +96,8 @@ interface Runtime {
   armUsage?: UsageSnapshot
   /** Cumulative usage reading from the previous evaluation turn (arm-time reading seeds it). Runtime-local like armUsage; a restored runtime drops it, so the first recorded verdict after a restore carries no turn spend — never estimated. */
   turnUsage?: UsageSnapshot
+  /** Last host-measured figures, computed at evaluation time: spend vs the record baseline and the estimated prompt-context size. Carried by every `changed` snapshot this session emits until recomputed (compaction landing drops or replaces the context half — it describes a context the host just replaced). Runtime-local like armUsage; a restored runtime drops it. */
+  figures?: { readonly spend?: UsageSnapshot; readonly contextSize?: number }
 }
 
 const HISTORY = 20
@@ -246,7 +248,7 @@ export class GoalController {
   }
 
   /** Reset a pending boundary request to its just-landed form: bookkeeping cleared, misses reset, fresh requests re-enabled. */
-  private landPending(record: GoalRecord, pending: LoopCompactState): void {
+  private landPending(record: GoalRecord, pending: LoopCompactState, freshContextSize?: number): void {
     record.loopCompact = {
       ...pending,
       landedAt: this.deps.clock.now(),
@@ -255,6 +257,16 @@ export class GoalController {
       stalenessUnknown: undefined,
       unwillingWarned: undefined,
     }
+    // The cached context figure described the pre-compaction context the host just replaced. Replace it
+    // with the fresh post-landing estimate when the caller has one, else drop it — the meter renders
+    // nothing until the next evaluation measures the new context instead of painting a lie.
+    const runtime = this.runtimes.get(record.sessionID)
+    if (!runtime?.figures) return
+    const figures = runtime.figures
+    runtime.figures =
+      freshContextSize !== undefined && Number.isFinite(freshContextSize) && freshContextSize >= 0
+        ? { ...figures, contextSize: freshContextSize }
+        : { ...(figures.spend !== undefined ? { spend: figures.spend } : {}) }
   }
 
   /**
@@ -686,11 +698,18 @@ export class GoalController {
     const sessionID = record.sessionID
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
-    const usage = await session.usage(sessionID).catch(() => undefined)
+    const [usage, contextSize] = await Promise.all([
+      session.usage(sessionID).catch(() => undefined),
+      this.contextSize(sessionID),
+    ])
     // Per-turn spend: the delta against the previous reading (the arm-time reading seeds the first turn). Runtime-local — after a restore there is no previous reading, so the verdict carries no spend rather than a cumulative-since-set number.
     const turnSpend = usage && runtime.turnUsage ? diffUsage(usage, runtime.turnUsage) : undefined
     if (usage) runtime.turnUsage = usage
     if (this.stale(record, runtime, epoch)) return
+    runtime.figures = {
+      ...(usage ? { spend: diffUsage(usage, record.baseline) } : {}),
+      ...(contextSize !== undefined ? { contextSize } : {}),
+    }
     const abort = new AbortController()
     runtime.abort = abort
     runtime.evaluating = true
@@ -1089,7 +1108,7 @@ export class GoalController {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
         if (this.stale(record, runtime, epoch)) return
         if (this.contextDropped(pending, size)) {
-          this.landPending(record, pending)
+          this.landPending(record, pending, size)
           skipRequest = "landed"
           await this.commit(record)
           this.notify(sessionID, "compact", "success", "Compaction landed", `Context dropped to ~${size} tokens at the loop boundary.`)
@@ -1364,8 +1383,11 @@ export class GoalController {
         void this.commit(record)
         // The commit-path `changed` event carries no spend (a usage() call per event is not affordable on the
         // hot path), and terminal goals are never re-pulled by the TUI's stale-chrome guard. Emit one more
-        // snapshot with the settled spend so an open card/dialog shows the final figure immediately.
-        this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID, diffUsage(usage, record.baseline)))
+        // snapshot with the settled spend so an open card/dialog shows the final figure immediately. The
+        // context figure rides along from the runtime (the last measured estimate — the authoritative fresh
+        // number for the finished record); absent a runtime it is simply omitted, never fabricated.
+        const figures = this.runtimes.get(record.sessionID)?.figures
+        this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID, diffUsage(usage, record.baseline), figures?.contextSize))
       })
       .catch((error) => this.deps.log.warn("final spend snapshot failed", { sessionID: record.sessionID, error: errorMessage(error) }))
       .finally(() => this.pendingUsage.delete(usageSnapshot))
@@ -1488,7 +1510,8 @@ export class GoalController {
 
   private emit(record: GoalRecord) {
     if (this.goals.get(record.sessionID) !== record) return
-    this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID))
+    const figures = this.runtimes.get(record.sessionID)?.figures
+    this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID, figures?.spend, figures?.contextSize))
   }
 
   private notify(sessionID: string, kind: NoticeKind, level: NoticeLevel, title: string, body: string) {
