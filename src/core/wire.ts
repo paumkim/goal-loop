@@ -35,6 +35,31 @@ const isString = (value: unknown): value is string => typeof value === "string"
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean"
 const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
 
+/**
+ * Recursively drops keys whose value is `undefined`, rebuilding plain objects and mapping arrays. `null`
+ * is a JSON value and passes through; class instances and non-plain objects pass through untouched (they
+ * are not JSON-representable anyway, and rebuilding them would silently change their identity).
+ *
+ * Why this exists: an RPC payload must be strict JSON by the time it reaches the host. A write like
+ * `record.pauseCause = undefined` leaves the key PRESENT with an undefined value, which survives
+ * `structuredClone` and which the host rejects anywhere in the payload with
+ * `SchemaError(Expected JSON value at …)` — the mechanism behind every `goal/get` HTTP 500 and every dropped
+ * `changed` event observed on opencode 2.3.2 (2026-11-17/2026-11-18). Central sanitizing at the emit
+ * choke point means no future `= undefined` write can reintroduce the defect.
+ */
+export const stripUndefined = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stripUndefined)
+  if (isRecord(value) && value.constructor === Object) {
+    const out: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry === undefined) continue
+      out[key] = stripUndefined(entry)
+    }
+    return out
+  }
+  return value
+}
+
 const GOAL_STATUSES: ReadonlySet<string> = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"])
 const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user"])
 const isPauseCause = (value: unknown): value is PauseCause => isString(value) && PAUSE_CAUSES.has(value)
