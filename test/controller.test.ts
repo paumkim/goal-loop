@@ -7,7 +7,7 @@ import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
-import { MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
+import { MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES, MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
 
 const SID = "ses_1"
 const DIR = "C:/work/project"
@@ -965,6 +965,76 @@ describe("RPC payload strict-JSON hygiene (host JSONValue gate)", () => {
       expect(() => assertJsonSafe(change, `changes[${i}]`)).not.toThrow()
     }
     expect(h.changes.length).toBeGreaterThan(0)
+  })
+})
+
+describe("in-memory terminal-goal retention", () => {
+  const NOW = 2_000_000_000_000
+  const DAY = 24 * 60 * 60 * 1000
+
+  const finishFresh = async (h: ReturnType<typeof harness>, sid: string) => {
+    await h.controller.command({ sessionID: sid, text: `goal for ${sid}`, delivery: "steer" })
+    h.verdicts.push(met())
+    h.controller.onExecutionStarted(sid)
+    h.controller.onToolCalled(sid)
+    await h.controller.onExecutionSucceeded(sid)
+    await flush()
+  }
+
+  test("the in-memory terminal map is bounded by the retention cap, oldest first; live records never evicted; storage untouched", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    const total = MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES + 1
+    const sids = Array.from({ length: total }, (_, i) => `ses_mem_${i}`)
+    for (const sid of sids) {
+      await finishFresh(h, sid)
+      h.clock.t += DAY
+    }
+    // live record stays in memory regardless of the cap
+    await h.controller.command({ sessionID: "ses_mem_live", text: "live thing", delivery: "steer" })
+    expect(h.controller.get("ses_mem_live")?.status).toBe("active")
+    // oldest terminal record evicted from memory
+    expect(h.controller.get("ses_mem_0")).toBeUndefined()
+    // the newest MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES terminal records stay in memory
+    for (const sid of sids.slice(1)) expect(h.controller.get(sid)?.status).toBe("achieved")
+    expect(h.controller.list().filter((s) => s.status === "achieved")).toHaveLength(MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES)
+    // durable storage is the source of truth — the evicted record is still stored, count caps untouched
+    expect(sids.every((sid) => storage.data.has(`goal/v1/${sid}`))).toBe(true)
+    // peek serves the evicted terminal record from storage (same record, no fabrication)
+    const peeked = await h.controller.peekSnapshot("ses_mem_0")
+    expect(peeked?.status).toBe("achieved")
+    expect(peeked?.turns).toBe(1)
+    expect(peeked?.sessionID).toBe("ses_mem_0")
+  })
+
+  test("live records are never evicted, even when the terminal cap is exceeded", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    await h.controller.command({ sessionID: "ses_live_only", text: "live thing", delivery: "steer" })
+    const total = MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES + 5
+    for (let i = 0; i < total; i++) {
+      await finishFresh(h, `ses_mem_pad_${i}`)
+      h.clock.t += DAY
+    }
+    expect(h.controller.get("ses_live_only")?.status).toBe("active")
+    expect(h.controller.list().map((s) => s.sessionID)).toContain("ses_live_only")
+    // the live record is also served by peek from memory
+    const peeked = await h.controller.peekSnapshot("ses_live_only")
+    expect(peeked?.status).toBe("active")
+  })
+
+  test("no terminal records are evicted at or below the cap", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    const total = MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES
+    for (let i = 0; i < total; i++) {
+      await finishFresh(h, `ses_mem_under_${i}`)
+      h.clock.t += DAY
+    }
+    for (let i = 0; i < total; i++) expect(h.controller.get(`ses_mem_under_${i}`)?.status).toBe("achieved")
   })
 })
 
