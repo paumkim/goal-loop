@@ -3148,6 +3148,25 @@
       "submittedAt": "2026-11-18T10:12:54Z",
       "mergedAt": "2026-11-18T10:37:42Z",
       "mergedInto": "dev"
+    },
+    "live-completion-release-verify": {
+      "agent": "inkling-2-small-free",
+      "paths": "SPEC.md,src,test,docs",
+      "branch": "wt/live-completion-release-verify",
+      "worktree": "worktrees/wt-live-completion-release-verify",
+      "status": "claimed",
+      "createdAt": "2026-11-18T10:45:32Z"
+    },
+    "opencode-cli-headless": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-cli.ts,test/opencode-cli.test.ts,README.md,docs/core.html,AGENTS.md,SPEC.md,docs/changelog.html",
+      "branch": "wt/opencode-cli-headless",
+      "worktree": "worktrees/wt-opencode-cli-headless",
+      "status": "done",
+      "createdAt": "2026-11-18T11:16:58Z",
+      "submittedAt": "2026-11-18T11:24:25Z",
+      "mergedAt": "2026-11-18T11:25:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
