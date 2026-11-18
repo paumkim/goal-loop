@@ -303,13 +303,17 @@ export default Plugin.define({
         const maxLoops = goalLoop.maxLoops ?? config.maxLoops
         // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
         // command path would have delivered, with the directive token and the count removed from the objective.
+        const originalPrompt = event.prompt.text
         event.prompt.text = directivePrompt(objective, commit, { iteration: 1, maxLoops, objective, history: [] })
-        await controller.armFromPrompt({
+        const armed = await controller.armFromPrompt({
           sessionID: event.sessionID,
           condition: objective,
           maxLoops,
           ...(goalLoop.invalidCount !== undefined ? { invalidCount: goalLoop.invalidCount } : {}),
         })
+        // Workstream XLV: the arming-side no-new-gap gate refused (a terminal record was persisted and the notice
+        // fired). Restore the user's own line — the directive would tell the model a loop is armed when it is not.
+        if (armed.status !== "active") event.prompt.text = originalPrompt
         return
       }
       controller.onUserPrompt(event.sessionID)
