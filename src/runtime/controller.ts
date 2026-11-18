@@ -186,7 +186,9 @@ export class GoalController {
       ...structuredClone(record),
       elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt,
       evaluating: runtime?.evaluating ?? false,
-      waiting: runtime?.deferredSince !== undefined,
+      // Runtime truth wins when present (fresh); the persisted `waitingSince` covers restored waits whose
+      // runtime was rebuilt empty by a restart/plugin reload.
+      waiting: runtime?.deferredSince !== undefined || record.waitingSince !== undefined,
       ...(spend ? { spend } : {}),
       ...(typeof compactAtTokens === "number" && compactAtTokens > 0 ? { compactAtTokens } : {}),
       ...(contextSize !== undefined && Number.isFinite(contextSize) && contextSize >= 0 ? { contextSize } : {}),
@@ -582,7 +584,7 @@ export class GoalController {
     if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
     const carried = runtime.carriedToolCalls
     runtime.carriedToolCalls = 0
-    runtime.deferredSince = undefined
+    this.clearDeferred(runtime, record)
     await this.evaluate(record, runtime, epoch, tools + carried)
   }
 
@@ -660,7 +662,10 @@ export class GoalController {
     Object.assign(record, { turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
     this.goals.set(record.sessionID, record)
     // Create the runtime up front so tool events that arrive before the first execution-end are counted.
-    this.runtime(record.sessionID)
+    const runtime = this.runtime(record.sessionID)
+    // Revive the persisted deferral so a restart/plugin reload mid-wait paints `waiting` again (and the
+    // drain path, check-in math and `waitedMs` all see the original start) instead of forgetting the wait.
+    if (record.waitingSince !== undefined) runtime.deferredSince = record.waitingSince
     // Adoption normalizes in memory only; no commit here. Writing the stored record on a read/adopt path is
     // what zeroed turns/baseline for other processes sharing the storage; the next real commit persists the
     // normalized state (the record's JSON differs from the no-op cache marker anyway, since adopt mutates
@@ -1236,7 +1241,12 @@ export class GoalController {
     runtime.iterationDeferred = true
     const firstDefer = runtime.deferredSince === undefined
     runtime.deferredSince ??= clock.now()
-    if (firstDefer) this.emit(record)
+    if (firstDefer) {
+      // Persist the deferral on the record so a restart/plugin reload restores the `waiting` paint instead of
+      // forgetting it mid-wait; commit also emits the snapshot the pill and mirror paint from.
+      record.waitingSince = runtime.deferredSince
+      void this.commit(record)
+    }
     if (config.checkinMinutes === 0 || record.checkins >= config.maxIdleCheckins) return
     const interval = config.checkinMinutes * 60_000 * Math.min(2 ** record.checkins, 4)
     const due = (runtime.lastCheckinAt ?? runtime.deferredSince) + interval
@@ -1285,7 +1295,7 @@ export class GoalController {
       if (!work || work.subagents + work.shells > 0) continue
       const carried = runtime.carriedToolCalls
       runtime.carriedToolCalls = 0
-      runtime.deferredSince = undefined
+      this.clearDeferred(runtime, record)
       const epoch = ++runtime.epoch
       try {
         await this.evaluate(record, runtime, epoch, carried)
@@ -1439,15 +1449,19 @@ export class GoalController {
 
   /**
    * Deferred background-wait state must not survive resume, failure, interrupt, pause or finish.
-   * `waiting` rides the snapshot off `deferredSince`; several interrupt paths flip it with no record
-   * mutation for commit() to notice, so announce the flip when one actually happened.
+   * `waiting` rides the snapshot off the runtime `deferredSince` and its persisted twin `waitingSince`;
+   * several interrupt paths flip it with no record mutation, so drop the twin and announce the flip when
+   * one actually happened.
    */
   private clearDeferred(runtime: Runtime, record?: GoalRecord) {
-    const wasWaiting = runtime.deferredSince !== undefined
+    const wasWaiting = runtime.deferredSince !== undefined || record?.waitingSince !== undefined
     runtime.deferredSince = undefined
     runtime.carriedToolCalls = 0
     runtime.lastCheckinAt = undefined
-    if (wasWaiting && record && this.goals.get(record.sessionID) === record) this.emit(record)
+    if (!wasWaiting) return
+    const ours = record !== undefined && this.goals.get(record.sessionID) === record
+    if (record && record.waitingSince !== undefined) delete record.waitingSince
+    if (ours) void this.commit(record)
   }
 
   private invalidate(runtime: Runtime) {
