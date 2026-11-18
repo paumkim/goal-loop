@@ -3231,6 +3231,17 @@
       "submittedAt": "2026-11-18T16:08:23Z",
       "mergedAt": "2026-11-18T16:09:52Z",
       "mergedInto": "dev"
+    },
+    "verdict-history-retention": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/core/types.ts,src/runtime/controller.ts,src/core/dossier.ts,src/core/dossier-seal.ts,src/core/hud.ts,src/tui-history.tsx,test/loop.test.ts,test/verdict-history-retention.test.ts,dist/tui.js,SPEC.md,docs/changelog.html,docs/runtime.html",
+      "branch": "wt/verdict-history-retention",
+      "worktree": "worktrees/wt-verdict-history-retention",
+      "status": "done",
+      "createdAt": "2026-11-18T16:22:17Z",
+      "submittedAt": "2026-11-18T16:29:26Z",
+      "mergedAt": "2026-11-18T16:30:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
