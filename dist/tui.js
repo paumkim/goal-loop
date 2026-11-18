@@ -2628,9 +2628,9 @@ var LoopSection = (props) => {
         _$setProp(_el$27, "wrapMode", "none");
         _$insert(_el$27, () => `~${formatTokens(s().peak)} peak \xB7 arm sizes, oldest${ascii() ? "->" : "\u2192"}newest`);
         _$effect((_p$) => {
-          var _v$19 = theme().text.base, _v$20 = theme().text.faint;
-          _v$19 !== _p$.e && (_p$.e = _$setProp(_el$26, "fg", _v$19, _p$.e));
-          _v$20 !== _p$.t && (_p$.t = _$setProp(_el$27, "fg", _v$20, _p$.t));
+          var _v$20 = theme().text.base, _v$21 = theme().text.faint;
+          _v$20 !== _p$.e && (_p$.e = _$setProp(_el$26, "fg", _v$20, _p$.e));
+          _v$21 !== _p$.t && (_p$.t = _$setProp(_el$27, "fg", _v$21, _p$.t));
           return _p$;
         }, {
           e: undefined,
@@ -2789,11 +2789,11 @@ var LoopSection = (props) => {
               return () => _c$5() ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`;
             })());
             _$effect((_p$) => {
-              var _v$21 = theme().text.muted, _v$22 = colorFor(theme(), entry(), mono()), _v$23 = TextAttributes.BOLD, _v$24 = theme().text.faint;
-              _v$21 !== _p$.e && (_p$.e = _$setProp(_el$33, "fg", _v$21, _p$.e));
-              _v$22 !== _p$.t && (_p$.t = _$setProp(_el$35, "fg", _v$22, _p$.t));
-              _v$23 !== _p$.a && (_p$.a = _$setProp(_el$35, "attributes", _v$23, _p$.a));
-              _v$24 !== _p$.o && (_p$.o = _$setProp(_el$36, "fg", _v$24, _p$.o));
+              var _v$22 = theme().text.muted, _v$23 = colorFor(theme(), entry(), mono()), _v$24 = TextAttributes.BOLD, _v$25 = theme().text.faint;
+              _v$22 !== _p$.e && (_p$.e = _$setProp(_el$33, "fg", _v$22, _p$.e));
+              _v$23 !== _p$.t && (_p$.t = _$setProp(_el$35, "fg", _v$23, _p$.t));
+              _v$24 !== _p$.a && (_p$.a = _$setProp(_el$35, "attributes", _v$24, _p$.a));
+              _v$25 !== _p$.o && (_p$.o = _$setProp(_el$36, "fg", _v$25, _p$.o));
               return _p$;
             }, {
               e: undefined,
@@ -2893,15 +2893,17 @@ var LoopSection = (props) => {
       nowMs
     }), null);
     _$effect((_p$) => {
-      var _v$16 = theme().text.base, _v$17 = TextAttributes.BOLD, _v$18 = theme().text.base;
-      _v$16 !== _p$.e && (_p$.e = _$setProp(_el$8, "fg", _v$16, _p$.e));
-      _v$17 !== _p$.t && (_p$.t = _$setProp(_el$8, "attributes", _v$17, _p$.t));
-      _v$18 !== _p$.a && (_p$.a = _$setProp(_el$11, "fg", _v$18, _p$.a));
+      var _v$16 = props.marginTop, _v$17 = theme().text.base, _v$18 = TextAttributes.BOLD, _v$19 = theme().text.base;
+      _v$16 !== _p$.e && (_p$.e = _$setProp(_el$6, "marginTop", _v$16, _p$.e));
+      _v$17 !== _p$.t && (_p$.t = _$setProp(_el$8, "fg", _v$17, _p$.t));
+      _v$18 !== _p$.a && (_p$.a = _$setProp(_el$8, "attributes", _v$18, _p$.a));
+      _v$19 !== _p$.o && (_p$.o = _$setProp(_el$11, "fg", _v$19, _p$.o));
       return _p$;
     }, {
       e: undefined,
       t: undefined,
-      a: undefined
+      a: undefined,
+      o: undefined
     });
     return _el$6;
   })();
@@ -2984,12 +2986,12 @@ var WhyLedger = (props) => {
               }
             }) : null, null);
             _$effect((_p$) => {
-              var _v$25 = colorFor(theme(), entry, mono()), _v$26 = TextAttributes.BOLD, _v$27 = theme().text.muted, _v$28 = furnitureWidth(), _v$29 = theme().text.base;
-              _v$25 !== _p$.e && (_p$.e = _$setProp(_el$38, "fg", _v$25, _p$.e));
-              _v$26 !== _p$.t && (_p$.t = _$setProp(_el$38, "attributes", _v$26, _p$.t));
-              _v$27 !== _p$.a && (_p$.a = _$setProp(_el$39, "fg", _v$27, _p$.a));
-              _v$28 !== _p$.o && (_p$.o = _$setProp(_el$39, "width", _v$28, _p$.o));
-              _v$29 !== _p$.i && (_p$.i = _$setProp(_el$40, "fg", _v$29, _p$.i));
+              var _v$26 = colorFor(theme(), entry, mono()), _v$27 = TextAttributes.BOLD, _v$28 = theme().text.muted, _v$29 = furnitureWidth(), _v$30 = theme().text.base;
+              _v$26 !== _p$.e && (_p$.e = _$setProp(_el$38, "fg", _v$26, _p$.e));
+              _v$27 !== _p$.t && (_p$.t = _$setProp(_el$38, "attributes", _v$27, _p$.t));
+              _v$28 !== _p$.a && (_p$.a = _$setProp(_el$39, "fg", _v$28, _p$.a));
+              _v$29 !== _p$.o && (_p$.o = _$setProp(_el$39, "width", _v$29, _p$.o));
+              _v$30 !== _p$.i && (_p$.i = _$setProp(_el$40, "fg", _v$30, _p$.i));
               return _p$;
             }, {
               e: undefined,
@@ -3162,10 +3164,10 @@ var HistoryBlock = (props) => {
         _$setProp(_el$57, "flexGrow", 1);
         _$insert(_el$57, () => `last ${entry().verdict.replace("_", " ")} (turn ${entry().turn}) \xB7 ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"} \xB7 ${countsText()} \xB7 ${elapsed()} elapsed${streakSuffix()}`);
         _$effect((_p$) => {
-          var _v$30 = colorFor(theme(), entry(), mono()), _v$31 = TextAttributes.BOLD, _v$32 = theme().text.base;
-          _v$30 !== _p$.e && (_p$.e = _$setProp(_el$56, "fg", _v$30, _p$.e));
-          _v$31 !== _p$.t && (_p$.t = _$setProp(_el$56, "attributes", _v$31, _p$.t));
-          _v$32 !== _p$.a && (_p$.a = _$setProp(_el$57, "fg", _v$32, _p$.a));
+          var _v$31 = colorFor(theme(), entry(), mono()), _v$32 = TextAttributes.BOLD, _v$33 = theme().text.base;
+          _v$31 !== _p$.e && (_p$.e = _$setProp(_el$56, "fg", _v$31, _p$.e));
+          _v$32 !== _p$.t && (_p$.t = _$setProp(_el$56, "attributes", _v$32, _p$.t));
+          _v$33 !== _p$.a && (_p$.a = _$setProp(_el$57, "fg", _v$33, _p$.a));
           return _p$;
         }, {
           e: undefined,
@@ -3191,6 +3193,7 @@ var HistoryBlock = (props) => {
       },
       nowMs
     }), null);
+    _$effect((_$p) => _$setProp(_el$50, "marginTop", props.marginTop, _$p));
     return _el$50;
   })();
 };
@@ -3607,68 +3610,86 @@ var StatusDialogBody = (props) => {
         return run(theme().text.base, false, "word");
     }
   };
+  const stripRow = (goalSnap) => (() => {
+    var _el$16 = _$createElement2("box"), _el$17 = _$createElement2("text"), _el$19 = _$createElement2("text"), _el$21 = _$createElement2("box"), _el$22 = _$createElement2("text"), _el$23 = _$createElement2("text"), _el$24 = _$createTextNode2(` \xB7 `), _el$25 = _$createTextNode2(` turn`);
+    _$insertNode2(_el$16, _el$17);
+    _$insertNode2(_el$16, _el$19);
+    _$insertNode2(_el$16, _el$21);
+    _$insertNode2(_el$16, _el$22);
+    _$insertNode2(_el$16, _el$23);
+    _$setProp2(_el$16, "flexDirection", "row");
+    _$setProp2(_el$16, "gap", 2);
+    _$insert2(_el$16, () => viewTab("overview"), _el$17);
+    _$insertNode2(_el$17, _$createTextNode2(`\xB7`));
+    _$setProp2(_el$17, "wrapMode", "none");
+    _$insert2(_el$16, () => viewTab("ledger"), _el$19);
+    _$insertNode2(_el$19, _$createTextNode2(`\xB7`));
+    _$setProp2(_el$19, "wrapMode", "none");
+    _$insert2(_el$16, () => viewTab("dossier"), _el$21);
+    _$setProp2(_el$21, "flexGrow", 1);
+    _$insert2(_el$22, () => goalSnap.status);
+    _$insertNode2(_el$23, _el$24);
+    _$insertNode2(_el$23, _el$25);
+    _$insert2(_el$23, () => formatDurationCoarse(props.elapsedMs()), _el$24);
+    _$insert2(_el$23, () => goalSnap.turns, _el$25);
+    _$insert2(_el$23, () => goalSnap.turns === 1 ? "" : "s", null);
+    _$insert2(_el$23, () => loopPosition(goalSnap), null);
+    _$insert2(_el$23, (() => {
+      var _c$2 = _$memo2(() => !!goalSnap.evaluating);
+      return () => _c$2() ? " \xB7 checking" : goalSnap.waiting ? " \xB7 waiting" : "";
+    })(), null);
+    _$effect2((_p$) => {
+      var _v$0 = theme().text.faint, _v$1 = theme().text.faint, _v$10 = stateColor(), _v$11 = TextAttributes2.BOLD, _v$12 = theme().text.muted;
+      _v$0 !== _p$.e && (_p$.e = _$setProp2(_el$17, "fg", _v$0, _p$.e));
+      _v$1 !== _p$.t && (_p$.t = _$setProp2(_el$19, "fg", _v$1, _p$.t));
+      _v$10 !== _p$.a && (_p$.a = _$setProp2(_el$22, "fg", _v$10, _p$.a));
+      _v$11 !== _p$.o && (_p$.o = _$setProp2(_el$22, "attributes", _v$11, _p$.o));
+      _v$12 !== _p$.i && (_p$.i = _$setProp2(_el$23, "fg", _v$12, _p$.i));
+      return _p$;
+    }, {
+      e: undefined,
+      t: undefined,
+      a: undefined,
+      o: undefined,
+      i: undefined
+    });
+    return _el$16;
+  })();
   return (() => {
-    var _el$16 = _$createElement2("box");
-    _$setProp2(_el$16, "flexDirection", "column");
-    _$setProp2(_el$16, "gap", 0);
-    _$insert2(_el$16, _$createComponent2(Show2, {
+    var _el$26 = _$createElement2("box");
+    _$setProp2(_el$26, "flexDirection", "column");
+    _$setProp2(_el$26, "gap", 0);
+    _$insert2(_el$26, _$createComponent2(Show2, {
       get when() {
         return props.noticeStale?.();
       },
       get children() {
-        var _el$17 = _$createElement2("text");
-        _$insertNode2(_el$17, _$createTextNode2(`snapshot unavailable - showing last known state`));
-        _$setProp2(_el$17, "wrapMode", "word");
-        _$effect2((_$p) => _$setProp2(_el$17, "fg", theme().text.faint, _$p));
-        return _el$17;
+        var _el$27 = _$createElement2("text");
+        _$insertNode2(_el$27, _$createTextNode2(`snapshot unavailable - showing last known state`));
+        _$setProp2(_el$27, "wrapMode", "word");
+        _$effect2((_$p) => _$setProp2(_el$27, "fg", theme().text.faint, _$p));
+        return _el$27;
       }
     }), null);
-    _$insert2(_el$16, _$createComponent2(Show2, {
+    _$insert2(_el$26, _$createComponent2(Show2, {
       get when() {
         return g();
       },
       get fallback() {
         return (() => {
-          var _el$19 = _$createElement2("text");
-          _$setProp2(_el$19, "wrapMode", "word");
-          _$insert2(_el$19, () => props.fallback);
-          _$effect2((_$p) => _$setProp2(_el$19, "fg", theme().text.base, _$p));
-          return _el$19;
+          var _el$29 = _$createElement2("text");
+          _$setProp2(_el$29, "wrapMode", "word");
+          _$insert2(_el$29, () => props.fallback);
+          _$effect2((_$p) => _$setProp2(_el$29, "fg", theme().text.base, _$p));
+          return _el$29;
         })();
       },
       children: (goal) => (() => {
-        var _el$20 = _$createElement2("box"), _el$21 = _$createElement2("box"), _el$22 = _$createElement2("text"), _el$24 = _$createElement2("text"), _el$26 = _$createElement2("box"), _el$27 = _$createElement2("text"), _el$28 = _$createElement2("text"), _el$29 = _$createTextNode2(` \xB7 `), _el$30 = _$createTextNode2(` turn`);
-        _$insertNode2(_el$20, _el$21);
-        _$setProp2(_el$20, "flexDirection", "column");
-        _$setProp2(_el$20, "gap", 1);
-        _$setProp2(_el$20, "paddingRight", 1);
-        _$insertNode2(_el$21, _el$22);
-        _$insertNode2(_el$21, _el$24);
-        _$insertNode2(_el$21, _el$26);
-        _$insertNode2(_el$21, _el$27);
-        _$insertNode2(_el$21, _el$28);
-        _$setProp2(_el$21, "flexDirection", "row");
-        _$setProp2(_el$21, "gap", 2);
-        _$insert2(_el$21, () => viewTab("overview"), _el$22);
-        _$insertNode2(_el$22, _$createTextNode2(`\xB7`));
-        _$setProp2(_el$22, "wrapMode", "none");
-        _$insert2(_el$21, () => viewTab("ledger"), _el$24);
-        _$insertNode2(_el$24, _$createTextNode2(`\xB7`));
-        _$setProp2(_el$24, "wrapMode", "none");
-        _$insert2(_el$21, () => viewTab("dossier"), _el$26);
-        _$setProp2(_el$26, "flexGrow", 1);
-        _$insert2(_el$27, () => goal().status);
-        _$insertNode2(_el$28, _el$29);
-        _$insertNode2(_el$28, _el$30);
-        _$insert2(_el$28, () => formatDurationCoarse(props.elapsedMs()), _el$29);
-        _$insert2(_el$28, () => goal().turns, _el$30);
-        _$insert2(_el$28, () => goal().turns === 1 ? "" : "s", null);
-        _$insert2(_el$28, () => loopPosition(goal()), null);
-        _$insert2(_el$28, (() => {
-          var _c$2 = _$memo2(() => !!goal().evaluating);
-          return () => _c$2() ? " \xB7 checking" : goal().waiting ? " \xB7 waiting" : "";
-        })(), null);
-        _$insert2(_el$20, _$createComponent2(Show2, {
+        var _el$30 = _$createElement2("box");
+        _$setProp2(_el$30, "flexDirection", "column");
+        _$setProp2(_el$30, "gap", 1);
+        _$setProp2(_el$30, "paddingRight", 1);
+        _$insert2(_el$30, _$createComponent2(Show2, {
           get when() {
             return view() === "overview";
           },
@@ -3677,6 +3698,7 @@ var StatusDialogBody = (props) => {
             _$insertNode2(_el$31, _el$32);
             _$setProp2(_el$31, "flexDirection", "column");
             _$setProp2(_el$31, "gap", 0);
+            _$insert2(_el$31, () => stripRow(goal()), _el$32);
             _$insertNode2(_el$32, _el$33);
             _$setProp2(_el$32, "flexDirection", "row");
             _$setProp2(_el$32, "gap", 2);
@@ -3974,7 +3996,7 @@ var StatusDialogBody = (props) => {
             return _el$31;
           }
         }), null);
-        _$insert2(_el$20, _$createComponent2(Show2, {
+        _$insert2(_el$30, _$createComponent2(Show2, {
           get when() {
             return _$memo2(() => !!ledger())() && remediation();
           },
@@ -3988,7 +4010,7 @@ var StatusDialogBody = (props) => {
             }
           })
         }), null);
-        _$insert2(_el$20, _$createComponent2(Show2, {
+        _$insert2(_el$30, _$createComponent2(Show2, {
           get when() {
             return dossier();
           },
@@ -3998,6 +4020,7 @@ var StatusDialogBody = (props) => {
             _$insertNode2(_el$34, _el$43);
             _$setProp2(_el$34, "flexDirection", "column");
             _$setProp2(_el$34, "gap", 1);
+            _$insert2(_el$34, () => stripRow(goal()), _el$35);
             _$insert2(_el$34, (() => {
               var _c$3 = _$memo2(() => !!props.onCopyDossier);
               return () => _c$3() ? (() => {
@@ -4265,10 +4288,10 @@ var StatusDialogBody = (props) => {
                 _$insertNode2(_el$41, _$createTextNode2(`close`));
                 _$setProp2(_el$41, "wrapMode", "none");
                 _$effect2((_p$) => {
-                  var _v$0 = findCount() > 0 ? theme().text.base : theme().text.faint, _v$1 = findCount() > 0 ? TextAttributes2.BOLD : undefined, _v$10 = theme().text.muted;
-                  _v$0 !== _p$.e && (_p$.e = _$setProp2(_el$39, "fg", _v$0, _p$.e));
-                  _v$1 !== _p$.t && (_p$.t = _$setProp2(_el$39, "attributes", _v$1, _p$.t));
-                  _v$10 !== _p$.a && (_p$.a = _$setProp2(_el$41, "fg", _v$10, _p$.a));
+                  var _v$13 = findCount() > 0 ? theme().text.base : theme().text.faint, _v$14 = findCount() > 0 ? TextAttributes2.BOLD : undefined, _v$15 = theme().text.muted;
+                  _v$13 !== _p$.e && (_p$.e = _$setProp2(_el$39, "fg", _v$13, _p$.e));
+                  _v$14 !== _p$.t && (_p$.t = _$setProp2(_el$39, "attributes", _v$14, _p$.t));
+                  _v$15 !== _p$.a && (_p$.a = _$setProp2(_el$41, "fg", _v$15, _p$.a));
                   return _p$;
                 }, {
                   e: undefined,
@@ -4343,7 +4366,15 @@ var StatusDialogBody = (props) => {
             return _el$34;
           }
         }), null);
-        _$insert2(_el$20, _$createComponent2(Show2, {
+        _$insert2(_el$30, _$createComponent2(Show2, {
+          get when() {
+            return ledger();
+          },
+          get children() {
+            return stripRow(goal());
+          }
+        }), null);
+        _$insert2(_el$30, _$createComponent2(Show2, {
           get when() {
             return !dossier();
           },
@@ -4386,7 +4417,8 @@ var StatusDialogBody = (props) => {
                   },
                   get onToggleExpanded() {
                     return props.onToggleExpanded;
-                  }
+                  },
+                  marginTop: -1
                 });
               }
             }), _$createComponent2(Show2, {
@@ -4412,13 +4444,14 @@ var StatusDialogBody = (props) => {
                   },
                   get onCopyReason() {
                     return props.onCopyReason;
-                  }
+                  },
+                  marginTop: -1
                 });
               }
             })];
           }
         }), null);
-        _$insert2(_el$20, _$createComponent2(Show2, {
+        _$insert2(_el$30, _$createComponent2(Show2, {
           get when() {
             return view() === "overview";
           },
@@ -4567,25 +4600,10 @@ var StatusDialogBody = (props) => {
             });
           }
         }), null);
-        _$effect2((_p$) => {
-          var _v$11 = theme().text.faint, _v$12 = theme().text.faint, _v$13 = stateColor(), _v$14 = TextAttributes2.BOLD, _v$15 = theme().text.muted;
-          _v$11 !== _p$.e && (_p$.e = _$setProp2(_el$22, "fg", _v$11, _p$.e));
-          _v$12 !== _p$.t && (_p$.t = _$setProp2(_el$24, "fg", _v$12, _p$.t));
-          _v$13 !== _p$.a && (_p$.a = _$setProp2(_el$27, "fg", _v$13, _p$.a));
-          _v$14 !== _p$.o && (_p$.o = _$setProp2(_el$27, "attributes", _v$14, _p$.o));
-          _v$15 !== _p$.i && (_p$.i = _$setProp2(_el$28, "fg", _v$15, _p$.i));
-          return _p$;
-        }, {
-          e: undefined,
-          t: undefined,
-          a: undefined,
-          o: undefined,
-          i: undefined
-        });
-        return _el$20;
+        return _el$30;
       })()
     }), null);
-    return _el$16;
+    return _el$26;
   })();
 };
 
