@@ -297,7 +297,7 @@ describe("plugin setup", () => {
 describe("the context hook strips end-of-record notes", () => {
   const noteMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 
-  test("a terminal <goal-note final> message is removed; everything else survives in order", async () => {
+  test("goal notes of either kind are removed; everything else survives in order", async () => {
     const directory = repository()
     const { ctx, hooks } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
@@ -307,7 +307,7 @@ describe("the context hook strips end-of-record notes", () => {
       const keep2 = noteMessage("<goal-note>\nLoop 1 of 3 achieved (turn 9); goal v2 armed.\nv2 armed\n</goal-note>")
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [keep1, terminal, keep2], tools: {}, options: {} }
       hooks.context!(event)
-      expect(event.messages).toEqual([keep1, keep2])
+      expect(event.messages).toEqual([keep1])
     } finally {
       await dispose?.()
     }
