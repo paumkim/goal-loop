@@ -14,7 +14,7 @@ import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict
 import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
 import { verdictEntryAccentColor, motionDisabled } from "./core/hud.ts"
 import { finalTallyLine, iterationAttestation } from "./core/attestation.ts"
-import { COMPACT_MISS_CAP, type GoalSnapshot, type LoopEntry, type Verdict, type VerdictEntry } from "./core/types.ts"
+import { COMPACT_MISS_CAP, completedIterationCount, type GoalSnapshot, type LoopEntry, type Verdict, type VerdictEntry } from "./core/types.ts"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
 export interface HistoryTheme {
@@ -146,7 +146,10 @@ export const LoopSection = (props: {
     }
   }
   const history = () => props.goal.loopHistory ?? []
-  const done = () => history().length
+  // Total landed (cap-aware) drives the bar/caption/capReached; the retained slice drives the rail.
+  const done = () => completedIterationCount(props.goal)
+  const retained = () => history().length
+  const dropped = () => props.goal.loopHistoryDropped ?? 0
   // Progressive disclosure: at most RAIL_VISIBLE completed iterations render; the rest fold behind one click.
   // Controlled when the caller passes `expanded` (the status dialog drives it from its keymap layer so
   // keyboard parity holds without stealing focus); uncontrolled otherwise (snapshots/tests).
@@ -190,9 +193,9 @@ export const LoopSection = (props: {
       // Best-effort.
     }
   }
-  const hiddenCount = () => (showAll() ? 0 : Math.max(0, done() - RAIL_VISIBLE))
+  const hiddenCount = () => (showAll() ? 0 : Math.max(0, retained() - RAIL_VISIBLE))
   const visibleHistory = () => (showAll() ? history() : history().slice(-RAIL_VISIBLE))
-  const railOffset = () => Math.max(0, done() - visibleHistory().length)
+  const railOffset = () => Math.max(0, retained() - visibleHistory().length)
   const max = () => props.goal.loopMaxLoops
   const current = () => Math.max(1, props.goal.loopIteration ?? done() + 1)
   const bar = () => renderBar(done(), max(), BAR_CELLS, ascii())
@@ -320,7 +323,17 @@ export const LoopSection = (props: {
         )}
       </Show>
       {/* iteration rail: one row per completed iteration, summaries hanging off a │ connector; a met iteration with zero tool calls produced no work — the evaluator found the condition already satisfied at HEAD — so it paints the blue accent (info.base, the palette's info hue; mono keeps the ○ shape as the signal) with the 'already satisfied at HEAD' tag. Older iterations fold behind one click so a long loop never buries the live row. */}
-      <Show when={done() > RAIL_VISIBLE}>
+      <Show when={dropped() > 0}>
+        <box flexDirection="row" gap={2}>
+          <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
+            {ascii() ? "..." : "…"}
+          </text>
+          <text wrapMode="none" fg={theme().text.faint}>
+            {`${dropped()} older iteration${dropped() === 1 ? "" : "s"} dropped from the record (retention cap)`}
+          </text>
+        </box>
+      </Show>
+      <Show when={retained() > RAIL_VISIBLE}>
         <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             {ascii() ? "..." : "…"}
