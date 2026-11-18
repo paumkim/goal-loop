@@ -165,6 +165,62 @@ export const boundCompletedConditions = (entries: readonly string[]): { retained
     : { retained: deduped.slice(-MAX_COMPLETED_CONDITION_ENTRIES), dropped: deduped.length - MAX_COMPLETED_CONDITION_ENTRIES }
 }
 
+/**
+ * Terminal goal records kept at plugin storage per directory. A goal that finished (achieved/impossible/cleared/failed)
+ * leaves its record behind for `spend`/`peekSnapshot` to answer about; an unbounded backlog of those is dead weight.
+ * Live records (active/paused) are never pruned. See `selectTerminalRecordsToPrune`.
+ */
+export const MAX_TERMINAL_RECORD_ENTRIES = 50
+
+/** Terminal records whose last-activity stamp (`endedAt`, falling back to `startedAt`) is older than this are pruned. */
+export const TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+export interface TerminalPruneSelection {
+  /** sessionIDs of the records to remove. */
+  readonly pruned: string[]
+  /** How many were pruned by the age cap. */
+  readonly droppedAged: number
+  /** How many were pruned by the count cap (the newest `MAX_TERMINAL_RECORD_ENTRIES` are kept). */
+  readonly droppedBeyondCap: number
+  /** How many terminal records were offered to the selector (live records are ignored). */
+  readonly offered: number
+  /** Terminal records kept because they carry no usable stamp (no `endedAt`/`startedAt`): age can never be judged. */
+  readonly unstampedKept: number
+}
+
+/**
+ * Chooses which terminal records to prune: any terminal record past `TERMINAL_RECORD_MAX_AGE_MS` (by `endedAt`,
+ * falling back to `startedAt`), then — from the survivors — all but the newest `MAX_TERMINAL_RECORD_ENTRIES` by the
+ * same stamp. Live records are ignored entirely. Terminal records with no usable stamp are kept (their age can never
+ * be judged) and are reported via `unstampedKept`, never silently counted as fresh or as pruned.
+ */
+export const selectTerminalRecordsToPrune = (
+  records: readonly GoalRecord[],
+  nowMs: number,
+): TerminalPruneSelection => {
+  const terminal = records.filter((r) => !isLive(r.status))
+  const stamped: Array<{ sessionID: string; at: number }> = []
+  let unstampedKept = 0
+  for (const r of terminal) {
+    const at = typeof r.endedAt === "number" && Number.isFinite(r.endedAt) ? r.endedAt
+      : typeof r.startedAt === "number" && Number.isFinite(r.startedAt) ? r.startedAt
+      : undefined
+    if (at === undefined) unstampedKept++
+    else stamped.push({ sessionID: r.sessionID, at })
+  }
+  const fresh = stamped.filter((x) => nowMs - x.at <= TERMINAL_RECORD_MAX_AGE_MS)
+  const droppedAged = stamped.length - fresh.length
+  const newestFirst = [...fresh].sort((a, b) => b.at - a.at)
+  const beyond = newestFirst.slice(MAX_TERMINAL_RECORD_ENTRIES)
+  return {
+    pruned: [...stamped.filter((x) => nowMs - x.at > TERMINAL_RECORD_MAX_AGE_MS).map((x) => x.sessionID), ...beyond.map((x) => x.sessionID)],
+    droppedAged,
+    droppedBeyondCap: beyond.length,
+    offered: terminal.length,
+    unstampedKept,
+  }
+}
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 /**
  * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
