@@ -257,8 +257,8 @@ export const DialogFooter = (props: {
   )
 }
 
-/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label boldens instead. */
-const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void }): JSX.Element => {
+/** One hit-tested button: hover swaps the background and brightens the label; everything else is transparent. Under mono there is no background swap — the label boldens instead. `flushLeft`/`flushRight` drop the edge padding to zero cells so the actions row's outer buttons paint their first/last glyph exactly on the card's content column — the same edge every label, value and affordance cell snaps to. */
+const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; onPress: () => void; flushLeft?: boolean; flushRight?: boolean }): JSX.Element => {
   const [hovered, setHovered] = createSignal(false)
   const mono = () => props.mono === true
   return (
@@ -266,8 +266,8 @@ const HudButton = (props: { theme: HudCardTheme; label: string; mono?: boolean; 
       flexDirection="row"
       flexShrink={0}
       height={1}
-      paddingLeft={1}
-      paddingRight={1}
+      paddingLeft={props.flushLeft === true ? 0 : 1}
+      paddingRight={props.flushRight === true ? 0 : 1}
       backgroundColor={!mono() && hovered() ? props.theme.background?.raised?.high : undefined}
       onMouseOver={() => setHovered(true)}
       onMouseOut={() => setHovered(false)}
@@ -608,15 +608,15 @@ export const HudCard = (props: {
           </box>
         )}
       </Show>
-      {/* actions */}
+      {/* actions — the outer buttons flush to the content column / right edge so the row hangs on the same 1-cell grid as every label and affordance cell above it */}
       <box flexDirection="row" gap={1} marginTop={0}>
-        <HudButton theme={theme()} label="details" mono={mono()} onPress={props.onDetails} />
+        <HudButton theme={theme()} label="details" mono={mono()} flushLeft onPress={props.onDetails} />
         <Show when={props.onTogglePin}>
           <HudButton theme={theme()} label={props.pinned ? "unpin" : "pin"} mono={mono()} onPress={() => props.onTogglePin?.()} />
         </Show>
         <HudButton theme={theme()} label="clear goal" mono={mono()} onPress={props.onClear} />
         <box flexGrow={1} />
-        <HudButton theme={theme()} label="esc" mono={mono()} onPress={props.onClose} />
+        <HudButton theme={theme()} label="esc" mono={mono()} flushRight onPress={props.onClose} />
       </box>
       {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 6 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
       <Show when={props.contextOpen}>
