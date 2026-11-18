@@ -3362,6 +3362,17 @@
       "submittedAt": "2026-11-18T19:30:08Z",
       "mergedAt": "2026-11-18T19:31:35Z",
       "mergedInto": "dev"
+    },
+    "docs-symbol-export-contract": {
+      "agent": "inkling-2-small-free",
+      "paths": "test/docs-line-refs.test.ts,SPEC.md,docs/core.html",
+      "branch": "wt/docs-symbol-export-contract",
+      "worktree": "worktrees/wt-docs-symbol-export-contract",
+      "status": "done",
+      "createdAt": "2026-11-18T19:36:32Z",
+      "submittedAt": "2026-11-18T19:41:35Z",
+      "mergedAt": "2026-11-18T19:42:57Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
