@@ -2876,6 +2876,25 @@
       "worktree": "worktrees/wt-tui-detail-dialog-compact-2",
       "status": "claimed",
       "createdAt": "2026-11-18T02:06:36Z"
+    },
+    "dist-tui-rebuild": {
+      "agent": "orchestrator",
+      "paths": "dist/tui.js",
+      "branch": "wt/dist-tui-rebuild",
+      "worktree": "worktrees/wt-dist-tui-rebuild",
+      "status": "done",
+      "createdAt": "2026-11-18T02:11:10Z",
+      "submittedAt": "2026-11-18T02:12:43Z",
+      "mergedAt": "2026-11-18T02:14:11Z",
+      "mergedInto": "dev"
+    },
+    "tui-storage-convergence-fallback": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/core/storage-pull.ts,test,SPEC.md,dist,docs",
+      "branch": "wt/tui-storage-convergence-fallback",
+      "worktree": "worktrees/wt-tui-storage-convergence-fallback",
+      "status": "claimed",
+      "createdAt": "2026-11-18T02:11:57Z"
     }
   },
   "mergeLock": null,
