@@ -1351,4 +1351,31 @@ describe("terminal record pruning after finish (opportunistic)", () => {
     const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
     expect(report?.extra).toMatchObject({ scanned: 1, pruned: 0, readOnly: true, unstampedKept: 1 })
   })
+
+  test("the finish path prunes foreign-directory terminal records too (unified with restore scope)", async () => {
+    const logs: Array<{ level: string; message: string; extra?: { scanned?: number; pruned?: number; directories?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { scanned?: number; pruned?: number; directories?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const storage = new MemoryStorage()
+    const foreignAged = { ...terminalRecord("achieved", NOW - 400 * DAY), directory: "C:/work/elsewhere" }
+    const foreignLive = { ...terminalRecord("paused", NOW - 400 * DAY), directory: "C:/work/elsewhere" }
+    delete (foreignLive as { endedAt?: number }).endedAt
+    const foreignFresh = { ...terminalRecord("cleared", NOW - 2 * DAY), directory: "C:/work/elsewhere" }
+    await seedTerminal(storage, [foreignAged, foreignLive, foreignFresh])
+    const h = harness({ log: capturingLog }, storage)
+    h.clock.t = NOW
+    await h.set("active thing")
+    h.verdicts.push(met())
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    await h.controller.dispose()
+    expect(storage.data.has(`goal/v1/${foreignAged.sessionID}`)).toBe(false) // aged foreign terminal record pruned at finish time
+    expect(storage.data.has(`goal/v1/${foreignLive.sessionID}`)).toBe(true) // foreign live record never pruned
+    expect(storage.data.has(`goal/v1/${foreignFresh.sessionID}`)).toBe(true) // foreign fresh record kept
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ pruned: 1, droppedAged: 1, directories: 2 })
+  })
 })
