@@ -259,8 +259,8 @@ const looped = (sessionID: string, iteration: number, startedAt: number): GoalSn
 const elapsedOf = (g: GoalSnapshot, receivedAt: number, nowMs: number) =>
   g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - receivedAt) : g.elapsedMs
 
-/** The ambient pill line for one session, exactly the segments tui.tsx composes (caret + model text). */
-const pillLine = (g: GoalSnapshot) => `▸ ${pillModel(g, elapsedOf(g, NOW, NOW), false).text}`
+/** The ambient pill line for one session, exactly the segments tui.tsx composes (the breath dot leads, no caret). */
+const pillLine = (g: GoalSnapshot) => pillModel(g, elapsedOf(g, NOW, NOW), false).text
 
 const renderPills = async (lineA: string, lineB: string): Promise<string> => {
   const node = (): JSX.Element => (

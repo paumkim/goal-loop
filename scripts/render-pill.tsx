@@ -1,6 +1,6 @@
 /**
  * Headless render of the ambient goal pill — the "it's alive and working, don't worry" indicator.
- * Mounts the real composition tui.tsx mounts (caret + pillModel text inside the same absolute
+ * Mounts the real composition tui.tsx mounts (pillModel text inside the same absolute
  * 1-row box over a jump-row substrate), across the breath's phases. Not shipped (scripts/ is not
  * in package.json `files`).
  *
@@ -14,7 +14,7 @@
  */
 import { RGBA, TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
-import { pillModel, terminalPill, pillCaret, breathCrest, type NeutralTheme } from "../src/core/hud.ts"
+import { pillModel, terminalPill, breathCrest, type NeutralTheme } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const mono = process.argv.includes("--mono")
@@ -74,7 +74,7 @@ const mount = async (name: string, goal: GoalSnapshot, phase: number | undefined
     : pillModel(goal, 1000 * 60 * 42, ascii, Number.POSITIVE_INFINITY, phase))!
   const crest = boldCrest && breathCrest(phase)
   const attrs = crest ? TextAttributes.BOLD : undefined
-  const line = pillCaret(false, ascii) + " " + model.text
+  const line = model.text
   const setup = await testRender(
     () => (
       <box flexDirection="column" width={terminal} height={2}>

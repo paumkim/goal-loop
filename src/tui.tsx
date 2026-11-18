@@ -31,7 +31,7 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveCarriedFields, applySnapshot, goalsEqual, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
@@ -963,11 +963,11 @@ export default Plugin.define({
           try {
             const g = goal()
             // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
-          // 2 cells for the open/closed caret prefix, minus the landing acknowledgment suffix when it rides
-          // the same line (cells, not .length). Walks the degradation ladder (retry → compact → turns → pips)
-          // before truncating the core, so an 80-column floor never clips the state the pill exists to show.
+          // minus the landing acknowledgment suffix when it rides the same line (cells, not .length).
+          // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
+          // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0))
+          const budget = Math.max(1, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0))
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -979,24 +979,20 @@ export default Plugin.define({
         }
         const dimensions = useTerminalDimensions()
         const pinnedNow = () => isPinned(props.sessionID)
-        // The leading caret is the pill's open/closed affordance: ▾ while the card is painted, ▸ while
-        // it is not. Keyed to the card actually rendering (not merely the session's hud slot), so the
-        // glyph never claims “open” over a missing card. Two cells, already reserved by the label budget.
-        const caret = () =>
-          pillCaret(getHudSession() === props.sessionID && cardFor() !== undefined, motionDisabled(process.env)) + " "
+        // No leading affordance: the dot begins the line (Workstream XV). The click contract stays —
+        // left click toggles the card, right click opens the detail view — it just is not advertised by chrome.
         const pillText = () => {
           const model = pill()
           if (!model) return ""
           const landed = landingNow() ? landingSuffix(motionDisabled(process.env)) : ""
-          const prefix = caret()
-          if (!pinnedNow()) return prefix + model.text + landed
+          const base = model.text + landed
+          if (!pinnedNow()) return base
           const g = goal()
           // The pinned condition rides the jump row so it stays visible while the conversation scrolls;
           // truncated to whatever cells remain after the state prefix.
-          const base = prefix + model.text + landed
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
         }
-        // The breath: the dot swells through `· • ● •` on a 2.4s cycle — presence, not animation.
+        // The breath: the ring swells through `◦ ○ ◎ ○` on a 2.4s cycle (crest = ◎) — presence, not animation.
         // It runs while the loop is genuinely alive (working, or a transient window: evaluating, hot
         // compaction, the just-achieved flash, the landing acknowledgment) and never otherwise —
         // waiting, paused, stuck and terminal states are static. The crest phase is the only beat
