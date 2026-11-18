@@ -3170,6 +3170,17 @@
       "submittedAt": "2026-11-18T11:24:25Z",
       "mergedAt": "2026-11-18T11:25:50Z",
       "mergedInto": "dev"
+    },
+    "spec-doc-alignment-sweep": {
+      "agent": "inkling-2-small-free",
+      "paths": "SPEC.md,AGENTS.md,README.md,src/runtime/compactor.ts,src/core/types.ts,src/core/config.ts,test/loop.test.ts",
+      "branch": "wt/spec-doc-alignment-sweep",
+      "worktree": "worktrees/wt-spec-doc-alignment-sweep",
+      "status": "done",
+      "createdAt": "2026-11-18T13:24:23Z",
+      "submittedAt": "2026-11-18T13:27:02Z",
+      "mergedAt": "2026-11-18T13:28:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
