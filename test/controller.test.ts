@@ -923,3 +923,41 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     expect(third.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 })
+
+describe("RPC payload strict-JSON hygiene (host JSONValue gate)", () => {
+  // The host rejects an explicit-undefined key ANYWHERE in an RPC payload with
+  // `SchemaError(Expected JSON value at …)`; on the wire that surfaced as HTTP 500 on goal/get and as
+  // silently dropped `changed` events (opencode 2.3.2 standalone, 2026-11-18). Every snapshot the
+  // controller emits must survive a recursive key walk with no undefined-valued key.
+  const assertJsonSafe = (value: unknown, path: string): void => {
+    if (value === undefined) throw new Error(`explicit undefined at ${path}`)
+    if (Array.isArray(value)) {
+      value.forEach((entry, i) => assertJsonSafe(entry, `${path}[${i}]`))
+      return
+    }
+    if (typeof value === "object" && value !== null && (value as Record<string, unknown>).constructor === Object) {
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        assertJsonSafe(entry, `${path}.${key}`)
+      }
+    }
+  }
+
+  test("emitted and read-back snapshots stay strict JSON across pause/resume/finish and loop advance", async () => {
+    const h = harness({ stallTurns: 1 })
+    await h.set()
+    // A pause (pauseCause set) and a resume (pauseCause cleared via the record's own state machine):
+    h.verdicts.push(notMet())
+    await h.turn(0)
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    h.controller.onUserPrompt(SID)
+    // A met verdict finishes the goal (finish() historically re-assigned undefined onto the record).
+    h.verdicts.push(met())
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    for (const [i, change] of h.changes.entries()) {
+      if (change === null) continue
+      expect(() => assertJsonSafe(change, `changes[${i}]`)).not.toThrow()
+    }
+    expect(h.changes.length).toBeGreaterThan(0)
+  })
+})
