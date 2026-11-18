@@ -7323,7 +7323,7 @@ var tui_default = Plugin.define({
           });
         };
         createEffect2(() => {
-          if (animated() && motionOk) {
+          if (animated() && !cardFor() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
             onCleanup3(() => clearInterval(timer));
             return;
@@ -7393,40 +7393,45 @@ var tui_default = Plugin.define({
                 return showing();
               },
               get children() {
-                return [(() => {
-                  var _el$12 = _$createElement4("box"), _el$13 = _$createElement4("text");
-                  _$insertNode4(_el$12, _el$13);
-                  _$setProp4(_el$12, "position", "absolute");
-                  _$setProp4(_el$12, "top", -1);
-                  _$setProp4(_el$12, "left", 0);
-                  _$setProp4(_el$12, "height", 1);
-                  _$setProp4(_el$12, "paddingLeft", 1);
-                  _$setProp4(_el$12, "flexDirection", "row");
-                  _$setProp4(_el$12, "onMouseOver", () => setHovered(true));
-                  _$setProp4(_el$12, "onMouseOut", () => setHovered(false));
-                  _$setProp4(_el$12, "onMouseUp", (event) => {
-                    try {
-                      if (!props.sessionID)
-                        return;
-                      if (event.button === 2)
-                        openDashboard(props.sessionID);
-                      else if (event.button === 0)
-                        toggleHud();
-                    } catch {}
-                  });
-                  _$setProp4(_el$13, "wrapMode", "none");
-                  _$insert4(_el$13, pillText);
-                  _$effect4((_p$) => {
-                    var _v$7 = color(), _v$8 = pillAttrs();
-                    _v$7 !== _p$.e && (_p$.e = _$setProp4(_el$13, "fg", _v$7, _p$.e));
-                    _v$8 !== _p$.t && (_p$.t = _$setProp4(_el$13, "attributes", _v$8, _p$.t));
-                    return _p$;
-                  }, {
-                    e: undefined,
-                    t: undefined
-                  });
-                  return _el$12;
-                })(), _$createComponent4(Show4, {
+                return [_$createComponent4(Show4, {
+                  get when() {
+                    return !cardFor();
+                  },
+                  get children() {
+                    var _el$12 = _$createElement4("box"), _el$13 = _$createElement4("text");
+                    _$insertNode4(_el$12, _el$13);
+                    _$setProp4(_el$12, "position", "absolute");
+                    _$setProp4(_el$12, "top", -1);
+                    _$setProp4(_el$12, "left", 0);
+                    _$setProp4(_el$12, "height", 1);
+                    _$setProp4(_el$12, "paddingLeft", 1);
+                    _$setProp4(_el$12, "flexDirection", "row");
+                    _$setProp4(_el$12, "onMouseOver", () => setHovered(true));
+                    _$setProp4(_el$12, "onMouseOut", () => setHovered(false));
+                    _$setProp4(_el$12, "onMouseUp", (event) => {
+                      try {
+                        if (!props.sessionID)
+                          return;
+                        if (event.button === 2)
+                          openDashboard(props.sessionID);
+                        else if (event.button === 0)
+                          toggleHud();
+                      } catch {}
+                    });
+                    _$setProp4(_el$13, "wrapMode", "none");
+                    _$insert4(_el$13, pillText);
+                    _$effect4((_p$) => {
+                      var _v$7 = color(), _v$8 = pillAttrs();
+                      _v$7 !== _p$.e && (_p$.e = _$setProp4(_el$13, "fg", _v$7, _p$.e));
+                      _v$8 !== _p$.t && (_p$.t = _$setProp4(_el$13, "attributes", _v$8, _p$.t));
+                      return _p$;
+                    }, {
+                      e: undefined,
+                      t: undefined
+                    });
+                    return _el$12;
+                  }
+                }), _$createComponent4(Show4, {
                   get when() {
                     return cardFor();
                   },
