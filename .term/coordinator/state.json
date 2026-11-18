@@ -3313,6 +3313,17 @@
       "submittedAt": "2026-11-18T17:49:05Z",
       "mergedAt": "2026-11-18T17:50:28Z",
       "mergedInto": "dev"
+    },
+    "finish-prune-all-directories": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/runtime/controller.ts,src/runtime/store.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
+      "branch": "wt/finish-prune-all-directories",
+      "worktree": "worktrees/wt-finish-prune-all-directories",
+      "status": "done",
+      "createdAt": "2026-11-18T18:30:31Z",
+      "submittedAt": "2026-11-18T18:34:11Z",
+      "mergedAt": "2026-11-18T18:35:36Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
