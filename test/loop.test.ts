@@ -1708,6 +1708,50 @@ describe("/goal-loop failure modes", () => {
   })
 })
 
+describe("re-arm boundary no-new-gap refusal contract (LIV)", () => {
+  test("a near-duplicate re-arm refusal speaks the arming-side grep-target vocabulary and does not advance the iteration", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("tighten the widget")
+    await h.turn() // arms v2 = "tighten the widget"
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("tighten the widgets in the widget suite") // token containment 1.0 vs the completed v2 condition
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    // The arming-side refusal (XLV) documents its reason string as the grep target of a no-new-gap
+    // refusal and leads with it; the re-arm boundary must speak the same words, or an operator
+    // greping /^no new gap/ over the durable store silently misses every planner-side refusal.
+    expect(record.reason).toMatch(/^no new gap/)
+    expect(record.reason).toMatch(/already-completed/i)
+    expect(record.loopIteration).toBe(2) // a refused re-arm does not advance the iteration (no marker churn)
+    expect(record.completedConditions).toContain("tighten the widget")
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+  })
+
+  test("an exact-repeat re-arm refusal speaks the same grep-target vocabulary", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("tighten the widget")
+    await h.turn() // arms v2 = "tighten the widget"
+    h.verdicts.push(met("v2 done"))
+    h.summaries.push("s2")
+    h.nextGoals.push("Tighten the widget.") // case/punctuation drift of the completed v2 condition
+    await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/^no new gap/)
+    expect(record.reason).toMatch(/already-completed/i)
+    expect(record.loopIteration).toBe(2)
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+  })
+})
+
 describe("/goal-loop straggler completions after failure", () => {
   test("a duplicated execution.succeeded after a failing turn does not evaluate the failed turn", async () => {
     const h = harness()
