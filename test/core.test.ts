@@ -113,6 +113,32 @@ describe("parseVerdict", () => {
   test("long reasons are clamped", () => {
     expect(parseVerdict(JSON.stringify({ verdict: "met", reason: "a".repeat(2000) }))!.reason.length).toBeLessThanOrEqual(600)
   })
+  test("forward-pointer gate: a met on the already-satisfied path without a next: line fails closed to not_met", () => {
+    const out = parseVerdict('{"verdict":"met","reason":"Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration."}')
+    expect(out?.verdict).toBe("not_met")
+    expect(out?.reason).toContain("duplicate-without-forward-pointer")
+    expect(out?.reason).toContain("Already satisfied at HEAD 3f3e1eb") // the original reason is quoted, fail closed
+  })
+  test("forward-pointer gate: a met on the already-satisfied path with a next: line naming a gap is accepted", () => {
+    const out = parseVerdict('{"verdict":"met","reason":"Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: docs/core.html stale cards"}')
+    expect(out?.verdict).toBe("met")
+    expect(out?.reason).toContain("next: docs/core.html stale cards")
+  })
+  test("forward-pointer gate: 'no new work' and 'nothing to do' phrasing is gated the same", () => {
+    expect(parseVerdict('{"verdict":"met","reason":"no new work was needed at this HEAD"}')?.verdict).toBe("not_met")
+    expect(parseVerdict('{"verdict":"met","reason":"The work was already done. Nothing to do."}')?.verdict).toBe("not_met")
+  })
+  test("forward-pointer gate: a met for genuinely new work (no already-satisfied phrasing) is untouched", () => {
+    expect(parseVerdict('{"verdict":"met","reason":"merged aa5e196: unified finish-time prune; 1693 tests green"}')?.verdict).toBe("met")
+  })
+  test("forward-pointer gate: the VERDICT-line fallback path is gated the same", () => {
+    expect(parseVerdict("VERDICT: met\nREASON: Already satisfied at HEAD 3f3e1eb.")?.verdict).toBe("not_met")
+    expect(parseVerdict("VERDICT: met\nREASON: Already satisfied at HEAD 3f3e1eb. next: src/runtime/store.ts")?.verdict).toBe("met")
+  })
+  test("forward-pointer gate: not_met and impossible are never gated", () => {
+    expect(parseVerdict('{"verdict":"not_met","reason":"already satisfied but tempted"}')?.verdict).toBe("not_met")
+    expect(parseVerdict('{"verdict":"impossible","reason":"already satisfied with something unavailable"}')?.verdict).toBe("impossible")
+  })
 })
 
 describe("classifyFailure", () => {
@@ -421,6 +447,17 @@ describe("prompts", () => {
     const text = evaluateInSession("all tests pass", { turn: 1, elapsedMs: 1_000 }, COMMIT)
     expect(text).toContain("Harness facts")
     expect(text).toContain("runs inside a git repository")
+  })
+  test("the evaluator rubric grades condition fit, novelty and the honest next gap (XLIV)", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    const session = evaluateInSession("work the merged plan", facts, COMMIT)
+    for (const token of ["Condition fit", "Novelty / no-duplicate", "token containment >= 0.7 or Jaccard >= 0.6", "duplicate-without-forward-pointer", "Honest next gap"]) {
+      expect(session).toContain(token)
+    }
+    const independent = evaluateIndependently("work the merged plan", facts, "transcript", COMMIT)
+    for (const token of ["Condition fit", "Novelty / no-duplicate", "duplicate-without-forward-pointer", "Honest next gap"]) {
+      expect(independent).toContain(token)
+    }
   })
   test("no commit rule in the rubric when it does not apply", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }

@@ -1,11 +1,37 @@
 import type { Verdict } from "./types.ts"
 
-interface ParsedVerdict {
+export interface ParsedVerdict {
   readonly verdict: Verdict
   readonly reason: string
 }
 
 const MAX_REASON = 600
+
+/**
+ * Workstream XLIV — the novelty / advancement gate, decidable from the verdict text alone.
+ *
+ * A "met" whose reason claims the already-satisfied / no-new-work path without naming a next concrete gap on the
+ * established `next:`-line convention is not an advancement verdict; accepting it would credit duplicates as met.
+ * It fails closed to not_met with the original reason quoted — exactly like the verification gate's downgrade.
+ * Never upgrades a verdict, never touches not_met or impossible, never fires on a met that names its gap.
+ */
+const ALREADY_SATISFIED = /(already[-\s]satisfied|no new work|nothing[_\s-](new[_\s-])?to do|no work needed)/i
+const NEXT_POINTER = /next\s*:/i
+const DUPLICATE_REASON = "duplicate-without-forward-pointer"
+
+export function applyForwardPointerGate(parsed: ParsedVerdict): ParsedVerdict {
+  if (parsed.verdict !== "met") return parsed
+  if (!ALREADY_SATISFIED.test(parsed.reason)) return parsed
+  if (NEXT_POINTER.test(parsed.reason)) return parsed
+  const original = parsed.reason
+  const quoted = original.length > 240 ? `${original.slice(0, 240)}…` : original
+  return {
+    verdict: "not_met",
+    reason: clampReason(
+      `${DUPLICATE_REASON}: verdict "met" claims prior work was "Already satisfied" but names no next concrete gap on a "next:" line; name a specific file, symbol or workstream from this turn's audit. Original: ${quoted}`,
+    ),
+  }
+}
 
 // Only explicit permanent words count as impossible. "blocked"/"cannot" are ambiguous (usually temporary or
 // "cannot yet"), so they count as not_met: ending the goal on them would be a false terminal verdict.
@@ -35,13 +61,13 @@ export function parseVerdict(text: string): ParsedVerdict | undefined {
     const record = parsed as Record<string, unknown>
     const verdict = normalizeVerdict(record.verdict ?? record.status ?? record.result ?? record.met)
     if (!verdict) continue
-    return { verdict, reason: clampReason(record.reason ?? record.explanation ?? record.rationale) }
+    return applyForwardPointerGate({ verdict, reason: clampReason(record.reason ?? record.explanation ?? record.rationale) })
   }
   const line = /verdict\s*[:=]\s*["']?([a-z_\s-]+?)["']?\s*(?:[\n.;,]|$)/i.exec(cleaned)
   const verdict = line ? normalizeVerdict(line[1]) : undefined
   if (!verdict) return undefined
   const reason = /reason\s*[:=]\s*(.+)/i.exec(cleaned)?.[1]
-  return { verdict, reason: clampReason(reason) }
+  return applyForwardPointerGate({ verdict, reason: clampReason(reason) })
 }
 
 function clampReason(value: unknown) {

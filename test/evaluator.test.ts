@@ -281,3 +281,95 @@ describe("Evaluator.evaluate — evaluator.consensus: 2", () => {
     expect(calls.model).toHaveLength(0)
   })
 })
+
+describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Workstream XLIV)", () => {
+  const transcriptWith = (messages: Array<[string, string]>) => [
+    { role: "user", content: "/goal-loop iteration 1 armed" },
+    ...messages.map(([role, content]) => ({ role, content })),
+  ]
+
+  test("duplicate-with-pointer: met on the already-satisfied path with a next: gap is accepted (mock transcript)", async () => {
+    const { fake } = deps({
+      context: async () => transcriptWith([["assistant", "git log --oneline -5\n3f3e1eb chore(coordinator)"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
+      modelGenerate: async () => verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: arming-side near-duplicate gate in the loop's arm path"),
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toContain("next:")
+  })
+
+  test("duplicate-without-pointer: bare already-satisfied met fails closed to not_met, quoted", async () => {
+    const { fake } = deps({
+      context: async () => transcriptWith([["assistant", "git log --oneline -5\n3f3e1eb chore(coordinator)"]]),
+      modelGenerate: async () => verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration."),
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("duplicate-without-forward-pointer")
+    expect(result.reason).toContain("Already satisfied at HEAD 3f3e1eb")
+  })
+
+  test("duplicate-without-pointer through the repair path fails closed the same way", async () => {
+    let n = 0
+    const { fake } = deps({
+      sessionGenerate: async () => {
+        n++
+        return n === 1 ? "not json at all" : verdictJson("met", "Already satisfied at HEAD 3f3e1eb.")
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("duplicate-without-forward-pointer")
+  })
+
+  test("fresh-but-irrelevant merged work: rubric clause visible to the judge; a not_met verdict passes through untouched", async () => {
+    let seen = ""
+    const { fake } = deps({
+      context: async () => transcriptWith([["assistant", "merged aa5e196: unified the XL finish-time prune with the XLI restore prune"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
+      modelGenerate: async (_model, prompt) => {
+        seen = prompt
+        return verdictJson("not_met", "merged aa5e196 unified the finish prune; the armed condition asked for the stale docs/core.html cards. next: docs/core.html stale cards")
+      },
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request({ condition: "fix the stale cards on docs/core.html" }))
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("docs/core.html")
+    // Condition fit and novelty clauses are printed in the prompt the judge sees; the downgrade decision is the judge's.
+    expect(seen).toContain("Condition fit")
+    expect(seen).toContain("Novelty / no-duplicate")
+    expect(seen).toContain("Honest next gap")
+  })
+
+  test("real merged gap: fresh in-turn evidence with a named gap verdicts met", async () => {
+    const { fake } = deps({
+      context: async () => transcriptWith([["assistant", "git log --oneline -2\naa5e196 merge wt/finish-prune-all-directories into dev"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
+      modelGenerate: async () => verdictJson("met", "merged aa5e196 unifies the finish-time and restore-time prunes; bundle rebuilt; bun run check green at the post-merge HEAD. next: arming-side near-duplicate gate"),
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request({ condition: "unify the XL finish-time prune with the XLI all-directory restore prune" }))
+    expect(result.verdict).toBe("met")
+  })
+
+  test("the rubric both judges see carries the three new clauses (session and independent)", async () => {
+    const sessionPrompts: string[] = []
+    const modelPrompts: string[] = []
+    const { fake } = deps({
+      sessionGenerate: async (_sid, prompt) => { sessionPrompts.push(prompt); return verdictJson("not_met", "x") },
+      modelGenerate: async (_model, prompt) => { modelPrompts.push(prompt); return verdictJson("not_met", "x") },
+    })
+    const session = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await session.evaluate(request())
+    const independent = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    await independent.evaluate(request())
+    for (const prompt of [sessionPrompts[0]!, modelPrompts[0]!]) {
+      expect(prompt).toContain("Condition fit")
+      expect(prompt).toContain("Novelty / no-duplicate")
+      expect(prompt).toContain("duplicate-without-forward-pointer")
+      expect(prompt).toContain("Honest next gap")
+    }
+  })
+})
