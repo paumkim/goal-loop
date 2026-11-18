@@ -1076,6 +1076,34 @@ describe("loop prompts", () => {
     expect(text).toContain("Already satisfied at HEAD")
   })
 
+  test("evaluator rubric is a defensive auditor: stale/weakened state forces not_met, met reasons carry a next: hint", () => {
+    for (const text of [
+      Prompt.evaluateInSession("do it", { turn: 2, elapsedMs: 1000 }, { required: false, branch: "dev", reason: "t" }),
+      Prompt.evaluateIndependently("do it", { turn: 2, elapsedMs: 1000 }, "transcript", { required: false, branch: "dev", reason: "t" }),
+    ]) {
+      expect(text).toContain("Defensive audit")
+      expect(text).toContain("weakened")
+      expect(text).toContain("contradicted by fresher output")
+      expect(text).toContain("bought by weakening a test")
+      expect(text).toContain('prefixed "next:"')
+      expect(text).toContain("single next concrete step")
+    }
+  })
+
+  test("next-goal planner audits in defensive order and carries forward the evaluator's next: hint", () => {
+    for (const text of [
+      Prompt.nextGoalInSession({ objective: "o", history: [entry], latestSummary: "s" }),
+      Prompt.nextGoalIndependently({ objective: "o", history: [entry], latestSummary: "s" }),
+    ]) {
+      expect(text).toContain("defensive auditor")
+      expect(text).toContain("a. Failing, weakened or unwired gates")
+      expect(text).toContain("b. Stale or contradictory state")
+      expect(text).toContain("e. Speed and friction")
+      expect(text).toContain('"next:" hint')
+      expect(text).toContain("first-class candidate")
+    }
+  })
+
   test("next-goal generator carries the LOOP_COMPLETE contract", () => {
     for (const text of [
       Prompt.nextGoalInSession({ objective: "o", history: [entry], latestSummary: "s" }),

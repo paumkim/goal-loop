@@ -314,7 +314,9 @@ const VERDICTS = [
   `- "met": every part of the condition is demonstrated by evidence in the conversation (tool output, command`,
   `  results, file contents shown), or an explicit stop clause in the condition (turn, time, or budget limit) has`,
   `  been reached according to the harness facts below.`,
-  `- "not_met": not demonstrated yet but still achievable. The reason must name what is missing or the next step.`,
+  `- "not_met": not demonstrated yet but still achievable. The reason must name what is missing and the`,
+  `  single next concrete step, phrased so a fresh worker can execute it without re-deriving the problem;`,
+  `  name the evidence that would settle it.`,
   `- "impossible": can never be satisfied (self-contradictory, or depends on something verifiably unavailable).`,
   `  Use only with strong evidence; difficulty or slow progress is "not_met".`,
 ]
@@ -329,6 +331,15 @@ const RULES = [
   `<sha>. No new work is produced by this iteration." Do not credit narration of effort, and do not produce`,
   `theater (re-verification-only turns still satisfy the condition, but a planner that re-proposes an identical`,
   `or materially equivalent condition must not be armed; the loop completes).`,
+  `Defensive audit (applies in addition to the condition): before deciding, scan the visible evidence for`,
+  `state that is stale, weakened or self-contradictory — tests skipped, deleted or relaxed to make a check`,
+  `pass; evidence produced before the last change; SPEC or docs contradicting the visible tree; generated`,
+  `artifacts never committed; half-landed work from an earlier turn; a claim contradicted by fresher output.`,
+  `If any of these is visible and bears on the condition, or on the evidence used to support it, the verdict is`,
+  `"not_met" and the reason names the item. A green gate bought by weakening a test is not green.`,
+  `Proactive duty: when the condition genuinely holds, end the reason with one line prefixed "next:" naming`,
+  `the highest-value improvement you saw that remains — stale files, missing tests, drift, speed, friction.`,
+  `This line is a hint for the loop planner; it never downgrades a met verdict. If nothing remains, omit it.`,
 ]
 
 /**
@@ -494,7 +505,14 @@ const NEXT_GOAL_ASK = [
   `Reply with EXACTLY ONE of these, and nothing else:`,
   `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
   `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `You are the loop's defensive auditor, not just a planner. Audit in this order and arm the highest entry on which work is genuinely ABSENT at HEAD:`,
+  `a. Failing, weakened or unwired gates (tests skipped, deleted or relaxed; checks detached from the build) — broken truth outranks all cosmetic work.`,
+  `b. Stale or contradictory state (docs or SPEC vs the tree, artifacts older than their source, half-landed work, uncommitted leftovers).`,
+  `c. Behavior that shipped without tests or gates.`,
+  `d. Gaps in the constant objective not yet closed.`,
+  `e. Speed and friction (repeated expensive work, slow checks, redundant steps).`,
   `Before proposing, audit the candidate against CURRENT HEAD via the completed history above: enumerate what it would require, and only propose a condition whose required work is ABSENT at HEAD.`,
+  `Carry forward any "next:" hint the evaluator attached to the latest met verdict — it is a first-class candidate, subject to the same ABSENT-at-HEAD audit.`,
   `If every meaningful improvement under the objective is already complete, reply LOOP_COMPLETE. Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored).`,
   `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
 ]
