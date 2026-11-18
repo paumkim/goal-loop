@@ -478,22 +478,21 @@ export const StatusDialogBody = (props: {
     }
   }
   return (
-    <box flexDirection="column" gap={1}>
+    <box flexDirection="column" gap={0}>
       <Show when={props.noticeStale?.()}>
         <text wrapMode="word" fg={theme().text.faint}>{"snapshot unavailable - showing last known state"}</text>
       </Show>
       <Show when={g()} fallback={<text wrapMode="word" fg={theme().text.base}>{props.fallback}</text>}>
         {(goal) => (
-        <box flexDirection="column" gap={1} paddingRight={3}>
+        <box flexDirection="column" gap={1} paddingRight={1}>
           {/* view tabs — overview (default) is the full dashboard as ever: state at a glance plus everything the bar's level (c) names; ledger is the focus view (strip, the state row and the history, nothing else); dossier is the whole record as rendered Markdown (strip, the state row, the copy row and the document, nothing else). Left click switches (the `t` chord in the keymap is the keyboard twin, host-wired); right/middle inert; the active tab paints base+bold, weight is the NO_COLOR contract. */}
-          <box flexDirection="row" gap={1}>
+          <box flexDirection="row" gap={2}>
             {viewTab("overview")}
             <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
             {viewTab("ledger")}
             <text wrapMode="none" fg={theme().text.faint}>{"·"}</text>
             {viewTab("dossier")}
-          </box>
-          <box flexDirection="row" gap={2}>
+            <box flexGrow={1} />
             <text fg={stateColor()} attributes={TextAttributes.BOLD}>
               {goal().status}
             </text>
@@ -504,7 +503,7 @@ export const StatusDialogBody = (props: {
             </text>
           </box>
           <Show when={view() === "overview"}>
-            <box flexDirection="column" gap={1}>
+            <box flexDirection="column" gap={0}>
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
           <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
