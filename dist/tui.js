@@ -5667,6 +5667,14 @@ var scrollbarTrackOptions = (theme, mono) => {
 };
 
 // src/core/entries.ts
+var stripVolatile = (key, value) => key === "elapsedMs" ? undefined : value;
+var goalsEqual = (a, b) => {
+  if (a === b)
+    return true;
+  if (!a || !b)
+    return false;
+  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile);
+};
 var ENTRY_CAP = 64;
 function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   let changed = false;
@@ -5729,6 +5737,209 @@ function compactionJustLanded(previous, next) {
     return false;
   return previous?.loopCompact?.landedAt !== landed;
 }
+var applySnapshot = (entries, sessionID, goal, nowMs, keep, cap = ENTRY_CAP) => {
+  const existing = entries[sessionID];
+  if (existing && goalsEqual(existing.goal, goal))
+    return pruneSnapshotEntries(bumpReceivedAt(entries, sessionID, nowMs), keep, cap);
+  const next = { ...entries, [sessionID]: { goal, receivedAt: nowMs, terminalAt: terminalStampOf(existing, goal, nowMs) } };
+  return pruneSnapshotEntries(next, keep, cap);
+};
+
+// src/core/wire.ts
+var sameDirectory = (a, b) => {
+  const norm = (p) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "");
+  const left = norm(a);
+  const right = norm(b);
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+};
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+var isString = (value) => typeof value === "string";
+var isBoolean = (value) => typeof value === "boolean";
+var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
+var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
+var PAUSE_CAUSES = new Set(["cap", "stall", "user"]);
+var isPauseCause = (value) => isString(value) && PAUSE_CAUSES.has(value);
+var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
+var VERDICTS = new Set(["met", "not_met", "impossible"]);
+var isVerdict = (value) => isString(value) && VERDICTS.has(value);
+var NOTICE_KINDS = new Set([
+  "set",
+  "status",
+  "cleared",
+  "achieved",
+  "impossible",
+  "paused",
+  "resumed",
+  "retry",
+  "failed",
+  "checkin",
+  "error",
+  "compact",
+  "loop"
+]);
+var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
+var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
+var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
+var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend));
+var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
+var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
+var isGoalSnapshot = (value) => {
+  if (!isRecord(value))
+    return false;
+  if (value.version !== 1)
+    return false;
+  if (!isString(value.id) || value.id === "" || !isString(value.sessionID) || value.sessionID === "" || !isString(value.directory) || !isString(value.condition))
+    return false;
+  if (!isGoalStatus(value.status))
+    return false;
+  if (value.reason !== undefined && !isString(value.reason))
+    return false;
+  if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause))
+    return false;
+  if (value.failureLabel !== undefined && !isString(value.failureLabel))
+    return false;
+  if (value.verdict !== undefined && !isVerdict(value.verdict))
+    return false;
+  if (!isFiniteNumber(value.setAt) || !isFiniteNumber(value.startedAt))
+    return false;
+  if (value.endedAt !== undefined && !isFiniteNumber(value.endedAt))
+    return false;
+  if (!isFiniteNumber(value.turns) || !isFiniteNumber(value.stall) || !isFiniteNumber(value.retries) || !isFiniteNumber(value.checkins))
+    return false;
+  if (!isUsageSnapshot(value.baseline))
+    return false;
+  if (value.final !== undefined && !isUsageSnapshot(value.final))
+    return false;
+  if (!Array.isArray(value.history) || !value.history.every(isVerdictEntry))
+    return false;
+  if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
+    return false;
+  if (value.spend !== undefined && !isUsageSnapshot(value.spend))
+    return false;
+  if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize))
+    return false;
+  if (value.compactAtTokens !== undefined && !isFiniteNumber(value.compactAtTokens))
+    return false;
+  if (value.loopEnabled !== undefined && !isBoolean(value.loopEnabled))
+    return false;
+  if (value.loopIteration !== undefined && !isFiniteNumber(value.loopIteration))
+    return false;
+  if (value.loopObjective !== undefined && !isString(value.loopObjective))
+    return false;
+  if (value.loopMaxLoops !== undefined && !isFiniteNumber(value.loopMaxLoops))
+    return false;
+  if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress))
+    return false;
+  if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry)))
+    return false;
+  if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact))
+    return false;
+  if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0))
+    return false;
+  return true;
+};
+var parseGoalSnapshot = (value) => isGoalSnapshot(value) ? value : undefined;
+var parseListGoalOutput = (value) => {
+  if (!isRecord(value) || !Array.isArray(value.goals))
+    return;
+  const out = [];
+  for (const entry of value.goals) {
+    const parsed = parseGoalSnapshot(entry);
+    if (parsed)
+      out.push(parsed);
+  }
+  return out;
+};
+var parseGetGoalOutput = (value) => {
+  if (!isRecord(value))
+    return;
+  const goal = value.goal;
+  if (goal === null)
+    return { goal: null };
+  const parsed = parseGoalSnapshot(goal);
+  return parsed ? { goal: parsed } : undefined;
+};
+var parseChangedEvent = (value) => {
+  if (!isRecord(value))
+    return;
+  const sessionID = value.sessionID;
+  if (!isString(sessionID) || sessionID === "")
+    return;
+  const goal = value.goal;
+  if (goal === undefined)
+    return;
+  if (goal === null)
+    return { sessionID, goal: null };
+  const parsed = parseGoalSnapshot(goal);
+  return parsed ? { sessionID, goal: parsed } : undefined;
+};
+var parseNotice = (value) => {
+  if (!isRecord(value))
+    return;
+  const { sessionID, kind, level, title, message } = value;
+  if (!isString(sessionID) || sessionID === "")
+    return;
+  if (!isNoticeKind(kind) || !isNoticeLevel(level))
+    return;
+  if (!isString(title) || !isString(message))
+    return;
+  return { sessionID, kind, level, title, message };
+};
+
+// src/core/repull.ts
+var makeGoalRefresh = (deps) => async (sessionID) => {
+  const output = parseGetGoalOutput(await deps.get(sessionID));
+  if (!output)
+    return false;
+  deps.put(sessionID, output.goal);
+  return true;
+};
+
+// src/core/rpc-pump.ts
+var RPC_RESUBSCRIBE_DELAY_MS = 1000;
+var defaultSleep = (ms, signal) => new Promise((resolve) => {
+  if (signal.aborted)
+    return resolve();
+  const timer = setTimeout(() => {
+    signal.removeEventListener("abort", onAbort);
+    resolve();
+  }, ms);
+  const onAbort = () => {
+    clearTimeout(timer);
+    resolve();
+  };
+  signal.addEventListener("abort", onAbort, { once: true });
+});
+var errorMessage = (error) => error instanceof Error ? error.message : String(error);
+var pumpRpcEvent = async (options) => {
+  const { name, signal, subscribe, handle, catchUp, log } = options;
+  const sleep = options.sleep ?? defaultSleep;
+  while (!signal.aborted) {
+    try {
+      for await (const event of subscribe()) {
+        if (signal.aborted)
+          return;
+        try {
+          handle(event);
+        } catch (error) {
+          log?.("rpc event handler failed", { name, error: errorMessage(error) });
+        }
+      }
+      log?.("rpc event stream ended", { name });
+    } catch (error) {
+      log?.("rpc event stream dropped", { name, error: errorMessage(error) });
+    }
+    if (signal.aborted)
+      return;
+    try {
+      catchUp?.();
+    } catch (error) {
+      log?.("rpc catch-up failed", { name, error: errorMessage(error) });
+    }
+    await sleep(RPC_RESUBSCRIBE_DELAY_MS, signal);
+  }
+};
 
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
@@ -5963,169 +6174,10 @@ var dialogStatusCommands = (deps) => {
   ];
 };
 
-// src/core/wire.ts
-var sameDirectory = (a, b) => {
-  const norm = (p) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "");
-  const left = norm(a);
-  const right = norm(b);
-  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
-};
-var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
-var isString = (value) => typeof value === "string";
-var isBoolean = (value) => typeof value === "boolean";
-var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
-var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
-var PAUSE_CAUSES = new Set(["cap", "stall", "user"]);
-var isPauseCause = (value) => isString(value) && PAUSE_CAUSES.has(value);
-var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
-var VERDICTS = new Set(["met", "not_met", "impossible"]);
-var isVerdict = (value) => isString(value) && VERDICTS.has(value);
-var NOTICE_KINDS = new Set([
-  "set",
-  "status",
-  "cleared",
-  "achieved",
-  "impossible",
-  "paused",
-  "resumed",
-  "retry",
-  "failed",
-  "checkin",
-  "error",
-  "compact",
-  "loop"
-]);
-var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
-var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
-var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
-var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend));
-var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
-var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
-var isGoalSnapshot = (value) => {
-  if (!isRecord(value))
-    return false;
-  if (value.version !== 1)
-    return false;
-  if (!isString(value.id) || value.id === "" || !isString(value.sessionID) || value.sessionID === "" || !isString(value.directory) || !isString(value.condition))
-    return false;
-  if (!isGoalStatus(value.status))
-    return false;
-  if (value.reason !== undefined && !isString(value.reason))
-    return false;
-  if (value.pauseCause !== undefined && !isPauseCause(value.pauseCause))
-    return false;
-  if (value.failureLabel !== undefined && !isString(value.failureLabel))
-    return false;
-  if (value.verdict !== undefined && !isVerdict(value.verdict))
-    return false;
-  if (!isFiniteNumber(value.setAt) || !isFiniteNumber(value.startedAt))
-    return false;
-  if (value.endedAt !== undefined && !isFiniteNumber(value.endedAt))
-    return false;
-  if (!isFiniteNumber(value.turns) || !isFiniteNumber(value.stall) || !isFiniteNumber(value.retries) || !isFiniteNumber(value.checkins))
-    return false;
-  if (!isUsageSnapshot(value.baseline))
-    return false;
-  if (value.final !== undefined && !isUsageSnapshot(value.final))
-    return false;
-  if (!Array.isArray(value.history) || !value.history.every(isVerdictEntry))
-    return false;
-  if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
-    return false;
-  if (value.spend !== undefined && !isUsageSnapshot(value.spend))
-    return false;
-  if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize))
-    return false;
-  if (value.compactAtTokens !== undefined && !isFiniteNumber(value.compactAtTokens))
-    return false;
-  if (value.loopEnabled !== undefined && !isBoolean(value.loopEnabled))
-    return false;
-  if (value.loopIteration !== undefined && !isFiniteNumber(value.loopIteration))
-    return false;
-  if (value.loopObjective !== undefined && !isString(value.loopObjective))
-    return false;
-  if (value.loopMaxLoops !== undefined && !isFiniteNumber(value.loopMaxLoops))
-    return false;
-  if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress))
-    return false;
-  if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry)))
-    return false;
-  if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact))
-    return false;
-  if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0))
-    return false;
-  return true;
-};
-var parseGoalSnapshot = (value) => isGoalSnapshot(value) ? value : undefined;
-var parseListGoalOutput = (value) => {
-  if (!isRecord(value) || !Array.isArray(value.goals))
-    return;
-  const out = [];
-  for (const entry of value.goals) {
-    const parsed = parseGoalSnapshot(entry);
-    if (parsed)
-      out.push(parsed);
-  }
-  return out;
-};
-var parseGetGoalOutput = (value) => {
-  if (!isRecord(value))
-    return;
-  const goal = value.goal;
-  if (goal === null)
-    return { goal: null };
-  const parsed = parseGoalSnapshot(goal);
-  return parsed ? { goal: parsed } : undefined;
-};
-var parseChangedEvent = (value) => {
-  if (!isRecord(value))
-    return;
-  const sessionID = value.sessionID;
-  if (!isString(sessionID) || sessionID === "")
-    return;
-  const goal = value.goal;
-  if (goal === undefined)
-    return;
-  if (goal === null)
-    return { sessionID, goal: null };
-  const parsed = parseGoalSnapshot(goal);
-  return parsed ? { sessionID, goal: parsed } : undefined;
-};
-var parseNotice = (value) => {
-  if (!isRecord(value))
-    return;
-  const { sessionID, kind, level, title, message } = value;
-  if (!isString(sessionID) || sessionID === "")
-    return;
-  if (!isNoticeKind(kind) || !isNoticeLevel(level))
-    return;
-  if (!isString(title) || !isString(message))
-    return;
-  return { sessionID, kind, level, title, message };
-};
-
-// src/core/repull.ts
-var makeGoalRefresh = (deps) => async (sessionID) => {
-  const output = parseGetGoalOutput(await deps.get(sessionID));
-  if (!output)
-    return false;
-  deps.put(sessionID, output.goal);
-  return true;
-};
-
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
 var elapsedOf = (g, receivedAt, nowMs) => g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs;
-var stripVolatile = (key, value) => key === "elapsedMs" ? undefined : value;
-var goalsEqual = (a, b) => {
-  if (a === b)
-    return true;
-  if (!a || !b)
-    return false;
-  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile);
-};
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions2();
   return (() => {
@@ -6515,20 +6567,7 @@ var tui_default = Plugin.define({
       } catch {}
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal);
       const mergedNow = Date.now();
-      return setEntries((previous) => {
-        const existing = previous[sessionID];
-        if (existing && goalsEqual(existing.goal, mergedGoal))
-          return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP);
-        const next = {
-          ...previous,
-          [sessionID]: {
-            goal: mergedGoal,
-            receivedAt: mergedNow,
-            terminalAt: terminalStampOf(existing, mergedGoal, mergedNow)
-          }
-        };
-        return pruneSnapshotEntries(next, statusDialogSession());
-      });
+      return setEntries((previous) => applySnapshot(previous, sessionID, mergedGoal, mergedNow, statusDialogSession()));
     };
     const ensure = (sessionID) => {
       if (requested.has(sessionID))
@@ -6611,7 +6650,13 @@ var tui_default = Plugin.define({
           }).catch(() => {});
         } catch {}
     };
-    const offChanged = rpc.events.on("changed", (event) => {
+    const pumpController = new AbortController;
+    const PUMP_GENERATION_KEY = "__opencodeGoalTuiRpcPump__";
+    const pumpGeneration = globalThis[PUMP_GENERATION_KEY];
+    if (pumpGeneration instanceof AbortController)
+      pumpGeneration.abort();
+    globalThis[PUMP_GENERATION_KEY] = pumpController;
+    const handleChangedEvent = (event) => {
       try {
         const parsed = parseChangedEvent(event?.data);
         const local = context.location?.directory;
@@ -6622,13 +6667,53 @@ var tui_default = Plugin.define({
         if (statusDialogOpen())
           refreshOthers();
       } catch {}
-    });
-    const offNotice = rpc.events.on("notice", (event) => {
+    };
+    const handleNoticeEvent = (event) => {
       try {
         const notice = parseNotice(event?.data);
         if (notice)
           onNotice(notice);
       } catch {}
+    };
+    const reconnectCatchUp = () => {
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0))
+        refresh(sessionID).catch(() => {});
+      if (statusDialogOpen())
+        refreshOthers();
+    };
+    const pumpSleep = (ms, signal) => new Promise((resolve) => {
+      if (signal.aborted)
+        return resolve();
+      const timer = setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      const onAbort = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      signal.addEventListener("abort", onAbort, {
+        once: true
+      });
+    });
+    pumpRpcEvent({
+      name: "changed",
+      signal: pumpController.signal,
+      subscribe: () => rpc.events.subscribe("changed", {
+        signal: pumpController.signal
+      }),
+      handle: handleChangedEvent,
+      catchUp: reconnectCatchUp,
+      sleep: pumpSleep
+    });
+    pumpRpcEvent({
+      name: "notice",
+      signal: pumpController.signal,
+      subscribe: () => rpc.events.subscribe("notice", {
+        signal: pumpController.signal
+      }),
+      handle: handleNoticeEvent,
+      sleep: pumpSleep
     });
     const timer = setInterval(() => {
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active"))
@@ -7750,14 +7835,13 @@ var tui_default = Plugin.define({
     }));
     return () => {
       clearInterval(timer);
+      pumpController.abort();
       if (statusCopiedTimer)
         clearTimeout(statusCopiedTimer);
       for (const pending of terminalTimers)
         clearTimeout(pending);
       terminalTimers.clear();
       setTerminalAcks({});
-      offChanged();
-      offNotice();
       setFlashing(new Set);
       setLanding(new Set);
       setStatusDialogOpen(false);

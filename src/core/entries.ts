@@ -10,6 +10,21 @@
  */
 import { isLive, type GoalSnapshot } from "./types.ts"
 
+/**
+ * Elapsed wall time is recomputed from `now - startedAt` by every server snapshot, so two pulls of an
+ * otherwise-identical live goal never deep-equal — strip it or the unchanged-snapshot arm (and its
+ * bumpReceivedAt dedup) never engages for live goals. Everything else on the snapshot is either
+ * user-visible state or derived from the record's fields, so it stays part of the comparison.
+ */
+const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
+
+/** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
+export const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
+  if (a === b) return true
+  if (!a || !b) return false
+  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
+}
+
 export interface GoalSnapshotCacheEntry {
   readonly goal: GoalSnapshot | null
   /** Client clock when the snapshot arrived; elapsed time is extrapolated from it to avoid clock skew. */
@@ -131,4 +146,28 @@ function compactionJustLanded(previous: GoalSnapshot | null | undefined, next: G
   const landed = next.loopCompact?.landedAt
   if (landed === undefined) return false
   return previous?.loopCompact?.landedAt !== landed
+}
+
+/**
+ * The TUI's `changed`-event / re-pull intake, extracted pure from the render tree: store `goal` under
+ * `sessionID`, or — when it compares equal to the cached copy (elapsedMs aside) — just re-stamp
+ * `receivedAt` so the stale-chrome guard counts it as fresh. A live→terminal or evaluating→idle flip is
+ * never equal, so terminal acknowledgment detection in the caller keeps working unchanged. Returns the
+ * same reference when the cap evicts nothing, a new map otherwise.
+ */
+export const applySnapshot = (
+  entries: Readonly<Record<string, GoalSnapshotCacheEntry>>,
+  sessionID: string,
+  goal: GoalSnapshot | null,
+  nowMs: number,
+  keep: string | undefined,
+  cap: number = ENTRY_CAP,
+): Readonly<Record<string, GoalSnapshotCacheEntry>> => {
+  const existing = entries[sessionID]
+  // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time
+  // still extrapolates (only active goals extrapolate); goal-identical memos stay untouched because the
+  // render tree sees the same goal reference.
+  if (existing && goalsEqual(existing.goal, goal)) return pruneSnapshotEntries(bumpReceivedAt(entries, sessionID, nowMs), keep, cap)
+  const next = { ...entries, [sessionID]: { goal, receivedAt: nowMs, terminalAt: terminalStampOf(existing, goal, nowMs) } }
+  return pruneSnapshotEntries(next, keep, cap)
 }
