@@ -473,7 +473,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=64 tests=1671 -->
+<!-- spec-check files=64 tests=1683 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6754,3 +6754,15 @@ Armed condition of this iteration (verbatim from the loop): "Persist a bounded c
 Honest limits. (a) 100 entries is a fixed bound — older completed conditions are gone by design, and `completedConditionsDropped` counts them; there is no manifest of dropped strings. (b) The ledger stores condition strings only, not summaries or shas — it exists for the gates, not for display; no dossier/TUI surface reads it. (c) A 100-entry ledger still cannot catch a condition completed more than 100 iterations ago; the cap is the explicit, counted boundary of best effort. (d) The anti-repeat and near-duplicate thresholds themselves are unchanged; this workstream widens what they see, not how they judge.
 
 <!-- spec-check files=64 tests=1671 -->
+
+## Workstream XXXVIII — terminal goal records bounded at plugin storage (2026-11-18)
+
+Armed condition of this iteration (verbatim from the loop): "Bound persisted goal records at plugin storage for very long sessions: prune terminal (ended/achieved/cleared) records past an explicit age or count cap on restore/startup, never touch active records, report what was pruned honestly; add tests; bun run check green; commit on wt branch and submit via coordinator."
+
+923. Motivation. A goal that reaches a terminal status keeps its persisted record at `goal/v1/<sessionID>` (finish commits it; nothing ever removed it). Long-lived plugin storage therefore accumulated one dead record per finished goal, per session, forever — every restart scanned and carried them, and the storage grew without bound.
+924. Behavior. `src/core/types.ts` gains `MAX_TERMINAL_RECORD_ENTRIES = 50` (per directory, newest kept), `TERMINAL_RECORD_MAX_AGE_MS = 30 days`, and the pure `selectTerminalRecordsToPrune(records, nowMs)` (age first by `endedAt` falling back to `startedAt`, then count cap on the survivors; live records are never offered; terminal records with no usable stamp are kept and counted as `unstampedKept`, never pruned). `GoalStore.pruneTerminal(directory, nowMs)` scans `goal/v1/` (same paging as `loadLive`), scopes to this directory only, and removes the selection through the normal per-session remove queue; in probe/readOnly mode it removes nothing and returns `readOnly: true` with the scanned count. `restore()` runs the prune before adopting live records; it is best-effort (a prune failure is logged and never blocks adoption) and logs one counts-only line (`scanned`/`pruned`/`kept`/`droppedAged`/`droppedBeyondCap`/`unstampedKept`) only when terminal records were seen. The log is the report; there is no hidden counter and the dropped records are not implied retained.
+925. Tests. New `test/terminal-record-prune.test.ts` (7 unit tests: live-never-offered, age boundary strictness, count cap keeps newest 50, age-before-count interaction, unstamped kept, endedAt-wins-over-startedAt). `test/controller.test.ts` gains five restore-level cases in a new describe block: restore prunes aged terminal records while the active record is adopted and a counts-only log line is emitted; the count cap drops the oldest fresh terminal records; foreign-directory terminal records are untouched; unstamped terminal records are kept and reported; a probe-mode (readOnly) store removes nothing and reports `readOnly: true`. Test count moves 1671 → **1683 pass / 0 fail**; packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1683` in this same commit. `docs/runtime.html` gains a "Storage hygiene" section stating the caps, the scoping, and the probe-mode behavior.
+
+Honest limits. (a) The caps are fixed constants, not config knobs — by design; widening them is a reviewed code change, not a silent drift. (b) A terminal record pruned by the cap is gone by design and is not enumerated anywhere; `pruned` is a count, not a manifest. (c) Records with no `endedAt`/`startedAt` are kept forever by the age rule (their age can never be judged) — they are reported via `unstampedKept`, not silently absorbed. (d) The prune is per-directory: terminal records of other directories at the same plugin storage are untouched; cross-directory GC is out of scope. (e) Live records (active/paused) are never pruned, even if ancient — paused is resumable and is not terminal.
+
+<!-- spec-check files=64 tests=1683 -->
