@@ -1,4 +1,4 @@
-import { BOUNDARY_DROP_FACTOR, BOUNDARY_LANDING_GRACE_MS, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
+import { BOUNDARY_DROP_FACTOR, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
@@ -657,41 +657,15 @@ export class GoalController {
 
   /**
    * Restores live goals after a restart, resetting turn count, timer and spend baseline (Claude Code parity).
-   * `boundaryCompact: false` adopts only: no host side effects are triggered.
-   * The default keeps the restart fan-out, restricted to armed loops: compact live loop sessions once so a
-   * restarted loop resumes on a fresh context. Plain `/goal` goals never reach the boundary-compaction path;
-   * the request is recorded as pending so the next arm can detect where it landed.
+   * Adopt-only by design: a restore never asks the host to compact. Compaction is strictly per session — it is
+   * requested for the specific session whose context crosses `compactAtTokens` (threshold path) or whose
+   * `/goal-loop` arm boundary asks for one (arm-time path). A plugin (re)load must not compact every live
+   * goal session at once, and a restore cannot know which session needs a fresh context next.
    */
-  async restore(options?: { boundaryCompact?: boolean }): Promise<number> {
-    const boundaryCompact = options?.boundaryCompact ?? true
+  async restore(): Promise<number> {
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
-    if (boundaryCompact) {
-      for (const record of this.goals.values()) {
-        if (record.status !== "active" || !record.loopEnabled || !this.deps.compactAtBoundary) continue
-        // Do not stack a restore-time request on top of one already in flight, nor on top of one that just
-        // landed: the arm-time settle re-requests an unlanded one (forced at 2 misses), and the host answers
-        // "nothing to compact yet" for the rest. Reloading the plugin must not queue another compaction.
-        const existing = record.loopCompact
-        if (existing && !existing.landedAt) continue
-        if (existing?.landedAt && this.deps.clock.now() - existing.landedAt < BOUNDARY_LANDING_GRACE_MS) continue
-        void this.deps
-          .compactAtBoundary(record.sessionID)
-          .then(async (result) => {
-            if (!result.requested) return
-            if (this.goals.get(record.sessionID) !== record || record.status !== "active") return
-            record.loopCompact = {
-              requestedAt: this.deps.clock.now(),
-              ...(result.estimatedTokens !== undefined ? { estimatedTokens: result.estimatedTokens } : {}),
-              iteration: record.loopIteration ?? 1,
-              misses: 0,
-            }
-            await this.commit(record).catch(() => {})
-          })
-          .catch((e) => this.deps.log.warn("restore boundary compact failed", { sessionID: record.sessionID, error: errorMessage(e) }))
-      }
-    }
     return this.goals.size
   }
 

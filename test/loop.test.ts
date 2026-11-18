@@ -671,7 +671,7 @@ describe("/goal-loop", () => {
     expect(h.controller.get(SID)!.reanchorCount).toBe(2)
   })
 
-  test("restore does not stack a compaction on top of an unlanded pending request", async () => {
+  test("a restore requests no compaction even with an unlanded pending request", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))
     h.summaries.push("s1")
@@ -683,12 +683,13 @@ describe("/goal-loop", () => {
     const h2 = harness({}, h.storage)
     const restored = await h2.controller.restore()
     expect(restored).toBe(1)
+    // Adopt-only: a restore never asks the host to compact, for any session. Compaction is per-session.
     expect(h2.compactCalls).toHaveLength(0)
     // The pending request stays recorded; the arm-time settle re-requests at 2 misses.
     expect(h2.controller.get(SID)!.loopCompact!.landedAt).toBeUndefined()
   })
 
-  test("restore does not compact again right after a landing", async () => {
+  test("a restore requests no compaction right after a landing either", async () => {
     await h.setLoop("improve the parser")
     h.verdicts.push(met("parser done"))
     h.summaries.push("s1")
@@ -1219,18 +1220,28 @@ describe("/goal-loop idempotent arming", () => {
     expect(marker).toBe(JSON.stringify(record))
   })
 
-  test("restore({ boundaryCompact: false }) adopts live records without requesting a host compaction", async () => {
+  test("restore adopts live records without requesting any host compaction (adopt-only)", async () => {
     const storage = new MemoryStorage()
     const h = harness({}, storage)
     await h.setLoop("improve the parser") // armed v1, no boundary request yet
     await h.controller.dispose()
-    const adoptOnly = harness({}, storage)
-    expect(await adoptOnly.controller.restore({ boundaryCompact: false })).toBe(1)
-    expect(adoptOnly.compactCalls).toHaveLength(0)
-    // The default restore keeps the restart fan-out (compact live sessions on a fresh context).
-    const fannedOut = harness({}, storage)
-    expect(await fannedOut.controller.restore()).toBe(1)
-    expect(fannedOut.compactCalls).toHaveLength(1)
+    const restored = harness({}, storage)
+    expect(await restored.controller.restore()).toBe(1)
+    // No per-session exception, no fan-out: a restore compacts nothing, not even armed loops.
+    expect(restored.compactCalls).toHaveLength(0)
+  })
+
+  test("a restore of many live loop sessions compacts none of them (no all-at-once fan-out)", async () => {
+    const storage = new MemoryStorage()
+    const hA = harness({}, storage)
+    const hB = harness({}, storage)
+    await hA.controller.command({ sessionID: "ses_a", text: "objective a", delivery: "steer", loop: true })
+    await hB.controller.command({ sessionID: "ses_b", text: "objective b", delivery: "steer", loop: true })
+    await hA.controller.dispose()
+    await hB.controller.dispose()
+    const restored = harness({}, storage)
+    expect(await restored.controller.restore()).toBe(2)
+    expect(restored.compactCalls).toHaveLength(0)
   })
 
   test("set() awaits the initial record write before returning (a8)", async () => {
@@ -2005,7 +2016,7 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     await h.setGoal("all tests pass")
     await h.controller.dispose()
     const h2 = harness({}, h.storage)
-    const restored = await h2.controller.restore() // default: boundary compact fan-out armed loops only
+    const restored = await h2.controller.restore() // adopt-only: a restore compacts nothing
     expect(restored).toBe(1)
     expect(h2.compactCalls).toHaveLength(0)
     expect(h2.controller.get(SID)!.loopCompact).toBeUndefined()
