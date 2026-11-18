@@ -256,8 +256,10 @@ export function checkin(
  * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
  * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
  * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
- * hook matches on (see `stripTerminalGoalNotes`). Loop advance notes stay plain `<goal-note>`: the
- * next armed iteration still needs them.
+ * hook matches on (see `stripTerminalGoalNotes`). Loop advance notes are terminal too since Workstream
+ * LI (2026-11-18): the armed kickoff (`loopContinuation`) carries everything an advance note repeated, so
+ * the completed iteration's outcome line must leave the model's context — it kept re-injecting the just-
+ * achieved goal into every later request ("false reminder after already achieved").
  */
 export const TERMINAL_NOTE_TAG = "<goal-note final>"
 
