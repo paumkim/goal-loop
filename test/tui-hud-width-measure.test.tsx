@@ -68,8 +68,9 @@ describe("the src/tui.tsx wiring that consumes the probe (source contract)", () 
 
   test("the card and its anchor consume the measured mount width, never the full terminal width", () => {
     // The row plan anchor and the painted card both read mountWidthOr() (mount width with
-    // terminal width as the fallback), not dimensions().width directly.
-    expect(tui).toContain("hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr())")
+    // terminal width as the fallback), not dimensions().width directly. The plan's maxRows is
+    // maxBodyRows() (the viewport ceiling minus the pill stripe) since the accordion change.
+    expect(tui).toContain("hudCardRows(g, contextOpen(), maxBodyRows(), mountWidthOr())")
     expect(tui).toContain("width={mountWidthOr()}")
     expect(tui).toContain("const mountWidthOr = () => mountWidth() ?? dimensions().width")
     // The width-dependent <Show> gate must sit INSIDE the probe box, never around it —
