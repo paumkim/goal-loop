@@ -76,6 +76,7 @@ function harness(
   let work: BackgroundWork = { subagents: 0, shells: 0 }
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   let usageFn: (() => Promise<UsageSnapshot | undefined>) | undefined
+  let estimateContext: (() => Promise<number | undefined>) | undefined
   const store = new GoalStore(storage, (e) => {
     throw e
   })
@@ -97,6 +98,7 @@ function harness(
       usage: async () => (usageFn ? usageFn() : usage),
       compact: async () => {},
     },
+    estimateContext: async () => estimateContext?.(),
     evaluator: {
       evaluate: async (request) => {
         requests.push(request)
@@ -130,6 +132,7 @@ function harness(
     setWork: (w: BackgroundWork) => void (work = w),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
     setUsageFn: (fn: (() => Promise<UsageSnapshot | undefined>) | undefined) => void (usageFn = fn),
+    setEstimateContext: (fn: (() => Promise<number | undefined>) | undefined) => void (estimateContext = fn),
     set: (condition = "all tests pass") => controller.command({ sessionID: SID, text: condition, delivery: "steer" }),
   }
 }
@@ -788,6 +791,33 @@ describe("context meter snapshot fields", () => {
     const h = harness()
     await h.set()
     expect(await h.controller.contextSize(SID)).toBeUndefined()
+  })
+
+  test("the turn's changed events carry the measured spend and context figures (per-turn refresh)", async () => {
+    const h = harness()
+    h.setEstimateContext(async () => 432_100)
+    await h.set()
+    h.changes.length = 0
+    h.setUsage({ cost: 7, input: 700, output: 70, reasoning: 0, cacheRead: 5, cacheWrite: 0 })
+    h.verdicts.push(notMet("keep going"))
+    await h.turn()
+    const withFigures = h.changes.filter((c) => c?.contextSize === 432_100)
+    expect(withFigures.length).toBeGreaterThan(0)
+    expect(withFigures[0]?.spend?.cost).toBe(6) // 7 vs the arm-time baseline of 1
+  })
+
+  test("the terminal achieved snapshot carries the settled spend AND the last measured context figure", async () => {
+    const h = harness()
+    h.setEstimateContext(async () => 99_001)
+    await h.set()
+    h.setUsage({ cost: 8, input: 800, output: 80, reasoning: 0, cacheRead: 0, cacheWrite: 0 })
+    h.verdicts.push(met("done"))
+    await h.turn()
+    await flush()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+    const terminal = h.changes.at(-1)
+    expect(terminal?.spend?.cost).toBe(7)
+    expect(terminal?.contextSize).toBe(99_001)
   })
 })
 
