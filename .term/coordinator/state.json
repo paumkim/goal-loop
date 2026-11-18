@@ -2951,8 +2951,16 @@
       "paths": "src/hud-card.tsx,src/tui-history.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/tui-hud.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/hover-stability",
       "worktree": "worktrees/wt-hover-stability",
-      "status": "claimed",
-      "createdAt": "2026-11-18T02:41:06Z"
+      "status": "done",
+      "createdAt": "2026-11-18T02:41:06Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T03:06:30Z",
+      "forcedScopeFiles": [
+        "test/render-scripts.test.ts"
+      ],
+      "submittedAt": "2026-11-18T03:06:30Z",
+      "mergedAt": "2026-11-18T03:13:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
