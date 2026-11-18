@@ -42,6 +42,8 @@ const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")
 const mono = process.argv.includes("--mono")
 if (mono) process.env.NO_COLOR = "1"
+/** --bench=N: render N frames and print avg/min/max ms per frame (renderOnce + captureCharFrame, the same work a keystroke triggers). 0 = skip benching. */
+const bench = positiveFiniteFlag("bench", 0)
 const now = Date.now()
 
 const theme: HistoryTheme & HudCardTheme = {
@@ -128,7 +130,7 @@ const goal: GoalSnapshot = {
 
 const setup = await testRender(
   () => (
-    <box width={width} height={height} flexDirection="column" paddingLeft={3} paddingRight={3} paddingBottom={1} paddingTop={0} gap={1}>
+    <box width={width} height={height} flexDirection="column" paddingLeft={1} paddingRight={1} paddingBottom={0} paddingTop={0} gap={1}>
       <box flexDirection="row" justifyContent="space-between" gap={2} flexShrink={0}>
         <text attributes={TextAttributes.BOLD} fg={theme.text.base}>
           {goalGlyph(motionDisabled(process.env))} /goal · loop
@@ -160,6 +162,18 @@ const setup = await testRender(
   { width, height },
 )
 await setup.renderOnce()
+if (bench > 0) {
+  const times: number[] = []
+  for (let frame = 0; frame < bench; frame++) {
+    const started = performance.now()
+    await setup.renderOnce()
+    setup.captureCharFrame()
+    times.push(performance.now() - started)
+  }
+  const total = times.reduce((sum, ms) => sum + ms, 0)
+  console.log(`bench: ${bench} frames · avg ${(total / times.length).toFixed(2)}ms · min ${Math.min(...times).toFixed(2)}ms · max ${Math.max(...times).toFixed(2)}ms`)
+  process.exit(0)
+}
 console.log(buggy ? "=== buggy scrollbox configuration ===" : "=== fixed scrollbox configuration ===")
 console.log(setup.captureCharFrame())
 process.exit(0)

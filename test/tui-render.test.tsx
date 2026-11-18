@@ -637,8 +637,8 @@ describe("DialogFooter (80-column floor)", () => {
     expect(frame).not.toContain("[copy condition]")
   })
 
-  test("at 96 cells the noun labels overflow — compact labels hold the row (audit finding A1)", async () => {
-    const frame = await renderFooter(96)
+  test("at 92 cells the noun labels overflow — compact labels hold the row (audit finding A1)", async () => {
+    const frame = await renderFooter(92)
     expect(frame).toContain("[copy]")
     expect(frame).toContain("[pin]")
     expect(frame).toContain("[clear]")

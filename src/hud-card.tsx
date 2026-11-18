@@ -187,14 +187,14 @@ const footerClearLabel = (roomy: boolean): string => (roomy ? "clear goal" : "cl
 /**
  * The footer tier, computed from measured cells — an overfull row paints the rightmost (destructive)
  * button past the host dialog for every width in the band, so the tier switch reads the actual
- * arithmetic. `budget` is the terminal width minus BOTH ClampedColumn paddings (`paddingLeft={3}` and
- * `paddingRight={3}` — the footer row's left edge starts at x=3, so the content ceiling is width−6); the host owns its
+ * arithmetic. `budget` is the terminal width minus BOTH ClampedColumn paddings (`paddingLeft={1}` and
+ * `paddingRight={1}` — the footer row's left edge starts at x=1, so the content ceiling is width−2); the host owns its
  * own frame. full (FULL_HINT + noun labels) unlocks only when everything fits; roomy (SHORT_HINT +
  * noun labels) one notch below; below that the compact labels hold the 80-column floor (≈69 cells).
  * Copied/pinned flip the labels and re-measure — the tier never paints past budget in any state.
  */
 export const dialogFooterTier = (width: number, copied: boolean, pinned: boolean): { wide: boolean; roomy: boolean } => {
-  const budget = Math.floor(width) - 6
+  const budget = Math.floor(width) - 2
   const buttons = (roomy: boolean): number =>
     footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4
   return {
