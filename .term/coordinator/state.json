@@ -3071,6 +3071,17 @@
       "submittedAt": "2026-11-18T06:19:12Z",
       "mergedAt": "2026-11-18T06:20:26Z",
       "mergedInto": "dev"
+    },
+    "live-context-refresh": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
+      "branch": "wt/live-context-refresh",
+      "worktree": "worktrees/wt-live-context-refresh",
+      "status": "done",
+      "createdAt": "2026-11-18T06:25:34Z",
+      "submittedAt": "2026-11-18T06:33:12Z",
+      "mergedAt": "2026-11-18T06:34:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
