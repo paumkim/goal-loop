@@ -131,3 +131,88 @@ describe("docs path references", () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * The docs symbol-export contract.
+ *
+ * Every card in docs/*.html ends with the path of the module it describes, and most carry an
+ * `<p>Exports: ...</p>` line naming the symbols a reader can import from that module. The 2026-11-17
+ * re-anchor made those lines symbol-citations; a symbol renamed or removed without updating the card
+ * leaves the docs teaching a wrong import. The path contract above pins that the cited *file* exists;
+ * this pins that the cited *symbols* are real exports of it.
+ *
+ * Method-style listings are allowed for a class's own methods — e.g. `AutoCompactor` (`maybeCompact`,
+ * `compactAtBoundary`) — because naming a class and its main methods on one line reads correctly.
+ * Those entries are listed in SYMBOL_EXPORT_ALLOWLIST below keyed by (module, symbol), and this test
+ * additionally requires each allowlisted method to appear as a method definition in the module
+ * (`  async name(` / `  name(`), so the allowlist is a documented exception that is still checked —
+ * never a way to silence a stale claim.
+ *
+ * Adding an entry is a docs-shape decision: the symbol must be a method of the exported class the card
+ * names. If a card wants to name something that is neither an export nor a listed class method, the
+ * card is wrong — fix the card, not the allowlist.
+ */
+const SYMBOL_EXPORT_ALLOWLIST: ReadonlyArray<readonly [string, string]> = [
+  // Methods of the exported class `AutoCompactor` (the class is what docs/core.html names and checks).
+  ["src/runtime/compactor.ts", "maybeCompact"],
+  ["src/runtime/compactor.ts", "compactAtBoundary"],
+]
+
+describe("docs symbol-export contract", () => {
+  test("every symbol in a card's Exports line is exported by the module it names (or allowlisted method-style)", () => {
+    const cardPattern = /<div class="card">(.*?)<\/div>/gs
+    const pathPattern = /<code>((?:src|packages)\/[^<]+\.(?:tsx|ts|js|mjs))<\/code>/
+    const codePattern = /<code>([^<]+)<\/code>/g
+    const exportDeclPattern = /export\s+(?:default\s+)?(?:async\s+)?(?:abstract\s+)?(?:const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)/g
+    const exportListPattern = /export\s+(?:type\s+)?\{([^}]*)\}/gs
+    const symbolPattern = /^[A-Za-z_$][A-Za-z0-9_$]*$/
+
+    const exportedNames = (module: string): Set<string> => {
+      const source = readFileSync(join(ROOT, module), "utf8")
+      const names = new Set<string>()
+      for (const match of source.matchAll(exportDeclPattern)) names.add(match[1] as string)
+      for (const match of source.matchAll(exportListPattern)) {
+        for (const part of (match[1] as string).split(",")) {
+          const specifier = part.trim()
+          if (!specifier) continue
+          const alias = specifier.match(/^(?:type\s+)?[A-Za-z_$][A-Za-z0-9_$]*\s+as\s+([A-Za-z_$][A-Za-z0-9_$]*)$/)
+          const bare = specifier.match(/^(?:type\s+)?([A-Za-z_$][A-Za-z0-9_$]*)$/)
+          if (alias?.[1]) names.add(alias[1])
+          else if (bare?.[1]) names.add(bare[1])
+        }
+      }
+      return names
+    }
+
+    const offenders: string[] = []
+    for (const file of docFiles) {
+      if (!file.startsWith("docs/")) continue
+      const text = readFileSync(join(ROOT, file), "utf8")
+      for (const card of text.matchAll(cardPattern)) {
+        const body = card[1] as string
+        const pathMatch = body.match(pathPattern)
+        const exportsMatch = body.match(/<p>Exports:\s*(.*?)<\/p>/s)
+        if (!pathMatch || !exportsMatch) continue // no Exports claim to pin (card may describe a non-module)
+        const module = pathMatch[1] as string
+        const names = exportedNames(module)
+        for (const symbolMatch of (exportsMatch[1] as string).matchAll(codePattern)) {
+          const symbol = (symbolMatch[1] as string).trim()
+          if (!symbolPattern.test(symbol)) continue // a note or list fragment inside a code tag; not an importable name
+          if (names.has(symbol)) continue // the happy path
+          const allowlisted = SYMBOL_EXPORT_ALLOWLIST.some(([m, s]) => m === module && s === symbol)
+          if (allowlisted) {
+            // The allowlist is still checked: the method must be defined in the module (two-space-or-deeper indent,
+            // like every other method in this codebase), so a renamed method cannot ride the exception.
+            const methodPattern = new RegExp(`(^|\\n)\\s+(async\\s+)?${symbol}\\s*\\(`)
+            if (!methodPattern.test(readFileSync(join(ROOT, module), "utf8"))) {
+              offenders.push(`${file}: ${module} -> ${symbol} (allowlisted method-style, but no method definition found in the module)`)
+            }
+            continue
+          }
+          offenders.push(`${file}: ${module} -> ${symbol} (not exported by the module, not allowlisted method-style)`)
+        }
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+})
