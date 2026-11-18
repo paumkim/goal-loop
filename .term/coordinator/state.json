@@ -3428,6 +3428,17 @@
       "submittedAt": "2026-11-18T20:26:07Z",
       "mergedAt": "2026-11-18T20:27:34Z",
       "mergedInto": "dev"
+    },
+    "rearm-no-new-gap-refusal-contract": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/rearm-no-new-gap-refusal-contract",
+      "worktree": "worktrees/wt-rearm-no-new-gap-refusal-contract",
+      "status": "done",
+      "createdAt": "2026-11-18T20:33:26Z",
+      "submittedAt": "2026-11-18T20:36:36Z",
+      "mergedAt": "2026-11-18T20:38:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
