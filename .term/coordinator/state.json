@@ -3269,6 +3269,17 @@
       "submittedAt": "2026-11-18T16:58:32Z",
       "mergedAt": "2026-11-18T16:59:56Z",
       "mergedInto": "dev"
+    },
+    "spec-docs-honesty-audit": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "SPEC.md,docs/runtime.html,docs/core.html",
+      "branch": "wt/spec-docs-honesty-audit",
+      "worktree": "worktrees/wt-spec-docs-honesty-audit",
+      "status": "done",
+      "createdAt": "2026-11-18T17:07:30Z",
+      "submittedAt": "2026-11-18T17:10:23Z",
+      "mergedAt": "2026-11-18T17:11:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
