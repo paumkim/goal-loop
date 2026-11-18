@@ -15,6 +15,8 @@
  *   - Totals sum only measured iterations and say so: the spend line names "M of N measured"
  *     when the measurement is partial, renders "no iteration carried a measurement" when it
  *     is absent, and never claims a $0.00 the record is silent on.
+ *   - A record trimmed by the loop-history retention cap says so in the heading and the totals:
+ *     the figures below cover the retained iterations only; the dropped ones are unknown, never $0.00.
  *   - The figures are the record's own; nothing was estimated, sampled, probed, or
  *     re-verified here. Cost is the host's reported usage delta, not a re-price.
  *   - Free text (objective, conditions) is quoted so it can never forge document structure;
@@ -29,7 +31,7 @@ import { join, resolve } from "node:path"
 import { GAP, isoOf, quote, shortSha } from "./dossier.ts"
 import { formatCost } from "./format.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
-import type { GoalSnapshot, LoopEntry, UsageSnapshot } from "./types.ts"
+import { MAX_LOOP_HISTORY_ENTRIES, type GoalSnapshot, type LoopEntry, type UsageSnapshot } from "./types.ts"
 
 const pad = (n: number): string => String(n).padStart(2, "0")
 
@@ -119,6 +121,7 @@ interface BuiltSpendLedger {
  */
 export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendLedger {
   const entries = goal.loopHistory ?? []
+  const dropped = goal.loopHistoryDropped ?? 0
   const isLoop = Boolean(goal.loopEnabled)
   const totals = totalsOf(entries)
   const stamp = isoOf(nowMs)
@@ -136,7 +139,8 @@ export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendL
   lines.push(...quote(isLoop ? (goal.loopObjective ?? goal.condition) : goal.condition))
   lines.push("")
 
-  lines.push(`## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`)
+  lines.push(dropped > 0 ? `## Per-iteration spend (${entries.length} most recent of ${entries.length + dropped} landed iterations)` : `## Per-iteration spend (${entries.length} landed iteration${entries.length === 1 ? "" : "s"})`)
+  if (dropped > 0) lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap (${MAX_LOOP_HISTORY_ENTRIES} kept); the rows and totals below cover the retained iterations only — the dropped ones are not $0.00, they are unknown._`)
   lines.push("")
   if (entries.length === 0) {
     lines.push("None — this record has not landed an iteration, so there is nothing to attribute. No figures are claimed.")
@@ -157,7 +161,7 @@ export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendL
 
   lines.push("## Totals")
   lines.push("")
-  lines.push(`- Iterations recorded: ${totals.iterations}`)
+  lines.push(`- Iterations recorded: ${totals.iterations}${dropped > 0 ? ` (+ ${dropped} dropped by the retention cap; totals cover the retained iterations only)` : ""}`)
   lines.push(`- Turns: ${totals.turns} · Tool calls: ${totals.tools}`)
   if (totals.measured === 0) {
     lines.push("- Spend across iterations: no iteration carried a measurement")

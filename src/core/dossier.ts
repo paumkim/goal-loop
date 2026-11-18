@@ -235,8 +235,10 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
 
   // ---- Iterations
   const entries = goal.loopHistory ?? []
+  const dropped = goal.loopHistoryDropped ?? 0
   if (isLoop || entries.length > 0) {
-    lines.push(`## Completed iterations (${entries.length})`)
+    lines.push(dropped > 0 ? `## Completed iterations (${entries.length} most recent of ${entries.length + dropped})` : `## Completed iterations (${entries.length})`)
+    if (dropped > 0) lines.push(`_${dropped} earlier iteration record${dropped === 1 ? "" : "s"} dropped by the loop-history retention cap; the rows and totals below cover the retained iterations only — the dropped ones are not $0.00, they are unknown._`)
     lines.push("")
     if (entries.length === 0) {
       lines.push("None yet — this loop has not landed an iteration.")

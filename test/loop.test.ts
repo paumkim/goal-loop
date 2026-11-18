@@ -1003,6 +1003,71 @@ describe("/goal-loop", () => {
   })
 })
 
+describe("loop history retention", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("a 60-iteration loop keeps the newest 50 entries, records 10 drops, and the persisted record is bounded too", async () => {
+    h = harness({ maxLoops: 100 })
+    await h.setLoop("objective")
+    for (let i = 1; i <= 60; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(`step ${i + 1}`)
+    }
+    for (let i = 0; i < 60; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopHistory).toHaveLength(50)
+    expect(record.loopHistory![0]!.version).toBe(11)
+    expect(record.loopHistory!.at(-1)!.version).toBe(60)
+    expect(record.loopHistoryDropped).toBe(10)
+    // Outbound snapshots clone the record — the cap must hold there too.
+    const snapshot = h.controller.snapshot(SID) as GoalSnapshot
+    expect(snapshot.loopHistory).toHaveLength(50)
+    expect(snapshot.loopHistoryDropped).toBe(10)
+    // The persisted bytes are bounded: restore into a fresh controller and read the stored record.
+    await h.controller.dispose()
+    const h2 = harness({}, h.storage)
+    expect(await h2.controller.restore()).toBe(1)
+    const restored = h2.controller.get(SID)!
+    expect(restored.loopHistory).toHaveLength(50)
+    expect(restored.loopHistory![0]!.version).toBe(11)
+    expect(restored.loopHistoryDropped).toBe(10)
+  })
+
+  test("the cap-reached end also bounds the final record", async () => {
+    h = harness({ maxLoops: 51 })
+    await h.setLoop("objective")
+    for (let i = 1; i <= 51; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      if (i < 51) h.nextGoals.push(`step ${i + 1}`)
+    }
+    for (let i = 0; i < 51; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.loopHistory).toHaveLength(50)
+    expect(record.loopHistory![0]!.version).toBe(2)
+    expect(record.loopHistoryDropped).toBe(1)
+  })
+
+  test("at or below the cap nothing is dropped and the dropped counter stays absent", async () => {
+    await h.setLoop("objective")
+    for (let i = 1; i <= 3; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(`step ${i + 1}`)
+    }
+    for (let i = 0; i < 3; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.loopHistory).toHaveLength(3)
+    expect(record.loopHistoryDropped).toBeUndefined()
+  })
+})
+
 describe("loop prompts", () => {
   const entry: LoopEntry = { version: 1, condition: "c", summary: "s", reason: "r", turns: 2, toolCalls: 5, endedAt: 1 }
 

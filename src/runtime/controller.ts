@@ -13,7 +13,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP,
+  COMPACT_MISS_CAP, boundLoopHistory,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -939,7 +939,15 @@ export class GoalController {
     // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop
     // restores either the pre-step or the fully-advanced state, never a half-advanced one.
     const assignLoopState = () => {
-      record.loopHistory = history
+      // Retention cap: persisted records and (via structuredClone) outbound snapshots stay bounded no matter how many
+      // iterations a long-running loop lands. The local `history` keeps everything — messages and the maxLoops guard read it —
+      // only the record's copy is trimmed, newest first. The drop count rides the record so displays/ledgers can stay honest.
+      const bound = boundLoopHistory(history)
+      record.loopHistory = bound.retained
+      if (bound.dropped > 0) {
+        record.loopHistoryDropped = (record.loopHistoryDropped ?? 0) + bound.dropped
+        log.info("loop history retention cap: dropped oldest iteration records", { sessionID, dropped: bound.dropped, retained: bound.retained.length, totalDropped: record.loopHistoryDropped })
+      }
       record.loopNotProgress = notProgress
     }
 
