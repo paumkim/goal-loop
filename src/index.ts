@@ -14,7 +14,7 @@ import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorB
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { directive as directivePrompt, systemReminder, stripTerminalGoalNotes } from "./core/prompts.ts"
+import { directive as directivePrompt, systemReminder, stripGoalNotes } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -332,12 +332,13 @@ export default Plugin.define({
       }
       const anchor = controller.consumeAnchor(event.sessionID)
       if (anchor) event.system.push({ type: "text", text: anchor })
-      // End-of-record notes are history, not instructions: they stay in the session (and on the
-      // terminal as the outcome line) but must not ride the model's context on later turns, where
-      // they invite a ceremonial acknowledgement. Splice in place — the host holds the caller's
+      // Goal notes are history, not instructions: they stay in the session (and on the terminal
+      // as the outcome line) but must not ride the model's context on later turns, where they
+      // invite a ceremonial acknowledgement. This covers plain notes too — legacy loop-arm notes
+      // were folded in forever. Splice in place — the host holds the caller's
       // array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
-        const kept = stripTerminalGoalNotes(event.messages)
+        const kept = stripGoalNotes(event.messages)
         if (kept.length !== event.messages.length) event.messages.splice(0, event.messages.length, ...kept)
       }
     })
