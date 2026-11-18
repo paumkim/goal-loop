@@ -212,6 +212,16 @@ describe("render script smoke tests", () => {
     expect(result.stdout).toContain("=== loop · empty history ===")
     expect(gridChars(result.stdout)).toBeGreaterThan(100)
   }, 30_000)
+
+  test("render-slot.tsx exits 0 and shows the pill suppressed under the open card, painted with it closed", () => {
+    const result = run("scripts/render-slot.tsx")
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("=== slot · card open — the pill is suppressed, the card holds the row ===")
+    expect(result.stdout).toContain("=== slot · card closed — the pill paints, no card under it               ===")
+    expect(result.stdout).toContain("pill-in-open-card-frame=no")
+    expect(result.stdout).toContain("pill-in-closed-card-frame=yes")
+  }, 30_000)
 })
 
 describe("render script argument validation", () => {

@@ -1008,7 +1008,9 @@ export default Plugin.define({
           return pillMotionNeeded({ working: workingNow(), evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
         }
         createEffect(() => {
-          if (animated() && motionOk) {
+          // The pill is not painted while the card is open (see the mount gate below), so the breath
+          // must not advance either — a timer with no painter is pure wake-up work.
+          if (animated() && !cardFor() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS)
             onCleanup(() => clearInterval(timer))
             return
@@ -1081,28 +1083,35 @@ export default Plugin.define({
         return (
           <ErrorBoundary fallback={() => <box />}>
           <Show when={showing()}>
-            <box
-              position="absolute"
-              top={-1}
-              left={0}
-              height={1}
-              paddingLeft={1}
-              flexDirection="row"
-              onMouseOver={() => setHovered(true)}
-              onMouseOut={() => setHovered(false)}
-              onMouseUp={(event) => {
-                try {
-                  if (!props.sessionID) return
-                  // Right click opens the dashboard directly; left click toggles the card; other buttons are inert.
-                  if (event.button === 2) openDashboard(props.sessionID)
-                  else if (event.button === 0) toggleHud()
-                } catch {}
-              }}
-            >
-              <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
-                {pillText()}
-              </text>
-            </box>
+            {/* While the card is open the card IS the pill: it is opaque and anchored over exactly
+                the row the pill paints (top={-cardRows()} + cardRows() rows of height includes the
+                pill's top={-1} row), so a mounted pill would land behind it — unseen, but still
+                laid out, still hit-tested, still breath-timed. Suppressed by construction instead:
+                one voice on the row, the card or the pill, never both stacked. */}
+            <Show when={!cardFor()}>
+              <box
+                position="absolute"
+                top={-1}
+                left={0}
+                height={1}
+                paddingLeft={1}
+                flexDirection="row"
+                onMouseOver={() => setHovered(true)}
+                onMouseOut={() => setHovered(false)}
+                onMouseUp={(event) => {
+                  try {
+                    if (!props.sessionID) return
+                    // Right click opens the dashboard directly; left click toggles the card; other buttons are inert.
+                    if (event.button === 2) openDashboard(props.sessionID)
+                    else if (event.button === 0) toggleHud()
+                  } catch {}
+                }}
+              >
+                <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
+                  {pillText()}
+                </text>
+              </box>
+            </Show>
             <Show when={cardFor()}>
               {(g) => (
                 <box
