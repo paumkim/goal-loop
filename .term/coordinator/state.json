@@ -2999,6 +2999,17 @@
       "submittedAt": "2026-11-18T04:07:31Z",
       "mergedAt": "2026-11-18T04:12:20Z",
       "mergedInto": "dev"
+    },
+    "pill-card-coherence": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/tui.tsx,test/tui-pill-card-coherence.test.tsx,scripts/render-slot.tsx,test/render-scripts.test.ts,SPEC.md,dist/tui.js,docs/changelog.html",
+      "branch": "wt/pill-card-coherence",
+      "worktree": "worktrees/wt-pill-card-coherence",
+      "status": "done",
+      "createdAt": "2026-11-18T04:14:10Z",
+      "submittedAt": "2026-11-18T04:33:42Z",
+      "mergedAt": "2026-11-18T04:35:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
