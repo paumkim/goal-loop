@@ -3181,6 +3181,17 @@
       "submittedAt": "2026-11-18T13:27:02Z",
       "mergedAt": "2026-11-18T13:28:39Z",
       "mergedInto": "dev"
+    },
+    "stdio-rpc-500-recheck": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "SPEC.md",
+      "branch": "wt/stdio-rpc-500-recheck",
+      "worktree": "worktrees/wt-stdio-rpc-500-recheck",
+      "status": "done",
+      "createdAt": "2026-11-18T13:33:30Z",
+      "submittedAt": "2026-11-18T13:38:12Z",
+      "mergedAt": "2026-11-18T13:46:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
