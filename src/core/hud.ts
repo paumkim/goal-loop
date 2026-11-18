@@ -250,6 +250,28 @@ export const staleRecentlyTerminalSessionIDs = (
     .map(([sessionID]) => sessionID)
 
 /**
+ * The expiry arm of the stale-chrome guard: entries observed terminal whose re-pull window has lapsed
+ * (`terminalAt` older than `RECENT_TERMINAL_WINDOW_MS`) are dropped from the entries cache outright.
+ * The palette predicates, the pill memos and every `entries()[sid]?.goal` consumer stop seeing the
+ * finished record — instead of staying enabled on it forever, which is the "doesn't stick around for
+ * new requests and new version goals" contract. The session an open status dialog is rendering (`keep`)
+ * is never dropped, and null (goal-cleared) entries are never dropped — they mark "maybe armed
+ * elsewhere" for the 15s tick re-pull, the same reason they are retained under ENTRY_CAP pressure.
+ * Entries without a `terminalAt` (cached before the stamp existed) are kept — never expired on a guess.
+ */
+export const expiredTerminalSessionIDs = (
+  entries: Readonly<Record<string, { readonly goal?: GoalSnapshot | null | undefined; readonly terminalAt?: number | undefined }>>,
+  nowMs: number,
+  keep?: string,
+  windowMs: number = RECENT_TERMINAL_WINDOW_MS,
+): string[] =>
+  Object.entries(entries)
+    .filter(([sessionID]) => sessionID !== keep)
+    .filter(([, entry]) => entry?.goal != null && !isLive(entry.goal.status))
+    .filter(([, entry]) => entry?.terminalAt !== undefined && nowMs - entry.terminalAt > windowMs)
+    .map(([sessionID]) => sessionID)
+
+/**
  * How long a terminal acknowledgment pill lingers on the jump row after a live→terminal transition.
  * Long enough to notice without becoming furniture; the entries cache may evict the goal itself sooner.
  */

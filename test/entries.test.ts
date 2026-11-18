@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -276,5 +276,25 @@ describe("terminalStampOf", () => {
     const input: Record<string, GoalSnapshotCacheEntry> = { a: { goal: snap("achieved"), receivedAt: 1000, terminalAt: 4000 } }
     const out = bumpReceivedAt(input, "a", 9999)
     expect(out.a!.terminalAt).toBe(4000)
+  })
+})
+
+describe("dropSessions", () => {
+  const entryWith = (terminalAt?: number) => ({ goal: snap("achieved"), receivedAt: 1000, ...(terminalAt !== undefined ? { terminalAt } : {}) })
+
+  test("drops the named sessions and keeps the rest", () => {
+    const out = dropSessions({ a: entryWith(5000), b: entryWith(6000), c: entryWith(7000) }, ["a", "c"])
+    expect(Object.keys(out)).toEqual(["b"])
+  })
+
+  test("the kept session is never dropped", () => {
+    const out = dropSessions({ a: entryWith(5000) }, ["a"], "a")
+    expect(Object.keys(out)).toEqual(["a"])
+  })
+
+  test("an empty id list (or nothing matched) returns the same reference", () => {
+    const input = { a: entryWith(5000) }
+    expect(dropSessions(input, [])).toBe(input)
+    expect(dropSessions(input, ["zzz"])).toBe(input)
   })
 })

@@ -31,8 +31,8 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, applySnapshot, goalsEqual, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
 import { createGoalMirror } from "./core/mirror.ts"
@@ -155,7 +155,10 @@ export default Plugin.define({
       // If the RPC rejects or the payload cannot be parsed, say so in the dialog — never let stale chrome pass as fresh.
       void refresh(sessionID).then((fresh) => setDialogNoticeStale(!fresh)).catch(() => setDialogNoticeStale(true))
       void refreshOthers()
-      const looped = () => Boolean(entries()[sessionID]?.goal?.loopEnabled)
+      const looped = () => {
+        const g = entries()[sessionID]?.goal
+        return Boolean(g && isLive(g.status) && g.loopEnabled)
+      }
       const loopPosition = () => {
         const g = entries()[sessionID]?.goal
         if (!g?.loopEnabled) return ""
@@ -281,6 +284,14 @@ export default Plugin.define({
       }, LANDING_ACK_MS)
       terminalTimers.add(timer)
     }
+    const releaseCompletion = (sessionID: string) => {
+      try {
+        if (getHudSession() === sessionID) setHudSession(undefined)
+        setContextOpen(false)
+        setContextIndex(0)
+        dropPin(sessionID)
+      } catch {}
+    }
     const noteTerminal = (sessionID: string, goal: GoalSnapshot) => {
       const ack = { goal, at: Date.now() }
       setTerminalAcks((previous) => ({ ...previous, [sessionID]: ack }))
@@ -370,8 +381,15 @@ export default Plugin.define({
         const previous = entries()[sessionID]?.goal
         // An identical snapshot changes nothing — skip re-arming so the ack window stays 45s from the transition.
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false
-        if (!unchanged && goal && previous && isLive(previous.status) && !isLive(goal.status) && goal.status !== "cleared") {
-          noteTerminal(sessionID, goal)
+        const wasLive = previous != null && isLive(previous.status)
+        const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status)
+        const gone = goal === null || goal === undefined || nowTerminal
+        if (!unchanged && wasLive && gone) {
+          // Every live→terminal (or cleared) intake releases the HUD arm, the context menu and the pin —
+          // whether or not an acknowledgment pill arms. Nothing from the finished goal sticks around to
+          // swallow Esc, re-open the card or re-pin its condition onto the next arm in this session.
+          releaseCompletion(sessionID)
+          if (goal && goal.status !== "cleared") noteTerminal(sessionID, goal)
         } else if (goal && isLive(goal.status)) {
           dropTerminal(sessionID)
         }
@@ -576,6 +594,10 @@ export default Plugin.define({
         void refresh(sessionID).catch(() => {})
         void refreshFromStorage(sessionID).catch(() => {})
       }
+      // Expiry: a terminal record whose re-pull window has lapsed leaves the cache outright — palette
+      // predicates, pill memos and every `entries()[sid]?.goal` consumer stop seeing the finished record
+      // instead of staying enabled (or armed) on it forever. The session an open dialog renders is kept.
+      setEntries((previous) => dropSessions(previous, expiredTerminalSessionIDs(previous, staleNow, statusDialogSession()), statusDialogSession()))
       // A kept-open dialog's foreign-goals block comes solely from the `others()` signal; the tick used to
       // refresh cached session entries but not this list, so a dropped `changed` event left it stale forever.
       if (statusDialogOpen()) void refreshOthers()
@@ -593,6 +615,17 @@ export default Plugin.define({
         const next = new Set(previous)
         if (next.has(sessionID)) next.delete(sessionID)
         else next.add(sessionID)
+        return next
+      })
+    }
+    // A pin belongs to the goal it was set on: when the goal completes (or is cleared) the pin drops with it,
+    // so a finished loop never silently re-attaches its condition to a new request or new version the next arm.
+    const dropPin = (sessionID: string | undefined) => {
+      if (!sessionID) return
+      setPinned((previous) => {
+        if (!previous.has(sessionID)) return previous
+        const next = new Set(previous)
+        next.delete(sessionID)
         return next
       })
     }
@@ -1308,7 +1341,7 @@ export default Plugin.define({
           title: "Goal loop: show status",
           group: "Goal",
           palette: true,
-          enabled: () => Boolean(live(currentSession())?.loopEnabled ?? entries()[currentSession() ?? ""]?.goal?.loopEnabled),
+          enabled: () => Boolean(live(currentSession())?.loopEnabled),
           run: () => {
             const sessionID = currentSession()
             if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
@@ -1319,7 +1352,7 @@ export default Plugin.define({
           title: "Goal HUD: toggle card",
           group: "Goal",
           palette: true,
-          enabled: () => hudArmEnabled(Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal), statusDialogOpen()),
+          enabled: () => hudArmEnabled(Boolean(live(currentSession())), statusDialogOpen()),
           run: () => {
             // Same effect as clicking the pill: toggle the compact card for the current session.
             // No-op while the status dialog owns the screen — arming the card behind the modal
@@ -1337,7 +1370,7 @@ export default Plugin.define({
           title: "Goal: toggle pinned condition",
           group: "Goal",
           palette: true,
-          enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
+          enabled: () => Boolean(live(currentSession())),
           run: () => { try { togglePin(currentSession()) } catch {} },
         },
         {
