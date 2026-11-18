@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-18 11:34 UTC</code></td><td>feat(goal): cross-directory terminal-record GC at restore() (XLI)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 11:23 UTC</code></td><td>feat(goal): opportunistic terminal-record pruning on finish() (XL)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 11:10 UTC</code></td><td>docs(spec): XXXIX honesty re-audit — correct stale claims vs the tree</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 10:58 UTC</code></td><td>feat(goal): bound terminal goal records at plugin storage (XXXVIII)</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-17 20:36 UTC</code></td><td>fix(tui): snapshot mirror — convergence when the RPC and the bus are both dead (IX)</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 20:32 UTC</code></td><td>fix(goal-loop): the pill's elapsed timer tracks from first arm to terminal — startedAt no longer resets on loop re-arm or restore</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 20:28 UTC</code></td><td>Dialog chrome: 1-cell ClampedColumn padding, footer tier re-priced to width−2, bench harness</td><td>commit</td></tr>
-<tr><td><code>2026-11-17 20:06 UTC</code></td><td>fix(compact): restore() is adopt-only — compaction only ever targets the specific session</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
