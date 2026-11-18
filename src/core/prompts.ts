@@ -104,11 +104,20 @@ interface LoopPreamble {
   readonly history: ReadonlyArray<LoopEntry>
 }
 
+/** Newest completed iterations injected into a loop prompt by default; older ones live on the record's bounded ledger. */
+const HISTORY_INJECT_LIMIT = 10
+/** Post-compaction re-anchors carry a tighter window: the model's context was just rebuilt, so the newest few iterations are all it needs to avoid re-doing work. */
+const REANCHOR_HISTORY_INJECT_LIMIT = 3
+
 /** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
-function historyBlock(history: ReadonlyArray<LoopEntry>): string {
+function historyBlock(history: ReadonlyArray<LoopEntry>, limit: number = HISTORY_INJECT_LIMIT): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
-  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(stripReasoningControl(entry.condition), 100))} — ${escape(truncate(stripReasoningControl(entry.summary), 160))}`).join("\n")
+  const kept = history.slice(-limit)
+  const omitted = history.length - kept.length
+  const lines = kept.map((entry) => `- v${entry.version}: ${escape(truncate(stripReasoningControl(entry.condition), 100))} — ${escape(truncate(stripReasoningControl(entry.summary), 160))}`)
+  if (omitted > 0) lines.unshift(`(${omitted} older completed iteration${omitted === 1 ? "" : "s"} omitted — the bounded ledger rides the record)`)
+  return lines.join("\n")
 }
 
 /** Repository ground-truth lines, shared by every "don't trust the summary" prompt. Kept byte-identical. */
@@ -200,8 +209,8 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
     `This iteration: v${input.iteration} of at most ${input.maxLoops} — armed condition:`,
     escape(input.condition),
     ``,
-    `Completed iterations:`,
-    historyBlock(input.history),
+    `Completed iterations (newest ${REANCHOR_HISTORY_INJECT_LIMIT}; older ones ride the record's bounded ledger):`,
+    historyBlock(input.history, REANCHOR_HISTORY_INJECT_LIMIT),
     ``,
     ...TREE_TRUTH,
     ``,
