@@ -58,6 +58,50 @@ export class GoalStore {
     return isRecord(value) ? value : undefined
   }
 
+  /**
+   * Restore-time hygiene across the whole store: apply the same age/count caps per directory to every directory
+   * at plugin storage, not just the calling controller's own. Scans once, groups terminal records by their
+   * `directory`, and applies `selectTerminalRecordsToPrune` to each group independently (a cap in one directory
+   * never evicts another directory's records). Live records (active/paused) are never touched anywhere.
+   * Oldest entries go first; reports exactly what it did (counts only — the dropped records are gone by design).
+   * `directories` counts every directory that had at least one record (live or terminal) in the scan.
+   * In probe mode (`readOnly`) nothing is removed and the report says so.
+   */
+  async pruneAllDirectories(
+    nowMs: number,
+  ): Promise<{ scanned: number; pruned: number; droppedAged: number; droppedBeyondCap: number; unstampedKept: number; readOnly: boolean; directories: number }> {
+    const byDirectory = new Map<string, GoalRecord[]>()
+    let after: string | undefined
+    do {
+      const page = await this.storage.scan({ prefix: PREFIX, limit: 200, ...(after ? { after } : {}) })
+      for (const entry of page.entries) {
+        if (!isRecord(entry.value)) continue
+        const dir = entry.value.directory
+        const list = byDirectory.get(dir)
+        if (list) list.push(entry.value)
+        else byDirectory.set(dir, [entry.value])
+      }
+      after = page.next
+    } while (after)
+    let scanned = 0
+    let unstampedKept = 0
+    let droppedAged = 0
+    let droppedBeyondCap = 0
+    const pruned: string[] = []
+    for (const records of byDirectory.values()) {
+      const selection = selectTerminalRecordsToPrune(records, nowMs)
+      scanned += selection.offered
+      unstampedKept += selection.unstampedKept
+      droppedAged += selection.droppedAged
+      droppedBeyondCap += selection.droppedBeyondCap
+      pruned.push(...selection.pruned)
+    }
+    if (this.options.readOnly)
+      return { scanned, pruned: 0, droppedAged: 0, droppedBeyondCap: 0, unstampedKept, readOnly: true, directories: byDirectory.size }
+    for (const sessionID of pruned) await this.remove(sessionID)
+    return { scanned, pruned: pruned.length, droppedAged, droppedBeyondCap, unstampedKept, readOnly: false, directories: byDirectory.size }
+  }
+
   /** Live goals owned by `directory`, for restore after a restart or plugin reload. */
   async loadLive(directory: string): Promise<GoalRecord[]> {
     const found: GoalRecord[] = []
