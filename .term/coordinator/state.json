@@ -2961,6 +2961,17 @@
       "submittedAt": "2026-11-18T03:06:30Z",
       "mergedAt": "2026-11-18T03:13:53Z",
       "mergedInto": "dev"
+    },
+    "goal-alive-indicator": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,src/core/format.ts,src/tui.tsx,src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md,test/,scripts/,dist/",
+      "branch": "wt/goal-alive-indicator",
+      "worktree": "worktrees/wt-goal-alive-indicator",
+      "status": "done",
+      "createdAt": "2026-11-18T03:21:44Z",
+      "submittedAt": "2026-11-18T03:38:07Z",
+      "mergedAt": "2026-11-18T03:39:29Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
