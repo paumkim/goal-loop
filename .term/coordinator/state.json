@@ -3192,6 +3192,17 @@
       "submittedAt": "2026-11-18T13:38:12Z",
       "mergedAt": "2026-11-18T13:46:45Z",
       "mergedInto": "dev"
+    },
+    "stdio-rpc-500-rootcause": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "SPEC.md,src/,test/",
+      "branch": "wt/stdio-rpc-500-rootcause",
+      "worktree": "worktrees/wt-stdio-rpc-500-rootcause",
+      "status": "done",
+      "createdAt": "2026-11-18T13:52:42Z",
+      "submittedAt": "2026-11-18T14:42:18Z",
+      "mergedAt": "2026-11-18T15:43:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
