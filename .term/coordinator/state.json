@@ -3082,6 +3082,17 @@
       "submittedAt": "2026-11-18T06:33:12Z",
       "mergedAt": "2026-11-18T06:34:37Z",
       "mergedInto": "dev"
+    },
+    "readme-attribution-detach-screenshots": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs,assets,package.json",
+      "branch": "wt/readme-attribution-detach-screenshots",
+      "worktree": "worktrees/wt-readme-attribution-detach-screenshots",
+      "status": "done",
+      "createdAt": "2026-11-18T08:07:43Z",
+      "submittedAt": "2026-11-18T08:21:20Z",
+      "mergedAt": "2026-11-18T08:22:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
