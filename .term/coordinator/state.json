@@ -3214,6 +3214,23 @@
       "submittedAt": "2026-11-18T15:50:04Z",
       "mergedAt": "2026-11-18T15:51:23Z",
       "mergedInto": "dev"
+    },
+    "loop-history-retention": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/core/types.ts,src/core/history.ts,src/runtime/controller.ts,src/core/hud.ts,src/hud-card.tsx,src/tui-history.tsx,src/core/spend-ledger.ts,src/core/dossier.ts,test/loop-history-retention.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/loop-history-retention",
+      "worktree": "worktrees/wt-loop-history-retention",
+      "status": "done",
+      "createdAt": "2026-11-18T15:58:10Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T16:08:23Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/loop.test.ts"
+      ],
+      "submittedAt": "2026-11-18T16:08:23Z",
+      "mergedAt": "2026-11-18T16:09:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
