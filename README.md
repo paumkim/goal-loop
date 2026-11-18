@@ -127,6 +127,10 @@ The loop only advances on a **met** verdict. It never advances on not-met, stall
 
 At every iteration boundary the plugin asks the host to compact the session first (`compactOnLoopIteration`, default on), so each version arms with a fresh context.
 
+The armed kickoff is dispatched with `resume: true`; admit-only notes stay `resume: false`. Between dispatch and the host reporting the execution started, the pill, the card and the status dialog paint the iteration `queued` instead of `active` (◯ glyph, tone stays `armed`). The flag clears on execution start, on failure and on interruption; a plugin reload drops it rather than fabricating a pending state.
+
+The summary that feeds the planner is capped at the summary budget and cut at a word boundary with a single `…` marker. It is never a raw mid-word slice, and a UTF-16 surrogate pair is never split. A summary under the budget is unchanged.
+
 It ends when any of these happens:
 
 - You run `/goal-loop clear` (or `stop`, `off`, `reset`, `none`, `cancel`), or set a new goal.
