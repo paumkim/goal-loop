@@ -1810,8 +1810,8 @@ function selectNewestSealedDossier(entries) {
 }
 
 // src/tui.tsx
-import { readFileSync as readFileSync2, readdirSync as readdirSync2, statSync } from "fs";
-import { join as join6 } from "path";
+import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
+import { join as join7 } from "path";
 
 // src/status-dialog.tsx
 import { use as _$use } from "@opentui/solid";
@@ -5934,6 +5934,47 @@ var pumpRpcEvent = async (options) => {
   }
 };
 
+// src/core/mirror.ts
+import { mkdirSync, readFileSync as readFileSync2, renameSync, rmSync, writeFileSync as writeFileSync6 } from "fs";
+import { tmpdir } from "os";
+import { join as join6 } from "path";
+var fileFor = (dir, sessionID) => {
+  const safe = sessionID.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return join6(dir, `${safe}.json`);
+};
+var createGoalMirror = (dir = join6(tmpdir(), "opencode-goal-mirror")) => {
+  const write = (snapshot) => {
+    try {
+      mkdirSync(dir, { recursive: true, mode: 448 });
+      const target = fileFor(dir, snapshot.sessionID);
+      const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+      writeFileSync6(tmp, JSON.stringify(snapshot), { mode: 384 });
+      renameSync(tmp, target);
+    } catch {}
+  };
+  const remove = (sessionID) => {
+    try {
+      rmSync(fileFor(dir, sessionID), { force: true });
+    } catch {}
+  };
+  const read = (sessionID, directory) => {
+    try {
+      const raw = readFileSync2(fileFor(dir, sessionID), "utf8");
+      const parsed = parseGoalSnapshot(JSON.parse(raw));
+      if (!parsed)
+        return;
+      if (parsed.sessionID !== sessionID)
+        return;
+      if (directory && !sameDirectory(parsed.directory, directory))
+        return;
+      return parsed;
+    } catch {
+      return;
+    }
+  };
+  return { write, remove, read };
+};
+
 // src/rpc.ts
 import { Rpc } from "@opencode/plugin/rpc";
 var sessionInput = {
@@ -6544,6 +6585,18 @@ var tui_default = Plugin.define({
       }, at(sessionID)),
       put: (sessionID, goal) => put(sessionID, goal)
     });
+    const goalMirror = createGoalMirror();
+    const refreshFromStorage = async (sessionID) => {
+      try {
+        const goal = goalMirror.read(sessionID, context.location?.directory);
+        if (goal === undefined)
+          return false;
+        put(sessionID, goal);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     const put = (sessionID, goal) => {
       try {
         const previous = entries()[sessionID]?.goal;
@@ -6569,8 +6622,10 @@ var tui_default = Plugin.define({
         requested.clear();
       requested.add(sessionID);
       refresh(sessionID).then((ok) => {
-        if (!ok)
+        if (!ok) {
           requested.delete(sessionID);
+          refreshFromStorage(sessionID).catch(() => {});
+        }
       }).catch(() => requested.delete(sessionID));
     };
     const live = (sessionID) => {
@@ -6669,8 +6724,10 @@ var tui_default = Plugin.define({
       } catch {}
     };
     const reconnectCatchUp = () => {
-      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0))
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0)) {
         refresh(sessionID).catch(() => {});
+        refreshFromStorage(sessionID).catch(() => {});
+      }
       if (statusDialogOpen())
         refreshOthers();
     };
@@ -6712,10 +6769,14 @@ var tui_default = Plugin.define({
       if (Object.values(entries()).some((entry) => entry.goal?.status === "active"))
         setNow(Date.now());
       const staleNow = Date.now();
-      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow))
+      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow)) {
         refresh(sessionID).catch(() => {});
-      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow))
+        refreshFromStorage(sessionID).catch(() => {});
+      }
+      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow)) {
         refresh(sessionID).catch(() => {});
+        refreshFromStorage(sessionID).catch(() => {});
+      }
       if (statusDialogOpen())
         refreshOthers();
     }, TICK_MS);
@@ -6996,7 +7057,7 @@ var tui_default = Plugin.define({
             try {
               return {
                 name,
-                mtimeMs: statSync(join6(directory, name)).mtimeMs
+                mtimeMs: statSync(join7(directory, name)).mtimeMs
               };
             } catch {
               return {
@@ -7028,7 +7089,7 @@ var tui_default = Plugin.define({
         }
         let markdown;
         try {
-          markdown = readFileSync2(join6(directory, newest), "utf8");
+          markdown = readFileSync3(join7(directory, newest), "utf8");
         } catch (error) {
           safeToast({
             title: "attest failed",

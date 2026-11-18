@@ -35,6 +35,7 @@ import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEn
 import { preserveCarriedFields, applySnapshot, goalsEqual, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
+import { createGoalMirror } from "./core/mirror.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice, sameDirectory } from "./core/wire.ts"
@@ -342,6 +343,26 @@ export default Plugin.define({
       put: (sessionID, goal) => put(sessionID, goal),
     })
 
+    const goalMirror = createGoalMirror()
+
+    /**
+     * Convergence fallback for a dead RPC + dropped `changed`: read the mirror file the server plugin writes on
+     * every `changed` emission (same snapshot, same atomic write discipline), instead of the wedged RPC bridge.
+     * Used only where a re-pull is already due (the 15s stale-chrome tick, a pump reconnect, a first view whose
+     * pull failed); any failure keeps the cached entry, the same posture as a rejected re-pull. Directory-scoped
+     * exactly like the `changed` intake, so a foreign project's record never paints here.
+     */
+    const refreshFromStorage = async (sessionID: string): Promise<boolean> => {
+      try {
+        const goal = goalMirror.read(sessionID, context.location?.directory)
+        if (goal === undefined) return false
+        put(sessionID, goal)
+        return true
+      } catch {
+        return false
+      }
+    }
+
     const put = (sessionID: string, goal: GoalSnapshot | null) => {
       // Completion-moment detection runs before the entries update: a live→terminal transition
       // arms the acknowledgment pill, a fresh live goal disarms any stale one. Best-effort.
@@ -379,7 +400,11 @@ export default Plugin.define({
       // so the next render retries instead of black-holing this session's pill forever.
       refresh(sessionID)
         .then((ok) => {
-          if (!ok) requested.delete(sessionID)
+          if (!ok) {
+            requested.delete(sessionID)
+            // RPC lost, but the persisted record may still answer: storage is not proxied through the RPC bridge.
+            void refreshFromStorage(sessionID).catch(() => {})
+          }
         })
         .catch(() => requested.delete(sessionID))
     }
@@ -497,7 +522,10 @@ export default Plugin.define({
     const reconnectCatchUp = () => {
       // A reconnect may have swallowed events; re-read the server's truth for every cached live/null entry.
       // Bounded by the entries cache (ENTRY_CAP) and runs at most once per reconnect.
-      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0)) void refresh(sessionID).catch(() => {})
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0)) {
+        void refresh(sessionID).catch(() => {})
+        void refreshFromStorage(sessionID).catch(() => {})
+      }
       if (statusDialogOpen()) void refreshOthers()
     }
     const pumpSleep = (ms: number, signal: AbortSignal) =>
@@ -540,8 +568,14 @@ export default Plugin.define({
       // get the same treatment inside RECENT_TERMINAL_WINDOW_MS: a record cleared in another process
       // right after the goal went terminal re-arms the intake instead of painting phantom chrome forever.
       const staleNow = Date.now()
-      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow)) void refresh(sessionID).catch(() => {})
-      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow)) void refresh(sessionID).catch(() => {})
+      for (const sessionID of staleUnprovenSessionIDs(entries(), staleNow)) {
+        void refresh(sessionID).catch(() => {})
+        void refreshFromStorage(sessionID).catch(() => {})
+      }
+      for (const sessionID of staleRecentlyTerminalSessionIDs(entries(), staleNow)) {
+        void refresh(sessionID).catch(() => {})
+        void refreshFromStorage(sessionID).catch(() => {})
+      }
       // A kept-open dialog's foreign-goals block comes solely from the `others()` signal; the tick used to
       // refresh cached session entries but not this list, so a dropped `changed` event left it stale forever.
       if (statusDialogOpen()) void refreshOthers()
