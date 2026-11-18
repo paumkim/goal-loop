@@ -3417,6 +3417,17 @@
       "submittedAt": "2026-11-18T20:16:25Z",
       "mergedAt": "2026-11-18T20:17:52Z",
       "mergedInto": "dev"
+    },
+    "docs-citation-export-star-absence-pin": {
+      "agent": "orchestrator",
+      "paths": "test/docs-line-refs.test.ts,SPEC.md",
+      "branch": "wt/docs-citation-export-star-absence-pin",
+      "worktree": "worktrees/wt-docs-citation-export-star-absence-pin",
+      "status": "done",
+      "createdAt": "2026-11-18T20:21:32Z",
+      "submittedAt": "2026-11-18T20:26:07Z",
+      "mergedAt": "2026-11-18T20:27:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
