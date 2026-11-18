@@ -2842,8 +2842,24 @@
       "paths": "src/status-dialog.tsx,scripts/render-dialog.tsx,src/tui-history.tsx,src/core/history.ts",
       "branch": "wt/tui-detail-dialog-compact",
       "worktree": "worktrees/wt-tui-detail-dialog-compact",
+      "status": "done",
+      "createdAt": "2026-11-18T01:48:31Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T02:01:10Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "submittedAt": "2026-11-18T02:01:10Z",
+      "mergedAt": "2026-11-18T02:04:12Z",
+      "mergedInto": "dev"
+    },
+    "per-session-compaction": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/index.ts,test,docs,SPEC.md,README.md",
+      "branch": "wt/per-session-compaction",
+      "worktree": "worktrees/wt-per-session-compaction",
       "status": "claimed",
-      "createdAt": "2026-11-18T01:48:31Z"
+      "createdAt": "2026-11-18T01:55:10Z"
     }
   },
   "mergeLock": null,
