@@ -3032,6 +3032,17 @@
       "submittedAt": "2026-11-18T05:13:55Z",
       "mergedAt": "2026-11-18T05:15:22Z",
       "mergedInto": "dev"
+    },
+    "crash-restore-live": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/crash-restore-live",
+      "worktree": "worktrees/wt-crash-restore-live",
+      "status": "done",
+      "createdAt": "2026-11-18T05:19:31Z",
+      "submittedAt": "2026-11-18T05:39:49Z",
+      "mergedAt": "2026-11-18T05:41:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
