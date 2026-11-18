@@ -394,6 +394,31 @@ describe("/goal-loop", () => {
     expect(v2Arming).toBeDefined()
   })
 
+  test("an over-budget summary is elided at a word boundary with the marker, never mid-word", async () => {
+    // The regression shape from this session: the planner consumed a raw 1600-char slice that ended
+    // mid-word ("…bu") with no elision marker. The record, the planner's latestSummary and the
+    // armed kickoff must all carry the elided text instead.
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    const oversized = "lorem ipsum dolor sit amet ".repeat(120) // 3240 chars, cap is 1600
+    h.summaries.push(oversized)
+    h.nextGoals.push("v2 condition")
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    const entry = record.loopHistory![0]!
+    expect(entry.summary.endsWith("…")).toBe(true)
+    expect(entry.summary.length).toBeLessThanOrEqual(1600)
+    // Whole last token — the marker never glues onto half a word.
+    const kept = entry.summary.slice(0, -1)
+    expect(oversized.startsWith(kept)).toBe(true)
+    // The planner saw the same elided payload (it reasons over latestSummary verbatim).
+    expect(h.nextGoalRequests[0]!.latestSummary).toBe(entry.summary)
+    // The armed kickoff carries the elided summary, marker included.
+    const arming = h.calls.synthetic.find((s) => String(s.description).includes("arming v2"))
+    expect(String(arming!.text)).toContain(entry.summary.slice(0, 80))
+    expect(String(arming!.text)).toContain("…")
+  })
+
   test("next-goal failure retries the planner with backoff and then advances", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
