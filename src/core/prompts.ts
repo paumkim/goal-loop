@@ -1,4 +1,5 @@
 import { formatDuration, formatSpend, truncate } from "./format.ts"
+import { stripReasoningControl } from "./sanitize.ts"
 import { isOpencodeCliCondition, opencodeCliGuide } from "./opencode-cli.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
@@ -107,7 +108,7 @@ interface LoopPreamble {
 function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
-  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
+  return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(stripReasoningControl(entry.condition), 100))} — ${escape(truncate(stripReasoningControl(entry.summary), 160))}`).join("\n")
 }
 
 /** Repository ground-truth lines, shared by every "don't trust the summary" prompt. Kept byte-identical. */
@@ -469,6 +470,7 @@ const SUMMARY_ASK = (input: LoopSummaryInput) => [
   `Write a compact, machine-consumable summary of this loop iteration for the next-goal generator.`,
   `At most ~${input.maxSummaryTokens} tokens. Plain text only: no markdown headings, no greetings, no advice to the user.`,
   `Cover exactly three things: what was achieved (with evidence pointers), key constraints the next iteration must keep, and what remains improvable or unfinished.`,
+  `Output exactly the block, nothing before or after it. Never emit reasoning-control tags such as <think> or <ernie:think>; they corrupt the record and the next-goal prompt.`,
   `Prior iterations (oldest first):`,
   historyBlock(input.history),
 ]
@@ -535,7 +537,7 @@ const nextGoalFacts = (input: NextGoalInput) => [
   `Completed iterations (oldest first):`,
   historyBlock(input.history),
   `Latest iteration summary:`,
-  escape(input.latestSummary),
+  escape(stripReasoningControl(input.latestSummary)),
 ]
 
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */

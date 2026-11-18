@@ -13,6 +13,7 @@ import type { CommitPolicy, ModelRef, UsageSnapshot } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
 import { truncate } from "../core/format.ts"
+import { stripReasoningControl } from "../core/sanitize.ts"
 
 interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
@@ -126,7 +127,7 @@ export class Evaluator implements EvaluatorPort {
         const messages = await this.deps.context(request.sessionID, signal)
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
         const text = await this.deps.modelGenerate(model, summarizeIndependently(request, transcript), signal)
-        return this.cap(text, request.maxSummaryTokens)
+        return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
         if (signal.aborted) throw error
         this.log.warn("independent summarizer failed; falling back to session summarizer", { error: String(error) })
@@ -135,7 +136,7 @@ export class Evaluator implements EvaluatorPort {
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {
       const text = await this.deps.sessionGenerate(request.sessionID, summarizeInSession(request), signal)
-      return this.cap(text, request.maxSummaryTokens)
+      return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
     } finally {
       const left = (this.inflight.get(request.sessionID) ?? 1) - 1
       if (left > 0) this.inflight.set(request.sessionID, left)
