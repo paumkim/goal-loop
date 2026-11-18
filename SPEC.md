@@ -194,7 +194,7 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 ## Verification
 
 - `bun run check` — tsc, unit tests, compile (order: tsc first).
-- Manual: `opencode plugin add @el4cteo/opencode-goal`, then `/goal bun test passes` in a scratch repo and
+- Manual: `opencode plugin add github:paumkim/opencode-goalv2#v1.1.0` (specifier updated at the BA rename; the `@el4cteo/opencode-goal` form predates it), then `/goal bun test passes` in a scratch repo and
   watch the prompt footer indicator and `/goal` status output.
 - Workstream A/B manual: tmux TUI smoke — `/goal-loop <trivial objective>`, watch v1 achieve, the info
   toast, summary generation, v2 armed and worked, dialog shows iteration history, `/goal-loop clear`
@@ -816,7 +816,10 @@ live goal after a restart.
     (a) in `loopAdvance` after the arm commit/notify/note and before the armed `continueWith` synthetic
     steer — compaction is queued BEFORE the armed iteration runs; awaiting only waits for the host's
     acceptance of the `session.compact` request, not the summary; and (b) in `restore()` for every adopted
-    ACTIVE record, so a plugin restart also resumes from a fresh context. `opencode` itself auto-compacts
+    ACTIVE record, so a plugin restart also resumes from a fresh context. [SUPERSEDED 2026-11-17 by the
+    adopt-only fix: `restore()` never requests a host compaction — see src/runtime/controller.ts `restore()`
+    and docs/runtime.html; compaction is strictly per session on the threshold and arm-time paths.]
+    `opencode` itself auto-compacts
     near the model window by default; the per-boundary request is the window-independent complement and is
     accepted even when `compaction.auto` is false (requests run at the next safe point).
 91. New option `compactOnLoopIteration` (default `true`, env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`;
@@ -875,6 +878,8 @@ bounded-backoff retry; `pause()` survives only for the interrupt and the explici
     (60s) forever; any user prompt/clear/dispose calls `invalidate(runtime)` which clears `runtime.timer`,
     cancelling the pending retry (noted in a comment at the call site).
 95. `restore()` compacts adopted ACTIVE records at the boundary (Workstream T) and logs restores as before.
+    [SUPERSEDED 2026-11-17 by the adopt-only fix: `restore()` is adopt-only and requests nothing — the
+    per-session threshold and arm-time paths are the only compaction triggers; see docs/runtime.html.]
     The evaluator-stale guard, epoch guard, verify-gate fail-closed, commit rule, defer/background-work
     behavior and check-in cadence are all unchanged. The state-machine doc comment reflects the new shape
     (active → not_met → continue; met/impossible → terminal; user interrupt or explicit cap → paused;
@@ -909,7 +914,8 @@ boundary request actually lands, record it, surface it, and re-request when it n
     (a) in `loopAdvance` after the arm commit — a returned boundary-compact result with `requested: true`
     overwrites the record with a fresh pending state (iteration = the newly armed iteration, `misses` carried
     forward until an actual landing is observed, never reset by a mere re-request); (b) in `restore()` for
-    adopted ACTIVE records that the boundary compaction was re-requested for. Landing detection (i) — the
+    adopted ACTIVE records that the boundary compaction was re-requested for. [SUPERSEDED 2026-11-17:
+    restore re-requests nothing; see item 95's note and docs/runtime.html.] Landing detection (i) — the
     `session.compaction.ended` event settles the pending state via the controller's public
     `onCompactionLanded()` — is evidence-based: it marks `landedAt` only on an observed context-size drop
     (same threshold as (ii)); an unestimable or no-op compaction counts as a miss toward the 2-miss
@@ -1101,6 +1107,11 @@ count misses and force a re-request at 2, but an arm at misses 4, 5, 6… kept a
 emitting "Compaction pending" every armed iteration) for a context the host refuses to shrink. Consecutive
 unlanded misses are now capped: at 4 the plugin stops requesting until a landing is observed, with one final
 warning instead of one per armed iteration. The armed loop keeps running throughout.
+
+[SUPERSEDED 2026-11-17 by Workstream BV (items 227-228): the 4-miss cap is only a backstop. At 2 misses one
+host-unwilling warning fires; re-requests continue as a trickle every 3rd arm. The permanent suspension
+described in items 118-121 was never the shipped contract, and the `"capped"` `BoundaryCompactMiss` member
+was removed with this annotation.]
 
 118. Cap constants: `COMPACT_MISS_CAP = 4` lives in `src/core/types.ts` (exported so the core status line and
     the TUI detail dialog print `miss n/4` instead of a stale `/2`); `COMPACT_MISS_RETRY = 2` stays private to
@@ -6638,5 +6649,21 @@ Interpretation. The XXVIII section records its evidence as unit + snapshot only 
 888. Honest limits. (a) The wedge round was injected by shadow re-registration, not produced by the host — fresh TCP serve answers the goal RPC 200 post-activation; the live host failure of 2026-11-18 is unreproducible on demand, but the standalone round reproduces the 500 posture without the shadow (889) — treat both as the same failure seen at two layers. (b) One model (KiloCode-Free, which echo-spams badly — hence tmux), two condition shapes; the Ernie model the user named is unreachable from opencode's 9router-go (883). (c) The context menu can open only by right-click (no keyboard path); right-click lands on any card cell — the condition row was used. Menu *item* activation was not exercised; every item releases through the same `releaseCompletion` state drop as the card, which the release evidence covers. (d) The 874 dialog header gate WAS exercised live this pass (886) — through the degraded path: goal RPC dead on the wire, stale line painted, dialog rendered from the cached terminal record. (e) The three arming/toggle predicates (hud, pin, loop.status) all read "No results found" post-terminal in both rounds — the XXVIII targets are verified live. (f) Convergence latency: the terminal intake landed via the 15s tick + mirror — the chat rendered "◎ Loop complete after …" (session content, not goal RPC) before the chrome flipped; at no point in either round did the TUI converge early. (g) markers unchanged (`files=63 tests=1624`); `bun ../scripts/spec-check.ts` from `test/` reports ok; no shipped files or tests changed in this pass; SPEC.md only. (h) The contaminated first "healthy" attempt (a project nested inside `/tmp/opencode/goal-verify-live/`, whose parent `opencode.json` lists the shadow plugin) inherited the wedge through config discovery — discarded; the clean round lives at `/tmp/opencode/goal-verify-healthy/` and logged all plugin loads for inspection.
 889. New finding, host-side, unresolved: on opencode **2.3.2**, the standalone TUI's location-scoped RPC path fails deterministically. The TUI spawns `opencode serve --stdio --port 0`; inside it, `POST /api/rpc/goal/get` returns HTTP 500 on every call (observed at regular 30s intervals across two standalone runs, and forced by the dialog's fresh pull) with **zero** plugin-side or middleware-side log detail at any log level (debug included): no `rpc handler failed`, no `rpc call failed`, no `schema rejection` WARN, no defect line. Handlers nevertheless execute — the status notice reached the TUI and the dialog opened (886) — so the failure sits on the response path, after dispatch, not in the goal plugin. A fresh TCP `opencode serve` (same cwd, same plugins, same wire shape: `location[directory]=<cwd>`, deepObject, excess keys tolerated) answers `200` after plugin activation, `400 rpc.unavailable` during the activation window (the likely source of the live incident's `goal/list` 400), and `400 InvalidRequestError "Expected object at \"location\""` for a flat `location=…` string. Root cause not isolated — suspect the stdio transport/overlay (the in-TUI serve child) rather than the protocol stack; no host source was modified; this is reported as an observation with exact log lines, not a diagnosis. Why it matters here: every live round this pass, wedged or not, ran with dead wire-RPC and live one-way notices — XXVIII's release path never depended on a successful RPC call, and the mirror+tick carried the chrome correctly through completion. The live 2026-11-18 incident is consistent with seeing exactly this signature from the user's long-running service.
 890. Verification (fresh at the amended HEAD): `bun ../scripts/spec-check.ts` from `test/` → `spec-check: ok (63 files, 1624 tests match SPEC.md)`; SPEC.md-only amendment; branch `wt/live-completion-release-verify` based on dev `b8773cd`; coordinator lease `live-completion-release-verify` submitted; the shift 882→889 is recorded in this section. Live evidence is the transcripts above; both throwaways are preserved on disk for inspection (`/tmp/opencode/goal-verify-live/` wedge, `/tmp/opencode/goal-verify-healthy/` clean, `/tmp/opencode/goal-verify-debug/` debug-level boot).
+
+<!-- spec-check files=63 tests=1624 -->
+
+## Workstream XXXI — documentation/spec alignment sweep: the stale compaction-ladder and restore-compaction claims are retired (2026-11-18)
+
+Armed condition of this iteration (verbatim from the loop): keep improving the current directory, fixing what needs fixing. A read-only audit found six static documentation/comment defects; all six are fixed here. No behavior changed; every fix points the reader at the shipped contract.
+
+Interpretation. The repo's normative documents (SPEC.md) and inline comments had drifted behind the code on two topics: (1) whether `restore()` asks the host to compact (it never does — adopt-only, src/runtime/controller.ts `restore()`), and (2) what the boundary-compaction miss ladder does at 4+ misses (it never suspends — at 2 misses one host-unwilling warning, re-requests trickle every 3rd arm, the 4-miss cap is only a backstop final warning; Workstream BV). Left alone, a regression test restoring either stale behavior would look spec-compliant.
+
+891. SPEC.md items 90(b), 95 and 97(b) now carry dated SUPERSEDED annotations pointing at the adopt-only fix and `docs/runtime.html`; Workstream AB (items 118-121) carries a SUPERSEDED annotation pointing at Workstream BV (items 227-228). History is annotated, not rewritten.
+892. `src/runtime/compactor.ts` — the dead `"capped"` member of `BoundaryCompactMiss` is removed (it was constructed nowhere; every `reason:` site yields disabled/in-flight/cooldown/read-failed/too-small/busy/compact-failed). `test/loop.test.ts` — the stale "miss 4: capped" comment now describes the BV backstop.
+893. `src/core/types.ts` — the `COMPACT_MISS_CAP` comment no longer claims requests are "suspended" past 4 misses; it describes the backstop warning and the every-3rd-arm trickle, matching the doc comment on `LoopCompactState.misses`. `src/core/config.ts` — the `maxLoopSummaryTokens` comment now states the enforced `max(200, tokens) * 4` (was `tokens*4`), matching src/runtime/evaluator.ts.
+894. `AGENTS.md` and `README.md` — the documented `bun run check` composition now includes `check:spec` (the SPEC honesty gate that package.json actually runs); AGENTS.md previously mentioned it only once elsewhere in the file and contradicted its own requirements block.
+895. SPEC.md's original Verification section no longer tells the tester to install the pre-rename `@el4cteo/opencode-goal`; it names the current `github:paumkim/opencode-goalv2#v1.1.0` specifier (the line-1909 historical occurrence is deliberately untouched as history).
+
+Honest limits. (a) Documentation/comments only; no shipped behavior, API, or test expectation changed. (b) The enforced (first-occurrence) spec-check marker is unchanged at `files=63 tests=1624` — no shipped-file or test-count delta; `bun run check` green before submit. (c) Stale claims could in principle linger in other historical SPEC sections; those are records and are annotated only where an agent could mistake them for the operative contract.
 
 <!-- spec-check files=63 tests=1624 -->

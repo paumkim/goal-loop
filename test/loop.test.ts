@@ -901,7 +901,7 @@ describe("/goal-loop", () => {
     await arm() // miss 1
     await arm() // miss 2 (forced)
     await arm() // miss 3 (forced)
-    await arm() // miss 4: capped
+    await arm() // miss 4: backstop — final warning, trickle re-requests continue (Workstream BV)
     expect(h5.compactCalls).toHaveLength(3)
     h5.setContextSize(90_000)
     await h5.controller.onCompactionLanded(SID) // landing observed via the ended event
