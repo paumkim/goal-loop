@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-17 20:36 UTC</code></td><td>fix(tui): snapshot mirror — convergence when the RPC and the bus are both dead (IX)</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 20:32 UTC</code></td><td>fix(goal-loop): the pill's elapsed timer tracks from first arm to terminal — startedAt no longer resets on loop re-arm or restore</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 20:28 UTC</code></td><td>Dialog chrome: 1-cell ClampedColumn padding, footer tier re-priced to width−2, bench harness</td><td>commit</td></tr>
 <tr><td><code>2026-11-17 20:06 UTC</code></td><td>fix(compact): restore() is adopt-only — compaction only ever targets the specific session</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-16 19:09 UTC</code></td><td>feat(tui): HUD card in the v2 composer's grammar + ErrorBoundary over dialog and HUD</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 18:54 UTC</code></td><td>fix(coordinator): bootstrap only coordinator repositories</td><td>commit</td></tr>
 <tr><td><code>2026-11-16 18:45 UTC</code></td><td>docs(opencode-cli): point the guide at the real clone path</td><td>commit</td></tr>
-<tr><td><code>2026-11-16 18:04 UTC</code></td><td>fix(goal): strip end-of-record notes from model context; keep them on the terminal</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
