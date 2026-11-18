@@ -1250,7 +1250,9 @@ export class GoalController {
     await this.commit(record)
     if (this.stale(record, runtime, epoch)) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} of ${maxLoops} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
-    await this.note(record, `Loop ${iteration} of ${maxLoops} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition)
+    // The outcome line stays on the terminal; the armed kickoff (loopContinuation) carries the same
+    // state forward, so this note must not ride later context — a final note, like any end of record.
+    await this.note(record, `Loop ${iteration} of ${maxLoops} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition, { final: true })
     // The note round-trips through synthetic; the world may have moved on while it landed.
     if (this.stale(record, runtime, epoch)) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
