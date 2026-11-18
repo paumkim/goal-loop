@@ -209,9 +209,11 @@ All optional, set in `opencode.json`:
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_MIRROR`.
+`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
 
 `OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/opencode-goal-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
+
+`OPENCODE_GOAL_LOG_FILE=<path>` mirrors every plugin log line to a file as JSON Lines (`{"ts","level","message","data"?}`), one object per line. The host swallows the plugin's console logger, so this is the only way to see plugin logs (restore adoptions, coordinator notes, loop/compaction bookkeeping) from a live session — especially valuable over very long runs. Best-effort: a logging failure never throws and never affects a commit; the file rotates to `<path>.1` once it exceeds 5 MiB (one generation kept). Unset by default.
 
 `OPENCODE_GOAL_PROBE=1` puts the plugin in probe mode: plugin storage becomes read-only (goal records are never written or deleted, so `restore()` has no side effects). Use it for any probe opencode server or scratch instance that loads the plugin. Without it, a probe can mutate the live goal records shared with your real sessions. Verification commands still execute in the probe's working directory, so point probes at a throwaway checkout.
 
