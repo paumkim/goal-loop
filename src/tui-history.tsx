@@ -412,7 +412,7 @@ export const LoopSection = (props: {
         </box>
       </Show>
       {/* evaluator verdict trail */}
-      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} />
+      <VerdictTrail theme={theme()} history={props.goal.history ?? []} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} dropped={props.goal.historyDropped} />
     </box>
   )
 }
@@ -490,10 +490,13 @@ const WhyLedger = (props: {
   )
 }
 
-const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean; ascii?: () => boolean; onCopyReason?: (reason: string) => void; nowMs?: () => number }): JSX.Element => {
+const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEntry[]; mono?: boolean; ascii?: () => boolean; onCopyReason?: (reason: string) => void; nowMs?: () => number; dropped?: number }): JSX.Element => {
   const mono = () => props.mono === true
   const ascii = () => (props.ascii?.() === true) || motionDisabled(process.env)
+  // Retention cap: when earlier verdicts were dropped from the record, the trail is a window, not the whole story — the caption says so.
+  const dropped = () => props.dropped ?? 0
   const trail = () => trailWindow(props.history, 24)
+  const total = () => trail().total + dropped()
   // The timeline is a control, not a picture: clicking a dot copies that turn's exact evaluator
   // reason. The why ledger inline-quotes only the last three reasons; this is the deep scrub
   // surface for the rest. Dots without a reason (or without the host wiring) stay inert pictures.
@@ -534,7 +537,7 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
           </box>
           <text wrapMode="none" fg={props.theme.text.muted} flexShrink={0}>
             {" "}
-            {trail().shown.length} of {trail().total} verdict{trail().total === 1 ? "" : "s"}
+            {trail().shown.length} of {total()} verdict{total() === 1 ? "" : "s"}{dropped() > 0 ? ` · ${dropped()} older dropped (retention cap)` : ""}
             {(() => {
               const t = copiedTurn()
               return t === null ? "" : (ascii() ? ` · turn ${t} · + copied` : ` · turn ${t} · ✓ copied`)
@@ -576,13 +579,16 @@ export const HistoryBlock = (props: {
   const streak = () => verdictStreak(history())
   const streakSuffix = () => {
     const s = streak()
-    return s.count >= 2 && s.verdict ? ` · ${s.count}x ${s.verdict.replace("_", " ")} in a row` : ""
+    // Retention cap: when the whole retained window is one verdict and older entries were dropped, the streak is a lower bound, not an exact count.
+    const lowerBound = (props.goal.historyDropped ?? 0) > 0 && s.count >= history().length
+    return s.count >= 2 && s.verdict ? ` · ${lowerBound ? "at least " : ""}${s.count}x ${s.verdict.replace("_", " ")} in a row` : ""
   }
   const elapsed = () => formatDurationCoarse(props.elapsedMs())
   const countsText = () => {
     const c = counts()
     const parts = [`${c.met} met`, `${c.not_met} not_met`]
     if (c.impossible > 0) parts.push(`${c.impossible} impossible`)
+    if ((props.goal.historyDropped ?? 0) > 0) parts.push("retained turns only")
     return parts.join(" · ")
   }
   return (
@@ -609,7 +615,7 @@ export const HistoryBlock = (props: {
           )}
         </Show>
       </box>
-      <VerdictTrail theme={theme()} history={history()} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} />
+      <VerdictTrail theme={theme()} history={history()} mono={mono()} ascii={ascii} onCopyReason={props.onCopyReason} nowMs={nowMs} dropped={props.goal.historyDropped} />
     </box>
   )
 }

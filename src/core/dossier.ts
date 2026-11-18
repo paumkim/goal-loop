@@ -254,7 +254,10 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
 
   // ---- Verdict trail
   const history = goal.history ?? []
-  lines.push(`## Verdict trail (${history.length} evaluated turn${history.length === 1 ? "" : "s"})`)
+  const historyDropped = goal.historyDropped ?? 0
+  const totalTrail = history.length + historyDropped
+  lines.push(historyDropped > 0 ? `## Verdict trail (${history.length} most recent of ${totalTrail} evaluated turns)` : `## Verdict trail (${history.length} evaluated turn${history.length === 1 ? "" : "s"})`)
+  if (historyDropped > 0) lines.push(`_${historyDropped} earlier verdict${historyDropped === 1 ? "" : "s"} dropped by the verdict-trail retention cap; the tallies and rows below cover the retained turns only — the dropped ones are unknown, never inferred._`)
   lines.push("")
   if (history.length === 0) {
     lines.push("No turns have been evaluated yet.")
@@ -266,7 +269,7 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
     const zeroToolMet = history.filter((entry) => entry.verdict === "met" && entry.toolCalls === 0).length
     const tally = [`met ${counts.met}`, `not_met ${counts.not_met}`, `impossible ${counts.impossible}`]
     if (zeroToolMet > 0) tally.push(`${zeroToolMet} met with zero tool calls (condition already held at HEAD)`)
-    lines.push(`Tallies: ${tally.join(" · ")}`)
+    lines.push(historyDropped > 0 ? `Tallies: ${tally.join(" · ")} · retained turns only` : `Tallies: ${tally.join(" · ")}`)
     lines.push("")
     lines.push(...verdictProse(history))
     lines.push("")
