@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, pillCaret, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, pillCaret, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -183,6 +183,73 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal({ retries: 5, status: "paused" }), 1000 * 60 * 12)
     expect(pill.tone).toBe("paused")
     expect(pill.text).toContain("· retry 5")
+  })
+})
+
+describe("the breath — the ambient dot (workstream XII)", () => {
+  const working = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot =>
+    loopedGoal({ loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 3, ...overrides }) as unknown as GoalSnapshot
+
+  test("four 600ms phases make a 2.4s period — about a quarter-minute per cycle, never a heartbeat", () => {
+    expect(BREATH_PERIOD_MS).toBe(2_400)
+    expect(BREATH_PHASE_MS).toBe(600)
+    expect(BREATH_PERIOD_MS / BREATH_PHASE_MS).toBe(4)
+  })
+
+  test("the wave swells and eases back symmetrically — · • ● •", () => {
+    expect([0, 1, 2, 3].map((p) => breathGlyph(p))).toEqual(["\u00B7", "\u2022", "\u25CF", "\u2022"])
+    expect(breathGlyph(4)).toBe(breathGlyph(0))
+    expect(breathGlyph(-1)).toBe(breathGlyph(3))
+  })
+
+  test("an undefined or non-finite phase paints the static resting face — the reduced-motion contract", () => {
+    expect(breathGlyph(undefined)).toBe(BREATH_REST)
+    expect(BREATH_REST).toBe("\u2022")
+    expect(breathGlyph(Number.NaN)).toBe(BREATH_REST)
+  })
+
+  test("only the crest phase carries the bold — every other phase renders at normal weight", () => {
+    expect([0, 1, 2, 3].map((p) => breathCrest(p))).toEqual([false, false, true, false])
+    expect(breathCrest(undefined)).toBe(false)
+    expect(breathCrest(Number.NaN)).toBe(false)
+  })
+
+  test("the dot is one cell at every phase, in both arms — the pill budget math is phase-independent", () => {
+    for (const phase of [0, 1, 2, 3, undefined] as const) {
+      expect(stringWidth(breathGlyph(phase))).toBe(1)
+      expect(stringWidth(breathGlyph(phase, true))).toBe(1)
+    }
+    expect(breathGlyph(undefined, true)).toBe("*")
+    expect(breathGlyph(2, true)).toBe("*")
+  })
+
+  test("every breath frame of a working pill differs only in the leading dot — the one-cell contract", () => {
+    const frames = [0, 1, 2, 3].map((p) => pillModel(working(), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, p).text)
+    const rest = [...frames[0]!].slice(1).join("")
+    for (const frame of frames.slice(1)) expect([...frame].slice(1).join("")).toBe(rest)
+    expect(new Set(frames.map((f) => [...f][0])).size).toBeGreaterThan(1)
+  })
+
+  test("the resting (reduced-motion) frame is itself legible — a working pill at rest reads goal active", () => {
+    const text = pillModel(working(), 1000 * 60 * 41).text
+    expect(text).toBe("\u2022 goal active · 41m · 3 turns")
+  })
+
+  test("waiting, paused and stuck paint static, distinct glyphs — never the wave, in any phase", () => {
+    for (const phase of [0, 1, 2, 3] as const) {
+      expect(pillModel(working({ waiting: true }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u25CB")).toBe(true) // ○
+      expect(pillModel(working({ status: "paused" }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u2016")).toBe(true) // ‖
+      expect(pillModel(working({ retries: 3 }), 0, false, Number.POSITIVE_INFINITY, phase).text.startsWith("\u25CF")).toBe(true) // ● — nothing executes, so no breath
+    }
+    // ASCII arm: o / | / *
+    expect(pillModel(working({ waiting: true }), 0, true).text.startsWith("o")).toBe(true)
+    expect(pillModel(working({ status: "paused" }), 0, true).text.startsWith("|")).toBe(true)
+    expect(pillModel(working({ retries: 3 }), 0, true).text.startsWith("*")).toBe(true)
+  })
+
+  test("an evaluating goal paints the full wave at rest — the crest face is ●, and weight is the caller's lever", () => {
+    const text = pillModel(working({ evaluating: true }), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, 2).text
+    expect(text.startsWith("\u25CF goal checking · 41m · 3 turns")).toBe(true)
   })
 })
 
@@ -380,16 +447,21 @@ describe("pinBudget", () => {
 })
 
 describe("pillMotionNeeded", () => {
-  test("all quiet is static — an armed, idle goal never pulses", () => {
-    expect(pillMotionNeeded({})).toBe(false)
-    expect(pillMotionNeeded({ evaluating: false, hot: false, flashing: false })).toBe(false)
+  test("a live goal that is working always breathes — presence, not an alarm", () => {
+    expect(pillMotionNeeded({ working: true })).toBe(true)
+    expect(pillMotionNeeded({ working: true, evaluating: false, hot: false })).toBe(true)
   })
 
-  test("the just-achieved flash alone drives the pulse — the flash rides the same cadence as the evaluating shimmer", () => {
+  test("all quiet is static — a waiting, paused or stuck goal never breathes", () => {
+    expect(pillMotionNeeded({})).toBe(false)
+    expect(pillMotionNeeded({ working: false, evaluating: false, hot: false, flashing: false, landing: false })).toBe(false)
+  })
+
+  test("the just-achieved flash alone drives the breath — the flash rides the same cadence as the evaluating swell", () => {
     expect(pillMotionNeeded({ flashing: true })).toBe(true)
   })
 
-  test("the just-landed window alone drives the pulse — a landing is worth catching even when nothing else moves", () => {
+  test("the just-landed window alone drives the breath — a landing is worth catching even when nothing else moves", () => {
     expect(pillMotionNeeded({ landing: true })).toBe(true)
     expect(pillMotionNeeded({ evaluating: false, hot: false, flashing: false, landing: true })).toBe(true)
   })
@@ -400,7 +472,7 @@ describe("pillMotionNeeded", () => {
     expect(LANDING_SUFFIX).toBe(" · landed ✓")
   })
 
-  test("evaluating and a hot compaction drive the pulse independently", () => {
+  test("evaluating and a hot compaction drive the breath independently", () => {
     expect(pillMotionNeeded({ evaluating: true })).toBe(true)
     expect(pillMotionNeeded({ hot: true })).toBe(true)
   })
@@ -415,25 +487,25 @@ describe("terminalPill", () => {
   test("a finished single goal renders the acknowledgment with frozen elapsed and turns", () => {
     const model = terminalPill(loopedGoal({ status: "achieved", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 4, elapsedMs: 1000 * 60 * 12 }), 1000 * 60 * 12)
     expect(model?.tone).toBe("achieved")
-    expect(model?.text).toBe(`${GOAL_GLYPH} goal achieved · 12m · 4 turns`)
+    expect(model?.text).toBe(`● goal achieved · 12m · 4 turns`)
   })
 
   test("a finished loop renders the completion grammar with iteration and cap", () => {
     const model = terminalPill(loopedGoal({ status: "achieved", loopIteration: 5, loopMaxLoops: 5, turns: 31, elapsedMs: 1000 * 60 * 48 }), 1000 * 60 * 48)
     expect(model?.tone).toBe("achieved")
-    expect(model?.text).toBe(`${GOAL_GLYPH} loop complete · v5/5 · 48m · 31 turns`)
+    expect(model?.text).toBe(`● loop complete · v5/5 · 48m · 31 turns`)
   })
 
   test("an impossible verdict renders in the same grammar", () => {
     const model = terminalPill(loopedGoal({ status: "impossible", loopIteration: 3, turns: 9, elapsedMs: 1000 * 60 * 30 }), 1000 * 60 * 30)
     expect(model?.tone).toBe("impossible")
-    expect(model?.text).toBe(`${GOAL_GLYPH} loop impossible · v3/5 · 30m · 9 turns`)
+    expect(model?.text).toBe(`◌ loop impossible · v3/5 · 30m · 9 turns`)
   })
 
   test("a failed goal renders the failure tone and zero-turn goals omit the turns segment", () => {
     const model = terminalPill(loopedGoal({ status: "failed", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 0, elapsedMs: 1000 * 60 * 2 }), 1000 * 60 * 2)
     expect(model?.tone).toBe("failed")
-    expect(model?.text).toBe(`${GOAL_GLYPH} goal failed · 2m`)
+    expect(model?.text).toBe(`✕ goal failed · 2m`)
   })
 
   test("a width budget caps the acknowledgment — it never paints past the cells it is given", () => {
@@ -621,13 +693,18 @@ describe("footerButtonCells / dialogFooterTier", () => {
     expect(footerButtonCells("+ copied")).toBe(footerButtonCells("✓ copied"))
   })
 
-  test("under ASCII the pill and terminal acknowledgment paint *, never a broken glyph", () => {
+  test("the breath and acknowledgment glyphs demote to ASCII under reduced color, never a broken glyph", () => {
     const achieved = loopedGoal({ status: "achieved", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 4, elapsedMs: 1000 * 60 * 12 })
-    expect(terminalPill(achieved, 1000 * 60 * 12, true)?.text.startsWith("* goal achieved")).toBe(true)
-    expect(terminalPill(achieved, 1000 * 60 * 12, false)?.text.startsWith(`${GOAL_GLYPH} goal achieved`)).toBe(true)
+    expect(terminalPill(achieved, 1000 * 60 * 12, true)?.text.startsWith("+ goal achieved")).toBe(true)
+    expect(terminalPill(achieved, 1000 * 60 * 12, false)?.text.startsWith("● goal achieved")).toBe(true)
+    const impossible = loopedGoal({ status: "impossible", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined })
+    expect(terminalPill(impossible, 1000 * 60 * 12, true)?.text.startsWith("? goal impossible")).toBe(true)
+    const failed = loopedGoal({ status: "failed", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 0 })
+    expect(terminalPill(failed, 1000 * 60 * 12, true)?.text.startsWith("x goal failed")).toBe(true)
     const looped = loopedGoal({ status: "active" })
     expect(pillModel(looped, 1000 * 60 * 12, true).text.startsWith("* loop · v3/5")).toBe(true)
-    expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith(`${GOAL_GLYPH} loop · v3/5`)).toBe(true)
+    expect(pillModel(looped, 1000 * 60 * 12, false).text.startsWith("• loop · v3/5")).toBe(true)
+    expect(pillModel(looped, 1000 * 60 * 12, false, Number.POSITIVE_INFINITY, 2).text.startsWith("● loop · v3/5")).toBe(true)
   })
 
   test("the compact band prices in BOTH ClampedColumn paddings (width−2) — the audit's A1 frame-accounting fix", () => {

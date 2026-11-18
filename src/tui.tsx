@@ -31,7 +31,7 @@ import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
-import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
+import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
 import { preserveCarriedFields, applySnapshot, goalsEqual, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
@@ -261,7 +261,7 @@ export default Plugin.define({
      */
     const [terminalAcks, setTerminalAcks] = createSignal<Readonly<Record<string, { goal: GoalSnapshot; at: number }>>>({})
     // The check-flash window after a goal lands `achieved`: per session, self-terminating, setup-scope
-    // like the ack registry. A view acknowledgment riding the existing pulse — never state, never stored.
+    // like the ack registry. A view acknowledgment riding the breath's crest — never state, never stored.
     const [flashing, setFlashing] = createSignal<ReadonlySet<string>>(new Set())
     // The landing acknowledgment after a boundary compaction is observed to land (pending → landed
     // flip on the loopCompact state): same registry shape, longer window, info tone. A background win
@@ -596,11 +596,13 @@ export default Plugin.define({
         return next
       })
     }
-    // Reduced motion: no pulse, no animation. Evaluated once — a user toggling NO_COLOR mid-session gets it on next launch.
+    // Reduced motion: no breath, no animation. Evaluated once — a user toggling NO_COLOR mid-session gets it on next launch.
     const motionOk = !motionDisabled(process.env)
     // Reduced color: NO_COLOR / TERM=dumb also drop the plugin's chromatic accents (weight and glyphs carry meaning). Same env predicate as the motion guard.
     const reducedColor = !motionOk
-    const [pulse, setPulse] = createSignal(false)
+    // The breath phase (0..3). Advances on a slow 600ms tick only while the loop is alive; the dot
+    // itself is the only cell that changes. Static (never mounted) under reduced motion.
+    const [breathPhase, setBreathPhase] = createSignal(0)
 
     // Claims the empty left side of the host's jump-to-latest row (the 1-row strip directly above the
     // input prompt) for the ambient goal pill: a zero-flow absolute 1-row box at top={-1}. Left click
@@ -966,7 +968,7 @@ export default Plugin.define({
           // before truncating the core, so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
           const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0))
-          if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget)
+          if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
             // Same cell budget as the live pill: the ack never paints past the row either.
@@ -994,26 +996,42 @@ export default Plugin.define({
           const base = prefix + model.text + landed
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
         }
-        // Soft pulse while the evaluator is thinking, and an amber shimmer while the compaction
-        // request is running hot: bold flips on a slow tick, only while evaluating/hot; reduced
-        // motion/NO_COLOR/TERM=dumb gets a static pill (motionOk stays false).
-        // Motion is live while the evaluator is thinking, the compaction request runs hot, or the just-achieved flash window is open. The flash rides the same slow bold-flip as the evaluating pulse — it only exists for the first ACK_FLASH_MS of the ack pill, then the pill goes static. The goal() read is undefined once terminal; the flash is keyed off the session alone.
+        // The breath: the dot swells through `· • ● •` on a 2.4s cycle — presence, not animation.
+        // It runs while the loop is genuinely alive (working, or a transient window: evaluating, hot
+        // compaction, the just-achieved flash, the landing acknowledgment) and never otherwise —
+        // waiting, paused, stuck and terminal states are static. The crest phase is the only beat
+        // that may carry bold (evaluating / hot / flash / landing); plain working never goes bold.
+        // Under reduced motion (NO_COLOR / TERM=dumb) the dot paints its static resting face and
+        // weight goes permanently to evaluating / hot.
+        const workingNow = () => {
+          const g = goal()
+          return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g)
+        }
         const animated = () => {
           const g = goal()
-          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
+          return pillMotionNeeded({ working: workingNow(), evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
         }
         createEffect(() => {
           if (animated() && motionOk) {
-            const timer = setInterval(() => setPulse((value) => !value), 850)
+            const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS)
             onCleanup(() => clearInterval(timer))
             return
           }
-          setPulse(false)
+          setBreathPhase(0)
         })
+        // The crest beat belongs to the transients, never to plain working: an evaluating / hot /
+        // flash / landing goal flexes at the top of the breath; an armed-and-working loop does not.
+        const transientNow = () => {
+          const g = goal()
+          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
+        }
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes.BOLD : 0
-          const bold = animated() && pulse() && motionOk ? TextAttributes.BOLD : 0
-          const attrs = hoverBold | bold
+          const g = goal()
+          // Reduced motion: no phase ever advances, so weight goes permanently to evaluating / hot —
+          // the mono contract keeps weight as a first-class channel.
+          const peak = motionOk ? breathCrest(breathPhase()) && transientNow() : g?.evaluating === true || (g !== undefined && isCompactHot(g))
+          const attrs = hoverBold | (peak ? TextAttributes.BOLD : 0)
           return attrs === 0 ? undefined : attrs
         }
         const color = () => {

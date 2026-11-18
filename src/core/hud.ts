@@ -6,7 +6,7 @@
  */
 import stringWidth from "string-width"
 import { COMPACT_MISS_CAP, isLive, type GoalSnapshot, type LoopCompactState } from "./types.ts"
-import { formatDurationCoarse, goalGlyph, truncate } from "./format.ts"
+import { formatDurationCoarse, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /**
@@ -155,9 +155,11 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
  * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
  * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the
  * core with the surface's ellipsis. An unbounded budget (the default) composes exactly the historical
- * full label.
+ * full label. `phase` is the breath cycle index (0..3, advanced by the caller's slow timer); an
+ * undefined phase paints the static resting face — the reduced-motion contract. The dot costs the
+ * same single cell at every phase, so the budget math is phase-independent.
  */
-export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY): PillModel => {
+export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY, phase?: number): PillModel => {
   const state = stateWord(goal)
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
@@ -174,7 +176,7 @@ export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = 
             : goal.waiting
               ? "waiting"
               : "armed"
-  const glyph = goalGlyph(ascii)
+  const glyph = stateGlyph(goal, ascii, phase)
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : ""
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii)
@@ -261,18 +263,18 @@ export const TERMINAL_ACK_MS = 45_000
 
 /**
  * How long the check-flash rides the terminal acknowledgment pill after a goal lands `achieved`:
- * the bold attribute flips on the same slow cadence as the evaluating pulse, then the flash ends and
+ * the bold attribute crests on the same slow cadence as the evaluating breath, then the flash ends and
  * the pill goes static for the rest of the ack window. Motion, not information — it exists so the eye
  * catches the completion moment where the user was already watching. Suppressed under reduced motion
- * (NO_COLOR / TERM=dumb) like every other pulse.
+ * (NO_COLOR / TERM=dumb) like every other breath.
  */
 export const ACK_FLASH_MS = 1_700
 
 /**
  * How long the landing acknowledgment rides the ambient pill after a boundary compaction is observed to
  * land (`loopCompact.pending → landed`): the pill appends ` · landed ✓`, reads in the info tone and
- * flips bold on the same 850ms cadence, then goes static. Deliberately longer than the met flash —
- * a background win worth catching, not a celebration. Suppressed under reduced motion like every pulse.
+ * crests bold on the same slow cadence as the evaluating breath, then goes static. Deliberately longer than the met flash —
+ * a background win worth catching, not a celebration. Suppressed under reduced motion like every breath.
  */
 export const LANDING_ACK_MS = 3_000
 
@@ -283,13 +285,14 @@ const LANDING_SUFFIX_ASCII = " · landed +"
 export const landingSuffix = (ascii: boolean = false): string => (ascii ? LANDING_SUFFIX_ASCII : LANDING_SUFFIX)
 
 /**
- * The pill's pulse interval runs while any of the transient conditions is live: the evaluator is
- * thinking, the compaction request is running hot, the just-achieved flash window is open, or the
- * boundary compaction is observed to have landed (the landing acknowledgment window). Extracted so the
- * contract — one of these alone drives the pulse — is pinned in unit tests. Pure.
+ * The pill's breath interval runs while the loop is genuinely alive: a live goal that is working
+ * (armed and not blocked, or the evaluator is thinking — `working`), a compaction request running
+ * hot, the just-achieved flash window, or the boundary-compaction landing window. Waiting, paused,
+ * a stuck-retrying loop and every terminal state are static by design — amplitude tracks how alive,
+ * never how urgent. Extracted so the contract is pinned in unit tests. Pure.
  */
-export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly hot?: boolean; readonly flashing?: boolean; readonly landing?: boolean }): boolean =>
-  args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true
+export const pillMotionNeeded = (args: { readonly working?: boolean; readonly evaluating?: boolean; readonly hot?: boolean; readonly flashing?: boolean; readonly landing?: boolean }): boolean =>
+  args.working === true || args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true
 
 /**
  * The completion moment: when a goal goes live→terminal the ambient pill would otherwise blink out
@@ -304,10 +307,10 @@ export const pillMotionNeeded = (args: { readonly evaluating?: boolean; readonly
  * row. Mirrors `pillModel`'s contract — the pill never exceeds the cells it is given.
  */
 export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget?: number): PillModel | undefined => {
-  const glyph = goalGlyph(ascii)
   const tone: HudTone | undefined =
     goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined
   if (!tone) return undefined
+  const glyph = terminalGlyph(goal.status, ascii)
   const word = goal.status === "achieved" ? (goal.loopEnabled ? "complete" : "achieved") : goal.status
   const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
   const span = `${formatDurationCoarse(elapsed)}${turns}`
@@ -327,6 +330,54 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean
 
 /** Minimum cells a pinned condition needs before the pin suffix is worth rendering at all. */
 export const PIN_MIN_WIDTH = 12
+
+/**
+ * The breath — the ambient dot's entire motion vocabulary. Four phases of 600ms (a 2.4s period,
+ * about a quarter-minute per cycle): a sleeping-cat cadence, never a heartbeat. The dot swells from
+ * `·` through `•` to a full `●` crest and eases back, nothing else on the line moves, and no phase
+ * is brighter-or-more-frantic than its neighbors. Reduced motion (NO_COLOR / TERM=dumb) never
+ * advances the phase at all — the dot paints its resting face, static, and the glyph family
+ * (plus weight) carries every state.
+ */
+export const BREATH_PERIOD_MS = 2_400
+export const BREATH_PHASE_MS = BREATH_PERIOD_MS / 4
+/** The four faces of the dot, indexed by phase: exhale floor, rising, crest, falling. */
+const BREATH_WAVE = ["\u00B7", "\u2022", "\u25CF", "\u2022"] as const
+/** The static resting face — painted whenever the phase is not advanced (reduced motion) and as the frame the motion dissolves into. */
+export const BREATH_REST = "\u2022"
+
+/** The dot's face at breath phase `phase` (any number; wraps). An undefined or non-finite phase paints the static resting face — the reduced-motion contract. ASCII demotes the whole family to `*`. */
+export const breathGlyph = (phase: number | undefined, ascii: boolean = false): string => {
+  if (ascii) return "*"
+  if (phase === undefined || !Number.isFinite(phase)) return BREATH_REST
+  return BREATH_WAVE[((Math.floor(phase) % 4) + 4) % 4]!
+}
+
+/** True only on the crest phase — the single beat that may carry bold. Every other phase renders at normal weight. */
+export const breathCrest = (phase: number | undefined): boolean =>
+  phase !== undefined && Number.isFinite(phase) && ((Math.floor(phase) % 4) + 4) % 4 === 2
+
+/**
+ * The leading state glyph for the pill, by state family — shape carries the state before color or
+ * word ever get a say, so the family holds under NO_COLOR:
+ *   - a live goal that is working (armed, or the evaluator is thinking) swells through the breath wave;
+ *   - `waiting` (background work holding evaluation back) paints a hollow `○` — nothing is in flight;
+ *   - `paused` paints `‖` — stopped, two bars, the same metaphor as every media key;
+ *   - a stuck-retrying goal paints a solid-but-static `●` — nothing executes, so nothing breathes;
+ * the terminal acknowledgments paint `●` / `◌` / `✕` (achieved / impossible / failed), static.
+ */
+const stateGlyph = (goal: GoalSnapshot, ascii: boolean, phase: number | undefined): string => {
+  if (goal.status === "paused") return ascii ? "|" : "\u2016" // ‖
+  if (isRetryStuck(goal)) return ascii ? "*" : "\u25CF" // ●
+  if (goal.waiting === true && goal.evaluating !== true) return ascii ? "o" : "\u25CB" // ○
+  return breathGlyph(phase, ascii)
+}
+
+/** The terminal acknowledgment's leading glyph — static, one per outcome, ASCII-demoted under reduced color. */
+const terminalGlyph = (status: string, ascii: boolean): string => {
+  if (ascii) return status === "achieved" ? "+" : status === "impossible" ? "?" : "x"
+  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2715" // ● ◌ ✕
+}
 export const PIN_PREFIX = " · pin: "
 
 /**
@@ -345,10 +396,10 @@ export const pinSuffix = (condition: string, conditionMax: number, ascii: boolea
 }
 
 /**
- * Motion guard for the evaluator-thinking pulse: no animation when the user asked for none
+ * Motion guard for the breath: no animation when the user asked for none
  * (NO_COLOR) or the terminal cannot animate (TERM=dumb). The host conversation renders in the
  * same terminal, so the common conventions apply without a plugin-specific variable.
- * Anything else gets the pulse — it only ever runs while `evaluating` is true.
+ * Anything else gets the breath — it only ever runs while the loop is alive (see pillMotionNeeded).
  */
 export const motionDisabled = (env: Record<string, string | undefined>): boolean =>
   env.NO_COLOR !== undefined || env.TERM === "dumb"

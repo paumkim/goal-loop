@@ -1939,12 +1939,12 @@ var nextMenuIndex = (index, delta, rows) => {
   }
   return (index % count + count) % count;
 };
-var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY) => {
+var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY, phase) => {
   const state = stateWord(goal);
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
   const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
   const tone = goal.status === "paused" ? "paused" : isRetryStuck(goal) ? "retrying" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
-  const glyph = goalGlyph(ascii);
+  const glyph = stateGlyph(goal, ascii, phase);
   if (goal.loopEnabled) {
     const cap = typeof goal.loopMaxLoops === "number" && goal.loopMaxLoops > 0 ? `/${goal.loopMaxLoops}` : "";
     const pips = renderPips(goal.loopHistory?.length ?? 0, goal.loopMaxLoops, ascii);
@@ -1970,12 +1970,12 @@ var LANDING_ACK_MS = 3000;
 var LANDING_SUFFIX = " \xB7 landed \u2713";
 var LANDING_SUFFIX_ASCII = " \xB7 landed +";
 var landingSuffix = (ascii = false) => ascii ? LANDING_SUFFIX_ASCII : LANDING_SUFFIX;
-var pillMotionNeeded = (args) => args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true;
+var pillMotionNeeded = (args) => args.working === true || args.evaluating === true || args.hot === true || args.flashing === true || args.landing === true;
 var terminalPill = (goal, elapsed, ascii = false, budget) => {
-  const glyph = goalGlyph(ascii);
   const tone = goal.status === "achieved" ? "achieved" : goal.status === "impossible" ? "impossible" : goal.status === "failed" ? "failed" : undefined;
   if (!tone)
     return;
+  const glyph = terminalGlyph(goal.status, ascii);
   const word = goal.status === "achieved" ? goal.loopEnabled ? "complete" : "achieved" : goal.status;
   const turns = goal.turns > 0 ? ` \xB7 ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : "";
   const span = `${formatDurationCoarse(elapsed)}${turns}`;
@@ -1992,6 +1992,32 @@ var terminalPill = (goal, elapsed, ascii = false, budget) => {
   return { text, tone };
 };
 var PIN_MIN_WIDTH = 12;
+var BREATH_PERIOD_MS = 2400;
+var BREATH_PHASE_MS = BREATH_PERIOD_MS / 4;
+var BREATH_WAVE = ["\xB7", "\u2022", "\u25CF", "\u2022"];
+var BREATH_REST = "\u2022";
+var breathGlyph = (phase, ascii = false) => {
+  if (ascii)
+    return "*";
+  if (phase === undefined || !Number.isFinite(phase))
+    return BREATH_REST;
+  return BREATH_WAVE[(Math.floor(phase) % 4 + 4) % 4];
+};
+var breathCrest = (phase) => phase !== undefined && Number.isFinite(phase) && (Math.floor(phase) % 4 + 4) % 4 === 2;
+var stateGlyph = (goal, ascii, phase) => {
+  if (goal.status === "paused")
+    return ascii ? "|" : "\u2016";
+  if (isRetryStuck(goal))
+    return ascii ? "*" : "\u25CF";
+  if (goal.waiting === true && goal.evaluating !== true)
+    return ascii ? "o" : "\u25CB";
+  return breathGlyph(phase, ascii);
+};
+var terminalGlyph = (status, ascii) => {
+  if (ascii)
+    return status === "achieved" ? "+" : status === "impossible" ? "?" : "x";
+  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2715";
+};
 var PIN_PREFIX = " \xB7 pin: ";
 var pinSuffix = (condition, conditionMax, ascii = false) => {
   const budget = Math.floor(conditionMax);
@@ -6730,7 +6756,7 @@ var tui_default = Plugin.define({
     };
     const motionOk = !motionDisabled(process.env);
     const reducedColor = !motionOk;
-    const [pulse, setPulse] = createSignal4(false);
+    const [breathPhase, setBreathPhase] = createSignal4(0);
     const [getHudSession, setHudSession] = createSignal4(undefined);
     const [statusCopied, setStatusCopied] = createSignal4(false);
     const [contextOpen, setContextOpen] = createSignal4(false);
@@ -7259,7 +7285,7 @@ var tui_default = Plugin.define({
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
             const budget = Math.max(1, mountWidthOr() - 4 - (landingNow() ? stringWidth(landingSfx()) : 0));
             if (g)
-              return pillModel(g, elapsed(), motionDisabled(process.env), budget);
+              return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
             return t ? terminalPill(t, t.elapsedMs, motionDisabled(process.env), budget) : undefined;
           } catch {
@@ -7281,9 +7307,14 @@ var tui_default = Plugin.define({
           const base = prefix + model.text + landed;
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
+        const workingNow = () => {
+          const g = goal();
+          return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g);
+        };
         const animated = () => {
           const g = goal();
           return pillMotionNeeded({
+            working: workingNow(),
             evaluating: g?.evaluating === true,
             hot: g !== undefined && isCompactHot(g),
             flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
@@ -7292,16 +7323,26 @@ var tui_default = Plugin.define({
         };
         createEffect2(() => {
           if (animated() && motionOk) {
-            const timer = setInterval(() => setPulse((value) => !value), 850);
+            const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
             onCleanup3(() => clearInterval(timer));
             return;
           }
-          setPulse(false);
+          setBreathPhase(0);
         });
+        const transientNow = () => {
+          const g = goal();
+          return pillMotionNeeded({
+            evaluating: g?.evaluating === true,
+            hot: g !== undefined && isCompactHot(g),
+            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
+            landing: landingNow()
+          });
+        };
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes4.BOLD : 0;
-          const bold = animated() && pulse() && motionOk ? TextAttributes4.BOLD : 0;
-          const attrs = hoverBold | bold;
+          const g = goal();
+          const peak = motionOk ? breathCrest(breathPhase()) && transientNow() : g?.evaluating === true || g !== undefined && isCompactHot(g);
+          const attrs = hoverBold | (peak ? TextAttributes4.BOLD : 0);
           return attrs === 0 ? undefined : attrs;
         };
         const color = () => {
