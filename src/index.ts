@@ -26,6 +26,7 @@ import { createGoalMirror } from "./core/mirror.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
+import { withFileSink } from "./core/file-log.ts"
 
 const PLUGIN_ID = "opencode-goal"
 
@@ -131,7 +132,7 @@ export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
     const config = resolveConfig(ctx.options, process.env)
-    const log = createLogger()
+    const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
 
     // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
