@@ -3527,6 +3527,17 @@
       "submittedAt": "2026-11-18T22:28:34Z",
       "mergedAt": "2026-11-18T22:30:00Z",
       "mergedInto": "dev"
+    },
+    "wt-docs-config-audit": {
+      "agent": "orchestrator",
+      "paths": "docs/config.html,docs/index.html,docs/changelog.html,docs/runtime.html,docs/core.html,docs/install.html,docs/architecture.html,SPEC.md",
+      "branch": "wt/wt-docs-config-audit",
+      "worktree": "worktrees/wt-wt-docs-config-audit",
+      "status": "done",
+      "createdAt": "2026-11-18T22:35:56Z",
+      "submittedAt": "2026-11-18T22:38:55Z",
+      "mergedAt": "2026-11-18T22:40:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
