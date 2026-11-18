@@ -3242,6 +3242,17 @@
       "submittedAt": "2026-11-18T16:29:26Z",
       "mergedAt": "2026-11-18T16:30:53Z",
       "mergedInto": "dev"
+    },
+    "completed-condition-ledger": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/core/types.ts,src/runtime/controller.ts,test/loop.test.ts,test/completed-condition-ledger.test.ts,SPEC.md",
+      "branch": "wt/completed-condition-ledger",
+      "worktree": "worktrees/wt-completed-condition-ledger",
+      "status": "done",
+      "createdAt": "2026-11-18T16:37:53Z",
+      "submittedAt": "2026-11-18T16:42:42Z",
+      "mergedAt": "2026-11-18T16:44:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
