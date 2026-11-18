@@ -3351,6 +3351,17 @@
       "submittedAt": "2026-11-18T19:14:06Z",
       "mergedAt": "2026-11-18T19:15:33Z",
       "mergedInto": "dev"
+    },
+    "clean-history-docs-pin": {
+      "agent": "inkling-2-small-free",
+      "paths": "docs/core.html,test/docs-line-refs.test.ts,src/runtime/controller.ts,test/plugin.test.ts,SPEC.md,dist/tui.js",
+      "branch": "wt/clean-history-docs-pin",
+      "worktree": "worktrees/wt-clean-history-docs-pin",
+      "status": "done",
+      "createdAt": "2026-11-18T19:24:25Z",
+      "submittedAt": "2026-11-18T19:30:08Z",
+      "mergedAt": "2026-11-18T19:31:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
