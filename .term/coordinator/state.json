@@ -3494,6 +3494,17 @@
       "submittedAt": "2026-11-18T21:20:46Z",
       "mergedAt": "2026-11-18T21:22:14Z",
       "mergedInto": "dev"
+    },
+    "loop-arm-queued-honesty": {
+      "agent": "orchestrator-v11",
+      "paths": "src/runtime/controller.ts,src/core/types.ts,src/core/hud.ts,src/hud-card.tsx,src/tui-history.tsx,test/controller.test.ts,test/loop.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist/tui.js",
+      "branch": "wt/loop-arm-queued-honesty",
+      "worktree": "worktrees/wt-loop-arm-queued-honesty",
+      "status": "done",
+      "createdAt": "2026-11-18T21:54:42Z",
+      "submittedAt": "2026-11-18T21:55:06Z",
+      "mergedAt": "2026-11-18T21:56:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
