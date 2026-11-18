@@ -3253,6 +3253,22 @@
       "submittedAt": "2026-11-18T16:42:42Z",
       "mergedAt": "2026-11-18T16:44:13Z",
       "mergedInto": "dev"
+    },
+    "terminal-record-prune": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/core/types.ts,src/runtime/store.ts,src/runtime/controller.ts,test/terminal-record-prune.test.ts,test/controller.test.ts,SPEC.md,docs/runtime.html",
+      "branch": "wt/terminal-record-prune",
+      "worktree": "worktrees/wt-terminal-record-prune",
+      "status": "done",
+      "createdAt": "2026-11-18T16:52:43Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T16:58:32Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-18T16:58:32Z",
+      "mergedAt": "2026-11-18T16:59:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
