@@ -3538,6 +3538,17 @@
       "submittedAt": "2026-11-18T22:38:55Z",
       "mergedAt": "2026-11-18T22:40:20Z",
       "mergedInto": "dev"
+    },
+    "docs-coverage-gate": {
+      "agent": "inkling-2-small-free",
+      "paths": "SPEC.md,test/docs-coverage.test.ts",
+      "branch": "wt/docs-coverage-gate",
+      "worktree": "worktrees/wt-docs-coverage-gate",
+      "status": "done",
+      "createdAt": "2026-11-18T22:45:40Z",
+      "submittedAt": "2026-11-18T22:47:58Z",
+      "mergedAt": "2026-11-18T22:49:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
