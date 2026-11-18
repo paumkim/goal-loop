@@ -3335,6 +3335,22 @@
       "submittedAt": "2026-11-18T18:53:35Z",
       "mergedAt": "2026-11-18T18:55:09Z",
       "mergedInto": "dev"
+    },
+    "arm-no-new-gap-gate": {
+      "agent": "inkling-2-small-free",
+      "paths": "src/runtime/controller.ts,src/index.ts,test/loop.test.ts,SPEC.md,dist/tui.js",
+      "branch": "wt/arm-no-new-gap-gate",
+      "worktree": "worktrees/wt-arm-no-new-gap-gate",
+      "status": "done",
+      "createdAt": "2026-11-18T19:02:29Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T19:14:06Z",
+      "forcedScopeFiles": [
+        "docs/runtime.html"
+      ],
+      "submittedAt": "2026-11-18T19:14:06Z",
+      "mergedAt": "2026-11-18T19:15:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
