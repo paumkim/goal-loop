@@ -473,7 +473,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=63 tests=1628 -->
+<!-- spec-check files=64 tests=1637 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6701,4 +6701,17 @@ Armed condition of this iteration (verbatim from the loop): "Root-cause the stdi
 
 Honest limits. (a) The armed model was Console-auth-failing at this hour; the arming path, the pause/finish state machine, the event-emit path and the RPC pull all execute model-independently and were exercised end-to-end. (b) The failing-model condition is live and current on this host (unrelated to this plugin). (c) Proof that the pull resolved is the dashboard's own stale flag plus the absence of 500/SchemaError lines — the host does not log 2xx responses, so no 200 line exists to quote; this limit is stated plainly. (d) Markers: files unchanged at 63 (no new shipped file), tests 1624 → 1628; this same commit updates the enforced (first-occurrence) marker; historical trailing markers remain as recorded. (e) Historical SPEC sections remain annotated records; this amendment carries no new file/line citations; `bun run check` green before submit.
 
-<!-- spec-check files=63 tests=1628 -->
+<!-- spec-check files=64 tests=1637 -->
+
+## Workstream XXXIV — opt-in file log sink: `OPENCODE_GOAL_LOG_FILE` (2026-11-18)
+
+Armed condition of this iteration (verbatim from the loop): "keep on improving make it sturdy for a very long running session … if there are nothing else todo? keep looking for other things to keep on improving."
+
+907. Motivation. Workstream XXX item 826(a) recorded the named consequence plainly: the plugin's logger is raw `console.*` and the host swallows it, so **restore is silent in production** — an operator whose goal silently fails to adopt has no log anywhere to look at. It was filed there as "candidate for a future iteration". This iteration ships that candidate, in the minimal shape that cannot destabilize the host: an opt-in file sink, off by default, best-effort throughout.
+908. Behavior. New module `src/core/file-log.ts` exports `withFileSink(base, file, options?)` and `FILE_LOG_MAX_BYTES` (5 MiB). When `file` is unset or blank the base logger is returned unchanged (strictly opt-in, zero behavior change for existing installs). Otherwise every `info`/`warn`/`error` call still reaches the base logger first, then appends one JSON Lines object to the file: `{"ts": ISO, "level", "message", "data"?}`. Writes are `appendFileSync` inside a try that swallows every failure (a logging failure never throws into the caller and never affects a commit); a missing parent directory is created once and the append retried; a file exceeding `maxBytes` is rotated to `<file>.1` (replacing any previous `.1`) before the next append, so a very long session cannot grow the log without bound — one generation of history is kept. `safeStringify` survives cycles (`[circular]`), bigints (stringified) and `Error`s (`{name, message}`), so no log site can crash the sink. `src/index.ts` wires it: `const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)`.
+909. Docs and honesty gates. `README.md` and `docs/config.html` both document `OPENCODE_GOAL_LOG_FILE` (the `env-vars` suite pins the src↔README↔config token sets to be identical). New test file `test/file-log.test.ts` (9 tests): opt-out passthrough, JSONL shape and timestamp, base-logger-still-called on write failure, missing-parent creation, rotation (rotate over cap, no rotate at/under cap, `.1` replaced), unserializable payloads, the 5 MiB default, and line integrity for a 100k-value write. Test count moves 1628 → **1637 pass / 0 fail**; packed files 63 → **64** (`src/core/file-log.ts` ships); `test/package-integrity.test.ts` count re-pinned to 64; the enforced (first-occurrence) SPEC marker and this workstream's trailing marker advance to `files=64 tests=1637` in this same commit.
+910. Scope and honesty. This is a sink, not a host integration: the host's log routing remains what Workstream XXX item 826(a) recorded, and the SILENT-RESTORE consequence is now mitigated only for operators who set the env var — the default stays silent. Rotation keeps one `.1`; older lines are dropped by design. No other behavior changed; `bun run check` green before submit.
+
+Honest limits. (a) The sink writes synchronously on the log path; log volume is low (arm/restore/loop/compaction bookkeeping, never per-tick), but a pathological writer could still pay fsync costs — accepted for durability simplicity. (b) No live host run was performed this iteration; the module is unit-tested and the wiring is one line in `src/index.ts` reviewed against `createLogger`. (c) `OPENCODE_GOAL_LOG_FILE` is documented as best-effort; rotation is rename-based and POSIX-atomic only in the same directory, which the implementation guarantees (`<file>.1` is a sibling). (d) Historical SPEC sections remain annotated records.
+
+<!-- spec-check files=64 tests=1637 -->
