@@ -88,7 +88,7 @@ export interface LoopEntry {
   readonly spend?: UsageSnapshot
 }
 
-/** Consecutive unlanded boundary compactions after which the plugin suspends further requests until a landing is observed. 2 misses arm a forced re-request; 4 suspends. Lives here so core formatters can display it. */
+/** Consecutive unlanded boundary compactions after which the plugin emits one final backstop warning. 2 misses arm a forced re-request; past 4 re-requests drop to a trickle every 3rd arm. Lives here so core formatters can display it. */
 export const COMPACT_MISS_CAP = 4
 
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */

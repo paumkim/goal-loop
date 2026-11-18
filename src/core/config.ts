@@ -37,7 +37,7 @@ export interface GoalConfig {
   readonly compactOnLoopIteration: boolean
   /** `/goal-loop` iteration cap; counts completed iterations. */
   readonly maxLoops: number
-  /** Token budget for the per-iteration summary and the next-goal generation; enforced as tokens*4 characters. */
+  /** Token budget for the per-iteration summary and the next-goal generation; enforced as max(200, tokens) * 4 characters. */
   readonly maxLoopSummaryTokens: number
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
