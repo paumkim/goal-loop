@@ -3505,6 +3505,17 @@
       "submittedAt": "2026-11-18T21:55:06Z",
       "mergedAt": "2026-11-18T21:56:37Z",
       "mergedInto": "dev"
+    },
+    "loop-arm-summary-elision": {
+      "agent": "inkling",
+      "paths": "src/core/format.ts,src/runtime/controller.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/loop-arm-summary-elision",
+      "worktree": "worktrees/wt-loop-arm-summary-elision",
+      "status": "done",
+      "createdAt": "2026-11-18T22:15:29Z",
+      "submittedAt": "2026-11-18T22:20:53Z",
+      "mergedAt": "2026-11-18T22:22:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
