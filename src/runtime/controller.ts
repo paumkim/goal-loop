@@ -13,7 +13,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory,
+  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -954,6 +954,15 @@ export class GoalController {
         log.info("loop history retention cap: dropped oldest iteration records", { sessionID, dropped: bound.dropped, retained: bound.retained.length, totalDropped: record.loopHistoryDropped })
       }
       record.loopNotProgress = notProgress
+      // Completed-condition ledger: the anti-repeat and near-duplicate gates below must catch a planner
+      // re-offering a condition that completed before the retained 50-entry iteration window. record.condition
+      // is the just-achieved condition at both call sites (endClean and the normal advance, before re-arming).
+      const ledgerBound = boundCompletedConditions([...(record.completedConditions ?? []), record.condition])
+      record.completedConditions = ledgerBound.retained
+      if (ledgerBound.dropped > 0) {
+        record.completedConditionsDropped = (record.completedConditionsDropped ?? 0) + ledgerBound.dropped
+        log.info("completed-condition ledger cap: dropped oldest entries", { sessionID, dropped: ledgerBound.dropped, retained: ledgerBound.retained.length, totalDropped: record.completedConditionsDropped })
+      }
     }
 
     const endClean = async (reason: string) => {
@@ -1069,6 +1078,8 @@ export class GoalController {
       normalize(record.condition),
       ...(record.loopObjective ? [normalize(record.loopObjective)] : []),
       ...history.map((entry) => normalize(entry.condition)),
+      // The ledger outlives the retained window: conditions dropped from it by the cap are gone by design (counted on the record); everything still held is scanned here.
+      ...(record.completedConditions ?? []).map(normalize),
     ])
     if (completed.has(normalize(condition))) {
       log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
