@@ -2820,6 +2820,30 @@
       "submittedAt": "2026-11-18T01:02:00Z",
       "mergedAt": "2026-11-18T01:03:14Z",
       "mergedInto": "dev"
+    },
+    "tui-checking-indicator-stuck": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,src/runtime/controller.ts,src/runtime/evaluator.ts,src/runtime/events.ts,src/runtime/ports.ts,src/runtime/store.ts,src/core/wire.ts,src/core/types.ts,src/core/hud.ts,src/core/entries.ts,src/core/repull.ts,rpc.ts,test,SPEC.md,dist,docs",
+      "branch": "wt/tui-checking-indicator-stuck",
+      "worktree": "worktrees/wt-tui-checking-indicator-stuck",
+      "status": "done",
+      "createdAt": "2026-11-18T01:24:16Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T01:48:48Z",
+      "forcedScopeFiles": [
+        "src/core/rpc-pump.ts"
+      ],
+      "submittedAt": "2026-11-18T01:48:48Z",
+      "mergedAt": "2026-11-18T01:50:09Z",
+      "mergedInto": "dev"
+    },
+    "tui-detail-dialog-compact": {
+      "agent": "inkling",
+      "paths": "src/status-dialog.tsx,scripts/render-dialog.tsx,src/tui-history.tsx,src/core/history.ts",
+      "branch": "wt/tui-detail-dialog-compact",
+      "worktree": "worktrees/wt-tui-detail-dialog-compact",
+      "status": "claimed",
+      "createdAt": "2026-11-18T01:48:31Z"
     }
   },
   "mergeLock": null,
