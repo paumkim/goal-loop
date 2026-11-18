@@ -4,7 +4,7 @@
  * These tests pin the grammar and the context-hook predicate.
  */
 import { describe, expect, test } from "bun:test"
-import { note, isTerminalGoalNoteMessage, stripTerminalGoalNotes, TERMINAL_NOTE_TAG } from "../src/core/prompts.ts"
+import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG } from "../src/core/prompts.ts"
 
 const textMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 
@@ -20,42 +20,44 @@ describe("note()", () => {
   })
 })
 
-describe("isTerminalGoalNoteMessage", () => {
+describe("isGoalNoteMessage", () => {
   test("matches a user message whose text part carries the terminal tag", () => {
-    expect(isTerminalGoalNoteMessage(textMessage(note({ title: "Goal achieved (turn 1, 7m 21s).", body: "done", final: true })))).toBe(true)
+    expect(isGoalNoteMessage(textMessage(note({ title: "Goal achieved (turn 1, 7m 21s).", body: "done", final: true })))).toBe(true)
   })
-  test("ignores plain goal notes (loop advance)", () => {
-    expect(isTerminalGoalNoteMessage(textMessage(note({ title: "Loop 2 of 5 achieved", body: "v3 armed" })))).toBe(false)
+  test("matches a plain loop-advance note too (legacy notes must leave the context)", () => {
+    expect(isGoalNoteMessage(textMessage(note({ title: "Loop 2 of 5 achieved", body: "v3 armed" })))).toBe(true)
   })
   test("ignores non-text parts even with a similar payload shape", () => {
-    expect(isTerminalGoalNoteMessage({ role: "user", content: [{ type: "media", text: TERMINAL_NOTE_TAG }] })).toBe(false)
+    expect(isGoalNoteMessage({ role: "user", content: [{ type: "media", text: TERMINAL_NOTE_TAG }] })).toBe(false)
   })
   test("ignores malformed messages", () => {
-    expect(isTerminalGoalNoteMessage(null)).toBe(false)
-    expect(isTerminalGoalNoteMessage(undefined)).toBe(false)
-    expect(isTerminalGoalNoteMessage("<goal-note final>")).toBe(false)
-    expect(isTerminalGoalNoteMessage({})).toBe(false)
-    expect(isTerminalGoalNoteMessage({ content: null })).toBe(false)
-    expect(isTerminalGoalNoteMessage({ content: "not-an-array" })).toBe(false)
-    expect(isTerminalGoalNoteMessage({ content: [null, { type: "text" }, 42] })).toBe(false)
+    expect(isGoalNoteMessage(null)).toBe(false)
+    expect(isGoalNoteMessage(undefined)).toBe(false)
+    expect(isGoalNoteMessage("<goal-note final>")).toBe(false)
+    expect(isGoalNoteMessage({})).toBe(false)
+    expect(isGoalNoteMessage({ content: null })).toBe(false)
+    expect(isGoalNoteMessage({ content: "not-an-array" })).toBe(false)
+    expect(isGoalNoteMessage({ content: [null, { type: "text" }, 42] })).toBe(false)
   })
-  test("matches when any of several parts is the terminal note", () => {
+  test("matches when any of several parts is a goal note of either kind", () => {
     const message = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: `${TERMINAL_NOTE_TAG}\nx\n` }] }
-    expect(isTerminalGoalNoteMessage(message)).toBe(true)
+    expect(isGoalNoteMessage(message)).toBe(true)
+    const plain = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: "<goal-note>\ny\n" }] }
+    expect(isGoalNoteMessage(plain)).toBe(true)
   })
 })
 
-describe("stripTerminalGoalNotes", () => {
-  test("drops only the terminal notes, preserves order and the input array", () => {
+describe("stripGoalNotes", () => {
+  test("drops goal notes of either kind, preserves order and the input array", () => {
     const keep1 = textMessage("user task")
-    const drop = textMessage(note({ title: "Goal achieved", body: "done", final: true }))
+    const drop1 = textMessage(note({ title: "Goal achieved", body: "done", final: true }))
     const keep2 = textMessage("assistant answer")
-    const keep3 = textMessage(note({ title: "Loop 1 of 3 achieved", body: "v2 armed" }))
-    const input = [keep1, drop, keep2, keep3]
-    expect(stripTerminalGoalNotes(input)).toEqual([keep1, keep2, keep3])
+    const drop2 = textMessage(note({ title: "Loop 1 of 3 achieved", body: "v2 armed" }))
+    const input = [keep1, drop1, keep2, drop2]
+    expect(stripGoalNotes(input)).toEqual([keep1, keep2])
     expect(input).toHaveLength(4)
   })
   test("an empty list stays empty", () => {
-    expect(stripTerminalGoalNotes([])).toEqual([])
+    expect(stripGoalNotes([])).toEqual([])
   })
 })
