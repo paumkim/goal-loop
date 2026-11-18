@@ -549,10 +549,14 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
     }
   }
   const streak = verdictStreak(goal.history ?? [])
+  // Retention cap: when the whole retained window is one verdict and older entries were dropped, the true streak is at least the window — never reported as an exact count.
+  const streakIsLowerBound = (goal.historyDropped ?? 0) > 0 && streak.count >= (goal.history?.length ?? 0)
   if (streak.verdict === "not_met" && streak.count >= 3) {
     return {
       tone: "warning",
-      text: `${streak.count}x not_met in a row · consider evaluator.verifyCommand`,
+      text: streakIsLowerBound
+        ? `at least ${streak.count} not_met in a row · consider evaluator.verifyCommand`
+        : `${streak.count}x not_met in a row · consider evaluator.verifyCommand`,
     }
   }
   return undefined

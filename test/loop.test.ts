@@ -1068,6 +1068,36 @@ describe("loop history retention", () => {
   })
 })
 
+describe("verdict trail retention", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("25 evaluated turns retain the newest 20 with an explicit dropped counter on the record and the snapshot clone", async () => {
+    await h.setGoal("all tests pass")
+    for (let turn = 1; turn <= 25; turn++) h.verdicts.push(notMet(`turn ${turn} still failing`))
+    for (let turn = 0; turn < 25; turn++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.history).toHaveLength(20)
+    expect(record.history![0]!.turn).toBe(6)
+    expect(record.history![19]!.turn).toBe(25)
+    expect(record.historyDropped).toBe(5)
+    const snapshot = h.controller.snapshot(SID) as GoalSnapshot
+    expect(snapshot.history).toHaveLength(20)
+    expect(snapshot.historyDropped).toBe(5)
+  })
+
+  test("at or below the cap nothing is dropped and the counter stays absent", async () => {
+    await h.setGoal("all tests pass")
+    for (let turn = 1; turn <= 20; turn++) h.verdicts.push(notMet(`turn ${turn} still failing`))
+    for (let turn = 0; turn < 20; turn++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.history).toHaveLength(20)
+    expect(record.historyDropped).toBeUndefined()
+  })
+})
+
 describe("loop prompts", () => {
   const entry: LoopEntry = { version: 1, condition: "c", summary: "s", reason: "r", turns: 2, toolCalls: 5, endedAt: 1 }
 

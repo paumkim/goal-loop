@@ -120,6 +120,16 @@ export function attestationAppendix(
     `_The bookkeeping above is the record's own and was not re-verified; it renders what the record holds, nothing more. The shas the record quotes were re-probed here, fresh, against \`${directory}\`, at ${stamp}: existence (the object store), ancestry (this line), and the seal (git's signature check). \`unknown\` means git could not answer and is never counted as a pass or a fail. No question substitutes for another._`,
     "",
   ]
+  // A retention-capped record no longer quotes every sha the session ever saw. Say so once, plainly: the
+  // dropped entries are gone by design; nothing below re-probes them, and the counts are never a claim about them.
+  const droppedLoop = _goal.loopHistoryDropped ?? 0
+  const droppedVerdicts = _goal.historyDropped ?? 0
+  if (droppedLoop > 0 || droppedVerdicts > 0) {
+    const bits: string[] = []
+    if (droppedLoop > 0) bits.push(`${droppedLoop} earlier iteration record${droppedLoop === 1 ? "" : "s"}`)
+    if (droppedVerdicts > 0) bits.push(`${droppedVerdicts} earlier verdict${droppedVerdicts === 1 ? "" : "s"}`)
+    lines.push(`_${bits.join(" and ")} dropped by the retention caps; the shas they quoted are not re-probed here and are never implied held._`, "")
+  }
   if (verification.unique === 0) {
     lines.push(
       "The record quotes no sha — there is nothing to seal. An unshaded record cannot be re-probed, and none is claimed.",
