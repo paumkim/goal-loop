@@ -3093,6 +3093,22 @@
       "submittedAt": "2026-11-18T08:21:20Z",
       "mergedAt": "2026-11-18T08:22:42Z",
       "mergedInto": "dev"
+    },
+    "evaluator-proactive-auditor": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,test/evaluator.test.ts,test/commit-rule.test.ts,SPEC.md",
+      "branch": "wt/evaluator-proactive-auditor",
+      "worktree": "worktrees/wt-evaluator-proactive-auditor",
+      "status": "done",
+      "createdAt": "2026-11-18T08:38:59Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T08:47:31Z",
+      "forcedScopeFiles": [
+        "docs/runtime.html"
+      ],
+      "submittedAt": "2026-11-18T08:47:31Z",
+      "mergedAt": "2026-11-18T08:48:57Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
