@@ -2806,6 +2806,17 @@
       "submittedAt": "2026-11-17T21:18:51Z",
       "mergedAt": "2026-11-17T21:20:13Z",
       "mergedInto": "dev"
+    },
+    "build-tool-determinism": {
+      "agent": "orchestrator",
+      "paths": "scripts/build.ts,dist/tui.js",
+      "branch": "wt/build-tool-determinism",
+      "worktree": "worktrees/wt-build-tool-determinism",
+      "status": "done",
+      "createdAt": "2026-11-18T01:00:39Z",
+      "submittedAt": "2026-11-18T01:02:00Z",
+      "mergedAt": "2026-11-18T01:03:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
