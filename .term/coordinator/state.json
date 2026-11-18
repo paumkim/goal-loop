@@ -641,10 +641,13 @@
     "github-single-channel": {
       "agent": "orchestrator",
       "branch": "wt/github-single-channel",
-      "createdAt": "2026-11-16T00:30:51Z",
+      "createdAt": "2026-11-18T01:03:56Z",
       "paths": "README.md,docs,RELEASE-CHECKLIST.md",
-      "status": "claimed",
-      "worktree": "worktrees/wt-github-single-channel"
+      "status": "done",
+      "worktree": "worktrees/wt-github-single-channel",
+      "submittedAt": "2026-11-18T01:04:18Z",
+      "mergedAt": "2026-11-18T01:05:33Z",
+      "mergedInto": "dev"
     },
     "goal-dialog-design": {
       "agent": "inkling-dialog-fix",
