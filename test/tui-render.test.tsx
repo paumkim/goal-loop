@@ -402,6 +402,15 @@ describe("StatusDialogBody edge paths", () => {
     expect(frame).toContain("checking")
   })
 
+  test("the indicator transition renders: the same body leaves 'checking' once the verdict snapshot lands", async () => {
+    // The live sequence: entries cache holds evaluating:true; the verdict's changed event flips the store;
+    // re-render paints the post-verdict frame. Both frames are render-verified headlessly.
+    const evaluating = await render(() => <StatusDialogBody goal={loopedGoal({ evaluating: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    const arrived = await render(() => <StatusDialogBody goal={loopedGoal({ evaluating: false })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(evaluating).toContain("checking")
+    expect(arrived).not.toContain("checking")
+  })
+
   test("a waiting goal shows 'waiting' in the state line", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal({ waiting: true })} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("waiting")

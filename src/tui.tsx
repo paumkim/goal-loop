@@ -32,32 +32,21 @@ import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./statu
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pillCaret, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, pruneSnapshotEntries, bumpReceivedAt, terminalStampOf, ENTRY_CAP, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { preserveCarriedFields, applySnapshot, goalsEqual, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { makeGoalRefresh } from "./core/repull.ts"
+import { pumpRpcEvent } from "./core/rpc-pump.ts"
 import { GoalRpc } from "./rpc.ts"
 import { dialogStatusCommands } from "./core/dialog-keys.ts"
 import { parseChangedEvent, parseListGoalOutput, parseNotice, sameDirectory } from "./core/wire.ts"
-import { makeGoalRefresh } from "./core/repull.ts"
 
 type Entry = GoalSnapshotCacheEntry
 
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
 
-/** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
 /** Elapsed wall time for display: the record's elapsed plus the idle time since the snapshot arrived (live goals only). */
 const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: number) =>
   g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs
-
-// `elapsedMs` is recomputed from `now - startedAt` by every server snapshot, so two pulls of an
-// otherwise-identical live goal never deep-equal — strip it or the unchanged-snapshot arm (and its
-// bumpReceivedAt dedup) never engages for live goals. Everything else on the snapshot is either
-// user-visible state or derived from the record's fields, so it stays part of the comparison.
-const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
-const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
-  if (a === b) return true
-  if (!a || !b) return false
-  return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
-}
 
 /**
  * Host xlarge dialogs size to their content and can outgrow the terminal; clamping the column to the
@@ -378,14 +367,7 @@ export default Plugin.define({
       // The `get` RPC pull carries the context estimate and spend; `changed` events usually do not — carry both forward.
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       const mergedNow = Date.now()
-      return setEntries((previous) => {
-        const existing = previous[sessionID]
-        // Keep the old entry's elapsed baseline when nothing changed, but mark it freshly checked: elapsed time still extrapolates (only active goals extrapolate, and presumably-changed ones always take the fresh branch). Goal-identical memos stay untouched because the render tree sees the same goal reference; the stale-chrome guard re-pulls at most once per cadence instead of every tick. The cap still applies here — steady null entries ride the cap eviction (oldest non-live first) but are never dropped outright, or the tick would lose the re-pull target.
-        if (existing && goalsEqual(existing.goal, mergedGoal)) return pruneSnapshotEntries(bumpReceivedAt(previous, sessionID, Date.now()), statusDialogSession(), ENTRY_CAP)
-        const next = { ...previous, [sessionID]: { goal: mergedGoal, receivedAt: mergedNow, terminalAt: terminalStampOf(existing, mergedGoal, mergedNow) } }
-        // Null entries are retained (the stale-chrome tick re-pulls them); only the cap evicts.
-        return pruneSnapshotEntries(next, statusDialogSession())
-      })
+      return setEntries((previous) => applySnapshot(previous, sessionID, mergedGoal, mergedNow, statusDialogSession()))
     }
 
     /** Lazily fetches a session's goal the first time a view asks for it; events keep it fresh afterwards. */
@@ -472,9 +454,26 @@ export default Plugin.define({
         }
     }
 
-    const offChanged = rpc.events.on("changed", (event) => {
+    /**
+     * Reconnecting pumps for the RPC event streams. The one-shot `events.on` subscriptions they replace
+     * die permanently the moment the harness's shared event connection drops (a service handoff or a
+     * dropped stream): the `@opencode/client` wrapper iterates the shared stream once and never re-opens
+     * it, so a goal left mid-"checking" never receives the verdict's `changed` event again and the pill
+     * strands until the whole TUI restarts (observed live: 77 consecutive HTTP 500s on /api/rpc/goal/get
+     * in the background service, and zero `rpc.goal.changed` deliveries, over 26 minutes on 2026-11-17).
+     * The pumps re-open the stream with a small backoff and run a catch-up re-pull after every reconnect,
+     * so the pill converges to the server's truth within ~a second of the bus reviving instead of never.
+     * A globalThis generation guard aborts a previous TUI plugin generation's pumps on re-setup, so the
+     * pumps never multiply across hot reloads.
+     */
+    const pumpController = new AbortController()
+    const PUMP_GENERATION_KEY = "__opencodeGoalTuiRpcPump__"
+    const pumpGeneration = (globalThis as Record<string, unknown>)[PUMP_GENERATION_KEY]
+    if (pumpGeneration instanceof AbortController) pumpGeneration.abort()
+    ;(globalThis as Record<string, unknown>)[PUMP_GENERATION_KEY] = pumpController
+    const handleChangedEvent = (event: unknown) => {
       try {
-        const parsed = parseChangedEvent(event?.data)
+        const parsed = parseChangedEvent((event as { data?: unknown } | null | undefined)?.data)
         // Defense-in-depth: a bus that ever crosses processes/directories must not paint another
         // project's record onto this one (the RPC read paths enforce the same directory scope).
         // Fail open when this instance has no directory to compare against; null-goal clears carry
@@ -486,14 +485,48 @@ export default Plugin.define({
       } catch {
         // A malformed event must not take the plugin's render tree down.
       }
-    })
-    const offNotice = rpc.events.on("notice", (event) => {
+    }
+    const handleNoticeEvent = (event: unknown) => {
       try {
-        const notice = parseNotice(event?.data)
+        const notice = parseNotice((event as { data?: unknown } | null | undefined)?.data)
         if (notice) onNotice(notice)
       } catch {
         // Same.
       }
+    }
+    const reconnectCatchUp = () => {
+      // A reconnect may have swallowed events; re-read the server's truth for every cached live/null entry.
+      // Bounded by the entries cache (ENTRY_CAP) and runs at most once per reconnect.
+      for (const sessionID of staleUnprovenSessionIDs(entries(), Date.now(), 0)) void refresh(sessionID).catch(() => {})
+      if (statusDialogOpen()) void refreshOthers()
+    }
+    const pumpSleep = (ms: number, signal: AbortSignal) =>
+      new Promise<void>((resolve) => {
+        if (signal.aborted) return resolve()
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort)
+          resolve()
+        }, ms)
+        const onAbort = () => {
+          clearTimeout(timer)
+          resolve()
+        }
+        signal.addEventListener("abort", onAbort, { once: true })
+      })
+    void pumpRpcEvent({
+      name: "changed",
+      signal: pumpController.signal,
+      subscribe: () => rpc.events.subscribe("changed", { signal: pumpController.signal }),
+      handle: handleChangedEvent,
+      catchUp: reconnectCatchUp,
+      sleep: pumpSleep,
+    })
+    void pumpRpcEvent({
+      name: "notice",
+      signal: pumpController.signal,
+      subscribe: () => rpc.events.subscribe("notice", { signal: pumpController.signal }),
+      handle: handleNoticeEvent,
+      sleep: pumpSleep,
     })
 
     // Minute-resolution clock, ticking only while some goal is active.
@@ -1434,12 +1467,11 @@ export default Plugin.define({
 
     return () => {
       clearInterval(timer)
+      pumpController.abort()
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       for (const pending of terminalTimers) clearTimeout(pending)
       terminalTimers.clear()
       setTerminalAcks({})
-      offChanged()
-      offNotice()
       setFlashing(new Set<string>())
       setLanding(new Set<string>())
       setStatusDialogOpen(false)
