@@ -3291,6 +3291,17 @@
       "submittedAt": "2026-11-18T17:23:47Z",
       "mergedAt": "2026-11-18T17:25:10Z",
       "mergedInto": "dev"
+    },
+    "cross-directory-terminal-gc": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/runtime/store.ts,src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
+      "branch": "wt/cross-directory-terminal-gc",
+      "worktree": "worktrees/wt-cross-directory-terminal-gc",
+      "status": "done",
+      "createdAt": "2026-11-18T17:31:19Z",
+      "submittedAt": "2026-11-18T17:34:41Z",
+      "mergedAt": "2026-11-18T17:36:03Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
