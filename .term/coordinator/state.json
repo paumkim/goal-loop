@@ -3439,6 +3439,17 @@
       "submittedAt": "2026-11-18T20:36:36Z",
       "mergedAt": "2026-11-18T20:38:01Z",
       "mergedInto": "dev"
+    },
+    "docs-loop-advance-rearm-refusal": {
+      "agent": "orchestrator",
+      "paths": "docs/runtime.html,docs/changelog.html,SPEC.md",
+      "branch": "wt/docs-loop-advance-rearm-refusal",
+      "worktree": "worktrees/wt-docs-loop-advance-rearm-refusal",
+      "status": "done",
+      "createdAt": "2026-11-18T20:43:12Z",
+      "submittedAt": "2026-11-18T20:45:19Z",
+      "mergedAt": "2026-11-18T20:46:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
