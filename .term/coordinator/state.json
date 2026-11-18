@@ -3302,6 +3302,17 @@
       "submittedAt": "2026-11-18T17:34:41Z",
       "mergedAt": "2026-11-18T17:36:03Z",
       "mergedInto": "dev"
+    },
+    "in-memory-terminal-goal-retention": {
+      "agent": "opencode-goalv2-loop",
+      "paths": "src/core/types.ts,src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
+      "branch": "wt/in-memory-terminal-goal-retention",
+      "worktree": "worktrees/wt-in-memory-terminal-goal-retention",
+      "status": "done",
+      "createdAt": "2026-11-18T17:44:13Z",
+      "submittedAt": "2026-11-18T17:49:05Z",
+      "mergedAt": "2026-11-18T17:50:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
