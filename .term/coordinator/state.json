@@ -2874,8 +2874,21 @@
       "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,scripts/render-dialog.tsx",
       "branch": "wt/tui-detail-dialog-compact-2",
       "worktree": "worktrees/wt-tui-detail-dialog-compact-2",
-      "status": "claimed",
-      "createdAt": "2026-11-18T02:06:36Z"
+      "status": "done",
+      "createdAt": "2026-11-18T02:06:36Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-18T02:22:51Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "src/hud-card.tsx",
+        "test/__snapshots__/tui-snapshots.test.tsx.snap",
+        "test/tui-hud.test.tsx",
+        "test/tui-render.test.tsx",
+        "test/tui-snapshots.test.tsx"
+      ],
+      "submittedAt": "2026-11-18T02:22:51Z",
+      "mergedAt": "2026-11-18T02:31:37Z",
+      "mergedInto": "dev"
     },
     "dist-tui-rebuild": {
       "agent": "orchestrator",
@@ -2895,6 +2908,14 @@
       "worktree": "worktrees/wt-tui-storage-convergence-fallback",
       "status": "claimed",
       "createdAt": "2026-11-18T02:11:57Z"
+    },
+    "tui-pill-timer-continuity": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md",
+      "branch": "wt/tui-pill-timer-continuity",
+      "worktree": "worktrees/wt-tui-pill-timer-continuity",
+      "status": "claimed",
+      "createdAt": "2026-11-18T02:29:38Z"
     }
   },
   "mergeLock": null,
