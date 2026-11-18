@@ -312,13 +312,13 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
     `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:312`, `facts` `:337`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1121`, `prompts.ts:207`). References were
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1121`, `prompts.ts:208`). References were
     re-synced against HEAD twice on 2026-11-16 (`docs/config.html`, `docs/architecture.html`,
     `docs/index.html`, `docs/core.html`, `docs/runtime.html`, `docs/install.html`): first for the
     line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
     `CONTINUE_RETRY_MS` and the gate in the loop-advance path and shifted every later anchor (controller
     +16, after the loop-advance insertion +29 in total; prompts +6/+5/+2). The 2026-11-15 values
-    (64/82/263/288, controller.ts line 461 at the time) are superseded and recorded in git history. Note the caveat, discovered the hard way: `docs:check` verifies only page
+    (64/82/263/288, controller.ts line 461 at the time) are superseded and recorded in git history. The 2026-11-18 sync moved the steer anchor one line down (the `stripReasoningControl` import added at the top of prompts.ts shifted every later line by one). Note the caveat, discovered the hard way: `docs:check` verifies only page
     stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
     points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
     source moves. The README coordinator section documents the `.gitignore` auto-append and the
@@ -473,7 +473,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=62 tests=1598 -->
+<!-- spec-check files=63 tests=1613 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6560,3 +6560,19 @@ Harness. Scratch XDG triple under `/tmp/opencode/live-loop-xxv/` (wiped with the
 Candidate arms identified by this run for the next iteration (recorded, not done): (1) sanitize session-generate / compactor output — strip inline reasoning control tags and collapse the post-tag duplication before persisting to `loopHistory[].summary` (needs prompt tighten + a code filter + tests). (2) make the harness's or plugin's provider-fallback loud (out of plugin scope — belongs to the host; recorded for the host's own backlog). (3) a genuinely open objective run to arm v2 and observe the `next:` carry-forward with a `next:`-emitting judge — needs a live judge that actually adopts the duty, or a nudge like an objective with a standing backlog.
 
 <!-- spec-check files=62 tests=1598 -->
+
+## Workstream XXVI — the summarizer's reasoning-tag leak is stripped deterministically before it persists or reaches the planner (2026-11-18)
+
+Armed condition of this loop iteration (verbatim from the loop): "Strip reasoning control tags (e.g. `<ernie:think>`) and the duplicated post-tag content from the session/independent compactor output before it persists to loopHistory[].summary or enters the next-goal planner prompt; ship with unit tests; bun run check green."
+
+860. The leak, restated from the live evidence of Workstream XXV (item 856): the session summarizer ran past its instruction, leaked a raw `<ernie:think>`/`</ernie:think>` reasoning control tag into `loopHistory[0].summary`, duplicated its content around the tag before the hard `maxLoopSummaryTokens × 4` slice, and the result was persisted verbatim on the record and injected into the next-goal planner prompt as `latestSummary`. `escape()` in prompts.ts only neutralizes goal-tag closures; it was never designed for this.
+
+861. The fix, two layers. (i) **Code filter** — new `src/core/sanitize.ts` exporting `stripReasoningControl(text)`: removes complete `<(ns:)?(think|thinking|reasoning|thought)>…</…>` pairs (case-insensitive, optional namespace prefix such as `ernie:`); for each remaining stray closing tag, partitions at the FIRST one and keeps the pre-tag part when the post-tag text is a whitespace/punctuation-insensitive prefix of it (the truncated-duplicate restart observed live) and the post-tag part otherwise (an unterminated reasoning preamble); drops any unterminated opener to end-of-text (the model spent its budget reasoning — everything after the opener is that reasoning, not the answer); the kept part is re-cleaned so nested stray tags are handled by the same rules; the function is idempotent and strips to empty on tag-only input. Applied at both persistence boundaries: `Evaluator.summarize` (session and independent paths) sanitizes before the `cap()` budget is applied, and `historyBlock()` in prompts.ts sanitizes every `entry.condition`/`entry.summary` line and `latestSummary` at every prompt-construction site — so summaries persisted before this fix are also cleaned at prompt time, never reaching the next-goal planner or any directive carrier. (ii) **Prompt tighten** — one line added to `SUMMARY_ASK`: output exactly the block, nothing before or after it, never emit reasoning-control tags.
+
+862. Evidence, fresh at this HEAD. `bun run check` green: tsc clean; `bun test` **1613 pass / 0 fail / 28 snapshots** (was 1598; +15: `test/sanitize.test.ts` 12 unit tests — paired removal, stray-close disambiguation both ways, the verbatim XXV leak shape, nested stray tags, idempotency, tags-only input, non-reasoning angle brackets, trimming — plus 3 integration tests proving the session summarizer, the independent summarizer and the next-goal planner prompt are all tag-free after a leak); `docs-watch` freshness passed; TUI load check ok. The verbatim XXV sample round-trips: `objective: Create LOOP.txt …` block with `.</ernie:think>objective: Cre` suffix in → block out, post-tag duplicate gone.
+
+863. Honest limits. (a) The filter is deterministic and tag-shape-based; it catches the observed leak class (reasoning-control tags + the truncated-restart duplication), not arbitrary model noise — it will not drop a reasoning preamble written in plain prose with no tag, and it cannot restore content lost to the upstream token slice (the post-tag restart is dropped, not spliced back; the pre-tag block survives, which is what the live record needed). (b) Live layer this iteration: unit + integration tests only — the loop was not re-run live, and the armed-next-condition chain remains live-unverified; re-running an open-objective live pass to observe a `next:`-adopting judge remains the standing candidate (item 859). (c) `src/core/prompts.ts` was edited beyond the claimed paths (the historyBlock/latestSummary choke points and the one prompt line); the submit is recorded with `--force` and logged to the lease per the coordinator's scope-override policy. (d) `docs/runtime.html` records the filter next to the compaction paragraph; `docs/changelog.html` and page stamps regenerate from git history via `docs-watch.ts once` after the commit.
+
+864. SPEC honesty gate — the enforced (first occurrence) marker is now `<!-- spec-check files=63 tests=1613 -->` (test count 1598 → 1613; packed files 62 → 63 because `src/core/sanitize.ts` is a new shipped source file; `scripts/`/`test/` stay outside `package.json` `files`). Unforced history: `test/package-integrity.test.ts` count 62 → 63; Appendix A's frozen steer ref (the `continuation` export) re-synced one line down after the new import shifted the file, with a dated note in Appendix A; `docs/index.html` cites the same construct by symbol name and is unaffected by line shifts. `bun run check` green before submit.
+
+<!-- spec-check files=63 tests=1613 -->
