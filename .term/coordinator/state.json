@@ -3549,6 +3549,17 @@
       "submittedAt": "2026-11-18T22:47:58Z",
       "mergedAt": "2026-11-18T22:49:22Z",
       "mergedInto": "dev"
+    },
+    "docs-gate-pointer": {
+      "agent": "inkling-2-small-free",
+      "paths": "docs/index.html,docs/install.html,docs/changelog.html,SPEC.md",
+      "branch": "wt/docs-gate-pointer",
+      "worktree": "worktrees/wt-docs-gate-pointer",
+      "status": "done",
+      "createdAt": "2026-11-18T22:50:57Z",
+      "submittedAt": "2026-11-18T22:52:28Z",
+      "mergedAt": "2026-11-18T22:53:49Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
