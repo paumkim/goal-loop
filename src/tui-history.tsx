@@ -226,16 +226,13 @@ export const LoopSection = (props: {
     return theme().text.faint
   }
   return (
-    <box flexDirection="column" gap={1}>
-      {/* progress: vN of at most M, then the block bar on its own row */}
+    <box flexDirection="column" gap={0}>
+      {/* progress: vN of at most M, followed inline by the block bar */}
       <box flexDirection="row" gap={2}>
         {label(theme(), "loop")}
         <text wrapMode="none" fg={theme().text.base} attributes={TextAttributes.BOLD}>
           {barCaption(current(), max(), done())}
         </text>
-      </box>
-      <box flexDirection="row" gap={2}>
-        <box width={LABEL} flexShrink={0} />
         <box flexDirection="row" flexShrink={0}>
         <Show when={bar().filled > 0}>
           <text wrapMode="none" fg={mono() ? theme().text.base : theme().text.feedback.info.base}>
@@ -497,7 +494,7 @@ const VerdictTrail = (props: { theme: HistoryTheme; history: readonly VerdictEnt
   const copyHint = (entry: VerdictEntry): boolean => entry.reason.trim().length > 0
   return (
     <Show when={trail().shown.length > 0}>
-      <box flexDirection="column" gap={1}>
+      <box flexDirection="column" gap={0}>
         <box flexDirection="row" gap={2}>
           {label(props.theme, "trail")}
           <box flexDirection="row" flexShrink={0}>
@@ -564,7 +561,7 @@ export const HistoryBlock = (props: {
     return parts.join(" · ")
   }
   return (
-    <box flexDirection="column" gap={1}>
+    <box flexDirection="column" gap={0}>
       <box flexDirection="row" gap={2}>
         {label(theme(), "history")}
         <Show
