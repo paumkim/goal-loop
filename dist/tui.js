@@ -177,6 +177,7 @@ var isLive = (status) => LIVE_STATUSES.has(status);
 var COMPACT_MISS_CAP = 4;
 var MAX_LOOP_HISTORY_ENTRIES = 50;
 var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.loopHistory?.length ?? 0);
+var TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // src/core/format.ts
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });

@@ -7,6 +7,7 @@ import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
+import { MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
 
 const SID = "ses_1"
 const DIR = "C:/work/project"
@@ -80,14 +81,18 @@ function harness(
   const store = new GoalStore(storage, (e) => {
     throw e
   })
+  const logs: Array<{ level: string; message: string; extra?: unknown }> = []
   const silent = { info() {}, warn() {}, error() {} }
+  const log = typeof options.log === "object" && options.log !== null
+    ? (options.log as { info(m: string, e?: unknown): void; warn(m: string, e?: unknown): void; error(m: string, e?: unknown): void })
+    : silent
   const controller = new GoalController({
     config: resolveConfig(options),
     directory: DIR,
     commit,
     clock,
     store,
-    log: silent,
+    log,
     newId: (() => {
       let n = 0
       return () => `goal_${++n}`
@@ -128,6 +133,7 @@ function harness(
     controller,
     storage,
     store,
+    logs,
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
@@ -959,5 +965,138 @@ describe("RPC payload strict-JSON hygiene (host JSONValue gate)", () => {
       expect(() => assertJsonSafe(change, `changes[${i}]`)).not.toThrow()
     }
     expect(h.changes.length).toBeGreaterThan(0)
+  })
+})
+
+describe("terminal record pruning at restore", () => {
+  const NOW = 2_000_000_000_000
+  const DAY = 24 * 60 * 60 * 1000
+
+  let seq = 0
+  const terminalRecord = (status: GoalStatus, endedAt?: number): GoalRecord => ({
+    version: 1,
+    id: `goal_t${++seq}`,
+    sessionID: `ses_terminal_${seq}`,
+    directory: DIR,
+    condition: "done thing",
+    status,
+    setAt: (endedAt ?? NOW) - 2 * DAY,
+    startedAt: (endedAt ?? NOW) - 2 * DAY,
+    ...(endedAt !== undefined ? { endedAt } : {}),
+    turns: 3,
+    stall: 0,
+    retries: 0,
+    checkins: 0,
+    baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    history: [],
+  })
+  const seedTerminal = async (storage: MemoryStorage, records: GoalRecord[]) => {
+    for (const r of records) await storage.set(`goal/v1/${r.sessionID}`, structuredClone(r))
+  }
+
+  test("restore prunes aged terminal records, keeps fresh and active ones, and reports counts", async () => {
+    const logs: Array<{ level: string; message: string; extra?: { scanned?: number; pruned?: number; droppedAged?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { scanned?: number; pruned?: number; droppedAged?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const storage = new MemoryStorage()
+    await seedTerminal(storage, [
+      terminalRecord("achieved", NOW - 40 * DAY),
+      terminalRecord("failed", NOW - 90 * DAY),
+      terminalRecord("cleared", NOW - 2 * DAY),
+    ])
+    const first = harness({}, storage)
+    await first.set("active thing")
+    await first.store.flush()
+    const second = harness({ log: capturingLog }, storage)
+    second.clock.t = NOW
+    expect(await second.controller.restore()).toBe(1) // the active record is adopted
+    const keys = [...storage.data.keys()]
+    expect(keys.filter((k) => k.includes("ses_terminal"))).toHaveLength(1) // only the fresh one survives
+    expect(keys.filter((k) => k === "goal/v1/ses_1" || (k.startsWith("goal/v1/ses_") && !k.includes("ses_terminal")))).not.toHaveLength(0)
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ scanned: 3, pruned: 2, droppedAged: 2, droppedBeyondCap: 0 })
+    // Active goal is intact and adopted:
+    expect(second.controller.get("ses_1")?.status).toBe("active")
+  })
+
+  test("the count cap drops the oldest fresh terminal records beyond the cap", async () => {
+    const storage = new MemoryStorage()
+    const records = Array.from({ length: MAX_TERMINAL_RECORD_ENTRIES + 5 }, (_, i) =>
+      terminalRecord("achieved", NOW - i * 60_000),
+    )
+    await seedTerminal(storage, records)
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    expect(await h.controller.restore()).toBe(0) // no live records
+    const survivors = [...storage.data.keys()].filter((k) => k.startsWith("goal/v1/"))
+    expect(survivors).toHaveLength(MAX_TERMINAL_RECORD_ENTRIES)
+    expect(storage.data.has(`goal/v1/${records.at(-1)!.sessionID}`)).toBe(false) // oldest fresh one dropped
+    expect(storage.data.has(`goal/v1/${records[0]!.sessionID}`)).toBe(true) // newest kept
+  })
+
+  test("records of another directory are never pruned", async () => {
+    const storage = new MemoryStorage()
+    const foreign = { ...terminalRecord("achieved", NOW - 400 * DAY), directory: "C:/work/elsewhere" }
+    await seedTerminal(storage, [foreign])
+    const h = harness({}, storage)
+    h.clock.t = NOW
+    expect(await h.controller.restore()).toBe(0)
+    expect(storage.data.has(`goal/v1/${foreign.sessionID}`)).toBe(true)
+  })
+
+  test("unstamped terminal records are kept (age can never be judged) and reported, not pruned", async () => {
+    const logs: Array<{ level: string; message: string; extra?: { unstampedKept?: number; pruned?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { unstampedKept?: number; pruned?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const unstamped = terminalRecord("achieved") // endedAt absent
+    delete (unstamped as { startedAt?: number }).startedAt
+    const storage = new MemoryStorage()
+    await seedTerminal(storage, [unstamped])
+    const h = harness({ log: capturingLog }, storage)
+    h.clock.t = NOW
+    expect(await h.controller.restore()).toBe(0)
+    expect(storage.data.has(`goal/v1/${unstamped.sessionID}`)).toBe(true)
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ pruned: 0, unstampedKept: 1 })
+  })
+
+  test("a probe-mode (readOnly) store reports but removes nothing", async () => {
+    const storage = new MemoryStorage()
+    await seedTerminal(storage, [terminalRecord("achieved", NOW - 400 * DAY)])
+    const logs: Array<{ level: string; message: string; extra?: { readOnly?: boolean; pruned?: number; scanned?: number } }> = []
+    const capturingLog = {
+      info: (message: string, extra?: { readOnly?: boolean; pruned?: number; scanned?: number }) => void logs.push({ level: "info", message, extra }),
+      warn: () => {},
+      error: () => {},
+    }
+    const probeStore = new GoalStore(storage, () => {}, { readOnly: true })
+    const probe = new GoalController({
+      config: resolveConfig({}),
+      directory: DIR,
+      commit: { required: false, branch: "dev", reason: "test" },
+      clock: new (class extends FakeClock {})(),
+      store: probeStore,
+      log: capturingLog,
+      newId: () => "goal_probe",
+      session: {
+        prompt: async () => {},
+        synthetic: async () => {},
+        usage: async () => ({ cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
+        compact: async () => {},
+      },
+      evaluator: { evaluate: async () => ({ verdict: "not_met" as const, reason: "x" }) },
+      background: { busy: async () => ({ subagents: 0, shells: 0 }) },
+      emitter: { changed: () => {}, notice: () => {} },
+    })
+    await probe.restore()
+    expect(storage.data.size).toBe(1) // nothing removed under probe mode
+    const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
+    expect(report?.extra).toMatchObject({ scanned: 1, pruned: 0, readOnly: true })
   })
 })

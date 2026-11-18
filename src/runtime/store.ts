@@ -1,4 +1,4 @@
-import { isLive, type GoalRecord } from "../core/types.ts"
+import { isLive, selectTerminalRecordsToPrune, type GoalRecord } from "../core/types.ts"
 import { sameDirectory } from "../core/wire.ts"
 import type { StoragePort } from "./ports.ts"
 
@@ -69,6 +69,38 @@ export class GoalStore {
       after = page.next
     } while (after)
     return found
+  }
+
+  /**
+   * Restore-time hygiene: prune terminal records (achieved/impossible/cleared/failed) at plugin storage that are
+   * past the age cap or the per-directory count cap. Live records are never touched; other directories' records are
+   * never touched. Oldest entries go first; reports exactly what it did (counts only — the dropped strings/records
+   * are gone by design). In probe mode (`readOnly`) nothing is removed and the report says so.
+   */
+  async pruneTerminal(
+    directory: string,
+    nowMs: number,
+  ): Promise<{ scanned: number; pruned: number; droppedAged: number; droppedBeyondCap: number; unstampedKept: number; readOnly: boolean }> {
+    const scoped: GoalRecord[] = []
+    let after: string | undefined
+    do {
+      const page = await this.storage.scan({ prefix: PREFIX, limit: 200, ...(after ? { after } : {}) })
+      for (const entry of page.entries)
+        if (isRecord(entry.value) && sameDirectory(entry.value.directory, directory)) scoped.push(entry.value)
+      after = page.next
+    } while (after)
+    const selection = selectTerminalRecordsToPrune(scoped, nowMs)
+    if (this.options.readOnly)
+      return { scanned: selection.offered, pruned: 0, droppedAged: 0, droppedBeyondCap: 0, unstampedKept: selection.unstampedKept, readOnly: true }
+    for (const sessionID of selection.pruned) await this.remove(sessionID)
+    return {
+      scanned: selection.offered,
+      pruned: selection.pruned.length,
+      droppedAged: selection.droppedAged,
+      droppedBeyondCap: selection.droppedBeyondCap,
+      unstampedKept: selection.unstampedKept,
+      readOnly: false,
+    }
   }
 
   /** Resolves once every queued write has settled. */
