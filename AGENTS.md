@@ -1,11 +1,11 @@
 # opencode-goal
 
-Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`@el4cteo/opencode-goal`).
+Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`opencode-goalv2`).
 
 ## Entrypoints
 
 - `index.ts` → `src/index.ts` `Plugin.define setup()` — the server plugin. Only place wiring lives (config, commit policy, bootstrap, RPC, `/goal` + `/goal-loop` commands, hooks, event pump). `/goal-loop <objective>` is a `/goal` whose `met` verdicts arm a summarized next iteration until `maxLoops`, `LOOP_COMPLETE`, impossible, clear, or two zero-tool-call iterations; loop state rides the persisted `GoalRecord` (`loopEnabled`, `loopIteration`, `loopObjective`, `loopMaxLoops`, `loopHistory`, `loopNotProgress`; additive, `version` stays 1).
-- `src/core/*` — pure, no I/O beyond fs reads: `config.ts` (options + env), `git.ts` (commit policy), `prompts.ts` (directive + evaluator rubric), `bootstrap.ts` (first-run layout), `parse/verdict/transcript/errors/format`.
+- `src/core/*` — pure, no I/O beyond fs reads: `config.ts` (options + env), `git.ts` (commit policy), `prompts.ts` (directive + evaluator rubric), `opencode-cli.ts` (`<opencode-cli>` guide injected into the directive for goals that mention opencode), `bootstrap.ts` (first-run layout), `parse/verdict/transcript/errors/format`.
 - `src/runtime/*` — stateful: `controller.ts` (goal state machine, `/goal-loop` advance: met → summarize → arm next iteration, `maxLoops`/`LOOP_COMPLETE`/not-progress guards), `evaluator.ts`, `store.ts`, `events.ts`, `background.ts`, `ports.ts`.
 - `tui.ts` → `dist/tui.js` (precompiled). Edit TUI in `src/tui.tsx`, never `tui.ts`/`dist/`. `rpc.ts` → `src/rpc.ts` (shared client contract).
 
@@ -30,7 +30,8 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 - **Cold-start:** on `setup()` in a git repo, `ensureCoordinatorLayout()` creates `.term/coordinator/{config,state}.json` + `worktrees/` if missing (never overwrites) and the commit policy becomes coordinator mode. Detection needs `.term/coordinator/config.json` + `state.json`, or the coordinator bin + one json.
 - **Commit rule:** coordinator repos → agent works on `wt/<slug>` and `submit`s; `merge-next` merges into `dev` and gates on `bun run check` **of the merged result** (trial merge on a scratch branch; `dev` is untouched on failure). Outside a git repo the rule is off. `resolveCommitPolicy` takes an optional absolute plugin coordinator bin — never emit a repo-relative bin path.
 - **Vague goals** (`isFuzzyCondition` in `prompts.ts`): first turn writes `SPEC.md` (acceptance + verification incl. screenshot for visual requests), then builds, verifies, commits. Precise conditions skip this.
-- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work, 3-turn stall pause, 200-turn cap (pauses and *stays* paused until `/goal clear` or a new goal; a message alone will not extend the cap).
+- **opencode-CLI goals** (`isOpencodeCliCondition` in `opencode-cli.ts`): when the condition mentions opencode, the first-turn directive injects an `<opencode-cli>` block — check `opencode --version`, never rebuild the installed binary, SlotMap (`node_modules/@opencode/plugin/dist/tui/context.d.ts`) is the only stable TUI extension surface, verify in a headless opentui render in /tmp, and report the layer (binary/source/test-render/live TUI) each claim was verified at. Conditions without "opencode" get nothing extra.
+- **State/robustness:** per-session records (`goal/v1/<sessionID>`), restore on restart, epoch-guarded async work; the turn cap and stall guard are opt-in (default 0 = off) and apply to plain goals only — an armed /goal-loop never pauses at either (one notice each); a fatal provider error fails the goal; /goal clear stops it.
 
 ## Coordinator (`packages/coordinator/bin/coordinator`)
 
@@ -38,10 +39,10 @@ bun run e2e <empty-dir> [provider/model]  # real opencode server + live model, ~
 - **Bookkeeping policy (one, documented).** `merge-next` unions the live `.term/coordinator/state.json` with the committed copy (lease keys from both, live bus wins per key, `mergeLock` reset to null) and auto-commits it on `dev` as `chore(coordinator): record <slug> lease done after merge`. The union means an entry a wt bookkeeping branch landed on `dev` is never reverted by the merge's own lease flip. The chore commit is part of the merge flow — the only sanctioned path to `dev` — not a direct dev commit by an agent. If the commit fails the dirt stays exempt and the next merge-next retries. Do not hand-commit `state.json`; do not extend the exemption beyond this one file.
 - Requires `jq` (plus `git`, `bun` for the merge gate). Claim is flock-locked with lease re-check; path overlap without `--force` is a hard error; `status --json` lists leases (`state.json` is the coordination bus).
 - `merge-next` removes the merged worktree + `wt/` branch and marks the lease `done`. Leftover `worktrees/wt-*` dirs are safe to prune; leases in `.term/coordinator/state.json` are the source of truth.
-- This repo's own `opencode.json` forces `coordinator: true`. Work here the same way: claim, worktree, submit.
+- Contributors copy `opencode.json.example` to `opencode.json` (gitignored) — it wires the coordinator for local runs; the committed example uses a placeholder path. Work here the same way: claim, worktree, submit.
 
 - **SPEC honesty gate.** `bun run check` runs `scripts/spec-check.ts` (`check:spec`): it reads the `<!-- spec-check files=N tests=N -->` marker in SPEC.md and fails when the `npm pack --dry-run --json` file count or the `bun test` pass count trails it. Update the marker in the same commit that ships shipped-file or test changes. It is read-only and never enforces sizes, only counts.
-- **Loop re-arm hygiene.** An armed `/goal-loop` iteration is steered to re-read the repository (`git log --oneline -5`, `git status --short`, `git branch --show-current`, plus `coordinator status --json` / `git worktree list` in coordinator repos) and the current check output before touching anything; the summary is a hint, the tree is truth. Zero-progress iterations are counted by the harness (`onToolCalled` events → `iterationToolCalls`), never by the model's self-report; two consecutive zero-tool iterations pause the loop. A model claiming heavy work with zero harness tool calls still counts as zero.
+- **Loop re-arm hygiene.** An armed `/goal-loop` iteration is steered to re-read the repository (`git log --oneline -5`, `git status --short`, `git branch --show-current`, plus `coordinator status --json` / `git worktree list` in coordinator repos) and the current check output before touching anything; the summary is a hint, the tree is truth. Zero-progress iterations are counted by the harness (`onToolCalled` events → `iterationToolCalls`), never by the model's self-report; two consecutive zero-tool iterations are recorded (loopNotProgress) but never pause the loop. A model claiming heavy work with zero harness tool calls still counts as zero.
 
 ## Config
 

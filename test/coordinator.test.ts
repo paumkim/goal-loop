@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 import { execFileSync, spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -101,21 +101,35 @@ describe("coordinator merge-next", () => {
     expect(fileOnDev("FILE").status).not.toBe(0)
   })
 
-  test("a post-green checkout failure keeps HEAD on the scratch branch and tells the operator how to finish", () => {
-    // The merged result's `check` dirties a file the wt branch adds, so `git checkout dev` must refuse.
-    setup("echo dirty >> FILE")
+  test("a fast-forward failure leaves dev untouched, keeps the verified scratch branch, and prints the recovery command", () => {
+    // The verify-then-fast-forward split is explicit: when the fast-forward cannot happen,
+    // the merged result stays on merge-check-* and dev never moves. Simulated deterministically
+    // with the documented COORDINATOR_TEST_FF_FAIL hook (the old "check dirties a file" scenario
+    // cannot strand the main checkout anymore — the gate runs in a dedicated merge worktree).
+    setup("true")
     claimCommitSubmit("stuck", { FILE: "from-wt\n" }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(dir, ["merge-next"])
+    const result = spawnSync(SCRIPT, ["merge-next"], {
+      cwd: dir,
+      encoding: "utf8",
+      env: { ...GIT_ENV, COORDINATOR_TEST_FF_FAIL: "1" },
+    })
     expect(result.status).toBe(1)
-    expect(result.stderr).toContain("cannot checkout dev")
+    expect(result.stderr).toContain("cannot fast-forward dev")
     expect(result.stderr).toContain("recovery:")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
-    // HEAD must not be detached; it stays on the scratch branch holding the verified-green merge.
-    const head = git(dir, ["branch", "--show-current"]).trim()
-    expect(head).toMatch(/^merge-check-stuck-/)
-    expect(git(dir, ["branch", "--list", "merge-check-*"]).trim()).toMatch(/^\*?\s*merge-check-stuck-/)
+    // HEAD never left dev (merge work happens in a dedicated worktree now).
+    expect(git(dir, ["branch", "--show-current"]).trim()).toBe("dev")
+    // The verified-green merged result is kept on the scratch branch for manual recovery.
+    expect(git(dir, ["branch", "--list", "--format=%(refname:short)", "merge-check-stuck-*"]).trim()).toMatch(/^merge-check-stuck-/)
     expect(lease("stuck").status).toBe("submitted")
+    // finishing by hand works: fast-forward dev, then merge-done records the lease
+    const scratch = git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-stuck-*"]).trim()
+    git(dir, ["merge", "--ff-only", scratch])
+    const done = run(dir, ["merge-done", "stuck"])
+    expect(done.status).toBe(0)
+    expect(lease("stuck").status).toBe("done")
+    expect(fileOnDev("FILE").stdout.trim()).toBe("from-wt")
   })
 
   test("the merge-check prune keeps fresh scratch branches and drops stale ones", () => {
@@ -197,5 +211,69 @@ describe("coordinator merge-next", () => {
     const branches = git(dir, ["branch", "--list", "merge-check-*"]).trim()
     expect(branches).toBe("")
     expect(git(dir, ["branch", "--show-current"]).trim()).toBe("dev")
+  })
+})
+
+describe("coordinator scope parsing and scratch selection", () => {
+  test("claim canonicalizes whitespace-separated --paths to comma-joined", () => {
+    setup("true")
+    expect(run(dir, ["claim", "canon", "--agent", "t", "--paths", "src/**   test/**"]).status).toBe(0)
+    expect(lease("canon").paths).toBe("src/**,test/**")
+  })
+
+  test("submit enforces whitespace-separated claimed scopes (space-separated paths in state.json)", () => {
+    setup("true")
+    expect(run(dir, ["claim", "spaced", "--agent", "t", "--paths", "src/** test/**"]).status).toBe(0)
+    const wt = join(dir, "worktrees", "wt-spaced")
+    mkdirSync(join(wt, "src"), { recursive: true })
+    mkdirSync(join(wt, "test"), { recursive: true })
+    writeFileSync(join(wt, "src", "a.ts"), "export const a = 1\n")
+    writeFileSync(join(wt, "test", "b.test.ts"), "export const b = 1\n")
+    git(wt, ["add", "-A"])
+    git(wt, ["commit", "-q", "-m", "in scope work"], "2026-11-02T10:00:00+00:00")
+    expect(run(wt, ["submit"]).status).toBe(0)
+    expect(lease("spaced").status).toBe("submitted")
+  })
+
+  test("submit detects out-of-scope files in a multi-root repo with no dev branch", () => {
+    dir = mkdtempSync(join(tmpdir(), "coordinator-multiroot-"))
+    git(dir, ["init", "-q", "-b", "main"])
+    writeFileSync(join(dir, "root-one.txt"), "one\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "root one"], "2026-11-01T10:00:00+00:00")
+    git(dir, ["checkout", "-q", "--orphan", "other"])
+    git(dir, ["rm", "-q", "-r", "-f", "."])
+    writeFileSync(join(dir, "root-two.txt"), "two\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "root two"], "2026-11-02T10:00:00+00:00")
+    git(dir, ["checkout", "-q", "main"])
+    git(dir, ["merge", "-q", "--no-edit", "--allow-unrelated-histories", "-m", "merge two roots", "other"])
+    mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
+    writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}\n')
+    writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "-m", "unrelated-history merge fixture"], "2026-11-03T10:00:00+00:00")
+    expect(run(dir, ["claim", "multiroot", "--agent", "t", "--paths", "SPEC.md"]).status).toBe(0)
+    const wt = join(dir, "worktrees", "wt-multiroot")
+    writeFileSync(join(wt, "totally-out-of-scope.ts"), "export const x = 1\n")
+    git(wt, ["add", "-A"])
+    git(wt, ["commit", "-q", "-m", "out of scope work"], "2026-11-04T10:00:00+00:00")
+    const result = run(wt, ["submit"])
+    expect(result.status).toBe(1)
+    expect(`${result.stderr}${result.stdout}`).toContain("outside the claimed paths")
+  })
+
+  test("merge-done accepts a newer scratch branch, not only the oldest leftover", () => {
+    setup("true")
+    claimCommitSubmit("multi", { FILE: "x\n" }, "2026-11-02T10:00:00+00:00")
+    expect(run(dir, ["merge-next", "--review"]).status).toBe(0)
+    expect(run(dir, ["merge-next", "--review"]).status).toBe(0) // second pass: lease still submitted, a newer scratch is created
+    const scratches = git(dir, ["branch", "--list", "merge-check-multi-*", "--sort=-committerdate"])
+      .trim().split("\n").map((l) => l.trim()).filter(Boolean)
+    expect(scratches.length).toBe(2)
+    git(dir, ["merge", "-q", "--ff-only", scratches[0] as string]) // dev fast-forwards onto the NEWEST scratch
+    const done = run(dir, ["merge-done", "multi"])
+    expect(done.status).toBe(0)
+    expect(lease("multi").status).toBe("done")
   })
 })

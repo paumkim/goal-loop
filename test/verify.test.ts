@@ -4,6 +4,9 @@ import type { CommitPolicy, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import type { BackgroundWork, Clock, EvaluationResult, StoragePort, VerifyRequest, VerifyResult } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const SID = "ses_1"
 const DIR = "C:/work/project"
@@ -58,7 +61,7 @@ interface Harness {
   set: (condition?: string) => Promise<void>
 }
 
-function harness(options: Record<string, unknown>, { withVerifier = true }: { withVerifier?: boolean } = {}): Harness {
+function harness(options: Record<string, unknown>, { withVerifier = true, directory = DIR }: { withVerifier?: boolean; directory?: string } = {}): Harness {
   const clock = new FakeClock()
   const calls = { prompts: [] as any[], synthetic: [] as Array<{ text: string; description: string }> }
   const verdicts: EvaluationResult[] = []
@@ -68,7 +71,7 @@ function harness(options: Record<string, unknown>, { withVerifier = true }: { wi
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const deps: ConstructorParameters<typeof GoalController>[0] = {
     config: resolveConfig(options),
-    directory: DIR,
+    directory,
     commit,
     clock,
     log: silentLog,
@@ -247,5 +250,80 @@ describe("verification gate config", () => {
   test("whitespace-only verifyCommand is treated as disabled", () => {
     const config = resolveConfig({ evaluator: { verifyCommand: "   " } })
     expect(config.evaluator.verifyCommand).toBe("")
+  })
+})
+
+describe("verification tail on the record (dashboard evidence)", () => {
+  test("a passing gate persists the exit code and the stripped tail on the record", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check" } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: 0, output: "\u001b[32m42 pass\u001b[0m\n0 fail", timedOut: false })
+    await h.turn(3)
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.lastVerify).toBeDefined()
+    expect(record.lastVerify!.command).toBe("bun run check")
+    expect(record.lastVerify!.code).toBe(0)
+    expect(record.lastVerify!.tail).toBe("42 pass\n0 fail")
+    expect(record.lastVerify!.tail).not.toContain("\u001b")
+    expect(typeof record.lastVerify!.at).toBe("number")
+  })
+
+  test("a failing gate persists the stripped tail and exit code; the reason contract is unchanged", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check" } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: 1, output: "\u001b[31m1 fail\u001b[0m\nerror: expected true", timedOut: false })
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.verdict).toBe("not_met")
+    expect(record.lastVerify!.code).toBe(1)
+    expect(record.lastVerify!.tail).toBe("1 fail\nerror: expected true")
+    expect(record.reason).toContain("1 fail")
+  })
+
+  test("a timeout persists timedOut with a null exit code and no tail", async () => {
+    const h = harness({ evaluator: { verifyCommand: "bun run check", verifyTimeoutMs: 5_000 } })
+    await h.set()
+    h.verdicts.push(met())
+    h.verifyResults.push({ code: null, output: "", timedOut: true })
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.lastVerify!.timedOut).toBe(true)
+    expect(record.lastVerify!.code).toBeNull()
+    expect(record.lastVerify!.tail).toBeUndefined()
+  })
+})
+
+describe("commit sha on ledger entries (the verdict lands on a commit the reader can inspect)", () => {
+  const SHA = "a3f5c8e91d4b6f7061728394a5b6c7d8e9f0a1b2"
+  const repoDir = (() => {
+    const dir = mkdtempSync(join(tmpdir(), "goalv2-sha-repo-"))
+    const gitDir = join(dir, ".git")
+    mkdirSync(join(gitDir, "refs", "heads"), { recursive: true })
+    writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/main\n")
+    writeFileSync(join(gitDir, "refs", "heads", "main"), SHA + "\n")
+    return dir
+  })()
+
+  test("an evaluated turn stamps HEAD's sha on the per-verdict history entry", async () => {
+    const h = harness({}, { directory: repoDir })
+    await h.set()
+    h.verdicts.push(met())
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.history.at(-1)!.sha).toBe(SHA)
+  })
+
+  test("outside a repository the sha is absent — never guessed, never fabricated", async () => {
+    // A bare temp dir is outside any repository on every platform (the harness's C:/work/project
+    // sentinel resolves inside this checkout on Linux and would trip findRepository's walk-up).
+    const h = harness({}, { directory: mkdtempSync(join(tmpdir(), "goalv2-sha-nonrepo-")) })
+    await h.set()
+    h.verdicts.push(met())
+    await h.turn(1)
+    const record = h.controller.get(SID)!
+    expect(record.history.at(-1)!.sha).toBeUndefined()
   })
 })

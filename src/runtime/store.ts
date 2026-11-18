@@ -1,22 +1,26 @@
 import { isLive, type GoalRecord } from "../core/types.ts"
+import { sameDirectory } from "../core/wire.ts"
 import type { StoragePort } from "./ports.ts"
+
+// Re-exported from core/wire.ts (the boundary-validation module) so existing importers and tests keep working.
+export { sameDirectory }
 
 const PREFIX = "goal/v1/"
 
 export const keyFor = (sessionID: string) => `${PREFIX}${sessionID}`
 
-/** Normalizes paths for cross-platform equality (case-insensitive drive letters, separators). */
-export const sameDirectory = (a: string, b: string) => {
-  const norm = (p: string) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "")
-  const left = norm(a)
-  const right = norm(b)
-  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right
-}
-
 function isRecord(value: unknown): value is GoalRecord {
   if (typeof value !== "object" || value === null) return false
   const r = value as Partial<GoalRecord>
-  return r.version === 1 && typeof r.sessionID === "string" && typeof r.condition === "string" && typeof r.status === "string"
+  // `directory` is required by the type but absent on corrupt/legacy records; an unvalidated
+  // `sameDirectory()` call would throw and kill the whole bulk restore.
+  return (
+    r.version === 1 &&
+    typeof r.sessionID === "string" &&
+    typeof r.condition === "string" &&
+    typeof r.status === "string" &&
+    typeof r.directory === "string"
+  )
 }
 
 /**

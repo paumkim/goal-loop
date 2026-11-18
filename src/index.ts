@@ -8,11 +8,13 @@
  * Mirrors Claude Code's /goal (status, clear aliases, met / not met / impossible verdicts, stall guard, retries,
  * background-work check-ins, restore on restart).
  */
+import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
-import { systemReminder } from "./core/prompts.ts"
+import { parseGoalLoopDirective } from "./core/parse.ts"
+import { directive as directivePrompt, systemReminder, stripTerminalGoalNotes } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -20,11 +22,12 @@ import { BackgroundTracker } from "./runtime/background.ts"
 import { AutoCompactor } from "./runtime/compactor.ts"
 import { GoalController } from "./runtime/controller.ts"
 import { Evaluator } from "./runtime/evaluator.ts"
+import { createGoalMirror } from "./core/mirror.ts"
 import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
 
-export const PLUGIN_ID = "opencode-goal"
+const PLUGIN_ID = "opencode-goal"
 
 const DESCRIPTION = "keep working until a condition is met"
 const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"
@@ -53,8 +56,19 @@ function toUsage(info: { cost?: number; tokens?: Partial<{ input: number; output
 
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, ms)
-    signal.addEventListener("abort", () => (clearTimeout(timer), resolve()), { once: true })
+    if (signal.aborted) {
+      resolve()
+      return
+    }
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener("abort", onAbort, { once: true })
   })
 
 /** Env flag: `1/true/yes/on` (case-insensitive) enables; anything else is off. Probe mode makes plugin storage read-only. */
@@ -76,22 +90,23 @@ function createVerifier() {
         env: process.env,
       })
       let output = ""
+      // One streaming decoder so a multi-byte sequence split across chunks is not corrupted.
+      const decoder = new TextDecoder()
       const append = (chunk: Uint8Array) => {
-        output = (output + new TextDecoder().decode(chunk)).slice(-MAX)
+        output = (output + decoder.decode(chunk, { stream: true })).slice(-MAX)
       }
-      const drain = async () => {
-        for (const stream of [child.stdout, child.stderr]) {
-          if (!stream) continue
-          const reader = stream.getReader()
-          try {
-            for (;;) {
-              const { done, value } = await reader.read()
-              if (done) break
-              if (value) append(value)
-            }
-          } catch {
-            // stream closed by kill
+      // Both streams are drained concurrently: an unread pipe fills the OS buffer and blocks the child.
+      const read = async (stream: typeof child.stdout) => {
+        if (!stream) return
+        const reader = stream.getReader()
+        try {
+          for (;;) {
+            const { done, value } = await reader.read()
+            if (done) break
+            if (value) append(value)
           }
+        } catch {
+          // stream closed by kill
         }
       }
       let timedOut = false
@@ -102,7 +117,7 @@ function createVerifier() {
       const onAbort = () => child.kill("SIGKILL")
       signal.addEventListener("abort", onAbort, { once: true })
       try {
-        const [code] = await Promise.all([child.exited, drain()])
+        const [code] = await Promise.all([child.exited, read(child.stdout), read(child.stderr)])
         return { code, output, timedOut }
       } finally {
         clearTimeout(timer)
@@ -179,6 +194,10 @@ export default Plugin.define({
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
     if (probe) log.warn("probe mode: goal storage is read-only (OPENCODE_GOAL_PROBE); restore() will not persist anything")
     const store = new GoalStore(ctx.storage, (error) => log.error("goal storage write failed", { error: String(error) }), { readOnly: probe })
+    // The compactor and the controller need each other: the controller asks the compactor to compact at a loop boundary,
+    // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
+    // The compactor is assigned before anything can call it, so the deferred closure is safe.
+    let compactor!: AutoCompactor
     const controller = new GoalController({
       config,
       directory: ctx.location.directory,
@@ -189,24 +208,43 @@ export default Plugin.define({
       store,
       emitter,
       verifier: createVerifier(),
+      compactAtBoundary: (sessionID, opts) => compactor.compactAtBoundary(sessionID, opts),
+      estimateContext: async (sessionID) => estimateContextTokens((await ctx.session.context({ sessionID })) as readonly unknown[]),
       clock: systemClock,
       log,
     })
-
-    const compactor = new AutoCompactor({
+    compactor = new AutoCompactor({
       config,
       compact: (sessionID) => session.compact(sessionID),
       context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
       emitter,
       clock: systemClock,
       log,
+      isBusy: async (sessionID) => {
+        const work = await background.busy(sessionID).catch(() => ({ subagents: 0, shells: 0 }))
+        return work.subagents + work.shells > 0 || controller.isExecuting(sessionID)
+      },
     })
 
     // ---- RPC for clients (status line, dialogs, palette actions)
     const rpc = await ctx.rpc.register(GoalRpc, createRpcHandlers({ controller, log }))
     const quiet = (error: unknown) => log.warn("goal event emit failed", { error: String(error) })
+    // Backstop mirror of the latest snapshot: the TUI reads it when both RPC paths are wedged (see core/mirror.ts).
+    // Disabled in probe mode (read-only storage) and by OPENCODE_GOAL_MIRROR=0; best-effort, never throws.
+    const mirrorEnabled = !probe && process.env.OPENCODE_GOAL_MIRROR !== "0"
+    const mirror = mirrorEnabled ? createGoalMirror() : undefined
     emit = {
-      changed: (sessionID, goal) => void rpc.events.emit("changed", { sessionID, goal }).catch(quiet),
+      changed: (sessionID, goal) => {
+        if (mirror) {
+          try {
+            if (goal) mirror.write(goal)
+            else mirror.remove(sessionID)
+          } catch (error) {
+            log.warn("goal mirror write failed", { error: String(error) })
+          }
+        }
+        return void rpc.events.emit("changed", { sessionID, goal }).catch(quiet)
+      },
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
@@ -234,17 +272,70 @@ export default Plugin.define({
 
     // ---- hooks
     // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
-    await ctx.session.hook("prompt", (event) => controller.onUserPrompt(event.sessionID))
+    // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
+    // through to a plain prompt, and the plugin arms the loop right here — the host awaits this hook before the
+    // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
+    // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
+    await ctx.session.hook("prompt", async (event) => {
+      const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
+      const goalLoop = parseGoalLoopDirective(text)
+      if (goalLoop) {
+        const objective = goalLoop.objective
+        // The raw-prompt path bypasses parseGoalCommand, so enforce the configured condition limit here too.
+        if (
+          objective !== "" &&
+          Number.isFinite(config.maxConditionChars) &&
+          config.maxConditionChars < Number.MAX_SAFE_INTEGER &&
+          objective.length > config.maxConditionChars
+        ) {
+          controller.noteConditionTooLong(event.sessionID, objective.length, config.maxConditionChars)
+          controller.onUserPrompt(event.sessionID)
+          return
+        }
+        if (objective === "") {
+          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): same as bare /goal-loop — show status.
+          if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
+          await controller.status(event.sessionID)
+          controller.onUserPrompt(event.sessionID)
+          return
+        }
+        const maxLoops = goalLoop.maxLoops ?? config.maxLoops
+        // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
+        // command path would have delivered, with the directive token and the count removed from the objective.
+        event.prompt.text = directivePrompt(objective, commit, { iteration: 1, maxLoops, objective, history: [] })
+        await controller.armFromPrompt({
+          sessionID: event.sessionID,
+          condition: objective,
+          maxLoops,
+          ...(goalLoop.invalidCount !== undefined ? { invalidCount: goalLoop.invalidCount } : {}),
+        })
+        return
+      }
+      controller.onUserPrompt(event.sessionID)
+    })
     // Bound the evaluator's transient request without touching tools or system, which would break the cached prefix.
     await ctx.session.hook("generate", (event) => {
       if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
     })
-    if (config.systemReminder) {
-      await ctx.session.hook("context", (event) => {
+    // One context hook, two possible injections: the standing system reminder (config-gated) and the
+    // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
+    // when the reminder is off; it is invisible on every request except the one after a landing).
+    await ctx.session.hook("context", (event) => {
+      if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
         if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
-      })
-    }
+      }
+      const anchor = controller.consumeAnchor(event.sessionID)
+      if (anchor) event.system.push({ type: "text", text: anchor })
+      // End-of-record notes are history, not instructions: they stay in the session (and on the
+      // terminal as the outcome line) but must not ride the model's context on later turns, where
+      // they invite a ceremonial acknowledgement. Splice in place — the host holds the caller's
+      // array reference, so a rebound property could go unseen.
+      if (Array.isArray(event.messages)) {
+        const kept = stripTerminalGoalNotes(event.messages)
+        if (kept.length !== event.messages.length) event.messages.splice(0, event.messages.length, ...kept)
+      }
+    })
 
     // ---- event pump with reconnect
     const route = createRouter({ controller, background, log, compactor })

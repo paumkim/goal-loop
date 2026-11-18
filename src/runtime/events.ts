@@ -11,7 +11,10 @@ export interface ServerEvent {
   readonly data?: unknown
 }
 
-type Data = Record<string, any>
+type Data = Record<string, unknown>
+
+/** Narrows a destructured payload field to a plain object for nested reads (shell info/metadata). */
+const asRecord = (value: unknown): Data => (typeof value === "object" && value !== null ? (value as Data) : {})
 
 /** Remembers recently seen event IDs so a stream reconnect that replays events cannot double-fire a turn. */
 class RecentIds {
@@ -34,9 +37,14 @@ export function createRouter(input: { controller: GoalController; background: Ba
   const recent = new RecentIds()
   const fail = (error: unknown) => log.error("goal event handler failed", { error: String(error) })
 
-  const safe = (fn: () => void) => {
+  /**
+   * One safety rule for every handler, sync or async: a throwing handler is reported via `fail` and never
+   * propagates into the event stream. Sync throws are caught at call time; async rejections are chained.
+   */
+  const guard = (fn: () => void | Promise<unknown>) => {
     try {
-      fn()
+      const out = fn()
+      if (out) void Promise.resolve(out).catch(fail)
     } catch (error) {
       fail(error)
     }
@@ -49,49 +57,56 @@ export function createRouter(input: { controller: GoalController; background: Ba
     switch (event.type) {
       case "session.execution.started":
         if (!sessionID) return
-        return safe(() => {
+        return guard(() => {
           background.executionStarted(sessionID)
           controller.onExecutionStarted(sessionID)
         })
       case "session.tool.called":
-        if (sessionID) safe(() => controller.onToolCalled(sessionID))
+        if (sessionID) guard(() => controller.onToolCalled(sessionID))
         return
       case "session.execution.succeeded":
         if (!sessionID) return
-        safe(() => background.executionEnded(sessionID))
-        void compactor.maybeCompact(sessionID).catch(fail)
-        return void controller.onExecutionSucceeded(sessionID).catch(fail)
+        guard(() => background.executionEnded(sessionID))
+        guard(() => compactor.maybeCompact(sessionID))
+        guard(() => controller.onExecutionSucceeded(sessionID))
+        // Background work may have just ended — re-run any evaluation this session deferred on it.
+        return guard(() => controller.onBackgroundDrained())
       case "session.execution.failed":
         if (!sessionID) return
-        return safe(() => {
+        guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionFailed(sessionID, data.error as FailureInfo | undefined)
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.execution.interrupted":
         if (!sessionID) return
-        return safe(() => {
+        guard(() => {
           background.executionEnded(sessionID)
           controller.onExecutionInterrupted(sessionID, String(data.reason ?? "user"))
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.created":
-        if (sessionID) safe(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
+        if (sessionID) guard(() => background.sessionCreated(sessionID, typeof data.parentID === "string" ? data.parentID : undefined))
         return
       case "session.deleted":
         if (!sessionID) return
-        return safe(() => {
+        guard(() => {
           background.sessionDeleted(sessionID)
           controller.onSessionDeleted(sessionID)
           compactor.onSessionDeleted(sessionID)
         })
+        return guard(() => controller.onBackgroundDrained())
       case "session.compaction.started":
-        if (sessionID) safe(() => compactor.noteCompactionStarted(sessionID))
+        if (sessionID) guard(() => compactor.noteCompactionStarted(sessionID))
         return
       case "session.compaction.ended":
-        if (sessionID) safe(() => compactor.noteCompactionEnded(sessionID, true))
-        return
+        if (!sessionID) return
+        guard(() => compactor.noteCompactionEnded(sessionID, true))
+        // A landed compaction also settles any pending loop-boundary request.
+        return guard(() => controller.onCompactionLanded(sessionID))
       case "session.compaction.failed":
         if (sessionID)
-          safe(() => {
+          guard(() => {
             const raw = data.error
             const message =
               typeof raw === "string"
@@ -103,22 +118,25 @@ export function createRouter(input: { controller: GoalController; background: Ba
           })
         return
       case "shell.created": {
-        const info = (data.info ?? {}) as Data
-        if (typeof info.id === "string") safe(() => background.shellCreated(info.id, String(info.status), info.metadata?.sessionID))
+        const info = asRecord(data.info)
+        const createdId = typeof info.id === "string" ? info.id : undefined
+        if (createdId) guard(() => background.shellCreated(createdId, String(info.status), asRecord(info.metadata).sessionID))
         return
       }
       case "shell.updated": {
-        const info = (data.info ?? data) as Data
+        const info = asRecord(data.info ?? data)
         const id = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
-        if (id) safe(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), info.metadata?.sessionID ?? data.metadata?.sessionID))
-        return
+        const owner = asRecord(info.metadata).sessionID ?? asRecord(data.metadata).sessionID
+        if (id) guard(() => background.shellUpdated(id, String(info.status ?? data.status ?? ""), owner))
+        return guard(() => controller.onBackgroundDrained())
       }
       case "shell.exited":
       case "shell.deleted": {
         // Exited/deleted always ends the shell, regardless of any status field on the event.
-        const id = typeof data.id === "string" ? data.id : typeof (data.info as Data | undefined)?.id === "string" ? String((data.info as Data).id) : undefined
-        if (id) safe(() => background.shellEnded(id))
-        return
+        const info = asRecord(data.info)
+        const id = typeof data.id === "string" ? data.id : typeof info.id === "string" ? info.id : undefined
+        if (id) guard(() => background.shellEnded(id))
+        return guard(() => controller.onBackgroundDrained())
       }
     }
   }

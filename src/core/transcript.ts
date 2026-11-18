@@ -5,7 +5,7 @@
 
 type Unknown = Record<string, unknown>
 
-export interface DigestOptions {
+interface DigestOptions {
   readonly maxChars: number
   /** Per-tool-output cap. Tails are kept: test runners and builds report results last. */
   readonly maxToolChars?: number
@@ -18,12 +18,12 @@ function head(text: string, max: number) {
   return text.length <= max ? text : `${text.slice(0, max)}\u2026 [${text.length - max} chars cut]`
 }
 
-/** Keeps the start and, mostly, the end of long output. */
 function headTail(text: string, max: number) {
   if (text.length <= max) return text
-  const front = Math.floor(max * 0.25)
-  const back = max - front
-  return `${text.slice(0, front)}\n\u2026 [${text.length - max} chars cut] \u2026\n${text.slice(-back)}`
+  const cap = Math.max(1, Math.floor(max)) // a zero budget returns the cut marker plus a proven tail, never the whole input
+  const front = Math.floor(cap * 0.25)
+  const back = cap - front
+  return `${text.slice(0, front)}\n\u2026 [${text.length - cap} chars cut] \u2026\n${text.slice(-back)}`
 }
 
 function toolText(content: unknown): string {
@@ -64,7 +64,7 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
   return blocks.length ? `ASSISTANT:\n${blocks.join("\n\n")}` : ""
 }
 
-export function renderMessage(message: unknown, options: Required<DigestOptions>): string {
+function renderMessage(message: unknown, options: Required<DigestOptions>): string {
   if (typeof message !== "object" || message === null) return ""
   const m = message as Unknown
   switch (m.type) {

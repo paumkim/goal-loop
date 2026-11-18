@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, formatDuration, formatDurationCoarse, formatTokens } from "../src/core/format.ts"
-import { parseGoalCommand } from "../src/core/parse.ts"
+import { diffUsage, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
+import stringWidth from "string-width"
+import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
   checkin,
   continuation,
@@ -13,7 +14,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
-import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy } from "../src/core/types.ts"
+import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { parseVerdict } from "../src/core/verdict.ts"
 
 const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
@@ -35,6 +36,50 @@ describe("parseGoalCommand", () => {
   test("enforces the length limit", () => {
     const result = parseGoalCommand("x".repeat(4001), 4000)
     expect(result.type).toBe("invalid")
+  })
+})
+
+describe("parseGoalLoopDirective", () => {
+  test("plain /goal-loop keeps the default (no override)", () => {
+    expect(parseGoalLoopDirective("/goal-loop fix the auth tests")).toEqual({ objective: "fix the auth tests" })
+    expect(parseGoalLoopDirective("/goal-loop investigate the 12 failing tests")).toEqual({ objective: "investigate the 12 failing tests" })
+  })
+  test("-<N> and =<N> set a per-run override", () => {
+    expect(parseGoalLoopDirective("/goal-loop-188 fix the whole release pipeline")).toEqual({ objective: "fix the whole release pipeline", maxLoops: 188 })
+    expect(parseGoalLoopDirective("/goal-loop=3 audit the TUI")).toEqual({ objective: "audit the TUI", maxLoops: 3 })
+    expect(parseGoalLoopDirective("/goal-loop-1 x")).toEqual({ objective: "x", maxLoops: 1 })
+    expect(parseGoalLoopDirective("/goal-loop-1000 x")).toEqual({ objective: "x", maxLoops: 1000 })
+  })
+  test("the count is never part of the objective", () => {
+    expect(parseGoalLoopDirective("/goal-loop-188 objective 12 things")?.objective).toBe("objective 12 things")
+  })
+  test("invalid counts are reported, never guessed: abc, 0, 1001, 1.5, -3, empty", () => {
+    for (const raw of ["/goal-loop-abc fix it", "/goal-loop-0 fix it", "/goal-loop-1001 fix it", "/goal-loop-1.5 fix it", "/goal-loop--3 fix it", "/goal-loop- fix it", "/goal-loop= fix it"]) {
+      const parsed = parseGoalLoopDirective(raw)
+      expect(parsed).toBeDefined()
+      expect(parsed?.maxLoops).toBeUndefined()
+      expect(typeof parsed?.invalidCount).toBe("string")
+      expect(parsed?.objective).toBe("fix it")
+    }
+    expect(parseGoalLoopDirective("/goal-loop-abc fix it")?.invalidCount).toBe("abc")
+  })
+  test("zero-padded counts are integers in range", () => {
+    expect(parseGoalLoopDirective("/goal-loop-007 x")?.maxLoops).toBe(7)
+  })
+  test("a bare directive parses with an empty objective (status behavior upstream)", () => {
+    expect(parseGoalLoopDirective("/goal-loop")).toEqual({ objective: "" })
+    expect(parseGoalLoopDirective("/goal-loop   ")).toEqual({ objective: "" })
+    expect(parseGoalLoopDirective("/goal-loop-12")).toEqual({ objective: "", maxLoops: 12 })
+  })
+  test("leading whitespace is tolerated; the directive must otherwise be first", () => {
+    expect(parseGoalLoopDirective("  /goal-loop-5 x")?.maxLoops).toBe(5)
+    expect(parseGoalLoopDirective("please /goal-loop-5 x")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal-loopy thing")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal-loops thing")).toBeUndefined()
+    expect(parseGoalLoopDirective("/goal fix it")).toBeUndefined()
+  })
+  test("tab after the token still bounds it", () => {
+    expect(parseGoalLoopDirective("/goal-loop-12\tfix it")).toEqual({ objective: "fix it", maxLoops: 12 })
   })
 })
 
@@ -149,8 +194,16 @@ describe("config", () => {
     const config = resolveConfig({ maxTurns: 10, stallTurns: -4 }, { OPENCODE_GOAL_CHECKIN_MINUTES: "0", OPENCODE_GOAL_MODEL: "x/y" })
     expect(config.checkinMinutes).toBe(0)
     expect(config.maxTurns).toBe(10)
-    expect(config.stallTurns).toBe(1)
+    expect(config.stallTurns).toBe(0)
     expect(config.evaluator.model).toEqual({ providerID: "x", id: "y" })
+  })
+  test("defaults: maxTurns 0, stallTurns 0, compactOnLoopIteration true", () => {
+    const config = resolveConfig({})
+    expect(config.maxTurns).toBe(0)
+    expect(config.stallTurns).toBe(0)
+    expect(config.compactOnLoopIteration).toBe(true)
+    expect(resolveConfig({ compactOnLoopIteration: false }).compactOnLoopIteration).toBe(false)
+    expect(resolveConfig({}, { OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION: "0" }).compactOnLoopIteration).toBe(false)
   })
   test("commit options", () => {
     expect(resolveConfig({}).commit).toEqual({ enabled: true, branch: "dev", coordinator: "auto" })
@@ -171,6 +224,15 @@ describe("config", () => {
 })
 
 describe("format", () => {
+  test("outcomeStory renders turns, elapsed and optional loop iterations", () => {
+    expect(outcomeStory({ turns: 1, elapsedMs: 65_000 })).toBe("1 turn · 1m 05s")
+    expect(outcomeStory({ turns: 12, elapsedMs: 3_725_000 })).toBe("12 turns · 1h 02m")
+    expect(outcomeStory({ turns: 0, elapsedMs: 5_000 })).toBe("0 turns · 5s")
+    expect(outcomeStory({ turns: 34, elapsedMs: 90_000, iterations: 4 })).toBe("34 turns · 1m 30s · 4 iterations")
+    expect(outcomeStory({ turns: 3, elapsedMs: 1_000, iterations: 1 })).toBe("3 turns · 1s · 1 iteration")
+    expect(outcomeStory({ turns: 3, elapsedMs: 1_000, iterations: 0 })).toBe("3 turns · 1s")
+  })
+
   test("durations and tokens", () => {
     expect(formatDuration(5_000)).toBe("5s")
     expect(formatDuration(65_000)).toBe("1m 05s")
@@ -180,9 +242,111 @@ describe("format", () => {
     expect(formatTokens(950)).toBe("950")
     expect(formatTokens(12_345)).toBe("12k")
     expect(formatTokens(2_500_000)).toBe("2.50M")
+    expect(formatTokens(999_499)).toBe("999k")
+    expect(formatTokens(999_500)).toBe("1.00M")
+    expect(formatTokens(999_999)).toBe("1.00M")
   })
   test("usage diff never goes negative", () => {
     expect(diffUsage(EMPTY_USAGE, { ...EMPTY_USAGE, cost: 5 }).cost).toBe(0)
+  })
+})
+
+describe("truncate", () => {
+  test("an ASCII string at exactly the cap is returned unchanged", () => {
+    expect(truncate("a".repeat(42), 42)).toBe("a".repeat(42))
+  })
+
+  test("the cap is terminal cells, not code units — CJK text truncates at 2 cells per glyph", () => {
+    const out = truncate("床前明月光疑是地上霜举头望明月低头思故乡", 12)
+    // 5 CJK glyphs (10 cells) + … = 11 cells; a 6th glyph would overflow the 11-cell budget
+    expect(stringWidth(out)).toBe(11)
+    expect(out).toBe("床前明月光…")
+  })
+
+  test("the boundary never splits an astral emoji — no lone surrogate ever leaks", () => {
+    const out = truncate("ship the 🚀 release notes now please", 13)
+    // budget 12: "ship the 🚀" is exactly 11 cells, the dangling space is rstripped, + … = 12
+    expect(stringWidth(out)).toBe(12)
+    expect(out).toBe("ship the 🚀…")
+    // a lone surrogate throws URIError here — the cheapest exact check
+    expect(() => encodeURIComponent(out)).not.toThrow()
+  })
+
+  test("a ZWJ family emoji is one grapheme costing 2 cells", () => {
+    const out = truncate("ab👨‍👩‍👧‍👦cd", 5)
+    expect(stringWidth(out)).toBeLessThanOrEqual(5)
+    expect(out).toBe("ab👨‍👩‍👧‍👦…")
+  })
+
+  test("a combining mark stays attached to its base — é never decomposes at the boundary", () => {
+    const out = truncate("abe\u0301fghij", 4)
+    expect(out).toBe("abe\u0301…")
+    expect(stringWidth(out)).toBe(4)
+  })
+
+  test("max of 1 yields just the ellipsis; max of 0 yields empty", () => {
+    expect(truncate("hello", 1)).toBe("…")
+    expect(truncate("hello", 0)).toBe("")
+    // an ellipsis wider than the cap itself degrades to whole graphemes of the ellipsis — never past max
+    expect(truncate("hello", 2, "...")).toBe("..")
+    expect(truncate("hello", 1, "...")).toBe(".")
+    expect(stringWidth(truncate("hello", 2, "..."))).toBeLessThanOrEqual(2)
+  })
+
+  test("whitespace collapses before measuring", () => {
+    expect(truncate("a   b\n\tc", 10)).toBe("a b c")
+  })
+})
+
+describe("formatStatus", () => {
+  const base = (): GoalRecord => ({
+    version: 1,
+    id: "goal_test",
+    sessionID: "ses_test",
+    directory: "/tmp/goal-test",
+    condition: "all tests pass",
+    status: "active",
+    setAt: 1_000,
+    startedAt: 1_000,
+    turns: 3,
+    stall: 0,
+    retries: 0,
+    checkins: 0,
+    baseline: EMPTY_USAGE,
+    history: [],
+  })
+  const looped = (loopCompact?: GoalRecord["loopCompact"]): GoalRecord => ({
+    ...base(),
+    loopEnabled: true,
+    loopIteration: 2,
+    loopObjective: "ship the thing",
+    loopMaxLoops: 5,
+    loopHistory: [
+      { version: 1, condition: "all tests pass", summary: "did the first part", reason: "ok", turns: 2, toolCalls: 4, endedAt: 2_000 },
+    ],
+    ...(loopCompact ? { loopCompact } : {}),
+  })
+  test("plain goals never render a compact line", () => {
+    const text = formatStatus(base(), 10_000, undefined)
+    expect(text).not.toContain("Loop compact")
+    expect(text).not.toContain("Loop:")
+  })
+  test("a pending boundary compact renders age and miss count", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 1 }), 70_000, undefined)
+    expect(text).toMatch(/Loop compact: pending \d/)
+    expect(text).toContain("(miss 1/4)")
+  })
+  test("misses at the re-request threshold render verbatim", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, iteration: 2, misses: 2 }), 70_000, undefined)
+    expect(text).toContain("(miss 2/4)")
+  })
+  test("a landed boundary compact renders the landing, not a miss", () => {
+    const text = formatStatus(looped({ requestedAt: 4_000, estimatedTokens: 180_000, iteration: 2, misses: 3, landedAt: 60_000 }), 70_000, undefined)
+    expect(text).toMatch(/Loop compact: landed /)
+    expect(text).not.toContain("(miss")
+  })
+  test("a loop without a compaction request omits the line entirely", () => {
+    expect(formatStatus(looped(), 10_000, undefined)).not.toContain("Loop compact")
   })
 })
 
@@ -290,5 +454,113 @@ describe("renderTranscript", () => {
     expect(text.length).toBeLessThan(600)
     expect(text).toContain("file locked")
     expect(text).toContain("earlier messages omitted")
+  })
+})
+describe("wrapLines", () => {
+  test("an empty string still paints one line", () => {
+    expect(wrapLines("", 49)).toBe(1)
+  })
+
+  test("a string that fits the width — exactly or under — wraps to one line", () => {
+    expect(wrapLines("a".repeat(49), 49)).toBe(1)
+    expect(wrapLines("goal failed — /goal clear to reset", 49)).toBe(1)
+    expect(wrapLines("paused · send a message to resume, or /goal clear", 49)).toBe(1)
+  })
+
+  test("wraps greedily at single spaces, never mid-word", () => {
+    expect(wrapLines("judged impossible · rephrase the condition, else /goal clear", 49)).toBe(2)
+    expect(wrapLines("turn cap reached · /goal clear or set a new goal — a message will not extend it", 49)).toBe(2)
+    expect(wrapLines("5× not_met in a row · consider evaluator.verifyCommand", 49)).toBe(2)
+  })
+
+  test("a long failureLabel surfacing in the failed remediation costs the rows it actually needs", () => {
+    // catalog remediation: `${label} — /goal clear to reset`; a 100-cell label needs three rows at 49 cells
+    const text = `${"x".repeat(100)} — /goal clear to reset`
+    expect(wrapLines(text, 49)).toBe(3)
+  })
+
+  test("a word longer than the line hard-breaks across as many rows as it needs", () => {
+    expect(wrapLines("a".repeat(100), 49)).toBe(3)
+    expect(wrapLines("short " + "b".repeat(100), 49)).toBe(4)
+  })
+
+  test("the width cap is terminal cells, not code units — CJK counts two", () => {
+    // 30 CJK glyphs = 60 cells; at 49 cells per line that is two lines, never one
+    expect(wrapLines("床".repeat(30), 49)).toBe(2)
+  })
+})
+
+describe("formatSpend", () => {
+  const spend = { ...EMPTY_USAGE, input: 1_480_000, output: 2_100, cacheRead: 739_000, cost: 0.9 }
+
+  test("the full line renders tokens, cached volume and cost", () => {
+    expect(formatSpend(spend)).toBe("2.22M in \u00B7 2.1k out \u00B7 739k cached \u00B7 $0.90")
+  })
+
+  test("an absent cost renders tokens only — no fabricated $ figure", () => {
+    const noCost = { ...EMPTY_USAGE, input: 120_000, output: 8_400 }
+    expect(formatSpend(noCost)).toBe("120k in \u00B7 8.4k out")
+  })
+
+  test("a tight budget drops cached first, then out — the cost is the anchor", () => {
+    // 36 cells is the clamp-floor card's spend budget (width 52 - left border 1 - padding 4 - LABEL 10 - gap 1)
+    expect(formatSpend(spend, 36)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
+    // 28-cell budget forces out as well
+    expect(formatSpend(spend, 28)).toBe("2.22M in \u00B7 2.1k out \u00B7 $0.90")
+    expect(formatSpend(spend, 26)).toBe("2.22M in \u00B7 $0.90")
+    // 16 cells keeps tokens + anchor exactly (16 cells, fits)
+    expect(formatSpend(spend, 16)).toBe("2.22M in \u00B7 $0.90")
+    expect(formatSpend(spend, 15)).toBe("$0.90")
+  })
+
+  test("the cost is never dropped and never clipped mid-figure — even at a budget smaller than the cost", () => {
+    expect(formatSpend(spend, 5)).toBe("$0.90")
+    expect(formatSpend(spend, 3)).toBe("$0.90")
+    expect(formatSpend(spend, 0)).toBe("$0.90")
+  })
+
+  test("with a budget the degraded output never exceeds it while a figure remains to drop", () => {
+    for (const budget of [26, 30, 37, 41, 56]) {
+      expect(stringWidth(formatSpend(spend, budget))).toBeLessThanOrEqual(budget)
+    }
+  })
+})
+
+describe("formatDuration regression: non-finite input", () => {
+  test("NaN and Infinity render 0s, never NaNs", () => {
+    expect(formatDuration(Number.NaN)).toBe("0s")
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe("0s")
+    expect(formatDuration(Number.NEGATIVE_INFINITY)).toBe("0s")
+  })
+})
+
+describe("renderTranscript regression: a zero per-tool budget", () => {
+  const toolHeavy = [
+    { type: "user", text: "run the tests" },
+    {
+      type: "assistant",
+      content: [
+        { type: "tool", name: "shell", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: `${"noise\n".repeat(2000)}12 pass 0 fail` }] } },
+      ],
+    },
+  ]
+
+  test("renders the cut marker with a bounded tail, never the whole tool output", () => {
+    const text = renderTranscript(toolHeavy, { maxChars: 8_000, maxToolChars: 0 })
+    expect(text).toContain("chars cut]")
+    expect(text).not.toContain("12 pass 0 fail")
+    expect(text.length).toBeLessThan(400)
+  })
+})
+
+describe("config regression: an empty env model", () => {
+  test("reads as unset and falls back to the configured model, never discards it", () => {
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "   " }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(resolveConfig({ model: "a/b" }, { OPENCODE_GOAL_MODEL: "" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    // An empty option model falls back past it to a valid top-level one too.
+    expect(resolveConfig({ evaluator: { model: "" }, model: "a/b" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
+    // A non-empty invalid env value still yields no model (unchanged semantics).
+    expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "nope" }).evaluator.model).toBeUndefined()
   })
 })

@@ -10,7 +10,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 
-export interface BootstrapResult {
+interface BootstrapResult {
   readonly created: string[]
   readonly skipped: string[]
 }
@@ -63,7 +63,8 @@ export function hasJq(): boolean {
  * `config.json` / `state.json` when they are missing. Never overwrites
  * existing files. Appends `worktrees/` and `.term/coordinator/*.lock` to
  * `.gitignore` when it exists and lacks them (idempotent). No-op outside a
- * git repository.
+ * git repository, and no-op in a git repository that neither ships the
+ * coordinator package nor already carries coordinator state.
  */
 export function ensureCoordinatorLayout(projectRoot: string, pluginRoot?: string): BootstrapResult {
   const created: string[] = []
@@ -71,6 +72,15 @@ export function ensureCoordinatorLayout(projectRoot: string, pluginRoot?: string
   try {
     if (!existsSync(join(projectRoot, ".git"))) {
       return { created: [], skipped: ["not a git repository"] }
+    }
+    // Only coordinator repositories get the layout: one that ships the coordinator
+    // package, or one that already carries coordinator state. A session opened in an
+    // unrelated repository must never be mutated — its `.term/` and `.gitignore` stay
+    // as the repository has them, and it is not mistaken for a coordinator repo next time.
+    const projectBin = join(projectRoot, "packages", "coordinator", "bin", "coordinator")
+    const existingConfig = join(projectRoot, ".term", "coordinator", "config.json")
+    if (!existsSync(projectBin) && !existsSync(existingConfig)) {
+      return { created: [], skipped: ["not a coordinator repository"] }
     }
     const coordDir = join(projectRoot, ".term", "coordinator")
     const worktreesDir = join(projectRoot, "worktrees")

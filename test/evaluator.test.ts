@@ -185,3 +185,99 @@ describe("Evaluator.nextGoal", () => {
     expect(reply.length).toBe(4_000)
   })
 })
+
+describe("Evaluator.evaluate — evaluator.consensus: 2", () => {
+  const consensusSession = (overrides: Record<string, unknown> = {}) =>
+    resolveConfig({ model: "provider/model", evaluator: { mode: "session", consensus: 2, ...overrides } }, {}).evaluator
+  const consensusIndependent = (overrides: Record<string, unknown> = {}) =>
+    resolveConfig({ model: "provider/model", evaluator: { mode: "independent", consensus: 2, ...overrides } }, {}).evaluator
+
+  test("both judges met: verdict met", async () => {
+    let modelCalls = 0
+    const { fake } = deps({
+      sessionGenerate: async () => verdictJson("met", "session says done"),
+      modelGenerate: async () => {
+        modelCalls++
+        return verdictJson("met", "independent says done")
+      },
+    })
+    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(modelCalls).toBe(1)
+  })
+
+  test("disagreement fails closed to not_met, with the disagreement named in the reason", async () => {
+    const { fake } = deps({
+      sessionGenerate: async () => verdictJson("met", "looks done to me"),
+      modelGenerate: async () => verdictJson("not_met", "no test output anywhere"),
+    })
+    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus disagreement")
+    expect(result.reason).toContain("session evaluator ruled met")
+    expect(result.reason).toContain("independent evaluator ruled not_met")
+    expect(result.reason).toContain("no test output anywhere")
+  })
+
+  test("independent primary disagreeing with the session second opinion fails closed the same way", async () => {
+    const { fake } = deps({
+      modelGenerate: async () => verdictJson("met", "independent says done"),
+      sessionGenerate: async () => verdictJson("not_met", "transcript shows no green run"),
+    })
+    const evaluator = new Evaluator(fake, consensusIndependent(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus disagreement")
+    expect(result.reason).toContain("independent evaluator ruled met")
+    expect(result.reason).toContain("session evaluator ruled not_met")
+  })
+
+  test("a dead second judge fails closed to not_met, named — met never passes on one vote", async () => {
+    const { fake } = deps({
+      sessionGenerate: async () => verdictJson("met", "session says done"),
+      modelGenerate: async () => {
+        throw new Error("model unreachable")
+      },
+    })
+    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(result.reason).toContain("fail closed")
+  })
+
+  test("session primary with no independent model configured fails closed, named", async () => {
+    const { fake, calls } = deps({
+      sessionGenerate: async () => verdictJson("met", "session says done"),
+    })
+    const evaluator = new Evaluator(fake, resolveConfig({ evaluator: { mode: "session", consensus: 2 } }, {}).evaluator, COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(result.reason).toContain("fail closed")
+    expect(calls.model).toHaveLength(0) // no model to ask; never a silent pass
+  })
+
+  test("a not_met primary is returned as-is; the second judge is never called", async () => {
+    const { fake, calls } = deps({
+      sessionGenerate: async () => verdictJson("not_met", "still broken"),
+      modelGenerate: async () => verdictJson("met", "independent disagrees"),
+    })
+    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("consensus 1 (default) keeps the single-judge behavior", async () => {
+    const { fake, calls } = deps({
+      sessionGenerate: async () => verdictJson("met", "session says done"),
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.model).toHaveLength(0)
+  })
+})

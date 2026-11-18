@@ -57,6 +57,7 @@ interface Harness {
   contextCalls: number
   setContext: (messages: readonly unknown[] | Error) => void
   setCompact: (fn: (sessionID: string) => Promise<void>) => void
+  setBusy: (value: boolean) => void
   compactor: AutoCompactor
 }
 
@@ -67,6 +68,7 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
   const infos: string[] = []
   const compactCalls: string[] = []
   let contextCalls = 0
+  let busy = false
   let context: readonly unknown[] | Error = [assistant({ input: 10_000, cache: { read: 255_000, write: 0 } })]
   let compactImpl: (sessionID: string) => Promise<void> = async () => {}
   const silent = {
@@ -88,6 +90,7 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
     emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
     clock,
     log: silent,
+    isBusy: async () => busy,
   })
   return {
     clock,
@@ -99,6 +102,7 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
     },
     setContext: (m) => void (context = m),
     setCompact: (fn) => void (compactImpl = fn),
+    setBusy: (value) => void (busy = value),
     compactor,
   }
 }
@@ -212,5 +216,159 @@ describe("AutoCompactor.maybeCompact", () => {
     const notice = h.notices.find((n) => n.kind === "compact" && n.level === "warning")
     expect(notice?.title).toBe("Auto-compact failed")
     expect(notice?.message).toContain("timed out")
+  })
+})
+
+describe("AutoCompactor.compactAtBoundary", () => {
+  test("compactOnLoopIteration=false returns disabled without reading the context or compacting", async () => {
+    const h = harness({ compactAtTokens: 260_000, compactOnLoopIteration: false })
+    const result = await h.compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "disabled" })
+    expect(h.contextCalls).toBe(0)
+    expect(h.compactCalls).toEqual([])
+  })
+
+  test("tiny context (< 10k tokens) is skipped without a notice", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([assistant({ input: 1_000, cache: { read: 2_000, write: 0 } })])
+    const result = await h.compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "too-small" })
+    expect(h.compactCalls).toEqual([])
+    expect(h.notices).toEqual([])
+  })
+
+  test("context at or above 10k tokens compacts and returns the estimated size", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([assistant({ input: 8_000, cache: { read: 2_500, write: 0 } })])
+    const result = await h.compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: true, estimatedTokens: 10_500 })
+    expect(h.compactCalls).toEqual([SID])
+    const notice = h.notices.find((n) => n.kind === "compact")
+    expect(notice?.level).toBe("info")
+    expect(notice?.title).toBe("Auto-compact requested (loop boundary)")
+    expect(notice?.message).toContain("~10500")
+    expect(notice?.message).toContain("boundary")
+  })
+
+  test("no assistant token usage (estimate undefined) compacts with an unknown-size result", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setContext([{ type: "user", text: "hi" }])
+    const result = await h.compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: true })
+    expect(h.compactCalls).toEqual([SID])
+    const notice = h.notices.find((n) => n.kind === "compact")
+    expect(notice?.title).toBe("Auto-compact requested (loop boundary)")
+    expect(notice?.message).toBe("context size unknown; compacting at the loop boundary")
+  })
+
+  test("two immediate calls compact only once (in-flight/cooldown honored)", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    const first = await h.compactor.compactAtBoundary(SID)
+    const second = await h.compactor.compactAtBoundary(SID)
+    expect(first).toEqual(expect.objectContaining({ requested: true }))
+    expect(second).toEqual({ requested: false, reason: "in-flight" })
+    expect(h.compactCalls).toEqual([SID])
+  })
+
+  test("work in flight defers the compaction without requesting anything", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    h.setBusy(true)
+    const result = await h.compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "busy" })
+    expect(h.compactCalls).toEqual([])
+    expect(h.contextCalls).toBe(0)
+  })
+
+  test("maybeCompact defers while work is in flight", async () => {
+    const h = harness()
+    h.setBusy(true)
+    await h.compactor.maybeCompact(SID)
+    expect(h.compactCalls).toEqual([])
+    expect(h.contextCalls).toBe(0)
+  })
+
+  test("maybeCompact runs again once the work ends", async () => {
+    const h = harness()
+    h.setBusy(true)
+    await h.compactor.maybeCompact(SID)
+    h.setBusy(false)
+    await h.compactor.maybeCompact(SID)
+    expect(h.compactCalls).toEqual([SID])
+  })
+
+  test("force skips the cooldown but never the in-flight or busy gate", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    await h.compactor.compactAtBoundary(SID)
+    h.compactor.noteCompactionEnded(SID, true)
+    // Within the cooldown an ordinary request is denied…
+    expect(await h.compactor.compactAtBoundary(SID)).toEqual({ requested: false, reason: "cooldown" })
+    // …but a forced request goes through.
+    expect(await h.compactor.compactAtBoundary(SID, { force: true })).toEqual(expect.objectContaining({ requested: true }))
+    h.compactor.noteCompactionEnded(SID, true)
+    // Force never bypasses the busy gate.
+    h.setBusy(true)
+    expect(await h.compactor.compactAtBoundary(SID, { force: true })).toEqual({ requested: false, reason: "busy" })
+    // …and never the in-flight gate.
+    h.setBusy(false)
+    h.compactor.noteCompactionStarted(SID)
+    expect(await h.compactor.compactAtBoundary(SID, { force: true })).toEqual({ requested: false, reason: "in-flight" })
+  })
+
+  test("a busy check that throws fails closed (defers the compaction)", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    const throwing = new AutoCompactor({
+      config: resolveConfig({ compactAtTokens: 260_000 }),
+      compact: async () => void h.compactCalls.push(SID),
+      context: async () => [assistant({ input: 10_000 })],
+      emitter: { changed: () => {}, notice: () => {} },
+      clock: h.clock,
+      log: { info() {}, warn() {}, error() {} },
+      isBusy: async () => {
+        throw new Error("busy probe down")
+      },
+    })
+    expect(await throwing.compactAtBoundary(SID)).toEqual({ requested: false, reason: "busy" })
+    expect(h.compactCalls).toEqual([])
+  })
+})
+
+describe("AutoCompactor regression: work that starts during the context read", () => {
+  test("maybeCompact defers when the session starts work during the context fetch", async () => {
+    const h = harness()
+    let busy = false
+    const compactor = new AutoCompactor({
+      config: resolveConfig({ compactAtTokens: 260_000 }),
+      compact: async (sessionID) => void h.compactCalls.push(sessionID),
+      context: async () => {
+        busy = true // the turn starts while the context read is in flight
+        return [assistant({ input: 10_000, cache: { read: 255_000, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void h.notices.push(n) },
+      clock: h.clock,
+      log: { info() {}, warn() {}, error() {} },
+      isBusy: async () => busy,
+    })
+    await compactor.maybeCompact(SID)
+    expect(h.compactCalls).toEqual([])
+  })
+
+  test("compactAtBoundary reports busy when the session starts work during the context fetch", async () => {
+    const h = harness({ compactOnLoopIteration: true })
+    let busy = false
+    const compactor = new AutoCompactor({
+      config: resolveConfig({ compactOnLoopIteration: true }),
+      compact: async (sessionID) => void h.compactCalls.push(sessionID),
+      context: async () => {
+        busy = true
+        return [assistant({ input: 10_000, cache: { read: 100, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void h.notices.push(n) },
+      clock: h.clock,
+      log: { info() {}, warn() {}, error() {} },
+      isBusy: async () => busy,
+    })
+    const result = await compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "busy" })
+    expect(h.compactCalls).toEqual([])
   })
 })

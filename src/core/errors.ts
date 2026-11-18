@@ -14,7 +14,7 @@ export function errorMessage(error: unknown): string {
  */
 export type FailureClass = "fatal" | "transient" | "pause"
 
-export interface Classified {
+interface Classified {
   readonly kind: FailureClass
   readonly label: string
 }

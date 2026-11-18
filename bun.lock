@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "opencode-goal",
+      "dependencies": {
+        "string-width": "7.2.0",
+      },
       "devDependencies": {
         "@opencode/client": "2.0.29",
         "@opencode/plugin": "2.0.29",

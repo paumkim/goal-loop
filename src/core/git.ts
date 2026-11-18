@@ -91,6 +91,39 @@ function refDirs(gitDir: string): string[] {
 }
 
 /**
+ * The sha HEAD resolves to right now, or undefined when it cannot be read.
+ *
+ * Contract: never throws. Detached HEAD answers the recorded sha; an attached HEAD resolves
+ * through the loose ref first and `packed-refs` second (a worktree shares refs with its main
+ * repository, so the same `commondir` fallback used for branches applies here too).
+ */
+export function headSha(gitDir: string): string | undefined {
+  try {
+    const head = read(join(gitDir, "HEAD"))?.trim()
+    if (!head) return undefined
+    if (/^[0-9a-f]{40}$/i.test(head) || /^[0-9a-f]{64}$/i.test(head)) return head.toLowerCase()
+    const ref = /^ref:\s*(\S+)$/.exec(head)?.[1]
+    if (!ref) return undefined
+    for (const dir of refDirs(gitDir)) {
+      const loose = read(join(dir, ref))?.trim()
+      if (loose && (/^[0-9a-f]{40}$/i.test(loose) || /^[0-9a-f]{64}$/i.test(loose))) return loose.toLowerCase()
+      const packed = read(join(dir, "packed-refs"))
+      if (!packed) continue
+      for (const line of packed.split("\n")) {
+        const parts = line.trim().split(/\s+/)
+        const packedSha = parts[0] ?? ""
+        // SHA-1 repos pack 40-hex shas; SHA-256 repos pack 64-hex shas.
+        if (parts.length === 2 && parts[1] === ref && (/^[0-9a-f]{40}$/i.test(packedSha) || /^[0-9a-f]{64}$/i.test(packedSha)))
+          return packedSha.toLowerCase()
+      }
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Turns the user's request into the rule that applies to one session.
  *
  * The rule needs a repository to be meaningful, so it is switched off outside one. Inside a repository the
@@ -136,7 +169,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
   return { required: true, branch: request.branch, mode: "direct", reason: "repository found" }
 }
 
-export interface CoordinatorDetection {
+interface CoordinatorDetection {
   /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
   readonly worktreeDir: string

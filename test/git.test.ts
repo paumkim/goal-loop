@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { branchExists, currentBranch, detectCoordinator, findRepository, resolveCommitPolicy } from "../src/core/git.ts"
+import { branchExists, currentBranch, detectCoordinator, findRepository, headSha, resolveCommitPolicy } from "../src/core/git.ts"
 
 /** A throwaway directory that is removed when the test ends. */
 function scratch(): string {
@@ -129,5 +129,33 @@ describe("resolveCommitPolicy", () => {
     const policy = resolveCommitPolicy({ enabled: true, branch: "dev", coordinator: true }, root)
     expect(policy.mode).toBe("coordinator")
     expect(policy.branch).toBe("dev")
+  })
+})
+describe("headSha", () => {
+  test("resolves attached (loose then packed), detached and missing HEADs; never throws", () => {
+    // attached with a loose ref
+    const loose = repo(["dev"], "dev")
+    writeFileSync(join(loose, ".git", "refs", "heads", "dev"), "a".repeat(40) + "\n")
+    expect(headSha(join(loose, ".git"))).toBe("a".repeat(40))
+    // attached with a packed ref only
+    const packed = repo([], "dev")
+    writeFileSync(join(packed, ".git", "packed-refs"), "# pack-refs with: peeled fully-peeled sorted\n" + "b".repeat(40) + " refs/heads/dev\n")
+    expect(headSha(join(packed, ".git"))).toBe("b".repeat(40))
+    // detached HEAD
+    const detached = repo(["main"], "main")
+    writeFileSync(join(detached, ".git", "HEAD"), "c".repeat(40) + "\n")
+    expect(headSha(join(detached, ".git"))).toBe("c".repeat(40))
+    // HEAD points at a ref that exists nowhere -> undefined (never a guess)
+    expect(headSha(join(repo(["other"], "missing"), ".git"))).toBeUndefined()
+    // unreadable directory -> undefined, not a throw
+    expect(headSha(join(scratch(), ".git"))).toBeUndefined()
+  })
+})
+
+describe("headSha regression: sha256 repositories", () => {
+  test("resolves an attached HEAD through a packed-refs file with 64-hex (sha256) shas", () => {
+    const packed = repo([], "dev")
+    writeFileSync(join(packed, ".git", "packed-refs"), "# pack-refs with: peeled fully-peeled sorted\n" + "d".repeat(64) + " refs/heads/dev\n")
+    expect(headSha(join(packed, ".git"))).toBe("d".repeat(64))
   })
 })

@@ -14,14 +14,17 @@ export interface GoalConfig {
     readonly verifyCommand: string
     /** Wall-clock budget for one verification run. */
     readonly verifyTimeoutMs: number
+    /** Second-opinion gate: `2` requires two independent verdicts (session evaluator + independent model) both rule `met`; any disagreement or second-opinion failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; doubles evaluator cost when enabled. */
+    readonly consensus: 1 | 2
   }
-  /** Hard turn cap; 0 disables. Conditions can still carry their own natural-language limit. */
+  /** Hard turn cap; 0 disables the cap — the default; set explicitly as a hard safety limit. Conditions can still carry their own natural-language limit. */
   readonly maxTurns: number
-  /** Consecutive evaluated turns without tool use before the loop pauses. */
+  /** Evaluated turns without tool use before pausing; 0 disables — the default. */
   readonly stallTurns: number
-  /** First check-in interval for background work; 0 disables check-ins and automatic retries. */
+  /** First check-in interval for background work; 0 disables idle check-in nudges (automatic retries never stop). */
   readonly checkinMinutes: number
   readonly maxIdleCheckins: number
+  /** Retained for compatibility; no longer gates anything — automatic retries are unlimited with capped backoff. */
   readonly maxRetries: number
   readonly maxConditionChars: number
   /** Adds a stable system reminder while a goal is live. Costs one prompt-cache miss when toggled. */
@@ -30,6 +33,8 @@ export interface GoalConfig {
   readonly transcriptNotes: boolean
   /** Auto-compact when the estimated model-visible context (last assistant token usage) is at or above this many tokens. 0 disables. Env OPENCODE_GOAL_COMPACT_AT_TOKENS. */
   readonly compactAtTokens: number
+  /** Request a host compaction at every loop-iteration boundary so the next version arms with a fresh context. Env OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION. */
+  readonly compactOnLoopIteration: boolean
   /** `/goal-loop` iteration cap; counts completed iterations. */
   readonly maxLoops: number
   /** Token budget for the per-iteration summary and the next-goal generation; enforced as tokens*4 characters. */
@@ -43,12 +48,14 @@ export const DEFAULTS = {
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,
-  maxTurns: 200,
-  stallTurns: 3,
+  consensus: 1,
+  maxTurns: 0,
+  stallTurns: 0,
   checkinMinutes: 30,
   maxIdleCheckins: 3,
   maxRetries: 3,
   compactAtTokens: 0,
+  compactOnLoopIteration: true,
   maxLoops: 5,
   maxLoopSummaryTokens: 400,
   // Effectively unlimited: goals are pasted from the clipboard and can run to whole files, so the default never rejects.
@@ -95,15 +102,15 @@ const branch = (value: unknown, fallback: string) => {
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
- * OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS, OPENCODE_GOAL_VERIFY_COMMAND,
- * OPENCODE_GOAL_VERIFY_TIMEOUT_MS.
+ * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
+ * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
   env: Readonly<Record<string, string | undefined>> = {},
 ): GoalConfig {
   const evaluator = (typeof options.evaluator === "object" && options.evaluator !== null ? options.evaluator : {}) as Record<string, unknown>
-  const model = parseModelRef(env.OPENCODE_GOAL_MODEL ?? evaluator.model ?? options.model)
+  const model = parseModelRef([env.OPENCODE_GOAL_MODEL, evaluator.model, options.model].find((v) => (typeof v === "string" ? v.trim() !== "" : v != null))) // empty/whitespace strings read as unset — the `str`/`int` posture
   const requested = evaluator.mode === "session" || evaluator.mode === "independent" ? evaluator.mode : "auto"
   const mode = requested === "auto" ? (model ? "independent" : "session") : requested === "independent" && !model ? "session" : requested
   return {
@@ -115,9 +122,10 @@ export function resolveConfig(
       timeoutMs: int(evaluator.timeoutMs, DEFAULTS.timeoutMs, 5_000),
       verifyCommand: str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, ""),
       verifyTimeoutMs: int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000),
+      consensus: int(evaluator.consensus, DEFAULTS.consensus, 1, 2) as 1 | 2,
     },
     maxTurns: int(env.OPENCODE_GOAL_MAX_TURNS ?? options.maxTurns, DEFAULTS.maxTurns, 0),
-    stallTurns: int(options.stallTurns, DEFAULTS.stallTurns, 1),
+    stallTurns: int(options.stallTurns, DEFAULTS.stallTurns, 0),
     checkinMinutes: int(env.OPENCODE_GOAL_CHECKIN_MINUTES ?? options.checkinMinutes, DEFAULTS.checkinMinutes, 0),
     maxIdleCheckins: int(options.maxIdleCheckins, DEFAULTS.maxIdleCheckins, 0),
     maxRetries: int(options.maxRetries, DEFAULTS.maxRetries, 0),
@@ -125,6 +133,7 @@ export function resolveConfig(
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),
     compactAtTokens: int(env.OPENCODE_GOAL_COMPACT_AT_TOKENS ?? options.compactAtTokens, DEFAULTS.compactAtTokens, 0),
+    compactOnLoopIteration: envBool(env.OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, bool(options.compactOnLoopIteration, DEFAULTS.compactOnLoopIteration)),
     maxLoops: int(env.OPENCODE_GOAL_MAX_LOOPS ?? options.maxLoops, DEFAULTS.maxLoops, 1, 100),
     maxLoopSummaryTokens: int(env.OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS ?? options.maxLoopSummaryTokens, DEFAULTS.maxLoopSummaryTokens, 50, 4_000),
     commit: {

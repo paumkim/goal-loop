@@ -11,38 +11,38 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
-<tr><td><code>2026-11-15 11:17 UTC</code></td><td>fix(check): run bun test from test/ so worktree forks of the suite are not double-counted</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 11:15 UTC</code></td><td>fix(check): scope bun test to test/ so opencode worktrees don't double-count the suite</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 11:12 UTC</code></td><td>feat(goal-loop): verify-before-met gate, merge-owned bookkeeping, probe mode, SPEC honesty gate</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 10:51 UTC</code></td><td>fix(coordinator): merge-next merges a state.json bookkeeping branch through the gate</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 10:37 UTC</code></td><td>docs: re-sync every file:line reference to HEAD; fix SPEC criteria 23/D-28</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 10:27 UTC</code></td><td>fix(rpc): restoreOne only adopts records owned by this directory</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 01:19 UTC</code></td><td>fix(rpc): goal RPC handlers are total — no input or state yields a 500</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 01:12 UTC</code></td><td>fix(rpc): read goal state through to plugin storage when memory is empty</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 01:06 UTC</code></td><td>fix(coordinator): merge-next gates on the merged result, not dev's pre-merge HEAD</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 00:53 UTC</code></td><td>fix(loop): count tool calls after a plugin reload before the first execution-end</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 00:16 UTC</code></td><td>feat: docs freshness gate — docs:check wired into bun run check and CI</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 00:11 UTC</code></td><td>fix: coordinator bin never repo-relative; align summary cap formula; coordinator bash hygiene; evaluator/store tests; docs sync</td><td>commit</td></tr>
-<tr><td><code>2026-11-15 00:05 UTC</code></td><td>ci: add GitHub Actions check workflow; fold TUI load check into bun run check; regenerate docs stamps/changelog</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 23:08 UTC</code></td><td>fix(loop): count superseded tool work and background deferral toward iterations</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 23:04 UTC</code></td><td>fix(store): never let a failed durable write pass for a persisted one</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 23:00 UTC</code></td><td>fix(loop): re-check epoch staleness before the arming steer</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 22:58 UTC</code></td><td>fix(loop): ignore straggler succeeded events after failed/interrupted turns</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 22:55 UTC</code></td><td>fix(loop): close four arm-time failure modes</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 22:44 UTC</code></td><td>fix(loop): await the terminal persist in goal-loop end paths</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 22:25 UTC</code></td><td>fix(loop): persist the armed iteration before announcing it; drop duplicate advances</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 22:03 UTC</code></td><td>refactor(prompts): extract the shared commitRuleSentence builder used by suffix, retry, check-in, system reminder and evaluator facts; outputs pinned byte-identical by test/commit-rule.test.ts</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:56 UTC</code></td><td>refactor: dedupe shared helpers (errorMessage, truncate, nextGoalFacts, elapsedOf/refresh), purge unused exports and dead code</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:52 UTC</code></td><td>docs: sync line refs, add missing compactor/context-size pages, document top-level model option, regenerate changelog</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(tui): skip setEntries when an incoming snapshot is identical, so renders happen only on real change</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:47 UTC</code></td><td>perf(controller): skip store writes and change emissions when the record is unchanged since the last commit</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:45 UTC</code></td><td>refactor(config): unify string/boolean flag parsing behind one flag() helper</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:45 UTC</code></td><td>chore: prune bloat — drop e2e-marker.txt, unship coordinator bus files, unify script/ into scripts/, remove dead preflight()/PreflightResult, dedupe jq check via hasJq()</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 21:31 UTC</code></td><td>fix(loop): review findings — local-only loop bookkeeping across awaits, resume resets not-progress, abortable loop generations, clamped prompt history, lossless pause diagnostics</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 14:23 UTC</code></td><td>tui: never call renderer hooks at setup time</td><td>commit</td></tr>
-<tr><td><code>2026-11-14 10:45 UTC</code></td><td>tui: let the dialog scrollbox shrink below its content</td><td>commit</td></tr>
+<tr><td><code>2026-11-18 02:20 UTC</code></td><td>docs: de-fork attribution and refresh screenshots</td><td>commit</td></tr>
+<tr><td><code>2026-11-18 00:33 UTC</code></td><td>feat(goal): fresh spend and context figures ride every turn's changed snapshot</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 23:50 UTC</code></td><td>feat(tui): the pill is the accordion header — click toggles the panel expanding upward</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 22:33 UTC</code></td><td>feat(tui): the pill yields to the open card — one voice on the composer.top row (XVII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 22:11 UTC</code></td><td>feat(tui): drop the play-icon caret; the breath swells through the bullseye family</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 21:55 UTC</code></td><td>fix(tui): hang the card actions row flush on the one-cell grid (XIV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 21:37 UTC</code></td><td>feat(tui): the ambient pill learns to breathe — a sleeping-cat presence indicator</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 21:08 UTC</code></td><td>docs: changelog stamp for the hover-stability fix (XI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 21:07 UTC</code></td><td>fix(tui): hover stability — click rows paint an always-mounted affordance cell; hover never mounts, resizes or restyles text (XI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:57 UTC</code></td><td>tui(detail-dialog): drop the two residual blank rows — strip rides each view branch, loop/history pulls up over the spend gap</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:36 UTC</code></td><td>fix(tui): snapshot mirror — convergence when the RPC and the bus are both dead (IX)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:32 UTC</code></td><td>fix(goal-loop): the pill's elapsed timer tracks from first arm to terminal — startedAt no longer resets on loop re-arm or restore</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:28 UTC</code></td><td>Dialog chrome: 1-cell ClampedColumn padding, footer tier re-priced to width−2, bench harness</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:06 UTC</code></td><td>fix(compact): restore() is adopt-only — compaction only ever targets the specific session</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 20:00 UTC</code></td><td>Compact the /goal detail dialog: merge strip+state row, inline loop bar, collapse vertical gaps</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 19:48 UTC</code></td><td>fix(tui): reconnecting RPC pumps — the indicator reflects backend truth without a harness restart</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 19:01 UTC</code></td><td>build: normalize dist module-path comments so the bundle is build-location independent</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 15:17 UTC</code></td><td>fix(tui): re-pull recently-terminal entries — a post-terminal clear converges instead of lingering</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 15:02 UTC</code></td><td>fix(tui): retain null re-pull targets, dedupe elapsedMs snapshots, drop dead guard</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 14:38 UTC</code></td><td>docs: re-anchor src/file:line citations to symbol names</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 14:32 UTC</code></td><td>fix: convergence hygiene — silent evaluating/waiting flips announce themselves; tick refreshes open dialog; steady-null cap (II)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 14:13 UTC</code></td><td>fix: direct drain call in the event router — stubs pin drain rejection reporting (HH)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 14:09 UTC</code></td><td>fix: live-stream cross-process truth — peek reads, background drain, null re-pull (HH)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 13:36 UTC</code></td><td>fix: live-stream guards — record identity on the carry, drop goal-less changed events, commit on planner-retry path (GG)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 13:23 UTC</code></td><td>fix: spend rides the live stream — carry-forward on changed events + settled-spend emit at finish (FF)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 08:59 UTC</code></td><td>fix: e2e harness swept — spawn fail-fast, signal forwarding, timeout honesty, exit-code frozen at goal outcome, extracted testable helpers (EY)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 08:09 UTC</code></td><td>fix: the EG executable-surfaces sweep — scripts/** and packages/coordinator/**, each finding pinned (EG)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 07:30 UTC</code></td><td>fix: the EV bugfix sweep — nineteen audited findings, each pinned (EV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-17 00:04 UTC</code></td><td>fix(tui): make the stale-chrome refresh boundary total — the jump row stops stranding on 'goal checking' (EU)</td><td>commit</td></tr>
+<tr><td><code>2026-11-16 23:31 UTC</code></td><td>docs: simplify README and docs site prose</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Based on opencode-goal by EL4CTEO (<a href="https://github.com/EL4CTEO/opencode-goal">https://github.com/EL4CTEO/opencode-goal</a>)<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-15 00:16 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-18 02:20 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>

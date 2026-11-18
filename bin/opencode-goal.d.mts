@@ -1,0 +1,53 @@
+/**
+ * Type declarations for bin/opencode-goal.mjs. Zero runtime dependencies;
+ * this file ships with the package so TypeScript consumers can type-check
+ * imports of the CLI module.
+ */
+export const PLUGIN_PACKAGE: string;
+export const PLUGIN_SPEC: string;
+
+export interface ScopeResolution {
+  scope: "global" | "project";
+  dir: string;
+  file: string;
+}
+
+export interface CliOptions {
+  env?: { [key: string]: string | undefined };
+  cwd?: string;
+  homedir?: string;
+}
+
+export interface CliResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface OpencodeProbeResult {
+  error?: Error & { code?: string } | null;
+  status?: number | null;
+  signal?: string | null;
+  stdout?: string | Buffer;
+}
+
+export interface AddPluginResult {
+  text: string;
+  already: boolean;
+}
+
+export interface RemovePluginResult {
+  text: string;
+  removed: boolean;
+  emptyRoot: boolean;
+  skeletonRoot: boolean;
+}
+
+export function addPluginText(text: string): AddPluginResult;
+export function removePluginText(text: string): RemovePluginResult;
+export function resolveScope(args: string[], opts?: CliOptions): ScopeResolution;
+export function install(args: string[], opts?: CliOptions): CliResult;
+export function uninstall(args: string[], opts?: CliOptions): CliResult;
+export function probeOpencodeVersion(v: OpencodeProbeResult): string;
+export function status(args: string[], opts?: CliOptions): CliResult;
+export function runCli(argv: string[], opts?: CliOptions): CliResult;

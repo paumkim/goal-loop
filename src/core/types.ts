@@ -56,11 +56,16 @@ export interface UsageSnapshot {
 
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
-interface VerdictEntry {
+export interface VerdictEntry {
   readonly turn: number
   readonly verdict: Verdict
   readonly reason: string
   readonly at: number
+  /** Tool calls the evaluating turn used (0 = the turn produced nothing — at a met verdict that means the condition already held at HEAD). Absent on records written before this field landed; never fabricated. */
+  readonly toolCalls?: number  /** Marginal usage this turn consumed (delta against the previous turn's measurement; the first turn diffs against the arm-time reading). Absent on records written before this field landed or when the host cannot measure — never estimated. */
+  readonly spend?: UsageSnapshot
+  /** The sha HEAD resolved to when this turn was evaluated (the loop rail stamps it at advance; the per-verdict ledger matches). Absent outside a repository or when HEAD could not be read — never guessed. */
+  readonly sha?: string
 }
 
 /** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */
@@ -75,9 +80,47 @@ export interface LoopEntry {
   readonly turns: number
   readonly toolCalls: number
   readonly endedAt: number
+  /** Estimated context size measured at the arm of this iteration (the boundary-compaction estimate tagged with this iteration). Absent when the arm could not measure the context — never estimated, never fabricated. */
+  readonly contextTokens?: number
+  /** The sha HEAD resolved to when the iteration was recorded (stamped at loop advance). Absent outside a repository or when HEAD could not be read — never guessed. */
+  readonly sha?: string
+  /** Usage delta attributed to this iteration alone (diff between the arm-time cumulative usage and the advance-time cumulative usage). Absent when either side could not be measured — never estimated, never fabricated. */
+  readonly spend?: UsageSnapshot
 }
 
+/** Consecutive unlanded boundary compactions after which the plugin suspends further requests until a landing is observed. 2 misses arm a forced re-request; 4 suspends. Lives here so core formatters can display it. */
+export const COMPACT_MISS_CAP = 4
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
+/**
+ * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
+ *
+ * Landing signals, strongest first: a `session.compaction.ended` event (authoritative — the host compacted),
+ * or a >=10% context-size drop observed against `estimatedTokens` at an arm. An unknown/unestimable size is
+ * never a landing and never a miss: it ticks `unmeasurableTicks` until the host shows us a number again.
+ */
+export interface LoopCompactState {
+  /** When the plugin asked the host to compact (ms since epoch). */
+  readonly requestedAt: number
+  /** Context size in tokens at the time the request was made; absent when the estimate was unknown. */
+  readonly estimatedTokens?: number
+  /** The loop iteration that armed when the request was made (1-based). */
+  readonly iteration: number
+  /** Set when the compaction was observed to land (compaction-ended event, or the context-size drop). */
+  landedAt?: number
+  /** Consecutive measurable observations in which a pending request did not land. At COMPACT_MISS_CAP (4) a final backstop warning fires; re-requests drop to a trickle every 3rd arm. The 4-miss cap is never the only signal. */
+  misses: number
+  /** Consecutive arms in which the context size was unestimable. Never a miss. The first tick forces one re-request past cooldown; repeated ticks mark `stalenessUnknown`. */
+  unmeasurableTicks?: number
+  /** Set after repeated unmeasurable arms: the landing cannot be ruled out or in. While set, the request is never suspended — at most one forced re-request per 2 arms. */
+  stalenessUnknown?: boolean
+  /** Set once the host-unwilling warning (2 measurable arms without a landing) has fired for this pending request; the warning fires at most once. */
+  unwillingWarned?: boolean
+}
+
+/** Why the goal paused. Machine-readable so the HUD can render the exact remedy instead of a generic hint; absent on records persisted before this field existed (restore falls back to the generic line). */
+export type PauseCause = "cap" | "stall" | "user"
+
 export interface GoalRecord {
   readonly version: 1
   readonly id: string
@@ -90,13 +133,35 @@ export interface GoalRecord {
   reason?: string
   verdict?: Verdict
   readonly setAt: number
-  /** Timer origin. Reset when a goal is restored after a restart. */
+  /** Timer origin — the arm stamp of the FIRST iteration. Stable across loop re-arms and restores; the TUI pill's elapsed timer tracks from here to terminal state. */
   startedAt: number
   endedAt?: number
   /** Evaluated turns. */
   turns: number
   /** Consecutive evaluated turns without tool use. */
   stall: number
+  /** Why the goal is paused; set when entering the paused status, cleared on resume/finish. Absent outside paused records and on pre-pauseCause persisted records. */
+  pauseCause?: PauseCause
+  /** The classifier's short label for the unrecoverable error that failed the goal (e.g. "authentication failure"). Set only on records entering the failed status; absent on legacy records and non-failed goals. */
+  failureLabel?: string
+  /**
+   * The last `evaluator.verifyCommand` gate run against this record (additive; absent on legacy records,
+   * on goals with no command configured, and on non-met verdicts — the gate only runs on `met`).
+   * Observational only: written by the controller, read by the dashboard. The tail is display-safe
+   * (control sequences stripped, last lines, capped) and rides the record so a restart restores it.
+   */
+  lastVerify?: {
+    /** The configured command exactly as run. */
+    readonly command: string
+    /** Exit code; null when the process never returned one (spawn error or timeout). */
+    readonly code: number | null
+    /** True when the gate killed the command at evaluator.verifyTimeoutMs. */
+    readonly timedOut?: boolean
+    /** Last lines of combined output, display-safe, capped at the tail. Absent when the command produced no output. */
+    readonly tail?: string
+    /** ms since epoch (the shared clock). */
+    readonly at: number
+  }
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */
@@ -115,8 +180,16 @@ export interface GoalRecord {
   loopMaxLoops?: number
   /** Completed iterations, oldest first. */
   loopHistory?: LoopEntry[]
-  /** Consecutive iterations with zero tool calls; two pause the loop. */
+  /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */
   loopNotProgress?: number
+  /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */
+  loopCompact?: LoopCompactState
+  /**
+   * How many post-compaction re-anchors have been armed for this goal — the count the HUD card shows
+   * as `⟲ N` so the re-anchor's existence is one quiet number instead of a transcript notice per landing.
+   * Additive; absent on legacy records (treated as 0).
+   */
+  reanchorCount?: number
 }
 
 /** Read model shared with clients over RPC. */
@@ -127,6 +200,13 @@ export interface GoalSnapshot extends GoalRecord {
   /** Background work is holding evaluation back. */
   readonly waiting: boolean
   readonly spend?: UsageSnapshot
+  /**
+   * Estimated prompt tokens, present when the server could compute them (the `get` RPC does; `changed`
+   * event snapshots may not, and the TUI carries the last known value forward). Absent = unknown, never 0.
+   */
+  readonly contextSize?: number
+  /** The configured auto-compact threshold this estimate should be read against; absent when disabled (`compactAtTokens <= 0`). */
+  readonly compactAtTokens?: number
 }
 
 export interface ModelRef {

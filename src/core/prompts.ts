@@ -1,4 +1,5 @@
 import { formatDuration, formatSpend, truncate } from "./format.ts"
+import { isOpencodeCliCondition, opencodeCliGuide } from "./opencode-cli.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
@@ -61,7 +62,7 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
 }
 
 /** The coordinator flow injected into every /goal prompt in a coordinator repo. */
-export function coordinatorFlow(policy: CommitPolicy): string {
+function coordinatorFlow(policy: CommitPolicy): string {
   const target = policy.branch
   if (!policy.coordinatorBin) {
     // Detection held on the json markers but no absolute binary could be located: never invent or
@@ -93,7 +94,7 @@ export function isFuzzyCondition(condition: string): boolean {
   return !hard
 }
 
-export interface LoopPreamble {
+interface LoopPreamble {
   /** 1-based iteration; 1 is the goal set by `/goal-loop` itself. */
   readonly iteration: number
   readonly maxLoops: number
@@ -103,14 +104,21 @@ export interface LoopPreamble {
 }
 
 /** Compact one-line-per-iteration block; the only loop state a prompt ever carries. */
-export function historyBlock(history: ReadonlyArray<LoopEntry>): string {
+function historyBlock(history: ReadonlyArray<LoopEntry>): string {
   if (history.length === 0) return "(none — this is the first iteration)"
   // Inject only the most recent iterations; older ones already shaped the objective and would just grow the prompt.
   return history.slice(-10).map((entry) => `- v${entry.version}: ${escape(truncate(entry.condition, 100))} — ${escape(truncate(entry.summary, 160))}`).join("\n")
 }
 
+/** Repository ground-truth lines, shared by every "don't trust the summary" prompt. Kept byte-identical. */
+const TREE_TRUTH: ReadonlyArray<string> = [
+  `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
+  `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
+  `equivalent). What these show is the ground truth; the summary is only a hint.`,
+]
+
 /** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
-export function loopPreamble(loop: LoopPreamble): string[] {
+function loopPreamble(loop: LoopPreamble): string[] {
   return [
     `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Objective (constant): ${escape(loop.objective)}`,
@@ -138,6 +146,9 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
       `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
     )
   }
+  if (isOpencodeCliCondition(condition)) {
+    lines.push(``, opencodeCliGuide())
+  }
   if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")
 }
@@ -155,13 +166,41 @@ export function loopContinuation(
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
     ``,
-    `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
-    `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
-    `equivalent). What these show is the ground truth; the summary is only a hint.`,
+    ...TREE_TRUTH,
+    ``,
+    `Before working, audit the armed condition against CURRENT HEAD:`,
+    `(i) enumerate what the condition requires — files, tests, gates, docs;`,
+    `(ii) check each requirement against the tree at current HEAD using only fresh command output produced this turn — never summaries;`,
+    `(iii) if every requirement already holds, respond exactly: Already satisfied at HEAD <sha>. Evidence: <fresh command output>. No new work is produced by this iteration. — and stop; do not redo or fake the work.`,
+    `If something is missing, proceed and show evidence.`,
     ``,
     `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
+  ].join("\n")
+}
+
+/**
+ * Re-anchor queued after a compaction lands on a live (`/goal-loop`) session. Compaction replaces history with a
+ * lossy summary; this restores the objective, the armed condition and the completed iterations from the plugin's
+ * own record so the loop survives the cut. Queued (`resume: false`): it never wakes the session and never
+ * interrupts an in-flight turn; the next steer the loop already dispatches carries it into the model's view.
+ */
+export function loopReanchor(input: { iteration: number; maxLoops: number; objective: string; condition: string; history: ReadonlyArray<LoopEntry> }): string {
+  return [
+    `<goal-loop-reanchor iteration="${input.iteration}" max="${input.maxLoops}">`,
+    `The session context was just compacted; earlier history was replaced by a lossy summary. Ground truth for this loop:`,
+    `Objective (constant): ${escape(input.objective)}`,
+    `This iteration: v${input.iteration} of at most ${input.maxLoops} — armed condition:`,
+    escape(input.condition),
+    ``,
+    `Completed iterations:`,
+    historyBlock(input.history),
+    ``,
+    ...TREE_TRUTH,
+    ``,
+    `The compaction cut the thread, not the loop: keep working toward the armed condition. After each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Do not wait for a user message.`,
+    `</goal-loop-reanchor>`,
   ].join("\n")
 }
 
@@ -211,9 +250,45 @@ export function checkin(
   ].join("\n")
 }
 
-export function note(input: { title: string; body: string }): string {
-  return `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
+/**
+ * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
+ * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
+ * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
+ * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
+ * hook matches on (see `stripTerminalGoalNotes`). Loop advance notes stay plain `<goal-note>`: the
+ * next armed iteration still needs them.
+ */
+export const TERMINAL_NOTE_TAG = "<goal-note final>"
+
+export function note(input: { title: string; body: string; final?: boolean }): string {
+  return input.final
+    ? `${TERMINAL_NOTE_TAG}\n${input.title}\n${escape(input.body)}\n</goal-note>`
+    : `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
 }
+
+/** Structural view of a model-bound message: the `context` hook sees host-shaped messages, so match on the text content parts rather than any metadata the host may or may not propagate. */
+interface NoteMessageLike {
+  readonly content?: unknown
+}
+
+/** True when any text content part carries a terminal goal note. Unknown shapes never match. */
+export const isTerminalGoalNoteMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const content = (message as NoteMessageLike).content
+  if (!Array.isArray(content)) return false
+  return content.some((part) => {
+    if (typeof part !== "object" || part === null) return false
+    const { type, text } = part as { type?: unknown; text?: unknown }
+    return type === "text" && typeof text === "string" && text.includes(TERMINAL_NOTE_TAG)
+  })
+}
+
+/**
+ * Drop terminal goal notes from a model-bound message list. Mutating in place would share an array
+ * with the host, so callers that must signal removals through an array the host holds can splice the
+ * result back; this returns a fresh array and never touches its input.
+ */
+export const stripTerminalGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isTerminalGoalNoteMessage(m))
 
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
@@ -227,7 +302,7 @@ export function systemReminder(condition: string, policy: CommitPolicy): string 
   return lines.join("\n")
 }
 
-export interface EvaluationFacts {
+interface EvaluationFacts {
   /** The turn being evaluated (1-based). */
   readonly turn: number
   readonly elapsedMs: number
@@ -249,6 +324,11 @@ const RULES = [
   `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
   `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
   `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
+  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the`,
+  `work landed and gates green): judge met, and state exactly that in the reason — "Already satisfied at HEAD`,
+  `<sha>. No new work is produced by this iteration." Do not credit narration of effort, and do not produce`,
+  `theater (re-verification-only turns still satisfy the condition, but a planner that re-proposes an identical`,
+  `or materially equivalent condition must not be armed; the loop completes).`,
 ]
 
 /**
@@ -348,7 +428,7 @@ export function evaluateIndependently(
   ].join("\n")
 }
 
-export interface LoopSummaryInput {
+interface LoopSummaryInput {
   readonly objective: string
   readonly condition: string
   readonly reason: string
@@ -360,7 +440,7 @@ export interface LoopSummaryInput {
   readonly maxSummaryTokens: number
 }
 
-export interface NextGoalInput {
+interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>
@@ -414,6 +494,8 @@ const NEXT_GOAL_ASK = [
   `Reply with EXACTLY ONE of these, and nothing else:`,
   `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
   `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `Before proposing, audit the candidate against CURRENT HEAD via the completed history above: enumerate what it would require, and only propose a condition whose required work is ABSENT at HEAD.`,
+  `If every meaningful improvement under the objective is already complete, reply LOOP_COMPLETE. Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored).`,
   `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
 ]
 

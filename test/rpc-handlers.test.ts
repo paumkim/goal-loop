@@ -34,23 +34,17 @@ function stub(overrides: Partial<Stub> = {}): Stub {
   const s: Stub = {
     explode: {},
     restored: false,
-    restoreOne: async () => (overrides.restored ?? false),
-    restore: async () => {
-      if (s.explode.restore) throw new Error("storage down")
-      s.restored = true
-      return 1
-    },
-    snapshot: () => {
-      if (s.explode.snapshot) throw new Error("bad record")
+    peekSnapshot: async () => {
+      if (s.explode.peekSnapshot) throw new Error("peek exploded")
       return s.restored ? snapshot() : null
+    },
+    peekList: async () => {
+      if (s.explode.peekList) throw new Error("peek list exploded")
+      return s.restored ? [snapshot()] : []
     },
     spend: async (): Promise<UsageSnapshot | undefined> => {
       if (s.explode.spend) throw new Error("usage down")
       return undefined
-    },
-    list: () => {
-      if (s.explode.list) throw new Error("list exploded")
-      return s.restored ? [snapshot()] : []
     },
     status: async () => {
       if (s.explode.status) throw new Error("status exploded")
@@ -76,41 +70,52 @@ describe("goal RPC handlers", () => {
     }
   })
 
-  test("get returns the snapshot when the controller behaves", async () => {
+  test("get returns the snapshot the controller peeks", async () => {
     const s = stub({ restored: true })
     expect(await handlers(s).get({ sessionID: "ses_test" })).toEqual({ goal: snapshot() })
   })
 
-  test("get falls back to a storage restore and returns null when storage is unreadable", async () => {
+  test("get returns goal: null when peek throws", async () => {
     const s = stub()
-    s.explode.restore = true
-    // restoreOne throws inside the handler's own catch; snapshot sees no record -> null, never a 500.
-    s.restoreOne = async () => {
-      throw new Error("storage gone")
-    }
+    s.explode.peekSnapshot = true
     expect(await handlers(s).get({ sessionID: "ses_test" })).toEqual({ goal: null })
   })
 
-  test("get returns goal: null even if the snapshot computation explodes", async () => {
-    const s = stub({ restored: true })
-    s.explode.snapshot = true
-    expect(await handlers(s).get({ sessionID: "ses_test" })).toEqual({ goal: null })
-  })
-
-  test("get returns goal: null when spend fails AND snapshot throws — the double failure path", async () => {
+  test("get returns goal: null when the storage read inside peek fails AND spend fails — the double failure path", async () => {
     const s = stub({ restored: true })
     s.explode.spend = true
-    s.explode.snapshot = true
+    s.explode.peekSnapshot = true
     expect(await handlers(s).get({ sessionID: "ses_test" })).toEqual({ goal: null })
   })
 
-  test("list returns the restored goals, and falls back to [] on failure", async () => {
-    const s = stub()
-    // empty memory; restore populates the list on the fallback path
+  test("get returns goal: null even if the peek computation explodes; spend failure alone still yields a goal", async () => {
+    const s = stub({ restored: true })
+    s.explode.peekSnapshot = true
+    expect(await handlers(s).get({ sessionID: "ses_test" })).toEqual({ goal: null })
+    const spendOnly = stub({ restored: true })
+    spendOnly.explode.spend = true
+    expect(await handlers(spendOnly).get({ sessionID: "ses_test" })).toEqual({ goal: snapshot() })
+  })
+
+  test("list returns the peeked goals, [] on failure, [] when empty — without any restore call", async () => {
+    const s = stub({ restored: true })
     expect(await handlers(s).list()).toEqual({ goals: [snapshot()] })
     const broken = stub()
-    broken.explode.list = true
+    broken.explode.peekList = true
     expect(await handlers(broken).list()).toEqual({ goals: [] })
+    const empty = stub()
+    expect(await handlers(empty).list()).toEqual({ goals: [] })
+  })
+
+  test("list issues no storage restore and adopts nothing", async () => {
+    // The stub carries no restore/restoreOne/snapshot/list surface at all — a handler that tried to
+    // read-through or adopt would TypeError straight into the outer catch's { goals: [] }.
+    const s = stub({ restored: true })
+    expect("restoreOne" in s).toBe(false)
+    expect("restore" in s).toBe(false)
+    expect("snapshot" in s).toBe(false)
+    expect("list" in s).toBe(false)
+    expect(await handlers(s).list()).toEqual({ goals: [snapshot()] })
   })
 
   test("status resolves {} even when controller.status throws", async () => {
@@ -137,5 +142,41 @@ describe("goal RPC handlers", () => {
     expect(Array.isArray(goals)).toBe(true)
     const { cleared } = await h.clear({ sessionID: "ses_test" })
     expect(typeof cleared).toBe("boolean")
+  })
+})
+
+describe("contextSize over RPC", () => {
+  test("get passes the controller-provided estimate into the peek; a missing implementation passes none", async () => {
+    const calls: Array<[string, unknown, unknown]> = []
+    const withCtx: Stub = {
+      ...stub({ restored: true }),
+      contextSize: async () => 95_000,
+      peekSnapshot: (async (sessionID: string, spend?: UsageSnapshot, contextSize?: number) => {
+        calls.push([sessionID, spend, contextSize])
+        return { ...snapshot(), ...(contextSize !== undefined ? { contextSize } : {}) }
+      }) as Stub["peekSnapshot"],
+    }
+    const handlers = createRpcHandlers({ controller: withCtx, log: silentLog })
+    const out = await handlers.get({ sessionID: "ses_test" })
+    expect(calls[0]?.[2]).toBe(95_000)
+    expect(out.goal?.contextSize).toBe(95_000)
+
+    const bare = stub({ restored: true })
+    const handlers2 = createRpcHandlers({ controller: bare, log: silentLog })
+    const out2 = await handlers2.get({ sessionID: "ses_test" })
+    expect(out2.goal?.contextSize).toBeUndefined()
+  })
+
+  test("a failing context estimate still yields the snapshot (never a 500)", async () => {
+    const failing: Stub = {
+      ...stub({ restored: true }),
+      contextSize: async () => {
+        throw new Error("context read exploded")
+      },
+    }
+    const handlers = createRpcHandlers({ controller: failing, log: silentLog })
+    const out = await handlers.get({ sessionID: "ses_test" })
+    expect(out.goal?.sessionID).toBe("ses_test")
+    expect(out.goal?.contextSize).toBeUndefined()
   })
 })

@@ -1,6 +1,6 @@
 import type { BackgroundPort, BackgroundWork } from "./ports.ts"
 
-export interface BackgroundDeps {
+interface BackgroundDeps {
   /** Parent session ID, or undefined for a root session. */
   parentOf(sessionID: string): Promise<string | undefined>
 }
@@ -42,12 +42,15 @@ export class BackgroundTracker implements BackgroundPort {
   }
 
   shellUpdated(id: string, status: string, owner: unknown) {
-    if (status !== "running") {
-      this.shells.delete(id)
+    if (status === "running") {
+      // Running with a known owner: track it. Running without an owner: keep any existing entry.
+      if (typeof owner === "string") this.shells.set(id, owner)
       return
     }
-    // Running with a known owner: track it. Running without an owner: keep any existing entry.
-    if (typeof owner === "string") this.shells.set(id, owner)
+    // No status at all (a metadata-only update): keep tracking — the same defensive posture as the
+    // owner branch. `shell.exited`/`shell.deleted` always end the shell explicitly.
+    if (status === "") return
+    this.shells.delete(id)
   }
 
   shellEnded(id: string) {
