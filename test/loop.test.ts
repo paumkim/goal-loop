@@ -1003,6 +1003,84 @@ describe("/goal-loop", () => {
   })
 })
 
+describe("completed-condition ledger", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness({ maxLoops: 150 })
+  })
+
+  test("a planner repeat of a condition that completed long before the retained window ends the loop", async () => {
+    h = harness({ maxLoops: 100 })
+    await h.setLoop("objective")
+    for (let i = 1; i <= 55; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(i < 55 ? `step ${i + 1}` : "Step 2!")
+    }
+    for (let i = 0; i < 55; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
+    // v2's condition fell out of the retained 50-entry iteration window long before this proposal.
+    expect(record.loopHistory).toHaveLength(50)
+    expect(record.loopHistory!.some((e) => e.condition === "step 2")).toBe(false)
+    // The ledger is what still knows about it.
+    expect(record.completedConditions).toContain("step 2")
+    expect(record.completedConditions).toHaveLength(55)
+    expect(record.completedConditionsDropped).toBeUndefined()
+  })
+
+  test("a near-duplicate proposal of a pre-window completed condition ends the loop", async () => {
+    h = harness({ maxLoops: 100 })
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("tighten the widget")
+    await h.turn() // arms v2 = "tighten the widget"
+    for (let i = 2; i <= 55; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(i < 55 ? `step ${i + 1}` : "tighten the widget extra")
+    }
+    for (let i = 0; i < 54; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toMatch(/already-completed/i)
+    expect(record.loopHistory!.some((e) => e.condition === "tighten the widget")).toBe(false)
+    expect(record.completedConditions).toContain("tighten the widget")
+  })
+
+  test("the ledger is bounded: the cap keeps the newest conditions and counts the drops", async () => {
+    await h.setLoop("objective")
+    for (let i = 1; i <= 105; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(`step ${i + 1}`)
+    }
+    for (let i = 0; i < 105; i++) await h.turn()
+    const record = h.controller.get(SID)!
+    expect(record.completedConditions).toHaveLength(100)
+    expect(record.completedConditions![0]).toBe("step 6")
+    expect(record.completedConditionsDropped).toBe(5)
+  })
+
+  test("the ledger survives a dispose + restore round trip", async () => {
+    h = harness({ maxLoops: 100 })
+    await h.setLoop("objective")
+    for (let i = 1; i <= 3; i++) {
+      h.verdicts.push(met(`v${i} done`))
+      h.summaries.push(`summary ${i}`)
+      h.nextGoals.push(`step ${i + 1}`)
+    }
+    for (let i = 0; i < 3; i++) await h.turn()
+    await h.controller.dispose()
+    const h2 = harness({}, h.storage)
+    expect(await h2.controller.restore()).toBe(1)
+    const restored = h2.controller.get(SID)!
+    expect(restored.completedConditions).toEqual(["objective", "step 2", "step 3"])
+  })
+})
+
 describe("loop history retention", () => {
   let h: ReturnType<typeof harness>
   beforeEach(() => {

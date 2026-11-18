@@ -136,6 +136,35 @@ export const boundVerdictHistory = (entries: readonly VerdictEntry[]): { retaine
     ? { retained: [...entries], dropped: 0 }
     : { retained: entries.slice(-MAX_VERDICT_HISTORY_ENTRIES), dropped: entries.length - MAX_VERDICT_HISTORY_ENTRIES }
 
+/**
+ * Completed-condition strings retained on the record as the anti-repeat/near-duplicate gate ledger. The gates
+ * must catch a planner re-offering a condition that completed before the retained 50-entry iteration window;
+ * the ledger is the bounded memory that outlives that window. Sized so 100 completed conditions ride the
+ * record (a line each, never the summaries) while staying small in storage and snapshots.
+ */
+export const MAX_COMPLETED_CONDITION_ENTRIES = 100
+
+/** Total completed conditions a consumer should count: retained plus dropped. */
+export const completedConditionCount = (goal: { readonly completedConditions?: readonly string[]; readonly completedConditionsDropped?: number }): number =>
+  (goal.completedConditionsDropped ?? 0) + (goal.completedConditions?.length ?? 0)
+
+/**
+ * Bounds the completed-condition ledger to the newest `MAX_COMPLETED_CONDITION_ENTRIES` strings. Oldest entries
+ * past the cap are dropped; exact consecutive duplicates (a re-entered advance for the same iteration) collapse to
+ * one. Returns the retained list and how many were dropped this call. Callers add the drop count onto the record's
+ * `completedConditionsDropped`.
+ */
+export const boundCompletedConditions = (entries: readonly string[]): { retained: string[]; dropped: number } => {
+  const deduped: string[] = []
+  for (const entry of entries) {
+    if (deduped[deduped.length - 1] === entry) continue
+    deduped.push(entry)
+  }
+  return deduped.length <= MAX_COMPLETED_CONDITION_ENTRIES
+    ? { retained: deduped, dropped: 0 }
+    : { retained: deduped.slice(-MAX_COMPLETED_CONDITION_ENTRIES), dropped: deduped.length - MAX_COMPLETED_CONDITION_ENTRIES }
+}
+
 /** Persisted goal state. Plain JSON so it round-trips through plugin storage. */
 /**
  * Plugin-tracked state of a boundary-compaction request at a loop iteration boundary. Plain JSON so it round-trips through plugin storage.
@@ -238,6 +267,17 @@ export interface GoalRecord {
    * use `completedIterationCount`, never `loopHistory.length` alone, when a display means "total landed".
    */
   loopHistoryDropped?: number
+  /**
+   * Every condition this loop completed, oldest first — the bounded memory the anti-repeat and near-duplicate gates
+   * scan so a planner re-offering a pre-window condition is still caught. Retained up to `MAX_COMPLETED_CONDITION_ENTRIES`
+   * (newest kept); see `completedConditionsDropped`.
+   */
+  completedConditions?: string[]
+  /**
+   * How many completed-condition strings the ledger cap dropped (oldest first). Additive; absent when the cap never
+   * engaged. Total completed conditions = (this ?? 0) + completedConditions.length — use `completedConditionCount`.
+   */
+  completedConditionsDropped?: number
   /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */
   loopNotProgress?: number
   /** Pending/recent boundary-compaction bookkeeping; absent when no compact was requested at a boundary. */
