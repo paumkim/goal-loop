@@ -4818,7 +4818,7 @@ var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "un
 var footerButtonCells = (label) => stringWidth(label) + 4;
 var footerClearLabel = (roomy) => roomy ? "clear goal" : "clear";
 var dialogFooterTier = (width, copied, pinned) => {
-  const budget = Math.floor(width) - 6;
+  const budget = Math.floor(width) - 2;
   const buttons = (roomy) => footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4;
   return {
     wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
@@ -6218,9 +6218,9 @@ var ClampedColumn = (props) => {
     var _el$ = _$createElement4("box");
     _$setProp4(_el$, "flexDirection", "column");
     _$setProp4(_el$, "height", "100%");
-    _$setProp4(_el$, "paddingLeft", 3);
-    _$setProp4(_el$, "paddingRight", 3);
-    _$setProp4(_el$, "paddingBottom", 1);
+    _$setProp4(_el$, "paddingLeft", 1);
+    _$setProp4(_el$, "paddingRight", 1);
+    _$setProp4(_el$, "paddingBottom", 0);
     _$setProp4(_el$, "gap", 1);
     _$insert4(_el$, () => props.children);
     _$effect4((_$p) => _$setProp4(_el$, "maxHeight", Math.max(8, dimensions().height - 1), _$p));
