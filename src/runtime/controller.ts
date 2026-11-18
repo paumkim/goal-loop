@@ -131,6 +131,46 @@ const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
   return containment >= 0.7 || jaccard >= 0.6
 }
 
+/** Normalize a condition for anti-repeat matching: lowercase, collapse every run of non-alphanumerics to one space (unicode letters/numbers kept), trim. */
+const normalizeCondition = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+/**
+ * The completed-condition ledger of one record, as raw condition strings (deduped by exact match): the persisted
+ * `completedConditions` (harness-measured completed iterations), the retained iteration conditions that verdicts met,
+ * and — only when the record reached `achieved` — its own condition. A cleared or failed arm never completed its
+ * condition, so re-arming the same objective must not be refused on that account. The loop objective is NOT
+ * included: it is the constant target of a run, not demonstrated work, and its iteration-1 condition already
+ * covers the re-arm question. Matching normalizes at comparison time — same posture as the loop advance gate,
+ * which scans the persisted ledger verbatim rather than at write time.
+ */
+const ledgerOf = (record: GoalRecord): Set<string> => {
+  const set = new Set<string>()
+  const add = (value: string | undefined) => {
+    if (value && normalizeCondition(value)) set.add(value)
+  }
+  for (const entry of record.completedConditions ?? []) add(entry)
+  if (record.status === "achieved") add(record.condition)
+  for (const entry of record.loopHistory ?? []) add(entry.condition)
+  return set
+}
+/**
+ * Workstream XLV — the arming-side no-new-gap gate, shared by the planner re-arm boundary (loopAdvance) and the
+ * initial /goal-loop arm (arm()). Returns the matched ledger entry on a hit (exact normalized repeat, or token
+ * containment >= 0.7 / Jaccard >= 0.6 against the normalized candidate), undefined otherwise. Never throws; the
+ * empty candidate or an empty ledger can never match.
+ */
+const completedLedgerHit = (candidate: string, ledger: ReadonlySet<string>): string | undefined => {
+  const normalized = normalizeCondition(candidate)
+  if (!normalized) return undefined
+  const candidateTokens = tokensOf(normalized)
+  for (const entry of ledger) {
+    const entryNormalized = normalizeCondition(entry)
+    if (!entryNormalized) continue
+    if (entryNormalized === normalized) return entry
+    if (candidateTokens.size > 0 && isNearDuplicate(candidateTokens, tokensOf(entryNormalized))) return entry
+  }
+  return undefined
+}
+
 type InterruptReason = "user" | "shutdown" | "superseded" | "inactivity" | (string & {})
 
 /**
@@ -402,6 +442,9 @@ export class GoalController {
    */
   private async arm(input: { sessionID: string; condition: string; loop: boolean; maxLoops?: number }): Promise<GoalRecord> {
     const { sessionID, condition } = input
+    // Capture BEFORE finishing/replacing: this object may be the in-memory copy of the persisted completed-condition
+    // ledger that finish() is about to write through — after goals.set() below it is gone.
+    const inMemoryPrior = this.goals.get(sessionID)
     const previous = this.live(sessionID)
     if (previous) this.finish(previous, "cleared", "Replaced by a new goal.")
     const now = this.deps.clock.now()
@@ -410,6 +453,68 @@ export class GoalController {
     const loop = input.loop
     // Per-run override only: this never touches config.maxLoops, so a later /goal-loop-<N> applies to that run alone.
     const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
+    if (loop) {
+      // Workstream XLV — the arming-side no-new-gap gate. The planner re-arm boundary in loopAdvance has run the
+      // anti-repeat and near-duplicate gates against the record's persisted completedConditions ledger since XXXVII;
+      // the initial /goal-loop arm did not, so re-issuing an objective this session already completed could spend
+      // iteration 1 on duplicate work. Collect the ledger from the record being replaced (in memory, the freshest
+      // copy) and from durable storage (cross-restart; restore() only adopts live records, terminal ones stay here),
+      // run the same exact-repeat / containment >= 0.7 / Jaccard >= 0.6 test, and on a hit do NOT arm: persist a
+      // terminal record carrying the ledger forward (nothing the prior runs recorded is lost), notify and log with
+      // the explicit "no new gap" reason, and end as achieved without spending an iteration.
+      const durable = await this.deps.store.load(sessionID).catch(() => {
+        this.deps.log.warn("no-new-gap gate: prior record unreadable; arming with the in-memory ledger only", { sessionID })
+        return undefined
+      })
+      const ledger = new Set<string>()
+      let dropped = 0
+      const seen = new Set<string>()
+      for (const source of [inMemoryPrior, durable]) {
+        if (!source || seen.has(source.id)) continue
+        seen.add(source.id)
+        dropped += source.completedConditionsDropped ?? 0
+        for (const entry of ledgerOf(source)) ledger.add(entry)
+      }
+      const hit = completedLedgerHit(condition, ledger)
+      if (hit !== undefined) {
+        const capped = boundCompletedConditions([...ledger])
+        const totalDropped = dropped + capped.dropped
+        const refusalReason = `no new gap: the proposed objective near-duplicates (exact repeat, or token containment >= 0.7 / Jaccard >= 0.6) the already-completed "${truncate(normalizeCondition(hit), 140)}" recorded for this session; the loop was not armed.`
+        const refusal: GoalRecord = {
+          version: 1,
+          id: this.newId(),
+          sessionID,
+          directory: this.deps.directory,
+          condition,
+          status: "achieved",
+          setAt: now,
+          startedAt: now,
+          endedAt: now,
+          reason: refusalReason,
+          turns: 0,
+          stall: 0,
+          retries: 0,
+          checkins: 0,
+          baseline,
+          history: [],
+          loopEnabled: true,
+          loopIteration: 1,
+          loopObjective: condition,
+          loopMaxLoops: maxLoops,
+          loopHistory: [],
+          loopNotProgress: 1,
+          completedConditions: capped.retained,
+          ...(totalDropped > 0 ? { completedConditionsDropped: totalDropped } : {}),
+        }
+        this.goals.set(sessionID, refusal)
+        this.reset(sessionID)
+        await this.commit(refusal)
+        this.evictTerminalGoalsBeyondRetention()
+        this.notify(sessionID, "loop", "warning", "Loop not armed: no new gap", refusalReason)
+        this.deps.log.warn("loop arm refused: no new gap", { sessionID, matched: truncate(normalizeCondition(hit), 120) })
+        return refusal
+      }
+    }
     const record: GoalRecord = {
       version: 1,
       id: this.newId(),
@@ -449,6 +554,7 @@ export class GoalController {
     const loop = input.loop === true
     const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
     const record = await this.arm({ sessionID, condition, loop, ...(input.maxLoops !== undefined ? { maxLoops: input.maxLoops } : {}) })
+    if (record.status !== "active") return // Workstream XLV: the arming-side no-new-gap gate refused; the notice already told the user why.
     const loopLabel = loop ? "Loop" : "Goal"
     try {
       await this.deps.session.prompt({
@@ -1094,7 +1200,7 @@ export class GoalController {
     }
     // A planner that repeats an already-completed condition would spin the loop on the same work; end instead.
     // Punctuation-insensitive: collapse every run of non-alphanumerics to one space (unicode letters/numbers kept).
-    const normalize = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    const normalize = normalizeCondition
     const completed = new Set([
       normalize(record.condition),
       ...(record.loopObjective ? [normalize(record.loopObjective)] : []),
@@ -1104,7 +1210,7 @@ export class GoalController {
     ])
     if (completed.has(normalize(condition))) {
       log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
-      return endClean(`Loop complete: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; nothing new to plan.`)
+      return endClean(`Loop complete: no new gap — the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; ending instead of arming.`)
     }
     // Near-duplicate gate: a planner proposing work that materially overlaps an already-completed condition
     // would burn the iteration on a no-op. Token containment >= 0.7 or Jaccard >= 0.6 is a near-duplicate.
@@ -1115,7 +1221,7 @@ export class GoalController {
         if (entryTokens.size === 0) continue
         if (isNearDuplicate(candidateTokens, entryTokens)) {
           log.warn("loop next-goal generator offered a near-duplicate of an already-completed condition", { sessionID, iteration })
-          return endClean(`Loop complete: the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); nothing new to plan.`)
+          return endClean(`Loop complete: no new gap — the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); ending instead of arming.`)
         }
       }
     }
