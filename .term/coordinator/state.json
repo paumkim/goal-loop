@@ -3620,6 +3620,17 @@
       "submittedAt": "2026-11-19T07:23:22Z",
       "mergedAt": "2026-11-19T07:44:31Z",
       "mergedInto": "dev"
+    },
+    "iteration-cap-counts-dropped-history": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/iteration-cap-counts-dropped-history",
+      "worktree": "worktrees/wt-iteration-cap-counts-dropped-history",
+      "status": "done",
+      "createdAt": "2026-11-19T07:47:36Z",
+      "submittedAt": "2026-11-19T07:49:32Z",
+      "mergedAt": "2026-11-19T07:50:54Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
