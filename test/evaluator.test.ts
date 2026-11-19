@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { resolveConfig } from "../src/core/config.ts"
 import type { CommitPolicy } from "../src/core/types.ts"
 import type { EvaluationRequest, LoopSummaryRequest, NextGoalRequest } from "../src/runtime/ports.ts"
-import { EvaluationError, Evaluator } from "../src/runtime/evaluator.ts"
+import { EvaluationError, EvaluationTimeoutError, Evaluator } from "../src/runtime/evaluator.ts"
 import { REPAIR, STRICT_REPAIR } from "../src/core/prompts.ts"
 
 const SID = "ses_test"
@@ -185,8 +185,93 @@ describe("Evaluator.evaluate", () => {
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const aborted = new AbortController()
     aborted.abort()
-    await expect(evaluator.evaluate(request({ signal: aborted.signal }))).rejects.toThrow("aborted by timeout")
+    // Pre-aborted caller: cut off up front (no budget is even created) and unwind isEvaluating.
+    await expect(evaluator.evaluate(request({ signal: aborted.signal }))).rejects.toThrow(/aborted/)
     expect(evaluator.isEvaluating(SID)).toBe(false)
+  })
+})
+
+describe("Evaluator.evaluate — slow / hanging provider (per-attempt budget + app-level race)", () => {
+  // Bypass the config floor so a test can use a sub-second budget; the evaluator only reads timeoutMs.
+  const slowConfig = (timeoutMs: number) => ({ ...sessionConfig(), timeoutMs })
+  const delay = (ms: number, value: string) => new Promise<string>((resolve) => setTimeout(() => resolve(value), ms))
+
+  test("a verdict that arrives within its budget still parses (the budget does not over-trigger)", async () => {
+    const { fake } = deps({ sessionGenerate: () => delay(20, verdictJson("met", "in time")) })
+    const evaluator = new Evaluator(fake, slowConfig(500), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toBe("in time")
+  })
+
+  test("each escalating attempt gets its own budget — a slow garbage first attempt does not starve the repair", async () => {
+    // Shared-budget starvation: with one 300ms budget for both attempts, attempt 1 (200ms) leaves only
+    // 100ms, so a signal-honouring attempt 2 (200ms) is cut off. Per-attempt budgets let attempt 2 finish.
+    let n = 0
+    const { fake } = deps({
+      sessionGenerate: (_sid, _prompt, signal) => {
+        n++
+        const value = n === 1 ? "not a verdict" : verdictJson("met", "recovered on repair")
+        return new Promise<string>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(value), 200)
+          const abort = () => {
+            clearTimeout(timer)
+            reject(new Error("aborted by timeout"))
+          }
+          if (signal.aborted) abort()
+          else signal.addEventListener("abort", abort, { once: true })
+        })
+      },
+    })
+    const evaluator = new Evaluator(fake, slowConfig(300), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toBe("recovered on repair")
+    expect(n).toBe(2)
+  })
+
+  test("a generate that ignores the abort signal and never settles is cut off by the app-level race, named a timeout", async () => {
+    const { fake } = deps({ sessionGenerate: () => new Promise<string>(() => {}) })
+    const evaluator = new Evaluator(fake, slowConfig(1000), COMMIT, silentLog)
+    const started = Date.now()
+    const error = await evaluator.evaluate(request()).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    )
+    expect(error).toBeInstanceOf(EvaluationTimeoutError)
+    expect(error?.message).toBe("evaluator timed out after 1s (attempt 1/3)")
+    expect(Date.now() - started).toBeLessThan(3000) // bounded — no indefinite hang
+    expect(evaluator.isEvaluating(SID)).toBe(false)
+  })
+
+  test("empty-on-slow: a reply that lands only after the budget fired is a timeout, never a bare unreadable verdict", async () => {
+    // The SDK ignores the signal and resolves "" late. Before the fix this was the reported
+    // `unreadable verdict: ""` retry loop; now the budget fires first and names the timeout.
+    const { fake } = deps({ sessionGenerate: () => delay(120, "") })
+    const evaluator = new Evaluator(fake, slowConfig(50), COMMIT, silentLog)
+    const error = await evaluator.evaluate(request()).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    )
+    expect(error).toBeInstanceOf(EvaluationTimeoutError)
+    expect(error?.message).toMatch(/timed out after/)
+    expect(error?.message).not.toMatch(/unreadable verdict/)
+  })
+
+  test("a caller abort during a slow generation aborts the evaluation, not a timeout", async () => {
+    const aborter = new AbortController()
+    const { fake } = deps({ sessionGenerate: () => new Promise<string>(() => {}) })
+    const evaluator = new Evaluator(fake, slowConfig(30_000), COMMIT, silentLog)
+    const inflight = evaluator.evaluate(request({ signal: aborter.signal }))
+    await new Promise((resolve) => setImmediate(resolve))
+    aborter.abort()
+    const error = await inflight.then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    )
+    expect(error).toBeInstanceOf(EvaluationError)
+    expect(error?.message).toMatch(/aborted/)
+    expect(error?.message).not.toMatch(/timed out/)
   })
 })
 

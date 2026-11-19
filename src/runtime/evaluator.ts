@@ -33,7 +33,16 @@ interface EvaluationFacts {
 }
 
 export class EvaluationError extends Error {
-  override readonly name = "EvaluationError"
+  override readonly name: string = "EvaluationError"
+}
+
+/**
+ * One generation outlived its per-attempt budget, or the SDK ignored the abort signal. Named so the
+ * controller's retry notice reads "evaluator timed out after Ns" instead of a bare unreadable verdict,
+ * and so a slow link retries with bounded backoff rather than hanging or failing as a parse error.
+ */
+export class EvaluationTimeoutError extends EvaluationError {
+  override readonly name = "EvaluationTimeoutError"
 }
 
 /**
@@ -66,7 +75,10 @@ export class Evaluator implements EvaluatorPort {
    * closed to `not_met` with the disagreement named in the reason string. Opt-in per repo/loop; never a default.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
+    // Each generation runs under its own per-attempt budget (see `underBudget`): one shared
+    // `AbortSignal.timeout` across the escalating attempts starved the later ones on a slow link,
+    // and a bare timeout with no app-level race hung forever when the SDK ignored the signal.
+    const signal = request.signal
     const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
     const primary = await this.primary(request, facts, signal)
     if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
@@ -101,17 +113,17 @@ export class Evaluator implements EvaluatorPort {
   private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
     const model = this.config.model
     if (!model) throw new EvaluationError("independent model not configured; set evaluator.model")
-    const messages = await this.deps.context(request.sessionID, signal)
+    const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
-    return this.ask((text) => this.deps.modelGenerate(model, text, signal), prompt)
+    return this.ask((text, s) => this.deps.modelGenerate(model, text, s), prompt, signal)
   }
 
   private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
     const prompt = evaluateInSession(request.condition, facts, this.commit)
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {
-      return await this.ask((text) => this.deps.sessionGenerate(request.sessionID, text, signal), prompt)
+      return await this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal)
     } finally {
       const left = (this.inflight.get(request.sessionID) ?? 1) - 1
       if (left > 0) this.inflight.set(request.sessionID, left)
@@ -121,13 +133,13 @@ export class Evaluator implements EvaluatorPort {
 
   /** Loop step: compact one achieved iteration into a machine-consumable block. */
   async summarize(request: LoopSummaryRequest): Promise<string> {
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
+    const signal = request.signal
     const model = this.config.model
     if (this.config.mode === "independent" && model) {
       try {
-        const messages = await this.deps.context(request.sessionID, signal)
+        const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const text = await this.deps.modelGenerate(model, summarizeIndependently(request, transcript), signal)
+        const text = await this.underBudget((s) => this.deps.modelGenerate(model, summarizeIndependently(request, transcript), s), signal, "summary")
         return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
         if (signal.aborted) throw error
@@ -136,7 +148,7 @@ export class Evaluator implements EvaluatorPort {
     }
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {
-      const text = await this.deps.sessionGenerate(request.sessionID, summarizeInSession(request), signal)
+      const text = await this.underBudget((s) => this.deps.sessionGenerate(request.sessionID, summarizeInSession(request), s), signal, "summary")
       return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
     } finally {
       const left = (this.inflight.get(request.sessionID) ?? 1) - 1
@@ -147,11 +159,11 @@ export class Evaluator implements EvaluatorPort {
 
   /** Loop step: generate the next condition (or LOOP_COMPLETE). Returns the raw reply, trimmed. */
   async nextGoal(request: NextGoalRequest): Promise<string> {
-    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(this.config.timeoutMs)])
+    const signal = request.signal
     const model = this.config.model
     if (this.config.mode === "independent" && model) {
       try {
-        const text = await this.deps.modelGenerate(model, nextGoalIndependently(request), signal)
+        const text = await this.underBudget((s) => this.deps.modelGenerate(model, nextGoalIndependently(request), s), signal, "next-condition")
         return text.trim().slice(0, 4_000)
       } catch (error) {
         if (signal.aborted) throw error
@@ -160,7 +172,7 @@ export class Evaluator implements EvaluatorPort {
     }
     this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
     try {
-      const text = await this.deps.sessionGenerate(request.sessionID, nextGoalInSession(request), signal)
+      const text = await this.underBudget((s) => this.deps.sessionGenerate(request.sessionID, nextGoalInSession(request), s), signal, "next-condition")
       return text.trim().slice(0, 4_000)
     } finally {
       const left = (this.inflight.get(request.sessionID) ?? 1) - 1
@@ -176,16 +188,55 @@ export class Evaluator implements EvaluatorPort {
     return flat.length <= limit ? flat : `${flat.slice(0, limit - 1)}…`
   }
 
-  private async ask(generate: (prompt: string) => Promise<string>, prompt: string): Promise<EvaluationResult> {
+  /**
+   * Runs one generation under its own abort budget, and — because the SDK cannot be trusted to honour the
+   * signal on a slow response — races it against the budget so the evaluator always converges. Escalating
+   * attempts each get a fresh budget instead of sharing one, so a slow first attempt cannot starve, hang, or
+   * empty-out the repair attempts. An abort caused by the budget is re-labelled a named
+   * `EvaluationTimeoutError`; an abort caused by the caller (user interrupt / session change) propagates.
+   */
+  private async underBudget<T>(run: (signal: AbortSignal) => Promise<T>, caller: AbortSignal, scope: string): Promise<T> {
+    const timeoutMs = this.config.timeoutMs
+    const describe = () => `evaluator timed out after ${Math.round(timeoutMs / 1_000)}s (${scope})`
+    if (caller.aborted) throw new EvaluationError(`evaluation aborted before the ${scope} completed`)
+    const budget = AbortSignal.timeout(timeoutMs)
+    const signal = AbortSignal.any([caller, budget])
+    return await new Promise<T>((resolve, reject) => {
+      let settled = false
+      const settle = (fn: () => void) => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener("abort", onAbort)
+        fn()
+      }
+      const onAbort = () => {
+        if (caller.aborted) settle(() => reject(new EvaluationError(`evaluation aborted during the ${scope}`)))
+        else settle(() => reject(new EvaluationTimeoutError(describe())))
+      }
+      signal.addEventListener("abort", onAbort)
+      run(signal).then(
+        (value) => settle(() => resolve(value)),
+        (error) => settle(() => {
+          // A rejection that lands at/after the budget fired is the timeout, whatever shape the SDK throws
+          // (an AbortError, or an empty-text resolution turned into an error upstream). Name it as one.
+          if (budget.aborted && !caller.aborted) reject(new EvaluationTimeoutError(describe()))
+          else reject(error)
+        }),
+      )
+    })
+  }
+
+  private async ask(generate: (prompt: string, signal: AbortSignal) => Promise<string>, prompt: string, caller: AbortSignal): Promise<EvaluationResult> {
     // Escalating retries: the second generation repeats the prompt plus REPAIR; the third adds
     // STRICT_REPAIR, which forbids tools and other text. An empty answer usually means the model
-    // tried to call a tool, so the strict retry is the usual fix.
+    // tried to call a tool, so the strict retry is the usual fix. Each attempt gets its own budget.
     const attempts = [prompt, `${prompt}\n\n${REPAIR}`, `${prompt}\n\n${STRICT_REPAIR}`]
     let text = ""
-    for (const next of attempts) {
-      text = await generate(next)
+    for (const [index, next] of attempts.entries()) {
+      text = await this.underBudget((signal) => generate(next, signal), caller, `attempt ${index + 1}/${attempts.length}`)
       const parsed = parseVerdict(text)
       if (parsed) return parsed
+      // An empty (or unreadable) reply escalates; only a genuine timeout/abort leaves this loop early.
     }
     throw new EvaluationError(`unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))}`)
   }
