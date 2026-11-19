@@ -333,6 +333,10 @@ export class GoalController {
    */
   async onCompactionLanded(sessionID: string): Promise<void> {
     const record = this.goals.get(sessionID)
+    // Terminal records are inert: a landed compaction must not land boundary state, re-commit the
+    // finished record, or re-state ground truth for a goal that already reached met/cleared/... —
+    // the model-bound re-anchor would tell it to keep working on a finished goal.
+    if (record && !isLive(record.status)) return
     const pending = record?.loopCompact
     if (record && pending && !pending.landedAt) {
       this.landPending(record, pending)
@@ -371,6 +375,12 @@ export class GoalController {
   consumeAnchor(sessionID: string): string | undefined {
     const text = this.pendingAnchors.get(sessionID)
     if (text !== undefined) this.pendingAnchors.delete(sessionID)
+    // A re-anchor armed while the loop was live must never ride a model request after the goal
+    // reached a terminal status: the text tells the model to keep working on a finished goal.
+    // finish() drops pending anchors, but a landing that armed one before the finish (or a record
+    // evicted outside finish's reach) must fail closed here too.
+    const record = this.goals.get(sessionID)
+    if (!record || record.status !== "active") return undefined
     return text
   }
 
@@ -1572,6 +1582,11 @@ export class GoalController {
     record.status = status
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
+    // Terminal records are inert: drop any one-shot re-anchor armed before the finish so it cannot
+    // ride a later model request (a compaction landing between the arm and the finish would
+    // otherwise inject "keep working" ground truth for a finished goal).
+    this.pendingAnchors.delete(record.sessionID)
+    this.lastReanchorAt.delete(record.sessionID)
     // Bound the in-memory map before committing: the just-finished record is the newest, so it is never evicted here.
     this.evictTerminalGoalsBeyondRetention()
     const saved = this.commit(record)

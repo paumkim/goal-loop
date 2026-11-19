@@ -2589,3 +2589,93 @@ describe("arm→execution transition observability (LX)", () => {
     expect(h.controller.snapshot(SID)?.queued).toBe(false)
   })
 })
+
+describe("terminal goals are inert after compaction", () => {
+  let h: ReturnType<typeof harness>
+  beforeEach(() => {
+    h = harness()
+  })
+
+  test("a re-anchor armed before the loop finishes never rides a post-terminal model request", async () => {
+    await h.controller.set({ sessionID: SID, condition: "improve the parser", delivery: "steer", loop: true, maxLoops: 1 })
+    h.setContextSize(90_000)
+    await h.controller.onCompactionLanded(SID) // arms the one-shot re-anchor while the loop is live
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    h.verdicts.push(met("parser done"))
+    h.summaries.push("parser rewritten and tests green")
+    await h.turn() // iteration 1 of 1 achieved -> loop completes -> terminal
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    // The stale anchor must not survive the finish: the next model request injects nothing.
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
+  })
+
+  test("a re-anchor armed before /goal clear never rides a post-clear model request", async () => {
+    await h.setLoop("improve the parser")
+    h.setContextSize(90_000)
+    await h.controller.onCompactionLanded(SID)
+    expect(h.controller.get(SID)!.reanchorCount).toBe(1)
+    h.controller.clear(SID) // user clears before the next model request
+    expect(h.controller.get(SID)!.status).toBe("cleared")
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
+    expect(h.controller.activeCondition(SID)).toBeUndefined()
+  })
+
+  test("a compaction landing after the goal is achieved arms nothing and re-commits nothing", async () => {
+    await h.setGoal("all tests pass")
+    h.verdicts.push(met("done"))
+    await h.turn()
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    const noticesBefore = h.notices.length
+    await h.controller.onCompactionLanded(SID)
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    expect(h.notices.slice(noticesBefore).filter((n) => n.kind === "compact")).toHaveLength(0)
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
+    expect(h.controller.activeCondition(SID)).toBeUndefined()
+  })
+
+  test("a compaction landing after a cleared goal arms nothing", async () => {
+    await h.setGoal("all tests pass")
+    h.controller.clear(SID)
+    const noticesBefore = h.notices.length
+    await h.controller.onCompactionLanded(SID)
+    expect(h.notices.slice(noticesBefore).filter((n) => n.kind === "compact")).toHaveLength(0)
+    expect(h.controller.consumeAnchor(SID)).toBeUndefined()
+    expect(h.controller.activeCondition(SID)).toBeUndefined()
+  })
+
+  test("an achieved goal restores inert: no adoption, no reminder, terminal stays terminal", async () => {
+    const storage = h.storage
+    await h.setGoal("all tests pass")
+    h.verdicts.push(met("done"))
+    await h.turn()
+    expect(h.controller.get(SID)!.status).toBe("achieved")
+    await h.controller.dispose()
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(0)
+    expect(second.controller.get(SID)).toBeUndefined()
+    expect(second.controller.activeCondition(SID)).toBeUndefined()
+    expect(second.controller.consumeAnchor(SID)).toBeUndefined()
+    // The persisted record stays terminal; restore must not resurrect it.
+    const persisted = await second.controller.peekSnapshot(SID)
+    expect(persisted?.status).toBe("achieved")
+  })
+
+  test("a cleared loop restores inert after a compaction event", async () => {
+    const storage = h.storage
+    await h.setLoop("improve the parser")
+    h.setContextSize(90_000)
+    await h.controller.onCompactionLanded(SID)
+    h.controller.clear(SID)
+    await h.controller.dispose()
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(0)
+    expect(second.controller.get(SID)).toBeUndefined()
+    expect(second.controller.consumeAnchor(SID)).toBeUndefined()
+    await second.controller.onCompactionLanded(SID) // no record: must no-op
+    expect(second.controller.consumeAnchor(SID)).toBeUndefined()
+    const persisted = await second.controller.peekSnapshot(SID)
+    expect(persisted?.status).toBe("cleared")
+  })
+})
