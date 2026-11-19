@@ -3748,6 +3748,17 @@
       "submittedAt": "2026-11-19T12:31:42Z",
       "mergedAt": "2026-11-19T12:33:20Z",
       "mergedInto": "dev"
+    },
+    "review-recent-changes-fix-merge-rebuild": {
+      "agent": "orchestrator",
+      "paths": "src,test,scripts,docs,SPEC.md,pending_fixes.md,dist,README.md,package.json",
+      "branch": "wt/review-recent-changes-fix-merge-rebuild",
+      "worktree": "worktrees/wt-review-recent-changes-fix-merge-rebuild",
+      "status": "done",
+      "createdAt": "2026-11-19T12:46:14Z",
+      "submittedAt": "2026-11-19T13:05:15Z",
+      "mergedAt": "2026-11-19T13:06:47Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
