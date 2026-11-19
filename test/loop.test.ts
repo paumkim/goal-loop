@@ -1078,7 +1078,11 @@ describe("completed-condition ledger", () => {
   })
 
   test("the ledger is bounded: the cap keeps the newest conditions and counts the drops", async () => {
+    // The config maxLoops is 100 here, and with the loop cap now counting total completed iterations
+    // it ends this loop ~99 advances in, before the ledger can trim; the record's cap is lifted so the
+    // test drives the 105 advances it needs (record-level, like (vii-d): the cap reads it per advance).
     await h.setLoop("objective")
+    h.controller.get(SID)!.loopMaxLoops = 200
     for (let i = 1; i <= 105; i++) {
       h.verdicts.push(met(`v${i} done`))
       h.summaries.push(`summary ${i}`)
@@ -2339,6 +2343,27 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(record.reason).toContain("no evidence of work toward the condition")
     expect(record.condition).toBe("add a failing test for the parser")
     expect(record.loopIteration).toBe(1) // the loop did not advance
+  })
+
+  test("(vii-d) the iteration cap counts retained history plus dropped entries, not the saturated slice", async () => {
+    await h.setLoop("add a failing test for the parser")
+    const record = h.controller.get(SID)!
+    record.loopMaxLoops = 52
+    record.loopHistory = Array.from({ length: 50 }, (_, i) => ({
+      version: 100 + i,
+      condition: "old condition",
+      summary: "old iteration",
+      reason: "old reason",
+      turns: 1,
+      toolCalls: 0,
+      endedAt: 1,
+    }))
+    record.loopHistoryDropped = 2
+    h.verdicts.push(met("new work landed"))
+    await h.turn(1) // one tool call: the zero-tool met downgrade does not apply, the met advances the loop
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toContain("reached the 52-iteration cap")
+    expect(record.reason).toContain("53")
   })
 })
 

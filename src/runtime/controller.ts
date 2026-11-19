@@ -13,7 +13,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions,
+  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions, completedIterationCount,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -1193,8 +1193,12 @@ export class GoalController {
     history.push(entry)
     log.info("loop iteration met", { sessionID, iteration, toolCalls: iterationTools, history: history.length })
 
-    if (history.length >= maxLoops) {
-      return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${history.length} achieved iteration${history.length === 1 ? "" : "s"}.`)
+    // The cap counts total achieved iterations — retained history plus the entries the retention cap
+    // dropped plus this one — not the saturated retained slice: `history` alone tops out at
+    // MAX_LOOP_HISTORY_ENTRIES + 1, so `history.length >= maxLoops` is unreachable for maxLoops > 51.
+    const completedCount = completedIterationCount(record) + history.length - (record.loopHistory?.length ?? 0)
+    if (completedCount >= maxLoops) {
+      return endClean(`Loop complete: reached the ${maxLoops}-iteration cap after ${completedCount} achieved iteration${completedCount === 1 ? "" : "s"}.`)
     }
 
     if (!this.deps.evaluator.nextGoal) {
