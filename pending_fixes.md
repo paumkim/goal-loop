@@ -1,19 +1,24 @@
-# pending_fixes — opencode-goalv2 back-to-front sweep (iteration 1)
+# pending_fixes — opencode-goalv2 terminal-TUI consistency loop (iteration 1)
 
-Sweep done by a general subagent (read-only, worktree: wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front). Findings — some fixed and verified, others reviewed/rejected.
+Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencies across the zoom levels (pill < card < per-session dialog < history). Sweep done by a read-only explorer subagent at dev HEAD; findings listed user-impact order; `tui` plugin.
 
-## Fixed (fixed by general subagent + verified by tester subagent)
-6. `src/runtime/controller.ts:921-926` — dropped the dead "already satisfied at HEAD" zero-tool exemption; stale comment replaced (the forward-pointer gate in core/verdict.ts owns the already-satisfied landing — a bare already-satisfied met downgrades to not_met there, pinned by core.test.ts). `test/loop.test.ts` (vii-b) pinned the exemption and was reconciled to pin the downgrade instead (loop does not advance; reason "no evidence of work toward the condition"; loopIteration 1). Found in review: the exemption was unproducible in production since XLIV landed (applyForwardPointerGate at parse), but was the only remaining path that could advance an armed loop on a bare already-satisfied claim with zero tool calls. Verified: `bun run check` exit 0 (1756 pass / 0 fail, docs:check passed, spec-check ok, 64 files, 1756 tests).
-4. `src/runtime/controller.ts:731` — `onExecutionSucceeded` now fails closed when `background.busy(sessionID)` errors: logs "goal busy check failed; skipping evaluation" and returns without evaluating. Regression test "skips evaluation when the busy check errors" added to `test/controller.test.ts` (harness: `busyError` + `setBusyError`). Verified: new test passes with the fix (1 pass / 0 fail); with the fix stashed it fails (Expected 0, Received 1); tester re-ran: `bun run check` suite 1756 pass / 0 fail; regression test exit 0.
-5. `src/runtime/store.ts:119-121` — `flush()` now drains: `while (this.chains.size > 0) { await Promise.all([...this.chains.values()]) }`. Regression test added to `test/store.test.ts` ("GoalStore.flush > flush drains writes enqueued while it is awaiting"). SPEC marker updated (tests=1754→1755). Verified: `bun run check` exit 0 (1755 pass / 0 fail, spec-check ok); `bun test test/store.test.ts` exit 0 (10 pass / 0 fail); discrimination: with the buggy flush the new test fails (9 pass / 1 fail).
+## Fixed (this iteration)
+1. **One always-mounted affordance cell.** `Affordance` (hover-stability grammar: never mounts/unmounts, hover brightens only, weight under mono, width 8) was copy-pasted three times — hud-card.tsx (AffordanceCell), status-dialog.tsx, tui-history.tsx. Now one export in `src/affordance.tsx` (structural theme: text.base + text.faint); three call sites import it. Paint output byte-identical (render suites + snapshots unchanged: 446 pass before pin moves).
+2. **Stuck loops read as stuck everywhere.** A retrying-stalled loop (retries ≥ 3) painted amber on pill/card but `active` in the dialog strip row and history rail. Fixed: strip paints `stuck`; dialog elsewhere-rows and the strip's accent pass `isRetryStuck`; rail `stateWord` gains the `stuck` branch; rail now-row goes warning-amber. New render test pins the rail behavior. `test/package-integrity.test.ts` re-pinned 64 → 65 (new packed file); SPEC marker advances `files=65 tests=1758`.
+3. **SPEC intro honesty.** Footer-hint paragraph quoted the pre-`x older` hint; now shows `· x older` in both tiers with the measured 64-cell FULL_HINT (matches CQ + dialog-keys). SPEC.md intro line ~40.
 
-## Rejected — contradicts pinned behavior (tests)
-- `src/runtime/controller.ts:1447` — proposed clearing `iterationDeferred` in `clearDeferred`: contradicts `loop.test.ts:1938` ("an iteration spent waiting on background work is not a zero-tool iteration" — the suppression while waiting is by design). Fix applied by a general subagent, then reverted; targeted rerun on base: 1 pass / 0 fail.
+## Open (explorer findings, not yet fixed)
+4. `src/tui-history.tsx:326-345` — two adjacent `…` rows: inert retention-dropped notice vs clickable fold; fold carries no affordance cell/hover (elsewhere fold paints `click · m`); pinned wording at tui-render.test.tsx:806 needs a same-commit test edit; SPEC.md:79-86 promises every clickable row an affordance.
+5. `src/status-dialog.tsx:476` — dossier `table` rows paint wrapMode="none" inside clipped scrollbox: silent right-edge data loss; needs a render decision (wrap vs ellipsis vs column budget).
+6. `src/status-dialog.tsx:226-229`, `src/core/dossier-outline.ts:64-65` — UTF-16 code-unit slicing where cells/graphemes are the contract (CJK titles/headings mis-measure ~2x; surrogate bisection); `truncate()` does it right.
+7. `src/status-dialog.tsx:747-757` — dossier outline chips: prop doc promises hover-bolden + click-to-copy with in-cell ack; implementation installs only onMouseUp; no hover handler, no Affordance cell (invisible click target on the mouse-first rail).
+8. `src/status-dialog.tsx:725-741` — find row + close button: clickable with zero hover feedback; SPEC hover grammar says every clickable row shows something on the way in.
+9. Failure-glyph codepoint split — pill ack paints `✕` (hud.ts), verify/final-tally rows paint `✗`; mono arms both `x`; no pin distinguishes them.
+10. Hyphen-minus where the grammar uses `·` — hud.ts:530/538/575, status-dialog.tsx:518, tui-history.tsx:342; snapshot pins move with any fix.
+11. Duplication still open: `compactMarkerFg` verbatim in hud-card.tsx:516-522 and status-dialog.tsx:297-303; context-menu enabled predicates derived twice (mouse arm checks wiring, keyboard arm `tui.tsx` checks data only); `stateWord` now single import in card+rail, dialog strip carries its own one-line twin.
+12. `tui-history.tsx:~568` counts line pins `not_met` (tui-render.test.tsx:200: "3 met · 2 not_met") and hud.ts:560-561 streak strings pinned in three suites and SPEC — raw enum kept per pin-wins rule; would need a deliberate re-pin decision, not polish.
+13. SPEC intro still quotes the old breath wave `· • ● •` (code: `◦ ○ ◎ ○`), resting hollow `○` (code `◯`), "four fixed rows" in the card context menu (code: six), `◎ goal achieved` ack glyph (code `●`).
 
-## Open (reviewed, minor — not fixed per mandate)
-3. `src/runtime/controller.ts:1029-1031` — `verifyMet` registers no `runtime.abort` during the verification await (impact: wasted verify compute on interrupt, up to verifyTimeoutMs). [Moot: main checkout carries the verifyMet abort registration fix — iteration 1's second verified improvement; confirm at merge time.]
-5. `src/runtime/controller.ts:1189` — the iteration cap is unreachable when `maxLoops > 50` (loopHistory is capped at 50).
-6. `src/core/config.ts:132` — `maxConditionChars` floor of 100 on the otherwise-unlimited default.
-7. `src/core/index.ts:288-290` — the goal-loop length check counts UTF-16 units, `parseGoalCommand` counts code points.
-8. `src/core/events.ts:121-124` — a `shell.created` without an id never registers the shell (background undercount).
-9. `src/core/parse.ts:28-29` — `unquote` returns the one-char input `"` for `/goal "` (cosmetic).
+## Verified this iteration
+- `cd test && bun test` — 1757 pass before new test; 1758 after adding it. package-integrity green after re-pin. `bunx tsc --noEmit` exit 0. TUI render+snapshot suites unchanged (446 pass) pre-pin-change.
+- Rebuilt `dist/tui.js`.

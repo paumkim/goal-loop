@@ -190,6 +190,12 @@ describe("LoopSection", () => {
     expect(frame).toContain("paused")
     expect(frame).toContain("stall 3 · retries 2")
   })
+
+  test("a stuck-retrying goal reads stuck in the now row, not active", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ retries: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("stuck")
+    expect(frame).not.toContain(" active ")
+  })
 })
 
 describe("HistoryBlock", () => {

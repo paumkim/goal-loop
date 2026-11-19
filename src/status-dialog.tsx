@@ -9,7 +9,7 @@ import type { JSX } from "@opentui/solid"
 import { TextAttributes, type InputRenderable, type ColorInput } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
 import { findMatches, countMatches, segmentLine, matchLabel } from "./core/find.ts"
-import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
+import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, isRetryStuck, type CompactMarkerTone } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
@@ -21,6 +21,7 @@ import { reachAckSegment, type ReachOutcome } from "./core/reach-record.ts"
 import { signAckSegment, type SignOutcome } from "./core/sign-record.ts"
 import { sealAckSegment, type SealOutcome } from "./core/dossier-seal.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
+import { Affordance } from "./affordance.tsx"
 import { LABEL } from "./core/history.ts"
 
 /** Other rows the elsewhere block paints — the dust settles at four; beyond that the block gains a `+N more` line. */
@@ -51,28 +52,6 @@ const FixRow = (props: { theme: HistoryTheme; mono: () => boolean; fix: { readon
     </text>
   </box>
 )
-
-/**
- * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
- * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
- * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
- * the widest in-cell payload (`✓ copied` / `+ copied` / `✓ saved`); wider verbs pass their own width.
- */
-const Affordance = (props: { theme: HistoryTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
-  const ack = () => props.ack ?? null
-  const lit = () => props.hovered || ack() !== null
-  return (
-    <text
-      wrapMode="none"
-      flexShrink={0}
-      width={props.width ?? 8}
-      fg={lit() ? props.theme.text.base : props.theme.text.faint}
-      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
-    >
-      {ack() ?? props.verb}
-    </text>
-  )
-}
 
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined
@@ -213,7 +192,7 @@ export const StatusDialogBody = (props: {
     </box>
   )
   // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
-  const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted)
+  const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, isRetryStuck(props.goal), mono()) : theme().text.muted)
   const g = () => props.goal
   // elsewhere — live goals held by other sessions in this directory. Switching sessions is the host's
   // business, so with no handler rows paint inert and carry no key chords; when the host wires
@@ -503,7 +482,7 @@ export const StatusDialogBody = (props: {
       {viewTab("dossier")}
       <box flexGrow={1} />
       <text fg={stateColor()} attributes={TextAttributes.BOLD}>
-        {goalSnap.status}
+        {goalSnap.status === "active" && isRetryStuck(goalSnap) ? "stuck" : goalSnap.status}
       </text>
       <text fg={theme().text.muted}>
         {formatDurationCoarse(props.elapsedMs())} · {goalSnap.turns} turn{goalSnap.turns === 1 ? "" : "s"}
@@ -800,7 +779,7 @@ export const StatusDialogBody = (props: {
                       ) : (
                         label("")
                       )}
-                      <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, false, mono())}>
+                      <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, isRetryStuck(other), mono())}>
                         {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
                       </text>
                       <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>

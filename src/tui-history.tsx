@@ -12,9 +12,10 @@ import { For, Show, createMemo, createSignal, onCleanup } from "solid-js"
 import type { JSX } from "@opentui/solid"
 import { BAR_CELLS, LABEL, barCaption, contextSparkline, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, relativeTime, pauseDiagnostics, renderBar, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictStreak } from "./core/history.ts"
 import { formatCost, formatDuration, formatDurationCoarse, formatTokens, goalGlyph, truncate } from "./core/format.ts"
-import { verdictEntryAccentColor, motionDisabled } from "./core/hud.ts"
+import { verdictEntryAccentColor, motionDisabled, isRetryStuck } from "./core/hud.ts"
 import { finalTallyLine, iterationAttestation } from "./core/attestation.ts"
 import { COMPACT_MISS_CAP, completedIterationCount, type GoalSnapshot, type LoopEntry, type Verdict, type VerdictEntry } from "./core/types.ts"
+import { Affordance } from "./affordance.tsx"
 
 /** Structural subset of the host's ResolvedTheme this component needs; anything ColorInput-typed fits (RGBA or hex string). */
 export interface HistoryTheme {
@@ -44,28 +45,6 @@ const label = (theme: HistoryTheme, text: string) => (
     {text}
   </text>
 )
-
-/**
- * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
- * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
- * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
- * the widest in-cell payload (`✓ copied` / `+ copied`).
- */
-const Affordance = (props: { theme: HistoryTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
-  const ack = () => props.ack ?? null
-  const lit = () => props.hovered || ack() !== null
-  return (
-    <text
-      wrapMode="none"
-      flexShrink={0}
-      width={props.width ?? 8}
-      fg={lit() ? props.theme.text.base : props.theme.text.faint}
-      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
-    >
-      {ack() ?? props.verb}
-    </text>
-  )
-}
 
 const colorFor = (theme: HistoryTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
   verdictEntryAccentColor(theme, entry, mono)
@@ -219,7 +198,7 @@ export const LoopSection = (props: {
     const s = props.goal.status
     if (s === "paused") return "paused"
     if (s !== "active") return s
-    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : props.goal.queued ? "queued" : "active"
+    return props.goal.evaluating ? "checking" : props.goal.waiting ? "waiting" : props.goal.queued ? "queued" : isRetryStuck(props.goal) ? "stuck" : "active"
   }
   const nowMs = () => props.nowMs?.() ?? Date.now()
   const iterVerdict = () => currentIterationVerdict(props.goal.history ?? [], history(), props.goal.setAt)
@@ -248,7 +227,7 @@ export const LoopSection = (props: {
     const s = props.goal.status
     if (mono()) return s === "paused" || s === "impossible" || s === "active" ? theme().text.base : theme().text.faint
     if (s === "paused" || s === "impossible") return theme().text.feedback.warning.base
-    if (s === "active") return theme().text.feedback.info.base
+    if (s === "active") return isRetryStuck(props.goal) ? theme().text.feedback.warning.base : theme().text.feedback.info.base
     return theme().text.faint
   }
   return (
