@@ -3676,7 +3676,7 @@ var StatusDialogBody = (props) => {
       case "fence":
         return run(theme().text.faint, false, "word");
       case "table":
-        return run(theme().text.muted, false, "none");
+        return run(theme().text.muted, false, "word");
       case "bullet":
         return (() => {
           var _el$10 = _$createElement3("box"), _el$11 = _$createElement3("text");

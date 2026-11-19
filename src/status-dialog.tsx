@@ -448,7 +448,9 @@ export const StatusDialogBody = (props: {
       case "fence":
         return run(theme().text.faint, false, "word")
       case "table":
-        return run(theme().text.muted, false, "none")
+        // Table rows wrap like every other dossier line: the record is the whole record. The host scrollbox
+        // clips horizontally, so nowrap silently dropped the row's right edge on narrow panes.
+        return run(theme().text.muted, false, "word")
       case "bullet":
         return (
           <box flexDirection="row" gap={1} flexShrink={0}>

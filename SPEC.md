@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1771 -->
+<!-- spec-check files=65 tests=1772 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7199,3 +7199,13 @@ Fixes:
 Honest limits. (a) `-` hyphen-minus strings in remediation/hints (`authentication failure - /goal clear to reset`, `the evaluator reads only the transcript - it cannot run commands`, `snapshot unavailable - showing last known state`, `turn cap reached … - a message will not extend it`) are kept: each is pinned (tui-hud, render-scripts, tui-render, snapshot) and this is a polish pass, not a re-pin. (b) `HistoryBlock` counts keep raw `not_met` for the same reason. (c) The fold row's inert twin (retention-drop notice) is distinguishable by shape now — plain row vs affordance cell — but keeps its `…` glyph deliberately. (d) Not fixed this iteration: dossier `table` markdown rows paint `wrapMode="none"` inside a clipped scrollbox (silent right-edge loss — needs a wrap-or-ellipsis decision with its own render evidence), `stateWord`'s dialog-strip one-line twin (kept by design — the strip needs the raw status + the `stuck` override inline), the mouse/keyboard context-menu enabled predicates (wired-identically today; the divergence is latent and would need a threaded signature), and SPEC intro's glyph-wave quotes (`· • ● •` vs shipped `◦ ○ ◎ ○`, `◯` hollow, "four rows" vs six, `◎` vs `●` — quoted-docs drift, not behavior). Test count 1758 → **1759**; packed files unchanged at **65**; the enforced first-occurrence marker advances in the same commit. No version bump, no tag, no push.
 
 <!-- spec-check files=65 tests=1759 -->
+
+## Workstream LXX — the dossier table keeps its right edge (2026-11-19)
+
+Armed condition (verbatim): "inspect for regression on behavior functionalities. fix what needs fixing and improving to keep on moving forwards with the repo project." Fuzzy; this iteration closes the deferred dossier `table` finding from LXIX's honest-limits list: a verdict-trail row wider than the pane painted `wrapMode="none"` inside the host's clipped scrollbox, silently dropping its right edge.
+
+Fix: the dossier row classifier's `table` kind now paints `wrapMode="word"` like every other document line (`src/status-dialog.tsx`). The verdict-trail row is data, not chrome — truncation would still lose cells; wrapping keeps the whole record inside the vertical scrollbox. Evidence: regression test "a verdict-table row wider than the pane wraps instead of clipping — the record keeps its right edge" (`test/tui-render.test.tsx`) renders one wide row (4-digit turn, `impossible`, 4-digit tools, sha, four-figure spend) at width 60 and pins the spend cell's survival; it failed on the nowrap tree and passes after the change.
+
+Honest limits. The table still reads as a Markdown table; a wrapped continuation starts on the row's next line without an indent — acceptable in a scrollable record. No other kind changed. Test count moved 1763 → 1764; packed files stay 65; the enforced (first-occurrence) SPEC marker advances in this same commit.
+
+<!-- spec-check files=65 tests=1764 -->
