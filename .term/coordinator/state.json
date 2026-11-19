@@ -3670,9 +3670,11 @@
       "paths": "src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md",
       "branch": "wt/dossier-table-wrap",
       "worktree": "worktrees/wt-dossier-table-wrap",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-19T10:34:12Z",
-      "submittedAt": "2026-11-19T10:43:47Z"
+      "submittedAt": "2026-11-19T10:43:47Z",
+      "mergedAt": "2026-11-19T10:55:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
