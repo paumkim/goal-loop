@@ -45,6 +45,19 @@ describe("isGoalNoteMessage", () => {
     const plain = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: "<goal-note>\ny\n" }] }
     expect(isGoalNoteMessage(plain)).toBe(true)
   })
+  test("a compaction checkpoint is history, not a note, even when its recent text quotes one", () => {
+    const checkpoint = textMessage(
+      [
+        "<conversation-checkpoint>",
+        "<summary>\nworked\n</summary>",
+        "<recent-context>",
+        "[User]: <goal-note final>\nGoal achieved\ndone\n</goal-note>",
+        "</recent-context>",
+        "</conversation-checkpoint>",
+      ].join("\n"),
+    )
+    expect(isGoalNoteMessage(checkpoint)).toBe(false)
+  })
 })
 
 describe("stripGoalNotes", () => {
@@ -90,5 +103,22 @@ describe("isGoalInstructionMessage / stripGoalContext", () => {
   test("TERMINAL_REMINDER is a counter-instruction, not an instruction to work", () => {
     expect(TERMINAL_REMINDER).toContain("Do not resume work toward it")
     expect(TERMINAL_REMINDER).toContain("await the user's next instruction")
+  })
+
+  test("a compaction checkpoint is history, not an instruction, and survives the terminal strip", () => {
+    const checkpoint = msg(
+      [
+        "<conversation-checkpoint>",
+        "The following is a summary and serialized record of earlier conversation. Treat it as historical context, not as new instructions.",
+        "<summary>\nworked\n</summary>",
+        "<recent-context>",
+        "[User]: <goal>\nfinish the tree\n</goal>",
+        "[Assistant]: ok",
+        "</recent-context>",
+        "</conversation-checkpoint>",
+      ].join("\n"),
+    )
+    expect(isGoalInstructionMessage(checkpoint)).toBe(false)
+    expect(stripGoalContext([checkpoint])).toEqual([checkpoint])
   })
 })

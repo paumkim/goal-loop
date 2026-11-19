@@ -292,11 +292,29 @@ interface NoteMessageLike {
   readonly content?: unknown
 }
 
-/** True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown shapes never match. */
+/**
+ * The single user message opencode folds a landing compaction into before dispatch. Its `<recent-context>`
+ * quotes earlier turns verbatim, including any `<goal>` / `<goal-continuation>` a compacted window held, so
+ * the goal-grammar matchers below would otherwise mistake the checkpoint for a live goal message and delete
+ * it. It is history (the model is told to treat it as such), never one of the plugin's own notes or
+ * instructions, and after a landing compaction it can be the only user message in the request: stripping it
+ * leaves a strict provider nothing but its "The last message must have role=user." rejection.
+ */
+const CHECKPOINT_TAG = "<conversation-checkpoint>"
+const isCheckpointPart = (part: unknown): boolean => {
+  if (typeof part !== "object" || part === null) return false
+  const { type, text } = part as { type?: unknown; text?: unknown }
+  return type === "text" && typeof text === "string" && text.includes(CHECKPOINT_TAG)
+}
+/** True when any content part carries the compaction-checkpoint marker. */
+const isCompactionCheckpoint = (content: ReadonlyArray<unknown>): boolean => content.some(isCheckpointPart)
+
+/** True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown shapes never match, and a compaction checkpoint is history, never a note. */
 export const isGoalNoteMessage = (message: unknown): boolean => {
   if (typeof message !== "object" || message === null) return false
   const content = (message as NoteMessageLike).content
   if (!Array.isArray(content)) return false
+  if (isCompactionCheckpoint(content)) return false
   return content.some((part) => {
     if (typeof part !== "object" || part === null) return false
     const { type, text } = part as { type?: unknown; text?: unknown }
@@ -622,11 +640,12 @@ export const STRICT_REPAIR = `Your previous reply was not valid. ${OUTPUT} Do no
  */
 const INSTRUCTION_TAGS = ["<goal>", "<goal-loop", "<goal-continuation", "<goal-retry", "<goal-checkin"] as const
 
-/** True when any text content part carries one of the goal-instruction tags. Unknown shapes never match. */
+/** True when any text content part carries one of the goal-instruction tags. Unknown shapes never match, and a compaction checkpoint (which may quote a tag in its `<recent-context>`) is history, never an instruction. */
 export const isGoalInstructionMessage = (message: unknown): boolean => {
   if (typeof message !== "object" || message === null) return false
   const content = (message as NoteMessageLike).content
   if (!Array.isArray(content)) return false
+  if (isCompactionCheckpoint(content)) return false
   return content.some((part) => {
     if (typeof part !== "object" || part === null) return false
     const { type, text } = part as { type?: unknown; text?: unknown }
