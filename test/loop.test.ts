@@ -2329,15 +2329,16 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(record.loopIteration).toBe(1)
   })
 
-  test("(vii-b) the already-satisfied-at-HEAD met is exempt from the zero-tool rejection", async () => {
+  test("(vii-b) the already-satisfied-at-HEAD met with zero tool calls does not advance the loop", async () => {
     await h.setLoop("add a failing test for the parser")
     h.verdicts.push(met("Already satisfied at HEAD deadbee. No new work is produced by this iteration."))
-    h.summaries.push("s1")
     h.nextGoals.push("v2 condition")
-    await h.turn(0) // zero tool calls, but the met is the already-satisfied landing
+    await h.turn(0) // zero tool calls: an already-satisfied claim naming no "next:" gap is not advancement
     const record = h.controller.get(SID)!
-    expect(record.loopIteration).toBe(2) // the loop advanced
-    expect(record.condition).toBe("v2 condition")
+    expect(record.verdict).toBe("not_met")
+    expect(record.reason).toContain("no evidence of work toward the condition")
+    expect(record.condition).toBe("add a failing test for the parser")
+    expect(record.loopIteration).toBe(1) // the loop did not advance
   })
 })
 

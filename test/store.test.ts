@@ -131,3 +131,36 @@ describe("GoalStore.loadLive regression: under-validated records", () => {
     expect(found.map((entry) => entry.sessionID)).toEqual(["ses_ok"])
   })
 })
+
+describe("GoalStore.flush", () => {
+  test("flush drains writes enqueued while it is awaiting", async () => {
+    const storage = new MemoryStorage()
+    const written: string[] = []
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((r) => (releaseFirst = r))
+    let releaseSecond!: () => void
+    const secondGate = new Promise<void>((r) => (releaseSecond = r))
+    storage.set = async (key: string, value: unknown) => {
+      written.push(key)
+      if (key === keyFor("ses_first")) await firstGate
+      if (key === keyFor("ses_second")) await secondGate
+      storage.data.set(key, structuredClone(value))
+    }
+    const store = new GoalStore(storage, () => {})
+    void store.save(record({ sessionID: "ses_first" }))
+    let flushDone = false
+    const flushing = store.flush().then(() => {
+      flushDone = true
+    })
+    void store.save(record({ sessionID: "ses_second" })) // enqueued during flush await
+    releaseFirst() // first write completes; second body starts and blocks on secondGate
+    await new Promise((resolve) => setTimeout(resolve, 0)) // let microtasks settle
+    // With the bug, flush resolved while the second write is still in flight.
+    expect(flushDone).toBe(false)
+    expect(written).toContain(keyFor("ses_second"))
+    releaseSecond()
+    await flushing
+    expect(flushDone).toBe(true)
+    expect(written).toEqual([keyFor("ses_first"), keyFor("ses_second")])
+  })
+})

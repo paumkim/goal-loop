@@ -728,7 +728,13 @@ export class GoalController {
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
-    const work = await this.deps.background.busy(sessionID).catch((): BackgroundWork => ({ subagents: 0, shells: 0 }))
+    const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+      // Busy-check failure: fail closed — don't treat a possibly-busy session as idle. The next
+      // background-drained/execution-start event re-runs the deferred evaluation.
+      this.deps.log.error("goal busy check failed; skipping evaluation", { sessionID, error: errorMessage(error) })
+      return undefined
+    })
+    if (!work) return
     if (this.stale(record, runtime, epoch)) return
     if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
     const carried = runtime.carriedToolCalls
@@ -916,9 +922,10 @@ export class GoalController {
 
     // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
     // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
-    // The "already satisfied at HEAD" wording is exempt: that met is the workstream BT already-satisfied landing,
-    // and rejecting it would strand the loop on a completed condition (the v18 near-duplicate gate is the escape).
-    if (result.verdict === "met" && tools === 0 && PRODUCING_CONDITION.test(record.condition) && !/already satisfied at head/i.test(result.reason ?? "")) {
+    // The BT already-satisfied landing has no exemption here: the forward-pointer gate in core/verdict.ts
+    // (applyForwardPointerGate) downgrades that met to not_met unless the reason names a "next:" gap, so the
+    // landing is accepted only through a forward pointer (see the rubric in core/prompts.ts).
+    if (result.verdict === "met" && tools === 0 && PRODUCING_CONDITION.test(record.condition)) {
       result = {
         verdict: "not_met" as const,
         reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
