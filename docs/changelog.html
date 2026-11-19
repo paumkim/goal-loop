@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-19 04:42 UTC</code></td><td>fix(dossier): table rows wrap in the record view — no silent right-edge clip; regression test pins the spend cell in a narrow pane; SPEC LXX; marker 1763→1764</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:59 UTC</code></td><td>fix(evaluator): escalate unreadable verdicts — empty/garbage replies retried with REPAIR then STRICT_REPAIR before EvaluationError; regression tests cover empty-reply recovery and the 3-attempt failure; SPEC marker re-stamped 1758→1760</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:41 UTC</code></td><td>chore(terminal-tui): terminal-TUI consistency pass — claimant uncommitted edits, docs stamps and changelog refreshed</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(tui): consistency pass — de-duplicated affordance cell, truthful stuck state in dialog strip and history rail</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): opportunistic terminal-record pruning on finish() (XL)</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs(spec): XXXIX honesty re-audit — correct stale claims vs the tree</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): bound terminal goal records at plugin storage (XXXVIII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): completed-condition ledger — gates outlive the retained window (XXXVII)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
