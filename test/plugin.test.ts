@@ -347,6 +347,46 @@ describe("the context hook strips end-of-record notes", () => {
       await dispose?.()
     }
   })
+
+  test("a compaction checkpoint survives the terminal strip — it is history, not goal grammar", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const checkpoint = noteMessage(
+        [
+          "<conversation-checkpoint>",
+          "<summary>\nworked\n</summary>",
+          "<recent-context>",
+          "[User]: <goal>\nfinish the tree\n</goal>",
+          "</recent-context>",
+          "</conversation-checkpoint>",
+        ].join("\n"),
+      )
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [checkpoint], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([checkpoint])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("stripping never leaves the request without a trailing user turn", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const assistant = { role: "assistant", content: [{ type: "text", text: "working" }] }
+      const continuation = noteMessage('<goal-continuation turn="2">\nThe goal is not met yet.')
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [assistant, continuation], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toHaveLength(2)
+      expect((event.messages.at(-1) as any).role).toBe("user")
+      expect(event.messages.at(-1)).toBe(continuation)
+    } finally {
+      await dispose?.()
+    }
+  })
 })
 
 describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin)", () => {

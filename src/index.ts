@@ -376,8 +376,19 @@ export default Plugin.define({
       // "keep working" text must not ride any later request, including the one after a compaction.
       // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
-        const kept = live ? stripGoalNotes(event.messages) : stripGoalContext(event.messages)
-        if (kept.length !== event.messages.length) event.messages.splice(0, event.messages.length, ...kept)
+        const original = event.messages
+        const kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        if (kept.length !== original.length) {
+          // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
+          // last message must have role=user."), and after a landing compaction the trailing turn can be
+          // the only user message in the request (opencode folds the whole summary into it). If stripping
+          // removed that trailing turn, keep it: a stale goal line is harmless history, while an invalid
+          // request aborts the turn. Splice in place — the host holds the caller's array reference.
+          const trailing = original[original.length - 1]
+          const last = kept[kept.length - 1]
+          const repaired = last?.role === "user" || trailing === undefined || last === trailing ? kept : [...kept, trailing]
+          original.splice(0, original.length, ...repaired)
+        }
       }
     })
 
