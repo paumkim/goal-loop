@@ -1,35 +1,30 @@
-# opencode-goalv2
-
+# goal-loop
 Claude Code's `/goal` for OpenCode v2, rebuilt as its own project. Give the agent a finish line. It works turn after turn until an evaluator confirms the condition is met. MIT licensed.
-
 ![/goal in the OpenCode CLI](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-status.png)
-
 ## Install
+One line, straight from GitHub:
+```sh
+curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh
+```
+That puts the `goal-loop` CLI in `~/.local/bin` and registers the plugin in your OpenCode config (`"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`). No npm account or registry is involved: OpenCode fetches the tag from GitHub. Requires OpenCode 2.0.29 or newer. Restart OpenCode, then use `/goal` or `/goal-loop`.
 
-From GitHub, no npm account or registry access needed:
+Remove everything — the plugin entry and the CLI script:
+```sh
+goal-loop uninstall --self
+```
+Three commands, that is the whole CLI:
+```sh
+goal-loop            # install (default): add the plugin to your OpenCode config
+goal-loop uninstall  # remove exactly what install added
+goal-loop status     # scope, config path, installed yes/no
+```
+`--project` targets the project config instead of the global one; `--dry-run` prints what would change and writes nothing. Every write is backed up first (`<file>.<timestamp>.bak`) and running a command twice is a no-op.
 
+Prefer no CLI at all? Register the plugin by hand:
 ```sh
 opencode plugin add github:paumkim/opencode-goalv2#v1.1.0
 ```
-
-That installs the plugin and registers it in your global opencode config (as `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`). No npm account or registry is involved. opencode fetches the tag straight from GitHub. Restart opencode, then use `/goal`. Requires OpenCode 2.0.29 or newer.
-
-To remove it, ask opencode to remove it. The CLI installer's `uninstall` does not touch entries it did not add:
-
-```sh
-opencode plugin remove github:paumkim/opencode-goalv2#v1.1.0
-```
-
-The CLI installer (`opencode-goal install` from the v1.1.0 release tarball) registers a bare `"opencode-goalv2"` specifier. It resolves only against the npm registry, so it is not usable as published. It is fixed on `dev` (the source tree now derives the specifier from package.json) and will be correct in the next release. On v1.1.0, use the plugin-add command above.
-
-```sh
-opencode-goal uninstall          # removes exactly what install added; opencode is as it was
-opencode-goal status             # scope, config path, installed yes/no
-opencode-goal install --project  # target the project's config instead of global
-```
-
-The installer only edits the `plugins` array in the global config opencode itself picks. It backs the file up first (timestamped `.bak`, never overwritten) and is idempotent. Uninstall restores the pre-install config when the plugin entry is already missing and an install-time backup exists. It picks the oldest backup whose parsed content provably lacks the plugin, and it takes a safety backup of the current state first. `uninstall --restore` puts the pre-install backup back over the config, also taking a fresh safety backup first. Prefer doing it by hand? Add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your opencode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goalv2"] }`).
-
+Or add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your OpenCode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goalv2"] }`).
 ## Use
 
 | Command | What it does |
@@ -215,7 +210,7 @@ Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCO
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
 `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
 
-`OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/opencode-goal-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
+`OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/goal-loop-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
 
 `OPENCODE_GOAL_LOG_FILE=<path>` mirrors every plugin log line to a file as JSON Lines (`{"ts","level","message","data"?}`), one object per line. The host swallows the plugin's console logger, so this is the only way to see plugin logs (restore adoptions, coordinator notes, loop/compaction bookkeeping) from a live session — especially valuable over very long runs. Best-effort: a logging failure never throws and never affects a commit; the file rotates to `<path>.1` once it exceeds 5 MiB (one generation kept). Unset by default.
 

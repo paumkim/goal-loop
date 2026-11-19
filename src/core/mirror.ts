@@ -36,7 +36,7 @@ const fileFor = (dir: string, sessionID: string) => {
   return join(dir, `${safe}.json`)
 }
 
-export const createGoalMirror = (dir: string = join(tmpdir(), "opencode-goal-mirror")): GoalMirror => {
+export const createGoalMirror = (dir: string = join(tmpdir(), "goal-loop-mirror")): GoalMirror => {
   const write = (snapshot: GoalSnapshot): void => {
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 })

@@ -1,5 +1,5 @@
 /**
- * opencode-goal: `/goal <condition>` and `/goal-loop <objective>` for OpenCode v2.
+ * goal-loop: `/goal <condition>` and `/goal-loop <objective>` for OpenCode v2.
  *
  * Sets a completion condition for the session; after every turn an evaluator checks it against the conversation
  * and, until it holds, the plugin starts the next turn itself. `/goal-loop` layers a continuous improvement
@@ -28,7 +28,7 @@ import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./
 import { GoalStore } from "./runtime/store.ts"
 import { withFileSink } from "./core/file-log.ts"
 
-const PLUGIN_ID = "opencode-goal"
+const PLUGIN_ID = "goal-loop"
 
 const DESCRIPTION = "keep working until a condition is met"
 const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"

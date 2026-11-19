@@ -325,7 +325,7 @@ dossier     the whole record as markdown                                        
 find        find in the record                                                                      
 Goal loop dossier                                                                                   
                                                                                                     
-_Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record. Everything below is the 
+_Generated 2027-01-15T08:00:00.000Z from the goal-loop plugin's record. Everything below is the     
 record's own bookkeeping; a measurement it does not carry renders as —, never estimated. The        
 session id is omitted on purpose._                                                                  
                                                                                                     
@@ -373,9 +373,9 @@ dossier     the whole record as markdown                                        
 find        find in the record                                                                      
 objective       Goal loop dossier                                                                   
 status                                                                                              
-iterations      _Generated 2027-01-15T08:00:00.000Z from the opencode-goal plugin's record.         
-verdicts        Everything below is the record's own bookkeeping; a measurement it does not carry   
-compaction      renders as —, never estimated. The session id is omitted on purpose._               
+iterations      _Generated 2027-01-15T08:00:00.000Z from the goal-loop plugin's record. Everything  
+verdicts        below is the record's own bookkeeping; a measurement it does not carry renders as   
+compaction      —, never estimated. The session id is omitted on purpose._                          
 re-anchor                                                                                           
 verify          Objective                                                                           
 totals                                                                                              

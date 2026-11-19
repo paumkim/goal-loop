@@ -713,7 +713,7 @@ function buildLoopDossier(goal, nowMs) {
   const generatedAt = isoOf(nowMs);
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier");
   lines.push("");
-  lines.push(`_Generated ${generatedAt} from the opencode-goal plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push(`_Generated ${generatedAt} from the goal-loop plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
   lines.push("");
   lines.push(isLoop ? "## Objective" : "## Condition");
   lines.push("");
@@ -820,7 +820,7 @@ function buildLoopDossier(goal, nowMs) {
   }
   lines.push("");
   lines.push("---");
-  lines.push("_opencode-goal dossier \xB7 source: plugin record \xB7 nothing above was re-verified; it is the record's own bookkeeping._");
+  lines.push("_goal-loop dossier \xB7 source: plugin record \xB7 nothing above was re-verified; it is the record's own bookkeeping._");
   return lines.join(`
 `);
 }
@@ -1443,7 +1443,7 @@ function buildSpendLedger(goal, nowMs) {
   const lines = [];
   lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger");
   lines.push("");
-  lines.push(`_Generated ${stamp} from the opencode-goal plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
+  lines.push(`_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement \u2014 the usage delta the harness attributed to each landed iteration (arm \u2192 advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`);
   lines.push("");
   lines.push(isLoop ? "## Objective" : "## Condition");
   lines.push("");
@@ -1483,7 +1483,7 @@ function buildSpendLedger(goal, nowMs) {
   }
   lines.push("");
   lines.push("---");
-  lines.push("_opencode-goal spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
+  lines.push("_goal-loop spend ledger \xB7 source: plugin record \xB7 the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._");
   return {
     markdown: lines.join(`
 `),
@@ -1606,7 +1606,7 @@ function buildDossierIndex(entries, nowMs, skipped = 0) {
     lines.push("");
   }
   lines.push("---");
-  lines.push("_opencode-goal dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
+  lines.push("_goal-loop dossier index \xB7 source: the files at generation time \xB7 sha256 computed over the exact bytes read \xB7 nothing was estimated or inferred; an unreadable file is counted, never guessed \xB7 this index inventories, it does not verify._");
   return {
     markdown: lines.join(`
 `),
@@ -5968,7 +5968,7 @@ var fileFor = (dir, sessionID) => {
   const safe = sessionID.replace(/[^a-zA-Z0-9_-]/g, "_");
   return join6(dir, `${safe}.json`);
 };
-var createGoalMirror = (dir = join6(tmpdir(), "opencode-goal-mirror")) => {
+var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
   const write = (snapshot) => {
     try {
       mkdirSync(dir, { recursive: true, mode: 448 });
@@ -6254,7 +6254,7 @@ var ClampedColumn = (props) => {
   })();
 };
 var tui_default = Plugin.define({
-  id: "opencode-goal.tui",
+  id: "goal-loop.tui",
   setup(context) {
     const rpc = context.client.rpc(GoalRpc);
     const [entries, setEntries] = createSignal4({});

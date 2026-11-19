@@ -99,9 +99,9 @@ describe("package integrity", () => {
     }
   })
 
-  test("bin/opencode-goal.mjs exists and carries the executable bit", () => {
-    const bin = pkg.bin["opencode-goal"]
-    expect(bin).toBe("./bin/opencode-goal.mjs")
+  test("bin/goal-loop.mjs exists and carries the executable bit", () => {
+    const bin = pkg.bin["goal-loop"]
+    expect(bin).toBe("./bin/goal-loop.mjs")
     if (!bin) throw new Error("bin entry missing")
     const full = join(ROOT, bin)
     expect(existsSync(full)).toBe(true)
@@ -118,10 +118,10 @@ describe("package integrity", () => {
     const { paths } = packPaths(["--dry-run"])
     for (const path of paths) expect(existsSync(join(ROOT, path)), `tarball file missing on disk: ${path}`).toBe(true)
     expect(forbiddenIn(paths)).toEqual([])
-    for (const required of ["LICENSE", "README.md", "package.json", "index.ts", "tui.ts", "rpc.ts", "dist/tui.js", "bin/opencode-goal.mjs", "packages/coordinator/bin/coordinator", "packages/coordinator/README.md"]) {
+    for (const required of ["LICENSE", "README.md", "package.json", "index.ts", "tui.ts", "rpc.ts", "dist/tui.js", "bin/goal-loop.mjs", "install.sh", "packages/coordinator/bin/coordinator", "packages/coordinator/README.md"]) {
       expect(paths, `tarball is missing ${required}`).toContain(required)
     }
-    expect(paths.length).toBe(65)
+    expect(paths.length).toBe(66)
   })
 
   test("a real npm pack produces the identical file list as the dry-run", () => {

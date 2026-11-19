@@ -3,12 +3,12 @@
  *  1. every fenced-or-braced JSON block parses with JSON.parse, so the copy-pasted example is never
  *     malformed (both docs instruct the user to paste it into `opencode.json`);
  *  2. every occurrence of the plugin specifier form `github:paumkim/opencode-goalv2#…` in either file
- *     equals PLUGIN_SPEC exported by `bin/opencode-goal.mjs` (and therefore `v` + package.json version).
+ *     equals PLUGIN_SPEC exported by `bin/goal-loop.mjs` (and therefore `v` + package.json version).
  */
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
-import { PLUGIN_SPEC } from "../bin/opencode-goal.mjs"
+import { PLUGIN_SPEC } from "../bin/goal-loop.mjs"
 
 const ROOT = join(import.meta.dir, "..")
 const readme = readFileSync(join(ROOT, "README.md"), "utf8")

@@ -1,6 +1,6 @@
-# opencode-goal
+# goal-loop
 
-Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`opencode-goalv2`).
+Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion condition after every turn until it is met. Shipped as a plugin (`goal-loop`).
 
 ## Entrypoints
 
@@ -10,6 +10,9 @@ Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion
 - `tui.ts` → `dist/tui.js` (precompiled). Edit TUI in `src/tui.tsx`, never `tui.ts`/`dist/`. `rpc.ts` → `src/rpc.ts` (shared client contract).
 
 ## Commands
+
+- `bin/goal-loop.mjs` — the `goal-loop` CLI (install / uninstall / status). `install.sh` is the GitHub one-liner that drops it in `~/.local/bin` and registers the plugin.
+
 
 ```sh
 bun install
