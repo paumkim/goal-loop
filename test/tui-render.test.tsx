@@ -13,6 +13,7 @@ import type { JSX } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, HudCard, hudCardRows } from "../src/hud-card.tsx"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
+import { contextMenuRows, type ContextMenuRow } from "../src/core/hud.ts"
 import type { GoalSnapshot, VerdictEntry } from "../src/core/types.ts"
 
 const theme: HistoryTheme = {
@@ -852,7 +853,7 @@ describe("HUD card context menu (right-click)", () => {
     onSaveDossier?: () => void
   }
 
-  const renderCardHarness = async (goal: GoalSnapshot, spies: MenuSpies = {}) => {
+  const renderCardHarness = async (goal: GoalSnapshot, spies: MenuSpies = {}, menuRows?: () => readonly ContextMenuRow[]) => {
     const Harness = () => {
       const [open, setOpen] = createSignal(false)
       return (
@@ -871,6 +872,7 @@ describe("HUD card context menu (right-click)", () => {
           onCopySummary={spies.onCopySummary ? (s) => spies.onCopySummary?.(s) : undefined}
           onCopyDossier={spies.onCopyDossier ? () => spies.onCopyDossier?.() : undefined}
           onSaveDossier={spies.onSaveDossier ? () => spies.onSaveDossier?.() : undefined}
+          menuRows={menuRows}
         />
       )
     }
@@ -993,6 +995,26 @@ describe("HUD card context menu (right-click)", () => {
     await setup.mockMouse.click(at!.x + 2, at!.y)
     await setup.renderOnce()
     expect(copied).toBe("ship the release notes")
+    await setup.renderer.destroy()
+  })
+
+  test("one row source: rows the host declares win over the card's own wiring probe — mouse and keyboard cannot diverge", async () => {
+    // The card used to compute the enabled predicates itself while the keyboard arm computed its own from
+    // the goal data alone. A host that declares the rows (the TUI mount does) must paint exactly those rows:
+    // here the summary callback IS wired, but the declared rows say the row is inert, and inert wins.
+    let copied = 0
+    const setup = await renderCardHarness(loopedGoal(), { onCopySummary: () => { copied += 1 } }, () =>
+      contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false }),
+    )
+    const frame = setup.captureCharFrame()
+    await rightClickCard(setup, frame)
+    const opened = setup.captureCharFrame()
+    const at = findIn(opened, "copy latest summary")
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x + 2, at!.y)
+    await setup.renderOnce()
+    expect(copied).toBe(0) // the declared row is disabled; the wiring probe never gets a vote
+    expect(setup.captureCharFrame()).toContain("copy latest summary") // the menu stays open; nothing fired
     await setup.renderer.destroy()
   })
 

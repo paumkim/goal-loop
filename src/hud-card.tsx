@@ -24,7 +24,7 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, compactMarkerFg, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, compactMarkerFg, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type ContextMenuRow } from "./core/hud.ts"
 import { completedIterationCount, type GoalSnapshot, type Verdict } from "./core/types.ts"
 import { Affordance } from "./affordance.tsx"
 
@@ -334,6 +334,13 @@ export const HudCard = (props: {
   onToggleContext?: () => void
   /** Called after any menu action so the mount can collapse the menu. */
   onCloseMenu?: () => void
+  /**
+   * The menu rows, as data, from the host that owns the action wiring. The mount passes the SAME
+   * function its keyboard arm uses, so the painted rows and the Enter/up/down rows are one array —
+   * the mouse can never enable a row the keyboard refuses, or the reverse. Absent: the card
+   * derives the rows from its own props (the embed/test posture).
+   */
+  menuRows?: () => readonly ContextMenuRow[]
   /** Wired by the host; absent callback renders the reason row inert. */
   onCopyReason?: (reason: string) => void
   /** Wired by the host; absent callback renders the summary row inert. */
@@ -595,7 +602,7 @@ export const HudCard = (props: {
       {/* context menu — right-click the card; power copies without leaving the hand. In-flow so the mount anchor grows with it (hudCardRows 6 extra). Rows fixed in number and position; inert rows render faint and do nothing. */}
       <Show when={props.contextOpen}>
         <box flexDirection="column" marginTop={0}>
-          {contextMenuRows({ hasReason: Boolean(g().reason && props.onCopyReason), hasSummary: Boolean(latestSummary() && props.onCopySummary), hasDossier: Boolean(props.onCopyDossier && props.onSaveDossier) }).map((row, index) => {
+          {(props.menuRows ?? (() => contextMenuRows({ hasReason: Boolean(g().reason && props.onCopyReason), hasSummary: Boolean(latestSummary() && props.onCopySummary), hasDossier: Boolean(props.onCopyDossier && props.onSaveDossier) })))().map((row, index) => {
             const gutter = index === 0 ? "menu" : ""
             const selected = () => (props.menuSelected?.() ?? 0) === index
             switch (row.id) {

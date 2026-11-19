@@ -14,7 +14,7 @@ Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencie
 
 ## Still open (deferred)
 5. `src/status-dialog.tsx` dossier `table` kind: `wrapMode="none"` inside a clipped scrollbox → silent right-edge clip; needs a wrap-or-ellipsis decision + render evidence, next iteration.
-11b. Context-menu enabled predicates diverge between mouse arm (checks wiring) and keyboard arm (checks data); wired-identically today; needs a threaded signature for the row predicate.
+11b. ~~Context-menu enabled predicates diverge between mouse arm (checks wiring) and keyboard arm (checks data)~~ — **done in LXXI**: `HudCard.menuRows` threads the mount's single row source (`contextRowsFor`) into the paint path; the card's own wiring probe is the embed fallback.
 11c. `stateWord` dialog-strip inline twin — kept by design (strip needs raw status + stuck override inline).
 12. `not_met` raw enum in countsText and remediationFor streak strings — pinned (tui-render "3 met · 2 not_met"; tui-hud + verdict-history-retention + SPEC.md). Pin wins; flipping is a separate deliberate decision.
 13. SPEC intro quotes stale glyphs: breath wave `· • ● •` vs shipped `◦ ○ ◎ ○`, resting waiting glyph `○` vs `◯`, "four fixed rows" vs six, `◎ goal achieved` vs `●`; SPEC.md intro only (LXVIII already fixed the footer-hint paragraph).
