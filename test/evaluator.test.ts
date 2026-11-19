@@ -3,6 +3,7 @@ import { resolveConfig } from "../src/core/config.ts"
 import type { CommitPolicy } from "../src/core/types.ts"
 import type { EvaluationRequest, LoopSummaryRequest, NextGoalRequest } from "../src/runtime/ports.ts"
 import { EvaluationError, Evaluator } from "../src/runtime/evaluator.ts"
+import { REPAIR, STRICT_REPAIR } from "../src/core/prompts.ts"
 
 const SID = "ses_test"
 const COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "test" }
@@ -139,6 +140,38 @@ describe("Evaluator.evaluate", () => {
     const { fake } = deps({ sessionGenerate: async () => "total garbage" })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     await expect(evaluator.evaluate(request())).rejects.toThrow(EvaluationError)
+  })
+
+  test("empty replies escalate through REPAIR then STRICT_REPAIR and parse once text returns", async () => {
+    const prompts: string[] = []
+    let turn = 0
+    const { fake } = deps({
+      sessionGenerate: async (_sid, prompt) => {
+        prompts.push(prompt)
+        turn++
+        return turn <= 2 ? "" : verdictJson("met", "recovered on the third attempt")
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toBe("recovered on the third attempt")
+    expect(prompts).toHaveLength(3)
+    expect(prompts[1]).toContain(REPAIR)
+    expect(prompts[2]).toContain(STRICT_REPAIR)
+  })
+
+  test("persistently empty replies raise EvaluationError naming the escalation", async () => {
+    let calls = 0
+    const { fake } = deps({
+      sessionGenerate: async () => {
+        calls++
+        return ""
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await expect(evaluator.evaluate(request())).rejects.toThrow(/unreadable verdict after 3 attempts/)
+    expect(calls).toBe(3)
   })
 
   test("an already-aborted signal cuts the evaluation off and unwinds isEvaluating", async () => {
