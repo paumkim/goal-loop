@@ -1,24 +1,25 @@
-# pending_fixes — opencode-goalv2 terminal-TUI consistency loop (iteration 1)
+# pending_fixes — opencode-goalv2 terminal-TUI consistency loop (iteration 2)
 
-Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencies across the zoom levels (pill < card < per-session dialog < history). Sweep done by a read-only explorer subagent at dev HEAD; findings listed user-impact order; `tui` plugin.
+Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencies across the zoom levels (pill < card < per-session dialog < history). Continues from the iteration-1 list. Sweep provenance: read-only explorer at dev HEAD (session ses_e0d35103bffeZppjiqUPwz0ync), triaged line-by-line this turn.
 
-## Fixed (this iteration)
-1. **One always-mounted affordance cell.** `Affordance` (hover-stability grammar: never mounts/unmounts, hover brightens only, weight under mono, width 8) was copy-pasted three times — hud-card.tsx (AffordanceCell), status-dialog.tsx, tui-history.tsx. Now one export in `src/affordance.tsx` (structural theme: text.base + text.faint); three call sites import it. Paint output byte-identical (render suites + snapshots unchanged: 446 pass before pin moves).
-2. **Stuck loops read as stuck everywhere.** A retrying-stalled loop (retries ≥ 3) painted amber on pill/card but `active` in the dialog strip row and history rail. Fixed: strip paints `stuck`; dialog elsewhere-rows and the strip's accent pass `isRetryStuck`; rail `stateWord` gains the `stuck` branch; rail now-row goes warning-amber. New render test pins the rail behavior. `test/package-integrity.test.ts` re-pinned 64 → 65 (new packed file); SPEC marker advances `files=65 tests=1758`.
-3. **SPEC intro honesty.** Footer-hint paragraph quoted the pre-`x older` hint; now shows `· x older` in both tiers with the measured 64-cell FULL_HINT (matches CQ + dialog-keys). SPEC.md intro line ~40.
+## Fixed (this iteration — see SPEC.md Workstream LXIX)
+4. Rail fold row vs retention-drop notice twin `…` rows: fold now carries an always-mounted `click · x` affordance cell + hover flag (elsewhere-fold grammar); inert notice untouched; fold text `-` → `·`; tui-render pin re-set in-commit.
+6. UTF-16 code-unit slicing: `sessionTag` (status-dialog.tsx) and dossier `chip` label (`dossier-outline.ts`) now cell-aware via `truncate()`; new CJK unit test (≤ 12 cells); ASCII pins unchanged.
+9. Failure glyph split: pill ack `✕` → `✗` (tui-hud.test.tsx re-pinned); mono arms untouched (`x`).
+10. Hyphen-minus separators KEPT — pinned in 8 sites (tui-hud ×2, render-scripts, tui-render, snapshot, hud.ts hint/remediation); polish pass, pin wins. The fold-row instance was rewritten as part of fix 4.
+11a. `markerFg` duplicated in hud-card.tsx and status-dialog.tsx → one `compactMarkerFg` in core/hud.ts; card and dialog import it.
+7. Outline chips "no hover handler" — REJECTED by pin: `tui-render.test.tsx` (hovering a chip changes nothing — byte-identical frame, no UNDERLINE/BOLD) is the deliberate contract; the misleading prop doc and rail comment were rewritten to state the shipped contract. No behavior change.
+8. Find row + popup `close` cell now flip fg on hover (faint→base; close also BOLD under mono). No width changes.
+13. SPEC intro glyph-wave quotes (`· • ● •`, `◯` waiting, six menu rows, `●` achieved) NOT YET DONE — quoted-docs drift, listed below.
 
-## Open (explorer findings, not yet fixed)
-4. `src/tui-history.tsx:326-345` — two adjacent `…` rows: inert retention-dropped notice vs clickable fold; fold carries no affordance cell/hover (elsewhere fold paints `click · m`); pinned wording at tui-render.test.tsx:806 needs a same-commit test edit; SPEC.md:79-86 promises every clickable row an affordance.
-5. `src/status-dialog.tsx:476` — dossier `table` rows paint wrapMode="none" inside clipped scrollbox: silent right-edge data loss; needs a render decision (wrap vs ellipsis vs column budget).
-6. `src/status-dialog.tsx:226-229`, `src/core/dossier-outline.ts:64-65` — UTF-16 code-unit slicing where cells/graphemes are the contract (CJK titles/headings mis-measure ~2x; surrogate bisection); `truncate()` does it right.
-7. `src/status-dialog.tsx:747-757` — dossier outline chips: prop doc promises hover-bolden + click-to-copy with in-cell ack; implementation installs only onMouseUp; no hover handler, no Affordance cell (invisible click target on the mouse-first rail).
-8. `src/status-dialog.tsx:725-741` — find row + close button: clickable with zero hover feedback; SPEC hover grammar says every clickable row shows something on the way in.
-9. Failure-glyph codepoint split — pill ack paints `✕` (hud.ts), verify/final-tally rows paint `✗`; mono arms both `x`; no pin distinguishes them.
-10. Hyphen-minus where the grammar uses `·` — hud.ts:530/538/575, status-dialog.tsx:518, tui-history.tsx:342; snapshot pins move with any fix.
-11. Duplication still open: `compactMarkerFg` verbatim in hud-card.tsx:516-522 and status-dialog.tsx:297-303; context-menu enabled predicates derived twice (mouse arm checks wiring, keyboard arm `tui.tsx` checks data only); `stateWord` now single import in card+rail, dialog strip carries its own one-line twin.
-12. `tui-history.tsx:~568` counts line pins `not_met` (tui-render.test.tsx:200: "3 met · 2 not_met") and hud.ts:560-561 streak strings pinned in three suites and SPEC — raw enum kept per pin-wins rule; would need a deliberate re-pin decision, not polish.
-13. SPEC intro still quotes the old breath wave `· • ● •` (code: `◦ ○ ◎ ○`), resting hollow `○` (code `◯`), "four fixed rows" in the card context menu (code: six), `◎ goal achieved` ack glyph (code `●`).
+## Still open (deferred)
+5. `src/status-dialog.tsx` dossier `table` kind: `wrapMode="none"` inside a clipped scrollbox → silent right-edge clip; needs a wrap-or-ellipsis decision + render evidence, next iteration.
+11b. Context-menu enabled predicates diverge between mouse arm (checks wiring) and keyboard arm (checks data); wired-identically today; needs a threaded signature for the row predicate.
+11c. `stateWord` dialog-strip inline twin — kept by design (strip needs raw status + stuck override inline).
+12. `not_met` raw enum in countsText and remediationFor streak strings — pinned (tui-render "3 met · 2 not_met"; tui-hud + verdict-history-retention + SPEC.md). Pin wins; flipping is a separate deliberate decision.
+13. SPEC intro quotes stale glyphs: breath wave `· • ● •` vs shipped `◦ ○ ◎ ○`, resting waiting glyph `○` vs `◯`, "four fixed rows" vs six, `◎ goal achieved` vs `●`; SPEC.md intro only (LXVIII already fixed the footer-hint paragraph).
+14. (new) `markerFg`→`compactMarkerFg` — done. `stateWord` in card+rail single-imported — done earlier (LXVIII).
 
 ## Verified this iteration
-- `cd test && bun test` — 1757 pass before new test; 1758 after adding it. package-integrity green after re-pin. `bunx tsc --noEmit` exit 0. TUI render+snapshot suites unchanged (446 pass) pre-pin-change.
-- Rebuilt `dist/tui.js`.
+- `bunx tsc --noEmit` exit 0; `bun test` (cd test) → **1759 pass / 0 fail** (with the new CJK test); snapshots 28 pass; `bun run compile` rebuilt dist/tui.js; package-integrity unchanged (65 files).
+- Fix-then-pin discipline: every re-pin (`tui-hud.test.tsx` ✕→✗, `tui-render.test.tsx` fold wording) moved in the same commit as the behavior change.
