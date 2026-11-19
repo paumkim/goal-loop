@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-19 05:08 UTC</code></td><td>fix(tui): context menu paints one row source — menuRows threads the mount's keyboard array into the card; mouse and keyboard can no longer diverge; SPEC LXXI; marker 1772→1773</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 04:42 UTC</code></td><td>fix(dossier): table rows wrap in the record view — no silent right-edge clip; regression test pins the spend cell in a narrow pane; SPEC LXX; marker 1763→1764</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 04:24 UTC</code></td><td>fix(evaluator): per-attempt abort budget + app-level race — a slow provider can no longer hang the evaluator or loop on &quot;unreadable verdict&quot;</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 04:05 UTC</code></td><td>fix(evaluator): escalate unreadable verdicts — empty/garbage replies retried with REPAIR then STRICT_REPAIR before EvaluationError; regression tests cover empty-reply recovery and the 3-attempt failure; SPEC marker re-stamped 1758→1760</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): unify finish-time prune with all-directory restore prune (XLIII)</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): bounded in-memory terminal-goal map (XLII)</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): cross-directory terminal-record GC at restore() (XLI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): opportunistic terminal-record pruning on finish() (XL)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
