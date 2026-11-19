@@ -283,13 +283,14 @@ export default Plugin.define({
       if (goalLoop) {
         const objective = goalLoop.objective
         // The raw-prompt path bypasses parseGoalCommand, so enforce the configured condition limit here too.
+        // Count code points, not UTF-16 units, matching parseGoalCommand: astral characters must not count double.
         if (
           objective !== "" &&
           Number.isFinite(config.maxConditionChars) &&
           config.maxConditionChars < Number.MAX_SAFE_INTEGER &&
-          objective.length > config.maxConditionChars
+          [...objective].length > config.maxConditionChars
         ) {
-          controller.noteConditionTooLong(event.sessionID, objective.length, config.maxConditionChars)
+          controller.noteConditionTooLong(event.sessionID, [...objective].length, config.maxConditionChars)
           controller.onUserPrompt(event.sessionID)
           return
         }
