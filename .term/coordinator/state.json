@@ -3693,6 +3693,17 @@
       "submittedAt": "2026-11-19T11:09:59Z",
       "mergedAt": "2026-11-19T11:11:56Z",
       "mergedInto": "dev"
+    },
+    "verifier-timeout-kills-tree": {
+      "agent": "orchestrator",
+      "paths": "src/index.ts,test/verifier.test.ts,SPEC.md",
+      "branch": "wt/verifier-timeout-kills-tree",
+      "worktree": "worktrees/wt-verifier-timeout-kills-tree",
+      "status": "done",
+      "createdAt": "2026-11-19T11:22:12Z",
+      "submittedAt": "2026-11-19T11:25:43Z",
+      "mergedAt": "2026-11-19T11:27:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
