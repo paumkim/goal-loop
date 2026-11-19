@@ -3737,6 +3737,17 @@
       "submittedAt": "2026-11-19T12:10:15Z",
       "mergedAt": "2026-11-19T12:12:04Z",
       "mergedInto": "dev"
+    },
+    "spec-intro-glyphs": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,pending_fixes.md,test/spec-intro-glyphs.test.ts",
+      "branch": "wt/spec-intro-glyphs",
+      "worktree": "worktrees/wt-spec-intro-glyphs",
+      "status": "done",
+      "createdAt": "2026-11-19T12:27:32Z",
+      "submittedAt": "2026-11-19T12:31:42Z",
+      "mergedAt": "2026-11-19T12:33:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
