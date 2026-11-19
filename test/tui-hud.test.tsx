@@ -521,7 +521,7 @@ describe("terminalPill", () => {
   test("a failed goal renders the failure tone and zero-turn goals omit the turns segment", () => {
     const model = terminalPill(loopedGoal({ status: "failed", loopEnabled: false, loopHistory: undefined, loopMaxLoops: undefined, turns: 0, elapsedMs: 1000 * 60 * 2 }), 1000 * 60 * 2)
     expect(model?.tone).toBe("failed")
-    expect(model?.text).toBe(`✕ goal failed · 2m`)
+    expect(model?.text).toBe(`✗ goal failed · 2m`)
   })
 
   test("a width budget caps the acknowledgment — it never paints past the cells it is given", () => {

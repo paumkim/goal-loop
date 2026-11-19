@@ -1927,6 +1927,16 @@ var compactMarker = (compact, ascii = false) => {
   return { text: "pending", tone: "pending" };
 };
 var stateWord = (goal) => goal.status === "paused" ? "paused" : goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active";
+var compactMarkerFg = (theme, tone, mono) => {
+  if (mono)
+    return theme.text.muted;
+  const fb = theme.text.feedback;
+  if (tone === "landed")
+    return (fb.success ?? fb.info).base;
+  if (tone === "missed")
+    return fb.warning.base;
+  return theme.text.faint;
+};
 var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
 var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   for (const rung of rungs) {
@@ -2039,7 +2049,7 @@ var stateGlyph = (goal, ascii, phase) => {
 var terminalGlyph = (status, ascii) => {
   if (ascii)
     return status === "achieved" ? "+" : status === "impossible" ? "?" : "x";
-  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2715";
+  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2717";
 };
 var PIN_PREFIX = " \xB7 pin: ";
 var pinSuffix = (condition, conditionMax, ascii = false) => {
@@ -2253,9 +2263,7 @@ var labelOf = (title) => {
     if (lower.startsWith(prefix))
       return label;
   }
-  if (title.length <= DOSSIER_OUTLINE_LABEL_MAX)
-    return title;
-  return `${title.slice(0, DOSSIER_OUTLINE_LABEL_MAX - 1)}\u2026`;
+  return truncate(title, DOSSIER_OUTLINE_LABEL_MAX);
 };
 var dossierOutline = (markdown) => {
   const lines = markdown.replace(/\r\n?/g, `
@@ -2492,6 +2500,7 @@ var LoopSection = (props) => {
     setLocalShowAll((v) => !v);
   };
   const [attestHover, setAttestHover] = createSignal(null);
+  const [railFoldHovered, setRailFoldHovered] = createSignal(false);
   const [attestCopied, setAttestCopied] = createSignal(null);
   const [tallyHover, setTallyHover] = createSignal(false);
   const [tallyCopied, setTallyCopied] = createSignal(false);
@@ -2742,14 +2751,27 @@ var LoopSection = (props) => {
           event.stopPropagation();
           toggleShowAll();
         });
+        _$setProp2(_el$14, "onMouseOver", () => setRailFoldHovered(true));
+        _$setProp2(_el$14, "onMouseOut", () => setRailFoldHovered(false));
         _$setProp2(_el$15, "flexShrink", 0);
         _$setProp2(_el$15, "width", LABEL);
         _$insert2(_el$15, () => ascii() ? "..." : "\u2026");
         _$setProp2(_el$16, "wrapMode", "none");
         _$insert2(_el$16, (() => {
           var _c$2 = _$memo2(() => !!showAll());
-          return () => _c$2() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`;
+          return () => _c$2() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} \xB7 click or press x`;
         })());
+        _$insert2(_el$14, _$createComponent(Affordance, {
+          get theme() {
+            return theme();
+          },
+          mono,
+          verb: "click \xB7 x",
+          get hovered() {
+            return railFoldHovered();
+          },
+          width: 9
+        }), null);
         _$effect2((_p$) => {
           var _v$6 = theme().text.faint, _v$7 = theme().text.faint;
           _v$6 !== _p$.e && (_p$.e = _$setProp2(_el$15, "fg", _v$6, _p$.e));
@@ -3423,7 +3445,7 @@ var StatusDialogBody = (props) => {
   const OTHERS_TAG_MAX = 12;
   const sessionTag = (sessionID) => {
     const label = props.sessionLabel?.(sessionID) ?? sessionID;
-    return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}\u2026` : label;
+    return truncate(label, OTHERS_TAG_MAX);
   };
   const othersLive = () => {
     const rows = foreignLiveRows(props.others, g()?.sessionID);
@@ -3489,17 +3511,9 @@ var StatusDialogBody = (props) => {
   const [othersHovered, setOthersHovered] = createSignal2(null);
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal2(false);
   const compactMarkerNow = () => compactMarker(g()?.loopCompact, ascii);
-  const compactMarkerFg = (tone) => {
-    if (mono())
-      return theme().text.muted;
-    const fb = theme().text.feedback;
-    if (tone === "landed")
-      return (fb.success ?? fb.info).base;
-    if (tone === "missed")
-      return fb.warning.base;
-    return theme().text.faint;
-  };
   const [foldHovered, setFoldHovered] = createSignal2(false);
+  const [findHovered, setFindHovered] = createSignal2(false);
+  const [closeHovered, setCloseHovered] = createSignal2(false);
   const othersExpanded = () => props.expandedOthers?.() ?? localOthersExpanded();
   const toggleOthersExpanded = () => {
     try {
@@ -3933,11 +3947,11 @@ var StatusDialogBody = (props) => {
                     })()
                   }), null);
                   _$effect3((_p$) => {
-                    var _v$13 = mono() ? theme().text.base : theme().text.faint, _v$14 = theme().text.base, _v$15 = glyphColor(), _v$16 = theme().text.muted;
-                    _v$13 !== _p$.e && (_p$.e = _$setProp3(_el$51, "fg", _v$13, _p$.e));
-                    _v$14 !== _p$.t && (_p$.t = _$setProp3(_el$53, "fg", _v$14, _p$.t));
-                    _v$15 !== _p$.a && (_p$.a = _$setProp3(_el$55, "fg", _v$15, _p$.a));
-                    _v$16 !== _p$.o && (_p$.o = _$setProp3(_el$56, "fg", _v$16, _p$.o));
+                    var _v$14 = mono() ? theme().text.base : theme().text.faint, _v$15 = theme().text.base, _v$16 = glyphColor(), _v$17 = theme().text.muted;
+                    _v$14 !== _p$.e && (_p$.e = _$setProp3(_el$51, "fg", _v$14, _p$.e));
+                    _v$15 !== _p$.t && (_p$.t = _$setProp3(_el$53, "fg", _v$15, _p$.t));
+                    _v$16 !== _p$.a && (_p$.a = _$setProp3(_el$55, "fg", _v$16, _p$.a));
+                    _v$17 !== _p$.o && (_p$.o = _$setProp3(_el$56, "fg", _v$17, _p$.o));
                     return _p$;
                   }, {
                     e: undefined,
@@ -4034,7 +4048,7 @@ var StatusDialogBody = (props) => {
                               _$setProp3(_el$65, "wrapMode", "none");
                               _$setProp3(_el$65, "flexShrink", 0);
                               _$insert3(_el$65, () => `\xB7 ${m().text}`);
-                              _$effect3((_$p) => _$setProp3(_el$65, "fg", compactMarkerFg(m().tone), _$p));
+                              _$effect3((_$p) => _$setProp3(_el$65, "fg", compactMarkerFg(theme(), m().tone, mono()), _$p));
                               return _el$65;
                             })()
                           }), null);
@@ -4064,7 +4078,7 @@ var StatusDialogBody = (props) => {
                             _$setProp3(_el$66, "wrapMode", "none");
                             _$setProp3(_el$66, "flexShrink", 0);
                             _$insert3(_el$66, () => `\xB7 ${m().text}`);
-                            _$effect3((_$p) => _$setProp3(_el$66, "fg", compactMarkerFg(m().tone), _$p));
+                            _$effect3((_$p) => _$setProp3(_el$66, "fg", compactMarkerFg(theme(), m().tone, mono()), _$p));
                             return _el$66;
                           })()
                         })];
@@ -4337,6 +4351,8 @@ var StatusDialogBody = (props) => {
               event.stopPropagation();
               toggleFind();
             });
+            _$setProp3(_el$34, "onMouseOver", () => setFindHovered(true));
+            _$setProp3(_el$34, "onMouseOut", () => setFindHovered(false));
             _$insert3(_el$34, () => label("find"), _el$35);
             _$setProp3(_el$35, "wrapMode", "word");
             _$setProp3(_el$35, "flexGrow", 1);
@@ -4368,18 +4384,22 @@ var StatusDialogBody = (props) => {
                   event.stopPropagation();
                   closeFind();
                 });
+                _$setProp3(_el$39, "onMouseOver", () => setCloseHovered(true));
+                _$setProp3(_el$39, "onMouseOut", () => setCloseHovered(false));
                 _$insertNode2(_el$40, _$createTextNode2(`close`));
                 _$setProp3(_el$40, "wrapMode", "none");
                 _$effect3((_p$) => {
-                  var _v$10 = findCount() > 0 ? theme().text.base : theme().text.faint, _v$11 = findCount() > 0 ? TextAttributes3.BOLD : undefined, _v$12 = theme().text.muted;
+                  var _v$10 = findCount() > 0 ? theme().text.base : theme().text.faint, _v$11 = findCount() > 0 ? TextAttributes3.BOLD : undefined, _v$12 = closeHovered() ? theme().text.base : theme().text.muted, _v$13 = closeHovered() && mono() ? TextAttributes3.BOLD : undefined;
                   _v$10 !== _p$.e && (_p$.e = _$setProp3(_el$38, "fg", _v$10, _p$.e));
                   _v$11 !== _p$.t && (_p$.t = _$setProp3(_el$38, "attributes", _v$11, _p$.t));
                   _v$12 !== _p$.a && (_p$.a = _$setProp3(_el$40, "fg", _v$12, _p$.a));
+                  _v$13 !== _p$.o && (_p$.o = _$setProp3(_el$40, "attributes", _v$13, _p$.o));
                   return _p$;
                 }, {
                   e: undefined,
                   t: undefined,
-                  a: undefined
+                  a: undefined,
+                  o: undefined
                 });
                 return _el$36;
               }
@@ -4422,9 +4442,9 @@ var StatusDialogBody = (props) => {
                         return () => _c$0() ? ascii ? "+ copied" : "\u2713 copied" : entry.label;
                       })());
                       _$effect3((_p$) => {
-                        var _v$17 = active() ? theme().text.base : theme().text.faint, _v$18 = active() ? TextAttributes3.BOLD : undefined;
-                        _v$17 !== _p$.e && (_p$.e = _$setProp3(_el$85, "fg", _v$17, _p$.e));
-                        _v$18 !== _p$.t && (_p$.t = _$setProp3(_el$85, "attributes", _v$18, _p$.t));
+                        var _v$18 = active() ? theme().text.base : theme().text.faint, _v$19 = active() ? TextAttributes3.BOLD : undefined;
+                        _v$18 !== _p$.e && (_p$.e = _$setProp3(_el$85, "fg", _v$18, _p$.e));
+                        _v$19 !== _p$.t && (_p$.t = _$setProp3(_el$85, "attributes", _v$19, _p$.t));
                         return _p$;
                       }, {
                         e: undefined,
@@ -4445,7 +4465,7 @@ var StatusDialogBody = (props) => {
               },
               children: (line, i) => dossierRow(line, i())
             }));
-            _$effect3((_$p) => _$setProp3(_el$35, "fg", findOpen() ? theme().text.base : theme().text.faint, _$p));
+            _$effect3((_$p) => _$setProp3(_el$35, "fg", findOpen() || findHovered() ? theme().text.base : theme().text.faint, _$p));
             return _el$33;
           }
         }), null);
@@ -4621,11 +4641,11 @@ var StatusDialogBody = (props) => {
                         width: 13
                       }) : null, null);
                       _$effect3((_p$) => {
-                        var _v$19 = stateAccentColor(theme(), other.status, isRetryStuck(other), mono()), _v$20 = theme().text.muted, _v$21 = theme().text.faint, _v$22 = theme().text.muted;
-                        _v$19 !== _p$.e && (_p$.e = _$setProp3(_el$92, "fg", _v$19, _p$.e));
-                        _v$20 !== _p$.t && (_p$.t = _$setProp3(_el$93, "fg", _v$20, _p$.t));
-                        _v$21 !== _p$.a && (_p$.a = _$setProp3(_el$94, "fg", _v$21, _p$.a));
-                        _v$22 !== _p$.o && (_p$.o = _$setProp3(_el$95, "fg", _v$22, _p$.o));
+                        var _v$20 = stateAccentColor(theme(), other.status, isRetryStuck(other), mono()), _v$21 = theme().text.muted, _v$22 = theme().text.faint, _v$23 = theme().text.muted;
+                        _v$20 !== _p$.e && (_p$.e = _$setProp3(_el$92, "fg", _v$20, _p$.e));
+                        _v$21 !== _p$.t && (_p$.t = _$setProp3(_el$93, "fg", _v$21, _p$.t));
+                        _v$22 !== _p$.a && (_p$.a = _$setProp3(_el$94, "fg", _v$22, _p$.a));
+                        _v$23 !== _p$.o && (_p$.o = _$setProp3(_el$95, "fg", _v$23, _p$.o));
                         return _p$;
                       }, {
                         e: undefined,
@@ -5144,16 +5164,6 @@ var HudCard = (props) => {
           const barFg = () => mono() ? theme().text.base : hot() ? theme().text.feedback.warning.base : theme().text.feedback.info.base;
           const trailFg = () => mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted;
           const marker = () => compactMarker(g().loopCompact, ascii());
-          const markerFg = (tone) => {
-            if (mono())
-              return theme().text.muted;
-            const fb = theme().text.feedback;
-            if (tone === "landed")
-              return (fb.success ?? fb.info).base;
-            if (tone === "missed")
-              return fb.warning.base;
-            return theme().text.faint;
-          };
           return _$createComponent3(Show3, {
             get when() {
               return g().compactAtTokens !== undefined;
@@ -5180,7 +5190,7 @@ var HudCard = (props) => {
                     _$setProp4(_el$36, "wrapMode", "none");
                     _$setProp4(_el$36, "flexShrink", 0);
                     _$insert4(_el$36, () => `\xB7 ${m().text}`);
-                    _$effect4((_$p) => _$setProp4(_el$36, "fg", markerFg(m().tone), _$p));
+                    _$effect4((_$p) => _$setProp4(_el$36, "fg", compactMarkerFg(theme(), m().tone, mono()), _$p));
                     return _el$36;
                   })()
                 }), null);
@@ -5221,7 +5231,7 @@ var HudCard = (props) => {
                   _$setProp4(_el$37, "wrapMode", "none");
                   _$setProp4(_el$37, "flexShrink", 0);
                   _$insert4(_el$37, () => `\xB7 ${m().text}`);
-                  _$effect4((_$p) => _$setProp4(_el$37, "fg", markerFg(m().tone), _$p));
+                  _$effect4((_$p) => _$setProp4(_el$37, "fg", compactMarkerFg(theme(), m().tone, mono()), _$p));
                   return _el$37;
                 })()
               }), null);

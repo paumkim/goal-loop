@@ -78,6 +78,15 @@ const stateWord = (goal: GoalSnapshot): string =>
  * the pill's left click and the HUD Esc layer all consult this one predicate rather than re-deriving a
  * local copy, so there is exactly one place the "dialog owns the screen" rule lives.
  */
+/** Boundary-compaction marker accent — the shared mapping behind the card's and the dialog's compaction-landed indicator. Mono drops the hue (the summary owns the words); color mode uses success/info for landed, warning for missed, faint for unresolvable. Structural theme so the card and the dialog share one mapping. */
+export const compactMarkerFg = <C>(theme: NeutralTheme<C>, tone: CompactMarkerTone, mono: boolean): C => {
+  if (mono) return theme.text.muted
+  const fb = theme.text.feedback
+  if (tone === "landed") return (fb.success ?? fb.info).base
+  if (tone === "missed") return fb.warning.base
+  return theme.text.faint
+}
+
 export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): boolean => hasGoal && !statusDialogOpen
 
 /**
@@ -383,7 +392,7 @@ export const breathCrest = (phase: number | undefined): boolean =>
  *     the large empty ring stays distinct from every face of the wave (◦ ○ ◎) and from the resting face (○);
  *   - `paused` paints `‖` — stopped, two bars, the same metaphor as every media key;
  *   - a stuck-retrying goal paints a solid-but-static `●` — nothing executes, so nothing breathes;
- * the terminal acknowledgments paint `●` / `◌` / `✕` (achieved / impossible / failed), static.
+ * the terminal acknowledgments paint `●` / `◌` / `✗` (achieved / impossible / failed), static.
  */
 const stateGlyph = (goal: GoalSnapshot, ascii: boolean, phase: number | undefined): string => {
   if (goal.status === "paused") return ascii ? "|" : "\u2016" // ‖
@@ -395,7 +404,7 @@ const stateGlyph = (goal: GoalSnapshot, ascii: boolean, phase: number | undefine
 /** The terminal acknowledgment's leading glyph — static, one per outcome, ASCII-demoted under reduced color. */
 const terminalGlyph = (status: string, ascii: boolean): string => {
   if (ascii) return status === "achieved" ? "+" : status === "impossible" ? "?" : "x"
-  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2715" // ● ◌ ✕
+  return status === "achieved" ? "\u25CF" : status === "impossible" ? "\u25CC" : "\u2717" // ● ◌ ✗
 }
 export const PIN_PREFIX = " · pin: "
 

@@ -809,7 +809,7 @@ describe("loop rail progressive disclosure", () => {
     const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame).toContain("2 older iterations - click or press x")
+    expect(frame).toContain("2 older iterations · click or press x")
     expect(frame).toContain("v6")
     expect(frame).toContain("v3")
     expect(frame).not.toContain("v2 ")

@@ -139,6 +139,7 @@ export const LoopSection = (props: {
   // row's own quotable payload, and the acknowledgment rides the row for a beat — the grammar the summary
   // copy established. Resting paint is byte-identical to the pre-click frame.
   const [attestHover, setAttestHover] = createSignal<number | null>(null)
+  const [railFoldHovered, setRailFoldHovered] = createSignal(false)
   const [attestCopied, setAttestCopied] = createSignal<number | null>(null)
   const [tallyHover, setTallyHover] = createSignal(false)
   const [tallyCopied, setTallyCopied] = createSignal(false)
@@ -313,13 +314,15 @@ export const LoopSection = (props: {
         </box>
       </Show>
       <Show when={retained() > RAIL_VISIBLE}>
-        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }}>
+        {/* fold row — same grammar as the elsewhere fold in the dialog: one clickable cell + an always-mounted affordance, the retention-drop notice above stays inert (a plain row with no button and no cell, so the two never read as the same control) */}
+        <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleShowAll() }} onMouseOver={() => setRailFoldHovered(true)} onMouseOut={() => setRailFoldHovered(false)}>
           <text fg={theme().text.faint} flexShrink={0} width={LABEL}>
             {ascii() ? "..." : "…"}
           </text>
           <text wrapMode="none" fg={theme().text.faint}>
-            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} - click or press x`}
+            {showAll() ? "show recent only" : `${hiddenCount()} older iteration${hiddenCount() === 1 ? "" : "s"} · click or press x`}
           </text>
+          <Affordance theme={theme()} mono={mono} verb="click · x" hovered={railFoldHovered()} width={9} />
         </box>
       </Show>
       <For each={visibleHistory()}>
