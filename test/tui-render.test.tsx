@@ -1751,6 +1751,24 @@ describe("dossier tab (the whole record, in-screen — mouse-first)", () => {
     expect(frame).toContain("the whole record as markdown") // the copy row
     await setup.renderer.destroy()
   })
+  test("a verdict-table row wider than the pane wraps instead of clipping — the record keeps its right edge", async () => {
+    // A wide row (4-digit turn + 'impossible' + 4-digit tools + short sha + four-figure spend) is wider than a
+    // narrow host. nowrap clipped its right edge silently; the table row must wrap like every other dossier line.
+    const goal = loopedGoal({
+      turns: 1,
+      history: [{ turn: 123456789, verdict: "impossible", reason: "no evidence", at: now, toolCalls: 987654321, sha: "abcdef1234", spend: { ...spend, cost: 123456789.12 } }],
+      loopHistory: [],
+    })
+    const setup = await testRender(() => <StatusDialogBody goal={goal} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 60, height: 60 })
+    await setup.renderOnce()
+    const at = dossierAt(setup.captureCharFrame())
+    expect(at).toBeDefined()
+    await setup.mockMouse.click(at!.x, at!.y)
+    await setup.renderOnce()
+    const frame = setup.captureCharFrame()
+    expect(frame).toContain("$123456789.12") // the spend cell (the row's right edge) survives the wrap
+    await setup.renderer.destroy()
+  })
 
   test("clicking the copy row copies the whole record as markdown — one click, the same bytes goal.dossier.copy writes", async () => {
     const copied: string[] = []
