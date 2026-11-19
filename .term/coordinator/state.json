@@ -3704,6 +3704,23 @@
       "submittedAt": "2026-11-19T11:25:43Z",
       "mergedAt": "2026-11-19T11:27:25Z",
       "mergedInto": "dev"
+    },
+    "menu-index-delta-normalize": {
+      "agent": "orchestrator",
+      "paths": "src/core/hud.ts,test/tui-hud.test.ts,SPEC.md",
+      "branch": "wt/menu-index-delta-normalize",
+      "worktree": "worktrees/wt-menu-index-delta-normalize",
+      "status": "done",
+      "createdAt": "2026-11-19T11:47:48Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-19T11:54:06Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/tui-hud.test.tsx"
+      ],
+      "submittedAt": "2026-11-19T11:54:06Z",
+      "mergedAt": "2026-11-19T11:55:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
