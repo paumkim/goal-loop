@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1773 -->
+<!-- spec-check files=65 tests=1777 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7223,3 +7223,23 @@ Evidence. New test "one row source: rows the host declares win over the card's o
 Honest limits. The prop is a row *supplier*, not a row *override* of individual fields: a host that wants one row flipped returns the whole array. No visual change in the shipped TUI — this is divergence prevention, not a bug fix a user could see today. Test count 1772 -> 1773; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
 <!-- spec-check files=65 tests=1773 -->
+
+## Workstream LXXII — the verification gate's timeout actually stops the command (2026-11-19)
+
+Armed condition (verbatim): "inspect for regression on behavior functionalities. fix what needs fixing and improving to keep on moving forwards with the repo project." Fuzzy; this iteration came from a coverage sweep of `src/index.ts` (68% lines), which showed `createVerifier` — the shell runner behind `evaluator.verifyCommand`, and therefore behind every `met` the gate holds — with no test at all.
+
+Two real defects, both reproduced before the fix.
+
+1. **The budget did not bound anything.** `verify` spawned `bash -c <command>` and on timeout sent SIGKILL to the shell's pid alone. A child of the shell keeps the inherited stdout pipe open, so `Promise.all([child.exited, read(stdout), read(stderr)])` waited for that child, not for the kill. Measured: `sleep 3; echo late` under a 200ms budget returned after **3003ms**. A verification command that starts a server would never return, and the evaluator would hang on it — the timeout the docs promise ("timeout ... downgrades to not_met") was not enforced.
+2. **An already-aborted signal ran the command.** The abort listener was attached with `addEventListener("abort", ...)`, which never fires on a signal that was aborted before the attachment. A cancel landing between the controller's `AbortSignal.any` and the spawn executed the command to completion anyway (measured the same 3003ms on a 10s budget).
+
+Fix (`src/index.ts`, `createVerifier`, now exported so the port is testable):
+- spawn with `detached: true` so the command is its own process group; on timeout or abort kill the group (`process.kill(-pid, "SIGKILL")`), falling back to `child.kill` if the group is already gone;
+- cancel both stream readers after the kill, so a surviving descendant or an unclosed pipe cannot stall the drain — the result is the tail captured so far;
+- run the kill immediately when `signal.aborted` is already true, and only then attach the listener.
+
+Evidence (`test/verifier.test.ts`, 4 tests): happy path exit 0 + output; failing command keeps exit 3 and reads stderr; the wide command returns under the 1500ms ceiling with `timedOut: true` (was 3003ms); a pre-aborted signal returns under 1500ms (was 3003ms). Both budget tests failed on the previous tree and pass now; the two functional tests pass on both, so the change does not alter ordinary gate behavior.
+
+Honest limits. `detached` is POSIX-shaped — the shipped runtime is Bun on Linux, which the docs already require; no Windows claim is made. Output on timeout is the tail captured up to the kill, never a promise of complete output. Test count 1773 -> 1777; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
+
+<!-- spec-check files=65 tests=1777 -->

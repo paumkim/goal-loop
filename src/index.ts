@@ -80,15 +80,20 @@ const probeFlag = (value: string | undefined) => {
 }
 
 /** Runs a verification command via the user's shell, capturing combined output (tail kept). Never touches plugin storage. */
-function createVerifier() {
+export function createVerifier() {
   return {
     async verify({ command, cwd, timeoutMs, signal }: { command: string; cwd: string; timeoutMs: number; signal: AbortSignal }) {
       const MAX = 16_000
+      // Detached, so the command owns its process group and the budget can kill the whole tree, not just the
+      // shell. Measured before this fix: `bash -c 'sleep 3; echo hi'` under a 200ms budget returned at 3003ms —
+      // SIGKILL reached only the shell, and the surviving `sleep` still held stdout, so the drain waited for it.
+      // A command that starts a server would have waited forever.
       const child = Bun.spawn(["bash", "-c", command], {
         cwd,
         stdout: "pipe",
         stderr: "pipe",
         env: process.env,
+        detached: true,
       })
       let output = ""
       // One streaming decoder so a multi-byte sequence split across chunks is not corrupted.
@@ -96,10 +101,12 @@ function createVerifier() {
       const append = (chunk: Uint8Array) => {
         output = (output + decoder.decode(chunk, { stream: true })).slice(-MAX)
       }
+      const readers: Array<ReadableStreamDefaultReader<Uint8Array>> = []
       // Both streams are drained concurrently: an unread pipe fills the OS buffer and blocks the child.
       const read = async (stream: typeof child.stdout) => {
         if (!stream) return
         const reader = stream.getReader()
+        readers.push(reader)
         try {
           for (;;) {
             const { done, value } = await reader.read()
@@ -111,12 +118,37 @@ function createVerifier() {
         }
       }
       let timedOut = false
+      // Kill the group, then cancel the drains. Cancelling matters as much as the kill: a descendant that
+      // survives the sweep (or a pipe the kernel has not closed yet) must not stall the very budget that
+      // just fired — the result is the tail captured so far, never an open-ended wait.
+      const killTree = () => {
+        try {
+          if (child.pid) process.kill(-child.pid, "SIGKILL")
+          else child.kill("SIGKILL")
+        } catch {
+          try {
+            child.kill("SIGKILL")
+          } catch {
+            // already gone
+          }
+        }
+        for (const reader of readers) {
+          try {
+            void reader.cancel().catch(() => {})
+          } catch {
+            // already released
+          }
+        }
+      }
       const timer = setTimeout(() => {
         timedOut = true
-        child.kill("SIGKILL")
+        killTree()
       }, timeoutMs)
-      const onAbort = () => child.kill("SIGKILL")
-      signal.addEventListener("abort", onAbort, { once: true })
+      const onAbort = () => killTree()
+      // Only arm on a live signal: an already-aborted signal never fires its listener, so a cancel that landed
+      // between the controller's signal and this spawn would otherwise have run the command to completion.
+      if (signal.aborted) onAbort()
+      else signal.addEventListener("abort", onAbort, { once: true })
       try {
         const [code] = await Promise.all([child.exited, read(child.stdout), read(child.stderr)])
         return { code, output, timedOut }
