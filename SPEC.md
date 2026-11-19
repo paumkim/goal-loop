@@ -313,13 +313,13 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
     `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:312`, `facts` `:337`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1121`, `prompts.ts:208`). References were
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1122`, `prompts.ts:208`). References were
     re-synced against HEAD twice on 2026-11-16 (`docs/config.html`, `docs/architecture.html`,
     `docs/index.html`, `docs/core.html`, `docs/runtime.html`, `docs/install.html`): first for the
     line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
     `CONTINUE_RETRY_MS` and the gate in the loop-advance path and shifted every later anchor (controller
     +16, after the loop-advance insertion +29 in total; prompts +6/+5/+2). The 2026-11-15 values
-    (64/82/263/288, controller.ts line 461 at the time) are superseded and recorded in git history. The 2026-11-18 sync moved the steer anchor one line down (the `stripReasoningControl` import added at the top of prompts.ts shifted every later line by one). Note the caveat, discovered the hard way: `docs:check` verifies only page
+    (64/82/263/288, controller.ts line 461 at the time) are superseded and recorded in git history. The 2026-11-18 sync moved the steer anchor one line down (the `stripReasoningControl` import added at the top of prompts.ts shifted every later line by one); the same-day Workstream LXVI fix moved it one more (1121 to 1122). Note the caveat, discovered the hard way: `docs:check` verifies only page
     stamps and the changelog against git history; it does NOT verify that a `file.ts:LINE` reference
     points at the claimed symbol, so line refs can drift silently and must be re-checked by hand when
     source moves. The README coordinator section documents the `.gitignore` auto-append and the
@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=64 tests=1741 -->
+<!-- spec-check files=64 tests=1747 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7121,3 +7121,23 @@ No other claim changed on either page; no source, test, or dist change; `dist/tu
 Marker decision. Documentation-only; no test moved; the enforced (first-occurrence) SPEC marker stays `files=64 tests=1741` (line 477); `files=64` is unchanged. Historical section-local markers keep their own counts. Stamps and the changelog row regenerate via `bun scripts/docs-watch.ts once` in the mechanical refresh commit on top of the content commit, never by hand; `bun run check` green before submit.
 
 Honest limits. (a) The bullets state shipped LXIV behavior only: the gate pins presence of the DEFAULTS keys and the module's `OPENCODE_GOAL_*` tokens in docs/config.html; it does not pin the README, and it does not check values (config-defaults.test.ts does). The bullets do not overclaim beyond that. (b) The install.html env-vars block in the Troubleshooting section is untouched — the pointer lives on the options surface, where the reader meets the config page first. (c) docs-watch stamps reflect the last commit that touched each page; the refresh follows the content commit in the same push and is committed separately, per repo convention.
+
+## Workstream LXVI — terminal goals are inert after compaction (2026-11-18)
+
+Bug (reported): after a /goal is achieved (or cleared) and the user runs compaction, the agent resumes working on the goal instead of stopping.
+
+Audit at HEAD `b5cb04c` (fresh reads this turn). The compaction-event chain is gated on the persisted record's status — with one hole. `onCompactionLanded` re-anchored only when `record.loopEnabled && record.status === "active"`, `activeCondition` serves the standing reminder only for `status === "active"`, `restore()` adopts only `isLive` records (`store.loadLive`), and `onExecutionSucceeded`/`onExecutionFailed`/`onExecutionInterrupted`/`onBackgroundDrained` all require `status === "active"`. The hole: the one-shot post-compaction re-anchor (`pendingAnchors`, injected by the `context` hook via `consumeAnchor`) was armed while the loop was live, but `finish()` never dropped a pending anchor, and `consumeAnchor` returned the armed text regardless of the adopted record's status. A compaction landing between the arm and the next model request — with the loop reaching achieved/cleared in that window (or the user running `/goal clear`) — left "keep working toward the armed condition. Do not wait for a user message." armed for a finished goal; the next request after the compact injected it and the model resumed the goal.
+
+Fix (`src/runtime/controller.ts`, three edits):
+
+1. `finish()` deletes `pendingAnchors` and `lastReanchorAt` for the session at the terminal transition — a one-shot re-anchor armed before the finish can no longer ride a later model request (mirrors what `onSessionDeleted` already did).
+2. `consumeAnchor()` fails closed: it drops the pending text and returns `undefined` unless the adopted record exists and `status === "active"` — belt and braces for any anchor that outlives its record.
+3. `onCompactionLanded()` short-circuits on terminal records before the boundary-landing bookkeeping (`landPending` commit + "Compaction landed" success notice) and the re-anchor — a landed compaction is a full no-op for a finished goal.
+
+Failing-then-passing (shown this turn). With the `src/` fix stashed and the tests kept, two of the six new cases fail — the stale anchor armed before `finish()` is served to the next request verbatim on a cleared goal and on an achieved-at-cap loop; with the fix all six pass.
+
+`test/loop.test.ts` — new `describe("terminal goals are inert after compaction")` with six cases: (i) a re-anchor armed before a maxLoops=1 loop finishes never rides a post-terminal model request; (ii) the same on `/goal clear`; (iii) a compaction landing after the goal is achieved arms nothing, commits nothing, emits no compact notice; (iv) the same after a clear; (v) an achieved goal across dispose + `restore()` adopts nothing, `activeCondition`/`consumeAnchor` stay undefined, and the persisted record stays `achieved`; (vi) the same for a cleared loop, including a post-restore compaction landing as a no-op.
+
+Honest limits. (a) The model-side residue is out of scope by design: the host's compaction summary is built from the transcript and can quote the original `<goal>` kickoff directive for a finished goal; the plugin cannot edit the summary, and the plugin-side levers that carry post-compact instructions (the re-anchor, the standing reminder) are now guaranteed inert for terminal records. `stripGoalNotes` is unchanged — goal notes were already stripped from model-bound context, live or terminal. (b) The `session.compaction.ended` bookkeeping for a terminal record is now skipped entirely; the unlanded `loopCompact` marker persists on the finished record and is pruned by the usual terminal-record hygiene, never evaluated. (c) `lastReanchorAt` is cleared at finish so a re-armed loop after a future re-arm (impossible today — a terminal record is never re-armed) starts with a fresh coalescing window. (d) Test count moved **1741 → 1747** (six new cases); packed files stay **64** (no `files` entry changes); the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1747` in this same commit. `dist/tui.js` byte-unchanged (no TUI source touched). The only files edited are `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, and one shared line-ref re-point (the steer anchor shifted one line down under the new `finish()` lines).
+
+<!-- spec-check files=64 tests=1747 -->
