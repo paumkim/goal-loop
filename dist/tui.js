@@ -1963,13 +1963,17 @@ var nextMenuIndex = (index, delta, rows) => {
   const count = rows.length;
   if (count === 0)
     return 0;
-  let next = (index % count + count) % count;
-  for (let step = 0;step < count; step += 1) {
-    next = ((next + delta) % count + count) % count;
+  const norm = (index % count + count) % count;
+  if (delta === 0)
+    return norm;
+  const step = Math.sign(delta);
+  let next = norm;
+  for (let pass = 0;pass < count; pass += 1) {
+    next = ((next + step) % count + count) % count;
     if (rows[next].enabled)
       return next;
   }
-  return (index % count + count) % count;
+  return norm;
 };
 var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY, phase) => {
   const state = stateWord(goal);
