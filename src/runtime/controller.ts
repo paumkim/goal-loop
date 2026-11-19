@@ -728,7 +728,13 @@ export class GoalController {
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
-    const work = await this.deps.background.busy(sessionID).catch((): BackgroundWork => ({ subagents: 0, shells: 0 }))
+    const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+      // Busy-check failure: fail closed — don't treat a possibly-busy session as idle. The next
+      // background-drained/execution-start event re-runs the deferred evaluation.
+      this.deps.log.error("goal busy check failed; skipping evaluation", { sessionID, error: errorMessage(error) })
+      return undefined
+    })
+    if (!work) return
     if (this.stale(record, runtime, epoch)) return
     if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
     const carried = runtime.carriedToolCalls

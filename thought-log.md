@@ -6,6 +6,10 @@ Goal: keep improving keep on fixing the codebase, from back to front.
 Interpretation: sweep from the back (src/runtime, execution back end) forward to the front (src/core, index.ts, rpc.ts).
 Pre-existing state: two verified improvements stashed in the main checkout (file-log shared-object DAG fix; controller verifyMet abort registration) — restored after submit.
 
+## Entry 4 — 2026-11-19 — confidence 9
+Iteration 3: finding 1 (controller.ts:731) fixed + verified — `onExecutionSucceeded` fails closed on `background.busy` error (log + skip evaluation). General subagent: new regression test "skips evaluation when the busy check errors" (harness `busyError`/`setBusyError`); discrimination: stashed fix → test fails (Expected 0, Received 1); restored → 1 pass. Tester re-ran: suite 1756 pass / 0 fail; regression test exit 0; SPEC marker re-counted 1755→1756. Remaining open: controller.ts:921-926, controller.ts:1189, config.ts:132, index.ts:288-290, events.ts:121-124, parse.ts:28-29 (finding 3 moot — main carries the verifyMet abort fix).
+## Entry 3 — 2026-11-19 — confidence 9
+Iteration 2: finding 5 fixed and verified — `GoalStore.flush()` drains write chains (`while (this.chains.size > 0) { await Promise.all([...this.chains.values()]) }`) with a gated-set regression test. Tester re-ran: `bun run check` exit 0 (1755 pass / 0 fail, spec-check ok); `bun test test/store.test.ts` exit 0 (10 pass / 0 fail); with the buggy flush the new test fails (9 pass / 1 fail) — the fix discriminates.
 ## Entry 2 — 2026-11-19 — confidence 7
 Iteration 1 sweep complete (read-only general subagent, worktree wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front). Findings recorded in pending_fixes.md.
 Finding 3 (controller.ts:1447 — `iterationDeferred` never cleared on drain/execution-start) was fixed by a general subagent, then rejected: `loop.test.ts:1938` ("an iteration spent waiting on background work is not a zero-tool iteration") pins the suppression as intended behavior. With the fix: 1753 pass / 1 fail; without: base passes — targeted rerun on base: 1 pass 0 fail. Fix reverted.
