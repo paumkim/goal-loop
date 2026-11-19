@@ -247,7 +247,7 @@ The estimate is the last assistant message's `input + cache.read + cache.write` 
 
 ```sh
 bun install
-bun run check                         # typecheck + unit tests + compile + TUI load check + docs freshness + SPEC honesty check (also runs in CI, see .github/workflows/check.yml)
+bun run check                         # typecheck + unit tests + dist freshness + compile + TUI load check + docs freshness + SPEC honesty check (also runs in CI, see .github/workflows/check.yml)
 bun run e2e <empty-dir> [provider/model]  # real run against a private opencode server (model also via E2E_MODEL, default opencode/deepseek-v4.1-flash-free)
 E2E_MODEL=opencode/deepseek-v4.1-flash-free bun run e2e <empty-dir>
 ```

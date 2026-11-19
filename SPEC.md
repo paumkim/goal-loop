@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1780 -->
+<!-- spec-check files=65 tests=1783 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7255,3 +7255,17 @@ Fix. `delta` now reads as a direction (negative = up, positive = down), which is
 Evidence (test/tui-hud.test.tsx, 3 tests): the multiple-of-count cases (2 rows with the second inert, 6-row menu with a full lap), the no-move case, and a property sweep over every row-count 1..6, every enabled/disabled mask with at least one enabled row, every resting index -2..n+2 and every delta in {-7,-2,-1,1,2,7} — in range and enabled, always. The property test and the multiple-of-count test failed on the previous helper (2 fail) and pass now; the pre-existing pinned selection tests are unchanged. Test count 1777 -> 1780; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
 <!-- spec-check files=65 tests=1780 -->
+
+## Workstream LXXIV — the check gate stops shipping a stale TUI artifact (2026-11-19)
+
+Armed condition (verbatim): "inspect for regression on behavior functionalities. fix what needs fixing and improving to keep on moving forwards with the repo project." Fuzzy; this iteration came from a defect in the gate itself, hit in this very session: a workturn changed `src/tui.tsx`, ran `bun run check`, and forgot to commit the rebuilt `dist/tui.js`. Nothing failed. The suite was green, the SPEC marker matched, docs were fresh — and the committed TUI was the previous one.
+
+The hole. `dist/tui.js` ships precompiled (OpenCode's Solid transform skips `node_modules`, so the installed package must carry built output). `bun run check` ran `bun run compile`, which rewrites `dist/tui.js` — but never compared the result with what was committed. The only signal was `git status` dirt, and nothing reads that. A stale artifact could therefore pass every gate: `tsc`, the full suite, the TUI load check (which loads the stale file happily), docs freshness and the SPEC marker. The old chain, verbatim: `tsc --noEmit && (cd test && bun test) && bun run compile && bun run check:tui && bun run docs:check && bun run check:spec`.
+
+Fix. `scripts/build.ts` gains `--check` (wrapped as `bun run check:dist`, now part of `bun run check` before `compile`): it captures the artifact's current bytes, builds, compares against the fresh normalized output, and exits non-zero with the byte counts and the repair line when they differ. It restores the artifact before it exits either way, so a failed check never half-updates the tree — `bun run compile` stays the only writer. `--target <file>` points the comparison elsewhere so the gate can be tested without touching the real artifact. The build is byte-stable (verified: three consecutive builds, identical md5), which is what makes an equality check meaningful.
+
+Evidence (`test/build-freshness.test.ts`, 3 tests): the committed artifact matches a fresh build (exit 0); a stale target fails with "is stale" + "bun run compile" and the target file is byte-identical afterwards (the check does not repair); a missing target fails with "is missing". Manual discrimination: appending a line to `dist/tui.js` makes `bun scripts/build.ts --check` exit 1 while the old chain's `bun run compile` would have silently overwritten it. README's Develop block now names the stage. Test count 1780 -> 1783; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
+
+Honest limits. The gate proves the artifact was built from the current `src/tui.tsx`, not that the build is correct — that is the TUI load check's and the render suite's job. It compares bytes, so a toolchain bump (Bun/OpenTUI) that changes output formatting will fail the gate until the artifact is rebuilt; that is the intended prompt to re-commit it.
+
+<!-- spec-check files=65 tests=1783 -->
