@@ -202,7 +202,7 @@ All optional, set in `opencode.json`:
 | `maxRetries` | `3` | Retained for compatibility; no longer gates anything. Automatic retries are unlimited with capped backoff |
 | `maxConditionChars` | unlimited | Condition length cap (min 100); default never rejects |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
-| `transcriptNotes` | `true` | Record achieved/impossible verdicts in the transcript |
+| `transcriptNotes` | `true` | Deprecated; no effect — the outcome note in the session inbox was retired (LXVII); outcomes surface via toast, the HUD acknowledgment and the record |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |
 | `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary, so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request warns once at 2 misses ("compaction did not land; loop is running hot; consider /compact manually") and re-requests as a trickle every 3rd arm; the 4-miss cap is a backstop only. An unmeasurable context never counts as a miss (one forced re-request at the first unmeasurable arm, then at most one per 2 arms). Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |

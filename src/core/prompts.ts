@@ -608,3 +608,43 @@ export function parseNextCondition(reply: string, maxChars = 2_000): string | un
 }
 
 export const REPAIR = `Your previous reply was not valid. ${OUTPUT}`
+
+/**
+ * The instruction grammar the plugin writes into the transcript: the `<goal>` kickoff, the `<goal-loop>`
+ * arming/ continuation steers, `<goal-continuation>`, `<goal-retry>`, `<goal-checkin>`. Every one of these
+ * carries "keep working until the condition holds" semantics. While a goal is live they are the state
+ * carrier and must ride context; once no live goal exists for the session they are history that invites
+ * the model to resume a finished goal — the exact post-compaction re-activation class. Suffixes are matched
+ * on the opening tag only, so unknown shapes never match.
+ */
+const INSTRUCTION_TAGS = ["<goal>", "<goal-loop", "<goal-continuation", "<goal-retry", "<goal-checkin"] as const
+
+/** True when any text content part carries one of the goal-instruction tags. Unknown shapes never match. */
+export const isGoalInstructionMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const content = (message as NoteMessageLike).content
+  if (!Array.isArray(content)) return false
+  return content.some((part) => {
+    if (typeof part !== "object" || part === null) return false
+    const { type, text } = part as { type?: unknown; text?: unknown }
+    return type === "text" && typeof text === "string" && INSTRUCTION_TAGS.some((tag) => text.includes(tag))
+  })
+}
+
+/**
+ * Drop every goal-grammar message (notes AND instructions) from a model-bound message list. Applied by the
+ * `context` hook only when the session has no live goal: a finished goal's kickoff/continuation text must
+ * leave context entirely, so neither an ordinary request nor a post-compaction summary can re-establish it.
+ * Same splice-back contract as {@link stripGoalNotes}.
+ */
+export const stripGoalContext = <T>(messages: ReadonlyArray<T>): T[] =>
+  messages.filter((m) => !isGoalNoteMessage(m) && !isGoalInstructionMessage(m))
+
+/**
+ * One ground-truth line for a session whose goal ended in this process. Injected by the `context` hook into
+ * the SYSTEM part on every model request while no live goal exists and a terminal record is held in memory.
+ * It is not a reminder to do anything — it is the counter-instruction to the compaction summary, which may
+ * quote the original `<goal>` kickoff and its "work autonomously … do not stop" mandate.
+ */
+export const TERMINAL_REMINDER =
+  "A /goal was set earlier in this session and it has ended (achieved, impossible, cleared or failed). Do not resume work toward it and do not re-arm it; await the user's next instruction."

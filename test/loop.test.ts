@@ -243,10 +243,8 @@ describe("/goal-loop", () => {
     const loopToast = h.notices.find((n) => n.kind === "loop")
     expect(loopToast).toBeDefined()
     expect(h.notices.some((n) => n.kind === "achieved")).toBe(false)
-    // The outcome note is a terminal note: it stays on the terminal, not in later context.
-    const note = h.calls.synthetic.find((s) => String(s.description).startsWith("Loop 1 of"))
-    expect(note).toBeDefined()
-    expect(String(note!.text)).toContain("<goal-note final>")
+    // The outcome note is retired (LXVII): the inbox never carries a "Loop N of M achieved" artifact.
+    expect(h.calls.synthetic.some((s) => String(s.description ?? "").startsWith("Loop 1 of"))).toBe(false)
     // The summary stayed within budget framing (one compact block, not the transcript).
     expect(h.summaryRequests[0]!.maxSummaryTokens).toBe(400)
   })
@@ -2540,15 +2538,13 @@ describe("arm→execution transition observability (LX)", () => {
     h.summaries.push("parser rewritten and tests green")
     h.nextGoals.push("add fuzz coverage for the parser")
     await h.turn()
-    // The armed kickoff (not the note) is the last synthetic in flight, carried by delivery:"steer".
+    // The armed kickoff is the last synthetic in flight, carried by delivery:"steer".
     const arm = h.calls.synthetic.find((s) => String(s.description).includes("arming v2"))
     expect(arm).toBeDefined()
     expect(arm.resume).toBe(true)
     expect(arm.delivery).toBe("steer")
-    // The note stays admit-only (resume: false) — notes never wake the session.
-    const note = h.calls.synthetic.find((s) => String(s.description).startsWith("Loop 1 of"))
-    expect(note).toBeDefined()
-    expect(note.resume).toBe(false)
+    // The outcome note is retired (LXVII): nothing but the kickoff and boundaries lands in the inbox.
+    expect(h.calls.synthetic.some((s) => String(s.description ?? "").startsWith("Loop 1 of"))).toBe(false)
     // Between the dispatch and the host's execution-started event, the record is honestly "queued".
     expect(h.controller.snapshot(SID)?.queued).toBe(true)
     // The host reports the kickoff execution started: the flag clears and a snapshot is emitted after this point.

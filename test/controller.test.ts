@@ -189,10 +189,8 @@ describe("GoalController", () => {
     expect(goal.status).toBe("achieved")
     expect(goal.turns).toBe(2)
     expect(goal.endedAt).toBeDefined()
-    // The verdict note is recorded without waking the session.
-    expect(h.calls.synthetic.at(-1).resume).toBe(false)
-    // End-of-record notes carry the terminal tag so the context hook strips them from later model requests.
-    expect(h.calls.synthetic.at(-1).text).toContain("<goal-note final>")
+    // The verdict outcome note is retired (LXVII): the steer resumes the goal, and no synthetic note rides the achievement.
+    expect(h.calls.synthetic.some((synthetic) => String(synthetic.description ?? "").startsWith("Goal achieved"))).toBe(false)
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
   })
 
@@ -480,6 +478,26 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.retries).toBe(2)
     expect(h.controller.get(SID)?.status).toBe("active")
     expect(h.controller.get(SID)?.reason).toBeUndefined()
+  })
+
+  test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {
+    const first = harness()
+    expect(first.controller.hasTerminalRecord(SID)).toBe(false)
+    await first.set("all tests pass")
+    expect(first.controller.hasTerminalRecord(SID)).toBe(false)
+    first.verdicts.push(met("done"))
+    await first.turn()
+    expect(first.controller.get(SID)?.status).toBe("achieved")
+    expect(first.controller.hasTerminalRecord(SID)).toBe(true)
+
+    const second = harness()
+    expect(second.controller.hasTerminalRecord(SID)).toBe(false)
+    await second.set("another condition")
+    second.controller.clear(SID)
+    expect(second.controller.hasTerminalRecord(SID)).toBe(true)
+    // A fresh live goal for the same session disarms the terminal signal.
+    await second.set("yet another condition")
+    expect(second.controller.hasTerminalRecord(SID)).toBe(false)
   })
 
   test("goals persist and restore with reset counters; finished goals are not restored", async () => {

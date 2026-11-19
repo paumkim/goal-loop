@@ -387,3 +387,81 @@ describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin
     }
   })
 })
+
+describe("a terminal goal is inert in later context (LXVII)", () => {
+  const message = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+
+  test("no live goal: goal-grammar messages leave context; the terminal ground truth rides the system part", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks, storage } = context(directory)
+    // Deliver one full turn (started -> tool -> succeeded) through the event pump once the arm lands;
+    // the mocked evaluator rules the goal met, so the record finishes in memory during this test.
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    ;(ctx.session as any).generate = async () => ({ text: '{"verdict":"met","reason":"done"}' })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      const event = {
+        sessionID: "ses_1",
+        agent: "build",
+        model: {},
+        system: [] as any[],
+        messages: [message("<goal>\nthe parser is correct\n</goal>"), message("the user's own line")],
+        tools: {},
+        options: {},
+      }
+      hooks.context!(event)
+      expect(event.messages).toEqual([message("the user's own line")])
+      expect(event.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(true)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a live goal keeps its instruction messages and gets no terminal line", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const kickoff = message("<goal>\nthe parser is correct\n</goal>")
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [kickoff], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([kickoff])
+      expect(event.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(false)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("no goal has ever been set: goal-grammar messages are dropped and nothing is injected", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const kickoff = message("<goal>\nthe parser is correct\n</goal>")
+      const keep = message("hello")
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [kickoff, keep], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([keep])
+      expect(event.system).toHaveLength(0)
+    } finally {
+      await dispose?.()
+    }
+  })
+})

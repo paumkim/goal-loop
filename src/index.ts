@@ -14,7 +14,7 @@ import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorB
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { directive as directivePrompt, systemReminder, stripGoalNotes } from "./core/prompts.ts"
+import { directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -322,23 +322,28 @@ export default Plugin.define({
     await ctx.session.hook("generate", (event) => {
       if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
     })
-    // One context hook, two possible injections: the standing system reminder (config-gated) and the
+    // One context hook, up to three injections: the standing system reminder (config-gated), the
     // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
-    // when the reminder is off; it is invisible on every request except the one after a landing).
+    // when the reminder is off; it is invisible on every request except the one after a landing),
+    // and one ground-truth line for sessions whose goal already ended here (achieved / impossible /
+    // cleared / failed) — the counter-instruction to a compaction summary that quotes the expired
+    // `<goal>` kickoff. All three are no-ops while no goal work is armed.
     await ctx.session.hook("context", (event) => {
+      const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
         if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
       }
       const anchor = controller.consumeAnchor(event.sessionID)
       if (anchor) event.system.push({ type: "text", text: anchor })
-      // Goal notes are history, not instructions: they stay in the session (and on the terminal
-      // as the outcome line) but must not ride the model's context on later turns, where they
-      // invite a ceremonial acknowledgement. This covers plain notes too — legacy loop-arm notes
-      // were folded in forever. Splice in place — the host holds the caller's
-      // array reference, so a rebound property could go unseen.
+      if (!live && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
+      // Goal messages are history, not instructions. While a goal is live the kickoff and the armed
+      // continuations carry the state and must ride context; only notes are stripped. Once no live
+      // goal exists for the session, every goal-grammar message is stripped — a finished goal's
+      // "keep working" text must not ride any later request, including the one after a compaction.
+      // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
-        const kept = stripGoalNotes(event.messages)
+        const kept = live ? stripGoalNotes(event.messages) : stripGoalContext(event.messages)
         if (kept.length !== event.messages.length) event.messages.splice(0, event.messages.length, ...kept)
       }
     })
