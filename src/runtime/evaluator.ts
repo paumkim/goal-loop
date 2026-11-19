@@ -5,6 +5,7 @@ import {
   nextGoalIndependently,
   nextGoalInSession,
   REPAIR,
+  STRICT_REPAIR,
   summarizeIndependently,
   summarizeInSession,
 } from "../core/prompts.ts"
@@ -176,13 +177,16 @@ export class Evaluator implements EvaluatorPort {
   }
 
   private async ask(generate: (prompt: string) => Promise<string>, prompt: string): Promise<EvaluationResult> {
-    const first = await generate(prompt)
-    const parsed = parseVerdict(first)
-    if (parsed) return parsed
-    // An empty answer usually means the model tried to call a tool; one stricter retry fixes most cases.
-    const second = await generate(`${prompt}\n\n${REPAIR}`)
-    const repaired = parseVerdict(second)
-    if (repaired) return repaired
-    throw new EvaluationError(`unreadable verdict: ${JSON.stringify((second || first).slice(0, 200))}`)
+    // Escalating retries: the second generation repeats the prompt plus REPAIR; the third adds
+    // STRICT_REPAIR, which forbids tools and other text. An empty answer usually means the model
+    // tried to call a tool, so the strict retry is the usual fix.
+    const attempts = [prompt, `${prompt}\n\n${REPAIR}`, `${prompt}\n\n${STRICT_REPAIR}`]
+    let text = ""
+    for (const next of attempts) {
+      text = await generate(next)
+      const parsed = parseVerdict(text)
+      if (parsed) return parsed
+    }
+    throw new EvaluationError(`unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))}`)
   }
 }

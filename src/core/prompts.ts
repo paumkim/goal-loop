@@ -609,6 +609,9 @@ export function parseNextCondition(reply: string, maxChars = 2_000): string | un
 
 export const REPAIR = `Your previous reply was not valid. ${OUTPUT}`
 
+/** Second-level retry: empty replies usually mean the model called a tool or produced no text. */
+export const STRICT_REPAIR = `Your previous reply was not valid. ${OUTPUT} Do not call tools and do not reason out loud — output only the JSON object.`
+
 /**
  * The instruction grammar the plugin writes into the transcript: the `<goal>` kickoff, the `<goal-loop>`
  * arming/ continuation steers, `<goal-continuation>`, `<goal-retry>`, `<goal-checkin>`. Every one of these
