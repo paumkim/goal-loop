@@ -3560,6 +3560,22 @@
       "submittedAt": "2026-11-18T22:52:28Z",
       "mergedAt": "2026-11-18T22:53:49Z",
       "mergedInto": "dev"
+    },
+    "terminal-goal-inert-after-compact": {
+      "agent": "inkling-2-small-free",
+      "paths": "src,test,SPEC.md",
+      "branch": "wt/terminal-goal-inert-after-compact",
+      "worktree": "worktrees/wt-terminal-goal-inert-after-compact",
+      "status": "done",
+      "createdAt": "2026-11-19T03:26:55Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-19T03:45:02Z",
+      "forcedScopeFiles": [
+        "docs/runtime.html"
+      ],
+      "submittedAt": "2026-11-19T03:45:02Z",
+      "mergedAt": "2026-11-19T04:02:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
