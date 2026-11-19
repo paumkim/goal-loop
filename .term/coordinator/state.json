@@ -3721,6 +3721,22 @@
       "submittedAt": "2026-11-19T11:54:06Z",
       "mergedAt": "2026-11-19T11:55:45Z",
       "mergedInto": "dev"
+    },
+    "dist-freshness-gate": {
+      "agent": "orchestrator",
+      "paths": "scripts/build.ts,package.json,test/build-freshness.test.ts,SPEC.md",
+      "branch": "wt/dist-freshness-gate",
+      "worktree": "worktrees/wt-dist-freshness-gate",
+      "status": "done",
+      "createdAt": "2026-11-19T12:01:57Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-19T12:10:15Z",
+      "forcedScopeFiles": [
+        "README.md"
+      ],
+      "submittedAt": "2026-11-19T12:10:15Z",
+      "mergedAt": "2026-11-19T12:12:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
