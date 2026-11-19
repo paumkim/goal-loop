@@ -141,18 +141,27 @@ export const contextMenuRows = (args: { readonly hasReason: boolean; readonly ha
 
 /**
  * Arrow-key selection: wraps at both ends and skips disabled rows (the mouse grammar — inert rows
- * never light up). Falls back to the resting index when every row is disabled, so the loop always
- * terminates. Always returns a valid in-range index for a non-empty rows array.
+ * never light up). `delta` is read as a direction (negative = up, positive = down): its magnitude
+ * carries no meaning here, and honouring it made a multiple of the row count orbit a residue class
+ * of rows — falling back to a disabled resting index while an enabled row existed. Falls back to
+ * the resting index when every row is disabled, so the loop always terminates. Always returns a
+ * valid in-range index for a non-empty rows array.
  */
 export const nextMenuIndex = (index: number, delta: number, rows: readonly { readonly enabled: boolean }[]): number => {
   const count = rows.length
   if (count === 0) return 0
-  let next = ((index % count) + count) % count
-  for (let step = 0; step < count; step += 1) {
-    next = (((next + delta) % count) + count) % count
+  const norm = ((index % count) + count) % count
+  if (delta === 0) return norm
+  // A delta that is a multiple of the row count would step in place on every pass and fall back to the
+  // resting index — which may be disabled while an enabled row exists. Reduce it to its direction
+  // instead, so the walk always advances and the inert-row contract holds for any integer delta.
+  const step = Math.sign(delta)
+  let next = norm
+  for (let pass = 0; pass < count; pass += 1) {
+    next = (((next + step) % count) + count) % count
     if (rows[next]!.enabled) return next
   }
-  return ((index % count) + count) % count
+  return norm
 }
 
 /** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */

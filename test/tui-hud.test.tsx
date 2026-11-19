@@ -956,6 +956,38 @@ describe("contextMenuRows + nextMenuIndex (the keyboard arm's pure model)", () =
     expect(nextMenuIndex(2, 1, wired)).toBe(3)
   })
 
+  test("a delta that is a multiple of the row count still lands on an enabled row (never the resting one)", () => {
+    // A two-row menu with the second row inert: stepping by ±2 used to walk in place on every pass and
+    // fall back to the resting index — a disabled row — while row 0 was live.
+    const rows = [{ enabled: true }, { enabled: false }]
+    expect(nextMenuIndex(1, 2, rows)).toBe(0)
+    expect(nextMenuIndex(1, -2, rows)).toBe(0)
+    expect(nextMenuIndex(0, 3, rows)).toBe(0) // reduced to one step, forward past the inert row
+    const six = contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false }) // 0 and 5 live
+    expect(nextMenuIndex(0, 6, six)).toBe(5) // a full lap reduces to a single step
+    expect(nextMenuIndex(5, 12, six)).toBe(0)
+  })
+  test("delta 0 is a no-move, not a silent advance", () => {
+    const rows = [{ enabled: true }, { enabled: true }]
+    expect(nextMenuIndex(0, 0, rows)).toBe(0)
+    expect(nextMenuIndex(3, 0, rows)).toBe(1) // the resting index still normalizes
+  })
+  test("property: any non-zero delta lands in range on an enabled row whenever one exists", () => {
+    for (let n = 1; n <= 6; n += 1) {
+      for (let mask = 0; mask < 1 << n; mask += 1) {
+        const rows = Array.from({ length: n }, (_, i) => ({ enabled: ((mask >> i) & 1) === 1 }))
+        if (!rows.some((row) => row.enabled)) continue
+        for (let index = -2; index <= n + 2; index += 1) {
+          for (const delta of [-7, -2, -1, 1, 2, 7]) {
+            const out = nextMenuIndex(index, delta, rows)
+            expect(out).toBeGreaterThanOrEqual(0)
+            expect(out).toBeLessThan(n)
+            expect(rows[out]!.enabled).toBe(true)
+          }
+        }
+      }
+    }
+  })
   test("all-disabled payload selection stays put — the loop terminates", () => {
     const disabled = [{ enabled: false }, { enabled: false }]
     expect(nextMenuIndex(0, 1, disabled)).toBe(0)

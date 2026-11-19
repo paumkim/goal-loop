@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1777 -->
+<!-- spec-check files=65 tests=1780 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7243,3 +7243,15 @@ Evidence (`test/verifier.test.ts`, 4 tests): happy path exit 0 + output; failing
 Honest limits. `detached` is POSIX-shaped — the shipped runtime is Bun on Linux, which the docs already require; no Windows claim is made. Output on timeout is the tail captured up to the kill, never a promise of complete output. Test count 1773 -> 1777; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
 <!-- spec-check files=65 tests=1777 -->
+
+## Workstream LXXIII — the menu walk cannot rest on an inert row (2026-11-19)
+
+Armed condition (verbatim): "inspect for regression on behavior functionalities. fix what needs fixing and improving to keep on moving forwards with the repo project." Fuzzy; this iteration came from fuzzing the context menu's pure selection helper instead of reading it.
+
+Defect. `nextMenuIndex(index, delta, rows)` (src/core/hud.ts) stepped by adding `delta` modulo the row count and returned the first enabled row it met. When `delta` was a multiple of the count, every pass landed on the same row, so the loop exhausted and fell back to the resting index — which could be disabled while an enabled row existed. Reachable shape: `nextMenuIndex(1, 2, [{enabled:true},{enabled:false}])` returned the disabled row 1. A reduced-but-still-composite delta fared no better: with 4 rows and `delta = 2` the walk visited only one residue class (rows 1 and 3) and never reached an enabled row 0. The shipped keymap only ever passes +-1, so nothing misbehaved in production — but the docstring promises the inert-row contract unconditionally, and a future caller passing a page-sized delta would have broken it silently.
+
+Fix. `delta` now reads as a direction (negative = up, positive = down), which is the only meaning a menu walk has; the walk steps one row at a time for at most `count` passes, so it always reaches every row. `delta === 0` is an explicit no-move that still normalizes the resting index. The docstring states the direction contract instead of implying magnitude.
+
+Evidence (test/tui-hud.test.tsx, 3 tests): the multiple-of-count cases (2 rows with the second inert, 6-row menu with a full lap), the no-move case, and a property sweep over every row-count 1..6, every enabled/disabled mask with at least one enabled row, every resting index -2..n+2 and every delta in {-7,-2,-1,1,2,7} — in range and enabled, always. The property test and the multiple-of-count test failed on the previous helper (2 fail) and pass now; the pre-existing pinned selection tests are unchanged. Test count 1777 -> 1780; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
+
+<!-- spec-check files=65 tests=1780 -->
