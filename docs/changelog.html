@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-19 02:20 UTC</code></td><td>fix(config): maxConditionChars floor lowered to 0 — 0/small values reachable (regression test in config-defaults.test.ts); SPEC marker re-stamped 1757→1758</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 01:49 UTC</code></td><td>fix(runtime): loop maxLoops cap counts dropped history, not the saturated retained slice</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 01:15 UTC</code></td><td>fix(runtime): drop dead already-satisfied-at-HEAD zero-tool exemption; reconcile loop (vii-b) pin with the forward-pointer gate</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 00:51 UTC</code></td><td>fix(runtime): GoalStore.flush drains writes enqueued while it awaits; onExecutionSucceeded fails closed when background.busy errors; regression tests (store.test.ts, controller.test.ts); SPEC marker re-count 1754→1756</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-18 10:42 UTC</code></td><td>feat(goal): completed-condition ledger — gates outlive the retained window (XXXVII)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 10:29 UTC</code></td><td>feat(goal): verdict-trail retention made explicit — historyDropped + honest consumers (XXXVI)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 10:07 UTC</code></td><td>docs: stamp changelog for the loop history retention cap (XXXV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 10:07 UTC</code></td><td>feat(goal): retention cap on loopHistory — newest 50 kept, drops counted (XXXV)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
