@@ -5,8 +5,8 @@ a compact segment painted on the empty left side of the host's jump-to-latest ro
 above the input prompt, claimed through the host's `session.composer.top` slot with a zero-flow absolute box);
 left click toggles the card, right click opens the detail view; when the condition is pinned (card `pin` button
 or `p` in the dialog) the pill appends the condition truncated to the remaining width so it stays visible while
-the conversation scrolls; a slow breathing dot marks a live, working goal — it swells through `· • ● •` on a
-2.4s cycle while the loop is alive, rests hollow (`○`) when waiting, bars-static (`‖`) when paused and solid
+the conversation scrolls; a slow breathing dot marks a live, working goal — it swells through `◦ ○ ◎ ○` on a
+2.4s cycle while the loop is alive, rests hollow (`◯`) when waiting, bars-static (`‖`) when paused and solid
 (`●`) when a stuck-retrying loop is executing nothing, and never runs when reduced motion is requested
 (NO_COLOR, TERM=dumb), where the resting face and weight carry the state (see Workstream XII); (b) A compact HUD card: a composer-grammar card painted above the jump row (absolute box, 1-cell left accent border, theme tokens only) with the condition (click
 to copy), the state row (live or terminal), the spend row when the server can estimate it (same
@@ -15,10 +15,11 @@ flow plus outflow plus cost), the last verdict, failure-first-class remediation 
 and — for a freshly armed goal, before the first turn lands — one teaching line (`hint  the evaluator reads
 only the transcript`): the evaluator never runs commands or reads files, so the condition must be provable from
 the conversation; the row disappears forever after turn 1. The card also answers right-click: anywhere on it
-toggles an in-card context menu (four fixed rows, appended below the permanent actions row so the absolute-mount
+toggles an in-card context menu (six fixed rows, appended below the permanent actions row so the absolute-mount
 anchor grows with it — `hudCardRows(goal, contextOpen)`): `copy condition`, `copy evaluator reason` (inert and
 faint when the snapshot carries no `reason`), `copy latest summary` (inert when no `loopHistory` entry exists),
-and `clear goal` (warning tone). Menu rows share the button hover grammar (raised background, weight under
+`copy dossier` and `save dossier file` (both inert until the record carries a dossier), and `clear goal`
+(warning tone). Menu rows share the button hover grammar (raised background, weight under
 mono); inert rows never light up and swallow the click; any action collapses the menu; Esc or another
 right-click toggles it shut. (c) The `/goal` detail view: a
 
@@ -68,7 +69,7 @@ a message to resume, or /goal clear` for the stall guard, `interrupted · send a
 user abort; legacy paused records without a cause fall back to `paused · send a message to resume, or
 /goal clear`. A failed goal gets the same treatment: the record carries the classifier's short `failureLabel` (set only at the fatal-failure site, additive and absent on legacy records), and the `fix` row names the cause — `authentication failure — /goal clear to reset` — instead of a bare state word; legacy failed records fall back to `goal failed — /goal clear to reset`. A paused goal outranks a stuck retry loop in the remediation order. When a goal goes live→terminal (achieved / impossible / failed, never
 `cleared`) the pill would otherwise blink out; instead it acknowledges the outcome for 45s
-(`◎ goal achieved · 12m · 4 turns`, or `◎ loop complete · v5/5 · …` for loops), holding the same click
+(`● goal achieved · 12m · 4 turns`, or `● loop complete · v5/5 · …` for loops), holding the same click
 wiring (left click card, right click dialog) and the card renders the terminal state truthfully (state word,
 title row and remediation row all reflect the outcome). `cleared` stays silent — a deliberate reset is not
 an announcement. State transitions also surface as host toasts; outcome toasts
@@ -474,7 +475,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1783 -->
+<!-- spec-check files=65 tests=1787 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7269,3 +7270,17 @@ Evidence (`test/build-freshness.test.ts`, 3 tests): the committed artifact match
 Honest limits. The gate proves the artifact was built from the current `src/tui.tsx`, not that the build is correct — that is the TUI load check's and the render suite's job. It compares bytes, so a toolchain bump (Bun/OpenTUI) that changes output formatting will fail the gate until the artifact is rebuilt; that is the intended prompt to re-commit it.
 
 <!-- spec-check files=65 tests=1783 -->
+
+## Workstream LXXV — the SPEC intro quotes the shipped glyphs (2026-11-19)
+
+Armed condition (verbatim): "Fix pending_fixes.md item 13: make the SPEC.md intro quote the shipped glyphs (breath wave, resting waiting glyph, six fixed rows, achieved marker) as rendered by code and pinned by tests, with bun run check green and the change on a merged wt/ lease." Closes the last open prose item from the terminal-TUI consistency sweep.
+
+The drift. The intro was written before the pill's glyph family and the context menu settled, and it kept four quotes the renderer no longer produces: the breath wave as `· • ● •` (shipped `◦ ○ ◎ ○`), the waiting ring as a small `○` (shipped the large `◯`, kept distinct from the resting face `○`), the in-card context menu as "four fixed rows" (shipped six — `copy dossier` and `save dossier file` were added after the sentence was written), and the terminal acknowledgment as `◎` (shipped `●`, the same `terminalGlyph` the achieved flash paints). Each shipped form is rendered by `src/core/hud.ts` and pinned in `test/tui-hud.test.tsx`; only the prose had drifted.
+
+Fix (SPEC.md intro only). The breath wave now reads `◦ ○ ◎ ○`; the waiting ring reads `◯`; the menu reads "six fixed rows" and enumerates all six shipped rows (`copy condition`, `copy evaluator reason`, `copy latest summary`, `copy dossier`, `save dossier file`, `clear goal`); the acknowledgment reads `● goal achieved` / `● loop complete`. No other sentence changed.
+
+Evidence (`test/spec-intro-glyphs.test.ts`, 4 tests — a new pin, not a re-quote). The test reads the SPEC intro (everything before `## Acceptance criteria`) and asserts it against the code that renders the glyphs: the wave equals `[0,1,2,3].map(breathGlyph).join(" ")`; the waiting ring equals the leading cell `pillModel` paints for `waiting: true` (U+25EF); the row count equals `contextMenuRows(...).length` and every row's `text` is quoted; the acknowledgment equals `terminalPill(achieved, ...).text` and the old `◎ goal achieved` string is absent. All four failed on the pre-fix intro (the wave and words were wrong) and pass now. Test count 1783 -> 1787; packed files stay 65 (test/ is outside package.json files); the enforced (first-occurrence) marker advances in this same commit.
+
+Honest limits. The test pins the exact strings the intro quotes — glyphs, the menu count and each row label — not the surrounding prose; a reworded sentence that keeps these tokens passes. It deliberately leaves the intro's `verdict glyphs (✓ / ⊘ / ○)` parenthetical alone: that `○` is the shipped satisfied-at-HEAD `verdictEntryGlyph` (history.ts), not a stale verdict glyph.
+
+<!-- spec-check files=65 tests=1787 -->
