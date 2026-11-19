@@ -6,6 +6,7 @@ import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
+import { EvaluationTimeoutError } from "../src/runtime/evaluator.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 import { MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES, MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
 
@@ -487,6 +488,23 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.retries).toBe(2)
     expect(h.controller.get(SID)?.status).toBe("active")
     expect(h.controller.get(SID)?.reason).toBeUndefined()
+  })
+  test("an evaluator timeout surfaces as a named timeout in the notice and retries with bounded backoff", async () => {
+    await h.set()
+    h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 1/3)"))
+    await h.turn()
+    expect(h.controller.get(SID)?.retries).toBe(1)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    const notice = h.notices.at(-1)
+    expect(notice?.title).toBe("Goal still active")
+    expect(notice?.message).toContain("Evaluator failed")
+    expect(notice?.message).toContain("evaluator timed out after 120s")
+    expect(notice?.message).toContain("retrying in 10s")
+    // Bounded backoff: the next failure backs off to 30s, and no unreadable-verdict loop with no progress.
+    h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 1/3)"))
+    await h.clock.advance(10_000)
+    expect(h.controller.get(SID)?.retries).toBe(2)
+    expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
   })
 
   test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {

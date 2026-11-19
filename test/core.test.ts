@@ -178,6 +178,8 @@ describe("classifyFailure", () => {
     ["hook pauses", { message: "hook denied this turn" }, "pause"],
     ["capacity transient", { message: "capacity exceeded, try again" }, "transient"],
     ["timeout transient", { message: "request timed out" }, "transient"],
+    ["evaluator timeout transient", { message: "evaluator timed out after 120s (attempt 1/3)" }, "transient"],
+    ["AbortError transient", { message: "This operation was aborted" }, "transient"],
     ["429 bare pauses", { status: 429 }, "pause"],
     ["429 rate limit pauses", { status: 429, message: "Rate limit reached" }, "pause"],
     ["429 quota is fatal credit", { status: 429, message: "You exceeded your current quota" }, "fatal"],
