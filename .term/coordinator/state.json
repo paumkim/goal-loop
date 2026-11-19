@@ -3675,6 +3675,24 @@
       "submittedAt": "2026-11-19T10:43:47Z",
       "mergedAt": "2026-11-19T10:55:50Z",
       "mergedInto": "dev"
+    },
+    "tui-context-menu-single-rows": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md",
+      "branch": "wt/tui-context-menu-single-rows",
+      "worktree": "worktrees/wt-tui-context-menu-single-rows",
+      "status": "done",
+      "createdAt": "2026-11-19T11:04:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-19T11:09:59Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "pending_fixes.md",
+        "src/core/hud.ts"
+      ],
+      "submittedAt": "2026-11-19T11:09:59Z",
+      "mergedAt": "2026-11-19T11:11:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
