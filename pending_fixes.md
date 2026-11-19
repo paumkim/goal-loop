@@ -10,14 +10,14 @@ Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencie
 11a. `markerFg` duplicated in hud-card.tsx and status-dialog.tsx → one `compactMarkerFg` in core/hud.ts; card and dialog import it.
 7. Outline chips "no hover handler" — REJECTED by pin: `tui-render.test.tsx` (hovering a chip changes nothing — byte-identical frame, no UNDERLINE/BOLD) is the deliberate contract; the misleading prop doc and rail comment were rewritten to state the shipped contract. No behavior change.
 8. Find row + popup `close` cell now flip fg on hover (faint→base; close also BOLD under mono). No width changes.
-13. SPEC intro glyph-wave quotes (`· • ● •`, `◯` waiting, six menu rows, `●` achieved) NOT YET DONE — quoted-docs drift, listed below.
+13. SPEC intro glyph-wave quotes (`· • ● •`, `◯` waiting, six menu rows, `●` achieved) — **done in LXXV** (quoted-docs drift; intro corrected and pinned by `test/spec-intro-glyphs.test.ts`).
 
 ## Still open (deferred)
 5. `src/status-dialog.tsx` dossier `table` kind: `wrapMode="none"` inside a clipped scrollbox → silent right-edge clip; needs a wrap-or-ellipsis decision + render evidence, next iteration.
 11b. ~~Context-menu enabled predicates diverge between mouse arm (checks wiring) and keyboard arm (checks data)~~ — **done in LXXI**: `HudCard.menuRows` threads the mount's single row source (`contextRowsFor`) into the paint path; the card's own wiring probe is the embed fallback.
 11c. `stateWord` dialog-strip inline twin — kept by design (strip needs raw status + stuck override inline).
 12. `not_met` raw enum in countsText and remediationFor streak strings — pinned (tui-render "3 met · 2 not_met"; tui-hud + verdict-history-retention + SPEC.md). Pin wins; flipping is a separate deliberate decision.
-13. SPEC intro quotes stale glyphs: breath wave `· • ● •` vs shipped `◦ ○ ◎ ○`, resting waiting glyph `○` vs `◯`, "four fixed rows" vs six, `◎ goal achieved` vs `●`; SPEC.md intro only (LXVIII already fixed the footer-hint paragraph).
+13. ~~SPEC intro quotes stale glyphs~~ — **done in LXXV**: intro now quotes the shipped breath wave `◦ ○ ◎ ○`, the large waiting ring `◯`, "six fixed rows" (all six enumerated) and `● goal achieved`; a new `test/spec-intro-glyphs.test.ts` pins the intro against the renderer.
 14. (new) `markerFg`→`compactMarkerFg` — done. `stateWord` in card+rail single-imported — done earlier (LXVIII).
 
 ## Verified this iteration
