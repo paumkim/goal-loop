@@ -9,7 +9,7 @@ import type { JSX } from "@opentui/solid"
 import { TextAttributes, type InputRenderable, type ColorInput } from "@opentui/core"
 import { formatDurationCoarse, formatSpend, formatTokens, truncate } from "./core/format.ts"
 import { findMatches, countMatches, segmentLine, matchLabel } from "./core/find.ts"
-import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, type CompactMarkerTone } from "./core/hud.ts"
+import { remediationFor, stateAccentColor, fixAccentColor, evaluatorHint, motionDisabled, compactMarker, compactMarkerFg, isRetryStuck } from "./core/hud.ts"
 import { contextMeter, CONTEXT_BAR_CELLS, relativeTime } from "./core/history.ts"
 import type { GoalSnapshot } from "./core/types.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
@@ -21,6 +21,7 @@ import { reachAckSegment, type ReachOutcome } from "./core/reach-record.ts"
 import { signAckSegment, type SignOutcome } from "./core/sign-record.ts"
 import { sealAckSegment, type SealOutcome } from "./core/dossier-seal.ts"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "./tui-history.tsx"
+import { Affordance } from "./affordance.tsx"
 import { LABEL } from "./core/history.ts"
 
 /** Other rows the elsewhere block paints — the dust settles at four; beyond that the block gains a `+N more` line. */
@@ -51,28 +52,6 @@ const FixRow = (props: { theme: HistoryTheme; mono: () => boolean; fix: { readon
     </text>
   </box>
 )
-
-/**
- * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
- * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
- * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
- * the widest in-cell payload (`✓ copied` / `+ copied` / `✓ saved`); wider verbs pass their own width.
- */
-const Affordance = (props: { theme: HistoryTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
-  const ack = () => props.ack ?? null
-  const lit = () => props.hovered || ack() !== null
-  return (
-    <text
-      wrapMode="none"
-      flexShrink={0}
-      width={props.width ?? 8}
-      fg={lit() ? props.theme.text.base : props.theme.text.faint}
-      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
-    >
-      {ack() ?? props.verb}
-    </text>
-  )
-}
 
 export const StatusDialogBody = (props: {
   goal: GoalSnapshot | undefined
@@ -108,7 +87,7 @@ export const StatusDialogBody = (props: {
   onSignDossier?: () => SignOutcome | undefined
   /** The seal row — the record sealed into a file. One click runs all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and writes the sealed dossier (palette twin `goal.dossier.seal`). Painted only when the host wires this callback. */
   onSealDossier?: () => SealOutcome | undefined
-  /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Hovering a chip boldens it; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
+  /** When set, the dossier view paints a mouse-first outline rail left of the document: one chip per `## ` section. Chips carry no hover state — the resting frame is pinned byte-identical (weight never changes under the mouse; a left-click copies THAT section's Markdown (the heading included, verbatim bytes) through this callback; right and middle clicks are inert; the clicked chip paints `✓ copied` (ascii `+ copied`) in place for the usual acknowledgment window. Unwired, the rail does not paint (the document renders exactly as before). */
   onCopyDossierSection?: (label: string, raw: string) => void
   /** When set, an "elsewhere" row carries an always-mounted faint `→ transcript` affordance cell and a left-click asks the host to open that session's transcript route (ui.router.navigate). Read-only chrome — switching sessions stays the host's business. */
   onViewTranscript?: (sessionID: string) => void
@@ -213,7 +192,7 @@ export const StatusDialogBody = (props: {
     </box>
   )
   // Terminal states carry the same accents as the HUD card so the dialog header never reads muted-gray on an outcome: achieved reads info, impossible and paused read warning, failed reads error (falling back to warning where the theme has no error token).
-  const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, false, mono()) : theme().text.muted)
+  const stateColor = () => (props.goal?.status ? stateAccentColor(theme(), props.goal.status, isRetryStuck(props.goal), mono()) : theme().text.muted)
   const g = () => props.goal
   // elsewhere — live goals held by other sessions in this directory. Switching sessions is the host's
   // business, so with no handler rows paint inert and carry no key chords; when the host wires
@@ -225,7 +204,8 @@ export const StatusDialogBody = (props: {
   const OTHERS_TAG_MAX = 12
   const sessionTag = (sessionID: string): string => {
     const label = props.sessionLabel?.(sessionID) ?? sessionID
-    return label.length > OTHERS_TAG_MAX ? `${label.slice(0, OTHERS_TAG_MAX - 1)}…` : label
+    // Width-aware: OTHERS_TAG_MAX counts cells, not UTF-16 code units — a CJK label measured in code units blew the 12-cell tag column and bisected surrogate pairs.
+    return truncate(label, OTHERS_TAG_MAX)
   }
   const othersLive = () => {
     const rows = foreignLiveRows(props.others, g()?.sessionID)
@@ -294,14 +274,9 @@ export const StatusDialogBody = (props: {
   const [localOthersExpanded, setLocalOthersExpanded] = createSignal(false)
   // The boundary-compaction marker (compaction-landed indicator on the dial the boundary compaction reads). mono drops the hue, ascii demotions live in the text.
   const compactMarkerNow = () => compactMarker(g()?.loopCompact, ascii)
-  const compactMarkerFg = (tone: CompactMarkerTone) => {
-    if (mono()) return theme().text.muted
-    const fb = theme().text.feedback
-    if (tone === "landed") return (fb.success ?? fb.info).base
-    if (tone === "missed") return fb.warning.base
-    return theme().text.faint
-  }
   const [foldHovered, setFoldHovered] = createSignal(false)
+  const [findHovered, setFindHovered] = createSignal(false)
+  const [closeHovered, setCloseHovered] = createSignal(false)
   // Controlled when the caller passes `expandedOthers` (the dialog keymap drives it so the `m` chord
   // and the fold row flip the same flag); local state otherwise. Same contract as the rail's fold.
   const othersExpanded = () => props.expandedOthers?.() ?? localOthersExpanded()
@@ -503,7 +478,7 @@ export const StatusDialogBody = (props: {
       {viewTab("dossier")}
       <box flexGrow={1} />
       <text fg={stateColor()} attributes={TextAttributes.BOLD}>
-        {goalSnap.status}
+        {goalSnap.status === "active" && isRetryStuck(goalSnap) ? "stuck" : goalSnap.status}
       </text>
       <text fg={theme().text.muted}>
         {formatDurationCoarse(props.elapsedMs())} · {goalSnap.turns} turn{goalSnap.turns === 1 ? "" : "s"}
@@ -620,7 +595,7 @@ export const StatusDialogBody = (props: {
                     fallback={
                       <box flexDirection="row" gap={1}>
                         <text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(goal().contextSize as number)} tokens`}</text>
-                        <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
+                        <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(theme(), m().tone, mono())}>{`· ${m().text}`}</text>}</Show>
                       </box>
                     }
                   >
@@ -628,7 +603,7 @@ export const StatusDialogBody = (props: {
                     <text wrapMode="none" fg={mono() ? theme().text.muted : hot() ? theme().text.feedback.warning.base : theme().text.muted}>
                       {`~${formatTokens(goal().contextSize as number)} of ${formatTokens(goal().compactAtTokens as number)} · ${meter().pct}%`}
                     </text>
-                    <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
+                    <Show when={compactMarkerNow()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(theme(), m().tone, mono())}>{`· ${m().text}`}</text>}</Show>
                   </Show>
                 </box>
               )
@@ -722,9 +697,9 @@ export const StatusDialogBody = (props: {
                 : null}
               {/* the find row — the dossier's live spotlight. One click opens the bar (an inline input, a running count, and a close button); one click closes it and resets the query. Mouse-first, no chord — the row is the discovery surface */}
               {/* zIndex 1 — the sibling dossier rows above mount after this one in the hit grid's claim order and their text rects spill one cell past their painted line, shadowing this row's cells. The hit grid awards a cell to the last render pass over it, so this row sorts last on purpose */}
-              <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleFind() }}>
+              <box flexDirection="row" gap={2} zIndex={1} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); toggleFind() }} onMouseOver={() => setFindHovered(true)} onMouseOut={() => setFindHovered(false)}>
                 {label("find")}
-                <text wrapMode="word" flexGrow={1} fg={findOpen() ? theme().text.base : theme().text.faint}>
+                <text wrapMode="word" flexGrow={1} fg={findOpen() || findHovered() ? theme().text.base : theme().text.faint}>
                   {findOpen() ? "hide find" : "find in the record"}
                 </text>
               </box>
@@ -735,13 +710,13 @@ export const StatusDialogBody = (props: {
                   <text wrapMode="none" flexShrink={0} fg={findCount() > 0 ? theme().text.base : theme().text.faint} attributes={findCount() > 0 ? TextAttributes.BOLD : undefined}>
                     {matchLabel(findCount())}
                   </text>
-                  <box flexDirection="row" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); closeFind() }}>
-                    <text wrapMode="none" fg={theme().text.muted}>close</text>
+                  <box flexDirection="row" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); closeFind() }} onMouseOver={() => setCloseHovered(true)} onMouseOut={() => setCloseHovered(false)}>
+                    <text wrapMode="none" fg={closeHovered() ? theme().text.base : theme().text.muted} attributes={closeHovered() && mono() ? TextAttributes.BOLD : undefined}>close</text>
                   </box>
                 </box>
               </Show>
               <box flexDirection="row" gap={2}>
-                {/* the outline rail — one chip per `## ` section; left-click quotes that section verbatim. Inert chrome when the host does not wire the callback: no rail, the document paints exactly as before. The chip never changes on hover: its label is the affordance, the clicked chip paints `✓ copied` in place for the acknowledgment window */}
+                {/* the outline rail — one chip per `## ` section; left-click quotes that section verbatim. Inert chrome when the host does not wire the callback: no rail, the document paints exactly as before. No hover state — pinned byte-identical resting frame (tui-render: 'hovering a chip changes nothing'); the clicked chip paints `✓ copied` in place for the acknowledgment window */}
                 <Show when={props.onCopyDossierSection}>
                   <box flexDirection="column" gap={0} flexShrink={0} width={14}>
                     <For each={outline()}>{(entry) => {
@@ -800,7 +775,7 @@ export const StatusDialogBody = (props: {
                       ) : (
                         label("")
                       )}
-                      <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, false, mono())}>
+                      <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, isRetryStuck(other), mono())}>
                         {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
                       </text>
                       <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>

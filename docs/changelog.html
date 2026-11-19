@@ -11,38 +11,38 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
-<tr><td><code>2026-11-19 03:29 UTC</code></td><td>fix(file-log): safeStringify rewrite — toJSON handling, shared objects encode fully, true cycles detected, arrays and Errors handled</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 02:20 UTC</code></td><td>fix(config): maxConditionChars floor lowered to 0 — 0/small values reachable (regression test in config-defaults.test.ts); SPEC marker re-stamped 1757→1758</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 01:49 UTC</code></td><td>fix(runtime): loop maxLoops cap counts dropped history, not the saturated retained slice</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 01:15 UTC</code></td><td>fix(runtime): drop dead already-satisfied-at-HEAD zero-tool exemption; reconcile loop (vii-b) pin with the forward-pointer gate</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 00:51 UTC</code></td><td>fix(runtime): GoalStore.flush drains writes enqueued while it awaits; onExecutionSucceeded fails closed when background.busy errors; regression tests (store.test.ts, controller.test.ts); SPEC marker re-count 1754→1756</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 22:32 UTC</code></td><td>fix(goal): terminal goals stop parking outcome notes in the inbox; finished goals leave context (LXVII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 21:44 UTC</code></td><td>fix(goal): terminal goals fully inert after compaction (LXVI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 16:51 UTC</code></td><td>docs+spec: point index/install at the LXIV docs coverage gate (LXV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 16:37 UTC</code></td><td>docs+spec: audit the config page against resolveConfig; retire the last docs line ref (LXIII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 16:27 UTC</code></td><td>docs+spec: document the LX queued armed kickoff and the LXI elision (LXII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 16:20 UTC</code></td><td>fix+spec: elide the re-arm boundary's planner evidence at a word boundary (LXI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 15:52 UTC</code></td><td>feat+spec: dispatch the armed kickoff with resume:true and paint it queued until execution starts (LX)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 15:19 UTC</code></td><td>docs+spec: date-correct the re-anchor history-window claims (LIX)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 15:10 UTC</code></td><td>feat+spec: bound the post-compaction re-anchor history window (LVIII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 15:05 UTC</code></td><td>feat+spec: teach the post-compaction re-anchor the audit-and-stop clause (LVII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 14:43 UTC</code></td><td>docs: guards list gains the loop-advance re-arm no-new-gap refusal bullet (LV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 14:36 UTC</code></td><td>test+fix: unify re-arm no-new-gap refusal with the arming-side grep target (LIV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 14:16 UTC</code></td><td>fix: strip plain goal notes from model context too (LII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 14:10 UTC</code></td><td>fix: the achieved loop outcome note stops riding the context (LI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 13:30 UTC</code></td><td>docs+test: pin the docs path contract, close the clean-history audit (XLVI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 13:13 UTC</code></td><td>feat(loop): arming-side no-new-gap gate at the initial /goal-loop arm (XLV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 12:53 UTC</code></td><td>feat(evaluator): novelty/advancement rubric and fail-closed forward-pointer gate (XLIV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 12:33 UTC</code></td><td>feat(goal): unify finish-time prune with all-directory restore prune (XLIII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 11:49 UTC</code></td><td>feat(goal): bounded in-memory terminal-goal map (XLII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 11:34 UTC</code></td><td>feat(goal): cross-directory terminal-record GC at restore() (XLI)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 11:23 UTC</code></td><td>feat(goal): opportunistic terminal-record pruning on finish() (XL)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 11:10 UTC</code></td><td>docs(spec): XXXIX honesty re-audit — correct stale claims vs the tree</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 10:58 UTC</code></td><td>feat(goal): bound terminal goal records at plugin storage (XXXVIII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 10:42 UTC</code></td><td>feat(goal): completed-condition ledger — gates outlive the retained window (XXXVII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 10:29 UTC</code></td><td>feat(goal): verdict-trail retention made explicit — historyDropped + honest consumers (XXXVI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:41 UTC</code></td><td>chore(terminal-tui): terminal-TUI consistency pass — claimant uncommitted edits, docs stamps and changelog refreshed</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(tui): consistency pass — de-duplicated affordance cell, truthful stuck state in dialog strip and history rail</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix(runtime): loop maxLoops cap counts dropped history, not the saturated retained slice</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix(runtime): drop dead already-satisfied-at-HEAD zero-tool exemption; reconcile loop (vii-b) pin with the forward-pointer gate</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix(runtime): GoalStore.flush drains writes enqueued while it awaits; onExecutionSucceeded fails closed when background.busy errors; regression tests (store.test.ts, controller.test.ts); SPEC marker re-count 1754→1756</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix(goal): terminal goals stop parking outcome notes in the inbox; finished goals leave context (LXVII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix(goal): terminal goals fully inert after compaction (LXVI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs+spec: point index/install at the LXIV docs coverage gate (LXV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs+spec: audit the config page against resolveConfig; retire the last docs line ref (LXIII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs+spec: document the LX queued armed kickoff and the LXI elision (LXII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix+spec: elide the re-arm boundary's planner evidence at a word boundary (LXI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat+spec: dispatch the armed kickoff with resume:true and paint it queued until execution starts (LX)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs+spec: date-correct the re-anchor history-window claims (LIX)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat+spec: bound the post-compaction re-anchor history window (LVIII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat+spec: teach the post-compaction re-anchor the audit-and-stop clause (LVII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs: guards list gains the loop-advance re-arm no-new-gap refusal bullet (LV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>test+fix: unify re-arm no-new-gap refusal with the arming-side grep target (LIV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix: strip plain goal notes from model context too (LII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix: the achieved loop outcome note stops riding the context (LI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs+test: pin the docs path contract, close the clean-history audit (XLVI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(loop): arming-side no-new-gap gate at the initial /goal-loop arm (XLV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(evaluator): novelty/advancement rubric and fail-closed forward-pointer gate (XLIV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): unify finish-time prune with all-directory restore prune (XLIII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): bounded in-memory terminal-goal map (XLII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): cross-directory terminal-record GC at restore() (XLI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): opportunistic terminal-record pruning on finish() (XL)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs(spec): XXXIX honesty re-audit — correct stale claims vs the tree</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): bound terminal goal records at plugin storage (XXXVIII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): completed-condition ledger — gates outlive the retained window (XXXVII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-19 03:37 UTC</code></td><td>feat(goal): verdict-trail retention made explicit — historyDropped + honest consumers (XXXVI)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-18 22:32 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-19 03:41 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
