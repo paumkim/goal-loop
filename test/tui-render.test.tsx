@@ -190,6 +190,12 @@ describe("LoopSection", () => {
     expect(frame).toContain("paused")
     expect(frame).toContain("stall 3 · retries 2")
   })
+
+  test("a stuck-retrying goal reads stuck in the now row, not active", async () => {
+    const frame = await render(() => <LoopSection goal={loopedGoal({ retries: 3 })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
+    expect(frame).toContain("stuck")
+    expect(frame).not.toContain(" active ")
+  })
 })
 
 describe("HistoryBlock", () => {
@@ -803,7 +809,7 @@ describe("loop rail progressive disclosure", () => {
     const setup = await testRender(() => <LoopSection goal={bigLoopGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, { width: 112, height: 44 })
     await setup.renderOnce()
     const frame = setup.captureCharFrame()
-    expect(frame).toContain("2 older iterations - click or press x")
+    expect(frame).toContain("2 older iterations · click or press x")
     expect(frame).toContain("v6")
     expect(frame).toContain("v3")
     expect(frame).not.toContain("v2 ")
