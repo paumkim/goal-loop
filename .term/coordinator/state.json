@@ -3759,6 +3759,17 @@
       "submittedAt": "2026-11-19T13:05:15Z",
       "mergedAt": "2026-11-19T13:06:47Z",
       "mergedInto": "dev"
+    },
+    "fix-context-strip-compaction-checkpoint-trailing-user": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,src/core/prompts.ts,src/index.ts,test/notes.test.ts,test/plugin.test.ts",
+      "branch": "wt/fix-context-strip-compaction-checkpoint-trailing-user",
+      "worktree": "worktrees/wt-fix-context-strip-compaction-checkpoint-trailing-user",
+      "status": "done",
+      "createdAt": "2026-11-19T13:43:57Z",
+      "submittedAt": "2026-11-19T13:45:41Z",
+      "mergedAt": "2026-11-19T13:47:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
