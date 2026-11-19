@@ -1035,8 +1035,12 @@ export class GoalController {
     }
     runtime.evaluating = true
     this.emit(record)
+    // Registered on the runtime so invalidate() during verification cancels the child instead of
+    // letting it run to the timeout; the stale-epoch check in evaluate() drops its result either way.
+    const verification = new AbortController()
+    runtime.abort = verification
     try {
-      const signal = AbortSignal.timeout(config.evaluator.verifyTimeoutMs)
+      const signal = AbortSignal.any([AbortSignal.timeout(config.evaluator.verifyTimeoutMs), verification.signal])
       const run = await verifier.verify({ command, cwd: this.deps.directory, timeoutMs: config.evaluator.verifyTimeoutMs, signal })
       if (run.code === 0) {
         mark({ code: 0, output: run.output })
@@ -1050,7 +1054,10 @@ export class GoalController {
       mark({ code: null, output: detail })
       return fail(detail)
     } finally {
-      if (runtime.abort === undefined) runtime.evaluating = false
+      if (runtime.abort === verification) {
+        runtime.abort = undefined
+        runtime.evaluating = false
+      }
     }
   }
 

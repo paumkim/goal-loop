@@ -27,16 +27,40 @@ export interface FileSinkOptions {
 /** JSON.stringify that survives anything a log site might hand it: cycles, bigints, Errors. */
 function safeStringify(value: unknown): string | undefined {
   const seen = new Set<object>()
-  try {
-    return JSON.stringify(value, (_key, nested: unknown) => {
-      if (typeof nested === "bigint") return nested.toString()
-      if (nested instanceof Error) return { name: nested.name, message: nested.message }
-      if (typeof nested === "object" && nested !== null) {
-        if (seen.has(nested)) return "[circular]"
-        seen.add(nested)
+  // Encode one value into its JSON literal. Returns undefined when the value has no JSON form.
+  const encode = (entry: unknown): string | undefined => {
+    if (typeof entry === "bigint") return JSON.stringify(entry.toString())
+    if (entry instanceof Error) return JSON.stringify({ name: entry.name, message: entry.message })
+    if (typeof entry === "object" && entry !== null) {
+      const toJSON = (entry as { toJSON?: unknown }).toJSON
+      if (typeof toJSON === "function") {
+        try {
+          return encode((toJSON as () => unknown).call(entry))
+        } catch {
+          return undefined
+        }
       }
-      return nested
-    })
+      // A true cycle (the value already on the path) is replaced; a shared non-cyclic object encodes fully.
+      if (seen.has(entry)) return JSON.stringify("[circular]")
+      seen.add(entry)
+      if (Array.isArray(entry)) {
+        const parts: string[] = []
+        for (const item of entry) parts.push(encode(item) ?? "null")
+        seen.delete(entry)
+        return `[${parts.join(",")}]`
+      }
+      const parts: string[] = []
+      for (const [key, nested] of Object.entries(entry)) {
+        const encoded = encode(nested)
+        if (encoded !== undefined) parts.push(`${JSON.stringify(key)}:${encoded}`)
+      }
+      seen.delete(entry)
+      return `{${parts.join(",")}}`
+    }
+    return JSON.stringify(entry)
+  }
+  try {
+    return encode(value)
   } catch {
     return undefined
   }
