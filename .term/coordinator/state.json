@@ -3615,9 +3615,9 @@
       "paths": ".",
       "branch": "wt/keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
       "worktree": "worktrees/wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
-      "status": "done",
-      "createdAt": "2026-11-19T07:55:17Z",
-      "submittedAt": "2026-11-19T08:20:08Z",
+      "status": "submitted",
+      "createdAt": "2026-11-19T08:29:45Z",
+      "submittedAt": "2026-11-19T09:13:31Z",
       "mergedAt": "2026-11-19T08:25:16Z",
       "mergedInto": "dev"
     },
@@ -3637,8 +3637,28 @@
       "paths": ".",
       "branch": "wt/keep-improving-the-terminal-tui-focusing-on-users-experiences-smooth-it-out-all-the-rough-edges-the-in-consistencies",
       "worktree": "worktrees/wt-keep-improving-the-terminal-tui-focusing-on-users-experiences-smooth-it-out-all-the-rough-edges-the-in-consistencies",
+      "status": "done",
+      "createdAt": "2026-11-19T09:13:20Z",
+      "submittedAt": "2026-11-19T09:13:20Z",
+      "mergedAt": "2026-11-19T10:11:46Z",
+      "mergedInto": "dev"
+    },
+    "behavior-regression-inspection": {
+      "agent": "orchestrator",
+      "paths": "src,test,SPEC.md",
+      "branch": "wt/behavior-regression-inspection",
+      "worktree": "worktrees/wt-behavior-regression-inspection",
+      "status": "submitted",
+      "createdAt": "2026-11-19T09:25:34Z",
+      "submittedAt": "2026-11-19T09:31:40Z"
+    },
+    "evaluator-slow-connection-timeout": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,src/core/prompts.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts",
+      "branch": "wt/evaluator-slow-connection-timeout",
+      "worktree": "worktrees/wt-evaluator-slow-connection-timeout",
       "status": "claimed",
-      "createdAt": "2026-11-19T07:51:54Z"
+      "createdAt": "2026-11-19T10:04:52Z"
     }
   },
   "mergeLock": null,
