@@ -212,6 +212,18 @@ export class GoalController {
     return record && isLive(record.status) ? record : undefined
   }
 
+  /**
+   * True when this process adopted/created a terminal (achieved/impossible/cleared/failed) record for
+   * the session: the goal ended here and must not re-establish itself. Used by the `context` hook to
+   * decide whether a session with no live goal gets the terminal ground-truth line. Volatile — a
+   * plugin reload adopts no terminal records, so this reads false until the next terminal transition
+   * in this process (instruction stripping still applies; only the reminder line is gated on it).
+   */
+  hasTerminalRecord(sessionID: string): boolean {
+    const record = this.goals.get(sessionID)
+    return record !== undefined && !isLive(record.status)
+  }
+
   activeCondition(sessionID: string): string | undefined {
     const record = this.goals.get(sessionID)
     return record?.status === "active" ? record.condition : undefined
@@ -384,7 +396,7 @@ export class GoalController {
     return text
   }
 
-  /** Arm the post-compaction ground-truth re-anchor; fire-and-forget like `note()`. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
+  /** Arm the post-compaction ground-truth re-anchor; fire-and-forget. Coalesced: at most one per session per {@link REANCHOR_MIN_INTERVAL_MS}. */
   private reanchor(record: GoalRecord) {
     // Never arm (or commit) for a record that is no longer the adopted one — deleted mid-flight above.
     if (this.goals.get(record.sessionID) !== record) return
@@ -950,13 +962,13 @@ export class GoalController {
       this.finish(record, "achieved", result.reason)
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, `${story} · ${result.reason || record.condition}`)
-      return this.note(record, `Goal achieved (turn ${turn}, ${formatDuration(clock.now() - record.startedAt)}).`, result.reason, { final: true })
+      this.deps.log.info("goal achieved", { sessionID, turn, elapsedMs: clock.now() - record.startedAt })
     }
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", `${story} · ${result.reason || record.condition}`)
-      return this.note(record, "Goal ended: the evaluator judged it impossible.", result.reason, { final: true })
+      this.deps.log.info("goal impossible", { sessionID, turn })
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
       return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`, "cap")
@@ -1124,7 +1136,7 @@ export class GoalController {
       await this.finish(record, "achieved", reason)
       const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt, iterations: history.length })
       this.notify(sessionID, "achieved", "success", "Loop complete", `${story} · ${reason}`)
-      return this.note(record, `Loop complete after ${history.length} iteration${history.length === 1 ? "" : "s"}.`, reason, { final: true })
+      return void this.deps.log.info("loop complete", { sessionID, iterations: history.length, reason })
     }
 
     if (!this.deps.evaluator.summarize && !this.deps.evaluator.nextGoal) {
@@ -1279,10 +1291,8 @@ export class GoalController {
     await this.commit(record)
     if (this.stale(record, runtime, epoch)) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} of ${maxLoops} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
-    // The outcome line stays on the terminal; the armed kickoff (loopContinuation) carries the same
-    // state forward, so this note must not ride later context — a final note, like any end of record.
-    await this.note(record, `Loop ${iteration} of ${maxLoops} achieved (turn ${turn}); goal v${nextIteration} armed.`, condition, { final: true })
-    // The note round-trips through synthetic; the world may have moved on while it landed.
+    // A stale step (the record was superseded by a clear/replace during the commit await) must not
+    // reach the compaction request or the arming steer.
     if (this.stale(record, runtime, epoch)) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
@@ -1669,21 +1679,6 @@ export class GoalController {
       this.lastReanchorAt.delete(sessionID)
       this.pendingAnchors.delete(sessionID)
     }
-  }
-
-  /** Records a verdict in the transcript without waking the session (like a shell notification). */
-  private async note(record: GoalRecord, title: string, body: string, opts?: { final?: boolean }) {
-    if (!this.deps.config.transcriptNotes) return
-    await this.deps.session
-      .synthetic({
-        sessionID: record.sessionID,
-        text: Prompt.note({ title, body: body || record.condition, ...(opts?.final ? { final: true } : {}) }),
-        description: title,
-        metadata: { source: Prompt.MARKER, goal: record.id, final: true },
-        delivery: "queue",
-        resume: false,
-      })
-      .catch((error) => this.deps.log.warn("could not record goal note", { error: errorMessage(error) }))
   }
 
   // ---------------------------------------------------------------- plumbing

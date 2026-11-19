@@ -29,7 +29,7 @@ export interface GoalConfig {
   readonly maxConditionChars: number
   /** Adds a stable system reminder while a goal is live. Costs one prompt-cache miss when toggled. */
   readonly systemReminder: boolean
-  /** Records verdicts in the transcript as synthetic notes. */
+  /** Retained for compatibility; no longer gates anything — the durable transcript outcome note was retired (Workstream LXVII) because it parked in the session inbox. The end-of-record outcome surfaces via the notice toast, the HUD terminal acknowledgment and the goal record itself. */
   readonly transcriptNotes: boolean
   /** Auto-compact when the estimated model-visible context (last assistant token usage) is at or above this many tokens. 0 disables. Env OPENCODE_GOAL_COMPACT_AT_TOKENS. */
   readonly compactAtTokens: number
