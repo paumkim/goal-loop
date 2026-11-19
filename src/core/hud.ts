@@ -114,9 +114,9 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
  * swallowed. The keyboard twin skips disabled rows by the same contract — selection can rest on a
  * disabled row only transiently if every row is disabled (index stays put).
  */
-type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
+export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
 
-interface ContextMenuRow {
+export interface ContextMenuRow {
   readonly id: ContextMenuId
   readonly text: string
   readonly enabled: boolean

@@ -5474,11 +5474,11 @@ var HudCard = (props) => {
         var _el$22 = _$createElement4("box");
         _$setProp4(_el$22, "flexDirection", "column");
         _$setProp4(_el$22, "marginTop", 0);
-        _$insert4(_el$22, () => contextMenuRows({
+        _$insert4(_el$22, () => (props.menuRows ?? (() => contextMenuRows({
           hasReason: Boolean(g().reason && props.onCopyReason),
           hasSummary: Boolean(latestSummary() && props.onCopySummary),
           hasDossier: Boolean(props.onCopyDossier && props.onSaveDossier)
-        }).map((row, index) => {
+        })))().map((row, index) => {
           const gutter = index === 0 ? "menu" : "";
           const selected = () => (props.menuSelected?.() ?? 0) === index;
           switch (row.id) {
@@ -6855,10 +6855,11 @@ var tui_default = Plugin.define({
     const contextRowsFor = (sessionID) => {
       try {
         const goal = sessionID ? entries()[sessionID]?.goal : undefined;
+        const wires = (fn) => typeof fn === "function";
         return contextMenuRows({
-          hasReason: Boolean(goal?.reason),
-          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary),
-          hasDossier: Boolean(goal)
+          hasReason: Boolean(goal?.reason) && wires(copyToClipboard),
+          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary) && wires(copyToClipboard),
+          hasDossier: Boolean(goal) && wires(copyToClipboard) && wires(exportDossier)
         });
       } catch {
         return contextMenuRows({
@@ -7585,6 +7586,7 @@ var tui_default = Plugin.define({
                             return next;
                           }),
                           menuSelected: () => contextIndex(),
+                          menuRows: () => contextRowsFor(getHudSession()),
                           onCloseMenu: () => {
                             setContextOpen(false);
                             setContextIndex(0);

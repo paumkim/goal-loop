@@ -474,7 +474,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1772 -->
+<!-- spec-check files=65 tests=1773 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7209,3 +7209,17 @@ Fix: the dossier row classifier's `table` kind now paints `wrapMode="word"` like
 Honest limits. The table still reads as a Markdown table; a wrapped continuation starts on the row's next line without an indent — acceptable in a scrollable record. No other kind changed. Test count moved 1763 → 1764; packed files stay 65; the enforced (first-occurrence) SPEC marker advances in this same commit.
 
 <!-- spec-check files=65 tests=1764 -->
+
+## Workstream LXXI — the context menu has one row source (2026-11-19)
+
+Armed condition (verbatim): "inspect for regression on behavior functionalities. fix what needs fixing and improving to keep on moving forwards with the repo project." Fuzzy; this iteration closes deferred item 11b — the HUD card's right-click menu computed its enabled predicates twice, and not identically.
+
+The divergence. The mouse arm (`src/hud-card.tsx`) enabled a row on data AND host wiring (`Boolean(goal.reason && props.onCopyReason)`); the keyboard arm (`src/tui.tsx` `contextRowsFor`) enabled on goal data alone. Both hosts wired everything, so nothing misbehaved in production — but the two arms were independent readings of the same contract, and a host that wired only some doors would have shown a row that the mouse refused and Enter fired, or a row that painted live and Enter skipped.
+
+Fix. One array, two consumers. `HudCard` gains `menuRows?: () => readonly ContextMenuRow[]`; the TUI mount passes `() => contextRowsFor(getHudSession())` — the exact function `activateContextMenu` and the up/down keymap already read. The card's internal wiring probe stays as the fallback for embeds and tests that declare no rows, and `ContextMenuRow`/`ContextMenuId` are exported as the contract between them. `contextRowsFor` spells out both halves of the grammar (data and wiring) through an `unknown` guard, so a future host that stops wiring a door shows it in the menu.
+
+Evidence. New test "one row source: rows the host declares win over the card's own wiring probe — mouse and keyboard cannot diverge" (`test/tui-render.test.tsx`) wires `onCopySummary` but declares all rows disabled: it failed on the previous tree (the card's own probe enabled the row and the click fired) and passes now (the declared row is inert, the menu stays open). The existing ten context-menu tests, including the half-wired-dossier pin, pass unchanged.
+
+Honest limits. The prop is a row *supplier*, not a row *override* of individual fields: a host that wants one row flipped returns the whole array. No visual change in the shipped TUI — this is divergence prevention, not a bug fix a user could see today. Test count 1772 -> 1773; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
+
+<!-- spec-check files=65 tests=1773 -->

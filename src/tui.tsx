@@ -654,10 +654,22 @@ export default Plugin.define({
     const [contextOpen, setContextOpen] = createSignal(false)
     // The keyboard arm of the open menu: ↑/↓ move a selection index over the same six rows the mouse paints (disabled rows are skipped — the inert-row contract), enter activates, esc collapses the menu before the card. Reset to the first row on every open.
     const [contextIndex, setContextIndex] = createSignal(0)
+    // One row source for both arms: the painted rows (menuRows on the card) and the up/down/Enter rows
+    // are this same function's output. Its predicates mirror the mouse grammar the card used to compute
+    // on its own — data AND the host's action wiring — so a row can never be clickable but Enter-dead (or
+    // the reverse). This mount wires every action, so the wiring terms are constant here; they are
+    // spelled out so a future host that stops wiring one shows it in the menu, not only in the click.
     const contextRowsFor = (sessionID: string | undefined) => {
       try {
         const goal = sessionID ? entries()[sessionID]?.goal : undefined
-        return contextMenuRows({ hasReason: Boolean(goal?.reason), hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary), hasDossier: Boolean(goal) })
+        // This mount wires every action unconditionally, so the wiring half is constant here; naming it
+        // through an `unknown` guard keeps the shared predicate honest without a dead condition.
+        const wires = (fn: unknown): boolean => typeof fn === "function"
+        return contextMenuRows({
+          hasReason: Boolean(goal?.reason) && wires(copyToClipboard),
+          hasSummary: Boolean(goal?.loopHistory?.at(-1)?.summary) && wires(copyToClipboard),
+          hasDossier: Boolean(goal) && wires(copyToClipboard) && wires(exportDossier),
+        })
       } catch {
         return contextMenuRows({ hasReason: false, hasSummary: false, hasDossier: false })
       }
@@ -1196,6 +1208,7 @@ export default Plugin.define({
                     maxRows={maxBodyRows()}
                     onToggleContext={() => setContextOpen((v) => { const next = !v; if (next) setContextIndex(0); return next })}
                     menuSelected={() => contextIndex()}
+                    menuRows={() => contextRowsFor(getHudSession())}
                     onCloseMenu={() => { setContextOpen(false); setContextIndex(0) }}
                     onCopyReason={(reason) => copyToClipboard(reason, props.sessionID, "reason")}
                     onCopySummary={(summary) => copyToClipboard(summary, props.sessionID, "summary")}
