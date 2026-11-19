@@ -3770,6 +3770,29 @@
       "submittedAt": "2026-11-19T13:45:41Z",
       "mergedAt": "2026-11-19T13:47:18Z",
       "mergedInto": "dev"
+    },
+    "goal-loop-cli": {
+      "agent": "orchestrator",
+      "paths": "bin,package.json,install.sh,test,README.md,SPEC.md,AGENTS.md,docs,scripts,rpc.ts",
+      "branch": "wt/goal-loop-cli",
+      "worktree": "worktrees/wt-goal-loop-cli",
+      "status": "done",
+      "createdAt": "2026-11-19T14:22:25Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-19T14:28:12Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "src/core/dossier-index.ts",
+        "src/core/dossier.ts",
+        "src/core/mirror.ts",
+        "src/core/opencode-cli.ts",
+        "src/core/spend-ledger.ts",
+        "src/index.ts",
+        "src/tui.tsx"
+      ],
+      "submittedAt": "2026-11-19T14:28:12Z",
+      "mergedAt": "2026-11-19T14:29:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
