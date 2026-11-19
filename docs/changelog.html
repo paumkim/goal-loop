@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-19 04:24 UTC</code></td><td>fix(evaluator): per-attempt abort budget + app-level race — a slow provider can no longer hang the evaluator or loop on &quot;unreadable verdict&quot;</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 04:05 UTC</code></td><td>fix(evaluator): escalate unreadable verdicts — empty/garbage replies retried with REPAIR then STRICT_REPAIR before EvaluationError; regression tests cover empty-reply recovery and the 3-attempt failure; SPEC marker re-stamped 1758→1760</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 02:20 UTC</code></td><td>fix(config): maxConditionChars floor lowered to 0 — 0/small values reachable (regression test in config-defaults.test.ts); SPEC marker re-stamped 1757→1758</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 01:49 UTC</code></td><td>fix(runtime): loop maxLoops cap counts dropped history, not the saturated retained slice</td><td>commit</td></tr>
@@ -40,9 +41,8 @@
 <tr><td><code>2026-11-18 11:10 UTC</code></td><td>docs(spec): XXXIX honesty re-audit — correct stale claims vs the tree</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 10:58 UTC</code></td><td>feat(goal): bound terminal goal records at plugin storage (XXXVIII)</td><td>commit</td></tr>
 <tr><td><code>2026-11-18 10:42 UTC</code></td><td>feat(goal): completed-condition ledger — gates outlive the retained window (XXXVII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-18 10:29 UTC</code></td><td>feat(goal): verdict-trail retention made explicit — historyDropped + honest consumers (XXXVI)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-19 04:05 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">opencode-goalv2 — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-19 04:24 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
