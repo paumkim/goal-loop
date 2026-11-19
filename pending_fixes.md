@@ -23,3 +23,27 @@ Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencie
 ## Verified this iteration
 - `bunx tsc --noEmit` exit 0; `bun test` (cd test) → **1759 pass / 0 fail** (with the new CJK test); snapshots 28 pass; `bun run compile` rebuilt dist/tui.js; package-integrity unchanged (65 files).
 - Fix-then-pin discipline: every re-pin (`tui-hud.test.tsx` ✕→✗, `tui-render.test.tsx` fold wording) moved in the same commit as the behavior change.
+
+---
+
+# pending_fixes — opencode-goalv2 back-to-front sweep (iteration 1)
+
+Sweep done by a general subagent (read-only, worktree: wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front). Findings — some fixed and verified, others reviewed/rejected.
+
+## Fixed (fixed by general subagent + verified by tester subagent)
+6. `src/runtime/controller.ts:921-926` — dropped the dead "already satisfied at HEAD" zero-tool exemption; stale comment replaced (the forward-pointer gate in core/verdict.ts owns the already-satisfied landing — a bare already-satisfied met downgrades to not_met there, pinned by core.test.ts). `test/loop.test.ts` (vii-b) pinned the exemption and was reconciled to pin the downgrade instead (loop does not advance; reason "no evidence of work toward the condition"; loopIteration 1). Found in review: the exemption was unproducible in production since XLIV landed (applyForwardPointerGate at parse), but was the only remaining path that could advance an armed loop on a bare already-satisfied claim with zero tool calls. Verified: `bun run check` exit 0 (1756 pass / 0 fail, docs:check passed, spec-check ok, 64 files, 1756 tests).
+4. `src/runtime/controller.ts:731` — `onExecutionSucceeded` now fails closed when `background.busy(sessionID)` errors: logs "goal busy check failed; skipping evaluation" and returns without evaluating. Regression test "skips evaluation when the busy check errors" added to `test/controller.test.ts` (harness: `busyError` + `setBusyError`). Verified: new test passes with the fix (1 pass / 0 fail); with the fix stashed it fails (Expected 0, Received 1); tester re-ran: `bun run check` suite 1756 pass / 0 fail; regression test exit 0.
+5. `src/runtime/store.ts:119-121` — `flush()` now drains: `while (this.chains.size > 0) { await Promise.all([...this.chains.values()]) }`. Regression test added to `test/store.test.ts` ("GoalStore.flush > flush drains writes enqueued while it is awaiting"). SPEC marker updated (tests=1754→1755). Verified: `bun run check` exit 0 (1755 pass / 0 fail, spec-check ok); `bun test test/store.test.ts` exit 0 (10 pass / 0 fail); discrimination: with the buggy flush the new test fails (9 pass / 1 fail).
+
+5. `src/runtime/controller.ts:1189` — the iteration cap is unreachable when `maxLoops > 50` (loopHistory is capped at 50). Fixed on dev (merged commit d5d1d33): the `history.length >= maxLoops` check now counts total achieved iterations (`completedIterationCount`) instead of retained entries, so a `maxLoops > 50` loop reaches its cap; regression test (vii-d) pins a 52-cap goal with 50 retained entries + 2 dropped completing at 53. Already in this worktree's tree (`grep -c completedIterationCount src/runtime/controller.ts` → 2). Dev `bun run check` green: 1757 pass / 0 fail, spec-check ok.
+
+6. `src/core/config.ts:132` — `maxConditionChars` floor lowered from 100 to 0 on the otherwise-unlimited default. Now `int(options.maxConditionChars, DEFAULTS.maxConditionChars, 0)`: `int(0, Number.MAX_SAFE_INTEGER, 0)` → 0, so the goal-hook check at src/index.ts:288-290 rejects any objective with length > 0 ("reject everything"); unset → Number.MAX_SAFE_INTEGER (default unchanged — README/docs tables still document it, and test/config-defaults.test.ts:187 still asserts it). Regression test added to `test/config-defaults.test.ts`: `resolveConfig({ maxConditionChars: 0 }).maxConditionChars` → 0, `resolveConfig({ maxConditionChars: 5 }).maxConditionChars` → 5, unset → MAX_SAFE_INTEGER. Verified: `bun test test/config-defaults.test.ts` exit 0 (12 pass / 0 fail, 197 expect() calls); discrimination — floor flipped back to 100: the new test fails (Expected: 0, Received: 100; 11 pass / 1 fail); restored → pass. `bun run check` exit 0 (1758 pass / 0 fail, 28 snapshots, 6963 expect() calls, Ran 1758 tests across 71 files; spec-check ok (64 files, 1758 tests match SPEC.md)).
+
+## Rejected — contradicts pinned behavior (tests)
+- `src/runtime/controller.ts:1447` — proposed clearing `iterationDeferred` in `clearDeferred`: contradicts `loop.test.ts:1938` ("an iteration spent waiting on background work is not a zero-tool iteration" — the suppression while waiting is by design). Fix applied by a general subagent, then reverted; targeted rerun on base: 1 pass / 0 fail.
+
+## Open (reviewed, minor — not fixed per mandate)
+3. `src/runtime/controller.ts:1029-1031` — `verifyMet` registers no `runtime.abort` during the verification await (impact: wasted verify compute on interrupt, up to verifyTimeoutMs). [Moot: main checkout carries the verifyMet abort registration fix — iteration 1's second verified improvement; confirm at merge time.]
+7. `src/core/index.ts:288-290` — the goal-loop length check counts UTF-16 units, `parseGoalCommand` counts code points.
+8. `src/core/events.ts:121-124` — a `shell.created` without an id never registers the shell (background undercount).
+9. `src/core/parse.ts:28-29` — `unquote` returns the one-char input `"` for `/goal "` (cosmetic).

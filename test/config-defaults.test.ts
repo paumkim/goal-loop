@@ -190,6 +190,12 @@ describe("config defaults — documented vs code", () => {
     expect(norm(htmlRows.get("maxConditionChars"))).toBe(Number.MAX_SAFE_INTEGER)
   })
 
+  test("maxConditionChars: the floor lets 0 and small values through (documented default stays unlimited)", () => {
+    expect(resolveConfig({}, {}).maxConditionChars).toBe(Number.MAX_SAFE_INTEGER)
+    expect(resolveConfig({ maxConditionChars: 0 }, {}).maxConditionChars).toBe(0)
+    expect(resolveConfig({ maxConditionChars: 5 }, {}).maxConditionChars).toBe(5)
+  })
+
   test("evaluator.mode documents 'auto'; 'auto' without a model resolves to 'session'", () => {
     expect(norm(readmeRows.get("evaluator.mode"))).toBe("auto")
     expect(norm(htmlRows.get("evaluator.mode"))).toBe("auto")

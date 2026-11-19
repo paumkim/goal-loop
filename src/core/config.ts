@@ -129,7 +129,7 @@ export function resolveConfig(
     checkinMinutes: int(env.OPENCODE_GOAL_CHECKIN_MINUTES ?? options.checkinMinutes, DEFAULTS.checkinMinutes, 0),
     maxIdleCheckins: int(options.maxIdleCheckins, DEFAULTS.maxIdleCheckins, 0),
     maxRetries: int(options.maxRetries, DEFAULTS.maxRetries, 0),
-    maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 100),
+    maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 0),
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),
     compactAtTokens: int(env.OPENCODE_GOAL_COMPACT_AT_TOKENS ?? options.compactAtTokens, DEFAULTS.compactAtTokens, 0),
