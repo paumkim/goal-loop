@@ -196,6 +196,26 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
     }
   })
 
+  test("an astral-heavy objective is measured in code points: admitted at the code-point limit", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory, { maxConditionChars: 5 })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      // 5 code points (10 UTF-16 units): at the limit, not over it.
+      const event = promptEvent("/goal-loop 🎉🎉🎉🎉🎉")
+      expect("🎉🎉🎉🎉🎉".length).toBe(10)
+      await hooks.prompt!(event)
+      // Admitted: the loop is armed and the prompt carries the objective; no "Loop not set" toast.
+      expect(event.prompt.text).toContain("🎉🎉🎉🎉🎉")
+      const stored = storage.get("goal/v1/ses_1") as any
+      expect(stored?.loopEnabled).toBe(true)
+      expect(stored?.condition).toBe("🎉🎉🎉🎉🎉")
+      expect(calls.notices.find((n: any) => n.title === "Loop not set")).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("an invalid count whose suffix carries control bytes is sanitized in the toast", async () => {
     const directory = repository()
     const { ctx, hooks, calls } = context(directory)
