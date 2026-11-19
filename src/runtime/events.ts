@@ -118,9 +118,13 @@ export function createRouter(input: { controller: GoalController; background: Ba
           })
         return
       case "shell.created": {
-        const info = asRecord(data.info)
-        const createdId = typeof info.id === "string" ? info.id : undefined
-        if (createdId) guard(() => background.shellCreated(createdId, String(info.status), asRecord(info.metadata).sessionID))
+        // Mirror shell.updated: the id/owner/status may ride `info` or the event's top-level `data`.
+        // Reading only `info` dropped a created event whose id lived at the top level — the shell never
+        // registered, so busy() undercounted and the evaluator could run while a shell was still live.
+        const info = asRecord(data.info ?? data)
+        const createdId = typeof info.id === "string" ? info.id : typeof data.id === "string" ? data.id : undefined
+        const owner = asRecord(info.metadata).sessionID ?? asRecord(data.metadata).sessionID
+        if (createdId) guard(() => background.shellCreated(createdId, String(info.status ?? data.status ?? ""), owner))
         return
       }
       case "shell.updated": {
