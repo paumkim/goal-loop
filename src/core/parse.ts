@@ -27,6 +27,9 @@ export function parseGoalCommand(raw: string, maxChars: number): GoalCommand {
 function unquote(text: string) {
   const first = text[0]
   if (text.length >= 2 && (first === '"' || first === "'" || first === "`") && text.endsWith(first)) return text.slice(1, -1).trim()
+  // A lone quote (`/goal "`) is an unterminated opener, not a one-character condition. Return empty so
+  // parseGoalCommand falls back to status instead of setting the goal's condition to a bare `"`.
+  if (text.length === 1 && (first === '"' || first === "'" || first === "`")) return ""
   return text
 }
 

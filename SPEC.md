@@ -475,7 +475,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=65 tests=1787 -->
+<!-- spec-check files=65 tests=1789 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7284,3 +7284,10 @@ Evidence (`test/spec-intro-glyphs.test.ts`, 4 tests — a new pin, not a re-quot
 Honest limits. The test pins the exact strings the intro quotes — glyphs, the menu count and each row label — not the surrounding prose; a reworded sentence that keeps these tokens passes. It deliberately leaves the intro's `verdict glyphs (✓ / ⊘ / ○)` parenthetical alone: that `○` is the shipped satisfied-at-HEAD `verdictEntryGlyph` (history.ts), not a stale verdict glyph.
 
 <!-- spec-check files=65 tests=1787 -->
+## Workstream LXXVI — the created-shell event reads its id where the others do (2026-11-19)
+Armed condition (verbatim): "review recent changes fix what needs fixing and merge and commit to dev and rebuild what needs rebuild." Fuzzy; this iteration closes the two remaining `pending_fixes.md` items (8 and 9) from the back-to-front sweep.
+Defect 1 (`src/runtime/events.ts`, `shell.created`). The event router's `shell.updated`, `shell.exited` and `shell.deleted` arms all read their id from `data.info ?? data` and fall back to a top-level `data.id`, and read the owner from either `info.metadata.sessionID` or `data.metadata.sessionID`. `shell.created` read only `info` (`asRecord(data.info)`), so a created event whose id/owner rode the top-level `data` was silently dropped: `BackgroundTracker.shellCreated` never saw it, `busy()` undercounted that session's shells, and the evaluator could run while a shell the session started was still live. The arm now mirrors `shell.updated` (id fallback, owner fallback, status fallback).
+Defect 2 (`src/core/parse.ts`, `unquote`, cosmetic). A lone unmatched quote — `/goal "` — was one character, so it failed the `length >= 2` gate and was returned unchanged; `parseGoalCommand` then set the condition to the bare `"`. It now returns empty for a single quote so the command falls back to status.
+Evidence. `test/controller.test.ts` gains "shell.created reads the id/owner at the top level too": a created event with `{ id, status, metadata }` at the top level (no `info`) registers one shell, and a present-but-empty `info` no longer masks the top-level id (two shells). `test/core.test.ts` gains "a lone unmatched quote is status": `"`, `'`, `` ` `` each parse to `status`. Discrimination: with the pre-fix `shell.created` (info-only) the controller test fails (0 shells, expected 2); with the pre-fix `unquote` the quote test fails (`set` with condition `"`, expected `status`). Both pass now.
+Honest limits. Defect 1 is defensive-shape parity, not a change to the documented event contract: the shipped opencode `shell.created` carries `info.id`, so this is the same posture `shell.updated`/`exited` already take against a top-level id. Defect 2 only affects the degenerate one-quote input; ordinary quoted conditions and unquoted text are unchanged. `pending_fixes.md` items 8 and 9 are marked fixed and item 8's stale `src/core/events.ts` path corrected to `src/runtime/events.ts`. Test count 1787 -> 1789; packed files stay 65; `dist/tui.js` byte-unchanged (no TUI source touched).
+<!-- spec-check files=65 tests=1789 -->

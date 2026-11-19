@@ -13,7 +13,7 @@ Goal: keep improving the terminal TUI; smooth out rough edges and inconsistencie
 13. SPEC intro glyph-wave quotes (`· • ● •`, `◯` waiting, six menu rows, `●` achieved) — **done in LXXV** (quoted-docs drift; intro corrected and pinned by `test/spec-intro-glyphs.test.ts`).
 
 ## Still open (deferred)
-5. `src/status-dialog.tsx` dossier `table` kind: `wrapMode="none"` inside a clipped scrollbox → silent right-edge clip; needs a wrap-or-ellipsis decision + render evidence, next iteration.
+5. `src/status-dialog.tsx` dossier `table` kind — **done in LXX** (commit `bda343a`): the `table` kind paints `wrapMode="word"`; a verdict-table row wider than the pane now wraps instead of clipping, pinned by `test/tui-render.test.tsx`.
 11b. ~~Context-menu enabled predicates diverge between mouse arm (checks wiring) and keyboard arm (checks data)~~ — **done in LXXI**: `HudCard.menuRows` threads the mount's single row source (`contextRowsFor`) into the paint path; the card's own wiring probe is the embed fallback.
 11c. `stateWord` dialog-strip inline twin — kept by design (strip needs raw status + stuck override inline).
 12. `not_met` raw enum in countsText and remediationFor streak strings — pinned (tui-render "3 met · 2 not_met"; tui-hud + verdict-history-retention + SPEC.md). Pin wins; flipping is a separate deliberate decision.
@@ -44,7 +44,9 @@ Sweep done by a general subagent (read-only, worktree: wt-keep-improving-keep-on
 ## Rejected — contradicts pinned behavior (tests)
 - `src/runtime/controller.ts:1447` — proposed clearing `iterationDeferred` in `clearDeferred`: contradicts `loop.test.ts:1938` ("an iteration spent waiting on background work is not a zero-tool iteration" — the suppression while waiting is by design). Fix applied by a general subagent, then reverted; targeted rerun on base: 1 pass / 0 fail.
 
-## Open (reviewed, minor — not fixed per mandate)
-3. `src/runtime/controller.ts:1029-1031` — `verifyMet` registers no `runtime.abort` during the verification await (impact: wasted verify compute on interrupt, up to verifyTimeoutMs). [Moot: main checkout carries the verifyMet abort registration fix — iteration 1's second verified improvement; confirm at merge time.]
-8. `src/core/events.ts:121-124` — a `shell.created` without an id never registers the shell (background undercount).
-9. `src/core/parse.ts:28-29` — `unquote` returns the one-char input `"` for `/goal "` (cosmetic).
+## Fixed (LXXVI — 2026-11-19; see SPEC.md Workstream LXXVI)
+8. `src/runtime/events.ts:120-131` — `shell.created` now reads id/owner/status from `data.info ?? data`, falling back to the top-level `data.id` / `data.metadata.sessionID` exactly like `shell.updated`/`shell.exited`. A created event whose id rode the top-level `data` registered no shell, so `busy()` undercounted and the evaluator could run while the shell was live. (Stale `src/core/events.ts` path corrected.) Regression test in `test/controller.test.ts`.
+9. `src/core/parse.ts:27-34` — `unquote` returns empty for a lone unmatched quote (`/goal "`), so the command falls back to status instead of setting the condition to `"`. Regression test in `test/core.test.ts`.
+3. `src/runtime/controller.ts:1040-1061` — `verifyMet` registers `runtime.abort` during the verification await and clears it in `finally`; `invalidate()` aborts it. Open in iteration 1; landed on the main checkout.
+## Still open (reviewed, not fixed — by design or pinned)
+- Items 11c (`stateWord` inline twin, kept by design) and 12 (`not_met` raw enum, pinned) from the iteration-2 list above. No unreviewed defects remain from this file.

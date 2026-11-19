@@ -685,6 +685,19 @@ describe("event router", () => {
     expect((await background.busy(SID)).shells).toBe(0)
   })
 
+  test("shell.created reads the id/owner at the top level too, not only under info", async () => {
+    const h = harness()
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const route = createRouter({ controller: h.controller, background, log: { info() {}, warn() {}, error() {} }, compactor: testCompactor([]) })
+    await h.set()
+    // The created event carries id/status/metadata at the top level, no `info` wrapper.
+    route({ type: "shell.created", data: { id: "sh-top", status: "running", metadata: { sessionID: SID } } })
+    expect((await background.busy(SID)).shells).toBe(1)
+    // A present-but-empty `info` must not mask the top-level id or owner.
+    route({ type: "shell.created", data: { id: "sh-top2", status: "running", info: {}, metadata: { sessionID: SID } } })
+    expect((await background.busy(SID)).shells).toBe(2)
+  })
+
   test("settled handlers throwing do not crash the router", () => {
     const background = new BackgroundTracker({ parentOf: async () => undefined })
     const throwing = {

@@ -33,6 +33,10 @@ describe("parseGoalCommand", () => {
     expect(parseGoalCommand('"npm test exits 0"', 4000)).toEqual({ type: "set", condition: "npm test exits 0" })
     expect(parseGoalCommand("stop the server and lint is clean", 4000).type).toBe("set")
   })
+  test("a lone unmatched quote is status, not a one-character condition", () => {
+    // An unterminated opener (`/goal "`) used to set the condition to the bare quote character.
+    for (const quote of ['"', "'", "`"]) expect(parseGoalCommand(quote, 4000)).toEqual({ type: "status" })
+  })
   test("enforces the length limit", () => {
     const result = parseGoalCommand("x".repeat(4001), 4000)
     expect(result.type).toBe("invalid")
