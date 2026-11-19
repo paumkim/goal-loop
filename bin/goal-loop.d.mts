@@ -1,5 +1,5 @@
 /**
- * Type declarations for bin/opencode-goal.mjs. Zero runtime dependencies;
+ * Type declarations for bin/goal-loop.mjs. Zero runtime dependencies;
  * this file ships with the package so TypeScript consumers can type-check
  * imports of the CLI module.
  */
@@ -16,6 +16,8 @@ export interface CliOptions {
   env?: { [key: string]: string | undefined };
   cwd?: string;
   homedir?: string;
+  /** uninstall --self: the script to delete. Defaults to process.argv[1]; tests inject it. */
+  selfPath?: string;
 }
 
 export interface CliResult {

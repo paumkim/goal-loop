@@ -1,6 +1,6 @@
 /**
  * Regression guard for the live-session crash reported as
- * "opencode-goal.tui crashed in dialog: undefined is not an object (evaluating 'e.length')".
+ * "goal-loop.tui crashed in dialog: undefined is not an object (evaluating 'e.length')".
  *
  * Provenance: the two fixtures below are the actual goal records the plugin had persisted when the
  * crash was reported — one from a fresh `/goal-loop` armed mid-compaction ("Extract opencode v2.3.0"

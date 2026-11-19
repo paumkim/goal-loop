@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * opencode-goal — install/uninstall the opencode-goal plugin on OpenCode v2.
+ * goal-loop — install/uninstall the goal-loop plugin on OpenCode v2.
  *
  * Mechanism (verified against the installed opencode v2.3.0 binary and the v2
  * plugin docs, 2026-11-15):
@@ -14,7 +14,7 @@
  *   array instead. `opencode plugin add` wraps the same config edit but
  *   attaches to the background service and offers no backup/restore, so we do
  *   the edit ourselves, surgically, on the config file.
- *   Back-compat: PLUGIN_PACKAGE ("opencode-goalv2") is what the v1.1.0 installer
+ *   Back-compat: PLUGIN_PACKAGE ("opencode-goalv2") is what older installers
  *   wrote. Uninstall and status match both specifiers, so an
  *   install made by the old version uninstalls cleanly.
  *
@@ -68,7 +68,7 @@ import {
   fsyncSync,
   closeSync,
 } from "node:fs";
-import { join, resolve, dirname, isAbsolute } from "node:path";
+import { join, resolve, dirname, isAbsolute, basename } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
@@ -82,10 +82,13 @@ const PKG = (() => {
 })();
 
 export const PLUGIN_PACKAGE = "opencode-goalv2"; // legacy spec; kept for uninstall/status back-compat
-export const PLUGIN_SPEC = `github:paumkim/opencode-goalv2#v${typeof PKG.version === "string" ? PKG.version : "unknown"}`;
+// A standalone copy (installed by install.sh) has no package.json next to it, so the
+// version is baked in here too. test/cli-installer.test.ts pins both to be equal.
+const FALLBACK_VERSION = "1.1.0";
+const VERSION = typeof PKG.version === "string" ? PKG.version : FALLBACK_VERSION;
+export const PLUGIN_SPEC = `github:paumkim/opencode-goalv2#v${VERSION}`;
 const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
 const SCHEMA_URL = "https://opencode.ai/config.json";
-const VERSION = typeof PKG.version === "string" ? PKG.version : "unknown";
 
 class CliError extends Error {}
 
@@ -584,6 +587,41 @@ function scopeDirOf(file) {
 }
 
 export function uninstall(args, opts = {}) {
+  const self = args.includes("--self");
+  const base = uninstallEntry(args, opts);
+  if (!self) return base;
+  const dryRun = args.includes("--dry-run");
+  const out = [base.stdout.replace(/\n$/, "")];
+  if (base.code !== 0 && base.stderr) return base;
+  const script = selfScriptPath(opts.selfPath ?? process.argv[1]);
+  if (!script) {
+    out.push(`self-removal skipped: ${opts.selfPath ?? process.argv[1] ?? "no script path"} is not the goal-loop script; remove it yourself`);
+  } else if (!dryRun) {
+    unlinkSync(script);
+    out.push(`deleted ${script} (goal-loop CLI removed)`);
+  } else {
+    out.push(`dry-run: would delete ${script}`);
+  }
+  return { code: base.code, stdout: out.filter(Boolean).join("\n") + "\n", stderr: "" };
+}
+/** The real path of the running CLI when it is a goal-loop script, else null. */
+function selfScriptPath(entry) {
+  if (!entry) return null;
+  let real = entry;
+  try {
+    real = realpathSync(entry);
+  } catch {
+    return null;
+  }
+  const name = basename(real);
+  if (name !== "goal-loop" && name !== "goal-loop.mjs") return null;
+  try {
+    return readFileSync(real, "utf8").includes("goal-loop — install/uninstall the goal-loop plugin") ? real : null;
+  } catch {
+    return null;
+  }
+}
+function uninstallEntry(args, opts = {}) {
   const dryRun = args.includes("--dry-run");
   const restore = args.includes("--restore");
   const scope = resolveScope(args, opts);
@@ -592,7 +630,7 @@ export function uninstall(args, opts = {}) {
 
   if (restore) {
     const candidate = preInstallBackup(file);
-    if (!candidate) return { code: 1, stdout: "", stderr: `opencode-goal: no pre-install (plugin-free) backup found for ${file}\n` };
+    if (!candidate) return { code: 1, stdout: "", stderr: `goal-loop: no pre-install (plugin-free) backup found for ${file}\n` };
     if (!dryRun) {
       const safety = existsSync(file) ? backupFile(file) : null; // keep a safety copy of the current state
       if (!safety) mkdirSync(scopeDirOf(file), { recursive: true });
@@ -658,7 +696,7 @@ export function status(args, opts = {}) {
         installed = prop.value.elements.some(matchesPluginEntry);
       }
     } catch (err) {
-      if (err instanceof CliError) return { code: 1, stdout: "", stderr: `opencode-goal: cannot parse ${file}: ${err.message}\n` };
+      if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: cannot parse ${file}: ${err.message}\n` };
       throw err;
     }
   } else {
@@ -681,44 +719,48 @@ export function runCli(argv, opts = {}) {
     return { code: 0, stdout: usage(), stderr: "" };
   }
   if (args.includes("--version") || args.includes("-v")) {
-    return { code: 0, stdout: `opencode-goal ${VERSION}\n`, stderr: "" };
+    return { code: 0, stdout: `goal-loop ${VERSION}\n`, stderr: "" };
   }
-  const flags = new Set(["--global", "--project", "--dry-run", "--restore"]);
+  const flags = new Set(["--global", "--project", "--dry-run", "--restore", "--self"]);
   const unknownFlag = args.find((a) => a.startsWith("--") && !flags.has(a));
-  if (unknownFlag) return { code: 2, stdout: "", stderr: `opencode-goal: unknown flag ${unknownFlag} (try: opencode-goal --help)\n` };
+  if (unknownFlag) return { code: 2, stdout: "", stderr: `goal-loop: unknown flag ${unknownFlag} (try: goal-loop --help)\n` };
   const positional = args.filter((a) => !a.startsWith("--"));
   const cmd = positional[0] ?? "install";
-  if (positional.length > 1) return { code: 2, stdout: "", stderr: `opencode-goal: unexpected argument ${positional[1]} (try: opencode-goal --help)\n` };
+  if (positional.length > 1) return { code: 2, stdout: "", stderr: `goal-loop: unexpected argument ${positional[1]} (try: goal-loop --help)\n` };
   if (!["install", "uninstall", "status"].includes(cmd)) {
-    return { code: 2, stdout: "", stderr: `opencode-goal: unknown command '${cmd}' (try: opencode-goal --help)\n` };
+    return { code: 2, stdout: "", stderr: `goal-loop: unknown command '${cmd}' (try: goal-loop --help)\n` };
   }
   if (args.includes("--restore") && cmd !== "uninstall") {
-    return { code: 2, stdout: "", stderr: `opencode-goal: --restore only applies to uninstall\n` };
+    return { code: 2, stdout: "", stderr: `goal-loop: --restore only applies to uninstall\n` };
+  }
+  if (args.includes("--self") && cmd !== "uninstall") {
+    return { code: 2, stdout: "", stderr: `goal-loop: --self only applies to uninstall\n` };
   }
   try {
     if (cmd === "install") return install(args, opts);
     if (cmd === "uninstall") return uninstall(args, opts);
     return status(args, opts);
   } catch (err) {
-    if (err instanceof CliError) return { code: 1, stdout: "", stderr: `opencode-goal: ${err.message}\n` };
+    if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: ${err.message}\n` };
     const message = err instanceof Error ? err.message : String(err);
-    return { code: 1, stdout: "", stderr: `opencode-goal: ${message}\n` };
+    return { code: 1, stdout: "", stderr: `goal-loop: ${message}\n` };
   }
 }
 
 function usage() {
   return [
-    "opencode-goal — manage the opencode-goal plugin (OpenCode v2)",
+    "goal-loop — install and remove the goal-loop plugin for OpenCode v2",
     "",
     "usage:",
-    "  opencode-goal [install] [--global|--project] [--dry-run]",
-    "  opencode-goal uninstall [--global|--project] [--dry-run] [--restore]",
-    "  opencode-goal status    [--global|--project]",
+    "  goal-loop [install] [--global|--project] [--dry-run]",
+    "  goal-loop uninstall [--global|--project] [--dry-run] [--restore|--self]",
+    "  goal-loop status    [--global|--project]",
     "",
     "  --global    per-machine config (default): $XDG_CONFIG_HOME/opencode or ~/.config/opencode",
     "  --project   the current directory's project config (opencode.json[c] or .opencode/opencode.json[c])",
     "  --dry-run   print what would change; write nothing",
     "  --restore   uninstall only: copy the pre-install .bak back over the config",
+    "  --self      uninstall only: also delete the goal-loop CLI script itself",
     "",
   ].join("\n");
 }

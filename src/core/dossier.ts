@@ -190,7 +190,7 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
   lines.push(isLoop ? "# Goal loop dossier" : "# Goal dossier")
   lines.push("")
   lines.push(
-    `_Generated ${generatedAt} from the opencode-goal plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`,
+    `_Generated ${generatedAt} from the goal-loop plugin's record. Everything below is the record's own bookkeeping; a measurement it does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`,
   )
   lines.push("")
 
@@ -308,7 +308,7 @@ export function buildLoopDossier(goal: GoalSnapshot, nowMs: number): string {
   }
   lines.push("")
   lines.push("---")
-  lines.push("_opencode-goal dossier · source: plugin record · nothing above was re-verified; it is the record's own bookkeeping._")
+  lines.push("_goal-loop dossier · source: plugin record · nothing above was re-verified; it is the record's own bookkeeping._")
 
   return lines.join("\n")
 }

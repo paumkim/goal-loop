@@ -183,7 +183,7 @@ export function buildDossierIndex(
 
   lines.push("---")
   lines.push(
-    "_opencode-goal dossier index · source: the files at generation time · sha256 computed over the exact bytes read · nothing was estimated or inferred; an unreadable file is counted, never guessed · this index inventories, it does not verify._",
+    "_goal-loop dossier index · source: the files at generation time · sha256 computed over the exact bytes read · nothing was estimated or inferred; an unreadable file is counted, never guessed · this index inventories, it does not verify._",
   )
 
   return {

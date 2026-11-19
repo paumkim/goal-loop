@@ -18,7 +18,7 @@
  * Trigger scope decision: the matcher is deliberately a bare word match on `opencode`, not a cli-ish-keyword
  * gate. A false positive costs one static block in the first turn; a keyword gate false-negatives
  * exactly when the guide is needed most ("opencode v2.3.0 broke my workflow"). Possessives ("OpenCode's"),
- * config filenames ("opencode.jsonc") and the plugin name ("opencode-goal") all intentionally match.
+ * config filenames ("opencode.jsonc") and the plugin name ("goal-loop") all intentionally match.
  */
 
 /** True when the goal condition mentions opencode (the CLI, its TUI, its plugin API, the harness). */

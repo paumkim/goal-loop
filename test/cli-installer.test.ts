@@ -1,6 +1,6 @@
 /**
- * Tests for bin/opencode-goal.mjs — the install/uninstall CLI for the
- * opencode-goal plugin on OpenCode v2.
+ * Tests for bin/goal-loop.mjs — the install/uninstall CLI for the
+ * goal-loop plugin on OpenCode v2.
  *
  * Every test operates on throwaway directories created under the OS temp dir.
  * The real ~/.config/opencode is never touched: scope resolution and home
@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, rmSync, chmodSync, statSync, symlinkSync, lstatSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { join, isAbsolute } from "node:path";
 import {
   PLUGIN_PACKAGE,
@@ -19,10 +20,10 @@ import {
   status,
   runCli,
   probeOpencodeVersion,
-} from "../bin/opencode-goal.mjs";
+} from "../bin/goal-loop.mjs";
 
 function fakeHome(): string {
-  return mkdtempSync(join(tmpdir(), "opencode-goal-test-home-"));
+  return mkdtempSync(join(tmpdir(), "goal-loop-test-home-"));
 }
 
 function envFor(home: string, xdg?: string): NodeJS.ProcessEnv {
@@ -700,7 +701,7 @@ describe("--restore reporting (regression)", () => {
 
 describe("writeFileAtomic syncs before the rename (regression)", () => {
   test("the atomic write fsyncs the temp file before renameSync", () => {
-    const src = readFileSync(new URL("../bin/opencode-goal.mjs", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../bin/goal-loop.mjs", import.meta.url), "utf8");
     const start = src.indexOf("function writeFileAtomic");
     expect(start).toBeGreaterThanOrEqual(0);
     const end = src.indexOf("\n}\n", start);
@@ -799,13 +800,13 @@ describe("status classifies the opencode probe honestly (regression)", () => {
   });
 });
 
-describe("bin/opencode-goal.d.mts stays in sync with opencode-goal.mjs (regression)", () => {
+describe("bin/goal-loop.d.mts stays in sync with goal-loop.mjs (regression)", () => {
   test("the declarations declare every export of the .mjs and carry no stale value extras", async () => {
-    const mjs = readFileSync(new URL("../bin/opencode-goal.mjs", import.meta.url), "utf8");
-    const dts = readFileSync(new URL("../bin/opencode-goal.d.mts", import.meta.url), "utf8");
+    const mjs = readFileSync(new URL("../bin/goal-loop.mjs", import.meta.url), "utf8");
+    const dts = readFileSync(new URL("../bin/goal-loop.d.mts", import.meta.url), "utf8");
 
     // Runtime truth: what a consumer importing the .mjs actually observes.
-    const ns = await import("../bin/opencode-goal.mjs");
+    const ns = await import("../bin/goal-loop.mjs");
     const runtimeExports = Object.keys(ns).sort();
 
     // Value declarations the .d.mts publishes. Interfaces and type aliases are
@@ -830,5 +831,105 @@ describe("bin/opencode-goal.d.mts stays in sync with opencode-goal.mjs (regressi
     for (const name of mjsExports) {
       expect(dts).toMatch(new RegExp(`^export\\s+(?:declare\\s+)?(?:const|let|var|function|class)\\s+${name}\\b`, "m"));
     }
+  });
+});
+
+describe("goal-loop identity", () => {
+  test("--help names goal-loop and exactly the three commands", () => {
+    const r = runCli(["--help"]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("goal-loop — install and remove the goal-loop plugin for OpenCode v2");
+    expect(r.stdout).toContain("goal-loop [install]");
+    expect(r.stdout).toContain("goal-loop uninstall");
+    expect(r.stdout).toContain("goal-loop status");
+    expect(r.stdout).not.toContain("opencode-goal ");
+  });
+  test("--version prints the goal-loop name and package.json's version", async () => {
+    const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+    const r = runCli(["--version"]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe(`goal-loop ${pkg.version}\n`);
+  });
+  test("the baked-in FALLBACK_VERSION equals package.json's version (standalone installs)", async () => {
+    const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
+    const src = readFileSync(new URL("../bin/goal-loop.mjs", import.meta.url), "utf8");
+    const match = src.match(/const FALLBACK_VERSION = "([^"]+)"/);
+    expect(match?.[1]).toBe(pkg.version);
+  });
+  test("--self is only accepted by uninstall", () => {
+    const r = runCli(["--self"]);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toContain("--self only applies to uninstall");
+  });
+});
+
+describe("uninstall --self removes the CLI script (and only a real goal-loop script)", () => {
+  const scriptFor = (dir: string, body: string): string => {
+    const file = join(dir, "goal-loop");
+    writeFileSync(file, body);
+    return file;
+  };
+  const cliBody = (): string =>
+    readFileSync(new URL("../bin/goal-loop.mjs", import.meta.url), "utf8");
+  test("--self deletes the running script after removing the plugin entry", () => {
+    const home = fakeHome();
+    install([], { env: envFor(home), cwd: home });
+    const script = scriptFor(home, cliBody());
+    const r = uninstall(["--self"], { env: envFor(home), cwd: home, selfPath: script });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`deleted ${script}`);
+    expect(existsSync(script)).toBe(false);
+    rmSync(home, { recursive: true, force: true });
+  });
+  test("--self --dry-run names the script and deletes nothing", () => {
+    const home = fakeHome();
+    install([], { env: envFor(home), cwd: home });
+    const script = scriptFor(home, cliBody());
+    const r = uninstall(["--self", "--dry-run"], { env: envFor(home), cwd: home, selfPath: script });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`dry-run: would delete ${script}`);
+    expect(existsSync(script)).toBe(true);
+    rmSync(home, { recursive: true, force: true });
+  });
+  test("--self refuses a file that is not the goal-loop CLI", () => {
+    const home = fakeHome();
+    const script = scriptFor(home, "#!/bin/sh\necho not the cli\n");
+    const r = uninstall(["--self"], { env: envFor(home), cwd: home, selfPath: script });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("self-removal skipped");
+    expect(existsSync(script)).toBe(true);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("install.sh (the GitHub one-liner)", () => {
+  const installer = new URL("../install.sh", import.meta.url).pathname;
+  test("installs the CLI into GOAL_LOOP_BIN_DIR from a local source, no network", () => {
+    const home = fakeHome();
+    const binDir = join(home, "bin");
+    const r = spawnSync("sh", [installer], {
+      encoding: "utf8",
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: home,
+        GOAL_LOOP_BIN_DIR: binDir,
+        GOAL_LOOP_SOURCE: new URL("../bin/goal-loop.mjs", import.meta.url).pathname,
+        GOAL_LOOP_NO_RUN: "1",
+      },
+    });
+    expect(r.status).toBe(0);
+    const target = join(binDir, "goal-loop");
+    expect(existsSync(target)).toBe(true);
+    expect(statSync(target).mode & 0o111).not.toBe(0);
+    const version = spawnSync(process.execPath, [target, "--version"], { encoding: "utf8" });
+    expect(version.stdout.trim()).toMatch(/^goal-loop \d+\.\d+\.\d+$/);
+    rmSync(home, { recursive: true, force: true });
+  });
+  test("is executable and carries the documented GitHub one-liner", () => {
+    const file = new URL("../install.sh", import.meta.url).pathname;
+    expect(statSync(file).mode & 0o111).not.toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).toContain("curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh");
+    expect(text).toContain("goal-loop uninstall --self");
   });
 });

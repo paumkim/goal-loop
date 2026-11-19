@@ -1,5 +1,5 @@
 {
-  "name": "opencode-goalv2",
+  "name": "goal-loop",
   "version": "1.1.0",
   "description": "Claude Code-style /goal for OpenCode v2: set a completion condition and the agent keeps working until it is met.",
   "author": "paumkim",
@@ -39,11 +39,12 @@
     "index.ts",
     "tui.ts",
     "rpc.ts",
-    "bin",
     "src",
+    "bin",
     "dist",
     "packages/coordinator/bin/coordinator",
-    "packages/coordinator/README.md"
+    "packages/coordinator/README.md",
+    "install.sh"
   ],
   "engines": {
     "opencode": ">=2.0.29"
@@ -101,6 +102,7 @@
     "paumkim"
   ],
   "bin": {
-    "opencode-goal": "./bin/opencode-goal.mjs"
+    "goal-loop": "./bin/goal-loop.mjs",
+    "opencode-goal": "./bin/goal-loop.mjs"
   }
 }

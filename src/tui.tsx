@@ -1,5 +1,5 @@
 /**
- * Terminal UI for opencode-goal: a compact goal indicator painted on the left side of the host's jump-to-latest
+ * Terminal UI for goal-loop: a compact goal indicator painted on the left side of the host's jump-to-latest
  * row (directly above the input prompt, claimed through the `session.composer.top` slot), verdict toasts and
  * notifications, the `/goal` status dialog, and palette actions. Purely presentational; all state lives in the
  * server plugin and arrives over RPC. Everything renders through the host's own UI primitives and theme tokens;
@@ -65,7 +65,7 @@ const ClampedColumn = (props: { children?: JSX.Element }) => {
 }
 
 export default Plugin.define({
-  id: "opencode-goal.tui",
+  id: "goal-loop.tui",
   setup(context) {
     const rpc = context.client.rpc(GoalRpc)
     const [entries, setEntries] = createSignal<Readonly<Record<string, Entry>>>({})

@@ -130,7 +130,7 @@ export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendL
   lines.push(isLoop ? "# Goal loop spend ledger" : "# Goal spend ledger")
   lines.push("")
   lines.push(
-    `_Generated ${stamp} from the opencode-goal plugin's record. Every figure below is the record's own measurement — the usage delta the harness attributed to each landed iteration (arm → advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`,
+    `_Generated ${stamp} from the goal-loop plugin's record. Every figure below is the record's own measurement — the usage delta the harness attributed to each landed iteration (arm → advance). A measurement the record does not carry renders as ${GAP}, never estimated. The session id is omitted on purpose._`,
   )
   lines.push("")
 
@@ -180,7 +180,7 @@ export function buildSpendLedger(goal: GoalSnapshot, nowMs: number): BuiltSpendL
 
   lines.push("---")
   lines.push(
-    "_opencode-goal spend ledger · source: plugin record · the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._",
+    "_goal-loop spend ledger · source: plugin record · the figures are the record's own measurements; cost is the host's reported usage delta, not a re-price; nothing was estimated, sampled, probed, or re-verified; an iteration counts as measured only when its full usage snapshot is present and finite; a measurement the record does not carry renders as " + GAP + "._",
   )
 
   return {
