@@ -3615,10 +3615,10 @@
       "paths": ".",
       "branch": "wt/keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
       "worktree": "worktrees/wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-19T08:29:45Z",
       "submittedAt": "2026-11-19T09:13:31Z",
-      "mergedAt": "2026-11-19T08:25:16Z",
+      "mergedAt": "2026-11-19T10:20:02Z",
       "mergedInto": "dev"
     },
     "iteration-cap-counts-dropped-history": {
