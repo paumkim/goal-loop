@@ -24,8 +24,9 @@ import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
-import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type CompactMarkerTone } from "./core/hud.ts"
+import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, compactMarkerFg, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR } from "./core/hud.ts"
 import { completedIterationCount, type GoalSnapshot, type Verdict } from "./core/types.ts"
+import { Affordance } from "./affordance.tsx"
 
 /** Structural subset of the host theme the card paints with; anything ColorInput-typed fits. Extra tokens degrade to sensible defaults. */
 export interface HudCardTheme {
@@ -62,28 +63,6 @@ const stateWord = (goal: GoalSnapshot): string =>
       : goal.status // terminal statuses render truthfully: achieved / impossible / cleared / failed
 const verdictColor = (theme: HudCardTheme, entry: { verdict: Verdict; toolCalls?: number }, mono: boolean): ColorInput =>
   verdictEntryAccentColor(theme, entry, mono)
-
-/**
- * The always-mounted click-affordance cell — the hover-stability grammar. The cell never mounts,
- * unmounts or changes width; hover only brightens it (weight under mono). The row's text never
- * changes attributes on hover, so nothing rewraps, nothing reflows, nothing flickers. Width 8 fits
- * the widest payload (`✓ copied` / `+ copied` / `✓ saved`); the verb sits left, padding stays empty.
- */
-const AffordanceCell = (props: { theme: HudCardTheme; mono: () => boolean; verb: string; hovered: boolean; ack?: string | null; width?: number }): JSX.Element => {
-  const ack = () => props.ack ?? null
-  const lit = () => props.hovered || ack() !== null
-  return (
-    <text
-      wrapMode="none"
-      flexShrink={0}
-      width={props.width ?? 8}
-      fg={lit() ? props.theme.text.base : props.theme.text.faint}
-      attributes={props.mono() && props.hovered && ack() === null ? TextAttributes.BOLD : undefined}
-    >
-      {ack() ?? props.verb}
-    </text>
-  )
-}
 
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 6
@@ -470,7 +449,7 @@ export const HudCard = (props: {
         <text wrapMode="none" flexGrow={1} fg={theme().text.base}>
           {truncate(g().condition, conditionCells(), ascii() ? "..." : "\u2026")}
         </text>
-        <AffordanceCell theme={theme()} mono={mono} verb="copy" hovered={conditionHovered()} />
+        <Affordance theme={theme()} mono={mono} verb="copy" hovered={conditionHovered()} />
       </box>
       {/* now — state, turns, elapsed, pips */}
       <box flexDirection="row" gap={1}>
@@ -513,13 +492,6 @@ export const HudCard = (props: {
           // compaction-landed indicator. Informational; at misses >= 2 the failure-first remediation rides
           // the same card. mono keeps the words, drops the hue; ascii demotions already live in the text.
           const marker = () => compactMarker(g().loopCompact, ascii())
-          const markerFg = (tone: CompactMarkerTone) => {
-            if (mono()) return theme().text.muted
-            const fb = theme().text.feedback
-            if (tone === "landed") return (fb.success ?? fb.info).base
-            if (tone === "missed") return fb.warning.base
-            return theme().text.faint
-          }
           return (
             <Show
               when={g().compactAtTokens !== undefined}
@@ -529,7 +501,7 @@ export const HudCard = (props: {
                     context
                   </text>
                   <text wrapMode="none" fg={theme().text.muted}>{`~${formatTokens(size())} tokens`}</text>
-                  <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={markerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
+                  <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(theme(), m().tone, mono())}>{`· ${m().text}`}</text>}</Show>
                 </box>
               }
             >
@@ -539,7 +511,7 @@ export const HudCard = (props: {
                 </text>
                 <text wrapMode="none" flexShrink={0} fg={barFg()}>{meter().text}</text>
                 <text wrapMode="none" fg={trailFg()}>{`~${formatTokens(size())} of ${formatTokens(g().compactAtTokens as number)} · ${meter().pct}%`}</text>
-                <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={markerFg(m().tone)}>{`· ${m().text}`}</text>}</Show>
+                <Show when={marker()}>{(m) => <text wrapMode="none" flexShrink={0} fg={compactMarkerFg(theme(), m().tone, mono())}>{`· ${m().text}`}</text>}</Show>
               </box>
             </Show>
           )
@@ -592,7 +564,7 @@ export const HudCard = (props: {
               <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
                 {truncate(whyReason(), conditionCells(), ascii() ? "..." : "\u2026")}
               </text>
-              {copyable() ? <AffordanceCell theme={theme()} mono={mono} verb="copy" hovered={whyHovered()} /> : null}
+              {copyable() ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={whyHovered()} /> : null}
             </box>
           )
         })()}

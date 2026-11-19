@@ -11,10 +11,12 @@
  * sections partition the document from the first `## ` heading to EOF.
  */
 
+import { truncate } from "./format.ts"
+
 export interface DossierOutlineEntry {
   /** stable slug id derived from the heading (lowercase, alnum/dash, de-duped -2, -3…). */
   readonly id: string
-  /** chip label, ≤ 12 columns; known headings get hand labels; unknown ones truncate with … (ascii "..."). */
+  /** chip label, ≤ 12 cells; known headings get hand labels; unknown ones truncate with … (cell-aware, stringWidth). */
   readonly label: string
   /** the heading text verbatim (after the leading `## `). */
   readonly title: string
@@ -61,8 +63,7 @@ const labelOf = (title: string): string => {
   for (const [prefix, label] of HAND_LABELS) {
     if (lower.startsWith(prefix)) return label
   }
-  if (title.length <= DOSSIER_OUTLINE_LABEL_MAX) return title
-  return `${title.slice(0, DOSSIER_OUTLINE_LABEL_MAX - 1)}…`
+  return truncate(title, DOSSIER_OUTLINE_LABEL_MAX)
 }
 
 export const dossierOutline = (markdown: string): readonly DossierOutlineEntry[] => {

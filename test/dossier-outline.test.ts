@@ -7,6 +7,7 @@ import { describe, expect, test } from "bun:test"
 import type { GoalSnapshot, UsageSnapshot } from "../src/core/types.ts"
 import { buildLoopDossier } from "../src/core/dossier.ts"
 import { dossierOutline, DOSSIER_OUTLINE_LABEL_MAX } from "../src/core/dossier-outline.ts"
+import stringWidth from "string-width"
 
 const DOC = [
   "# Goal loop dossier",
@@ -161,6 +162,13 @@ describe("dossierOutline", () => {
     expect(entry!.label.length).toBe(DOSSIER_OUTLINE_LABEL_MAX)
     expect(entry!.label.endsWith("…")).toBe(true)
     expect(entry!.label).not.toContain("……")
+  })
+
+  test("labels are ≤ 12 cells — CJK headings are measured in cells, not UTF-16 code units", () => {
+    const doc = "## 中文标题非常非常长的内容写不下去了\n\nbody"
+    const [entry] = dossierOutline(doc)
+    expect(stringWidth(entry!.label)).toBeLessThanOrEqual(DOSSIER_OUTLINE_LABEL_MAX)
+    expect(entry!.label.endsWith("…")).toBe(true)
   })
 
   test("CRLF and CR line endings normalize to LF — identical entries either way", () => {
