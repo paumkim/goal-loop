@@ -4,7 +4,7 @@
  * These tests pin the grammar and the context-hook predicate.
  */
 import { describe, expect, test } from "bun:test"
-import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG } from "../src/core/prompts.ts"
+import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG, isGoalInstructionMessage, stripGoalContext, TERMINAL_REMINDER } from "../src/core/prompts.ts"
 
 const textMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 
@@ -59,5 +59,36 @@ describe("stripGoalNotes", () => {
   })
   test("an empty list stays empty", () => {
     expect(stripGoalNotes([])).toEqual([])
+  })
+})
+
+describe("isGoalInstructionMessage / stripGoalContext", () => {
+  const msg = (...texts: string[]) => ({ role: "user", content: texts.map((text) => ({ type: "text", text })) })
+
+  test("matches every plugin instruction tag but not plain text", () => {
+    expect(isGoalInstructionMessage(msg("<goal>\nthe parser is correct\n</goal>"))).toBe(true)
+    expect(isGoalInstructionMessage(msg('<goal-loop iteration="1" max="5">'))).toBe(true)
+    expect(isGoalInstructionMessage(msg("<goal-continuation turn=\"2\">\nThe goal is not met yet."))).toBe(true)
+    expect(isGoalInstructionMessage(msg("<goal-retry>\nThe previous turn failed"))).toBe(true)
+    expect(isGoalInstructionMessage(msg("<goal-checkin>\nBackground work has kept the goal waiting"))).toBe(true)
+    expect(isGoalInstructionMessage(msg("the parser is correct"))).toBe(false)
+    expect(isGoalInstructionMessage(msg("a <goal-note> is not an instruction"))).toBe(false)
+    expect(isGoalInstructionMessage(null)).toBe(false)
+    expect(isGoalInstructionMessage({})).toBe(false)
+  })
+
+  test("stripGoalContext drops instructions and notes, keeps plain messages in order", () => {
+    const kickoff = msg("<goal>\nthe parser is correct\n</goal>")
+    const continuation = msg("<goal-continuation turn=\"2\">\nkeep going")
+    const note = msg("<goal-note final>\nGoal achieved\ndone\n</goal-note>")
+    const keep = msg("the user ad-hoc line")
+    expect(stripGoalContext([kickoff, keep, continuation, note])).toEqual([keep])
+    expect(stripGoalContext([keep])).toEqual([keep])
+    expect(stripGoalContext([])).toEqual([])
+  })
+
+  test("TERMINAL_REMINDER is a counter-instruction, not an instruction to work", () => {
+    expect(TERMINAL_REMINDER).toContain("Do not resume work toward it")
+    expect(TERMINAL_REMINDER).toContain("await the user's next instruction")
   })
 })
