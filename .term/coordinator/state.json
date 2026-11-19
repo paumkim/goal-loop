@@ -3656,11 +3656,23 @@
     },
     "evaluator-slow-connection-timeout": {
       "agent": "orchestrator",
-      "paths": "SPEC.md,src/core/prompts.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts",
+      "paths": "SPEC.md,src/core/prompts.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts,test/core.test.ts",
       "branch": "wt/evaluator-slow-connection-timeout",
       "worktree": "worktrees/wt-evaluator-slow-connection-timeout",
-      "status": "claimed",
-      "createdAt": "2026-11-19T10:04:52Z"
+      "status": "done",
+      "createdAt": "2026-11-19T10:32:07Z",
+      "submittedAt": "2026-11-19T10:32:25Z",
+      "mergedAt": "2026-11-19T10:50:58Z",
+      "mergedInto": "dev"
+    },
+    "dossier-table-wrap": {
+      "agent": "orchestrator",
+      "paths": "src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md",
+      "branch": "wt/dossier-table-wrap",
+      "worktree": "worktrees/wt-dossier-table-wrap",
+      "status": "submitted",
+      "createdAt": "2026-11-19T10:34:12Z",
+      "submittedAt": "2026-11-19T10:43:47Z"
     }
   },
   "mergeLock": null,
