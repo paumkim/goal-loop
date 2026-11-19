@@ -117,7 +117,10 @@ export class GoalStore {
 
   /** Resolves once every queued write has settled. */
   async flush(): Promise<void> {
-    await Promise.all(this.chains.values())
+    // A write enqueued while we await is not in the snapshot, so drain until no chains remain.
+    while (this.chains.size > 0) {
+      await Promise.all([...this.chains.values()])
+    }
   }
 
   /**

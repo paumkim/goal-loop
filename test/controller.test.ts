@@ -75,6 +75,7 @@ function harness(
   const notices: Notice[] = []
   const changes: Array<GoalSnapshot | null> = []
   let work: BackgroundWork = { subagents: 0, shells: 0 }
+  let busyError: Error | undefined
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   let usageFn: (() => Promise<UsageSnapshot | undefined>) | undefined
   let estimateContext: (() => Promise<number | undefined>) | undefined
@@ -113,7 +114,7 @@ function harness(
         return typeof next === "function" ? next() : next
       },
     },
-    background: { busy: async () => work },
+    background: { busy: async () => { if (busyError) throw busyError; return work } },
     emitter: { changed: (_, goal) => void changes.push(goal), notice: (n) => void notices.push(n) },
   })
   /** Simulates one complete agent turn. */
@@ -136,6 +137,7 @@ function harness(
     logs,
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
+    setBusyError: (e: Error | undefined) => void (busyError = e),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
     setUsageFn: (fn: (() => Promise<UsageSnapshot | undefined>) | undefined) => void (usageFn = fn),
     setEstimateContext: (fn: (() => Promise<number | undefined>) | undefined) => void (estimateContext = fn),
@@ -396,6 +398,13 @@ describe("GoalController", () => {
     await h.turn(0)
     expect(h.requests).toHaveLength(1)
     expect(h.controller.get(SID)?.stall).toBe(0)
+  })
+
+  test("skips evaluation when the busy check errors", async () => {
+    await h.set()
+    h.setBusyError(new Error("busy check failed"))
+    await h.turn()
+    expect(h.requests).toHaveLength(0)
   })
 
   test("idle check-ins stop after the cap until the user prompts", async () => {
