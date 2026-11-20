@@ -4574,6 +4574,17 @@
       "submittedAt": "2026-11-20T21:24:38Z",
       "mergedAt": "2026-11-20T21:26:29Z",
       "mergedInto": "dev"
+    },
+    "transcript-surrogate-safe-truncation": {
+      "agent": "build",
+      "paths": "src/core/transcript.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/transcript-surrogate-safe-truncation",
+      "worktree": "worktrees/wt-transcript-surrogate-safe-truncation",
+      "status": "done",
+      "createdAt": "2026-11-20T21:30:14Z",
+      "submittedAt": "2026-11-20T21:32:56Z",
+      "mergedAt": "2026-11-20T21:34:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
