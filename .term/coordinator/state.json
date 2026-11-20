@@ -3951,6 +3951,40 @@
       "submittedAt": "2026-11-20T06:31:30Z",
       "mergedAt": "2026-11-20T06:33:06Z",
       "mergedInto": "dev"
+    },
+    "improvement-backlog-ledger": {
+      "agent": "iceman",
+      "paths": "docs,src,test,SPEC.md,README.md,packages",
+      "branch": "wt/improvement-backlog-ledger",
+      "worktree": "worktrees/wt-improvement-backlog-ledger",
+      "status": "done",
+      "createdAt": "2026-11-20T06:42:01Z",
+      "submittedAt": "2026-11-20T06:49:44Z",
+      "mergedAt": "2026-11-20T07:18:46Z",
+      "mergedInto": "dev"
+    },
+    "backlog-planner-integration": {
+      "agent": "iceman",
+      "paths": "src,rpc.ts,test,docs,SPEC.md,index.ts",
+      "branch": "wt/backlog-planner-integration",
+      "worktree": "worktrees/wt-backlog-planner-integration",
+      "status": "submitted",
+      "createdAt": "2026-11-20T06:55:25Z",
+      "submittedAt": "2026-11-20T07:11:46Z"
+    },
+    "tui-detail-pileup-consistency": {
+      "agent": "iceman",
+      "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/core/history.ts,scripts/render-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
+      "branch": "wt/tui-detail-pileup-consistency",
+      "worktree": "worktrees/wt-tui-detail-pileup-consistency",
+      "status": "submitted",
+      "createdAt": "2026-11-20T06:56:22Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T07:14:32Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "submittedAt": "2026-11-20T07:14:32Z"
     }
   },
   "mergeLock": null,
