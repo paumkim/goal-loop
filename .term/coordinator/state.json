@@ -4098,6 +4098,17 @@
       "submittedAt": "2026-11-20T11:00:24Z",
       "mergedAt": "2026-11-20T11:28:45Z",
       "mergedInto": "dev"
+    },
+    "merge-next-ownership-guidance": {
+      "agent": "iceman",
+      "paths": "AGENTS.md,README.md,docs",
+      "branch": "wt/merge-next-ownership-guidance",
+      "worktree": "worktrees/wt-merge-next-ownership-guidance",
+      "status": "done",
+      "createdAt": "2026-11-20T11:29:56Z",
+      "submittedAt": "2026-11-20T11:31:28Z",
+      "mergedAt": "2026-11-20T11:33:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
