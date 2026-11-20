@@ -5,7 +5,7 @@ Objective (constant): keep improving keep on fixing the current directory codeba
 ## Interpretation
 - "Back to front": sweep from the back of the pipeline (src/runtime — the execution back end) forward to the front (src/core, then the entry points index.ts / rpc.ts).
 - "Improving/fixing": find real bugs — logic errors, broken invariants, dead code, edge cases — and fix what is worth fixing, verified by the project checks.
-- Scope: the opencode-goalv2 plugin at /home/pauk/Projects/opencode-v2-goal/opencode-goalv2.
+- Scope: the opencode-goalv2 plugin at /home/pauk/Projects/goal-loop.
 
 Note: the repo's own SPEC.md is the plugin's spec (enforced by the spec-check gate in `bun run check`); the goal-loop fuzzy-goal spec is recorded here instead of overwriting it.
 
