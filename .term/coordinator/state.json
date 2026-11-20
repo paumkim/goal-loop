@@ -3917,6 +3917,23 @@
       "submittedAt": "2026-11-20T06:03:21Z",
       "mergedAt": "2026-11-20T06:04:56Z",
       "mergedInto": "dev"
+    },
+    "wire-verdict-sha": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,test/wire.test.ts",
+      "branch": "wt/wire-verdict-sha",
+      "worktree": "worktrees/wt-wire-verdict-sha",
+      "status": "done",
+      "createdAt": "2026-11-20T06:15:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:21:40Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:21:40Z",
+      "mergedAt": "2026-11-20T06:23:16Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
