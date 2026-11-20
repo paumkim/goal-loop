@@ -1226,12 +1226,17 @@ export class GoalController {
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, `${story} · ${result.reason || record.condition}`)
       this.deps.log.info("goal achieved", { sessionID, turn, elapsedMs: clock.now() - record.startedAt })
+      // Terminal: a met verdict on a plain goal ends the run. Returning here is load-bearing — without it control
+      // falls through to the continuation dispatch at the bottom of evaluate(), which would re-arm an achieved goal.
+      return
     }
     if (result.verdict === "impossible") {
       this.finish(record, "impossible", result.reason)
       const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
       this.notify(sessionID, "impossible", "error", "Goal judged impossible", `${story} · ${result.reason || record.condition}`)
       this.deps.log.info("goal impossible", { sessionID, turn })
+      // Terminal: same fall-through hazard as the met branch above — an impossible goal must not be re-armed.
+      return
     }
     if (config.maxTurns > 0 && turn >= config.maxTurns && !record.loopEnabled) {
       return this.pause(record, `Reached the ${config.maxTurns}-turn safety limit.`, "cap")

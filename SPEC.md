@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1923 -->
+<!-- spec-check files=70 tests=1924 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7549,5 +7549,35 @@ never by a frame diff. The row claim for the host's `Jump to latest ↓` row rem
 the composer slot's negative-anchor grammar, so if the host reclaims or repaints that row the geometry
 inherits it.
 
-<!-- spec-check files=69 tests=1905 -->
+## Workstream XCI — a terminal verdict ends the run: the achieved goal no longer re-arms (2026-11-20)
+Armed condition (verbatim): "that is a problem: after goal achieved it should not be rearming: fix that
+problem."
+Defect. For a plain `/goal` (not `/goal-loop`), `evaluate()` handled a `met` verdict by calling
+`finish(record, "achieved", …)` and then, with no `return`, fell through to the continuation dispatch at the
+bottom of the method. The record's status was `achieved`, but the very next statement was
+`continueWith(record, { text: Prompt.continuation(...), turn: turn + 1 })`, which dispatched a fresh synthetic
+steer for the finished goal — a re-arm after achievement. The `impossible` branch fell through the same way.
+The default config (`maxTurns` and `stallTurns` both 0) never short-circuited the fall-through, so every
+terminal verdict on a plain goal re-armed it. Reproduced on the pre-fix tree: with a plain goal, a `not_met`
+turn then a `met` turn produced two synthetic steers —
+`goal · turn 2 · …` and `goal · turn 3 · …` — the second of which is the bug.
+933. `src/runtime/controller.ts` (`evaluate`) — the `met` branch returns after `finish(record, "achieved", …)`
+     (and its notice/log), and the `impossible` branch returns after `finish(record, "impossible", …)`. The
+     `loopEnabled` met path already returned via `loopAdvance`; only the plain-goal terminal branches leaked.
+     The comment at each `return` records that it is load-bearing: without it control reaches the continuation
+     dispatch and re-arms a terminal goal.
+934. `test/controller.test.ts` — the existing "not met -> continuation turn carrying the evaluator reason; met
+     -> achieved" test now pins `h.calls.synthetic` at length 1 after the met turn (regression: no turn-3
+     steer). A new test, "an impossible verdict is terminal: it does not re-arm the goal", pins zero synthetic
+     steers and an `impossible` notice for that branch.
+Verification (fresh at this HEAD, rebased onto dev). `cd test && bun test` → **1924 pass / 0 fail** (29
+snapshots; +1 test, +1 expect — the new impossible-verdict test and the regression assertion); the focused
+`controller.test.ts` + `loop.test.ts` pair → 247 pass / 0 fail; `tsc --noEmit` clean; `bun run check` green
+(check:spec ok — 70 files, 1924 tests). Pre-fix evidence captured on the same test: the debug line printed
+`synthetic after met: 2 [ "goal · turn 2 · …", "goal · turn 3 · …" ]`.
+Honest limits. The fix is exercised at the controller-unit layer (a fake session, a queue of verdicts), not on
+a live model loop this pass. It changes only plain-goal terminal handling; a `/goal-loop` still advances on a
+`met` verdict by design — that is the loop, not a re-arm, and `maxLoops`/`LOOP_COMPLETE`/the no-new-gap gates
+are the boundaries that end it.
+<!-- spec-check files=70 tests=1924 -->
 
