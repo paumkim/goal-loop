@@ -1,6 +1,6 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname } from "node:path"
-import { formatDuration } from "./format.ts"
+import { elideAtWordBoundary, formatDuration } from "./format.ts"
 
 const LEARNING_LOG_VERSION = 1 as const
 
@@ -290,35 +290,64 @@ export interface RecentLearning {
   readonly lesson: string
 }
 
+const LEARNING_KINDS = new Set<LearningEntryKind>([
+  "goal_terminal", "loop_iteration", "turn_verdict", "goal_armed", "session_outcome",
+])
+
+/**
+ * Best-effort parse of JSONL learning text. Blank, malformed, non-object, unknown-kind and
+ * timestamp-less lines are skipped; the reader never throws. Exported so the runtime can read
+ * the log once and derive both recent learnings and aggregate telemetry from the same entries.
+ */
+export function parseLearningEntries(text: string): LearningEntry[] {
+  if (typeof text !== "string" || !text.trim()) return []
+  const out: LearningEntry[] = []
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    let value: unknown
+    try {
+      value = JSON.parse(trimmed)
+    } catch {
+      continue
+    }
+    if (typeof value !== "object" || value === null || Array.isArray(value)) continue
+    const record = value as Record<string, unknown>
+    const kind = record.kind
+    if (typeof kind !== "string" || !LEARNING_KINDS.has(kind as LearningEntryKind)) continue
+    if (typeof record.ts !== "string") continue
+    out.push(value as LearningEntry)
+  }
+  return out
+}
+
+/** Derive recent-learning summaries from already-parsed entries (most recent last). */
+export function recentLearningsFromEntries(entries: readonly LearningEntry[], limit = 6): RecentLearning[] {
+  if (limit <= 0) return []
+  const out: RecentLearning[] = []
+  for (let i = entries.length - 1; i >= 0 && out.length < limit; i--) {
+    const entry = entries[i]
+    if (!entry) continue
+    const lesson = typeof entry.lesson === "string" ? entry.lesson.trim() : ""
+    if (!lesson) continue
+    out.push({
+      kind: entry.kind,
+      ts: entry.ts,
+      ...(typeof entry.condition === "string" ? { condition: entry.condition } : {}),
+      ...("verdict" in entry && typeof entry.verdict === "string" ? { verdict: entry.verdict } : {}),
+      ...("status" in entry && typeof entry.status === "string" ? { status: entry.status } : {}),
+      lesson,
+    })
+  }
+  return out.reverse()
+}
+
 /** Best-effort read of recent learning entries (most recent last). Never throws. */
 export function readRecentLearnings(file: string | undefined, limit = 6): RecentLearning[] {
   const target = typeof file === "string" ? file.trim() : ""
   if (!target || limit <= 0) return []
   try {
-    const text = readFileSync(target, "utf8")
-    const lines = text.trimEnd().split("\n")
-    const out: RecentLearning[] = []
-    for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
-      const line = lines[i]?.trim()
-      if (!line) continue
-      try {
-        const parsed = JSON.parse(line) as Record<string, unknown>
-        const lesson = typeof parsed.lesson === "string" ? parsed.lesson.trim() : ""
-        const kind = typeof parsed.kind === "string" ? (parsed.kind as LearningEntryKind) : undefined
-        if (!lesson || !kind) continue
-        out.push({
-          kind,
-          ts: typeof parsed.ts === "string" ? parsed.ts : "",
-          ...(typeof parsed.condition === "string" ? { condition: parsed.condition } : {}),
-          ...(typeof parsed.verdict === "string" ? { verdict: parsed.verdict } : {}),
-          ...(typeof parsed.status === "string" ? { status: parsed.status } : {}),
-          lesson,
-        })
-      } catch {
-        // skip malformed line
-      }
-    }
-    return out.reverse()
+    return recentLearningsFromEntries(parseLearningEntries(readFileSync(target, "utf8")), limit)
   } catch {
     return []
   }
@@ -332,7 +361,6 @@ export function formatRecentLearnings(learnings: readonly RecentLearning[], maxC
     const head = tag ? `[${tag}] ` : ""
     return `${i + 1}. ${head}${l.lesson}`
   })
-  let text = lines.join("\n")
-  if (text.length > maxChars) text = `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
+  const text = elideAtWordBoundary(lines.join("\n"), maxChars)
   return `Recent learnings from this goal/loop (apply them to improve this turn):\n${text}`
 }

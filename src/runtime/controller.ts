@@ -31,7 +31,8 @@ import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, Eval
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
-import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings, type LearningEntry } from "../core/learning-log.ts"
+import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries, type LearningEntry } from "../core/learning-log.ts"
+import { formatOutcomeTelemetry, summarizeOutcomeTelemetry } from "../core/outcome-telemetry.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
@@ -2601,8 +2602,11 @@ export class GoalController {
     try {
       const file = this.learningLogFile(record.directory ?? this.deps.directory)
       if (!file) return undefined
-      const text = formatRecentLearnings(readRecentLearnings(file, limit))
-      return text || undefined
+      // One read feeds both channels: recent lessons and the aggregate outcome-telemetry block.
+      const entries = parseLearningEntries(readFileSync(file, "utf8"))
+      const lessonText = formatRecentLearnings(recentLearningsFromEntries(entries, limit))
+      const telemetryText = formatOutcomeTelemetry(summarizeOutcomeTelemetry(entries))
+      return [lessonText, telemetryText].filter(Boolean).join("\n\n") || undefined
     } catch {
       return undefined
     }
