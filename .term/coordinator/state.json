@@ -4405,6 +4405,22 @@
       ],
       "mergedAt": "2026-11-20T16:18:15Z",
       "mergedInto": "dev"
+    },
+    "optimize-failure-diagnostic-mkdir": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts",
+      "branch": "wt/optimize-failure-diagnostic-mkdir",
+      "worktree": "worktrees/wt-optimize-failure-diagnostic-mkdir",
+      "status": "done",
+      "createdAt": "2026-11-20T16:23:20Z",
+      "submittedAt": "2026-11-20T16:26:31Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:26:31Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:28:19Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
