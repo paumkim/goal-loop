@@ -4027,6 +4027,22 @@
       "submittedAt": "2026-11-20T08:52:46Z",
       "mergedAt": "2026-11-20T08:54:22Z",
       "mergedInto": "dev"
+    },
+    "verification-matrix-trail-evidence": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/verification-matrix-trail-evidence",
+      "worktree": "worktrees/wt-verification-matrix-trail-evidence",
+      "status": "done",
+      "createdAt": "2026-11-20T08:56:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T09:02:10Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T09:02:10Z",
+      "mergedAt": "2026-11-20T09:03:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
