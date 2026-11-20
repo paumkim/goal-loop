@@ -547,6 +547,8 @@ export interface NextGoalInput {
   readonly latestSummary: string
   /** Highest-priority unblocked backlog item, de-duplicated against completed work. */
   readonly backlogSuggestion?: BacklogSuggestion
+  /** Recent learning journal entries (formatted) to apply in planning. */
+  readonly recentLearnings?: string
 }
 
 const summarizeFacts = (input: LoopSummaryInput) => [
@@ -641,14 +643,18 @@ const backlogBlock = (suggestion: BacklogSuggestion | undefined): string[] => {
   ]
 }
 
-const nextGoalFacts = (input: NextGoalInput) => [
-  `Objective (constant): ${escape(input.objective)}`,
-  `Completed iterations (oldest first):`,
-  historyBlock(input.history),
-  `Latest iteration summary:`,
-  escape(stripReasoningControl(input.latestSummary)),
-  ...backlogBlock(input.backlogSuggestion),
-]
+const nextGoalFacts = (input: NextGoalInput) => {
+  const learnings = input.recentLearnings?.trim()
+  return [
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(stripReasoningControl(input.latestSummary)),
+    ...backlogBlock(input.backlogSuggestion),
+    ...(learnings ? [``, `Recent learnings (apply when choosing the next improvement):`, escape(learnings)] : []),
+  ]
+}
 
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */
 export function nextGoalIndependently(input: NextGoalInput): string {

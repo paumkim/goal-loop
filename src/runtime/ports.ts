@@ -75,6 +75,8 @@ export interface NextGoalRequest {
   readonly signal: AbortSignal
   /** Optional backlog hint from docs/improvement-backlog.json (de-duplicated). */
   readonly backlogSuggestion?: BacklogSuggestion
+  /** Recent learning journal entries (formatted) to apply in next iteration planning. */
+  readonly recentLearnings?: string
 }
 
 export interface EvaluatorPort {

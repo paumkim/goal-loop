@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
-import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, formatRecentLearnings, readRecentLearnings, serializeLearningEntry } from "../src/core/learning-log.ts"
+import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, formatRecentLearnings, readRecentLearnings, serializeLearningEntry } from "../src/core/learning-log.ts"
 import type { GoalRecord, LoopEntry, UsageSnapshot } from "../src/core/types.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
@@ -188,6 +188,31 @@ describe("learning-log core", () => {
     expect(rows[1]?.reason).toBe("done again")
   })
 
+  test("buildSessionOutcomeLearningEntry captures session-level outcome and lesson", () => {
+    const record = baseRecord({
+      status: "achieved",
+      turns: 4,
+      startedAt: 1_700_000_000_000,
+      endedAt: 1_700_000_120_000,
+      loopEnabled: true,
+      loopObjective: "keep improving",
+      loopIteration: 3,
+      loopHistory: [
+        { version: 1, condition: "a", summary: "s", reason: "r", turns: 1, toolCalls: 1, endedAt: 1_700_000_010_000 },
+        { version: 2, condition: "b", summary: "s2", reason: "r2", turns: 2, toolCalls: 3, endedAt: 1_700_000_020_000 },
+      ],
+      reason: "loop completed",
+    })
+    const entry = buildSessionOutcomeLearningEntry(record, 1_700_000_120_100)
+    expect(entry.kind).toBe("session_outcome")
+    expect(entry.status).toBe("achieved")
+    expect(entry.iterations).toBe(2)
+    expect(entry.turns).toBe(4)
+    expect(entry.elapsedMs).toBe(120_000)
+    expect(entry.lesson).toContain("Session outcome")
+    expect(entry.lesson).toContain("next sessions")
+  })
+
   test("appendLearningEntry is best-effort and never throws on bad paths", () => {
     const entry = buildGoalTerminalLearningEntry(baseRecord({ status: "cleared", reason: "x" }))
     expect(() => appendLearningEntry("", entry)).not.toThrow()
@@ -277,15 +302,20 @@ describe("learning-log runtime emission", () => {
     await h.turn()
     const text = await readFile(join(dir, ".term/goal-loop/learnings.jsonl"), "utf8")
     const rows = text.trim().split("\n").map((l) => JSON.parse(l))
-    const goalRows = rows.filter((r) => r.kind === "goal_terminal")
+    const armedRows = rows.filter((r) => r.kind === "goal_armed")
     const turnRows = rows.filter((r) => r.kind === "turn_verdict")
+    const goalRows = rows.filter((r) => r.kind === "goal_terminal")
+    const sessionRows = rows.filter((r) => r.kind === "session_outcome")
+    expect(armedRows.length).toBeGreaterThanOrEqual(1)
     expect(turnRows.length).toBeGreaterThanOrEqual(1)
     expect(turnRows.some((r) => r.verdict === "met")).toBe(true)
     expect(goalRows.length).toBeGreaterThanOrEqual(1)
+    expect(sessionRows.length).toBeGreaterThanOrEqual(1)
     const last = goalRows[goalRows.length - 1]
     expect(last.status).toBe("achieved")
     expect(last.condition).toBe("make tests pass")
     expect(last.lesson).toContain("Achieved")
+    expect(sessionRows[sessionRows.length - 1]?.lesson).toContain("Session outcome")
   })
 
   test("writes a goal_terminal entry when a goal is cleared", async () => {

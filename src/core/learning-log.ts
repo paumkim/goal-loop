@@ -6,7 +6,7 @@ export const LEARNING_LOG_VERSION = 1 as const
 
 import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
 
-export type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed"
+export type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed" | "session_outcome"
 
 interface LearningEntryBase {
   readonly version: typeof LEARNING_LOG_VERSION
@@ -51,7 +51,13 @@ export interface GoalArmedLearningEntry extends LearningEntryBase {
   readonly loopMaxLoops?: number
 }
 
-export type LearningEntry = GoalTerminalLearningEntry | LoopIterationLearningEntry | TurnVerdictLearningEntry | GoalArmedLearningEntry
+export interface SessionOutcomeLearningEntry extends LearningEntryBase {
+  readonly kind: "session_outcome"
+  readonly status: GoalStatus
+  readonly iterations?: number
+}
+
+export type LearningEntry = GoalTerminalLearningEntry | LoopIterationLearningEntry | TurnVerdictLearningEntry | GoalArmedLearningEntry | SessionOutcomeLearningEntry
 
 function iso(atMs: number): string {
   const d = new Date(atMs)
@@ -211,6 +217,32 @@ export function buildGoalArmedLearningEntry(record: GoalRecord, atMs = Date.now(
     loopEnabled: loop,
     ...(loop && typeof record.loopMaxLoops === "number" ? { loopMaxLoops: record.loopMaxLoops } : {}),
     lesson,
+  }
+}
+
+export function buildSessionOutcomeLearningEntry(record: GoalRecord, atMs = Date.now()): SessionOutcomeLearningEntry {
+  const base = buildGoalTerminalLearningEntry(record, atMs)
+  const reason = clean(record.reason) ?? "no reason recorded"
+  const metrics = metricsLine(record.turns, undefined, record.endedAt && record.startedAt ? record.endedAt - record.startedAt : undefined)
+  const metricSuffix = metrics ? ` (${metrics})` : ""
+  const sessionLesson = `Session outcome for this goal: ${record.status} — ${reason}${metricSuffix}. Lesson for next sessions: review this outcome and its turn/loop learnings, keep what worked, and change approach where evidence showed gaps.`
+  return {
+    version: LEARNING_LOG_VERSION,
+    ts: base.ts,
+    kind: "session_outcome",
+    sessionID: base.sessionID,
+    goalID: base.goalID,
+    ...(base.directory ? { directory: base.directory } : {}),
+    condition: base.condition,
+    ...(base.objective ? { objective: base.objective } : {}),
+    status: record.status as GoalStatus,
+    ...(base.reason ? { reason: base.reason } : {}),
+    ...(base.turns !== undefined ? { turns: base.turns } : {}),
+    ...(base.elapsedMs !== undefined ? { elapsedMs: base.elapsedMs } : {}),
+    ...(base.iterations !== undefined ? { iterations: base.iterations } : {}),
+    ...(base.sha ? { sha: base.sha } : {}),
+    ...(base.spend ? { spend: base.spend } : {}),
+    lesson: sessionLesson,
   }
 }
 

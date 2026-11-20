@@ -28,7 +28,7 @@ import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, Eval
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
-import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
+import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -1934,6 +1934,7 @@ export class GoalController {
         latestSummary: entry.summary,
         signal: generate.signal,
         ...(backlogSuggestion ? { backlogSuggestion } : {}),
+        ...(this.recentLearningsForPrompt(record) ? { recentLearnings: this.recentLearningsForPrompt(record) } : {}),
       })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
@@ -2479,9 +2480,11 @@ export class GoalController {
     try {
       const file = this.learningLogFile(record.directory ?? this.deps.directory)
       if (!file) return
-      appendLearningEntry(file, buildGoalTerminalLearningEntry(record, this.deps.clock.now()))
+      const now = this.deps.clock.now()
+      appendLearningEntry(file, buildGoalTerminalLearningEntry(record, now))
+      appendLearningEntry(file, buildSessionOutcomeLearningEntry(record, now))
     } catch (error) {
-      this.deps.log.warn("learning log (goal terminal) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
+      this.deps.log.warn("learning log (goal terminal/session outcome) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
     }
   }
 
