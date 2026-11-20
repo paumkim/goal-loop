@@ -4189,8 +4189,11 @@
       "paths": "src/core/prompts.ts",
       "branch": "wt/evaluator-rubric-evidence-types",
       "worktree": "worktrees/wt-evaluator-rubric-evidence-types",
-      "status": "claimed",
-      "createdAt": "2026-11-20T12:42:31Z"
+      "status": "done",
+      "createdAt": "2026-11-20T12:42:31Z",
+      "submittedAt": "2026-11-20T12:44:47Z",
+      "mergedAt": "2026-11-20T12:46:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
