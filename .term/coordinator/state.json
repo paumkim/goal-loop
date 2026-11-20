@@ -4357,6 +4357,22 @@
       ],
       "mergedAt": "2026-11-20T15:39:38Z",
       "mergedInto": "dev"
+    },
+    "remove-unused-verify-check-definition": {
+      "agent": "iceman",
+      "paths": "src/core/types.ts",
+      "branch": "wt/remove-unused-verify-check-definition",
+      "worktree": "worktrees/wt-remove-unused-verify-check-definition",
+      "status": "done",
+      "createdAt": "2026-11-20T15:46:54Z",
+      "submittedAt": "2026-11-20T15:52:35Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:52:35Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T15:54:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
