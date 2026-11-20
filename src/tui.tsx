@@ -1009,13 +1009,14 @@ export default Plugin.define({
         const pill = () => {
           try {
             const g = goal()
-            // Budget the label to the measured terminal cells: 1-cell left padding + 1-cell right margin,
+            // Budget the label to the measured terminal cells: 1-cell right margin (no left padding —
+          // the leading icon begins the line at cell 0, one rail with the card's hanging bar),
           // minus the landing acknowledgment suffix when it rides the same line (cells, not .length),
           // minus the caret cell (▴/▾) that trails the pill on the same row.
           // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
           // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(8, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2) // -2: the caret cell rides the same row
+          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2) // -1: the 1-cell right margin; -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -1135,7 +1136,9 @@ export default Plugin.define({
           <ErrorBoundary fallback={() => <box />}>
           <Show when={showing()}>
             {/* The accordion: the pill is the persistent stripe on the jump row and the panel's
-                bottom seam — always mounted while showing(). Left click toggles the card open or
+                bottom seam — always mounted while showing(). The leading icon begins the line at
+                cell 0 (no left padding): it shares the left accent rail with the card's hanging bar
+                and the composer's own left bar. Left click toggles the card open or
                 closed (the panel expands upward from the pill, anchored at top={-(1 + cardRows())});
                 right click opens the dashboard. The caret cell rides the same row: ▴ when the panel
                 is collapsed (its content hidden above), ▾ when open (click again to collapse). */}
@@ -1144,7 +1147,7 @@ export default Plugin.define({
               top={-1}
               left={0}
               height={1}
-              paddingLeft={1}
+              paddingLeft={0}
               flexDirection="row"
               onMouseOver={() => setHovered(true)}
               onMouseOut={() => setHovered(false)}

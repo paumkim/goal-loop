@@ -4,7 +4,7 @@
  * floor), 64, 80, 88 (the design ceiling), 112 (what the live measured-mount can paint) — in both
  * the color and the mono (reduced-color) arm, plus the default terminal-resolved width path
  * (`cardWidth`), and the real pill model through the same one-row absolute mount tui.tsx uses
- * (paddingLeft 1, no frame on the other sides). Not shipped (test/ is not in `files`).
+ * (paddingLeft 0 — the leading icon owns cell 0, no frame on the other sides). Not shipped (test/ is not in `files`).
  * Requires the solid preload (test/bunfig.toml).
  *
  * The invariants, measured per frame rather than trusted:
@@ -18,8 +18,9 @@
  *              flushRight `[esc]` all share ONE right edge at width − 3. The affordance cell is 8
  *              cells wide with the 4-cell verb painted left, so the verb ink starts at width − 10;
  *              `[esc]` ink ends exactly at width − 3.
- *   pill       the pill paints `budget = width − 2` (1-cell left padding, 1-cell right margin) and,
- *              mounted, inks cell 1 first and never beyond cell width − 2 — under mono too.
+ *   pill       the pill paints `budget = width − 1` (1-cell right margin, no left padding — the
+ *              leading icon owns cell 0) and, mounted, inks cell 0 first and never beyond cell
+ *              width − 2 — under mono too. The icon shares the left column with the card's bar.
  */
 import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
@@ -232,11 +233,11 @@ for (const width of WIDTHS) {
       const ascii = mono
       const g = goal()
       const line = terminal
-        ? terminalPill(achievedGoal(), 1000 * 60 * 42, ascii, width - 2)!.text
-        : pillModel(g, 1000 * 60 * 42, ascii, width - 2, 2).text
+        ? terminalPill(achievedGoal(), 1000 * 60 * 42, ascii, width - 1)!.text
+        : pillModel(g, 1000 * 60 * 42, ascii, width - 1, 2).text
       const setup = await testRender(
         () => (
-          <box position="absolute" top={0} left={0} height={1} paddingLeft={1} flexDirection="row" width={width}>
+          <box position="absolute" top={0} left={0} height={1} paddingLeft={0} flexDirection="row" width={width}>
             <text fg={theme.text.muted} wrapMode="none">{line}</text>
           </box>
         ),
@@ -249,11 +250,11 @@ for (const width of WIDTHS) {
     }
     const expectPillFits = (label: string, mono: boolean, terminal: boolean) => async () => {
       const { frame, line } = await pillAt(mono, terminal)
-      expect(stringWidth(line), `${label} model stays inside its budget`).toBeLessThanOrEqual(width - 2)
+      expect(stringWidth(line), `${label} model stays inside its budget`).toBeLessThanOrEqual(width - 1)
       const cells = frameCells(frame.split("\n")[0]!)
       const ink = inkColumns(cells)
-      expect(cells[0]!.ink, `${label} leaves the mount's left margin cell blank`).toBe(false)
-      expect(ink[0], `${label} paints its first cell at the padding column`).toBe(1)
+      expect(cells[0]!.ink, `${label} begins the line at cell 0 — the leading icon owns the accent rail`).toBe(true)
+      expect(ink[0], `${label} paints its first cell at cell 0`).toBe(0)
       expect(ink[ink.length - 1]!, `${label} never paints past its right margin`).toBeLessThanOrEqual(width - 2)
     }
     test(`the working pill paints inside its mount budget (color)`, expectPillFits("working pill", false, false))

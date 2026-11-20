@@ -7541,7 +7541,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(8, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
+            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7657,7 +7657,7 @@ var tui_default = Plugin.define({
                   _$setProp5(_el$12, "top", -1);
                   _$setProp5(_el$12, "left", 0);
                   _$setProp5(_el$12, "height", 1);
-                  _$setProp5(_el$12, "paddingLeft", 1);
+                  _$setProp5(_el$12, "paddingLeft", 0);
                   _$setProp5(_el$12, "flexDirection", "row");
                   _$setProp5(_el$12, "onMouseOver", () => setHovered(true));
                   _$setProp5(_el$12, "onMouseOut", () => setHovered(false));

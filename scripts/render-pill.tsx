@@ -78,12 +78,12 @@ const mount = async (name: string, goal: GoalSnapshot, phase: number | undefined
   const setup = await testRender(
     () => (
       <box flexDirection="column" width={terminal} height={2}>
-        <box position="absolute" top={0} left={0} width={terminal} height={1} paddingLeft={1} flexDirection="row">
+        <box position="absolute" top={0} left={0} width={terminal} height={1} paddingLeft={0} flexDirection="row">
           <text fg={toneFg(model.tone)} wrapMode="none" attributes={attrs}>
             {line}
           </text>
         </box>
-        <box position="absolute" top={1} left={0} width={terminal} height={1} paddingLeft={1} flexDirection="row">
+        <box position="absolute" top={1} left={0} width={terminal} height={1} paddingLeft={0} flexDirection="row">
           <text fg={theme.text.faint} wrapMode="none">
             {"jump-to-latest row (host chrome)"}
           </text>
