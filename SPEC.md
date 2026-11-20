@@ -7803,3 +7803,26 @@ Honest limits. The pip visual is a bounded, proportional summary at large caps (
 position. The dialog's `barCaption` (`vN of at most M · k complete`) and block progress bar were already
 cap-agnostic and are unchanged except for the bar's one-cell progress floor.
 <!-- spec-check files=72 tests=1989 -->
+
+## Workstream XCVII — remove unused internal exports from core modules (2026-11-20)
+
+Behavior-preserving bloat cleanup (no runtime behavior or public API changes intended). Removes `export` from
+internal symbols that had no in-repo consumers outside their defining modules, reducing unnecessary module surface:
+
+1. **`src/core/changed-paths.ts`**: `GitRun`, `CollectChangedPathsOptions`, and `DEFAULT_INTEGRATION_BASE_REFS`
+   are now module-local (still used internally by `createGitRun`, `collectChangedPaths`, and
+   `resolveIntegrationBase`). Exported runtime API remains `createGitRun`, `pathsOf`, `resolveIntegrationBase`,
+   and `collectChangedPaths`.
+2. **`src/core/file-log.ts`**: `FileSinkOptions` is now module-local (used by `withFileSink`). Exported API
+   remains `FILE_LOG_MAX_BYTES` and `withFileSink`.
+3. **`src/core/learning-log.ts`**: `LEARNING_LOG_VERSION` is now module-local (used in entry types/builders).
+   Exported learning-log types/functions and serialized entry shape are unchanged.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/changed-paths.test.ts
+test/file-log.test.ts test/learning-log.test.ts` → **28 pass / 0 fail** (3 files, 111 expect() calls);
+`bun run check` green (tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots, dist fresh, TUI load, docs
+freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Internal-only cleanup; no changes to persisted formats, evaluator/rubric, commit/verify gates, or
+TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
+<!-- spec-check files=72 tests=1989 -->

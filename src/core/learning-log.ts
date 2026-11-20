@@ -2,7 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { formatDuration } from "./format.ts"
 
-export const LEARNING_LOG_VERSION = 1 as const
+const LEARNING_LOG_VERSION = 1 as const
 
 import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
 

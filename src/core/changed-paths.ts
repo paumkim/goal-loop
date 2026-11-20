@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process"
 
-export type GitRun = (args: string[]) => string | undefined
+type GitRun = (args: string[]) => string | undefined
 
-export interface CollectChangedPathsOptions {
+interface CollectChangedPathsOptions {
   /** How to report untracked files in porcelain. "all" lists each file individually. Default "normal" (git default). */
   readonly untrackedFiles?: "normal" | "all"
   /** Integration base refs to diff against, in preference order. */
@@ -12,7 +12,7 @@ export interface CollectChangedPathsOptions {
 }
 
 /** Integration refs consulted (in order) to find the merge-base for committed changes. */
-export const DEFAULT_INTEGRATION_BASE_REFS = ["dev", "origin/dev", "main", "origin/main"] as const
+const DEFAULT_INTEGRATION_BASE_REFS = ["dev", "origin/dev", "main", "origin/main"] as const
 
 /**
  * Create a git command runner bound to `cwd`.
