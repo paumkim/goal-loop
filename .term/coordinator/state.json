@@ -3815,6 +3815,22 @@
       "submittedAt": "2026-11-20T03:37:04Z",
       "mergedAt": "2026-11-20T03:38:37Z",
       "mergedInto": "dev"
+    },
+    "terminal-reminder-only-when-goal-text-remains": {
+      "agent": "orchestrator",
+      "paths": "src/index.ts,src/core/prompts.ts,test,SPEC.md",
+      "branch": "wt/terminal-reminder-only-when-goal-text-remains",
+      "worktree": "worktrees/wt-terminal-reminder-only-when-goal-text-remains",
+      "status": "done",
+      "createdAt": "2026-11-20T03:38:51Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T03:42:43Z",
+      "forcedScopeFiles": [
+        "docs/runtime.html"
+      ],
+      "submittedAt": "2026-11-20T03:42:43Z",
+      "mergedAt": "2026-11-20T03:44:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
