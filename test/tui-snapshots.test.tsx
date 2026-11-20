@@ -237,6 +237,37 @@ describe("full-frame snapshots (named layout states)", () => {
     expect(snapshot).toMatchSnapshot()
   })
 
+  test("StatusDialogBody · pile-up (massive goal + many elsewhere goals stay aligned and consistent)", async () => {
+    const massive = loopedGoal({
+      condition:
+        "improve the terminal tui dialog display on detail view when goals are starting to pile up. " +
+        "This is a very long massive goal condition that keeps going with lots of detail about layout consistency, spacing, alignment, truncation, wrapping behavior, and how the dialog should look when there are many goals running simultaneously across different sessions. ".repeat(2),
+      reason:
+        "Last evaluator said: " +
+        "this is a detailed reason that explains what is still missing and what needs to be done next in great detail so the row must stay consistent while the text wraps across many lines. ".repeat(2),
+      loopObjective:
+        "A very long objective that also wraps and takes up space: " +
+        "keep improving everything about the detail dialog so it remains consistent and readable when content piles up. ".repeat(3),
+      turns: 15,
+    })
+    const foreign = [
+      loopedGoal({ sessionID: "ses_1111111111", id: "goal_f1", condition: "ship the deploy pipeline before friday", loopIteration: 2, loopMaxLoops: 5 }),
+      loopedGoal({ sessionID: "ses_2222222222", id: "goal_f2", condition: "audit the whole tui surface", loopEnabled: false, status: "paused", pauseCause: "cap" }),
+      loopedGoal({ sessionID: "ses_4444444444", id: "goal_f4", condition: "map the snapshot states", loopIteration: 10, loopMaxLoops: 10 }),
+      loopedGoal({ sessionID: "ses_5555555555", id: "goal_f5", condition: "harden the 80 column floor", loopEnabled: false, status: "active" }),
+      loopedGoal({ sessionID: "ses_6666666666", id: "goal_f6", condition: "wheel pin on the dialog", loopIteration: 3, loopMaxLoops: 5 }),
+      loopedGoal({ sessionID: "ses_7777777777", id: "goal_f7", condition: "fold affordance coverage", loopEnabled: false, status: "paused", pauseCause: "stall" }),
+    ]
+    const slugs: Record<string, string> = { ses_1111111111: "brisk-falcon", ses_2222222222: "quiet-otter", ses_4444444444: "shy-heron", ses_5555555555: "grand-oyster", ses_6666666666: "still-bison", ses_7777777777: "ember-crab" }
+    const sessionLabel = (id: string): string => slugs[id] ?? id
+    const snapshot = await frame(
+      () => <StatusDialogBody goal={massive} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} others={foreign} sessionLabel={sessionLabel} onViewTranscript={() => {}} onCopyCondition={() => {}} onCopyReason={() => {}} onCopySummary={() => {}} onCopyAttestation={() => {}} expandedOthers={() => true} />,
+      100,
+      60,
+    )
+    expect(snapshot).toMatchSnapshot()
+  })
+
   test("StatusDialogBody · why ledger (each verdict row carries the commit sha it landed on)", async () => {
     const shaA = "a3f5c8e91d4b6f7061728394a5b6c7d8e9f0a1b2"
     const shaB = "b1e4d7a20f3c5968778394a5b6c7d8e9f0a1b2c3d"

@@ -3435,6 +3435,7 @@ var StatusDialogBody = (props) => {
     _$insertNode2(_el$8, _el$9);
     _$setProp3(_el$8, "flexDirection", "row");
     _$setProp3(_el$8, "gap", 2);
+    _$setProp3(_el$8, "alignItems", wide ? "flex-start" : undefined);
     _$insert3(_el$8, () => label(name), _el$9);
     _$setProp3(_el$9, "wrapMode", "word");
     _$setProp3(_el$9, "flexGrow", wide ? 1 : 0);
@@ -3447,9 +3448,14 @@ var StatusDialogBody = (props) => {
   const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE;
   const OTHERS_CONDITION_MAX = 34;
   const OTHERS_TAG_MAX = 12;
+  const OTHERS_STATE_MAX = 7;
   const sessionTag = (sessionID) => {
     const label = props.sessionLabel?.(sessionID) ?? sessionID;
     return truncate(label, OTHERS_TAG_MAX);
+  };
+  const otherStateLabel = (other) => {
+    const raw = other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
+    return truncate(raw, OTHERS_STATE_MAX);
   };
   const othersLive = () => {
     const rows = foreignLiveRows(props.others, g()?.sessionID);
@@ -3803,6 +3809,7 @@ var StatusDialogBody = (props) => {
             _$insertNode2(_el$31, _el$32);
             _$setProp3(_el$31, "flexDirection", "row");
             _$setProp3(_el$31, "gap", 2);
+            _$setProp3(_el$31, "alignItems", "flex-start");
             _$setProp3(_el$31, "onMouseUp", (event) => {
               if (event.button !== 0)
                 return;
@@ -3844,6 +3851,7 @@ var StatusDialogBody = (props) => {
                   _$insertNode2(_el$45, _el$46);
                   _$setProp3(_el$45, "flexDirection", "row");
                   _$setProp3(_el$45, "gap", 2);
+                  _$setProp3(_el$45, "alignItems", "flex-start");
                   _$setProp3(_el$45, "onMouseUp", (event) => {
                     if (event.button !== 0)
                       return;
@@ -4575,7 +4583,8 @@ var StatusDialogBody = (props) => {
                 _$setProp3(_el$87, "flexDirection", "row");
                 _$setProp3(_el$87, "gap", 2);
                 _$insert3(_el$87, () => label("elsewhere"), _el$88);
-                _$setProp3(_el$88, "wrapMode", "none");
+                _$setProp3(_el$88, "wrapMode", "word");
+                _$setProp3(_el$88, "flexGrow", 1);
                 _$insert3(_el$88, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 click a row to open its transcript" : ""}`);
                 _$insert3(_el$86, _$createComponent2(For2, {
                   get each() {
@@ -4623,13 +4632,12 @@ var StatusDialogBody = (props) => {
                       })());
                       _$setProp3(_el$93, "wrapMode", "none");
                       _$setProp3(_el$93, "flexShrink", 0);
+                      _$setProp3(_el$93, "width", 12);
                       _$insert3(_el$93, () => sessionTag(other.sessionID));
                       _$setProp3(_el$94, "wrapMode", "none");
                       _$setProp3(_el$94, "flexShrink", 0);
-                      _$insert3(_el$94, (() => {
-                        var _c$12 = _$memo3(() => !!other.loopEnabled);
-                        return () => _c$12() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
-                      })());
+                      _$setProp3(_el$94, "width", 7);
+                      _$insert3(_el$94, () => otherStateLabel(other));
                       _$setProp3(_el$95, "wrapMode", "none");
                       _$setProp3(_el$95, "flexGrow", 1);
                       _$insert3(_el$95, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
