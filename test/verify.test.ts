@@ -268,6 +268,9 @@ describe("verification tail on the record (dashboard evidence)", () => {
     expect(record.lastVerify!.tail).toBe("42 pass\n0 fail")
     expect(record.lastVerify!.tail).not.toContain("\u001b")
     expect(typeof record.lastVerify!.at).toBe("number")
+    const entry = record.history.at(-1)!
+    expect(entry.verdict).toBe("met")
+    expect(entry.verify).toEqual({ command: "bun run check", code: 0, tail: "42 pass\n0 fail" })
   })
 
   test("a failing gate persists the stripped tail and exit code; the reason contract is unchanged", async () => {
@@ -281,6 +284,9 @@ describe("verification tail on the record (dashboard evidence)", () => {
     expect(record.lastVerify!.code).toBe(1)
     expect(record.lastVerify!.tail).toBe("1 fail\nerror: expected true")
     expect(record.reason).toContain("1 fail")
+    const entry = record.history.at(-1)!
+    expect(entry.verdict).toBe("not_met")
+    expect(entry.verify).toEqual({ command: "bun run check", code: 1, tail: "1 fail\nerror: expected true" })
   })
 
   test("a timeout persists timedOut with a null exit code and no tail", async () => {
@@ -293,6 +299,8 @@ describe("verification tail on the record (dashboard evidence)", () => {
     expect(record.lastVerify!.timedOut).toBe(true)
     expect(record.lastVerify!.code).toBeNull()
     expect(record.lastVerify!.tail).toBeUndefined()
+    const entry = record.history.at(-1)!
+    expect(entry.verify).toEqual({ command: "bun run check", code: null, timedOut: true })
   })
 })
 

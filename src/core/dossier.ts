@@ -88,16 +88,23 @@ const iterationLines = (entry: LoopEntry, spanMs: number): string[] => {
   return lines
 }
 
+const verifyCell = (verify: VerdictEntry["verify"]): string => {
+  if (!verify) return GAP
+  if (verify.timedOut) return "timeout"
+  if (verify.code === null) return "error"
+  return `exit ${verify.code}`
+}
+
 /** One row per evaluated turn in the verdict trail. */
 const verdictTable = (history: readonly VerdictEntry[]): string[] => {
   const lines = [
-    "| turn | verdict | tools | commit | spend |",
-    "| ---: | --- | ---: | --- | --- |",
+    "| turn | verdict | tools | commit | spend | verify |",
+    "| ---: | --- | ---: | --- | --- | --- |",
   ]
   for (const entry of history) {
     const tools = entry.toolCalls ?? GAP
     lines.push(
-      `| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} |`,
+      `| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry.verify)} |`,
     )
   }
   return lines
@@ -110,8 +117,12 @@ const verdictProse = (history: readonly VerdictEntry[]): string[] => {
     const bits = [`turn ${entry.turn}`, entry.verdict, isoOf(entry.at)]
     if (entry.toolCalls !== undefined) bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`)
     if (entry.sha) bits.push(shortSha(entry.sha))
+    if (entry.verify) bits.push(`verify ${verifyCell(entry.verify)} ${inlineCode(entry.verify.command)}`)
     lines.push(`- ${bits.join(" · ")}`)
     lines.push(...quote(entry.reason))
+    if (entry.verify?.tail) {
+      lines.push(...quote(`verify output tail:\n${entry.verify.tail}`))
+    }
   }
   return lines
 }

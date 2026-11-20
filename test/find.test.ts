@@ -10,7 +10,7 @@ import { findMatches, countMatches, segmentLine, matchLabel } from "../src/core/
 const dossierLike = [
   "Loop dossier",
   "- Condition: `ship the release notes`",
-  "| turn | verdict | tools | commit | spend |",
+  "| turn | verdict | tools | commit | spend | verify |",
   "| 4 | met | 41 | a1b2c3d | $0.42 |",
   "v2 · met — evaluator reason: not yet",
   "The record, whole: met met met",
