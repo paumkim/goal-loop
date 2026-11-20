@@ -94,7 +94,11 @@ const verifyCell = (entry: VerdictEntry): string => {
     const req = m.checks.filter((c) => c.required)
     const pass = req.filter((c) => c.pass && c.scoped).length
     const label = `${pass}/${req.length || m.checks.length} ${m.pass ? "pass" : "fail"}`
-    return m.broadGoal ? `${label} (broad)` : label
+    const extras: string[] = []
+    if (m.timing?.reused) extras.push(`reused ${m.timing.reused}`)
+    if (m.timing?.parallel) extras.push(`parallel x${m.timing.concurrency}`)
+    const suffix = extras.length ? `, ${extras.join(", ")}` : ""
+    return m.broadGoal ? `${label} (broad${suffix})` : `${label}${suffix ? ` (${extras.join(", ")})` : ""}`
   }
   const verify = entry.verify
   if (!verify) return GAP
@@ -104,9 +108,19 @@ const verifyCell = (entry: VerdictEntry): string => {
 }
 
 const matrixCheckLine = (check: NonNullable<VerdictEntry["verification"]>["checks"][number]): string => {
-  const state = !check.scoped ? "unscoped" : check.pass ? "pass" : check.timedOut ? "timeout" : check.code === null ? "error" : `exit ${check.code}`
-  const bits = [check.id, check.type, check.required ? "required" : "optional", state]
+  const result = !check.scoped && check.required ? "unscoped" : check.pass ? "pass" : check.skipped ? "skipped" : check.timedOut ? "timeout" : check.code === null ? "error/unavailable" : `exit ${check.code}`
+  const bits = [
+    check.id,
+    check.type,
+    check.required ? "required" : "optional",
+    `source=${check.source ?? "configured"}`,
+    `mode=${check.executionMode ?? check.runState ?? check.evidenceMode ?? "command"}`,
+    result,
+  ]
   if (check.label) bits.push(`label=${check.label}`)
+  if (check.reused) bits.push("reused")
+  if (check.parallel) bits.push(`parallel${check.concurrency ? `@${check.concurrency}` : ""}`)
+  if (typeof check.durationMs === "number") bits.push(`${check.durationMs}ms`)
   return bits.join(" · ")
 }
 
@@ -134,7 +148,9 @@ const verdictProse = (history: readonly VerdictEntry[]): string[] => {
     if (entry.sha) bits.push(shortSha(entry.sha))
     if (entry.verification) {
       const req = entry.verification.checks.filter((c) => c.required).length
-      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required)`)
+      const t = entry.verification.timing
+      const timing = t ? `, ${t.totalMs}ms${t.parallel ? ` parallel x${t.concurrency}` : ""}${t.reused ? ` reused ${t.reused}` : ""}` : ""
+      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required${timing})`)
     } else if (entry.verify) {
       const v = entry.verify
       const state = v.timedOut ? "timeout" : v.code === null ? "error" : `exit ${v.code}`
@@ -143,13 +159,22 @@ const verdictProse = (history: readonly VerdictEntry[]): string[] => {
     lines.push(`- ${bits.join(" · ")}`)
     lines.push(...quote(entry.reason))
     if (entry.verification) {
-      lines.push(...quote("verification matrix checks:"))
-      for (const check of entry.verification.checks) {
+      const m = entry.verification
+      lines.push(...quote(`verification matrix checks (profile=${m.profile}, broad=${m.broadGoal}, deterministic coverage enforced):`))
+      if (m.coverageReasons?.length) lines.push(...quote(`coverage reasons: ${m.coverageReasons.join("; ")}`))
+      if (m.timing) lines.push(...quote(`timing: total ${m.timing.totalMs}ms, concurrency ${m.timing.concurrency}, executed ${m.timing.executed}, reused ${m.timing.reused}, skipped ${m.timing.skipped}, parallel ${m.timing.parallel}`))
+      for (const check of m.checks) {
         lines.push(...quote(`- ${matrixCheckLine(check)} cmd=${check.command}`))
+        if (check.scopeDecision) lines.push(...quote(`  scope decision: ${check.scopeDecision}`))
+        if (check.artifactPatterns?.length) lines.push(...quote(`  artifact patterns: ${check.artifactPatterns.join(" || ")}`))
+        if (check.artifactMatched?.length) lines.push(...quote(`  artifact matched: ${check.artifactMatched.join(" || ")}`))
+        if (check.artifactMissing?.length) lines.push(...quote(`  artifact missing: ${check.artifactMissing.join(" || ")}`))
         if (check.reason) lines.push(...quote(`  reason: ${check.reason}`))
-        if (check.tail) lines.push(...quote(`  output tail:\n${check.tail}`))
+        if (check.nextAction && !check.pass) lines.push(...quote(`  next action: ${check.nextAction}`))
+        if (check.tail) lines.push(...quote(`  evidence/output tail:\n${check.tail}`))
       }
-      if (entry.verification.missing.length) lines.push(...quote(`missing/unscoped/failed required checks: ${entry.verification.missing.join(", ")}`))
+      if (m.missing.length) lines.push(...quote(`missing/unscoped/failed required checks: ${m.missing.join(", ")}`))
+      if (m.malformedGoalChecks?.length) lines.push(...quote(`malformed goal-declared directives ignored (never executed): ${m.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`))
     } else if (entry.verify?.tail) {
       lines.push(...quote(`verify output tail:\n${entry.verify.tail}`))
     }
@@ -206,13 +231,21 @@ const verifyLines = (goal: GoalSnapshot): string[] => {
       `- Matrix profile: ${matrix.profile}${matrix.broadGoal ? " (broad goal)" : ""}`,
       `- Result: ${matrix.pass ? "pass" : "fail"} · ${passed}/${req.length} required checks satisfied · ${isoOf(matrix.at)}`,
     ]
+    if (matrix.timing) lines.push(`- Timing: total ${matrix.timing.totalMs}ms, concurrency ${matrix.timing.concurrency}, executed ${matrix.timing.executed}, reused ${matrix.timing.reused}, skipped ${matrix.timing.skipped}, parallel ${matrix.timing.parallel}`)
+    if (matrix.coverageReasons?.length) lines.push(`- Coverage reasons: ${matrix.coverageReasons.join("; ")}`)
     if (matrix.missing.length) lines.push(`- Missing/unscoped/failed required checks: ${matrix.missing.join(", ")}`)
+    if (matrix.malformedGoalChecks?.length) lines.push(`- Malformed goal-declared directives ignored (never executed): ${matrix.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`)
     lines.push("- Checks:")
     for (const check of matrix.checks) {
       lines.push(`  - ${matrixCheckLine(check)} cmd=${inlineCode(check.command)}`)
+      if (check.scopeDecision) lines.push(`    - scope decision: ${check.scopeDecision}`)
+      if (check.artifactPatterns?.length) lines.push(`    - artifact patterns: ${check.artifactPatterns.join(" || ")}`)
+      if (check.artifactMatched?.length) lines.push(`    - artifact matched: ${check.artifactMatched.join(" || ")}`)
+      if (check.artifactMissing?.length) lines.push(`    - artifact missing: ${check.artifactMissing.join(" || ")}`)
       if (check.reason) lines.push(`    - reason: ${check.reason}`)
+      if (check.nextAction && !check.pass) lines.push(`    - next action: ${check.nextAction}`)
       if (check.tail) {
-        lines.push("    - output tail:")
+        lines.push("    - evidence/output tail:")
         lines.push(...fenceBlock(check.tail).map((l) => `      ${l}`))
       }
     }

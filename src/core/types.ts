@@ -70,20 +70,57 @@ export interface VerifyCheckDefinition {
   readonly label?: string
 }
 
+export type VerifyEvidenceMode = "command" | "artifact" | "either"
+export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
+export type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
+
+/** Evidence captured for one verification-matrix check (additive, persisted in verdict trail). */
 export interface VerifyCheckEvidence {
   readonly id: string
   readonly type: VerifyCheckType
   readonly label?: string
   readonly command: string
+  /** Where this check came from (additive). */
+  readonly source?: VerifyCheckSource
+  /** Declared/allowed evidence mode (additive, default command for legacy). */
+  readonly evidenceMode?: VerifyEvidenceMode
+  /** How this result was satisfied/produced for this evaluation (additive). */
+  readonly runState?: VerifyCheckRunState
   readonly required: boolean
-  /** True when this check was applicable/scoped for the evaluated goal/profile. */
+  /** True when this check/evidence was scoped for the evaluated goal/profile. */
   readonly scoped: boolean
+  /** Deterministic scope/coverage decision summary (additive). */
+  readonly scopeDecision?: string
   readonly pass: boolean
+  /** Exit code; null when no command exit applies. */
   readonly code: number | null
   readonly timedOut?: boolean
+  /** Last lines of command output or artifact evidence excerpt, display-safe, capped. */
   readonly tail?: string
-  /** Machine-readable failure/scoping reason (e.g. failed, timeout, unscoped, missing). */
+  /** Concrete reason when missing/unscoped/failed/skipped. */
   readonly reason?: string
+  /** Concrete next action when unmet (additive). */
+  readonly nextAction?: string
+  /** Wall-clock duration in ms for this check execution/evaluation (additive). */
+  readonly durationMs?: number
+  /** True when this result reused an identical fresh check result from the same evaluated turn/HEAD (additive). */
+  readonly reused?: boolean
+  /** Reuse source key/label when reused (additive). */
+  readonly reusedFrom?: string
+  /** True when executed concurrently with other checks in this matrix run (additive). */
+  readonly parallel?: boolean
+  /** Concurrency slot/index metadata (additive). */
+  readonly concurrency?: number
+  /** True when skipped by configured semantics/short-circuit (additive). */
+  readonly skipped?: boolean
+  /** Required artifact patterns declared for artifact/either evidence checks (additive). */
+  readonly artifactPatterns?: readonly string[]
+  /** Artifact patterns matched as fresh scoped transcript/artifact evidence (additive). */
+  readonly artifactMatched?: readonly string[]
+  /** Artifact patterns still missing for artifact evidence satisfaction (additive). */
+  readonly artifactMissing?: readonly string[]
+  /** Explicit execution/evidence mode label for reporting (additive). */
+  readonly executionMode?: "command" | "artifact" | "reused-command" | "reused-artifact" | "skipped"
 }
 
 /** Profile-aware matrix evidence recorded for a candidate met verdict (legacy single verifyCommand is represented as one check). */
@@ -95,6 +132,19 @@ export interface VerdictVerificationMatrix {
   readonly checks: readonly VerifyCheckEvidence[]
   /** Required check ids/types that were missing, unscoped, or not satisfied. */
   readonly missing: readonly string[]
+  /** Deterministic scope/coverage policy reasons (additive). */
+  readonly coverageReasons?: readonly string[]
+  /** Timing/concurrency summary (additive). */
+  readonly timing?: {
+    readonly totalMs: number
+    readonly concurrency: number
+    readonly parallel: boolean
+    readonly reused: number
+    readonly executed: number
+    readonly skipped: number
+  }
+  /** Parsed/flagged malformed goal-declared directives (additive; never executed). */
+  readonly malformedGoalChecks?: readonly { readonly raw: string; readonly reason: string }[]
 }
 
 export interface VerdictEntry {

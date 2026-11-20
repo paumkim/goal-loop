@@ -98,6 +98,12 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheWrite)
 
 const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
+const VERIFY_SOURCES: ReadonlySet<string> = new Set(["configured", "legacy", "goal-declared"])
+const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])
+const VERIFY_RUN_STATES: ReadonlySet<string> = new Set(["executed", "artifact", "reused", "skipped"])
+const VERIFY_EXECUTION_MODES: ReadonlySet<string> = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"])
+
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString)
 
 const isVerifyCheckType = (value: unknown): value is NonNullable<VerdictEntry["verification"]>["checks"][number]["type"] =>
   isString(value) && VERIFY_CHECK_TYPES.has(value)
@@ -114,7 +120,34 @@ const isVerifyCheckEvidence = (value: unknown): value is NonNullable<VerdictEntr
   (value.label === undefined || isString(value.label)) &&
   (value.timedOut === undefined || isBoolean(value.timedOut)) &&
   (value.tail === undefined || isString(value.tail)) &&
-  (value.reason === undefined || isString(value.reason))
+  (value.reason === undefined || isString(value.reason)) &&
+  (value.source === undefined || (isString(value.source) && VERIFY_SOURCES.has(value.source))) &&
+  (value.evidenceMode === undefined || (isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode))) &&
+  (value.runState === undefined || (isString(value.runState) && VERIFY_RUN_STATES.has(value.runState))) &&
+  (value.scopeDecision === undefined || isString(value.scopeDecision)) &&
+  (value.nextAction === undefined || isString(value.nextAction)) &&
+  (value.durationMs === undefined || isFiniteNumber(value.durationMs)) &&
+  (value.reused === undefined || isBoolean(value.reused)) &&
+  (value.reusedFrom === undefined || isString(value.reusedFrom)) &&
+  (value.parallel === undefined || isBoolean(value.parallel)) &&
+  (value.concurrency === undefined || isFiniteNumber(value.concurrency)) &&
+  (value.skipped === undefined || isBoolean(value.skipped)) &&
+  (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) &&
+  (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) &&
+  (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) &&
+  (value.executionMode === undefined || (isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode)))
+
+const isVerifyTiming = (value: unknown): boolean =>
+  isRecord(value) &&
+  isFiniteNumber(value.totalMs) &&
+  isFiniteNumber(value.concurrency) &&
+  isBoolean(value.parallel) &&
+  isFiniteNumber(value.reused) &&
+  isFiniteNumber(value.executed) &&
+  isFiniteNumber(value.skipped)
+
+const isMalformedGoalCheck = (value: unknown): boolean =>
+  isRecord(value) && isString(value.raw) && isString(value.reason)
 
 const isVerdictVerificationMatrix = (value: unknown): value is NonNullable<VerdictEntry["verification"]> =>
   isRecord(value) &&
@@ -122,7 +155,10 @@ const isVerdictVerificationMatrix = (value: unknown): value is NonNullable<Verdi
   isBoolean(value.broadGoal) &&
   isBoolean(value.pass) &&
   Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) &&
-  Array.isArray(value.missing) && value.missing.every(isString)
+  Array.isArray(value.missing) && value.missing.every(isString) &&
+  (value.coverageReasons === undefined || isStringArray(value.coverageReasons)) &&
+  (value.timing === undefined || isVerifyTiming(value.timing)) &&
+  (value.malformedGoalChecks === undefined || (Array.isArray(value.malformedGoalChecks) && value.malformedGoalChecks.every(isMalformedGoalCheck)))
 
 const isLastVerification = (value: unknown): value is NonNullable<GoalSnapshot["lastVerification"]> =>
   isVerdictVerificationMatrix(value) && isFiniteNumber((value as unknown as Record<string, unknown>).at)
