@@ -3979,14 +3979,24 @@
       "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/core/history.ts,scripts/render-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/tui-detail-pileup-consistency",
       "worktree": "worktrees/wt-tui-detail-pileup-consistency",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-20T06:56:22Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-20T07:14:32Z",
       "forcedScopeFiles": [
         "test/__snapshots__/tui-snapshots.test.tsx.snap"
       ],
-      "submittedAt": "2026-11-20T07:14:32Z"
+      "submittedAt": "2026-11-20T07:14:32Z",
+      "mergedAt": "2026-11-20T07:34:53Z",
+      "mergedInto": "dev"
+    },
+    "fix-evaluator-staleness": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/fix-evaluator-staleness",
+      "worktree": "worktrees/wt-fix-evaluator-staleness",
+      "status": "claimed",
+      "createdAt": "2026-11-20T07:28:40Z"
     }
   },
   "mergeLock": null,
