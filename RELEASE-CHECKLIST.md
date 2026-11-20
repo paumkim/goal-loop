@@ -1,5 +1,11 @@
 # Release checklist — opencode-goalv2 1.1.0
 
+> **Naming note (2026-11-19, Workstream LXXVIII/LXXIX).** The product, package, plugin id and CLI are
+> now `goal-loop`; the CLI file is `bin/goal-loop.mjs`, and `opencode-goal` survives only as a bin alias,
+> a `PLUGIN_PACKAGE` spec and the `OPENCODE_GOAL_*` env surface. The statements below describe the
+> 1.1.0-era artifact and are kept verbatim; when re-running a step today, read `opencode-goal.mjs` as
+> `goal-loop.mjs` and `opencode-goal <cmd>` as `goal-loop <cmd>`.
+
 Status as of 2026-11-16. Complete as shipped: this is a GitHub-only release. The npm registry publish is
 not part of the 1.1.0 release (see step 7, skipped by maintainer decision). The release ships from `aff3a49`
 (the merge of the docs release lease into `dev`), tagged in git as `v1.1.0` and published as a GitHub

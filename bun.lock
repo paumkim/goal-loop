@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "opencode-goal",
+      "name": "goal-loop",
       "dependencies": {
         "string-width": "7.2.0",
       },
