@@ -7884,4 +7884,23 @@ invariant-sweep, spec-check `files=72 tests=1989`).
 
 Honest limits. Internal-only export-surface cleanup; no changes to persisted formats, evaluator/rubric, commit/verify
 gates, or TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
+
+## Workstream CI — cache ensured directory for learning-log appends (2026-11-20)
+
+Behavior-preserving performance optimization (no intended runtime behavior or persisted-format changes). `appendLearningEntry`
+in `src/core/learning-log.ts` now caches ensured target directories per process and skips redundant `mkdirSync` calls for
+repeated appends to the same log path. On `ENOENT` (directory removed after being ensured), it clears the cache entry and
+retries directory creation + append once, preserving prior best-effort recovery semantics; failures remain swallowed.
+
+Measured before/after (bun micro-benchmark, same temp-dir shape, 3000 appends × 5 runs): before (mkdir on every append)
+`avg_ms=4.97` (`times_ms=[4.67,4.67,4.51,4.57,6.43]`); after (cached ensured dir + ENOENT retry)
+`avg_ms=2.43/2.39/3.25` across three runs (`times_ms=[2.48,2.41,2.43,2.47,2.36]`, `[2.42,2.41,2.38,2.4,2.35]`,
+`[2.3,2.29,3.63,4.05,3.96]`), reducing redundant mkdir syscalls in the common append path.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/learning-log.test.ts` → **12 pass
+/ 0 fail** (1 file, 77 expect() calls); `bun run check` green (tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots,
+dist fresh, TUI load, docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Micro-benchmark evidence only (single-process JSONL append loop), not end-to-end goal-loop latency;
+behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
 <!-- spec-check files=72 tests=1989 -->
