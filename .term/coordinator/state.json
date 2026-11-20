@@ -3804,6 +3804,17 @@
       "submittedAt": "2026-11-20T03:30:09Z",
       "mergedAt": "2026-11-20T03:31:43Z",
       "mergedInto": "dev"
+    },
+    "spec-naming-declaration": {
+      "agent": "orchestrator",
+      "paths": "SPEC.md,test,docs",
+      "branch": "wt/spec-naming-declaration",
+      "worktree": "worktrees/wt-spec-naming-declaration",
+      "status": "done",
+      "createdAt": "2026-11-20T03:33:43Z",
+      "submittedAt": "2026-11-20T03:37:04Z",
+      "mergedAt": "2026-11-20T03:38:37Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
