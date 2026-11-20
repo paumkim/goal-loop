@@ -1156,10 +1156,12 @@ export class GoalController {
 
     // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
     // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
+    // Scoped to the first evaluated turn: on later turns prior evidence may already satisfy the condition and
+    // the evaluator judges from the full visible conversation, so a 0-tool-call reporting turn is legitimate.
     // The BT already-satisfied landing has no exemption here: the forward-pointer gate in core/verdict.ts
     // (applyForwardPointerGate) downgrades that met to not_met unless the reason names a "next:" gap, so the
     // landing is accepted only through a forward pointer (see the rubric in core/prompts.ts).
-    if (result.verdict === "met" && tools === 0 && PRODUCING_CONDITION.test(record.condition)) {
+    if (result.verdict === "met" && tools === 0 && turn === 1 && PRODUCING_CONDITION.test(record.condition)) {
       result = {
         verdict: "not_met" as const,
         reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
