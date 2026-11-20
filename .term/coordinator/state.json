@@ -4109,6 +4109,25 @@
       "submittedAt": "2026-11-20T11:31:28Z",
       "mergedAt": "2026-11-20T11:33:26Z",
       "mergedInto": "dev"
+    },
+    "failure-signature-escalation": {
+      "agent": "iceman",
+      "paths": "src/core,src/runtime,test,SPEC.md,docs,README.md,dist",
+      "branch": "wt/failure-signature-escalation",
+      "worktree": "worktrees/wt-failure-signature-escalation",
+      "status": "claimed",
+      "createdAt": "2026-11-20T11:38:32Z"
+    },
+    "pill-icon-left-rail": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,scripts/render-pill.tsx,scripts/render-slot.tsx,test/tui-alignment-invariants.test.tsx,test/tui-pill-card-coherence.test.tsx,test/render-scripts.test.ts,SPEC.md,dist,docs",
+      "branch": "wt/pill-icon-left-rail",
+      "worktree": "worktrees/wt-pill-icon-left-rail",
+      "status": "done",
+      "createdAt": "2026-11-20T11:41:20Z",
+      "submittedAt": "2026-11-20T11:41:36Z",
+      "mergedAt": "2026-11-20T11:50:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
