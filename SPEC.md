@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1962 -->
+<!-- spec-check files=71 tests=1974 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7727,4 +7727,36 @@ layer rather than on a live model loop; the verifier-command corroboration is gu
 follow and, when a verifier is actually configured, is already independently enforced by the runtime gate that
 spawns the command and downgrades a `met` with non-zero/unverifiable output. The clause does not itself change
 what the gate runs.
-<!-- spec-check files=70 tests=1962 -->
+<!-- spec-check files=71 tests=1974 -->
+
+## Workstream XCV — change-risk classifier and strict-gate notice for high-risk tiers (2026-11-20)
+
+Closes backlog item `change-risk-classification` (blind spot #7: safety and change-risk classification for
+autonomous improvement). Additive behavior in `src/core`/`src/runtime`; the fresh-evidence verification gate
+(`verifyMet` / matrix / coverage decision) and the commit policy are untouched.
+1. **Risk-tier classifier (`src/core/change-risk.ts`).** `classifyChangeRisk(paths)` labels a change set
+   (file paths) by sensitive surfaces — `deps`, `auth`, `migrations`, `ci-release`, and `data` — and returns
+   per-surface findings with risk tiers, the detected surfaces, an overall tier, and `highRisk` (true when any
+   high-risk tier is present). All five specified sensitive surfaces are classified as high-risk for strict
+   gating. `collectChangeSetPaths(directory)` is a best-effort git helper (working tree/index, including
+   untracked files, plus commits ahead of the integration base) that returns the changed paths; failures yield an
+   empty set. `formatStrictGateNotice(assessment)` and `STRICT_GATE_NOTICE_TITLE` render the strict-gate notice.
+2. **Controller strict-gate notice.** On arm, the controller classifies the session directory's change set and,
+   when high-risk tiers are detected, surfaces a warning notice (`kind: "set"`, `level: "warning"`, title
+   `Strict gate: high-risk change set`) listing the high-risk sensitive surfaces and stating that stricter gates
+   apply before merge/landing. The assessment is best-effort and never blocks arming.
+
+Verification (fresh at this HEAD). `test/change-risk.test.ts` pins the classifier (empty/low-risk, each
+sensitive surface — deps/auth/migrations/ci-release/data — labeled high-risk, multi-surface labeling,
+non-sensitive paths, notice formatting, best-effort collection) and the controller integration: arming a goal in
+a temp git repo whose change set contains high-risk surfaces emits the strict-gate warning with the expected
+surfaces, while a change set with no high-risk sensitive surfaces emits no strict-gate notice. `bunx tsc
+--noEmit` clean; `cd test && bun test` → **1974 pass / 0 fail**; `bun run check` green (check:spec ok — 72
+files, 1974 tests). Existing controller and runtime tests remain green unchanged.
+
+Honest limits. Classification is path/heuristic-based (basename/segment patterns), so it labels common sensitive
+surfaces but cannot prove semantic sensitivity of arbitrary paths; it is a strict-gate signal, not a complete
+security review. The change-set helper depends on git and inspects the working directory at arm time, so changes
+introduced after arming are not re-notified by this path. Surfacing is a warning notice (awareness/stricter-gate
+cue), not an automatic block.
+<!-- spec-check files=71 tests=1974 -->

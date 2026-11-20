@@ -1,5 +1,6 @@
 import { BOUNDARY_DROP_FACTOR, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
+import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
@@ -672,6 +673,7 @@ export class GoalController {
     // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
     if (record.status === "active") this.writeLearningGoalArmed(record)
+    this.surfaceChangeRiskStrictGate(sessionID, record.directory || this.deps.directory)
     const loopLabel = loop ? "Loop" : "Goal"
     const detail = loop ? `iteration="1" max="${maxLoops}" · ${condition}` : condition
     this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, detail)
@@ -748,6 +750,29 @@ export class GoalController {
     const text = formatStatus(record, this.deps.clock.now(), spend, this.deps.config.maxLoops)
     const title = isLive(record.status) ? `Goal ${statusLabel(record.status)}` : record.status === "achieved" ? "No goal set \u00B7 last goal achieved" : "No goal set"
     this.notify(sessionID, "status", "info", title, text)
+  }
+
+  /**
+   * Best-effort change-risk classification for the session's working directory. When the change set
+   * touches high-risk sensitive surfaces (deps, auth, migrations, CI/release, data paths), surface a
+   * strict-gate notice so stricter gates/review are explicit before landing.
+   */
+  private surfaceChangeRiskStrictGate(sessionID: string, directory: string): void {
+    try {
+      const paths = collectChangeSetPaths(directory)
+      if (paths.length === 0) return
+      const assessment = classifyChangeRisk(paths)
+      if (!assessment.highRisk) return
+      this.notify(sessionID, "set", "warning", STRICT_GATE_NOTICE_TITLE, formatStrictGateNotice(assessment))
+      this.deps.log.info("change-risk strict gate surfaced", {
+        sessionID,
+        tier: assessment.tier,
+        surfaces: [...assessment.surfaces],
+        files: paths.length,
+      })
+    } catch (error) {
+      this.deps.log.warn("change-risk classification failed", { sessionID, error: errorMessage(error) })
+    }
   }
 
   // ---------------------------------------------------------------- session events
