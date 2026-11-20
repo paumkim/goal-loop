@@ -4172,6 +4172,25 @@
       "submittedAt": "2026-11-20T12:27:43Z",
       "mergedAt": "2026-11-20T12:29:46Z",
       "mergedInto": "dev"
+    },
+    "docs-readability-redesign": {
+      "agent": "iceman",
+      "paths": "docs/**,SPEC.md",
+      "branch": "wt/docs-readability-redesign",
+      "worktree": "worktrees/wt-docs-readability-redesign",
+      "status": "done",
+      "createdAt": "2026-11-20T12:36:56Z",
+      "submittedAt": "2026-11-20T12:42:29Z",
+      "mergedAt": "2026-11-20T12:44:20Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-rubric-evidence-types": {
+      "agent": "iceman",
+      "paths": "src/core/prompts.ts",
+      "branch": "wt/evaluator-rubric-evidence-types",
+      "worktree": "worktrees/wt-evaluator-rubric-evidence-types",
+      "status": "claimed",
+      "createdAt": "2026-11-20T12:42:31Z"
     }
   },
   "mergeLock": null,
