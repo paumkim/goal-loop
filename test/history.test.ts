@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { BAR_CELLS, CONTEXT_BAR_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictGlyph, verdictStreak } from "../src/core/history.ts"
+import { BAR_CELLS, CONTEXT_BAR_CELLS, PIP_CELLS, SPARK_MAX_CELLS, contextMeter, contextSparkline, barCaption, currentIterationVerdict, durationShares, iterationDurations, iterationVerdictMix, lastVerdict, localTime, loopTotals, paceEstimate, pauseDiagnostics, relativeTime, renderBar, renderPips, trailWindow, turnsSinceVerdict, verdictCounts, verdictEntryGlyph, verdictGlyph, verdictStreak } from "../src/core/history.ts"
 import type { LoopEntry, VerdictEntry } from "../src/core/types.ts"
 
 const entry = (version: number, endedAt: number, toolCalls = 0, turns = 1): LoopEntry => ({
@@ -46,6 +46,11 @@ describe("renderBar", () => {
 
   test("custom cell count is honored", () => {
     expect(renderBar(1, 2, 10).text).toBe("█████░░░░░")
+  })
+  test("any completed iteration paints at least one cell — 'just started' never reads as 'nothing'", () => {
+    expect(renderBar(2, 100).filled).toBe(1)
+    expect(renderBar(2, 100).text.slice(0, 2)).toBe("█░")
+    expect(renderBar(0, 100).filled).toBe(0)
   })
 })
 
@@ -153,12 +158,34 @@ describe("renderPips", () => {
     expect(renderPips(9, 5)).toBe("●●●●●")
   })
 
-  test("missing, zero, negative, NaN or oversized caps render nothing", () => {
+  test("missing, zero, negative or NaN caps render nothing", () => {
     expect(renderPips(1, undefined)).toBe("")
     expect(renderPips(1, 0)).toBe("")
     expect(renderPips(1, -2)).toBe("")
     expect(renderPips(1, Number.NaN)).toBe("")
-    expect(renderPips(1, 9)).toBe("")
+  })
+  test("a cap just past the per-slot budget compresses instead of vanishing", () => {
+    expect(PIP_CELLS).toBe(8)
+    expect(renderPips(1, 9)).toBe("●○○○○○○○")
+  })
+  test("a large cap keeps a bounded, legible pip visual (v3/100 still reads as 3 of 100)", () => {
+    expect(renderPips(3, 100)).toBe("●○○○○○○○") // rounded to a whole cell, floored at one — never zero
+    expect(renderPips(0, 100)).toBe("○○○○○○○○")
+    expect(renderPips(100, 100)).toBe("●●●●●●●●")
+    expect(renderPips(3, 1000)).toBe("●○○○○○○○")
+  })
+  test("the compressed form is always PIP_CELLS wide and never decreases as iterations complete", () => {
+    for (const cap of [9, 50, 99, 100, 1000]) {
+      const filledAt = (done: number) => [...renderPips(done, cap)].filter((cell) => cell === "●").length
+      for (const done of [0, 1, 2, Math.floor(cap / 2), cap]) expect([...renderPips(done, cap)]).toHaveLength(PIP_CELLS)
+      const steps = [0, 1, 2, Math.floor(cap / 2), cap].map(filledAt)
+      expect(steps[0]).toBe(0)
+      expect(steps.at(-1)).toBe(PIP_CELLS)
+      for (let i = 1; i < steps.length; i += 1) expect(steps[i]!).toBeGreaterThanOrEqual(steps[i - 1]!)
+    }
+  })
+  test("ascii compresses with the same pair", () => {
+    expect(renderPips(3, 100, true)).toBe("#-------")
   })
 
   test("zero done renders all empty", () => {

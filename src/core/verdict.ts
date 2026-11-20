@@ -5,7 +5,7 @@ export interface ParsedVerdict {
   readonly reason: string
 }
 
-const MAX_REASON = 600
+const MAX_REASON = 4000
 
 /**
  * Workstream XLIV — the novelty / advancement gate, decidable from the verdict text alone.
@@ -71,7 +71,13 @@ export function parseVerdict(text: string): ParsedVerdict | undefined {
 }
 
 function clampReason(value: unknown) {
-  const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim() : ""
+  if (typeof value !== "string") return ""
+  const text = value
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
   if (text.length <= MAX_REASON) return text
   return `${text.slice(0, MAX_REASON - 1)}\u2026`
 }

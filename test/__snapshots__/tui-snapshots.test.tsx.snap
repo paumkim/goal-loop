@@ -1,15 +1,15 @@
 // Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
 │  [details]   [pin]   [clear goal]                      [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -29,15 +29,15 @@ exports[`full-frame snapshots (named layout states) HudCard · armed 1`] = `
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · evaluating (the evaluator is thinking) 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        checking v3/5 ●●○○○ · 4 turns · 12m                               
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -57,7 +57,8 @@ exports[`full-frame snapshots (named layout states) HudCard · evaluating (the e
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · hot (compaction keeps missing — exact remediation, never a vague warning) 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
@@ -66,8 +67,7 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 │  fix        compact pending 2/4 · send a message for a safe                   
 │             point · else set evaluator.verifyCommand                          
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -87,7 +87,8 @@ exports[`full-frame snapshots (named layout states) HudCard · hot (compaction k
 `;
 
 exports[`full-frame snapshots (named layout states) HudCard · failed (failure is a first-class screen) 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        failed v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
@@ -95,8 +96,7 @@ exports[`full-frame snapshots (named layout states) HudCard · failed (failure i
 │  why        Evaluator: docs build still fails                                 
 │  fix        provider error - /goal clear to reset                             
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -465,8 +465,13 @@ why         ✓  met · turn 3 · 3m ago      done
 exports[`full-frame snapshots (named layout states) StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
 goal        ship the release notes                                                         copy     
-evaluator   Verification \`bun run check\` did not pass: exit 1: 1 fail                               
-            error: expected true                                                                    
+evaluator   Verification matrix did not pass for scoped goal (profile default); missing/unscoped/   
+            failed required checks: verify-command.                                                 
+            next:                                                                                   
+              1. [high/risk] Satisfy required verification check verify-command (custom) — evidence 
+            gap/finding: exit 1; command "bun run check"; output: 1 fail                            
+            error: expected true — required proof: fresh executed command with exit 0 and scoped    
+            output for this goal.                                                                   
 verify      $ bun run check                                                                copy     
             ✗ exit 1 · 3m ago                                                                       
             1 fail                                                                                  
@@ -484,11 +489,6 @@ trail       ✓✗✓✓✗   5 of 5 verdicts
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
             ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -529,14 +529,78 @@ why         ✓  met · turn 3 · 3m ago      done
             ✗  not met · turn 5 · 1m ago  not yet                                                   
                                                                                                     
 elsewhere   6 other sessions holding live goals · click a row to open its transcript                
-1           ●  brisk-falcon  v2/5  ship the deploy pipeline before f…                 → transcript  
-2           ‖  quiet-otter  paused  audit the whole tui surface                       → transcript  
-3           ●  shy-heron  v3/5  map the snapshot states                               → transcript  
-4           ●  grand-oyster  v3/5  harden the 80 column floor                         → transcript  
-            ●  still-bison  v3/5  wheel pin on the dialog                             → transcript  
-            ●  ember-crab  v3/5  fold affordance coverage                             → transcript  
+1           ●  brisk-falcon  v2/5     ship the deploy pipeline before f…              → transcript  
+2           ‖  quiet-otter   paused   audit the whole tui surface                     → transcript  
+3           ●  shy-heron     v3/5     map the snapshot states                         → transcript  
+4           ●  grand-oyster  v3/5     harden the 80 column floor                      → transcript  
+            ●  still-bison   v3/5     wheel pin on the dialog                         → transcript  
+            ●  ember-crab    v3/5     fold affordance coverage                        → transcript  
             fold to 4  click                                                                        
                                                                                                     
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+"
+`;
+
+exports[`full-frame snapshots (named layout states) StatusDialogBody · pile-up (massive goal + many elsewhere goals stay aligned and consistent) 1`] = `
+"overview  ·  ledger  ·  dossier                                       active  12m · 15 turns · v3/5 
+goal        improve the terminal tui dialog display on detail view when goals are          copy     
+            starting to pile up. This is a very long massive goal condition that keeps              
+            going with lots of detail about layout consistency, spacing, alignment,                 
+            truncation, wrapping behavior, and how the dialog should look when there are            
+            many goals running simultaneously across different sessions. This is a very             
+            long massive goal condition that keeps going with lots of detail about layout           
+            consistency, spacing, alignment, truncation, wrapping behavior, and how the             
+            dialog should look when there are many goals running simultaneously across              
+            different sessions.                                                                     
+evaluator   Last evaluator said: this is a detailed reason that explains what is still     copy     
+            missing and what needs to be done next in great detail so the row must stay             
+            consistent while the text wraps across many lines. this is a detailed reason            
+            that explains what is still missing and what needs to be done next in great             
+            detail so the row must stay consistent while the text wraps across many                 
+            lines.                                                                                  
+spend       278k in · 25k out · 96k cached · $0.42                                                  
+loop        v3 of at most 5 · 2 complete  ███████░░░░░░░░░░░                                        
+pace        ~15m/iteration · ~45m left at this pace                                                 
+objective   A very long objective that also wraps and takes up space: keep improving everything     
+            about the detail dialog so it remains consistent and readable when content piles up.    
+            keep improving everything about the detail dialog so it remains consistent and readable 
+            when content piles up. keep improving everything about the detail dialog so it remains  
+            consistent and readable when content piles up.                                          
+v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 · 50% of wall   copy     
+│           │ Added an 18-cell block progress bar.                                         copy     
+v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall   copy     
+│           │ Trail renders up to 24 verdicts.                                             copy     
+now         ◎  v3 · active · 15 turns · 12m elapsed                         · last ✗ 10 turns since 
+trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
+why         ✓  met · turn 3 · 3m ago      done                                             copy     
+            ✓  met · turn 4 · 2m ago      done                                             copy     
+            ✗  not met · turn 5 · 1m ago  not yet                                          copy     
+                                                                                                    
+elsewhere   6 other sessions holding live goals · click a row to open its transcript                
+1           ●  brisk-falcon  v2/5     ship the deploy pipeline before f…              → transcript  
+2           ‖  quiet-otter   paused   audit the whole tui surface                     → transcript  
+3           ●  shy-heron     v10/10   map the snapshot states                         → transcript  
+4           ●  grand-oyster  active   harden the 80 column floor                      → transcript  
+            ●  still-bison   v3/5     wheel pin on the dialog                         → transcript  
+            ‖  ember-crab    paused   fold affordance coverage                        → transcript  
+            fold to 4  click                                                                        
                                                                                                     
                                                                                                     
                                                                                                     
@@ -607,15 +671,15 @@ why         ✓  met · turn 1 · 26m ago · b1e4d7a      done
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · waiting (background work is holding evaluation back — the pill's fifth word) 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        waiting v3/5 ●●○○○ · 4 turns · 12m                                
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       ✗ not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -635,7 +699,8 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · waitin
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · paused at the turn cap (exact remediation: clear or re-arm — never 'try again') 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        paused v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
@@ -644,8 +709,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 │  fix        turn cap reached · /goal clear or set a new goal                  
 │             - a message will not extend it                                    
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -665,7 +729,8 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · paused
 `;
 
 exports[`full-frame snapshots (waiting and remediation states) HudCard · judged impossible (remediation rides two rows of the anchor budget) 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        impossible v3/5 ●●○○○ · 4 turns · 12m                             
 │  spend      278k in · 25k out · 96k cached · $0.42                            
@@ -674,8 +739,7 @@ exports[`full-frame snapshots (waiting and remediation states) HudCard · judged
 │  fix        judged impossible · rephrase the condition, else                  
 │             /goal clear                                                       
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -825,7 +889,8 @@ why         ✓  met · turn 3 · 3m ago      done
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · context menu open — all six rows live 1`] = `
-"│  ◎ /goal-loop · v3/5                                                          
+"│                                                                               
+│  ◎ /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        active v3/5 ●●○○○ · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
@@ -838,8 +903,7 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 │             copy dossier                                                      
 │             save dossier file                                                 
 │             clear goal                                                        
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 
@@ -859,15 +923,15 @@ exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard ·
 `;
 
 exports[`full-frame snapshots (chrome tiers and reduced-color frames) HudCard · mono (NO_COLOR / TERM=dumb — weight and glyphs carry meaning) 1`] = `
-"│  * /goal-loop · v3/5                                                          
+"│                                                                               
+│  * /goal-loop · v3/5                                                          
 │  condition  ship the release notes                  copy                      
 │  now        active v3/5 ##--- · 4 turns · 12m                                 
 │  spend      278k in · 25k out · 96k cached · $0.42                            
 │  last       x not met · this turn                                             
 │  why        Evaluator: docs build still fails                                 
 │  [details]   [clear goal]                              [esc]                  
-                                                                                
-                                                                                
+│                                                                               
                                                                                 
                                                                                 
                                                                                 

@@ -91,6 +91,8 @@ export class AutoCompactor {
       log.info("auto-compact deferred: session has work in flight", { sessionID })
       return
     }
+    // Another compaction path/event can mark the session in-flight during the awaits above.
+    if (this.inFlight.has(sessionID)) return
 
     this.requestedAt.set(sessionID, now)
     this.inFlight.set(sessionID, now)
@@ -152,6 +154,8 @@ export class AutoCompactor {
       log.info("boundary compact deferred: session has work in flight", { sessionID })
       return { requested: false, reason: "busy" }
     }
+    // Another compaction path/event can mark the session in-flight during the awaits above.
+    if (this.inFlight.has(sessionID)) return { requested: false, reason: "in-flight" }
     this.requestedAt.set(sessionID, now)
     this.inFlight.set(sessionID, now)
     try {

@@ -66,7 +66,7 @@ describe("goal condition limits", () => {
   test("GoalController.command accepts a 100k-char condition through the default config", async () => {
     const notices: Notice[] = []
     const controller = new GoalController({
-      config: resolveConfig({}),
+      config: resolveConfig({ learning: { enabled: false } }),
       directory: "C:/work/project",
       commit: { required: false, branch: "dev", reason: "test" },
       clock: clock(),
@@ -86,7 +86,7 @@ describe("goal condition limits", () => {
   test("explicit small limit through controller rejects long paste", async () => {
     const notices: Notice[] = []
     const controller = new GoalController({
-      config: resolveConfig({ maxConditionChars: 4000 }),
+      config: resolveConfig({ learning: { enabled: false }, maxConditionChars: 4000 }),
       directory: "C:/work/project",
       commit: { required: false, branch: "dev", reason: "test" },
       clock: clock(),

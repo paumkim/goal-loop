@@ -32,7 +32,7 @@ const defaultSleep = (ms: number, signal: AbortSignal): Promise<void> =>
 
 const errorMessage = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
-export interface RpcPumpOptions {
+interface RpcPumpOptions {
   /** Event stream name, for diagnostics only. */
   readonly name: "changed" | "notice"
   /** Abort the pump (plugin teardown). */

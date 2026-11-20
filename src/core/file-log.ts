@@ -17,7 +17,7 @@ import type { Logger } from "../runtime/ports.ts"
 
 export const FILE_LOG_MAX_BYTES = 5 * 1024 * 1024
 
-export interface FileSinkOptions {
+interface FileSinkOptions {
   /** Clock override for tests; defaults to Date.now. */
   readonly now?: () => number
   /** Rotation threshold in bytes; defaults to FILE_LOG_MAX_BYTES. */

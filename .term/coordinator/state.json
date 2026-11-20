@@ -3900,6 +3900,620 @@
       "submittedAt": "2026-11-20T05:38:01Z",
       "mergedAt": "2026-11-20T05:39:33Z",
       "mergedInto": "dev"
+    },
+    "runtime-correctness-batch": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/runtime/compactor.ts,src/core/wire.ts,src/index.ts,test/controller.test.ts,test/compactor.test.ts,test/wire.test.ts,test/plugin.test.ts",
+      "branch": "wt/runtime-correctness-batch",
+      "worktree": "worktrees/wt-runtime-correctness-batch",
+      "status": "done",
+      "createdAt": "2026-11-20T05:50:39Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:03:21Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:03:21Z",
+      "mergedAt": "2026-11-20T06:04:56Z",
+      "mergedInto": "dev"
+    },
+    "wire-verdict-sha": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,test/wire.test.ts",
+      "branch": "wt/wire-verdict-sha",
+      "worktree": "worktrees/wt-wire-verdict-sha",
+      "status": "done",
+      "createdAt": "2026-11-20T06:15:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:21:40Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:21:40Z",
+      "mergedAt": "2026-11-20T06:23:16Z",
+      "mergedInto": "dev"
+    },
+    "wire-snapshot-optional-fields": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,test/wire.test.ts",
+      "branch": "wt/wire-snapshot-optional-fields",
+      "worktree": "worktrees/wt-wire-snapshot-optional-fields",
+      "status": "done",
+      "createdAt": "2026-11-20T06:26:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:31:30Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:31:30Z",
+      "mergedAt": "2026-11-20T06:33:06Z",
+      "mergedInto": "dev"
+    },
+    "improvement-backlog-ledger": {
+      "agent": "iceman",
+      "paths": "docs,src,test,SPEC.md,README.md,packages",
+      "branch": "wt/improvement-backlog-ledger",
+      "worktree": "worktrees/wt-improvement-backlog-ledger",
+      "status": "done",
+      "createdAt": "2026-11-20T06:42:01Z",
+      "submittedAt": "2026-11-20T06:49:44Z",
+      "mergedAt": "2026-11-20T07:18:46Z",
+      "mergedInto": "dev"
+    },
+    "backlog-planner-integration": {
+      "agent": "iceman",
+      "paths": "src,rpc.ts,test,docs,SPEC.md,index.ts",
+      "branch": "wt/backlog-planner-integration",
+      "worktree": "worktrees/wt-backlog-planner-integration",
+      "status": "done",
+      "createdAt": "2026-11-20T06:55:25Z",
+      "submittedAt": "2026-11-20T07:11:46Z",
+      "mergedAt": "2026-11-20T07:26:47Z",
+      "mergedInto": "dev"
+    },
+    "tui-detail-pileup-consistency": {
+      "agent": "iceman",
+      "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/core/history.ts,scripts/render-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
+      "branch": "wt/tui-detail-pileup-consistency",
+      "worktree": "worktrees/wt-tui-detail-pileup-consistency",
+      "status": "done",
+      "createdAt": "2026-11-20T06:56:22Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T07:14:32Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "submittedAt": "2026-11-20T07:14:32Z",
+      "mergedAt": "2026-11-20T07:34:53Z",
+      "mergedInto": "dev"
+    },
+    "fix-evaluator-staleness": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/fix-evaluator-staleness",
+      "worktree": "worktrees/wt-fix-evaluator-staleness",
+      "status": "done",
+      "createdAt": "2026-11-20T07:28:40Z",
+      "submittedAt": "2026-11-20T07:47:29Z",
+      "mergedAt": "2026-11-20T08:28:14Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-zero-tool-turn1-guard": {
+      "agent": "iceman",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,test/controller.test.ts",
+      "branch": "wt/evaluator-zero-tool-turn1-guard",
+      "worktree": "worktrees/wt-evaluator-zero-tool-turn1-guard",
+      "status": "done",
+      "createdAt": "2026-11-20T08:36:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T08:42:17Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "submittedAt": "2026-11-20T08:42:17Z",
+      "mergedAt": "2026-11-20T08:43:53Z",
+      "mergedInto": "dev"
+    },
+    "resume-stash2-path-fixes": {
+      "agent": "iceman",
+      "paths": "CURRENT_TASK.md,test/dialog-crash-records.test.tsx",
+      "branch": "wt/resume-stash2-path-fixes",
+      "worktree": "worktrees/wt-resume-stash2-path-fixes",
+      "status": "done",
+      "createdAt": "2026-11-20T08:50:03Z",
+      "submittedAt": "2026-11-20T08:52:46Z",
+      "mergedAt": "2026-11-20T08:54:22Z",
+      "mergedInto": "dev"
+    },
+    "verification-matrix-trail-evidence": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/verification-matrix-trail-evidence",
+      "worktree": "worktrees/wt-verification-matrix-trail-evidence",
+      "status": "done",
+      "createdAt": "2026-11-20T08:56:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T09:02:10Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T09:02:10Z",
+      "mergedAt": "2026-11-20T09:03:46Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-rubric-evidence-matrix": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs,dist",
+      "branch": "wt/evaluator-rubric-evidence-matrix",
+      "worktree": "worktrees/wt-evaluator-rubric-evidence-matrix",
+      "status": "done",
+      "createdAt": "2026-11-20T09:10:39Z",
+      "submittedAt": "2026-11-20T09:18:01Z",
+      "mergedAt": "2026-11-20T09:19:36Z",
+      "mergedInto": "dev"
+    },
+    "verification-matrix-beyond-check": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs,dist",
+      "branch": "wt/verification-matrix-beyond-check",
+      "worktree": "worktrees/wt-verification-matrix-beyond-check",
+      "status": "done",
+      "createdAt": "2026-11-20T09:23:02Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T09:38:45Z",
+      "forcedScopeFiles": [
+        "README.md"
+      ],
+      "submittedAt": "2026-11-20T09:38:45Z",
+      "mergedAt": "2026-11-20T09:40:21Z",
+      "mergedInto": "dev"
+    },
+    "verify-matrix-auto-deterministic": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs,dist,README.md",
+      "branch": "wt/verify-matrix-auto-deterministic",
+      "worktree": "worktrees/wt-verify-matrix-auto-deterministic",
+      "status": "done",
+      "createdAt": "2026-11-20T09:50:00Z",
+      "submittedAt": "2026-11-20T10:20:00Z",
+      "mergedAt": "2026-11-20T10:21:50Z",
+      "mergedInto": "dev"
+    },
+    "continuous-improvement-logging": {
+      "agent": "iceman",
+      "paths": "SPEC.md,src,rpc.ts,index.ts,test,docs",
+      "branch": "wt/continuous-improvement-logging",
+      "worktree": "worktrees/wt-continuous-improvement-logging",
+      "status": "done",
+      "createdAt": "2026-11-20T10:43:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T11:00:24Z",
+      "forcedScopeFiles": [
+        "CURRENT_TASK.md",
+        "README.md"
+      ],
+      "submittedAt": "2026-11-20T11:00:24Z",
+      "mergedAt": "2026-11-20T11:28:45Z",
+      "mergedInto": "dev"
+    },
+    "merge-next-ownership-guidance": {
+      "agent": "iceman",
+      "paths": "AGENTS.md,README.md,docs",
+      "branch": "wt/merge-next-ownership-guidance",
+      "worktree": "worktrees/wt-merge-next-ownership-guidance",
+      "status": "done",
+      "createdAt": "2026-11-20T11:29:56Z",
+      "submittedAt": "2026-11-20T11:31:28Z",
+      "mergedAt": "2026-11-20T11:33:26Z",
+      "mergedInto": "dev"
+    },
+    "failure-signature-escalation": {
+      "agent": "iceman",
+      "paths": "src/core,src/runtime,test,SPEC.md,docs,README.md,dist",
+      "branch": "wt/failure-signature-escalation",
+      "worktree": "worktrees/wt-failure-signature-escalation",
+      "status": "done",
+      "createdAt": "2026-11-20T11:38:32Z",
+      "submittedAt": "2026-11-20T11:59:00Z",
+      "mergedAt": "2026-11-20T12:09:28Z",
+      "mergedInto": "dev"
+    },
+    "pill-icon-left-rail": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,scripts/render-pill.tsx,scripts/render-slot.tsx,test/tui-alignment-invariants.test.tsx,test/tui-pill-card-coherence.test.tsx,test/render-scripts.test.ts,SPEC.md,dist,docs",
+      "branch": "wt/pill-icon-left-rail",
+      "worktree": "worktrees/wt-pill-icon-left-rail",
+      "status": "done",
+      "createdAt": "2026-11-20T11:41:20Z",
+      "submittedAt": "2026-11-20T11:41:36Z",
+      "mergedAt": "2026-11-20T11:50:25Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-lease-race-fix": {
+      "agent": "iceman",
+      "paths": "packages/coordinator/**,test/**",
+      "branch": "wt/coordinator-lease-race-fix",
+      "worktree": "worktrees/wt-coordinator-lease-race-fix",
+      "status": "done",
+      "createdAt": "2026-11-20T12:31:45Z",
+      "submittedAt": "2026-11-20T12:55:24Z",
+      "mergedAt": "2026-11-20T12:58:09Z",
+      "mergedInto": "dev"
+    },
+    "no-rearm-after-achieved": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
+      "branch": "wt/no-rearm-after-achieved",
+      "worktree": "worktrees/wt-no-rearm-after-achieved",
+      "status": "done",
+      "createdAt": "2026-11-20T11:59:17Z",
+      "submittedAt": "2026-11-20T12:02:58Z",
+      "mergedAt": "2026-11-20T12:18:32Z",
+      "mergedInto": "dev"
+    },
+    "failure-diagnostic-artifact": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts,src/core/failure-diagnostics.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/failure-diagnostics.test.ts,test/controller.test.ts,SPEC.md,docs,dist",
+      "branch": "wt/failure-diagnostic-artifact",
+      "worktree": "worktrees/wt-failure-diagnostic-artifact",
+      "status": "done",
+      "createdAt": "2026-11-20T12:22:58Z",
+      "submittedAt": "2026-11-20T12:32:40Z",
+      "mergedAt": "2026-11-20T12:35:10Z",
+      "mergedInto": "dev"
+    },
+    "docs-github-pages-live": {
+      "agent": "iceman",
+      "paths": ".github/workflows/pages.yml,docs/.nojekyll,README.md",
+      "branch": "wt/docs-github-pages-live",
+      "worktree": "worktrees/wt-docs-github-pages-live",
+      "status": "done",
+      "createdAt": "2026-11-20T12:27:12Z",
+      "submittedAt": "2026-11-20T12:27:43Z",
+      "mergedAt": "2026-11-20T12:29:46Z",
+      "mergedInto": "dev"
+    },
+    "docs-readability-redesign": {
+      "agent": "iceman",
+      "paths": "docs/**,SPEC.md",
+      "branch": "wt/docs-readability-redesign",
+      "worktree": "worktrees/wt-docs-readability-redesign",
+      "status": "done",
+      "createdAt": "2026-11-20T12:36:56Z",
+      "submittedAt": "2026-11-20T12:42:29Z",
+      "mergedAt": "2026-11-20T12:44:20Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-rubric-evidence-types": {
+      "agent": "iceman",
+      "paths": "src/core/prompts.ts",
+      "branch": "wt/evaluator-rubric-evidence-types",
+      "worktree": "worktrees/wt-evaluator-rubric-evidence-types",
+      "status": "done",
+      "createdAt": "2026-11-20T12:42:31Z",
+      "submittedAt": "2026-11-20T12:44:47Z",
+      "mergedAt": "2026-11-20T12:46:33Z",
+      "mergedInto": "dev"
+    },
+    "invariant-sweep-gate": {
+      "agent": "iceman",
+      "paths": "scripts/invariant-sweep.ts,package.json",
+      "branch": "wt/invariant-sweep-gate",
+      "worktree": "worktrees/wt-invariant-sweep-gate",
+      "status": "done",
+      "createdAt": "2026-11-20T12:50:43Z",
+      "submittedAt": "2026-11-20T13:00:45Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T13:00:45Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "test/invariant-sweep.test.ts"
+      ],
+      "mergedAt": "2026-11-20T13:06:26Z",
+      "mergedInto": "dev"
+    },
+    "troubleshoot-parallel-goal-loop-evaluator": {
+      "agent": "iceman",
+      "paths": "test,docs,SPEC.md",
+      "branch": "wt/troubleshoot-parallel-goal-loop-evaluator",
+      "worktree": "worktrees/wt-troubleshoot-parallel-goal-loop-evaluator",
+      "status": "done",
+      "createdAt": "2026-11-20T13:12:11Z",
+      "submittedAt": "2026-11-20T13:18:27Z",
+      "mergedAt": "2026-11-20T13:21:18Z",
+      "mergedInto": "dev"
+    },
+    "goal-tui-card-breathing-room": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,dist/tui.js,test,scripts,SPEC.md,docs",
+      "branch": "wt/goal-tui-card-breathing-room",
+      "worktree": "worktrees/wt-goal-tui-card-breathing-room",
+      "status": "done",
+      "createdAt": "2026-11-20T13:19:52Z",
+      "submittedAt": "2026-11-20T13:52:00Z",
+      "mergedAt": "2026-11-20T14:01:26Z",
+      "mergedInto": "dev"
+    },
+    "prune-workflow-overlap": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/core/learning-log.ts,test/controller.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/prune-workflow-overlap",
+      "worktree": "worktrees/wt-prune-workflow-overlap",
+      "status": "done",
+      "createdAt": "2026-11-20T13:24:20Z",
+      "submittedAt": "2026-11-20T13:35:52Z",
+      "mergedAt": "2026-11-20T13:39:02Z",
+      "mergedInto": "dev"
+    },
+    "prune-workflow-overlap-2": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/core/verify-matrix.ts,test/controller.test.ts,test/loop.test.ts,test/verify-matrix-goal-declared.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/prune-workflow-overlap-2",
+      "worktree": "worktrees/wt-prune-workflow-overlap-2",
+      "status": "done",
+      "createdAt": "2026-11-20T13:44:10Z",
+      "submittedAt": "2026-11-20T13:50:22Z",
+      "mergedAt": "2026-11-20T13:52:18Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-rubric-verifier-corroboration": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-rubric-verifier-corroboration",
+      "worktree": "worktrees/wt-evaluator-rubric-verifier-corroboration",
+      "status": "done",
+      "createdAt": "2026-11-20T13:55:22Z",
+      "submittedAt": "2026-11-20T14:01:55Z",
+      "mergedAt": "2026-11-20T14:08:10Z",
+      "mergedInto": "dev"
+    },
+    "loop-indicator-always-visible": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,scripts/render-pill.tsx,scripts/render-card.tsx,scripts/render-slot.tsx,scripts/render-dialog.tsx,test/history.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/tui-alignment-invariants.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/,dist/tui.js",
+      "branch": "wt/loop-indicator-always-visible",
+      "worktree": "worktrees/wt-loop-indicator-always-visible",
+      "status": "done",
+      "createdAt": "2026-11-20T14:07:11Z",
+      "submittedAt": "2026-11-20T14:21:30Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T14:21:30Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "scripts/repro-loop-cap.tsx"
+      ],
+      "mergedAt": "2026-11-20T14:37:38Z",
+      "mergedInto": "dev"
+    },
+    "change-risk-strict-gate": {
+      "agent": "orchestrator",
+      "paths": "src/core/change-risk.ts,src/runtime/controller.ts,test/change-risk.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/change-risk-strict-gate",
+      "worktree": "worktrees/wt-change-risk-strict-gate",
+      "status": "done",
+      "createdAt": "2026-11-20T14:18:19Z",
+      "submittedAt": "2026-11-20T14:28:16Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T14:28:16Z",
+      "forcedScopeFiles": [
+        "test/package-integrity.test.ts"
+      ],
+      "mergedAt": "2026-11-20T14:30:40Z",
+      "mergedInto": "dev"
+    },
+    "shared-changed-path-collector": {
+      "agent": "orchestrator",
+      "paths": "src/core/changed-paths.ts,src/core/change-risk.ts,scripts/invariant-sweep.ts,test/invariant-sweep.test.ts,test/change-risk.test.ts,test/changed-paths.test.ts,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
+      "branch": "wt/shared-changed-path-collector",
+      "worktree": "worktrees/wt-shared-changed-path-collector",
+      "status": "done",
+      "createdAt": "2026-11-20T14:37:44Z",
+      "submittedAt": "2026-11-20T14:44:45Z",
+      "mergedAt": "2026-11-20T14:46:53Z",
+      "mergedInto": "dev"
+    },
+    "dead-internal-exports": {
+      "agent": "iceman",
+      "paths": "src/core/changed-paths.ts,src/core/file-log.ts,src/core/learning-log.ts,test",
+      "branch": "wt/dead-internal-exports",
+      "worktree": "worktrees/wt-dead-internal-exports",
+      "status": "done",
+      "createdAt": "2026-11-20T15:10:04Z",
+      "submittedAt": "2026-11-20T15:15:17Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:15:17Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T15:18:01Z",
+      "mergedInto": "dev"
+    },
+    "test-c-path-pollution": {
+      "agent": "iceman",
+      "paths": "test/loop.test.ts,test/controller.test.ts,test/verify.test.ts,test/pill-timer.test.tsx,test/terminal-record-prune.test.ts,test/goal-limits.test.ts,test/store.test.ts",
+      "branch": "wt/test-c-path-pollution",
+      "worktree": "worktrees/wt-test-c-path-pollution",
+      "status": "done",
+      "createdAt": "2026-11-20T15:21:35Z",
+      "submittedAt": "2026-11-20T15:25:04Z",
+      "mergedAt": "2026-11-20T15:27:08Z",
+      "mergedInto": "dev"
+    },
+    "unify-learning-path-default": {
+      "agent": "iceman",
+      "paths": "src/runtime/controller.ts",
+      "branch": "wt/unify-learning-path-default",
+      "worktree": "worktrees/wt-unify-learning-path-default",
+      "status": "done",
+      "createdAt": "2026-11-20T15:32:02Z",
+      "submittedAt": "2026-11-20T15:37:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:37:44Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "src/core/failure-signature.ts"
+      ],
+      "mergedAt": "2026-11-20T15:39:38Z",
+      "mergedInto": "dev"
+    },
+    "remove-unused-verify-check-definition": {
+      "agent": "iceman",
+      "paths": "src/core/types.ts",
+      "branch": "wt/remove-unused-verify-check-definition",
+      "worktree": "worktrees/wt-remove-unused-verify-check-definition",
+      "status": "done",
+      "createdAt": "2026-11-20T15:46:54Z",
+      "submittedAt": "2026-11-20T15:52:35Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:52:35Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T15:54:34Z",
+      "mergedInto": "dev"
+    },
+    "unexport-internal-core-symbols": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts,src/core/types.ts,src/core/change-risk.ts,src/core/repull.ts,src/core/rpc-pump.ts,src/core/improvement-backlog.ts,src/core/verify-matrix.ts",
+      "branch": "wt/unexport-internal-core-symbols",
+      "worktree": "worktrees/wt-unexport-internal-core-symbols",
+      "status": "done",
+      "createdAt": "2026-11-20T16:01:11Z",
+      "submittedAt": "2026-11-20T16:05:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:05:32Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:07:20Z",
+      "mergedInto": "dev"
+    },
+    "optimize-learning-log-mkdir": {
+      "agent": "iceman",
+      "paths": "src/core/learning-log.ts",
+      "branch": "wt/optimize-learning-log-mkdir",
+      "worktree": "worktrees/wt-optimize-learning-log-mkdir",
+      "status": "done",
+      "createdAt": "2026-11-20T16:12:43Z",
+      "submittedAt": "2026-11-20T16:16:26Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:16:26Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:18:15Z",
+      "mergedInto": "dev"
+    },
+    "optimize-failure-diagnostic-mkdir": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts",
+      "branch": "wt/optimize-failure-diagnostic-mkdir",
+      "worktree": "worktrees/wt-optimize-failure-diagnostic-mkdir",
+      "status": "done",
+      "createdAt": "2026-11-20T16:23:20Z",
+      "submittedAt": "2026-11-20T16:26:31Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:26:31Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:28:19Z",
+      "mergedInto": "dev"
+    },
+    "optimize-mirror-mkdir": {
+      "agent": "iceman",
+      "paths": "src/core/mirror.ts",
+      "branch": "wt/optimize-mirror-mkdir",
+      "worktree": "worktrees/wt-optimize-mirror-mkdir",
+      "status": "done",
+      "createdAt": "2026-11-20T16:48:57Z",
+      "submittedAt": "2026-11-20T16:53:11Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:53:11Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-20T16:55:00Z",
+      "mergedInto": "dev"
+    },
+    "unify-windows-drive-guard": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,src/runtime/controller.ts,src/core/failure-signature.ts",
+      "branch": "wt/unify-windows-drive-guard",
+      "worktree": "worktrees/wt-unify-windows-drive-guard",
+      "status": "done",
+      "createdAt": "2026-11-20T17:08:29Z",
+      "submittedAt": "2026-11-20T17:10:51Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T17:10:51Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T17:12:39Z",
+      "mergedInto": "dev"
+    },
+    "ignore-goal-loop-learnings": {
+      "agent": "iceman",
+      "paths": ".gitignore",
+      "branch": "wt/ignore-goal-loop-learnings",
+      "worktree": "worktrees/wt-ignore-goal-loop-learnings",
+      "status": "done",
+      "createdAt": "2026-11-20T17:27:10Z",
+      "submittedAt": "2026-11-20T17:27:46Z",
+      "mergedAt": "2026-11-20T17:30:10Z",
+      "mergedInto": "dev"
+    },
+    "startup-workflow-scaffold": {
+      "agent": "iceman",
+      "paths": "src/core/bootstrap.ts,src/index.ts,src/core/workflow.ts,test/bootstrap.test.ts,test/workflow.test.ts,docs/changelog.html,docs/config.html,docs/install.html,docs/index.html,SPEC.md,.gitignore,README.md",
+      "branch": "wt/startup-workflow-scaffold",
+      "worktree": "worktrees/wt-startup-workflow-scaffold",
+      "status": "done",
+      "createdAt": "2026-11-20T17:42:12Z",
+      "submittedAt": "2026-11-20T17:54:28Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T17:54:28Z",
+      "forcedScopeFiles": [
+        "AGENTS.md",
+        "docs/core.html",
+        "test/package-integrity.test.ts",
+        "test/plugin.test.ts"
+      ],
+      "mergedAt": "2026-11-20T17:57:02Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-retry-caps": {
+      "agent": "antigravity",
+      "paths": "src/runtime/controller.ts,src/runtime/evaluator.ts,src/core/config.ts,test/controller.test.ts,test/evaluator.test.ts",
+      "branch": "wt/evaluator-retry-caps",
+      "worktree": "worktrees/wt-evaluator-retry-caps",
+      "status": "done",
+      "createdAt": "2026-11-20T17:53:04Z",
+      "submittedAt": "2026-11-20T18:05:04Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T18:05:04Z",
+      "forcedScopeFiles": [
+        "AGENTS.md",
+        "README.md",
+        "SPEC.md",
+        "docs/config.html"
+      ],
+      "mergedAt": "2026-11-20T18:11:31Z",
+      "mergedInto": "dev"
+    },
+    "readme-redesign-assets": {
+      "agent": "proof",
+      "paths": "README.md,assets,docs,SPEC.md,AGENTS.md,MAINTAINER.md,src/core,test",
+      "branch": "wt/readme-redesign-assets",
+      "worktree": "worktrees/wt-readme-redesign-assets",
+      "status": "done",
+      "createdAt": "2026-11-20T19:14:06Z",
+      "submittedAt": "2026-11-20T19:16:20Z",
+      "mergedAt": "2026-11-20T19:18:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,

@@ -86,6 +86,33 @@ export function commitStatusSuffix(policy: CommitPolicy): string {
   return commitRuleSentence(policy, "suffix")
 }
 
+/**
+ * Heuristic: a "broad goal" needs scoped/profile-aware verification evidence (typed checks, targeted proofs),
+ * not a single green-but-unscoped gate. Conservative: obvious multi-clause improvement/refactor/audit/completion
+ * goals are broad; precise single-scope conditions are not.
+ */
+export function isBroadGoalCondition(condition: string): boolean {
+  const text = condition.trim()
+  if (!text) return false
+  const words = text.split(/\s+/).filter(Boolean)
+  const lower = text.toLowerCase()
+  const broadSignals = [
+    /\b(improve|refactor|harden|audit|review|optimi[sz]e|stabili[sz]e|cleanup|clean up|overhaul|migrate|redesign|moderni[sz]e)\b/,
+    /\b(entire|whole|all|every|across|codebase|project|repository|repo)\b/,
+    /\b(backlog|roadmap|complete|finish|end[- ]to[- ]end|comprehensive|systemic|profile[- ]aware|verification matrix)\b/,
+    /\b(and|plus|also|including|as well as)\b.*\b(test|lint|typecheck|build|docs|spec|verify|check)\b/,
+  ]
+  let hits = 0
+  for (const re of broadSignals) if (re.test(lower)) hits++
+  const clauses = text.split(/[.;\n]+|\bthen\b|\band then\b/i).map((x) => x.trim()).filter(Boolean)
+  if (hits >= 2) return true
+  if (hits >= 1 && (words.length >= 14 || clauses.length >= 2)) return true
+  if (clauses.length >= 3 && words.length >= 18) return true
+  // Reuse fuzzy heuristic as a strong broad signal for open-ended goals.
+  if (isFuzzyCondition(text) && (hits >= 1 || words.length >= 12)) return true
+  return false
+}
+
 /** True when the goal has no hard evidence token or reads as vague. */
 export function isFuzzyCondition(condition: string): boolean {
   const text = condition.toLowerCase()
@@ -124,7 +151,7 @@ function historyBlock(history: ReadonlyArray<LoopEntry>, limit: number = HISTORY
 const TREE_TRUTH: ReadonlyArray<string> = [
   `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
   `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
-  `equivalent). What these show is the ground truth; the summary is only a hint.`,
+  `equivalent).`,
 ]
 
 /** Audit-and-stop lines, shared by every prompt that arms or re-arms a loop iteration. Kept byte-identical. */
@@ -142,7 +169,7 @@ function loopPreamble(loop: LoopPreamble): string[] {
     `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Objective (constant): ${escape(loop.objective)}`,
     `Prior iterations:\n${historyBlock(loop.history)}`,
-    `When this iteration is met, the loop summarizes it and arms the next one; you do not need to decide that. Keep the objective in mind, not just this condition.`,
+    `Keep the objective in mind, not just this condition; the loop arms the next iteration when this one is met.`,
   ]
 }
 
@@ -155,7 +182,7 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     `</goal>`,
     ``,
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
-    `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation; it cannot run commands or read files.`,
+    `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation.`,
     ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
@@ -174,9 +201,10 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
 
 /** Synthetic prompt arming iteration N+1 after iteration N was met. */
 export function loopContinuation(
-  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string },
+  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string; learnings?: string },
   policy: CommitPolicy,
 ): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
     `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
@@ -184,6 +212,7 @@ export function loopContinuation(
     ``,
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
+    ...(learnings ? [``, escape(learnings)] : []),
     ``,
     ...TREE_TRUTH,
     ``,
@@ -216,18 +245,20 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
     ``,
     ...AUDIT_AND_STOP,
     ``,
-    `The compaction cut the thread, not the loop: keep working toward the armed condition. After each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Do not wait for a user message.`,
+    `The compaction cut the thread, not the loop: keep working toward the armed condition. Do not wait for a user message.`,
     `</goal-loop-reanchor>`,
   ].join("\n")
 }
 
-export function continuation(input: { condition: string; turn: number; reason: string }, policy: CommitPolicy): string {
+export function continuation(input: { condition: string; turn: number; reason: string; learnings?: string }, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-continuation turn="${input.turn}">`,
     `The goal is not met yet. Keep working toward it.`,
     ``,
     `Goal: ${escape(input.condition)}`,
     `Evaluator: ${escape(input.reason || "No reason given.")}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
     policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
@@ -235,18 +266,20 @@ export function continuation(input: { condition: string; turn: number; reason: s
   ].join("\n")
 }
 
-export function retry(input: { condition: string; label: string }, policy: CommitPolicy): string {
+export function retry(input: { condition: string; label: string; learnings?: string }, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-retry>`,
     `The previous turn failed (${input.label}). The goal is still active; continue from where you left off.`,
     `Goal: ${escape(input.condition)}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "prompt") : ``,
     `</goal-retry>`,
   ].join("\n")
 }
 
 export function checkin(
-  input: { condition: string; waitedMs: number; subagents: number; shells: number },
+  input: { condition: string; waitedMs: number; subagents: number; shells: number; learnings?: string },
   policy: CommitPolicy,
 ): string {
   const running = input.subagents + input.shells > 0
@@ -256,12 +289,14 @@ export function checkin(
   ]
     .filter(Boolean)
     .join(" and ")
+  const learnings = input.learnings?.trim()
   return [
     `<goal-checkin>`,
     running
       ? `Background work (${work}) has kept the goal waiting for ${formatDuration(input.waitedMs)}. Read their output: keep waiting if they are progressing, and fix or stop any that are stuck.`
       : `Background work stopped without reporting a result. Continue toward the goal.`,
     `Goal: ${escape(input.condition)}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "checkin") : ``,
     `</goal-checkin>`,
   ].join("\n")
@@ -349,48 +384,23 @@ interface EvaluationFacts {
 }
 
 const VERDICTS = [
-  `Decide with these verdicts:`,
-  `- "met": every part of the condition is demonstrated by evidence in the conversation (tool output, command`,
-  `  results, file contents shown), or an explicit stop clause in the condition (turn, time, or budget limit) has`,
-  `  been reached according to the harness facts below.`,
-  `- "not_met": not demonstrated yet but still achievable. The reason must name what is missing and the`,
-  `  single next concrete step, phrased so a fresh worker can execute it without re-deriving the problem;`,
-  `  name the evidence that would settle it.`,
-  `- "impossible": can never be satisfied (self-contradictory, or depends on something verifiably unavailable).`,
-  `  Use only with strong evidence; difficulty or slow progress is "not_met".`,
+  `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
+  `1. Parse the armed condition into explicit, verifiable clauses.`,
+  `2. Build an evidence matrix per clause; name a concrete evidence type for each observed item (full clause schema in the OUTPUT list below).`,
+  `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
+  `4. Gate policy:`,
+  `   - "met": every clause satisfied by fresh, scoped evidence (incl. required commits/submit/merge/checks). Green but unscoped is insufficient for broad goals; transcript-only green does not corroborate a broad claim. See the "Verification matrix/profile" and "Broad-condition verifier corroboration" rules below for the full required-check and verifier-command requirements.`,
+  `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
+  `   - "impossible": only with strong evidence the condition can never be satisfied (self-contradictory or depends on something verifiably unavailable). Difficulty or slow progress is "not_met".`,
+  `5. Detect repeated failure signatures from recent verdicts/reasons visible in this conversation (same missing evidence, same failing gate, same flaky/error pattern, same unaddressed gap). If repeating, require strategy escalation: narrow scope, produce a diagnostic artifact, or mark blocked with the blocker.`,
 ]
 
 const RULES = [
-  `Rules: claims without evidence do not count; if the agent says tests pass but no test output is visible, the`,
-  `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
-  `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
-  `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
-  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the`,
-  `work landed and gates green): judge met, and state exactly that in the reason — "Already satisfied at HEAD`,
-  `<sha>. No new work is produced by this iteration." Do not credit narration of effort, and do not produce`,
-  `theater (re-verification-only turns still satisfy the condition, but a planner that re-proposes an identical`,
-  `or materially equivalent condition must not be armed; the loop completes).`,
-  `Condition fit: the reason must name which clause(s) of the armed condition the in-turn evidence satisfies,`,
-  `and the evidence must come from this turn's output at the post-change HEAD. Narration, earlier turns' claims,`,
-  `a previous verdict, and the absence of failure are not evidence.`,
-  `Novelty / no-duplicate: if the armed condition is a near-duplicate of a condition completed earlier in this`,
-  `loop's retained history window (token containment >= 0.7 or Jaccard >= 0.6, case/punctuation ignored), the`,
-  `already-satisfied met above is accepted only together with the next concrete gap it leaves on a "next:" line.`,
-  `A bare "Already satisfied" with no named next concrete gap verdicts "not_met" with reason`,
-  `"duplicate-without-forward-pointer" — even when the underlying work was genuinely already done.`,
-  `A met verdict on duplicate work must state in the reason that it is a duplicate pass, not new advancement.`,
-  `Honest next gap: reasons claiming "Already satisfied" or "no work needed" must name a specific next gap drawn`,
-  `from this turn's audit — a file, symbol, or workstream (e.g. "docs/core.html stale cards"). A vague`,
-  `"could improve X" names nothing and verdicts "not_met".`,
-  `Defensive audit (applies in addition to the condition): before deciding, scan the visible evidence for`,
-  `state that is stale, weakened or self-contradictory — tests skipped, deleted or relaxed to make a check`,
-  `pass; evidence produced before the last change; SPEC or docs contradicting the visible tree; generated`,
-  `artifacts never committed; half-landed work from an earlier turn; a claim contradicted by fresher output.`,
-  `If any of these is visible and bears on the condition, or on the evidence used to support it, the verdict is`,
-  `"not_met" and the reason names the item. A green gate bought by weakening a test is not green.`,
-  `Proactive duty: when the condition genuinely holds, end the reason with one line prefixed "next:" naming`,
-  `the highest-value improvement you saw that remains — stale files, missing tests, drift, speed, friction.`,
-  `This line is a hint for the loop planner; it never downgrades a met verdict. If nothing remains, omit it.`,
+  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
+  `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
+  `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
+  `Verification matrix/profile: if required verification checks or check types are configured/applicable for the goal or a broad goal profile, each required check needs fresh executed command/output/exit evidence scoped to the claimed change; treat missing, unscoped, failing, timed-out, or unverifiable required checks as not_met and name the exact check and proof still needed.`,
+  `Broad-condition verifier corroboration: for a broad or ambiguous condition, when a verifier command or configured required check is available (e.g. evaluator.verifyCommand or a required verification check), a "met" verdict must be corroborated by that command's fresh executed output scoped to the claimed change; transcript-only or generic green is insufficient for the broad claim. If a verifier command is configured but its fresh corroborating output is absent, unexecuted, or unscoped, the verdict is "not_met" and the reason names the missing verifier-command corroboration.`,
 ]
 
 /**
@@ -430,7 +440,18 @@ function rubric(policy: CommitPolicy) {
   return lines.join("\n")
 }
 
-const OUTPUT = `Reply with ONLY one JSON object and nothing else: {"verdict": "met" | "not_met" | "impossible", "reason": "<one or two sentences, under 300 characters>"}`
+const OUTPUT = [
+  `Reply with ONLY one JSON object and nothing else:`,
+  `{"verdict":"met"|"not_met"|"impossible","reason":"<structured reason; use \\n for line breaks>"}`,
+  ``,
+  `The reason must cover, in order:`,
+  `(a) Clause-by-clause judgment with evidence refs: clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn.`,
+  `(b) Gaps/flaws/risks found, or "none material".`,
+  `(c) Repeated-failure/escalation note if any (same missing evidence, same failing gate, same flaky/error pattern, or same unaddressed gap seen in recent visible verdicts/reasons/gate output); if repeating, state required escalation (narrow scope, produce a diagnostic artifact, or mark blocked with blocker). Otherwise state "none".`,
+  ``,
+  `Then next actions: when not_met, or when met with improvements remaining, list 1-3 in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; when met with no gap, write "next: none".`,
+  `Never invent evidence.`,
+].join("\n")
 
 function facts(input: EvaluationFacts, policy: CommitPolicy) {
   const lines = [
@@ -502,11 +523,27 @@ interface LoopSummaryInput {
   readonly maxSummaryTokens: number
 }
 
-interface NextGoalInput {
+export interface BacklogSuggestion {
+  readonly id: string
+  readonly title: string
+  readonly category: string
+  readonly priority: number
+  readonly impact: "low" | "medium" | "high"
+  readonly risk: "low" | "medium" | "high"
+  readonly finding: string
+  readonly improvement: string
+  readonly evidence: ReadonlyArray<string>
+}
+
+export interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>
   readonly latestSummary: string
+  /** Highest-priority unblocked backlog item, de-duplicated against completed work. */
+  readonly backlogSuggestion?: BacklogSuggestion
+  /** Recent learning journal entries (formatted) to apply in planning. */
+  readonly recentLearnings?: string
 }
 
 const summarizeFacts = (input: LoopSummaryInput) => [
@@ -582,13 +619,37 @@ export function nextGoalInSession(input: NextGoalInput): string {
   ].join("\n")
 }
 
-const nextGoalFacts = (input: NextGoalInput) => [
-  `Objective (constant): ${escape(input.objective)}`,
-  `Completed iterations (oldest first):`,
-  historyBlock(input.history),
-  `Latest iteration summary:`,
-  escape(stripReasoningControl(input.latestSummary)),
-]
+const backlogBlock = (suggestion: BacklogSuggestion | undefined): string[] => {
+  if (!suggestion) return []
+  const evidence = suggestion.evidence.length
+    ? suggestion.evidence.map((line) => `  - ${escape(stripReasoningControl(line))}`).join("\n")
+    : "  - (none)"
+  return [
+    ``,
+    `Suggested backlog item (highest-priority unblocked, de-duplicated against completed work):`,
+    `- id: ${escape(suggestion.id)}`,
+    `- title: ${escape(stripReasoningControl(suggestion.title))}`,
+    `- category: ${escape(suggestion.category)}; priority=${suggestion.priority}; impact=${suggestion.impact}; risk=${suggestion.risk}`,
+    `- finding: ${escape(stripReasoningControl(suggestion.finding))}`,
+    `- improvement: ${escape(stripReasoningControl(suggestion.improvement))}`,
+    `- evidence:`,
+    evidence,
+    `Prefer a concrete, verifiable next condition that advances this item when its required work is ABSENT at HEAD; otherwise choose the highest-value ABSENT-at-HEAD improvement per the audit above.`,
+  ]
+}
+
+const nextGoalFacts = (input: NextGoalInput) => {
+  const learnings = input.recentLearnings?.trim()
+  return [
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(stripReasoningControl(input.latestSummary)),
+    ...backlogBlock(input.backlogSuggestion),
+    ...(learnings ? [``, `Recent learnings (apply when choosing the next improvement):`, escape(learnings)] : []),
+  ]
+}
 
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */
 export function nextGoalIndependently(input: NextGoalInput): string {

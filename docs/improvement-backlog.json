@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-20T12:00:00.000Z",
+  "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
+  "items": [
+    {
+      "id": "verification-matrix-beyond-check",
+      "title": "Goal/profile-aware verification matrix beyond bun run check",
+      "category": "verification",
+      "priority": 1,
+      "impact": "high",
+      "risk": "medium",
+      "status": "done",
+      "finding": "Correctness gates can hinge on transcript evidence and configured checks (bun run check, optional evaluator.verifyCommand) while missing integration behavior, flakiness, perf regressions, security issues, or untested edge paths.",
+      "improvement": "Implemented profile-aware verification matrix (config verifyChecks/verifyProfile, legacy verifyCommand synthesis), broad-goal scoping/unscoped-required-check detection, per-check command/output/exit evidence recorded in verdict trail and dossier, and evaluator rubric/prompt guidance treating missing/unscoped required verification as not_met with concrete next actions. Backward-compatible with legacy single verifyCommand. Follow-up: NL goal-declared checks, deterministic coverage enforcement, concurrency/reuse/timing, and artifact-evidence modes reduce prior honest limits while preserving fresh-evidence guarantees.",
+      "evidence": [
+        "Goal-loop blind spot #1 (2026-11-20): met can hinge on transcript evidence + configured checks but miss system health dimensions.",
+        "SPEC.md Workstream LXXVI/LXXX+: evaluator accepts only fresh evidence; verifyCommand gate is optional and command-specific.",
+        "Workstream LXXXVIII (2026-11-20): src/core/config.ts/types.ts/wire.ts/prompts.ts, src/runtime/controller.ts, src/core/dossier.ts record and render per-check matrix evidence; tests cover pass/fail/unscoped/broad/legacy cases; bun run check exit 0 on merge commit.",
+        "Follow-up (2026-11-20): reduced honest limits with goal-declared verify directives parsed/merged from condition (structured verify: syntax), deterministic runtime coverage policy (rubric-independent) for broad/scope required checks, concurrent command execution with cap/reuse-caching/timing metadata, and explicit command|artifact|either evidence modes with artifact patterns (no narration fallback); tests cover NL parse/malformed, deterministic unscoped rejection, parallel/reuse, artifact-vs-command, backward compat; bun run check exit 0."
+      ],
+      "dedupeKeys": [
+        "verification-matrix",
+        "goal-aware-verification",
+        "invariant-matrix",
+        "evaluator-verify-command-scope"
+      ],
+      "related": [
+        "evaluator-rubric-evidence-types",
+        "standing-invariants-sweep"
+      ]
+    },
+    {
+      "id": "persistent-prioritized-backlog-dedup",
+      "title": "Persistent prioritized backlog/ledger with de-duplication",
+      "category": "planning",
+      "priority": 1,
+      "impact": "high",
+      "risk": "low",
+      "status": "in_progress",
+      "finding": "Next iterations rely on summaries/hints and repo re-reads; without a persistent backlog, prioritization can be ad hoc and important issues can be forgotten or repeated.",
+      "improvement": "Maintain a machine-readable backlog/ledger in-repo (findings, impact, risk, evidence, status, dedupe keys). Have the planner select the highest-value unblocked item and de-duplicate against completed conditions/history. Feed from audits, failing checks, TODO/FIXME, and telemetry.",
+      "evidence": [
+        "Goal-loop blind spot #3 (2026-11-20): no durable prioritized backlog; planning relies on summaries/hints.",
+        "This iteration seeds docs/improvement-backlog.json and src/core/improvement-backlog.ts."
+      ],
+      "dedupeKeys": [
+        "persistent-backlog",
+        "prioritized-backlog",
+        "backlog-dedup",
+        "improvement-ledger"
+      ],
+      "related": [
+        "failure-signature-strategy-escalation",
+        "structured-outcome-telemetry"
+      ]
+    },
+    {
+      "id": "failure-signature-strategy-escalation",
+      "title": "Failure-signature detection with automatic strategy escalation",
+      "category": "planning",
+      "priority": 1,
+      "impact": "high",
+      "risk": "medium",
+      "status": "done",
+      "finding": "Activity is not always meaningful progress; repeated not-met evaluations could cycle on the same strategy/failure without runtime escalation.",
+      "improvement": "Implemented runtime repeated failure-signature detection for goal/loop evaluations (src/core/failure-signature.ts): consecutive same-signature not_met verdicts (default threshold 3) are detected from verdict history, including structured verification-matrix/legacy gate failures and normalized reason gaps. On detection the controller escalates by pausing with pauseCause=repeated_failure and an explicit strategy-rotation/diagnostic/block reason instead of re-arming the same approach (src/runtime/controller.ts), with HUD/wire/types support and tests.",
+      "evidence": [
+        "Goal-loop blind spot #4 (2026-11-20): repeated not-met loops may cycle on the same strategy without learning from repeated failure signatures.",
+        "src/core/failure-signature.ts computes verification/reason signatures and detects trailing repeated not_met runs; src/runtime/controller.ts pauses on detection instead of continueWith.",
+        "src/core/types.ts, src/core/wire.ts, src/core/hud.ts add repeated_failure pause cause/remediation.",
+        "test/failure-signature.test.ts and test/controller.test.ts cover signature detection, verification failures, and controller escalation/block behavior; bun run check expected/passing for this iteration."
+      ],
+      "dedupeKeys": [
+        "failure-signature-detection",
+        "strategy-escalation",
+        "repeated-not-met",
+        "progress-scoring"
+      ],
+      "related": [
+        "persistent-prioritized-backlog-dedup",
+        "structured-outcome-telemetry"
+      ]
+    },
+    {
+      "id": "standing-invariants-sweep",
+      "title": "Standing invariants for improvement loops and post-merge invariant sweep",
+      "category": "correctness",
+      "priority": 2,
+      "impact": "high",
+      "risk": "medium",
+      "status": "open",
+      "finding": "A loop can land a valid local fix while leaving adjacent invariants, API/doc drift, or latent debt untouched.",
+      "improvement": "Add standing invariants for improvement loops: no new warnings, docs/SPEC/changelog alignment when behavior changes, boundary/type/schema consistency checks, and regression tests required for risky-path changes. Consider a post-merge invariant sweep iteration.",
+      "evidence": [
+        "Goal-loop blind spot #2 (2026-11-20): local fix != repository-wide improvement.",
+        "Recent passes caught wire.ts boundary gaps during audit rather than as a standing gate."
+      ],
+      "dedupeKeys": [
+        "standing-invariants",
+        "invariant-sweep",
+        "docs-spec-changelog-alignment",
+        "boundary-consistency"
+      ],
+      "related": [
+        "verification-matrix-beyond-check",
+        "change-risk-classification"
+      ]
+    },
+    {
+      "id": "evaluator-rubric-evidence-types",
+      "title": "Strengthen evaluator rubric with evidence types and adversarial self-check",
+      "category": "correctness",
+      "priority": 2,
+      "impact": "high",
+      "risk": "medium",
+      "status": "open",
+      "finding": "A single evaluator interpreting transcript evidence can misjudge completeness, accept weak evidence, or miss subtle regressions; calibration is not visible.",
+      "improvement": "Require evidence types per claim in the rubric, add adversarial self-check ('what would falsify met?'), and for high-risk/ambiguous conditions use dual-evaluation or mandatory verifier-command corroboration.",
+      "evidence": [
+        "Goal-loop blind spot #5 (2026-11-20): evaluator/judge is a single point of failure.",
+        "src/core/prompts.ts contains the evaluator rubric; evaluator.verifyCommand is optional."
+      ],
+      "dedupeKeys": [
+        "evaluator-rubric",
+        "evidence-types",
+        "adversarial-self-check",
+        "dual-evaluation"
+      ],
+      "related": [
+        "verification-matrix-beyond-check"
+      ]
+    },
+    {
+      "id": "coordinator-semantic-drift-guard",
+      "title": "Coordinator semantic-conflict and drift guards",
+      "category": "concurrency",
+      "priority": 2,
+      "impact": "medium",
+      "risk": "medium",
+      "status": "open",
+      "finding": "Leases/merge-next reduce direct conflicts, but semantic conflicts, stale assumptions after other merges, or environment/worktree drift can slip through if re-validation is incomplete.",
+      "improvement": "Enforce pre-submit/pre-merge rebase+full-gate on the merged result with explicit drift/failure reporting, run a quick post-merge health pass, and surface overlapping semantic risk (shared modules/APIs) before merge.",
+      "evidence": [
+        "Goal-loop blind spot #6 (2026-11-20): coordinator/concurrency and drift risks.",
+        "packages/coordinator/bin/coordinator merge-next already trial-merges and gates merged result; semantic overlap surfacing is limited."
+      ],
+      "dedupeKeys": [
+        "semantic-conflict-detection",
+        "worktree-drift",
+        "post-merge-health-pass",
+        "coordinator-preflight"
+      ],
+      "related": [
+        "standing-invariants-sweep"
+      ]
+    },
+    {
+      "id": "change-risk-classification",
+      "title": "Risk classification and stricter gates for sensitive changes",
+      "category": "safety",
+      "priority": 2,
+      "impact": "high",
+      "risk": "high",
+      "status": "open",
+      "finding": "Autonomous improvement may touch sensitive surfaces (deps, auth, migrations, CI/release, data paths) without proportional scrutiny.",
+      "improvement": "Classify changes by risk; require stricter gates/review or human confirmation for high-risk areas, and prefer small, reversible commits with clear rollback points.",
+      "evidence": [
+        "Goal-loop blind spot #7 (2026-11-20): safety and change-risk classification.",
+        "Autonomous loops can edit src/runtime, coordinator, install/release paths without explicit risk tiers."
+      ],
+      "dedupeKeys": [
+        "risk-classification",
+        "sensitive-surfaces",
+        "human-confirmation-gates",
+        "reversible-commits"
+      ],
+      "related": [
+        "verification-matrix-beyond-check",
+        "standing-invariants-sweep"
+      ]
+    },
+    {
+      "id": "structured-outcome-telemetry",
+      "title": "Structured outcome telemetry and learning from history",
+      "category": "learning",
+      "priority": 3,
+      "impact": "medium",
+      "risk": "low",
+      "status": "open",
+      "finding": "History/spend/verdicts are retained, but the system may not learn which interventions reduce failures fastest or where regressions recur.",
+      "improvement": "Add structured outcome telemetry (failure taxonomy, time-to-green, reverted/recurring fixes, flaky checks) and use it to tune prompts, gates, and backlog priority over time.",
+      "evidence": [
+        "Goal-loop blind spot #8 (2026-11-20): limited learning from history.",
+        "Records retain verdict/history/spend fields but lack aggregated failure taxonomy and recurrence tracking."
+      ],
+      "dedupeKeys": [
+        "outcome-telemetry",
+        "failure-taxonomy",
+        "recurring-fixes",
+        "time-to-green"
+      ],
+      "related": [
+        "failure-signature-strategy-escalation",
+        "persistent-prioritized-backlog-dedup"
+      ]
+    }
+  ]
+}

@@ -307,7 +307,7 @@ function renderBar(done, max, cells = BAR_CELLS, ascii = false) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
-  const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round(safeDone / safeMax * width)));
+  const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round(safeDone / safeMax * width)));
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
   return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) };
@@ -371,16 +371,20 @@ var PIP_FILLED = "\u25CF";
 var PIP_EMPTY = "\u25CB";
 var PIP_FILLED_ASCII = "#";
 var PIP_EMPTY_ASCII = "-";
+var PIP_CELLS = 8;
 function renderPips(done, max, ascii = false) {
   if (typeof max !== "number" || !Number.isFinite(max))
     return "";
   const cap = Math.floor(max);
-  if (cap < 1 || cap > 8)
+  if (cap < 1)
     return "";
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap);
   const filledGlyph = ascii ? PIP_FILLED_ASCII : PIP_FILLED;
   const emptyGlyph = ascii ? PIP_EMPTY_ASCII : PIP_EMPTY;
-  return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled);
+  if (cap <= PIP_CELLS)
+    return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled);
+  const cells = filled === 0 ? 0 : Math.min(PIP_CELLS, Math.max(1, Math.round(filled / cap * PIP_CELLS)));
+  return filledGlyph.repeat(cells) + emptyGlyph.repeat(PIP_CELLS - cells);
 }
 function paceEstimate(durations, max) {
   if (durations.length === 0)
@@ -632,14 +636,57 @@ var iterationLines = (entry, spanMs) => {
   lines.push(`- Evaluator reason:`, "", ...quote(entry.reason));
   return lines;
 };
+var verifyCell = (entry) => {
+  const m = entry.verification;
+  if (m) {
+    const req = m.checks.filter((c) => c.required);
+    const pass = req.filter((c) => c.pass && c.scoped).length;
+    const label = `${pass}/${req.length || m.checks.length} ${m.pass ? "pass" : "fail"}`;
+    const extras = [];
+    if (m.timing?.reused)
+      extras.push(`reused ${m.timing.reused}`);
+    if (m.timing?.parallel)
+      extras.push(`parallel x${m.timing.concurrency}`);
+    const suffix = extras.length ? `, ${extras.join(", ")}` : "";
+    return m.broadGoal ? `${label} (broad${suffix})` : `${label}${suffix ? ` (${extras.join(", ")})` : ""}`;
+  }
+  const verify = entry.verify;
+  if (!verify)
+    return GAP;
+  if (verify.timedOut)
+    return "timeout";
+  if (verify.code === null)
+    return "error";
+  return `exit ${verify.code}`;
+};
+var matrixCheckLine = (check) => {
+  const result = !check.scoped && check.required ? "unscoped" : check.pass ? "pass" : check.skipped ? "skipped" : check.timedOut ? "timeout" : check.code === null ? "error/unavailable" : `exit ${check.code}`;
+  const bits = [
+    check.id,
+    check.type,
+    check.required ? "required" : "optional",
+    `source=${check.source ?? "configured"}`,
+    `mode=${check.executionMode ?? check.runState ?? check.evidenceMode ?? "command"}`,
+    result
+  ];
+  if (check.label)
+    bits.push(`label=${check.label}`);
+  if (check.reused)
+    bits.push("reused");
+  if (check.parallel)
+    bits.push(`parallel${check.concurrency ? `@${check.concurrency}` : ""}`);
+  if (typeof check.durationMs === "number")
+    bits.push(`${check.durationMs}ms`);
+  return bits.join(" \xB7 ");
+};
 var verdictTable = (history) => {
   const lines = [
-    "| turn | verdict | tools | commit | spend |",
-    "| ---: | --- | ---: | --- | --- |"
+    "| turn | verdict | tools | commit | spend | verify |",
+    "| ---: | --- | ---: | --- | --- | --- |"
   ];
   for (const entry of history) {
     const tools = entry.toolCalls ?? GAP;
-    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} |`);
+    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry)} |`);
   }
   return lines;
 };
@@ -651,8 +698,51 @@ var verdictProse = (history) => {
       bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`);
     if (entry.sha)
       bits.push(shortSha(entry.sha));
+    if (entry.verification) {
+      const req = entry.verification.checks.filter((c) => c.required).length;
+      const t = entry.verification.timing;
+      const timing = t ? `, ${t.totalMs}ms${t.parallel ? ` parallel x${t.concurrency}` : ""}${t.reused ? ` reused ${t.reused}` : ""}` : "";
+      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required${timing})`);
+    } else if (entry.verify) {
+      const v = entry.verify;
+      const state = v.timedOut ? "timeout" : v.code === null ? "error" : `exit ${v.code}`;
+      bits.push(`verify ${state} ${inlineCode(v.command)}`);
+    }
     lines.push(`- ${bits.join(" \xB7 ")}`);
     lines.push(...quote(entry.reason));
+    if (entry.verification) {
+      const m = entry.verification;
+      lines.push(...quote(`verification matrix checks (profile=${m.profile}, broad=${m.broadGoal}, deterministic coverage enforced):`));
+      if (m.coverageReasons?.length)
+        lines.push(...quote(`coverage reasons: ${m.coverageReasons.join("; ")}`));
+      if (m.timing)
+        lines.push(...quote(`timing: total ${m.timing.totalMs}ms, concurrency ${m.timing.concurrency}, executed ${m.timing.executed}, reused ${m.timing.reused}, skipped ${m.timing.skipped}, parallel ${m.timing.parallel}`));
+      for (const check of m.checks) {
+        lines.push(...quote(`- ${matrixCheckLine(check)} cmd=${check.command}`));
+        if (check.scopeDecision)
+          lines.push(...quote(`  scope decision: ${check.scopeDecision}`));
+        if (check.artifactPatterns?.length)
+          lines.push(...quote(`  artifact patterns: ${check.artifactPatterns.join(" || ")}`));
+        if (check.artifactMatched?.length)
+          lines.push(...quote(`  artifact matched: ${check.artifactMatched.join(" || ")}`));
+        if (check.artifactMissing?.length)
+          lines.push(...quote(`  artifact missing: ${check.artifactMissing.join(" || ")}`));
+        if (check.reason)
+          lines.push(...quote(`  reason: ${check.reason}`));
+        if (check.nextAction && !check.pass)
+          lines.push(...quote(`  next action: ${check.nextAction}`));
+        if (check.tail)
+          lines.push(...quote(`  evidence/output tail:
+${check.tail}`));
+      }
+      if (m.missing.length)
+        lines.push(...quote(`missing/unscoped/failed required checks: ${m.missing.join(", ")}`));
+      if (m.malformedGoalChecks?.length)
+        lines.push(...quote(`malformed goal-declared directives ignored (never executed): ${m.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`));
+    } else if (entry.verify?.tail) {
+      lines.push(...quote(`verify output tail:
+${entry.verify.tail}`));
+    }
   }
   return lines;
 };
@@ -691,10 +781,48 @@ var boundaryCompactLines = (goal, nowMs) => {
   return lines;
 };
 var verifyLines = (goal) => {
+  const matrix = goal.lastVerification;
+  if (matrix) {
+    const req = matrix.checks.filter((c) => c.required);
+    const passed = req.filter((c) => c.pass && c.scoped).length;
+    const lines = [
+      `- Matrix profile: ${matrix.profile}${matrix.broadGoal ? " (broad goal)" : ""}`,
+      `- Result: ${matrix.pass ? "pass" : "fail"} \xB7 ${passed}/${req.length} required checks satisfied \xB7 ${isoOf(matrix.at)}`
+    ];
+    if (matrix.timing)
+      lines.push(`- Timing: total ${matrix.timing.totalMs}ms, concurrency ${matrix.timing.concurrency}, executed ${matrix.timing.executed}, reused ${matrix.timing.reused}, skipped ${matrix.timing.skipped}, parallel ${matrix.timing.parallel}`);
+    if (matrix.coverageReasons?.length)
+      lines.push(`- Coverage reasons: ${matrix.coverageReasons.join("; ")}`);
+    if (matrix.missing.length)
+      lines.push(`- Missing/unscoped/failed required checks: ${matrix.missing.join(", ")}`);
+    if (matrix.malformedGoalChecks?.length)
+      lines.push(`- Malformed goal-declared directives ignored (never executed): ${matrix.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`);
+    lines.push("- Checks:");
+    for (const check of matrix.checks) {
+      lines.push(`  - ${matrixCheckLine(check)} cmd=${inlineCode(check.command)}`);
+      if (check.scopeDecision)
+        lines.push(`    - scope decision: ${check.scopeDecision}`);
+      if (check.artifactPatterns?.length)
+        lines.push(`    - artifact patterns: ${check.artifactPatterns.join(" || ")}`);
+      if (check.artifactMatched?.length)
+        lines.push(`    - artifact matched: ${check.artifactMatched.join(" || ")}`);
+      if (check.artifactMissing?.length)
+        lines.push(`    - artifact missing: ${check.artifactMissing.join(" || ")}`);
+      if (check.reason)
+        lines.push(`    - reason: ${check.reason}`);
+      if (check.nextAction && !check.pass)
+        lines.push(`    - next action: ${check.nextAction}`);
+      if (check.tail) {
+        lines.push("    - evidence/output tail:");
+        lines.push(...fenceBlock(check.tail).map((l) => `      ${l}`));
+      }
+    }
+    return lines;
+  }
   const verify = goal.lastVerify;
   if (!verify) {
     return [
-      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when `evaluator.verifyCommand` is configured.)"
+      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when verification is configured.)"
     ];
   }
   const result = verify.timedOut ? "timed out" : verify.code === null ? "no exit code (spawn error or timeout)" : `exit ${verify.code}`;
@@ -1160,7 +1288,7 @@ var sealedDossierName = (nowMs, attempt = 0) => {
   return `goal-dossier-sealed-${stamp}${suffix}.md`;
 };
 var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var cleanShaCount = (verification, reach, sign) => {
@@ -1200,7 +1328,7 @@ function attestationAppendix(_goal, verification, reach, sign, nowMs, directory)
   const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
   lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
   for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
   }
   const clean = cleanShaCount(verification, reach, sign);
   lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
@@ -1285,7 +1413,7 @@ var reviewName = (nowMs, attempt = 0) => {
   return `goal-dossier-review-${stamp}${suffix}.md`;
 };
 var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var reviewVerdict = (exists, onThisLine, underSeal) => {
@@ -1307,7 +1435,7 @@ function buildReview(goal, directory, nowMs, probes = {}) {
   const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
   const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
   const rows = verification.checks.map((check) => {
-    const exists = verifyCell2(check.status);
+    const exists = verifyCell3(check.status);
     const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
     const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
     return {
@@ -1712,7 +1840,7 @@ function parseAttestationAppendix(markdown) {
     return { kind: "unparsable" };
   return { kind: "sealed", stamp, directory, rows, gap, malformed };
 }
-var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell4 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell3 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var shasAsGoal = (rows) => ({
@@ -1741,7 +1869,7 @@ function attestSealedDossier(markdown, directory, probes = {}) {
   const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
   const rows = uniqRows.map((row) => {
     const now = {
-      exists: verifyCell3(verifyBySha.get(row.sha) ?? "unknown"),
+      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
       onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
       underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
     };
@@ -2134,6 +2262,8 @@ var remediationFor = (goal) => {
       return { tone: "warning", text: `turn cap reached \xB7 /goal clear or set a new goal - a message will not extend it` };
     if (cause === "stall")
       return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
+    if (cause === "repeated_failure")
+      return { tone: "warning", text: `repeated not_met failure signature \xB7 rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` };
     if (cause === "user")
       return { tone: "warning", text: `interrupted \xB7 send a message to resume` };
     return { tone: "warning", text: `paused \xB7 send a message to resume, or /goal clear` };
@@ -3435,6 +3565,7 @@ var StatusDialogBody = (props) => {
     _$insertNode2(_el$8, _el$9);
     _$setProp3(_el$8, "flexDirection", "row");
     _$setProp3(_el$8, "gap", 2);
+    _$setProp3(_el$8, "alignItems", wide ? "flex-start" : undefined);
     _$insert3(_el$8, () => label(name), _el$9);
     _$setProp3(_el$9, "wrapMode", "word");
     _$setProp3(_el$9, "flexGrow", wide ? 1 : 0);
@@ -3447,9 +3578,14 @@ var StatusDialogBody = (props) => {
   const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE;
   const OTHERS_CONDITION_MAX = 34;
   const OTHERS_TAG_MAX = 12;
+  const OTHERS_STATE_MAX = 7;
   const sessionTag = (sessionID) => {
     const label = props.sessionLabel?.(sessionID) ?? sessionID;
     return truncate(label, OTHERS_TAG_MAX);
+  };
+  const otherStateLabel = (other) => {
+    const raw = other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
+    return truncate(raw, OTHERS_STATE_MAX);
   };
   const othersLive = () => {
     const rows = foreignLiveRows(props.others, g()?.sessionID);
@@ -3803,6 +3939,7 @@ var StatusDialogBody = (props) => {
             _$insertNode2(_el$31, _el$32);
             _$setProp3(_el$31, "flexDirection", "row");
             _$setProp3(_el$31, "gap", 2);
+            _$setProp3(_el$31, "alignItems", "flex-start");
             _$setProp3(_el$31, "onMouseUp", (event) => {
               if (event.button !== 0)
                 return;
@@ -3844,6 +3981,7 @@ var StatusDialogBody = (props) => {
                   _$insertNode2(_el$45, _el$46);
                   _$setProp3(_el$45, "flexDirection", "row");
                   _$setProp3(_el$45, "gap", 2);
+                  _$setProp3(_el$45, "alignItems", "flex-start");
                   _$setProp3(_el$45, "onMouseUp", (event) => {
                     if (event.button !== 0)
                       return;
@@ -4575,7 +4713,8 @@ var StatusDialogBody = (props) => {
                 _$setProp3(_el$87, "flexDirection", "row");
                 _$setProp3(_el$87, "gap", 2);
                 _$insert3(_el$87, () => label("elsewhere"), _el$88);
-                _$setProp3(_el$88, "wrapMode", "none");
+                _$setProp3(_el$88, "wrapMode", "word");
+                _$setProp3(_el$88, "flexGrow", 1);
                 _$insert3(_el$88, () => `${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " \xB7 click a row to open its transcript" : ""}`);
                 _$insert3(_el$86, _$createComponent2(For2, {
                   get each() {
@@ -4623,13 +4762,12 @@ var StatusDialogBody = (props) => {
                       })());
                       _$setProp3(_el$93, "wrapMode", "none");
                       _$setProp3(_el$93, "flexShrink", 0);
+                      _$setProp3(_el$93, "width", 12);
                       _$insert3(_el$93, () => sessionTag(other.sessionID));
                       _$setProp3(_el$94, "wrapMode", "none");
                       _$setProp3(_el$94, "flexShrink", 0);
-                      _$insert3(_el$94, (() => {
-                        var _c$12 = _$memo3(() => !!other.loopEnabled);
-                        return () => _c$12() ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status;
-                      })());
+                      _$setProp3(_el$94, "width", 7);
+                      _$insert3(_el$94, () => otherStateLabel(other));
                       _$setProp3(_el$95, "wrapMode", "none");
                       _$setProp3(_el$95, "flexGrow", 1);
                       _$insert3(_el$95, () => truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026"));
@@ -4729,6 +4867,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
 var verdictColor = (theme, entry, mono) => verdictEntryAccentColor(theme, entry, mono);
 var CONTEXT_MENU_ROWS = 6;
+var CARD_VERTICAL_PADDING = 2;
 var CARD_WIDTH_MIN = 52;
 var CARD_WIDTH_MAX = 88;
 var cardWidth = (terminalWidth) => {
@@ -4750,7 +4889,7 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   const whyAvailable = Boolean(goal.reason && goal.reason.trim());
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
-  const fit = (hint, spend, context, why, last, fix) => 4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
+  const fit = (hint, spend, context, why, last, fix) => CARD_VERTICAL_PADDING + 4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
   let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted;
   let rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
@@ -5055,6 +5194,8 @@ var HudCard = (props) => {
     _$setProp4(_el$9, "borderStyle", "single");
     _$setProp4(_el$9, "paddingLeft", 2);
     _$setProp4(_el$9, "paddingRight", 2);
+    _$setProp4(_el$9, "paddingTop", 1);
+    _$setProp4(_el$9, "paddingBottom", 1);
     _$setProp4(_el$9, "onMouseUp", (event) => {
       if (event.button === 2) {
         try {
@@ -5776,7 +5917,7 @@ var isString = (value) => typeof value === "string";
 var isBoolean = (value) => typeof value === "boolean";
 var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
-var PAUSE_CAUSES = new Set(["cap", "stall", "user"]);
+var PAUSE_CAUSES = new Set(["cap", "stall", "user", "repeated_failure"]);
 var isPauseCause = (value) => isString(value) && PAUSE_CAUSES.has(value);
 var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
 var VERDICTS = new Set(["met", "not_met", "impossible"]);
@@ -5800,9 +5941,23 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend));
+var VERIFY_CHECK_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]);
+var VERIFY_SOURCES = new Set(["configured", "legacy", "goal-declared"]);
+var VERIFY_EVIDENCE_MODES = new Set(["command", "artifact", "either"]);
+var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);
+var VERIFY_EXECUTION_MODES = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"]);
+var isStringArray = (value) => Array.isArray(value) && value.every(isString);
+var isVerifyCheckType = (value) => isString(value) && VERIFY_CHECK_TYPES.has(value);
+var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason)) && (value.source === undefined || isString(value.source) && VERIFY_SOURCES.has(value.source)) && (value.evidenceMode === undefined || isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode)) && (value.runState === undefined || isString(value.runState) && VERIFY_RUN_STATES.has(value.runState)) && (value.scopeDecision === undefined || isString(value.scopeDecision)) && (value.nextAction === undefined || isString(value.nextAction)) && (value.durationMs === undefined || isFiniteNumber(value.durationMs)) && (value.reused === undefined || isBoolean(value.reused)) && (value.reusedFrom === undefined || isString(value.reusedFrom)) && (value.parallel === undefined || isBoolean(value.parallel)) && (value.concurrency === undefined || isFiniteNumber(value.concurrency)) && (value.skipped === undefined || isBoolean(value.skipped)) && (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) && (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) && (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) && (value.executionMode === undefined || isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode));
+var isVerifyTiming = (value) => isRecord(value) && isFiniteNumber(value.totalMs) && isFiniteNumber(value.concurrency) && isBoolean(value.parallel) && isFiniteNumber(value.reused) && isFiniteNumber(value.executed) && isFiniteNumber(value.skipped);
+var isMalformedGoalCheck = (value) => isRecord(value) && isString(value.raw) && isString(value.reason);
+var isVerdictVerificationMatrix = (value) => isRecord(value) && isString(value.profile) && isBoolean(value.broadGoal) && isBoolean(value.pass) && Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) && Array.isArray(value.missing) && value.missing.every(isString) && (value.coverageReasons === undefined || isStringArray(value.coverageReasons)) && (value.timing === undefined || isVerifyTiming(value.timing)) && (value.malformedGoalChecks === undefined || Array.isArray(value.malformedGoalChecks) && value.malformedGoalChecks.every(isMalformedGoalCheck));
+var isLastVerification = (value) => isVerdictVerificationMatrix(value) && isFiniteNumber(value.at);
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha)) && (value.verify === undefined || isVerdictVerify(value.verify)) && (value.verification === undefined || isVerdictVerificationMatrix(value.verification));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
+var isLastVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && isFiniteNumber(value.at) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
+var isVerdictVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
 var isGoalSnapshot = (value) => {
   if (!isRecord(value))
     return false;
@@ -5834,6 +5989,8 @@ var isGoalSnapshot = (value) => {
     return false;
   if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
     return false;
+  if (value.queued !== undefined && !isBoolean(value.queued))
+    return false;
   if (value.spend !== undefined && !isUsageSnapshot(value.spend))
     return false;
   if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize))
@@ -5850,11 +6007,25 @@ var isGoalSnapshot = (value) => {
     return false;
   if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress))
     return false;
+  if (value.historyDropped !== undefined && (!isFiniteNumber(value.historyDropped) || value.historyDropped < 0))
+    return false;
   if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry)))
+    return false;
+  if (value.loopHistoryDropped !== undefined && (!isFiniteNumber(value.loopHistoryDropped) || value.loopHistoryDropped < 0))
+    return false;
+  if (value.completedConditions !== undefined && (!Array.isArray(value.completedConditions) || !value.completedConditions.every(isString)))
+    return false;
+  if (value.completedConditionsDropped !== undefined && (!isFiniteNumber(value.completedConditionsDropped) || value.completedConditionsDropped < 0))
     return false;
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact))
     return false;
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0))
+    return false;
+  if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify))
+    return false;
+  if (value.lastVerification !== undefined && !isLastVerification(value.lastVerification))
+    return false;
+  if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince))
     return false;
   return true;
 };
@@ -5969,14 +6140,30 @@ var fileFor = (dir, sessionID) => {
   return join6(dir, `${safe}.json`);
 };
 var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
+  const ensured = new Set;
   const write = (snapshot) => {
-    try {
-      mkdirSync(dir, { recursive: true, mode: 448 });
-      const target = fileFor(dir, snapshot.sessionID);
-      const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-      writeFileSync6(tmp, JSON.stringify(snapshot), { mode: 384 });
+    const target = fileFor(dir, snapshot.sessionID);
+    const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    const body = JSON.stringify(snapshot);
+    const writeOnce = () => {
+      if (!ensured.has(dir)) {
+        mkdirSync(dir, { recursive: true, mode: 448 });
+        ensured.add(dir);
+      }
+      writeFileSync6(tmp, body, { mode: 384 });
       renameSync(tmp, target);
-    } catch {}
+    };
+    try {
+      writeOnce();
+    } catch (error) {
+      if (ensured.has(dir) && error?.code === "ENOENT") {
+        try {
+          ensured.delete(dir);
+          writeOnce();
+        } catch {}
+        return;
+      }
+    }
   };
   const remove = (sessionID) => {
     try {
@@ -7379,7 +7566,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(8, mountWidthOr() - 2 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
+            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7495,7 +7682,7 @@ var tui_default = Plugin.define({
                   _$setProp5(_el$12, "top", -1);
                   _$setProp5(_el$12, "left", 0);
                   _$setProp5(_el$12, "height", 1);
-                  _$setProp5(_el$12, "paddingLeft", 1);
+                  _$setProp5(_el$12, "paddingLeft", 0);
                   _$setProp5(_el$12, "flexDirection", "row");
                   _$setProp5(_el$12, "onMouseOver", () => setHovered(true));
                   _$setProp5(_el$12, "onMouseOut", () => setHovered(false));

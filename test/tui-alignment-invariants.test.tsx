@@ -4,7 +4,7 @@
  * floor), 64, 80, 88 (the design ceiling), 112 (what the live measured-mount can paint) — in both
  * the color and the mono (reduced-color) arm, plus the default terminal-resolved width path
  * (`cardWidth`), and the real pill model through the same one-row absolute mount tui.tsx uses
- * (paddingLeft 1, no frame on the other sides). Not shipped (test/ is not in `files`).
+ * (paddingLeft 0 — the leading icon owns cell 0, no frame on the other sides). Not shipped (test/ is not in `files`).
  * Requires the solid preload (test/bunfig.toml).
  *
  * The invariants, measured per frame rather than trusted:
@@ -13,13 +13,16 @@
  *              row's gutter is deliberately blank (the context menu's continuation rows), to the
  *              value column (cell 14 — the same cell every labelled row's value paints at). Nothing
  *              lands between them: one two-stop grid, bar to padding to content.
+ *   padding    the card paints one bar-only row (no content ink) above the title and one below the
+ *              actions row — the vertical breathing room that keeps the text off the card's edges.
  *   ceiling    no painted cell crosses the right content edge (width − 3 = border 1 + paddingRight 2).
  *   affordance the condition row's `copy` affordance cell, the why row's, and the actions row's
  *              flushRight `[esc]` all share ONE right edge at width − 3. The affordance cell is 8
  *              cells wide with the 4-cell verb painted left, so the verb ink starts at width − 10;
  *              `[esc]` ink ends exactly at width − 3.
- *   pill       the pill paints `budget = width − 2` (1-cell left padding, 1-cell right margin) and,
- *              mounted, inks cell 1 first and never beyond cell width − 2 — under mono too.
+ *   pill       the pill paints `budget = width − 1` (1-cell right margin, no left padding — the
+ *              leading icon owns cell 0) and, mounted, inks cell 0 first and never beyond cell
+ *              width − 2 — under mono too. The icon shares the left column with the card's bar.
  */
 import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
@@ -164,6 +167,9 @@ const expectSharedLeftGrid = (frame: string, allowBlankGutter: boolean) => {
   const expect3 = (label: string, cells: Cell[]) => {
     const ink = inkColumns(cells)
     expect(ink[0], label).toBe(BAR) // the hanging bar carries cell 0
+    // Padding row arm: one blank row above the title and one below the actions row carry the bar
+    // alone (the card's vertical breathing room). No content ink means no grid to snap to.
+    if (ink.length === 1) return
     if (ink[1] === LABEL_COL || !allowBlankGutter) {
       expect(ink[1], `${label}: first content ink`).toBe(LABEL_COL)
       return
@@ -232,11 +238,11 @@ for (const width of WIDTHS) {
       const ascii = mono
       const g = goal()
       const line = terminal
-        ? terminalPill(achievedGoal(), 1000 * 60 * 42, ascii, width - 2)!.text
-        : pillModel(g, 1000 * 60 * 42, ascii, width - 2, 2).text
+        ? terminalPill(achievedGoal(), 1000 * 60 * 42, ascii, width - 1)!.text
+        : pillModel(g, 1000 * 60 * 42, ascii, width - 1, 2).text
       const setup = await testRender(
         () => (
-          <box position="absolute" top={0} left={0} height={1} paddingLeft={1} flexDirection="row" width={width}>
+          <box position="absolute" top={0} left={0} height={1} paddingLeft={0} flexDirection="row" width={width}>
             <text fg={theme.text.muted} wrapMode="none">{line}</text>
           </box>
         ),
@@ -249,11 +255,11 @@ for (const width of WIDTHS) {
     }
     const expectPillFits = (label: string, mono: boolean, terminal: boolean) => async () => {
       const { frame, line } = await pillAt(mono, terminal)
-      expect(stringWidth(line), `${label} model stays inside its budget`).toBeLessThanOrEqual(width - 2)
+      expect(stringWidth(line), `${label} model stays inside its budget`).toBeLessThanOrEqual(width - 1)
       const cells = frameCells(frame.split("\n")[0]!)
       const ink = inkColumns(cells)
-      expect(cells[0]!.ink, `${label} leaves the mount's left margin cell blank`).toBe(false)
-      expect(ink[0], `${label} paints its first cell at the padding column`).toBe(1)
+      expect(cells[0]!.ink, `${label} begins the line at cell 0 — the leading icon owns the accent rail`).toBe(true)
+      expect(ink[0], `${label} paints its first cell at cell 0`).toBe(0)
       expect(ink[ink.length - 1]!, `${label} never paints past its right margin`).toBeLessThanOrEqual(width - 2)
     }
     test(`the working pill paints inside its mount budget (color)`, expectPillFits("working pill", false, false))
@@ -281,5 +287,32 @@ describe("/goal card alignment · terminal-resolved width (cardWidth path)", () 
     const frame = await renderCard(undefined, true, false, 112)
     expectSharedLeftGrid(frame, false)
     expectNoBleed(frame, DEFAULT_CARD)
+  })
+})
+
+describe("/goal card breathing room — the text stays off the card's top and bottom edges", () => {
+  // The card paints one bar-only row above the title and one below the actions row, so the content is
+  // inset from the card's top and bottom edges (the composer's own vertical padding, matched). These
+  // pins are the "breathing room" contract: the first and last painted rows are bar-only padding rows.
+  test("the first painted row is a bar-only row above the title", async () => {
+    const rows = paintedRows(await renderCard(64, false))
+    const first = inkColumns(rows[0]!)
+    expect(first, "the card opens with a padding row, not the title").toEqual([BAR])
+    expect(cellIndexOf(rows[1]!, "goal"), "the title row follows exactly one padding row").toBeGreaterThanOrEqual(0)
+  })
+  test("the actions row is followed by exactly one bar-only row below it", async () => {
+    const rows = paintedRows(await renderCard(64, false))
+    const actions = rows.findIndex((cells) => cellIndexOf(cells, "[esc]") !== -1)
+    expect(actions, "the actions row paints").toBeGreaterThan(0)
+    const below = rows[actions + 1]
+    expect(below, "a padding row follows the actions row").toBeDefined()
+    expect(inkColumns(below!), "the row below the actions row is bar-only").toEqual([BAR])
+    expect(rows[actions + 2], "no second bar-only row below the actions row").toBeUndefined()
+  })
+  test("mono keeps the same two padding rows", async () => {
+    const rows = paintedRows(await renderCard(64, true))
+    expect(inkColumns(rows[0]!)).toEqual([BAR])
+    const actions = rows.findIndex((cells) => cellIndexOf(cells, "[esc]") !== -1)
+    expect(inkColumns(rows[actions + 1]!)).toEqual([BAR])
   })
 })

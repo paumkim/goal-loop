@@ -14,3 +14,4 @@ worktrees/wt-*
 .pkgtest-load/
 .package-integrity-test-*/
 opencode.json
+.term/goal-loop/

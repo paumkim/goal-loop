@@ -96,6 +96,13 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(91000) })).toBeUndefined()
   })
 
+  test("accepts an additive VerdictEntry sha and rejects non-string values when present", () => {
+    const verdict = (sha?: unknown) => [{ turn: 1, verdict: "not_met" as const, reason: "r", at: 900, ...(sha === undefined ? {} : { sha }) }]
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict("b".repeat(40)) })?.history[0]?.sha).toBe("b".repeat(40))
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict(undefined) })?.history[0]?.sha).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict(91000) })).toBeUndefined()
+  })
+
   test("accepts an additive LoopEntry spend delta and rejects broken values when present", () => {
     const spend = { cost: 0.42, input: 1000, output: 200, reasoning: 50, cacheRead: 800, cacheWrite: 10 }
     const entry = (value?: unknown) => [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 1, toolCalls: 2, endedAt: 800, ...(value === undefined ? {} : { spend: value }) }]
@@ -111,6 +118,15 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(undefined) })?.loopHistory?.[0]?.contextTokens).toBeUndefined()
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(Number.NaN) })).toBeUndefined()
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry("91000") })).toBeUndefined()
+  })
+
+  test("accepts optional queued boolean and rejects malformed queued values", () => {
+    expect(parseGoalSnapshot({ ...snapshot(), queued: true })?.queued).toBe(true)
+    expect(parseGoalSnapshot({ ...snapshot(), queued: false })?.queued).toBe(false)
+    expect(parseGoalSnapshot(snapshot())?.queued).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: "yes" })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: 1 })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: null })).toBeUndefined()
   })
 
   test("rejects each broken required field", () => {
@@ -336,6 +352,104 @@ describe("per-turn spend on verdict entries", () => {
     expect(parseGoalSnapshot(spendSnapshot("0.42"))).toBeUndefined()
     expect(parseGoalSnapshot(spendSnapshot({ cost: Number.NaN, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 }))).toBeUndefined()
     expect(parseGoalSnapshot(spendSnapshot({ cost: 1 }))).toBeUndefined()
+  })
+})
+
+describe("verification evidence on verdict entries", () => {
+  const withVerify = (verify?: unknown) => ({
+    ...snapshot(),
+    history: [{ turn: 1, verdict: "met" as const, reason: "done", at: 900, ...(verify === undefined ? {} : { verify }) }],
+  })
+
+  test("an additive VerdictEntry verify record is accepted when present", () => {
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, tail: "ok" }))?.history[0]?.verify).toEqual({ command: "bun run check", code: 0, tail: "ok" })
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: null, timedOut: true }))?.history[0]?.verify).toEqual({ command: "bun run check", code: null, timedOut: true })
+  })
+
+  test("verify may be absent and malformed values are rejected", () => {
+    expect(parseGoalSnapshot(withVerify(undefined))?.history[0]?.verify).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify("ok"))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: 1, code: 0 }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: "0" }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, timedOut: "yes" }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, tail: 7 }))).toBeUndefined()
+  })
+})
+
+describe("optional GoalSnapshot fields (historyDropped, loopHistoryDropped, completedConditions, completedConditionsDropped, lastVerify, waitingSince)", () => {
+  test("accepts valid additive fields and tolerates their absence", () => {
+    const lastVerify = { command: "bun run check", code: 0, at: 1_234 }
+    const parsed = parseGoalSnapshot({
+      ...snapshot(),
+      historyDropped: 2,
+      loopHistoryDropped: 1,
+      completedConditions: ["step 1", "step 2"],
+      completedConditionsDropped: 3,
+      lastVerify,
+      waitingSince: 9_999,
+    })
+    expect(parsed?.historyDropped).toBe(2)
+    expect(parsed?.loopHistoryDropped).toBe(1)
+    expect(parsed?.completedConditions).toEqual(["step 1", "step 2"])
+    expect(parsed?.completedConditionsDropped).toBe(3)
+    expect(parsed?.lastVerify).toEqual(lastVerify)
+    expect(parsed?.waitingSince).toBe(9_999)
+
+    const bare = parseGoalSnapshot(snapshot())
+    expect(bare?.historyDropped).toBeUndefined()
+    expect(bare?.loopHistoryDropped).toBeUndefined()
+    expect(bare?.completedConditions).toBeUndefined()
+    expect(bare?.completedConditionsDropped).toBeUndefined()
+    expect(bare?.lastVerify).toBeUndefined()
+    expect(bare?.waitingSince).toBeUndefined()
+  })
+
+  test("accepts boundary values for dropped counters, completedConditions, and lastVerify", () => {
+    expect(parseGoalSnapshot({ ...snapshot(), historyDropped: 0 })?.historyDropped).toBe(0)
+    expect(parseGoalSnapshot({ ...snapshot(), loopHistoryDropped: 0 })?.loopHistoryDropped).toBe(0)
+    expect(parseGoalSnapshot({ ...snapshot(), completedConditionsDropped: 0 })?.completedConditionsDropped).toBe(0)
+    expect(parseGoalSnapshot({ ...snapshot(), completedConditions: [] })?.completedConditions).toEqual([])
+    expect(parseGoalSnapshot({
+      ...snapshot(),
+      lastVerify: { command: "bun test", code: null, timedOut: true, tail: "timed out", at: 42 },
+    })?.lastVerify).toEqual({ command: "bun test", code: null, timedOut: true, tail: "timed out", at: 42 })
+    expect(parseGoalSnapshot({
+      ...snapshot(),
+      lastVerify: { command: "bun test", code: 1, timedOut: false, at: 42 },
+    })?.lastVerify).toEqual({ command: "bun test", code: 1, timedOut: false, at: 42 })
+  })
+
+  test("rejects malformed dropped counters, completedConditions, and waitingSince", () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ["historyDropped as string", { ...snapshot(), historyDropped: "2" }],
+      ["historyDropped as NaN", { ...snapshot(), historyDropped: Number.NaN }],
+      ["historyDropped negative", { ...snapshot(), historyDropped: -1 }],
+      ["loopHistoryDropped as string", { ...snapshot(), loopHistoryDropped: "1" }],
+      ["loopHistoryDropped negative", { ...snapshot(), loopHistoryDropped: -1 }],
+      ["completedConditions not array", { ...snapshot(), completedConditions: "step 1" }],
+      ["completedConditions with non-string", { ...snapshot(), completedConditions: ["step 1", 2] }],
+      ["completedConditionsDropped as string", { ...snapshot(), completedConditionsDropped: "3" }],
+      ["completedConditionsDropped negative", { ...snapshot(), completedConditionsDropped: -1 }],
+      ["waitingSince as string", { ...snapshot(), waitingSince: "9999" }],
+      ["waitingSince NaN", { ...snapshot(), waitingSince: Number.NaN }],
+    ]
+    for (const [, value] of cases) expect(parseGoalSnapshot(value)).toBeUndefined()
+  })
+
+  test("rejects malformed lastVerify values", () => {
+    const cases: Array<[string, Record<string, unknown>]> = [
+      ["lastVerify not object", { ...snapshot(), lastVerify: "ok" }],
+      ["lastVerify missing command", { ...snapshot(), lastVerify: { code: 0, at: 1 } }],
+      ["lastVerify non-string command", { ...snapshot(), lastVerify: { command: 1, code: 0, at: 1 } }],
+      ["lastVerify missing code", { ...snapshot(), lastVerify: { command: "bun test", at: 1 } }],
+      ["lastVerify invalid code type", { ...snapshot(), lastVerify: { command: "bun test", code: "0", at: 1 } }],
+      ["lastVerify NaN code", { ...snapshot(), lastVerify: { command: "bun test", code: Number.NaN, at: 1 } }],
+      ["lastVerify missing at", { ...snapshot(), lastVerify: { command: "bun test", code: 0 } }],
+      ["lastVerify non-numeric at", { ...snapshot(), lastVerify: { command: "bun test", code: 0, at: "1" } }],
+      ["lastVerify non-boolean timedOut", { ...snapshot(), lastVerify: { command: "bun test", code: 0, at: 1, timedOut: "yes" } }],
+      ["lastVerify non-string tail", { ...snapshot(), lastVerify: { command: "bun test", code: 0, at: 1, tail: 7 } }],
+    ]
+    for (const [, value] of cases) expect(parseGoalSnapshot(value)).toBeUndefined()
   })
 })
 

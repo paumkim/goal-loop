@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, test } from "bun:test"
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
 import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
-import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
+import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
 import { EvaluationTimeoutError } from "../src/runtime/evaluator.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 import { MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES, MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
@@ -68,6 +71,7 @@ function harness(
   options: Record<string, unknown> = {},
   storage = new MemoryStorage(),
   commit: CommitPolicy = { required: false, branch: "dev", reason: "test" },
+  directory = DIR,
 ) {
   const clock = new FakeClock()
   const calls = { prompts: [] as any[], synthetic: [] as any[] }
@@ -89,8 +93,8 @@ function harness(
     ? (options.log as { info(m: string, e?: unknown): void; warn(m: string, e?: unknown): void; error(m: string, e?: unknown): void })
     : silent
   const controller = new GoalController({
-    config: resolveConfig(options),
-    directory: DIR,
+    config: resolveConfig({ learning: { enabled: false }, ...options }),
+    directory,
     commit,
     clock,
     store,
@@ -192,9 +196,43 @@ describe("GoalController", () => {
     expect(goal.status).toBe("achieved")
     expect(goal.turns).toBe(2)
     expect(goal.endedAt).toBeDefined()
+    // Regression: a met verdict on a plain goal is terminal — evaluate() must not fall through to the
+    // continuation dispatch and re-arm the achieved goal (turn 3 steer seen before the fix).
+    expect(h.calls.synthetic).toHaveLength(1)
     // The verdict outcome note is retired (LXVII): the steer resumes the goal, and no synthetic note rides the achievement.
     expect(h.calls.synthetic.some((synthetic) => String(synthetic.description ?? "").startsWith("Goal achieved"))).toBe(false)
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
+  })
+  test("an impossible verdict is terminal: it does not re-arm the goal", async () => {
+    await h.set()
+    h.verdicts.push({ verdict: "impossible", reason: "the target cannot be built here" })
+    await h.turn()
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("impossible")
+    // Regression: like met, an impossible verdict must not fall through to the continuation dispatch.
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "impossible")).toBeTrue()
+  })
+  test("terminal settle: exactly one outcome-story notice per terminal path", async () => {
+    // Every terminal path now routes through the single settleTerminal helper (finish -> outcome story ->
+    // one notice). Pin the achieved message shape so a future split cannot double-announce or drop the story.
+    await h.set()
+    h.verdicts.push(met("all 40 tests pass"))
+    await h.turn()
+    const achieved = h.notices.filter((n) => n.kind === "achieved")
+    expect(achieved).toHaveLength(1)
+    expect(achieved[0]!.title).toBe("Goal achieved in 1 turn")
+    expect(achieved[0]!.message).toContain("1 turn")
+    expect(achieved[0]!.message).toContain("all 40 tests pass")
+
+    // Fatal failure is the fourth caller of the same helper: one `failed` notice, story body carrying the reason.
+    h = harness()
+    await h.set()
+    h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
+    const failed = h.notices.filter((n) => n.kind === "failed")
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.title).toBe("Goal failed")
+    expect(failed[0]!.message).toContain("Run /goal again")
   })
 
   test("the outcome toast carries the story: turns · wall time · reason", async () => {
@@ -401,11 +439,19 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
-  test("skips evaluation when the busy check errors", async () => {
+  test("retries evaluation when the busy check errors instead of skipping permanently", async () => {
     await h.set()
     h.setBusyError(new Error("busy check failed"))
     await h.turn()
     expect(h.requests).toHaveLength(0)
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "retry" && n.message.includes("Could not check background work state"))).toBeTrue()
+
+    h.setBusyError(undefined)
+    h.verdicts.push(notMet("recovered"))
+    await h.clock.advance(15_000)
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 
   test("idle check-ins stop after the cap until the user prompts", async () => {
@@ -421,8 +467,8 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(1)
   })
 
-  test("transient failures retry with capped backoff, forever", async () => {
-    h = harness({ maxRetries: 2 })
+  test("transient failures retry with capped backoff and fail at maxRetries", async () => {
+    h = harness({ maxRetries: 5 })
     await h.set()
     h.controller.onExecutionStarted(SID)
     h.controller.onExecutionFailed(SID, { status: 529, message: "Overloaded" })
@@ -440,6 +486,32 @@ describe("GoalController", () => {
     await h.clock.advance(5 * 60_000)
     expect(h.calls.synthetic).toHaveLength(3)
     expect(h.controller.get(SID)?.status).toBe("active")
+    // Two more transient failures exhaust the cap (retries 4 and 5).
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { message: "connection reset" })
+    await h.clock.advance(5 * 60_000)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { message: "connection reset again" })
+    expect(h.controller.get(SID)?.status).toBe("failed")
+    expect(h.controller.get(SID)?.failureLabel).toBe("execution retries exhausted")
+  })
+
+  test("queued stays false during retry backoff and flips only when the retry continuation is dispatched", async () => {
+    await h.set()
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { status: 529, message: "Overloaded" })
+    // No steer dispatched during backoff.
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(14_999)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(1)
+    await flush()
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
   })
 
   test("fatal failures clear the goal; rate limits retry with long backoff and never pause", async () => {
@@ -472,22 +544,34 @@ describe("GoalController", () => {
     await h.set()
     h.controller.onExecutionInterrupted(SID, "shutdown")
     expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
     h.controller.onExecutionInterrupted(SID, "user")
     expect(h.controller.get(SID)?.status).toBe("paused")
   })
 
-  test("evaluator errors retry forever with capped backoff", async () => {
+  test("inactivity interruption keeps queued false during backoff and flips only at retry dispatch", async () => {
+    await h.set()
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionInterrupted(SID, "inactivity")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(14_999)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    await h.clock.advance(1)
+    await flush()
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
+  })
+
+  test("evaluator errors fail the goal at maxRetries", async () => {
     h = harness({ maxRetries: 1 })
     await h.set()
     h.verdicts.push(new Error("boom"))
     await h.turn()
     expect(h.controller.get(SID)?.retries).toBe(1)
-    expect(h.controller.get(SID)?.status).toBe("active")
-    h.verdicts.push(new Error("boom again"))
-    await h.clock.advance(10_000)
-    expect(h.controller.get(SID)?.retries).toBe(2)
-    expect(h.controller.get(SID)?.status).toBe("active")
-    expect(h.controller.get(SID)?.reason).toBeUndefined()
+    expect(h.controller.get(SID)?.status).toBe("failed")
+    expect(h.controller.get(SID)?.failureLabel).toBe("evaluator retries exhausted")
   })
   test("an evaluator timeout surfaces as a named timeout in the notice and retries with bounded backoff", async () => {
     await h.set()
@@ -986,6 +1070,35 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     expect(await third.controller.restore()).toBe(1)
     expect(third.controller.snapshot(SID)?.waiting).toBeFalse()
   })
+
+  test("a busy-check rejection during drain is logged, kept waiting, and retried until it can evaluate", async () => {
+    const warns: Array<{ message: string; extra?: unknown }> = []
+    const log = {
+      info() {},
+      warn(message: string, extra?: unknown) {
+        warns.push({ message, extra })
+      },
+      error() {},
+    }
+    const h = harness({ log })
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    h.setWork({ subagents: 0, shells: 0 })
+    h.setBusyError(new Error("busy check failed"))
+    h.verdicts.push(notMet("recovered"))
+    await h.controller.onBackgroundDrained()
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(warns.some((e) => e.message === "goal busy check failed; will retry")).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "retry" && n.message.includes("Could not check background work state"))).toBeTrue()
+
+    h.setBusyError(undefined)
+    await h.clock.advance(15_000)
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
 })
 
 describe("RPC payload strict-JSON hygiene (host JSONValue gate)", () => {
@@ -1435,5 +1548,426 @@ describe("terminal record pruning after finish (opportunistic)", () => {
     expect(storage.data.has(`goal/v1/${foreignFresh.sessionID}`)).toBe(true) // foreign fresh record kept
     const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
     expect(report?.extra).toMatchObject({ pruned: 1, droppedAged: 1, directories: 2 })
+  })
+
+  describe("staleness, straggler ordering, and recovery regressions", () => {
+    test("busy-check failure preserves carried tool work and recovers evaluation", async () => {
+      const h = harness()
+      await h.set()
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.controller.onToolCalled(SID)
+      h.setBusyError(new Error("busy check failed"))
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(0)
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      h.setBusyError(undefined)
+      h.verdicts.push(notMet())
+      await h.clock.advance(15_000)
+      expect(h.requests).toHaveLength(1)
+      expect(h.controller.get(SID)?.stall).toBe(0)
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    })
+
+    test("straggler succeeded while awaiting retry execution is dropped, then real retry execution is evaluated", async () => {
+      const h = harness()
+      await h.set()
+      // Fail the turn so a retry continuation is scheduled.
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.controller.onExecutionFailed(SID, { message: "socket hang up" })
+      await flush()
+      expect(h.controller.snapshot(SID)?.queued).toBeFalse() // retry dispatch not yet sent
+
+      // Retry continuation dispatches now and marks the session awaiting execution.
+      await h.clock.advance(15_000)
+      expect(h.controller.snapshot(SID)?.queued).toBeTrue()
+      expect(h.calls.synthetic).toHaveLength(1)
+
+      // A stale succeeded delivered before the retry execution starts must be dropped.
+      h.verdicts.push(notMet("spurious"))
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(0)
+      expect(h.controller.get(SID)?.turns).toBe(0)
+
+      // The retry execution starts and completes normally; it must be evaluated.
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.verdicts[0] = notMet("real")
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(1)
+      expect(h.controller.get(SID)?.turns).toBe(1)
+      expect(h.controller.snapshot(SID)?.queued).toBeTrue() // continuation after not_met queued
+    })
+
+    test("evaluator timeout/failure retries with bounded backoff and keeps snapshots non-stuck", async () => {
+      const h = harness()
+      await h.set("the sky is blue")
+      h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 1/3)"))
+      h.controller.onExecutionStarted(SID)
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.controller.get(SID)?.status).toBe("active")
+      expect(h.controller.get(SID)?.retries).toBe(1)
+      expect(h.controller.snapshot(SID)?.evaluating).toBeFalse()
+      expect(h.controller.snapshot(SID)?.queued).toBeFalse()
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+      expect(h.notices.at(-1)?.message).toContain("retrying in 10s")
+
+      h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 2/3)"))
+      await h.clock.advance(10_000)
+      expect(h.controller.get(SID)?.retries).toBe(2)
+      expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
+
+      h.verdicts.push(met("recovered"))
+      await h.clock.advance(30_000)
+      expect(h.controller.get(SID)?.status).toBe("achieved")
+      expect(h.controller.snapshot(SID)?.evaluating).toBeFalse()
+    })
+  })
+
+})
+
+describe("repeated failure-signature escalation", () => {
+  test("pauses after consecutive same-signature not_met verdicts instead of re-arming", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("paused")
+    expect(goal.pauseCause).toBe("repeated_failure")
+    expect(goal.reason).toContain("Repeated failure signature detected")
+    expect(goal.reason).toContain("rotate strategy")
+    // Two continuations for turns 2 and 3; escalation blocks turn 4 re-arm.
+    expect(h.calls.synthetic).toHaveLength(2)
+    expect(h.notices.some((n) => n.kind === "paused" && n.message.includes("Repeated failure signature detected"))).toBe(true)
+  })
+
+  test("different failure signatures do not trigger escalation", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "missing typecheck output" },
+      { verdict: "not_met", reason: "missing commit hash" },
+      { verdict: "not_met", reason: "missing merge evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("active")
+    expect(goal.pauseCause).toBeUndefined()
+    expect(h.calls.synthetic).toHaveLength(3)
+  })
+
+  test("a met verdict breaks a repeated failure streak", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing evidence" },
+      { verdict: "not_met", reason: "same missing evidence" },
+      { verdict: "met", reason: "done" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("achieved")
+    expect(h.calls.synthetic).toHaveLength(2)
+  })
+
+  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ on escalation", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-loop-ctrl-diag-"))
+    try {
+      const h = harness({}, new MemoryStorage(), { required: false, branch: "dev", reason: "test" }, dir)
+      await h.set("fix the failing tests")
+      h.verdicts.push(
+        { verdict: "not_met", reason: "same missing test evidence" },
+        { verdict: "not_met", reason: "same missing test evidence" },
+        { verdict: "not_met", reason: "same missing test evidence" },
+      )
+      await h.turn()
+      await h.turn()
+      await h.turn()
+
+      const goal = h.controller.get(SID)!
+      expect(goal.status).toBe("paused")
+      expect(goal.pauseCause).toBe("repeated_failure")
+
+      const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
+      const files = await readdir(diagDir)
+      expect(files.length).toBe(1)
+      const saved = JSON.parse(await readFile(join(diagDir, files[0]!), "utf8"))
+      expect(saved.signature).toBeString()
+      expect(saved.count).toBe(3)
+      expect(saved.reason).toContain("Repeated failure signature detected")
+      expect(saved.reason).toContain("rotate strategy")
+      expect(Array.isArray(saved.failingChecks)).toBe(true)
+      expect(saved.kind).toBe("reason")
+      expect(saved.summary).toContain("repeated not_met gap")
+      expect(saved.verdictReason).toContain("same missing test evidence")
+      expect(saved.sessionID).toBe(SID)
+      expect(saved.goalID).toBe(goal.id)
+      expect(saved.turn).toBe(3)
+      expect(saved.condition).toBe("fix the failing tests")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("parallel mixed /goal and /goal-loop sessions", () => {
+  function parallelHarness(options: Record<string, unknown> = {}, storage = new MemoryStorage()) {
+    const clock = new FakeClock()
+    const calls = { prompts: [] as any[], synthetic: [] as any[] }
+    const verdictQueues = new Map<string, Array<EvaluationResult | Error | (() => Promise<EvaluationResult>)>>()
+    const summaryQueues = new Map<string, string[]>()
+    const nextGoalQueues = new Map<string, string[]>()
+    const notices: Notice[] = []
+    const changes: Array<{ sessionID: string; goal: GoalSnapshot | null }> = []
+    const logs: Array<{ level: string; message: string; extra?: unknown }> = []
+    const log = {
+      info: (message: string, extra?: unknown) => void logs.push({ level: "info", message, extra }),
+      warn: (message: string, extra?: unknown) => void logs.push({ level: "warn", message, extra }),
+      error: (message: string, extra?: unknown) => void logs.push({ level: "error", message, extra }),
+    }
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const store = new GoalStore(storage, (e) => {
+      throw e
+    })
+    const controller = new GoalController({
+      config: resolveConfig(options),
+      directory: DIR,
+      commit: { required: false, branch: "dev", reason: "test" },
+      clock,
+      store,
+      log,
+      newId: (() => {
+        let n = 0
+        return () => `goal_${++n}`
+      })(),
+      session: {
+        prompt: async (input) => void calls.prompts.push(input),
+        synthetic: async (input) => void calls.synthetic.push(input),
+        usage: async () => ({ cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
+        compact: async () => {},
+      },
+      evaluator: {
+        evaluate: async (request: EvaluationRequest) => {
+          const queue = verdictQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (!next) throw new Error(`no verdict queued for ${request.sessionID} turn ${request.turn}`)
+          if (next instanceof Error) throw next
+          return typeof next === "function" ? next() : next
+        },
+        summarize: async (request: LoopSummaryRequest) => {
+          const queue = summaryQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (next === undefined) throw new Error(`no summary queued for ${request.sessionID}`)
+          return next
+        },
+        nextGoal: async (request: NextGoalRequest) => {
+          const queue = nextGoalQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (next === undefined) throw new Error(`no next goal queued for ${request.sessionID}`)
+          return next
+        },
+      },
+      background,
+      emitter: {
+        changed: (sessionID, goal) => void changes.push({ sessionID, goal }),
+        notice: (n) => void notices.push(n),
+      },
+    })
+    const compactor = new AutoCompactor({
+      config: resolveConfig(options),
+      compact: async () => {},
+      context: async () => [],
+      emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+      clock,
+      log,
+    })
+    const route = createRouter({ controller, background, log, compactor })
+    let eid = 0
+    const ev = (type: string, data: any) => route({ id: `e${++eid}`, type, data })
+    const pushVerdict = (sessionID: string, ...items: Array<EvaluationResult | Error | (() => Promise<EvaluationResult>)>) => {
+      const queue = verdictQueues.get(sessionID) ?? []
+      queue.push(...items)
+      verdictQueues.set(sessionID, queue)
+    }
+    const pushSummary = (sessionID: string, ...items: string[]) => {
+      const queue = summaryQueues.get(sessionID) ?? []
+      queue.push(...items)
+      summaryQueues.set(sessionID, queue)
+    }
+    const pushNext = (sessionID: string, ...items: string[]) => {
+      const queue = nextGoalQueues.get(sessionID) ?? []
+      queue.push(...items)
+      nextGoalQueues.set(sessionID, queue)
+    }
+    const turn = async (sessionID: string, tools = 1) => {
+      controller.onExecutionStarted(sessionID)
+      for (let i = 0; i < tools; i++) controller.onToolCalled(sessionID)
+      await controller.onExecutionSucceeded(sessionID)
+      await flush()
+    }
+    return { clock, calls, notices, changes, logs, controller, background, route, ev, pushVerdict, pushSummary, pushNext, turn }
+  }
+
+  test("parallel plain goal and goal-loop: interleaved completions apply verdicts to correct sessions and loop re-arms on met", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "all tests pass", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "improve the repo", delivery: "steer", loop: true })
+    await flush()
+
+    h.pushVerdict("ses_goal", { verdict: "not_met", reason: "goal still failing" })
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "iteration 1 complete" })
+    h.pushSummary("ses_loop", "summary v1")
+    h.pushNext("ses_loop", "ship v2 improvement")
+
+    // Near-simultaneous completions routed through the real event router (including background drains).
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    await flush()
+
+    const goal = h.controller.get("ses_goal")!
+    const loop = h.controller.get("ses_loop")!
+    expect(goal.status).toBe("active")
+    expect(goal.turns).toBe(1)
+    expect(goal.verdict).toBe("not_met")
+    expect(loop.status).toBe("active")
+    expect(loop.loopEnabled).toBe(true)
+    expect(loop.loopIteration).toBe(2)
+    expect(loop.condition).toBe("ship v2 improvement")
+    expect(loop.loopHistory).toHaveLength(1)
+
+    expect(h.notices.some((n) => n.sessionID === "ses_loop" && n.kind === "loop")).toBe(true)
+    expect(h.calls.synthetic.some((s) => String(s.description).includes("goal · turn 2") && String(s.text).includes("goal still failing"))).toBe(true)
+    expect(h.calls.synthetic.some((s) => String(s.description).includes("arming v2"))).toBe(true)
+    expect(h.logs.filter((l) => l.level === "error")).toHaveLength(0)
+  })
+
+  test("slow evaluation in one session does not stall or stale the other session", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await flush()
+
+    let resolveGoal: ((v: EvaluationResult) => void) | undefined
+    h.pushVerdict("ses_goal", () => new Promise<EvaluationResult>((resolve) => { resolveGoal = resolve }))
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "loop met" })
+    h.pushSummary("ses_loop", "loop summary")
+    h.pushNext("ses_loop", "loop v2")
+
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    await flush()
+
+    await h.turn("ses_loop")
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+    expect(resolveGoal).toBeDefined()
+
+    resolveGoal!({ verdict: "not_met", reason: "goal pending" })
+    await flush()
+    await flush()
+
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+    expect(h.logs.some((l) => l.level === "warn" && String(l.message).includes("stale"))).toBe(false)
+  })
+
+  test("cross-session background-drain events during in-flight evaluations do not drop verdicts or loop re-arm", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await flush()
+
+    let resolveGoal: ((v: EvaluationResult) => void) | undefined
+    let resolveLoop: ((v: EvaluationResult) => void) | undefined
+    h.pushVerdict("ses_goal", () => new Promise<EvaluationResult>((resolve) => { resolveGoal = resolve }))
+    h.pushVerdict("ses_loop", () => new Promise<EvaluationResult>((resolve) => { resolveLoop = resolve }))
+
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    await flush()
+    expect(resolveGoal).toBeDefined()
+    expect(resolveLoop).toBeDefined()
+
+    for (let i = 0; i < 5; i++) {
+      h.ev("shell.updated", { info: { id: `sh_${i}`, status: "running", metadata: { sessionID: "other" } } })
+      h.ev("shell.exited", { id: `sh_${i}` })
+    }
+    await flush()
+
+    h.pushSummary("ses_loop", "summary")
+    h.pushNext("ses_loop", "v2")
+    resolveLoop!({ verdict: "met", reason: "loop done" })
+    await flush()
+    await flush()
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+
+    resolveGoal!({ verdict: "not_met", reason: "goal not yet" })
+    await flush()
+    await flush()
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+    expect(h.logs.filter((l) => l.level === "error")).toHaveLength(0)
+  })
+
+  test("background work owned by one session does not block or hide the other session's evaluation", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await flush()
+
+    h.ev("shell.created", { info: { id: "sh_loop", status: "running", metadata: { sessionID: "ses_loop" } } })
+    await flush()
+
+    h.pushVerdict("ses_goal", { verdict: "not_met", reason: "goal progressed" })
+    await h.turn("ses_goal")
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    expect(h.controller.get("ses_loop")!.turns).toBe(0)
+    expect(h.controller.snapshot("ses_loop")?.waiting).toBe(true)
+
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "loop v1" })
+    h.pushSummary("ses_loop", "sum")
+    h.pushNext("ses_loop", "loop v2")
+    h.ev("shell.exited", { id: "sh_loop" })
+    await flush()
+    await flush()
+
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+    expect(h.controller.get("ses_loop")!.condition).toBe("loop v2")
   })
 })

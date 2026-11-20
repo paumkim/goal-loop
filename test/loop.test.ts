@@ -58,8 +58,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const nextGoals: string[] = []
   const summaryRequests: LoopSummaryRequest[] = []
   const nextGoalRequests: NextGoalRequest[] = []
-  // Test hook: when set, the next-goal generator awaits this gate before replying (simulates an in-flight planner).
-  const gate: { nextGoal?: Promise<void>; evaluate?: Promise<void> } = {}
+  // Test hook: when set, the summarizer/next-goal generator/evaluator awaits this gate before replying (simulates in-flight steps).
+  const gate: { summarize?: Promise<void>; nextGoal?: Promise<void>; evaluate?: Promise<void> } = {}
   // Test hook: when set, the first matching synthetic call awaits this gate before delivering (simulates a slow steer round-trip).
   const syntheticGate: { promise?: Promise<void>; match?: string } = {}
   // Test hook: when set, every synthetic call throws (simulates the host rejecting the dispatch).
@@ -79,7 +79,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   let usageValue: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
-    config: resolveConfig(options),
+    config: resolveConfig({ learning: { enabled: false }, ...options }),
     directory: typeof options.directory === "string" ? options.directory : DIR,
     commit,
     clock,
@@ -115,6 +115,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
       },
       summarize: async (request: LoopSummaryRequest) => {
         summaryRequests.push(request)
+        if (gate.summarize) await gate.summarize
         const next = summaries.shift()
         if (next === undefined) throw new Error("no summary queued")
         return next
@@ -357,11 +358,11 @@ describe("/goal-loop", () => {
     expect(record.loopHistory?.map((e) => e.toolCalls)).toEqual([0, 0])
   })
 
-  test("user prompt during next-goal generation drops the half-advanced state", async () => {
+  test("user prompt during next-goal generation recovers the loop advance without losing iteration progress", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
-    h.summaries.push("s1")
-    h.nextGoals.push("v2 condition")
+    h.summaries.push("s1", "s1")
+    h.nextGoals.push("v2 condition", "v2 condition")
     let release!: () => void
     h.gate.nextGoal = new Promise<void>((resolve) => (release = resolve))
     const turnPromise = h.turn(1)
@@ -370,11 +371,71 @@ describe("/goal-loop", () => {
     release()
     await turnPromise
     await flush()
+    // Supersession-race recovery retries the advance instead of dropping progress.
+    await h.clock.advance(15_000)
+    await flush()
     const record = h.controller.get(SID)!
-    expect(record.condition).toBe("objective")
-    expect(record.loopIteration ?? 1).toBe(1)
-    expect(record.loopHistory ?? []).toHaveLength(0)
     expect(record.status).toBe("active")
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopIteration).toBe(2)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    const v2Arming = h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))
+    expect(v2Arming).toHaveLength(1)
+  })
+
+
+  test("loop-advance summary stale-drop recovery re-arms without losing iteration progress", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1", "s1")
+    h.nextGoals.push("v2 condition", "v2 condition")
+    let release!: () => void
+    h.gate.summarize = new Promise<void>((resolve) => (release = resolve))
+    const turnPromise = h.turn(1)
+    await flush() // evaluation finished; the loop is now awaiting the gated summary step
+    h.controller.onUserPrompt(SID) // supersession race invalidates the in-flight summary step
+    release()
+    await turnPromise
+    await flush()
+    await h.clock.advance(15_000)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopIteration).toBe(2)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))).toHaveLength(1)
+  })
+
+  test("a supersession race after the arm commit still dispatches exactly one continuation for the armed iteration", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    ;(h.controller as any).deps.compactAtBoundary = async (sessionID: string, opts?: { force?: boolean }) => {
+      h.compactCalls.push(opts ? { sessionID, opts } : { sessionID })
+      await gate
+      return { requested: true, estimatedTokens: 250_000 }
+    }
+    const turnPromise = h.turn(1)
+    await flush()
+    // The arm commit has durably advanced the record to v2; the tail is blocked in boundary compaction.
+    h.controller.onUserPrompt(SID)
+    release()
+    await turnPromise
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(2)
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    const v2Steers = h.calls.synthetic.filter((s) => String(s.description) === "goal-loop · arming v2")
+    expect(v2Steers).toHaveLength(1)
   })
 
   test("summary failure is recorded and the loop advances anyway", async () => {
@@ -976,11 +1037,13 @@ describe("/goal-loop", () => {
   test("an armed loop never pauses at the turn cap; it notifies once and keeps arming", async () => {
     const h3 = harness({ maxTurns: 1 })
     await h3.setLoop("improve the parser")
-    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    // Distinct reasons avoid repeated-failure-signature escalation; this test asserts cap guards never pause loops.
+    h3.verdicts.push(notMet("not yet: turn cap check A"), notMet("not yet: turn cap check B"), notMet("not yet: turn cap check C"))
     await h3.turn()
     await h3.turn()
     await h3.turn()
     expect(h3.controller.get(SID)?.status).toBe("active")
+    expect(h3.controller.get(SID)?.pauseCause).not.toBe("repeated_failure")
     const capNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("Turn cap"))
     expect(capNotices).toHaveLength(1)
   })
@@ -988,11 +1051,13 @@ describe("/goal-loop", () => {
   test("an armed loop never pauses at the stall guard; it notifies once and keeps running", async () => {
     const h3 = harness({ stallTurns: 2 })
     await h3.setLoop("improve the parser")
-    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    // Distinct reasons avoid repeated-failure-signature escalation; this test asserts stall guards never pause loops.
+    h3.verdicts.push(notMet("not yet: stall check A"), notMet("not yet: stall check B"), notMet("not yet: stall check C"))
     await h3.turn(0)
     await h3.turn(0)
     await h3.turn(0)
     expect(h3.controller.get(SID)?.status).toBe("active")
+    expect(h3.controller.get(SID)?.pauseCause).not.toBe("repeated_failure")
     const stallNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("No progress"))
     expect(stallNotices).toHaveLength(1)
   })
@@ -1304,7 +1369,7 @@ describe("loop prompts", () => {
     expect(text).toContain("Already satisfied at HEAD")
   })
 
-  test("evaluator rubric is a defensive auditor: stale/weakened state forces not_met, met reasons carry a next: hint", () => {
+  test("evaluator rubric is a defensive auditor: stale/weakened state forces not_met, reasons carry structured next actions", () => {
     for (const text of [
       Prompt.evaluateInSession("do it", { turn: 2, elapsedMs: 1000 }, { required: false, branch: "dev", reason: "t" }),
       Prompt.evaluateIndependently("do it", { turn: 2, elapsedMs: 1000 }, "transcript", { required: false, branch: "dev", reason: "t" }),
@@ -1313,8 +1378,9 @@ describe("loop prompts", () => {
       expect(text).toContain("weakened")
       expect(text).toContain("contradicted by fresher output")
       expect(text).toContain("bought by weakening a test")
-      expect(text).toContain('prefixed "next:"')
-      expect(text).toContain("single next concrete step")
+      expect(text).toContain("next: none")
+      expect(text).toContain("[priority/risk] <exact improvement>")
+      expect(text).toContain("Name the most critical falsifiable gap")
     }
   })
 
@@ -1607,7 +1673,7 @@ describe("/goal-loop failure modes", () => {
     expect(halfArmed).toHaveLength(0)
   })
 
-  test("a user prompt landing during the arm's persist suppresses the arm announcement", async () => {
+  test("a user prompt landing during the arm's persist recovers continuation without announcing the arm", async () => {
     const storage = new MemoryStorage()
     const h = harness({}, storage)
     await h.setLoop("objective")
@@ -1630,8 +1696,9 @@ describe("/goal-loop failure modes", () => {
     await turn
     await flush()
     const record = h.controller.get(SID)!
-    // The superseded loop step must not announce the arm into a world that moved on.
-    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
+    // The superseded loop step must not toast the arm into a world that moved on, but must
+    // still recover the continuation so the armed iteration cannot stall.
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(1)
     expect(h.notices.filter((n) => n.kind === "loop")).toHaveLength(0)
     // The armed state itself is still durably written; a restore lands on v2.
     expect(record.condition).toBe("v2 condition")
@@ -1800,6 +1867,37 @@ describe("re-arm boundary no-new-gap refusal contract (LIV)", () => {
     expect(record.reason).toMatch(/already-completed/i)
     expect(record.loopIteration).toBe(2)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
+  })
+
+  // The arming scan reuses completedLedgerHit (Workstream XCIII); refusing an exact normalized repeat must
+  // keep the exact-repeat wording while a near-duplicate keeps its own, so the two remain distinguishable.
+  test("the re-arm refusal wording still distinguishes an exact repeat from a near-duplicate", async () => {
+    const exact = harness()
+    await exact.setLoop("objective")
+    exact.verdicts.push(met("v1 done"))
+    exact.summaries.push("s1")
+    exact.nextGoals.push("tighten the widget")
+    await exact.turn() // arms v2 = "tighten the widget"
+    exact.verdicts.push(met("v2 done"))
+    exact.summaries.push("s2")
+    exact.nextGoals.push("Tighten the widget.") // normalized repeat of the completed v2 condition
+    await exact.turn()
+    const exactReason = exact.controller.get(SID)!.reason!
+    expect(exactReason).toContain("already-completed condition")
+    expect(exactReason).not.toContain("near-duplicate")
+
+    const near = harness()
+    await near.setLoop("objective")
+    near.verdicts.push(met("v1 done"))
+    near.summaries.push("s1")
+    near.nextGoals.push("tighten the widget")
+    await near.turn() // arms v2 = "tighten the widget"
+    near.verdicts.push(met("v2 done"))
+    near.summaries.push("s2")
+    near.nextGoals.push("tighten the widgets in the widget suite") // token containment 1.0 vs the completed v2 condition
+    await near.turn()
+    const nearReason = near.controller.get(SID)!.reason!
+    expect(nearReason).toContain("near-duplicate of an already-completed condition")
   })
 })
 
@@ -2345,6 +2443,17 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(record.loopIteration).toBe(1) // the loop did not advance
   })
 
+  test("(vii-c) a zero-tool-call producing-condition met on a later turn is accepted when the evaluator judges it met", async () => {
+    await h.setGoal("add a failing test for the parser")
+    h.verdicts.push(notMet("wrote the test but it does not fail yet"), met("test added and fails as required"))
+    await h.turn(1) // turn 1: did work
+    await h.turn(0) // turn 2: 0 tool calls, evaluator sees prior evidence in conversation
+    const record = h.controller.get(SID)!
+    expect(record.verdict).toBe("met")
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toBe("test added and fails as required")
+  })
+
   test("(vii-d) the iteration cap counts retained history plus dropped entries, not the saturated slice", async () => {
     await h.setLoop("add a failing test for the parser")
     const record = h.controller.get(SID)!
@@ -2699,5 +2808,131 @@ describe("terminal goals are inert after compaction", () => {
     expect(second.controller.consumeAnchor(SID)).toBeUndefined()
     const persisted = await second.controller.peekSnapshot(SID)
     expect(persisted?.status).toBe("cleared")
+  })
+})
+
+describe("/goal-loop backlog planner integration", () => {
+  function writeBacklog(dir: string, data: unknown) {
+    const docs = join(dir, "docs")
+    mkdirSync(docs, { recursive: true })
+    writeFileSync(join(docs, "improvement-backlog.json"), JSON.stringify(data, null, 2) + "\n")
+  }
+
+  const seedBacklog = () => ({
+    version: 1,
+    items: [
+      {
+        id: "verification-matrix-beyond-check",
+        title: "Goal/profile-aware verification matrix",
+        category: "verification",
+        priority: 1,
+        impact: "high",
+        risk: "medium",
+        status: "open",
+        finding: "Gates are narrower than system health.",
+        improvement: "Add a verification/invariant matrix per iteration.",
+        evidence: ["blind spot #1"],
+        dedupeKeys: ["verification-matrix", "goal-aware-verification"],
+      },
+      {
+        id: "persistent-prioritized-backlog-dedup",
+        title: "Persistent prioritized backlog with de-dup",
+        category: "planning",
+        priority: 1,
+        impact: "high",
+        risk: "low",
+        status: "open",
+        finding: "No durable backlog.",
+        improvement: "Maintain a machine-readable backlog and de-dup.",
+        evidence: ["blind spot #3"],
+        dedupeKeys: ["persistent-backlog", "backlog-dedup"],
+      },
+      {
+        id: "failure-signature-strategy-escalation",
+        title: "Failure-signature detection and escalation",
+        category: "planning",
+        priority: 2,
+        impact: "high",
+        risk: "medium",
+        status: "open",
+        finding: "Repeated not-met loops can cycle.",
+        improvement: "Detect repeated failure signatures and escalate strategy.",
+        evidence: ["blind spot #4"],
+        dedupeKeys: ["failure-signature-detection", "strategy-escalation"],
+      },
+    ],
+  })
+
+  test("surfaces the highest-priority unblocked backlog item to the planner", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-"))
+    writeBacklog(dir, seedBacklog())
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("baseline done"))
+    h.summaries.push("baseline iteration complete")
+    h.nextGoals.push("implement the highest-priority backlog improvement")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    const suggestion = h.nextGoalRequests[0]!.backlogSuggestion
+    expect(suggestion).toBeDefined()
+    // Priority 1 tie: same impact; lower risk wins (persistent-prioritized-backlog-dedup: low risk).
+    expect(suggestion!.id).toBe("persistent-prioritized-backlog-dedup")
+    expect(suggestion!.title).toBe("Persistent prioritized backlog with de-dup")
+    expect(suggestion!.evidence).toContain("blind spot #3")
+  })
+
+  test("de-duplicates backlog items against completed conditions and history", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-"))
+    writeBacklog(dir, seedBacklog())
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    // Iteration 1 summary is neutral, so the highest-priority unblocked item is suggested.
+    // Iteration 2 summary references that item's dedupe keys, so it is excluded on the next planning call.
+    h.verdicts.push(met("baseline done"), met("backlog shipped"))
+    h.summaries.push("general baseline cleanup", "implemented persistent-backlog ledger and backlog-dedup selection")
+    h.nextGoals.push("add verification matrix coverage", "detect failure signatures")
+    await h.turn()
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(2)
+    const first = h.nextGoalRequests[0]!.backlogSuggestion
+    expect(first).toBeDefined()
+    expect(first!.id).toBe("persistent-prioritized-backlog-dedup")
+
+    const second = h.nextGoalRequests[1]!.backlogSuggestion
+    expect(second).toBeDefined()
+    expect(second!.id).not.toBe("persistent-prioritized-backlog-dedup")
+    // Iteration 2 condition/summary de-dupe both priority-1 items in this scenario, so the next unblocked item is selected.
+    expect(second!.id).toBe("failure-signature-strategy-escalation")
+  })
+
+  test("falls back when the backlog ledger is missing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-missing-"))
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("done"))
+    h.summaries.push("done")
+    h.nextGoals.push("next step")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    expect(h.nextGoalRequests[0]!.backlogSuggestion).toBeUndefined()
+  })
+
+  test("falls back when the backlog ledger is invalid", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-invalid-"))
+    const docs = join(dir, "docs")
+    mkdirSync(docs, { recursive: true })
+    writeFileSync(join(docs, "improvement-backlog.json"), "{ not json")
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("done"))
+    h.summaries.push("done")
+    h.nextGoals.push("next step")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    expect(h.nextGoalRequests[0]!.backlogSuggestion).toBeUndefined()
   })
 })

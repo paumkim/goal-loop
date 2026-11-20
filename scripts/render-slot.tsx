@@ -69,9 +69,10 @@ const goal: GoalSnapshot = {
   spend: { input: 1_480_000, output: 2_100, reasoning: 0, cacheRead: 739_000, cacheWrite: 0, cost: 0.9 },
 }
 
-// The pill line exactly as tui.tsx composes it (post-Workstream-XV: no leading glyph; the breath
-// dot is part of the model text at the given phase). Budget mirrors tui.tsx: width − 2.
-const model = pillModel(goal, 1000 * 60 * 42, false, Math.max(1, terminal - 2), 2)!
+// The pill line exactly as tui.tsx composes it (post-Workstream XV: no leading glyph; the breath
+// dot is part of the model text at the given phase). The leading icon owns cell 0 — no left padding —
+// so the label keeps a 1-cell right margin (tui.tsx: width − 1 margin − 2 caret).
+const model = pillModel(goal, 1000 * 60 * 42, false, Math.max(1, terminal - 1), 2)!
 const pillLine = model.text
 const tone = theme.text.muted // working goal, reduced-color posture not requested — muted like the live TUI
 const cardRows = hudCardRows(goal, false, Math.max(8, 40 - 2), terminal)
@@ -103,7 +104,7 @@ const mount = async (name: string, cardOpen: boolean) => {
         {/* The pill mount, gate and all: `<Show when={!cardFor()}>` — the pill never mounts while
             the card is open. */}
         {!cardOpen ? (
-          <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={1} flexDirection="row">
+          <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={0} flexDirection="row">
             <text fg={tone} wrapMode="none" attributes={TextAttributes.BOLD}>
               {pillLine}
             </text>

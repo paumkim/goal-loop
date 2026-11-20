@@ -115,7 +115,7 @@ describe("parseVerdict", () => {
     expect(parseVerdict('{"verdict":"infeasible"}')?.verdict).toBe("impossible")
   })
   test("long reasons are clamped", () => {
-    expect(parseVerdict(JSON.stringify({ verdict: "met", reason: "a".repeat(2000) }))!.reason.length).toBeLessThanOrEqual(600)
+    expect(parseVerdict(JSON.stringify({ verdict: "met", reason: "a".repeat(5000) }))!.reason.length).toBeLessThanOrEqual(4000)
   })
   test("forward-pointer gate: a met on the already-satisfied path without a next: line fails closed to not_met", () => {
     const out = parseVerdict('{"verdict":"met","reason":"Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration."}')
@@ -142,6 +142,24 @@ describe("parseVerdict", () => {
   test("forward-pointer gate: not_met and impossible are never gated", () => {
     expect(parseVerdict('{"verdict":"not_met","reason":"already satisfied but tempted"}')?.verdict).toBe("not_met")
     expect(parseVerdict('{"verdict":"impossible","reason":"already satisfied with something unavailable"}')?.verdict).toBe("impossible")
+  })
+  test("structured reasons with clause matrix and next actions parse (compatibility)", () => {
+    const met = parseVerdict(JSON.stringify({
+      verdict: "met",
+      reason: "(a) Clause 1: clause=commit landed, required=commit hash+branch, observed=abc1234 on wt/x merged to dev, status=satisfied, source/turn=turn 3.\\n(b) Gaps/flaws/risks: none material. What would falsify met? hidden regression in untested path. What important risk is untested? integration smoke.\\n(c) Repeated-failure/escalation: none.\\nnext: none",
+    }))
+    expect(met?.verdict).toBe("met")
+    expect(met?.reason).toContain("clause=commit landed")
+    expect(met?.reason).toContain("What would falsify met?")
+    expect(met?.reason).toContain("next: none")
+
+    const notMet = parseVerdict(JSON.stringify({
+      verdict: "not_met",
+      reason: "(a) Clause 1: clause=tests pass, required=bun run check output, observed=none, status=missing, source/turn=n/a.\\n(b) Gaps/flaws/risks: missing fresh gate evidence. What would falsify met? tests fail. What important risk is untested? build artifacts.\\n(c) Repeated-failure/escalation: none.\\nnext:\\n1. [high/risk] Run and show bun run check in worktree — gap/finding: no fresh gate output — proof: terminal output with exit 0.",
+    }))
+    expect(notMet?.verdict).toBe("not_met")
+    expect(notMet?.reason).toContain("status=missing")
+    expect(notMet?.reason).toContain("next:")
   })
 })
 
@@ -515,15 +533,41 @@ describe("prompts", () => {
     expect(text).toContain("Harness facts")
     expect(text).toContain("runs inside a git repository")
   })
-  test("the evaluator rubric grades condition fit, novelty and the honest next gap (XLIV)", () => {
+  test("the evaluator rubric requires clause/evidence matrix, adversarial checks, and honest next actions (LXXXVII)", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }
     const session = evaluateInSession("work the merged plan", facts, COMMIT)
-    for (const token of ["Condition fit", "Novelty / no-duplicate", "token containment >= 0.7 or Jaccard >= 0.6", "duplicate-without-forward-pointer", "Honest next gap"]) {
+    for (const token of [
+      "clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn",
+      "What would falsify met?",
+      "What important risk is untested?",
+      "Green but unscoped is insufficient for broad goals",
+      "repeated failure signatures",
+      "strategy escalation",
+      "duplicate-without-forward-pointer",
+      "next: none",
+    ]) {
       expect(session).toContain(token)
     }
     const independent = evaluateIndependently("work the merged plan", facts, "transcript", COMMIT)
-    for (const token of ["Condition fit", "Novelty / no-duplicate", "duplicate-without-forward-pointer", "Honest next gap"]) {
+    for (const token of [
+      "evidence matrix per clause",
+      "What would falsify met?",
+      "repeated failure signatures",
+      "duplicate-without-forward-pointer",
+      "next: none",
+    ]) {
       expect(independent).toContain(token)
+    }
+  })
+  test("the evaluator rubric requires verifier-command corroboration for broad conditions (XCIV)", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    for (const text of [
+      evaluateInSession("improve the whole codebase and verify end to end", facts, COMMIT),
+      evaluateIndependently("improve the whole codebase and verify end to end", facts, "transcript", COMMIT),
+    ]) {
+      expect(text).toContain("Broad-condition verifier corroboration")
+      expect(text).toContain("transcript-only green does not corroborate a broad claim")
+      expect(text).toContain("missing verifier-command corroboration")
     }
   })
   test("no commit rule in the rubric when it does not apply", () => {

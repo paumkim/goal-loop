@@ -56,16 +56,108 @@ export interface UsageSnapshot {
 
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
+export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
+
+export type VerifyEvidenceMode = "command" | "artifact" | "either"
+export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
+type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
+
+/** Evidence captured for one verification-matrix check (additive, persisted in verdict trail). */
+export interface VerifyCheckEvidence {
+  readonly id: string
+  readonly type: VerifyCheckType
+  readonly label?: string
+  readonly command: string
+  /** Where this check came from (additive). */
+  readonly source?: VerifyCheckSource
+  /** Declared/allowed evidence mode (additive, default command for legacy). */
+  readonly evidenceMode?: VerifyEvidenceMode
+  /** How this result was satisfied/produced for this evaluation (additive). */
+  readonly runState?: VerifyCheckRunState
+  readonly required: boolean
+  /** True when this check/evidence was scoped for the evaluated goal/profile. */
+  readonly scoped: boolean
+  /** Deterministic scope/coverage decision summary (additive). */
+  readonly scopeDecision?: string
+  readonly pass: boolean
+  /** Exit code; null when no command exit applies. */
+  readonly code: number | null
+  readonly timedOut?: boolean
+  /** Last lines of command output or artifact evidence excerpt, display-safe, capped. */
+  readonly tail?: string
+  /** Concrete reason when missing/unscoped/failed/skipped. */
+  readonly reason?: string
+  /** Concrete next action when unmet (additive). */
+  readonly nextAction?: string
+  /** Wall-clock duration in ms for this check execution/evaluation (additive). */
+  readonly durationMs?: number
+  /** True when this result reused an identical fresh check result from the same evaluated turn/HEAD (additive). */
+  readonly reused?: boolean
+  /** Reuse source key/label when reused (additive). */
+  readonly reusedFrom?: string
+  /** True when executed concurrently with other checks in this matrix run (additive). */
+  readonly parallel?: boolean
+  /** Concurrency slot/index metadata (additive). */
+  readonly concurrency?: number
+  /** True when skipped by configured semantics/short-circuit (additive). */
+  readonly skipped?: boolean
+  /** Required artifact patterns declared for artifact/either evidence checks (additive). */
+  readonly artifactPatterns?: readonly string[]
+  /** Artifact patterns matched as fresh scoped transcript/artifact evidence (additive). */
+  readonly artifactMatched?: readonly string[]
+  /** Artifact patterns still missing for artifact evidence satisfaction (additive). */
+  readonly artifactMissing?: readonly string[]
+  /** Explicit execution/evidence mode label for reporting (additive). */
+  readonly executionMode?: "command" | "artifact" | "reused-command" | "reused-artifact" | "skipped"
+}
+
+/** Profile-aware matrix evidence recorded for a candidate met verdict (legacy single verifyCommand is represented as one check). */
+export interface VerdictVerificationMatrix {
+  /** Resolved profile label (e.g. default, broad, custom). */
+  readonly profile: string
+  readonly broadGoal: boolean
+  readonly pass: boolean
+  readonly checks: readonly VerifyCheckEvidence[]
+  /** Required check ids/types that were missing, unscoped, or not satisfied. */
+  readonly missing: readonly string[]
+  /** Deterministic scope/coverage policy reasons (additive). */
+  readonly coverageReasons?: readonly string[]
+  /** Timing/concurrency summary (additive). */
+  readonly timing?: {
+    readonly totalMs: number
+    readonly concurrency: number
+    readonly parallel: boolean
+    readonly reused: number
+    readonly executed: number
+    readonly skipped: number
+  }
+  /** Parsed/flagged malformed goal-declared directives (additive; never executed). */
+  readonly malformedGoalChecks?: readonly { readonly raw: string; readonly reason: string }[]
+}
+
 export interface VerdictEntry {
   readonly turn: number
   readonly verdict: Verdict
   readonly reason: string
   readonly at: number
   /** Tool calls the evaluating turn used (0 = the turn produced nothing — at a met verdict that means the condition already held at HEAD). Absent on records written before this field landed; never fabricated. */
-  readonly toolCalls?: number  /** Marginal usage this turn consumed (delta against the previous turn's measurement; the first turn diffs against the arm-time reading). Absent on records written before this field landed or when the host cannot measure — never estimated. */
+  readonly toolCalls?: number
+  /** Marginal usage this turn consumed (delta against the previous turn's measurement; the first turn diffs against the arm-time reading). Absent on records written before this field landed or when the host cannot measure — never estimated. */
   readonly spend?: UsageSnapshot
   /** The sha HEAD resolved to when this turn was evaluated (the loop rail stamps it at advance; the per-verdict ledger matches). Absent outside a repository or when HEAD could not be read — never guessed. */
   readonly sha?: string
+  /**
+   * Verification gate evidence when `evaluator.verifyCommand` ran for this evaluated turn (pass, or a met verdict downgraded to not_met by the gate).
+   * Additive; absent when no gate ran for the turn. Records explicit pass/fail evidence in the verdict trail.
+   */
+  readonly verify?: {
+    readonly command: string
+    readonly code: number | null
+    readonly timedOut?: boolean
+    readonly tail?: string
+  }
+  /** Profile-aware verification matrix evidence for this turn (additive; preferred over legacy single `verify` when present). */
+  readonly verification?: VerdictVerificationMatrix
 }
 
 /** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */
@@ -182,7 +274,7 @@ export const MAX_TERMINAL_RECORD_ENTRIES = 50
 /** Terminal records whose last-activity stamp (`endedAt`, falling back to `startedAt`) is older than this are pruned. */
 export const TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
-export interface TerminalPruneSelection {
+interface TerminalPruneSelection {
   /** sessionIDs of the records to remove. */
   readonly pruned: string[]
   /** How many were pruned by the age cap. */
@@ -256,7 +348,7 @@ export interface LoopCompactState {
 }
 
 /** Why the goal paused. Machine-readable so the HUD can render the exact remedy instead of a generic hint; absent on records persisted before this field existed (restore falls back to the generic line). */
-export type PauseCause = "cap" | "stall" | "user"
+export type PauseCause = "cap" | "stall" | "user" | "repeated_failure"
 
 export interface GoalRecord {
   readonly version: 1
@@ -299,6 +391,8 @@ export interface GoalRecord {
     /** ms since epoch (the shared clock). */
     readonly at: number
   }
+  /** Latest profile-aware verification matrix run (additive; observational, persisted like lastVerify). */
+  lastVerification?: (VerdictVerificationMatrix & { readonly at: number })
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */

@@ -90,33 +90,47 @@ ensure_state() {
   fi
 }
 
-# Atomic state write: jq args + filter, STATE_FILE is appended here. Uses mktemp + mv in DATA_DIR.
-# Every read-modify-write of state.json is serialized on one short-lived mutex so a claim, a
-# submit or a merging lease-finish cannot overwrite another writer's lease record. Blocking flock;
-# without flock there is no exclusion (same posture as the lock-file mkdir paths).
-state_jq() {
+# One mutex for every state write/read-modify-write: $DATA_DIR/.state.lock.
+# Callers that need to read, decide, and write atomically hold the lock across
+# the whole critical section and re-read $STATE_FILE while holding it.
+state_lock() {
+  mkdir -p "$DATA_DIR"
+  exec 8<>"$DATA_DIR/.state.lock" || { printf 'error: cannot open state lock\n' >&2; exit 1; }
+  if command -v flock >/dev/null 2>&1; then flock 8 || { printf 'error: cannot lock state\n' >&2; exit 1; }; fi
+}
+
+state_unlock() {
+  if command -v flock >/dev/null 2>&1; then flock -u 8 2>/dev/null || true; fi
+  { exec 8>&-; } 2>/dev/null || true
+}
+
+# Write while the caller already holds the state lock. Re-reads $STATE_FILE.
+state_write_filter() {
   local tmp
   tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
-  (
-    exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 1
-    if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
-    if ! jq "$@" "$STATE_FILE" > "$tmp"; then
-      rm -f "$tmp"
-      printf 'error: failed to update coordinator state\n' >&2
-      exit 1
-    fi
-    chmod 644 "$tmp" 2>/dev/null || true
-    mv "$tmp" "$STATE_FILE" || {
-      rm -f "$tmp"
-      printf 'error: failed to move coordinator state into place\n' >&2
-      exit 1
-    }
-  )
-  local rc=$?
-  if [ "$rc" -ne 0 ]; then
+  if ! jq "$@" "$STATE_FILE" > "$tmp"; then
+    rm -f "$tmp"
+    printf 'error: failed to update coordinator state\n' >&2
     exit 1
   fi
-  return 0
+  chmod 644 "$tmp" 2>/dev/null || true
+  # Test hook: widen the critical section to exercise concurrency deterministically.
+  if [ -n "${COORDINATOR_TEST_STATE_WRITE_SLEEP:-}" ]; then
+    sleep "$COORDINATOR_TEST_STATE_WRITE_SLEEP"
+  fi
+  mv -f "$tmp" "$STATE_FILE" || {
+    rm -f "$tmp"
+    printf 'error: failed to move coordinator state into place\n' >&2
+    exit 1
+  }
+}
+
+# Atomic state write: acquires the state mutex, re-reads, applies jq filter, mv -f.
+# Route all mutations through this helper (or state_write_filter under an already-held lock).
+state_jq() {
+  state_lock
+  state_write_filter "$@"
+  state_unlock
 }
 
 slugify() {
@@ -369,53 +383,13 @@ do_claim() {
   branch="wt/$slug"
   worktree="$WORKTREE_DIR/wt-$slug"
 
-  # acquire the claim lock: flock on .claim-lock-file (fd 9) plus mkdir .claim-lock
-  # (stale after 60 minutes). Held across the lease check, branch/worktree
-  # creation, and state write so parallel claims cannot race; released on all
-  # exit paths via the EXIT trap.
-  local claim_lock_dir="$DATA_DIR/.claim-lock"
-  local claim_lock_file="$DATA_DIR/.claim-lock-file"
-  mkdir -p "$DATA_DIR"
-  exec 9>"$claim_lock_file" || { printf 'error: cannot open claim lock file\n' >&2; exit 1; }
-  if command -v flock >/dev/null 2>&1; then
-    if ! flock -n 9; then
-      printf 'error: claim lock held\n' >&2
-      exec 9>&- 2>/dev/null || true
-      exit 1
-    fi
-  fi
-  if ! mkdir "$claim_lock_dir" 2>/dev/null; then
-    if [ -d "$claim_lock_dir" ] && [ -n "$(find "$claim_lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
-      printf 'warning: removing stale claim lock\n' >&2
-      # mv is atomic: exactly one contender renames the stale dir aside; the rest fail and exit,
-      # so a stale-reclaim can never delete the dir another process just created for itself.
-      if mv "$claim_lock_dir" "${claim_lock_dir}.stale.$$" 2>/dev/null; then
-        rm -rf "${claim_lock_dir}.stale.$$"
-      else
-        printf 'error: claim lock held\n' >&2
-        exec 9>&- 2>/dev/null || true
-        exit 1
-      fi
-      if ! mkdir "$claim_lock_dir" 2>/dev/null; then
-        printf 'error: claim lock held\n' >&2
-        exec 9>&- 2>/dev/null || true
-        exit 1
-      fi
-    else
-      printf 'error: claim lock held\n' >&2
-      exec 9>&- 2>/dev/null || true
-      exit 1
-    fi
-  fi
-  release_claim_lock() {
-    rmdir "$claim_lock_dir" 2>/dev/null || true
-    if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
-    exec 9>&- 2>/dev/null || true
-    trap - EXIT
-  }
+  # One mutex for the whole claim: re-read state inside the lock, check, create
+  # branch/worktree, and write the lease. This prevents lost updates.
+  state_lock
+  release_claim_lock() { state_unlock; trap - EXIT; }
   trap 'release_claim_lock' EXIT
 
-  # guard overwrite: an existing lease is never silently overwritten (re-checked inside the lock)
+  # guard overwrite: re-checked inside the state lock
   if [ "$force" -eq 0 ]; then
     local exists
     exists=$(jq -r --arg s "$slug" 'if .leases[$s] then "yes" else "no" end' "$STATE_FILE" 2>/dev/null || printf 'no')
@@ -426,7 +400,7 @@ do_claim() {
     fi
   fi
 
-  # overlap is a hard error unless --force is given (against live leases only)
+  # overlap is a hard error unless --force is given (against live leases only), re-read inside lock
   if ! check_overlap "$paths" "$slug" "$force"; then
     release_claim_lock
     exit 1
@@ -469,8 +443,7 @@ do_claim() {
 
   local ts
   ts=$(now_iso)
-  state_jq --arg slug "$slug" --arg agent "$agent" --arg paths "$paths" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug] = {agent: $agent, paths: $paths, branch: $branch, worktree: $worktree, status: "claimed", createdAt: $ts}'
-  # keep empty agent/paths as empty strings (no special handling needed)
+  state_write_filter --arg slug "$slug" --arg agent "$agent" --arg paths "$paths" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug] = {agent: $agent, paths: $paths, branch: $branch, worktree: $worktree, status: "claimed", createdAt: $ts}'
   release_claim_lock
   printf 'claimed %s worktree %s\n' "$branch" "$worktree"
 }
@@ -509,23 +482,42 @@ do_submit() {
     printf 'error: submit requires current branch wt/<slug> (claim first, then work in its worktree)\n' >&2
     exit 1
   fi
-  local status
+
+  local branch expected_worktree cur_worktree_rel
+  branch="wt/$slug"
+  expected_worktree="$WORKTREE_DIR/wt-$slug"
+  cur_worktree_rel="${ROOT#$MAIN_ROOT/}"
+  [ "$cur_worktree_rel" = "$ROOT" ] && cur_worktree_rel=""
+
+  # Re-read lease state inside the lock before deciding; refuse stale/wrong ownership.
+  state_lock
+  release_submit_lock() { state_unlock; trap - EXIT; }
+  trap 'release_submit_lock' EXIT
+  local status lease_branch lease_worktree lease_agent claimed_paths
   status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  lease_branch=$(jq -r --arg s "$slug" '.leases[$s].branch // empty' "$STATE_FILE" 2>/dev/null || true)
+  lease_worktree=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || true)
+  lease_agent=$(jq -r --arg s "$slug" '.leases[$s].agent // empty' "$STATE_FILE" 2>/dev/null || true)
+  claimed_paths=$(jq -r --arg s "$slug" '.leases[$s].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
   if [ -z "$status" ]; then
     printf 'error: no claimed lease for %s (run claim first)\n' "$slug" >&2
+    release_submit_lock
     exit 1
   fi
   if [ "$status" != "claimed" ]; then
     printf 'error: lease for %s is %s, expected claimed\n' "$slug" "$status" >&2
+    release_submit_lock
     exit 1
   fi
-  local branch worktree ts claimed_paths
-  branch="wt/$slug"
-  worktree="$WORKTREE_DIR/wt-$slug"
-  claimed_paths=$(jq -r --arg s "$slug" '.leases[$s].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
+  if [ "$lease_branch" != "$branch" ] || { [ -n "$lease_worktree" ] && [ "$lease_worktree" != "$cur_worktree_rel" ] && [ "$lease_worktree" != "$expected_worktree" ]; }; then
+    printf 'error: lease %s does not match the current worktree/branch (lease branch=%s worktree=%s agent=%s; current branch=%s worktree=%s)\n' \
+      "$slug" "${lease_branch:-<empty>}" "${lease_worktree:-<empty>}" "${lease_agent:-<empty>}" "$branch" "${cur_worktree_rel:-<main>}" >&2
+    release_submit_lock
+    exit 1
+  fi
+  release_submit_lock
 
   # Enforce the lease's claimed paths against the commits on this branch.
-  # Base: merge-base with the dev branch (fallback: repo root commit).
   local base
   base=$(git merge-base "$DEV_BRANCH" HEAD 2>/dev/null | head -n1 || true)
   if [ -z "$base" ]; then
@@ -543,6 +535,9 @@ do_submit() {
     if path_in_scopes "$f" "$SHARED_PATHS"; then continue; fi
     violations+=("$f")
   done <<<"$files"
+
+  local ts files_json="[]"
+  ts=$(now_iso)
   if [ "${#violations[@]}" -gt 0 ]; then
     printf 'error: commits on %s touch files outside the claimed paths:\n' "$branch" >&2
     for f in "${violations[@]}"; do printf '  - %s\n' "$f" >&2; done
@@ -552,11 +547,7 @@ do_submit() {
       printf 're-run with submit --force to override (the override is logged to the lease record)\n' >&2
       exit 1
     fi
-    local ts_force files_json
-    ts_force=$(now_iso)
     files_json=$(printf '%s\n' "${violations[@]}" | jq -R . | jq -s .)
-    state_jq --arg s "$slug" --arg ts "$ts_force" --argjson files "$files_json" \
-      '.leases[$s].forcedScope = true | .leases[$s].forcedScopeAt = $ts | .leases[$s].forcedScopeFiles = $files'
     printf 'warning: submit --force: scope override logged to the lease record for %s\n' "$slug" >&2
   fi
 
@@ -567,8 +558,26 @@ do_submit() {
     printf 'warning: worktree has %s uncommitted file(s); they will NOT be merged. merge-next preserves them in refs/coordinator/saved/%s-<ts>\n' "$uncommitted" "$slug" >&2
   fi
 
-  ts=$(now_iso)
-  state_jq --arg slug "$slug" --arg branch "$branch" --arg worktree "$worktree" --arg ts "$ts" '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts'
+  # Final transition is atomic and re-validated under the lock.
+  state_lock
+  release_submit_lock() { state_unlock; trap - EXIT; }
+  trap 'release_submit_lock' EXIT
+  status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  lease_branch=$(jq -r --arg s "$slug" '.leases[$s].branch // empty' "$STATE_FILE" 2>/dev/null || true)
+  lease_worktree=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ "$status" != "claimed" ] || [ "$lease_branch" != "$branch" ] || { [ -n "$lease_worktree" ] && [ "$lease_worktree" != "$cur_worktree_rel" ] && [ "$lease_worktree" != "$expected_worktree" ]; }; then
+    printf 'error: lease %s changed or does not match the current worktree; re-run submit\n' "$slug" >&2
+    release_submit_lock
+    exit 1
+  fi
+  if [ "${#violations[@]}" -gt 0 ]; then
+    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$expected_worktree" --arg ts "$ts" --argjson files "$files_json" \
+      '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts | .leases[$slug].branch = $branch | .leases[$slug].worktree = $worktree | .leases[$slug].forcedScope = true | .leases[$slug].forcedScopeAt = $ts | .leases[$slug].forcedScopeFiles = $files'
+  else
+    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$expected_worktree" --arg ts "$ts" \
+      '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts | .leases[$slug].branch = $branch | .leases[$slug].worktree = $worktree'
+  fi
+  release_submit_lock
   printf 'submitted %s\n' "$branch"
 }
 
@@ -617,28 +626,32 @@ do_release() {
     wt/*) slug="${slug#wt/}" ;;
   esac
 
-  local status
+  # Re-read and validate under the state lock; mark done atomically before cleanup.
+  state_lock
+  release_release_lock() { state_unlock; trap - EXIT; }
+  trap 'release_release_lock' EXIT
+  local status branch wt_rel wt_abs
   status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
   if [ -z "$status" ]; then
     printf 'error: no lease for %s\n' "$slug" >&2
+    release_release_lock
     exit 1
   fi
   if [ "$status" = "done" ]; then
+    release_release_lock
     printf 'already done: %s (nothing to release)\n' "$slug"
     return 0
   fi
   if [ "$status" = "submitted" ]; then
     printf 'error: lease %s is submitted; merge it with merge-next or discard it with merge-abort\n' "$slug" >&2
+    release_release_lock
     exit 1
   fi
 
-  local branch wt_rel wt_abs
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
   wt_rel=$(jq -r --arg s "$slug" --arg d "$WORKTREE_DIR" '.leases[$s].worktree // ($d + "/wt-" + $s)' "$STATE_FILE" 2>/dev/null || printf '%s/wt-%s' "$WORKTREE_DIR" "$slug")
   wt_abs="$MAIN_ROOT/$wt_rel"
 
-  # Unique commits: counted against dev when it exists, else against the main
-  # checkout's HEAD. The branch is never deleted while it carries any.
   local ahead=0 against
   if git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
     against="$DEV_BRANCH"
@@ -657,23 +670,23 @@ do_release() {
     if [ "$force" -ne 1 ]; then
       printf 'error: lease %s holds unsubmitted work (%s commit(s) ahead of %s, %s uncommitted file(s)); submit it, or release --force to abandon it deliberately\n' "$slug" "$ahead" "$against" "$dirty_n" >&2
       printf '  nothing is deleted either way: a branch with commits stays and uncommitted bytes go to refs/coordinator/saved/\n' >&2
-      exit 1
-    fi
-  fi
-
-  # Keep every byte: safe_remove_worktree stashes non-exempt dirt into a named
-  # ref and prints the recovery command before this worktree is removed.
-  if [ -d "$wt_abs" ]; then
-    if ! safe_remove_worktree "$wt_abs" "$slug" "released"; then
-      printf 'error: could not remove worktree %s; lease for %s left claimed\n' "$wt_rel" "$slug" >&2
+      release_release_lock
       exit 1
     fi
   fi
 
   local ts
   ts=$(now_iso)
-  state_jq --arg s "$slug" --arg ts "$ts" \
+  state_write_filter --arg s "$slug" --arg ts "$ts" \
     '.leases[$s].status = "done" | .leases[$s].releasedAt = $ts | .leases[$s].releaseReason = "released"'
+  release_release_lock
+
+  if [ -d "$wt_abs" ]; then
+    if ! safe_remove_worktree "$wt_abs" "$slug" "released"; then
+      printf 'warning: could not remove worktree %s; lease %s is marked done\n' "$wt_rel" "$slug" >&2
+    fi
+  fi
+
   printf 'released %s (status done)\n' "$slug"
   if [ "$ahead" != "0" ]; then
     printf 'kept branch %s (%s commit(s) ahead of %s)\n' "$branch" "$ahead" "$against"
@@ -696,18 +709,49 @@ do_release() {
 STATE_STASH=""
 restore_state_stash() {
   if [ -n "$STATE_STASH" ] && [ -f "$STATE_STASH" ]; then
-    # cp and the write are serialized on the state mutex with every other writer: restoring the
-    # pre-merge live copy must never land on top of a claim/submit that wrote in between.
-    if (
-      exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 1
-      if command -v flock >/dev/null 2>&1; then flock 8 || exit 1; fi
-      cp "$STATE_STASH" "$STATE_FILE"
-    ); then
-      rm -f "$STATE_STASH"
+    state_lock
+    local tmp head_tmp
+    tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { state_unlock; printf 'error: mktemp failed\n' >&2; return 1; }
+    head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX") || { rm -f "$tmp"; state_unlock; printf 'error: mktemp failed\n' >&2; return 1; }
+    # Prefer merging pre-merge live snapshot with only concurrent mutations made during merge.
+    # $STATE_FILE was reset to HEAD for the trial merge; keys equal to HEAD are not concurrent writes.
+    if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$head_tmp" 2>/dev/null; then
+      if ! jq -n --slurpfile head "$head_tmp" --slurpfile pre "$STATE_STASH" --slurpfile cur "$STATE_FILE" '
+        def h: $head[0];
+        def p: $pre[0];
+        def c: $cur[0];
+        def l: ((h.leases // {}) as $hl | (p.leases // {}) as $pl | (c.leases // {}) as $cl |
+          reduce (($hl + $pl + $cl) | keys_unsorted[]) as $k ({};
+            if (($cl | has($k)) and (($hl[$k] // null) != ($cl[$k] // null))) then .[$k] = $cl[$k]
+            elif ($pl | has($k)) then .[$k] = $pl[$k]
+            else . end));
+        (p * c) | .version = (c.version // p.version // h.version // 1) | .leases = l | .mergeLock = (if ((h.mergeLock // null) != (c.mergeLock // null)) then c.mergeLock else p.mergeLock end)
+      ' > "$tmp"; then
+        rm -f "$tmp" "$head_tmp"
+        state_unlock
+        printf 'error: could not merge %s into %s; stashed live state kept at %s\n' "$STATE_STASH" "$STATE_FILE" "$STATE_STASH" >&2
+        return 1
+      fi
     else
-      printf 'error: could not restore %s over %s; the stashed live state is kept at %s\n' "$STATE_STASH" "$STATE_FILE" "$STATE_STASH" >&2
+      # No committed head state; fall back to pre-merge live unioned with current, current wins.
+      if ! jq -n --slurpfile cur "$STATE_FILE" --slurpfile pre "$STATE_STASH" \
+        '$pre[0] * $cur[0] * {version: ($cur[0].version // $pre[0].version // 1), leases: (($pre[0].leases // {}) * ($cur[0].leases // {})), mergeLock: ($cur[0].mergeLock // $pre[0].mergeLock // null)}' > "$tmp"; then
+        rm -f "$tmp" "$head_tmp"
+        state_unlock
+        printf 'error: could not merge %s into %s; stashed live state kept at %s\n' "$STATE_STASH" "$STATE_FILE" "$STATE_STASH" >&2
+        return 1
+      fi
+    fi
+    chmod 644 "$tmp" 2>/dev/null || true
+    if ! mv -f "$tmp" "$STATE_FILE"; then
+      rm -f "$tmp" "$head_tmp"
+      state_unlock
+      printf 'error: could not restore %s over %s; stashed live state kept at %s\n' "$STATE_STASH" "$STATE_FILE" "$STATE_STASH" >&2
       return 1
     fi
+    rm -f "$head_tmp"
+    state_unlock
+    rm -f "$STATE_STASH"
   fi
   STATE_STASH=""
   return 0
@@ -737,31 +781,81 @@ do_merge_next() {
   need_jq
   ensure_state
   read_config
-  local review=0
+  local review=0 target="" explicit_target=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --help|-h)
-        printf 'usage: coordinator merge-next [--review]\n'
-        printf '\n  --review   stop before fast-forwarding dev: merged result stays on the\n'
-        printf '             merge-check-* branch, prints the exact command to finish\n'
+        printf 'usage: coordinator merge-next [<slug>|--target <slug>] [--review]\n'
+        printf '\n  --target <slug>  land a specific submitted lease (required to land someone else'"'"'s lease)\n'
+        printf '  --review         stop before fast-forwarding dev: merged result stays on the\n'
+        printf '                   merge-check-* branch, prints the exact command to finish\n'
         return 0 ;;
       --review)
         review=1; shift ;;
+      --target)
+        target="${2:-}"; explicit_target=1; shift 2 ;;
+      --target=*)
+        target="${1#--target=}"; explicit_target=1; shift ;;
       -*)
         printf 'error: unknown flag %s\n' "$1" >&2
         exit 1 ;;
       *)
-        printf 'error: unexpected argument %s\n' "$1" >&2
-        exit 1 ;;
+        if [ -z "$target" ]; then target="$1"; explicit_target=1; else
+          printf 'error: unexpected argument %s\n' "$1" >&2
+          exit 1
+        fi
+        shift ;;
     esac
   done
+  case "$target" in
+    wt/*) target="${target#wt/}" ;;
+  esac
+
+  local caller_slug=""
+  local cur_branch
+  cur_branch=$(git -C "$ROOT" branch --show-current 2>/dev/null || printf '')
+  case "$cur_branch" in
+    wt/*) caller_slug="${cur_branch#wt/}" ;;
+  esac
 
   local slug branch
-  slug=$(jq -r '.leases | to_entries | map(select(.value.status=="submitted")) | sort_by(.value.submittedAt // .value.createdAt // "") | .[0].key // empty' "$STATE_FILE" 2>/dev/null || true)
-  if [ -z "$slug" ]; then
-    printf 'no submitted tasks\n'
-    return 0
+  if [ -n "$target" ]; then
+    slug="$target"
+  else
+    # Default to the caller's own submitted lease; never land someone else's lease without --target.
+    slug="$caller_slug"
+    if [ -z "$slug" ]; then
+      local any_submitted
+      any_submitted=$(jq -r '[.leases | to_entries[] | select(.value.status=="submitted") | .key] | .[0] // empty' "$STATE_FILE" 2>/dev/null || true)
+      if [ -n "$any_submitted" ]; then
+        printf 'error: merge-next must target a lease explicitly; run from your wt/<slug> worktree or pass --target <slug> (submitted: %s)\n' "$any_submitted" >&2
+      else
+        printf 'no submitted tasks\n'
+      fi
+      if [ -n "$any_submitted" ]; then exit 1; else return 0; fi
+    fi
   fi
+
+  # Validate target lease (re-read inside lock below as well) and ownership.
+  local lease_status
+  lease_status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ -z "$lease_status" ]; then
+    printf 'error: no lease for %s\n' "$slug" >&2
+    exit 1
+  fi
+  if [ "$lease_status" != "submitted" ]; then
+    if [ "$explicit_target" -eq 0 ] && [ -z "$caller_slug" ]; then
+      printf 'no submitted tasks\n'
+      return 0
+    fi
+    printf 'error: lease %s is %s, expected submitted\n' "$slug" "$lease_status" >&2
+    exit 1
+  fi
+  if [ "$explicit_target" -eq 0 ] && [ "$slug" != "$caller_slug" ]; then
+    printf 'error: refusing to land lease %s (not owned by caller); pass --target %s to land it explicitly\n' "$slug" "$slug" >&2
+    exit 1
+  fi
+
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
 
   # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
@@ -778,7 +872,7 @@ do_merge_next() {
       local holder
       holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
       printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
-      exec 9>&- 2>/dev/null || true
+      { exec 9>&-; } 2>/dev/null || true
       exit 1
     fi
   fi
@@ -794,7 +888,7 @@ do_merge_next() {
         rm -rf "${lock_dir}.stale.$$"
       else
         printf 'error: merge lock held\n' >&2
-        exec 9>&- 2>/dev/null || true
+        { exec 9>&-; } 2>/dev/null || true
         exit 1
       fi
       # the stale holder died without releasing: clear its mergeLock so `doctor` stops failing forever
@@ -812,14 +906,14 @@ do_merge_next() {
       ) || true
       if ! mkdir "$lock_dir" 2>/dev/null; then
         printf 'error: merge lock held\n' >&2
-        exec 9>&- 2>/dev/null || true
+        { exec 9>&-; } 2>/dev/null || true
         exit 1
       fi
     else
       local holder
       holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'unknown')
       printf 'error: merge lock held (%s)\n' "${holder%$'\n'}" >&2
-      exec 9>&- 2>/dev/null || true
+      { exec 9>&-; } 2>/dev/null || true
       exit 1
     fi
   fi
@@ -856,7 +950,7 @@ do_merge_next() {
     rm -f "$lock_dir/holder" 2>/dev/null || true
     rmdir "$lock_dir" 2>/dev/null || true
     if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
-    exec 9>&- 2>/dev/null || true
+    { exec 9>&-; } 2>/dev/null || true
     trap - EXIT
     return 0
   }
@@ -877,9 +971,25 @@ do_merge_next() {
   trap 'release_merge_lock; exit 143' TERM
   trap 'release_merge_lock; exit 130' INT
   trap 'release_merge_lock; exit 129' HUP
-  # record lock owner in state (atomic): object form, with the scratch branch it pinned
-  state_jq --arg s "$slug" --arg b "$branch" --arg scratch "$scratch" --arg pid "$$" --arg ts "$started_iso" \
+  # Re-read lease inside the state lock and record merge owner atomically.
+  state_lock
+  lease_status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
+  if [ "$lease_status" != "submitted" ]; then
+    state_write_filter '.mergeLock = null'
+    state_unlock
+    rm -f "$lock_file" 2>/dev/null || true
+    rm -f "$lock_dir/holder" 2>/dev/null || true
+    rmdir "$lock_dir" 2>/dev/null || true
+    if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
+    { exec 9>&-; } 2>/dev/null || true
+    trap - EXIT TERM INT HUP
+    printf 'error: lease %s is %s, expected submitted\n' "$slug" "${lease_status:-<missing>}" >&2
+    exit 1
+  fi
+  state_write_filter --arg s "$slug" --arg b "$branch" --arg scratch "$scratch" --arg pid "$$" --arg ts "$started_iso" \
     '.mergeLock = {slug: $s, branch: $b, scratch: $scratch, pid: ($pid|tonumber), startedAt: $ts}'
+  state_unlock
 
   # Prune scratch branches from interrupted merges only once they are definitively stale (last commit
   # older than the 60-minute stale-lock window) AND fully contained in dev — i.e. there is nothing
@@ -902,6 +1012,17 @@ do_merge_next() {
 
   if ! git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
     fail "branch $branch not found" "restore or re-create the branch, then re-run merge-next"
+  fi
+
+  # Refuse stale-base leases loudly before any merge work; dev must be untouched on failure.
+  local dev_tip merge_base wt_rel wt_abs
+  dev_tip=$(git -C "$MAIN_ROOT" rev-parse "$DEV_BRANCH" 2>/dev/null || printf '')
+  merge_base=$(git -C "$MAIN_ROOT" merge-base "$DEV_BRANCH" "$branch" 2>/dev/null || printf '')
+  if [ -n "$dev_tip" ] && [ -n "$merge_base" ] && [ "$merge_base" != "$dev_tip" ]; then
+    wt_rel=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || printf "$WORKTREE_DIR/wt-$slug")
+    wt_abs="$MAIN_ROOT/$wt_rel"
+    fail "lease $slug is stale: merge-base($DEV_BRANCH,$branch) is not $DEV_BRANCH tip (dev moved under it); dev untouched" \
+      "git -C $wt_abs fetch && git -C $wt_abs rebase $DEV_BRANCH, resolve conflicts, git -C $wt_abs add <resolved>, git -C $wt_abs rebase --continue, re-run 'bun run check' in $wt_abs, then coordinator merge-next"
   fi
 
   # Stash the exempt dirt for the trial merge (see above): the worktree copy must equal HEAD for the
@@ -1095,25 +1216,61 @@ finish_merged_lease() {
     safe_remove_worktree "$wt_abs" "$slug" "merged lease" || true
   fi
   git -C "$MAIN_ROOT" branch -d "$branch" >/dev/null 2>&1 || true
-  # Bookkeeping policy: merge-next auto-commits the coordinator state file on dev, so the exempt residue
-  # never accumulates. The worktree copy and dev's committed copy can diverge (a wt branch may record
-  # bookkeeping of its own), so union them: lease keys from both, live copy wins per key — never let the
-  # auto-commit revert an entry the merge just landed. mergeLock is forced to null (the merge is closing).
-  # This chore commit is part of the merge flow (the only path to dev), not a direct dev commit by an agent.
+  # Bookkeeping policy: merge-next auto-commits the coordinator state file on dev.
+  # Live is the source of truth. When writing the committed copy, only include a committed
+  # key if the live file lacks it and its branch still exists and has unmerged commits.
+  # Never carry a key whose live status is done/absent (prevents resurrecting dead leases).
   if [ -f "$STATE_FILE" ] && command -v jq >/dev/null 2>&1; then
-    (
-      exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 0
-      if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
-      _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
-      _union_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
-      if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null \
-        && jq -n --slurpfile head "$_head_tmp" --slurpfile live "$STATE_FILE" \
-          '$head[0] * $live[0] * { version: ($live[0].version // $head[0].version // 1), leases: (($head[0].leases // {}) * ($live[0].leases // {})), mergeLock: null }' \
-          > "$_union_tmp" 2>/dev/null; then
-        cp "$_union_tmp" "$STATE_FILE"
-      fi
-      rm -f "$_head_tmp" "$_union_tmp"
-    )
+    state_lock
+    local _head_tmp _out_tmp _head_ok=0
+    _head_tmp=$(mktemp "$DATA_DIR/.state-head.XXXXXX" 2>/dev/null || mktemp)
+    _out_tmp=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
+    if git -C "$MAIN_ROOT" show HEAD:.term/coordinator/state.json > "$_head_tmp" 2>/dev/null; then
+      _head_ok=1
+    fi
+    if [ "$_head_ok" -eq 1 ]; then
+      # Start from live leases (source of truth), mergeLock cleared.
+      jq -n --slurpfile live "$STATE_FILE" \
+        '$live[0] * {version: ($live[0].version // 1), leases: ($live[0].leases // {}), mergeLock: null}' > "$_out_tmp" 2>/dev/null || cp "$STATE_FILE" "$_out_tmp"
+      # Preserve committed-only keys only when safe: branch still exists with unmerged commits,
+      # or the committed record is terminal (done) bookkeeping that cannot be chased by merge-next.
+      # Never resurrect absent live keys that represent active/claimable work.
+      local _k _branch _ahead _kstatus
+      while IFS= read -r _k; do
+        [ -z "$_k" ] && continue
+        if jq -e --arg k "$_k" '.leases[$k]' "$STATE_FILE" >/dev/null 2>&1; then
+          continue
+        fi
+        _kstatus=$(jq -r --arg k "$_k" '.leases[$k].status // empty' "$_head_tmp" 2>/dev/null || printf '')
+        _branch=$(jq -r --arg k "$_k" '.leases[$k].branch // ("wt/" + $k)' "$_head_tmp" 2>/dev/null || printf '')
+        local _keep=0
+        if [ "$_kstatus" = "done" ]; then
+          _keep=1
+        elif [ -n "$_branch" ] && git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$_branch"; then
+          _ahead=$(git -C "$MAIN_ROOT" rev-list --count "$DEV_BRANCH..$_branch" 2>/dev/null | tr -d ' ' || printf '0')
+          [ -z "$_ahead" ] && _ahead=0
+          if [ "$_ahead" != "0" ]; then
+            _keep=1
+          fi
+        fi
+        if [ "$_keep" -eq 1 ]; then
+          local _tmp2
+          _tmp2=$(mktemp "$DATA_DIR/.state-union.XXXXXX" 2>/dev/null || mktemp)
+          if jq --arg k "$_k" --slurpfile head "$_head_tmp" '.leases[$k] = $head[0].leases[$k]' "$_out_tmp" > "$_tmp2" 2>/dev/null; then
+            mv -f "$_tmp2" "$_out_tmp"
+          else
+            rm -f "$_tmp2"
+          fi
+        fi
+      done < <(jq -r '.leases | keys[]? // empty' "$_head_tmp" 2>/dev/null)
+      chmod 644 "$_out_tmp" 2>/dev/null || true
+      mv -f "$_out_tmp" "$STATE_FILE" || rm -f "$_out_tmp"
+    else
+      rm -f "$_out_tmp"
+      state_write_filter '.mergeLock = null'
+    fi
+    rm -f "$_head_tmp"
+    state_unlock
   fi
   # The bookkeeping commit must land on DEV_BRANCH only; on any other checkout the union stays as
   # exempt dirt instead of committing to the wrong branch.

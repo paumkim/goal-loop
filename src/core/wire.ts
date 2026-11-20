@@ -27,6 +27,10 @@ export const sameDirectory = (a: string, b: string) => {
   return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
+/** True for Windows drive-letter paths when running on a non-Windows host (test-fixture/foreign path guard). */
+export const isWindowsDrivePathOnPosix = (path: string): boolean =>
+  process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(path)
+
 /** Plain (non-array) object check; the base narrow every other guard is built on. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -61,7 +65,7 @@ export const stripUndefined = (value: unknown): unknown => {
 }
 
 const GOAL_STATUSES: ReadonlySet<string> = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"])
-const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user"])
+const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user", "repeated_failure"])
 const isPauseCause = (value: unknown): value is PauseCause => isString(value) && PAUSE_CAUSES.has(value)
 const isGoalStatus = (value: unknown): value is GoalStatus => isString(value) && GOAL_STATUSES.has(value)
 
@@ -97,6 +101,72 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheRead) &&
   isFiniteNumber(value.cacheWrite)
 
+const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
+const VERIFY_SOURCES: ReadonlySet<string> = new Set(["configured", "legacy", "goal-declared"])
+const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])
+const VERIFY_RUN_STATES: ReadonlySet<string> = new Set(["executed", "artifact", "reused", "skipped"])
+const VERIFY_EXECUTION_MODES: ReadonlySet<string> = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"])
+
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString)
+
+const isVerifyCheckType = (value: unknown): value is NonNullable<VerdictEntry["verification"]>["checks"][number]["type"] =>
+  isString(value) && VERIFY_CHECK_TYPES.has(value)
+
+const isVerifyCheckEvidence = (value: unknown): value is NonNullable<VerdictEntry["verification"]>["checks"][number] =>
+  isRecord(value) &&
+  isString(value.id) &&
+  isVerifyCheckType(value.type) &&
+  isString(value.command) &&
+  isBoolean(value.required) &&
+  isBoolean(value.scoped) &&
+  isBoolean(value.pass) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
+  (value.label === undefined || isString(value.label)) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail)) &&
+  (value.reason === undefined || isString(value.reason)) &&
+  (value.source === undefined || (isString(value.source) && VERIFY_SOURCES.has(value.source))) &&
+  (value.evidenceMode === undefined || (isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode))) &&
+  (value.runState === undefined || (isString(value.runState) && VERIFY_RUN_STATES.has(value.runState))) &&
+  (value.scopeDecision === undefined || isString(value.scopeDecision)) &&
+  (value.nextAction === undefined || isString(value.nextAction)) &&
+  (value.durationMs === undefined || isFiniteNumber(value.durationMs)) &&
+  (value.reused === undefined || isBoolean(value.reused)) &&
+  (value.reusedFrom === undefined || isString(value.reusedFrom)) &&
+  (value.parallel === undefined || isBoolean(value.parallel)) &&
+  (value.concurrency === undefined || isFiniteNumber(value.concurrency)) &&
+  (value.skipped === undefined || isBoolean(value.skipped)) &&
+  (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) &&
+  (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) &&
+  (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) &&
+  (value.executionMode === undefined || (isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode)))
+
+const isVerifyTiming = (value: unknown): boolean =>
+  isRecord(value) &&
+  isFiniteNumber(value.totalMs) &&
+  isFiniteNumber(value.concurrency) &&
+  isBoolean(value.parallel) &&
+  isFiniteNumber(value.reused) &&
+  isFiniteNumber(value.executed) &&
+  isFiniteNumber(value.skipped)
+
+const isMalformedGoalCheck = (value: unknown): boolean =>
+  isRecord(value) && isString(value.raw) && isString(value.reason)
+
+const isVerdictVerificationMatrix = (value: unknown): value is NonNullable<VerdictEntry["verification"]> =>
+  isRecord(value) &&
+  isString(value.profile) &&
+  isBoolean(value.broadGoal) &&
+  isBoolean(value.pass) &&
+  Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) &&
+  Array.isArray(value.missing) && value.missing.every(isString) &&
+  (value.coverageReasons === undefined || isStringArray(value.coverageReasons)) &&
+  (value.timing === undefined || isVerifyTiming(value.timing)) &&
+  (value.malformedGoalChecks === undefined || (Array.isArray(value.malformedGoalChecks) && value.malformedGoalChecks.every(isMalformedGoalCheck)))
+
+const isLastVerification = (value: unknown): value is NonNullable<GoalSnapshot["lastVerification"]> =>
+  isVerdictVerificationMatrix(value) && isFiniteNumber((value as unknown as Record<string, unknown>).at)
+
 const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isRecord(value) &&
   isFiniteNumber(value.turn) &&
@@ -104,7 +174,10 @@ const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isString(value.reason) &&
   isFiniteNumber(value.at) &&
   (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) &&
-  (value.spend === undefined || isUsageSnapshot(value.spend))
+  (value.spend === undefined || isUsageSnapshot(value.spend)) &&
+  (value.sha === undefined || isString(value.sha)) &&
+  (value.verify === undefined || isVerdictVerify(value.verify)) &&
+  (value.verification === undefined || isVerdictVerificationMatrix(value.verification))
 
 const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&
@@ -130,6 +203,21 @@ const isLoopCompact = (value: unknown): value is LoopCompactState =>
   (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) &&
   (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned))
 
+const isLastVerify = (value: unknown): value is NonNullable<GoalSnapshot["lastVerify"]> =>
+  isRecord(value) &&
+  isString(value.command) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
+  isFiniteNumber(value.at) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail))
+
+const isVerdictVerify = (value: unknown): value is NonNullable<VerdictEntry["verify"]> =>
+  isRecord(value) &&
+  isString(value.command) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail))
+
 /**
  * Structural check for the read model our own server emits over RPC. Optional additive fields (loop state,
  * spend, imported reason/verdict) are validated when present; unknown extra fields are tolerated so older
@@ -151,6 +239,7 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (value.final !== undefined && !isUsageSnapshot(value.final)) return false
   if (!Array.isArray(value.history) || !value.history.every(isVerdictEntry)) return false
   if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting)) return false
+  if (value.queued !== undefined && !isBoolean(value.queued)) return false
   if (value.spend !== undefined && !isUsageSnapshot(value.spend)) return false
   if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize)) return false
   if (value.compactAtTokens !== undefined && !isFiniteNumber(value.compactAtTokens)) return false
@@ -159,9 +248,16 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (value.loopObjective !== undefined && !isString(value.loopObjective)) return false
   if (value.loopMaxLoops !== undefined && !isFiniteNumber(value.loopMaxLoops)) return false
   if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress)) return false
+  if (value.historyDropped !== undefined && (!isFiniteNumber(value.historyDropped) || value.historyDropped < 0)) return false
   if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry))) return false
+  if (value.loopHistoryDropped !== undefined && (!isFiniteNumber(value.loopHistoryDropped) || value.loopHistoryDropped < 0)) return false
+  if (value.completedConditions !== undefined && (!Array.isArray(value.completedConditions) || !value.completedConditions.every(isString))) return false
+  if (value.completedConditionsDropped !== undefined && (!isFiniteNumber(value.completedConditionsDropped) || value.completedConditionsDropped < 0)) return false
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact)) return false
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0)) return false
+  if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify)) return false
+  if (value.lastVerification !== undefined && !isLastVerification(value.lastVerification)) return false
+  if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince)) return false
   return true
 }
 

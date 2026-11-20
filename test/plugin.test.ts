@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
@@ -245,7 +245,7 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
     }
   })
 
-  test("a bare /goal-loop-12 arms nothing and shows status instead", async () => {
+  test("a bare /goal-loop-12 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
@@ -253,8 +253,58 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
       const event = promptEvent("/goal-loop-12")
       await hooks.prompt!(event)
       expect(storage.get("goal/v1/ses_1")).toBeUndefined()
-      expect(event.prompt.text).toBe("/goal-loop-12")
       expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop-3 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop-3")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop with an invalid count reports the count, shows status, and rewrites the admitted prompt", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop-abc")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => /Loop count ignored/.test(n.title))).toBe(true)
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
     }
@@ -284,17 +334,24 @@ describe("plugin setup", () => {
     }
   })
 
-  test("a plain git repository is not switched to the coordinator flow", async () => {
+  test("a plain git repository receives the startup scaffold and coordinator flow is ready", async () => {
     const directory = repository()
     const { ctx, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
-      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(false)
+      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(true)
+      expect(existsSync(join(directory, ".term/coordinator/state.json"))).toBe(true)
+      expect(existsSync(join(directory, "worktrees"))).toBe(true)
+      expect(existsSync(join(directory, ".term/goal-loop"))).toBe(true)
+      expect(existsSync(join(directory, "SPEC.md"))).toBe(true)
+      expect(existsSync(join(directory, "MAINTAINER.md"))).toBe(true)
+      expect(existsSync(join(directory, "docs/README.md"))).toBe(true)
+      expect(readFileSync(join(directory, ".gitignore"), "utf8")).toContain(".term/goal-loop/")
       const goal = calls.commands.find((command) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
-      expect(directive.text).not.toContain("Coordinator repo")
+      expect(directive.text).toContain("Coordinator repo")
     } finally {
       await dispose?.()
     }

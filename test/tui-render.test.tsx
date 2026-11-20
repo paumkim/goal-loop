@@ -221,6 +221,25 @@ describe("StatusDialogBody", () => {
     expect(frame).toContain("no cached goal snapshot")
   })
 
+  test("a massive wrapped condition keeps the copy affordance on the leading line", async () => {
+    const long = "improve the terminal tui dialog display on detail view when goals are starting to pile up and the condition becomes massive " +
+      "so the layout must stay consistent with aligned rows and stable affordances across every wrapped line ".repeat(4)
+    const frame = await render(() => (
+      <StatusDialogBody
+        goal={plainGoal({ condition: long, history: [], turns: 0 })}
+        fallback="fb"
+        theme={theme}
+        elapsedMs={() => 0}
+        nowMs={() => now}
+        onCopyCondition={() => {}}
+      />
+    ), 100, 40)
+    const lines = frame.split("\n")
+    const goalLine = lines.find((line) => line.includes("goal") && line.includes("improve the terminal"))
+    expect(goalLine).toBeDefined()
+    expect(goalLine!).toContain("copy")
+  })
+
   test("active looped goal, overview tab: the full dashboard — state at a glance plus everything the bar's level (c) names", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("active")
@@ -530,16 +549,16 @@ describe("HUD card context meter row", () => {
   })
 
   test("under a ceiling the context row paints after spend and drops before the last-verdict row", async () => {
-    // spend + hint + context + why available: full = 4 + 4 = 8; at 6 the hint and spend rows have given way, context has not
+    // spend + hint + context + why available: full = 6 core + 4 = 10; at 8 the hint and spend rows have given way, context has not
     const spendFirst = loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
-    expect(hudCardRows(spendFirst, false, 6)).toBe(6)
-    const kept = await render(() => <HudCard goal={spendFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    expect(hudCardRows(spendFirst, false, 8)).toBe(8)
+    const kept = await render(() => <HudCard goal={spendFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={8} />)
     expect(kept).toContain("context") // spend and hint dropped; context kept
     expect(kept).not.toContain("spend")
     // verdicts-bearing goal without spend: at a two-row-short ceiling the context and why rows give way, the last-verdict row stays
     const lastFirst = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
-    expect(hudCardRows(lastFirst, false, 5)).toBe(5)
-    const lastKept = await render(() => <HudCard goal={lastFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={5} />)
+    expect(hudCardRows(lastFirst, false, 7)).toBe(7)
+    const lastKept = await render(() => <HudCard goal={lastFirst} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />)
     expect(lastKept).not.toContain("context")
     expect(lastKept).toContain("not met") // the last-verdict row survived
   })
@@ -592,12 +611,12 @@ describe("HUD card why row", () => {
   })
 
   test("under a ceiling the why row drops after context and before the last-verdict row", async () => {
-    // verdicts-bearing goal: 4 + context 1 + why 1 + last 1 = 7; at 6 the context row has given way, at 5 the why row has too
+    // verdicts-bearing goal: 6 core + context 1 + why 1 + last 1 = 9; at 8 the context row has given way, at 7 the why row has too
     const metered = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
-    const kept = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />)
+    const kept = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={8} />)
     expect(kept).toContain("why")
     expect(kept).not.toContain("context")
-    const dropped = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={5} />)
+    const dropped = await render(() => <HudCard goal={metered} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={7} />)
     expect(dropped).not.toContain("why")
     expect(dropped).toContain("not met") // the last-verdict row survived
   })
@@ -741,7 +760,7 @@ describe("evaluator teaching hint (fresh goal)", () => {
 
   test("the loop card hint fits a fresh looped goal — and the card renders it", async () => {
     const freshLoop = loopedGoal({ turns: 0, history: [], loopIteration: 1, loopHistory: [], reason: undefined, spend: undefined })
-    expect(hudCardRows(freshLoop)).toBe(5)
+    expect(hudCardRows(freshLoop)).toBe(7)
     const frame = await render(() => <HudCard goal={freshLoop} theme={theme} elapsedMs={() => 1000 * 60 * 2} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />)
     expect(frame).toContain("hint")
     expect(frame).toContain("the evaluator reads only the transcript")
@@ -1674,6 +1693,48 @@ describe("elsewhere block (other sessions holding live goals)", () => {
       <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />
     ))
     expect(absent).not.toContain("elsewhere")
+  })
+
+  test("pile-up: elsewhere columns align across rows with mixed session/state widths", async () => {
+    const many = [
+      loopedGoal({ sessionID: "ses_a", id: "goal_a", condition: "alpha goal condition text", loopIteration: 1, loopMaxLoops: 10 }),
+      loopedGoal({ sessionID: "ses_bb", id: "goal_b", condition: "beta goal condition text", loopEnabled: false, status: "active" }),
+      loopedGoal({ sessionID: "ses_ccc", id: "goal_c", condition: "gamma goal condition text", loopIteration: 10, loopMaxLoops: 10 }),
+      loopedGoal({ sessionID: "ses_dddd", id: "goal_d", condition: "delta goal condition text", loopEnabled: false, status: "paused", pauseCause: "cap" }),
+      loopedGoal({ sessionID: "ses_eeeee", id: "goal_e", condition: "epsilon goal condition text", loopIteration: 2, loopMaxLoops: 5 }),
+    ]
+    const labels: Record<string, string> = { ses_a: "a", ses_bb: "bee", ses_ccc: "cee", ses_dddd: "deedee", ses_eeeee: "ee" }
+    const frame = await render(() => (
+      <StatusDialogBody
+        goal={loopedGoal()}
+        fallback="fb"
+        theme={theme}
+        elapsedMs={() => 1000 * 60 * 12}
+        nowMs={() => now}
+        others={many}
+        sessionLabel={(id) => labels[id] ?? id}
+        onViewTranscript={() => {}}
+        expandedOthers={() => true}
+      />
+    ), 112, 44)
+    expect(frame).toContain("elsewhere")
+    const lines = frame.split("\n")
+    const row = (marker: string) => lines.find((line) => line.includes(marker))
+    const a = row("alpha goal condition text")
+    const b = row("beta goal condition text")
+    const c = row("gamma goal condition text")
+    const d = row("delta goal condition text")
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    expect(c).toBeDefined()
+    expect(d).toBeDefined()
+    // Fixed session/state columns keep the condition column start aligned across rows.
+    expect(a!.indexOf("alpha goal condition text")).toBe(b!.indexOf("beta goal condition text"))
+    expect(a!.indexOf("alpha goal condition text")).toBe(c!.indexOf("gamma goal condition text"))
+    expect(a!.indexOf("alpha goal condition text")).toBe(d!.indexOf("delta goal condition text"))
+    // The transcript affordance rides the same right-edge column in every row.
+    expect(a!.indexOf("→ transcript")).toBe(b!.indexOf("→ transcript"))
+    expect(a!.indexOf("→ transcript")).toBe(d!.indexOf("→ transcript"))
   })
 })
 

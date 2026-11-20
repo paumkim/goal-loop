@@ -1,16 +1,17 @@
 /**
  * Headless render of the full `/goal` detail dialog (clamped column + host-chrome layout + scrollbox +
- * StatusDialogBody) with the paused-loop snapshot from the bug report. Not shipped (scripts/ is not in
- * package.json `files`).
+ * StatusDialogBody). Not shipped (scripts/ is not in package.json `files`).
  *
- *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--pinned] [--copied] [--achieved]
+ *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--pinned] [--copied] [--achieved] [--pileup]
  *
  * --buggy reproduces the pre-fix configuration (shared scrollbarOptions visible: true, forced horizontal track);
  * the default prints the fixed configuration (auto scrollbar visibility, scrollX off, 3-cell body gutter).
- * --width pins the frame width (default 150) — the host hands the width through, so the floor and the
+ * --width pins the frame width (default 150, 100 under --pileup) — the host hands the width through, so the floor and the
  * footer tier boundaries can be eyeballed (80 = short hint + compact labels, ~100 = short hint + noun
  * labels, >= ~140 = full key hint). --pinned paints the pin button flipped, --copied paints the copy
  * button acknowledged, --mono prints under reduced color (NO_COLOR set) with ASCII glyphs.
+ * --pileup renders a stress frame: a massive goal (long condition/reason/objective) with many live goals in
+ * elsewhere (expanded) so alignment and consistency under pile-up can be eyeballed headlessly.
  * The footer is the real DialogFooter, never a hand-painted line. Both arms paint the verify section
  * (the last evaluator.verifyCommand gate's own output — the dialog's proof panel).
  */
@@ -24,6 +25,7 @@ import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const buggy = process.argv.includes("--buggy")
+const pileup = process.argv.includes("--pileup")
 /** --width=/--height=: must parse to a positive finite number; a bare "--width=abc" used to paint a NaN-wide frame silently. */
 const positiveFiniteFlag = (name: string, dflt: number): number => {
   const raw = process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
@@ -35,8 +37,8 @@ const positiveFiniteFlag = (name: string, dflt: number): number => {
   }
   return n
 }
-const height = positiveFiniteFlag("height", 46)
-const width = positiveFiniteFlag("width", 150)
+const height = positiveFiniteFlag("height", pileup ? 80 : 46)
+const width = positiveFiniteFlag("width", pileup ? 100 : 150)
 const pinned = process.argv.includes("--pinned")
 const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")
@@ -65,7 +67,7 @@ const verdicts = [
   "met", "met", "met", "not_met", "met", "not_met", "met", "met", "not_met", "met", "met", "met", "not_met", "met", "met", "met", "not_met", "met", "met", "met", "met", "not_met", "met", "met", "met", "met", "met", "not_met", "met", "met",
 ] as const
 
-const goal: GoalSnapshot = {
+const baseGoal: GoalSnapshot = {
   version: 1,
   id: "goal_dialog",
   sessionID: "ses_dialog",
@@ -128,6 +130,55 @@ const goal: GoalSnapshot = {
   lastVerify: { command: "bun run check", code: 0, tail: "spec-check: ok (44 files, 907 tests match SPEC.md)\nok: loaded TUI plugin", at: now - 1000 * 60 * 4 },
 }
 
+const pileupOthers: GoalSnapshot[] = Array.from({ length: 12 }, (_, i) => ({
+  version: 1,
+  id: `goal_other_${i}`,
+  sessionID: `ses_other_${i}_abcdefgh`,
+  directory: "/tmp/dialog",
+  condition: `Another goal number ${i + 1} with a fairly long condition text that describes what this session is trying to accomplish in detail ${i}`,
+  status: (i % 3 === 0 ? "paused" : "active") as GoalSnapshot["status"],
+  setAt: now - 1000 * 60 * (i + 5),
+  startedAt: now - 1000 * 60 * (i + 5),
+  turns: i + 2,
+  stall: 0,
+  retries: 0,
+  checkins: 0,
+  baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+  history: [],
+  loopEnabled: i % 2 === 0,
+  loopIteration: i % 2 === 0 ? i + 1 : undefined,
+  loopMaxLoops: i % 2 === 0 ? 10 : undefined,
+  elapsedMs: 1000 * 60 * (i + 1),
+  evaluating: false,
+  waiting: false,
+}))
+
+const goal: GoalSnapshot = pileup
+  ? {
+      ...baseGoal,
+      condition:
+        "improve the terminal tui dialog display on detail view when goals are starting to pile up. " +
+        "This is a very long massive goal condition that keeps going and going with lots of detail about layout consistency, spacing, alignment, truncation, wrapping behavior, and how the dialog should look when there are many goals running simultaneously across different sessions in the same directory and each goal has its own long objective and history and the elsewhere section becomes very crowded and the detail view starts breaking visually with inconsistent design patterns throughout the terminal tui interface. ".repeat(3),
+      reason:
+        "Last evaluator said: " +
+        "this is a detailed reason that explains what is still missing and what needs to be done next in great detail so the row must stay consistent while the text wraps across many lines. ".repeat(3),
+      loopObjective:
+        "A very long objective that also wraps and takes up space: " +
+        "keep improving everything about the detail dialog so it remains consistent and readable when content piles up. ".repeat(4),
+      turns: 15,
+    }
+  : baseGoal
+
+const others: readonly GoalSnapshot[] = pileup
+  ? pileupOthers
+  : [{ ...baseGoal, sessionID: "ses_render_foreign", id: "goal_render_foreign", condition: "ship the release notes before friday" }]
+
+const sessionLabel = (id: string): string => {
+  if (id === "ses_render_foreign") return "brisk-falcon"
+  if (pileup) return `session-${id.split("_")[2] ?? id}`
+  return id
+}
+
 const setup = await testRender(
   () => (
     <box width={width} height={height} flexDirection="column" paddingLeft={1} paddingRight={1} paddingBottom={0} paddingTop={0} gap={1}>
@@ -146,7 +197,24 @@ const setup = await testRender(
           ? { scrollbarOptions: { visible: true }, contentOptions: { minHeight: 0 } }
           : { scrollX: false, contentOptions: { minHeight: 0 } })}
       >
-        <StatusDialogBody goal={goal} fallback="no cached goal snapshot" theme={theme} elapsedMs={() => 1000 * 120} nowMs={() => now} mono={mono} onCopyVerify={() => {}} onViewTranscript={() => {}} others={[{ ...goal, sessionID: "ses_render_foreign", id: "goal_render_foreign", condition: "ship the release notes before friday" }]} sessionLabel={(id) => (id === "ses_render_foreign" ? "brisk-falcon" : id)} />
+        <StatusDialogBody
+          goal={goal}
+          fallback="no cached goal snapshot"
+          theme={theme}
+          elapsedMs={() => 1000 * 120}
+          nowMs={() => now}
+          mono={mono}
+          onCopyCondition={() => {}}
+          onCopyReason={() => {}}
+          onCopySummary={() => {}}
+          onCopyAttestation={() => {}}
+          onCopyTally={() => {}}
+          onCopyVerify={() => {}}
+          onViewTranscript={() => {}}
+          others={others}
+          sessionLabel={sessionLabel}
+          expandedOthers={pileup ? () => true : undefined}
+        />
       </scrollbox>
       <DialogFooter
         theme={theme}
