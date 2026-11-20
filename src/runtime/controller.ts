@@ -27,7 +27,8 @@ import {
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { isAbsolute, join } from "node:path"
+import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry } from "../core/learning-log.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -1803,6 +1804,10 @@ export class GoalController {
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
     // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop
     // restores either the pre-step or the fully-advanced state, never a half-advanced one.
+    const logIteration = (entry: LoopEntry | undefined) => {
+      if (!entry || entry.version !== iteration) return
+      this.writeLearningLoopIteration(record, entry)
+    }
     const assignLoopState = () => {
       // Retention cap: persisted records and (via structuredClone) outbound snapshots stay bounded no matter how many
       // iterations a long-running loop lands. The local `history` keeps everything — messages and the maxLoops guard read it —
@@ -1823,6 +1828,14 @@ export class GoalController {
         record.completedConditionsDropped = (record.completedConditionsDropped ?? 0) + ledgerBound.dropped
         log.info("completed-condition ledger cap: dropped oldest entries", { sessionID, dropped: ledgerBound.dropped, retained: ledgerBound.retained.length, totalDropped: record.completedConditionsDropped })
       }
+      let landed: LoopEntry | undefined
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i]?.version === iteration) {
+          landed = history[i]
+          break
+        }
+      }
+      logIteration(landed)
     }
 
     const endClean = async (reason: string) => {
@@ -2356,6 +2369,7 @@ export class GoalController {
     record.status = status
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
+    this.writeLearningGoalTerminal(record)
     // Terminal records are inert: drop any one-shot re-anchor armed before the finish so it cannot
     // ride a later model request (a compaction landing between the arm and the finish would
     // otherwise inject "keep working" ground truth for a finished goal).
@@ -2446,6 +2460,37 @@ export class GoalController {
   }
 
   // ---------------------------------------------------------------- plumbing
+
+  private learningLogFile(directory: string | undefined): string | undefined {
+    const learning = this.deps.config.learning
+    if (!learning?.enabled) return undefined
+    const base = directory ?? this.deps.directory
+    const raw = typeof learning.path === "string" ? learning.path.trim() : ""
+    const path = raw || ".term/goal-loop/learnings.jsonl"
+    if (isAbsolute(path)) return path
+    if (!base) return undefined
+    return join(base, path)
+  }
+
+  private writeLearningGoalTerminal(record: GoalRecord): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      appendLearningEntry(file, buildGoalTerminalLearningEntry(record, this.deps.clock.now()))
+    } catch (error) {
+      this.deps.log.warn("learning log (goal terminal) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    }
+  }
+
+  private writeLearningLoopIteration(record: GoalRecord, entry: LoopEntry): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      appendLearningEntry(file, buildLoopIterationLearningEntry(record, entry, this.deps.clock.now()))
+    } catch (error) {
+      this.deps.log.warn("learning log (loop iteration) write failed", { sessionID: record.sessionID, iteration: entry.version, error: errorMessage(error) })
+    }
+  }
 
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)

@@ -61,6 +61,12 @@ export interface GoalConfig {
   readonly maxLoops: number
   /** Token budget for the per-iteration summary and the next-goal generation; enforced as max(200, tokens) * 4 characters. */
   readonly maxLoopSummaryTokens: number
+  /** Durable learning/outcome journal (JSONL): logs what happened and lessons at loop/goal boundaries. */
+  readonly learning: {
+    readonly enabled: boolean
+    /** Path relative to the goal working directory, or absolute. */
+    readonly path: string
+  }
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
 }
@@ -82,6 +88,7 @@ export const DEFAULTS = {
   compactOnLoopIteration: true,
   maxLoops: 5,
   maxLoopSummaryTokens: 400,
+  learningPath: ".term/goal-loop/learnings.jsonl",
   // Effectively unlimited: goals are pasted from the clipboard and can run to whole files, so the default never rejects.
   maxConditionChars: Number.MAX_SAFE_INTEGER,
   commitBranch: "dev",
@@ -180,7 +187,7 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
  * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE,
- * OPENCODE_GOAL_VERIFY_CONCURRENCY.
+ * OPENCODE_GOAL_VERIFY_CONCURRENCY, OPENCODE_GOAL_LEARNING_LOG, OPENCODE_GOAL_LEARNING_LOG_PATH.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -191,6 +198,9 @@ export function resolveConfig(
   const requested = evaluator.mode === "session" || evaluator.mode === "independent" ? evaluator.mode : "auto"
   const mode = requested === "auto" ? (model ? "independent" : "session") : requested === "independent" && !model ? "session" : requested
   const verify = resolveVerifyMatrix(evaluator, env)
+  const learning = (typeof options.learning === "object" && options.learning !== null ? options.learning : {}) as Record<string, unknown>
+  const learningEnabled = envBool(env.OPENCODE_GOAL_LEARNING_LOG, bool(learning.enabled ?? options.learningLog, true))
+  const learningPath = str(env.OPENCODE_GOAL_LEARNING_LOG_PATH ?? learning.path ?? options.learningLogPath, DEFAULTS.learningPath)
   return {
     evaluator: {
       mode,
@@ -217,6 +227,10 @@ export function resolveConfig(
     compactOnLoopIteration: envBool(env.OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, bool(options.compactOnLoopIteration, DEFAULTS.compactOnLoopIteration)),
     maxLoops: int(env.OPENCODE_GOAL_MAX_LOOPS ?? options.maxLoops, DEFAULTS.maxLoops, 1, 100),
     maxLoopSummaryTokens: int(env.OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS ?? options.maxLoopSummaryTokens, DEFAULTS.maxLoopSummaryTokens, 50, 4_000),
+    learning: {
+      enabled: learningEnabled,
+      path: learningPath,
+    },
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),
       branch: branch(env.OPENCODE_GOAL_COMMIT_BRANCH ?? options.commitBranch, DEFAULTS.commitBranch),
