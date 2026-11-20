@@ -4138,7 +4138,7 @@
       "branch": "wt/coordinator-lease-race-fix",
       "worktree": "worktrees/wt-coordinator-lease-race-fix",
       "status": "claimed",
-      "createdAt": "2026-11-20T11:52:46Z"
+      "createdAt": "2026-11-20T12:31:45Z"
     },
     "no-rearm-after-achieved": {
       "agent": "orchestrator",
@@ -4156,8 +4156,11 @@
       "paths": "src/core/failure-signature.ts,src/core/failure-diagnostics.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/failure-diagnostics.test.ts,test/controller.test.ts,SPEC.md,docs,dist",
       "branch": "wt/failure-diagnostic-artifact",
       "worktree": "worktrees/wt-failure-diagnostic-artifact",
-      "status": "claimed",
-      "createdAt": "2026-11-20T12:22:58Z"
+      "status": "done",
+      "createdAt": "2026-11-20T12:22:58Z",
+      "submittedAt": "2026-11-20T12:32:40Z",
+      "mergedAt": "2026-11-20T12:35:10Z",
+      "mergedInto": "dev"
     },
     "docs-github-pages-live": {
       "agent": "iceman",
