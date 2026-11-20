@@ -4275,8 +4275,31 @@
       "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,scripts/render-pill.tsx,scripts/render-card.tsx,scripts/render-slot.tsx,scripts/render-dialog.tsx,test/history.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/tui-alignment-invariants.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/,dist/tui.js",
       "branch": "wt/loop-indicator-always-visible",
       "worktree": "worktrees/wt-loop-indicator-always-visible",
-      "status": "claimed",
-      "createdAt": "2026-11-20T14:07:11Z"
+      "status": "submitted",
+      "createdAt": "2026-11-20T14:07:11Z",
+      "submittedAt": "2026-11-20T14:21:30Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T14:21:30Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "scripts/repro-loop-cap.tsx"
+      ]
+    },
+    "change-risk-strict-gate": {
+      "agent": "orchestrator",
+      "paths": "src/core/change-risk.ts,src/runtime/controller.ts,test/change-risk.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/change-risk-strict-gate",
+      "worktree": "worktrees/wt-change-risk-strict-gate",
+      "status": "done",
+      "createdAt": "2026-11-20T14:18:19Z",
+      "submittedAt": "2026-11-20T14:28:16Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T14:28:16Z",
+      "forcedScopeFiles": [
+        "test/package-integrity.test.ts"
+      ],
+      "mergedAt": "2026-11-20T14:30:40Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
