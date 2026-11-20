@@ -129,7 +129,7 @@ export const RUNTIME_GITIGNORE_RULES: readonly string[] = [
   ".term/coordinator/.state.*",
 ]
 
-export interface StartupOptions {
+interface StartupOptions {
   /** Absolute project root. */
   readonly projectRoot: string
   /** Absolute plugin root, if known (for coordinator bin resolution context; not written). */

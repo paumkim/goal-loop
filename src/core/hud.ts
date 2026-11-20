@@ -33,7 +33,7 @@ export const isCompactHot = (goal: GoalSnapshot): boolean => {
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2)
 }
 
-export type CompactMarkerTone = "landed" | "missed" | "pending" | "unknown"
+type CompactMarkerTone = "landed" | "missed" | "pending" | "unknown"
 interface CompactMarker {
   /** Trailing clause; callers prepend their own separator. The ascii arm is plain words — no glyph dependence. */
   readonly text: string
@@ -114,7 +114,7 @@ const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = 
  * swallowed. The keyboard twin skips disabled rows by the same contract — selection can rest on a
  * disabled row only transiently if every row is disabled (index stays put).
  */
-export type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
+type ContextMenuId = "copy-condition" | "copy-reason" | "copy-summary" | "copy-dossier" | "save-dossier" | "clear"
 
 export interface ContextMenuRow {
   readonly id: ContextMenuId

@@ -588,6 +588,12 @@ var stampOf = (ms) => {
   const date = new Date(Number.isFinite(ms) ? ms : 0);
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 };
+var pad2 = (n) => String(n).padStart(2, "0");
+var fileStampOf = (ms) => {
+  const date = new Date(Number.isFinite(ms) ? ms : 0);
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
+  return `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` + `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`;
+};
 var shortSha = (sha) => {
   if (!sha)
     return GAP;
@@ -957,13 +963,9 @@ function buildLoopDossier(goal, nowMs) {
 import { writeFileSync } from "fs";
 import { join, resolve } from "path";
 var MAX_EXPORT_ATTEMPTS = 100;
-var pad = (n) => String(n).padStart(2, "0");
 var dossierExportName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` + `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-${stamp}${suffix}.md`;
+  return `goal-dossier-${fileStampOf(nowMs)}${suffix}.md`;
 };
 function exportLoopDossier(goal, nowMs, dir) {
   const content = buildLoopDossier(goal, nowMs);
@@ -1279,13 +1281,9 @@ function signAckSegment(sign, ascii) {
 // src/core/dossier-seal.ts
 import { writeFileSync as writeFileSync2 } from "fs";
 import { join as join2, resolve as resolve2 } from "path";
-var pad2 = (n) => String(n).padStart(2, "0");
 var sealedDossierName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` + `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-sealed-${stamp}${suffix}.md`;
+  return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
@@ -1404,13 +1402,9 @@ function sealAckSegment(seal, ascii) {
 // src/core/dossier-review.ts
 import { writeFileSync as writeFileSync3 } from "fs";
 import { join as join3, resolve as resolve3 } from "path";
-var pad3 = (n) => String(n).padStart(2, "0");
 var reviewName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad3(valid.getUTCMonth() + 1)}${pad3(valid.getUTCDate())}` + `-${pad3(valid.getUTCHours())}${pad3(valid.getUTCMinutes())}${pad3(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-review-${stamp}${suffix}.md`;
+  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
@@ -1514,11 +1508,11 @@ function reviewSummaryLine(review) {
 // src/core/spend-ledger.ts
 import { writeFileSync as writeFileSync4 } from "fs";
 import { join as join4, resolve as resolve4 } from "path";
-var pad4 = (n) => String(n).padStart(2, "0");
+var pad = (n) => String(n).padStart(2, "0");
 var spendLedgerName = (nowMs, attempt = 0) => {
   const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
   const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad4(valid.getUTCMonth() + 1)}${pad4(valid.getUTCDate())}` + `-${pad4(valid.getUTCHours())}${pad4(valid.getUTCMinutes())}${pad4(valid.getUTCSeconds())}`;
+  const stamp = `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` + `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
   return `goal-spend-ledger-${stamp}${suffix}.md`;
 };
@@ -1660,13 +1654,9 @@ function spendSummaryLine(result) {
 import { createHash } from "crypto";
 import { readdirSync, readFileSync, writeFileSync as writeFileSync5 } from "fs";
 import { join as join5, resolve as resolve5 } from "path";
-var pad5 = (n) => String(n).padStart(2, "0");
 var dossierIndexName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad5(valid.getUTCMonth() + 1)}${pad5(valid.getUTCDate())}` + `-${pad5(valid.getUTCHours())}${pad5(valid.getUTCMinutes())}${pad5(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-index-${stamp}${suffix}.md`;
+  return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
 var KIND_PATTERNS = [

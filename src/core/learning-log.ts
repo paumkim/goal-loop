@@ -6,7 +6,7 @@ const LEARNING_LOG_VERSION = 1 as const
 
 import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
 
-export type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed" | "session_outcome"
+type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed" | "session_outcome"
 
 interface LearningEntryBase {
   readonly version: typeof LEARNING_LOG_VERSION
@@ -26,32 +26,32 @@ interface LearningEntryBase {
   readonly lesson: string
 }
 
-export interface GoalTerminalLearningEntry extends LearningEntryBase {
+interface GoalTerminalLearningEntry extends LearningEntryBase {
   readonly kind: "goal_terminal"
   readonly status: GoalStatus
   readonly iterations?: number
 }
 
-export interface LoopIterationLearningEntry extends LearningEntryBase {
+interface LoopIterationLearningEntry extends LearningEntryBase {
   readonly kind: "loop_iteration"
   readonly iteration: number
   readonly summary: string
   readonly verdict: "met"
 }
 
-export interface TurnVerdictLearningEntry extends LearningEntryBase {
+interface TurnVerdictLearningEntry extends LearningEntryBase {
   readonly kind: "turn_verdict"
   readonly turn: number
   readonly verdict: Verdict
 }
 
-export interface GoalArmedLearningEntry extends LearningEntryBase {
+interface GoalArmedLearningEntry extends LearningEntryBase {
   readonly kind: "goal_armed"
   readonly loopEnabled: boolean
   readonly loopMaxLoops?: number
 }
 
-export interface SessionOutcomeLearningEntry extends LearningEntryBase {
+interface SessionOutcomeLearningEntry extends LearningEntryBase {
   readonly kind: "session_outcome"
   readonly status: GoalStatus
   readonly iterations?: number
@@ -281,7 +281,7 @@ export function appendLearningEntry(file: string | undefined, entry: LearningEnt
   }
 }
 
-export interface RecentLearning {
+interface RecentLearning {
   readonly kind: LearningEntryKind
   readonly ts: string
   readonly condition?: string
@@ -346,7 +346,7 @@ export function recentLearningsFromEntries(entries: readonly LearningEntry[], li
  * Default byte window for the prompt-facing tail read. The journal is append-only and grows with every goal version;
  * reading the tail keeps per-tick I/O bounded regardless of how many historical entries exist.
  */
-export const LEARNING_TAIL_MAX_BYTES = 256 * 1024
+const LEARNING_TAIL_MAX_BYTES = 256 * 1024
 
 /**
  * Best-effort read of learning entries from the tail of a JSONL journal without loading the whole file.

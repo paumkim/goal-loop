@@ -1,9 +1,9 @@
 import { collectChangedPaths } from "./changed-paths.ts"
 
-export type RiskTier = "low" | "medium" | "high"
-export type SensitiveSurface = "deps" | "auth" | "migrations" | "ci-release" | "data"
+type RiskTier = "low" | "medium" | "high"
+type SensitiveSurface = "deps" | "auth" | "migrations" | "ci-release" | "data"
 
-export interface ChangeRiskFinding {
+interface ChangeRiskFinding {
   readonly surface: SensitiveSurface
   readonly tier: RiskTier
   readonly paths: readonly string[]

@@ -22,23 +22,23 @@ const PROMPT_LESSON_LIMIT = 3
 const MAX_THEMES = 4
 const MAX_CONDITIONS = 3
 
-export interface FailureTheme {
+interface FailureTheme {
   readonly theme: string
   readonly count: number
   readonly recurring: boolean
 }
 
-export interface RecurringCondition {
+interface RecurringCondition {
   readonly condition: string
   readonly count: number
 }
 
-export interface TimeToGreen {
+interface TimeToGreen {
   readonly count: number
   readonly medianMs?: number
 }
 
-export interface OutcomeTelemetry {
+interface OutcomeTelemetry {
   /** Number of parsed journal entries that contributed. */
   readonly entries: number
   /** Terminal status -> count (goal_terminal, deduplicated against session_outcome). */

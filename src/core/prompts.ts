@@ -545,7 +545,7 @@ export interface BacklogSuggestion {
   readonly evidence: ReadonlyArray<string>
 }
 
-export interface NextGoalInput {
+interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>

@@ -10,7 +10,7 @@ import { TextAttributes, type ColorInput } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 
 /** Structural subset of the host theme the affordance cell needs; anything ColorInput-typed fits (RGBA or hex string). */
-export interface AffordanceTheme {
+interface AffordanceTheme {
   readonly text: {
     readonly base: ColorInput
     readonly faint: ColorInput

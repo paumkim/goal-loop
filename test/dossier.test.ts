@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test"
 import type { GoalSnapshot, UsageSnapshot } from "../src/core/types.ts"
-import { buildLoopDossier, fenceBlock, inlineCode, isoOf, quote, shortSha, stampOf, GAP } from "../src/core/dossier.ts"
+import { buildLoopDossier, fenceBlock, fileStampOf, inlineCode, isoOf, quote, shortSha, stampOf, GAP } from "../src/core/dossier.ts"
+import { dossierExportName } from "../src/core/dossier-export.ts"
+import { dossierIndexName } from "../src/core/dossier-index.ts"
+import { reviewName } from "../src/core/dossier-review.ts"
+import { sealedDossierName } from "../src/core/dossier-seal.ts"
 
 const now = 1_800_000_000_000
 const zero: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
@@ -196,5 +200,43 @@ describe("stampOf regression: unrepresentable clocks", () => {
     expect(stampOf(Number.NaN)).toBe("1970-01-01T00:00:00.000Z")
     expect(stampOf(0)).toBe("1970-01-01T00:00:00.000Z")
     expect(stampOf(1_800_000_000_000)).toBe(new Date(1_800_000_000_000).toISOString())
+  })
+})
+
+describe("fileStampOf: one shared stamp for every dossier exporter", () => {
+  // The pre-unification algorithm, kept here verbatim as the equivalence oracle.
+  const oldStamp = (ms: number): string => {
+    const pad = (n: number): string => String(n).padStart(2, "0")
+    const date = new Date(Number.isFinite(ms) ? ms : 0)
+    const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
+    return (
+      `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` +
+      `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`
+    )
+  }
+  const clocks = [
+    0,
+    now,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    8.64e15 + 1,
+    -8.64e15 - 1,
+    Date.UTC(9999, 11, 31, 23, 59, 59),
+    Date.UTC(2000, 0, 1, 0, 0, 0),
+  ]
+
+  test("matches the historical per-exporter stamp for finite, NaN, infinite and out-of-range clocks", () => {
+    for (const clock of clocks) expect(fileStampOf(clock)).toBe(oldStamp(clock))
+  })
+
+  test("every exporter name embeds the same shared stamp and retry suffix", () => {
+    for (const clock of clocks) {
+      const stamp = fileStampOf(clock)
+      expect(dossierExportName(clock, 2)).toBe(`goal-dossier-${stamp}-3.md`)
+      expect(dossierIndexName(clock, 2)).toBe(`goal-dossier-index-${stamp}-3.md`)
+      expect(reviewName(clock, 2)).toBe(`goal-dossier-review-${stamp}-3.md`)
+      expect(sealedDossierName(clock, 2)).toBe(`goal-dossier-sealed-${stamp}-3.md`)
+    }
   })
 })
