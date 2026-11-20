@@ -37,15 +37,33 @@ const fileFor = (dir: string, sessionID: string) => {
 }
 
 export const createGoalMirror = (dir: string = join(tmpdir(), "goal-loop-mirror")): GoalMirror => {
+  const ensured = new Set<string>()
   const write = (snapshot: GoalSnapshot): void => {
-    try {
-      mkdirSync(dir, { recursive: true, mode: 0o700 })
-      const target = fileFor(dir, snapshot.sessionID)
-      const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
-      writeFileSync(tmp, JSON.stringify(snapshot), { mode: 0o600 })
+    const target = fileFor(dir, snapshot.sessionID)
+    const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`
+    const body = JSON.stringify(snapshot)
+    const writeOnce = () => {
+      if (!ensured.has(dir)) {
+        mkdirSync(dir, { recursive: true, mode: 0o700 })
+        ensured.add(dir)
+      }
+      writeFileSync(tmp, body, { mode: 0o600 })
       renameSync(tmp, target)
-    } catch {
-      // The mirror is a backstop; failing it must never affect the commit path.
+    }
+    try {
+      writeOnce()
+    } catch (error) {
+      // If the directory was removed after being ensured, recover once; the mirror must never affect the commit path.
+      if (ensured.has(dir) && (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+        try {
+          ensured.delete(dir)
+          writeOnce()
+        } catch {
+          // swallow
+        }
+        return
+      }
+      // swallow
     }
   }
 
