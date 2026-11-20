@@ -14,7 +14,7 @@ import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorB
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -360,7 +360,8 @@ export default Plugin.define({
     // when the reminder is off; it is invisible on every request except the one after a landing),
     // and one ground-truth line for sessions whose goal already ended here (achieved / impossible /
     // cleared / failed) — the counter-instruction to a compaction summary that quotes the expired
-    // `<goal>` kickoff. All three are no-ops while no goal work is armed.
+    // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
+    // request still carrying goal text, so it never becomes a session-long stale system line.
     await ctx.session.hook("context", (event) => {
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
@@ -369,7 +370,6 @@ export default Plugin.define({
       }
       const anchor = controller.consumeAnchor(event.sessionID)
       if (anchor) event.system.push({ type: "text", text: anchor })
-      if (!live && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
       // Goal messages are history, not instructions. While a goal is live the kickoff and the armed
       // continuations carry the state and must ride context; only notes are stripped. Once no live
       // goal exists for the session, every goal-grammar message is stripped — a finished goal's
@@ -390,6 +390,13 @@ export default Plugin.define({
           original.splice(0, original.length, ...repaired)
         }
       }
+      // The terminal ground-truth line is a counter-instruction, so it rides only a request that still
+      // carries goal text: a compaction checkpoint quoting the expired `<goal>` kickoff, or a trailing
+      // user turn the strict-provider repair kept. With no goal text left in the request there is nothing
+      // to counter, and a line injected on every later request would be stale boilerplate for the rest of
+      // the session — it is not injected.
+      const stillCarriesGoal = Array.isArray(event.messages) ? carriesGoalGrammar(event.messages) : false
+      if (!live && stillCarriesGoal && controller.hasTerminalRecord(event.sessionID)) event.system.push({ type: "text", text: TERMINAL_REMINDER })
     })
 
     // ---- event pump with reconnect

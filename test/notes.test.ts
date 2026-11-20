@@ -4,7 +4,7 @@
  * These tests pin the grammar and the context-hook predicate.
  */
 import { describe, expect, test } from "bun:test"
-import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG, isGoalInstructionMessage, stripGoalContext, TERMINAL_REMINDER } from "../src/core/prompts.ts"
+import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG, isGoalInstructionMessage, stripGoalContext, carriesGoalGrammar, TERMINAL_REMINDER } from "../src/core/prompts.ts"
 
 const textMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 
@@ -120,5 +120,23 @@ describe("isGoalInstructionMessage / stripGoalContext", () => {
     )
     expect(isGoalInstructionMessage(checkpoint)).toBe(false)
     expect(stripGoalContext([checkpoint])).toEqual([checkpoint])
+  })
+  test("carriesGoalGrammar sees goal text stripping cannot remove, and nothing else", () => {
+    const checkpoint = msg(
+      [
+        "<conversation-checkpoint>",
+        "<summary>worked</summary>",
+        "<recent-context>",
+        "[User]: <goal>\nfinish the tree\n</goal>",
+        "</recent-context>",
+        "</conversation-checkpoint>",
+      ].join("\n"),
+    )
+    expect(carriesGoalGrammar([msg("the user's own line")])).toBe(false)
+    expect(carriesGoalGrammar([])).toBe(false)
+    expect(carriesGoalGrammar([msg("<goal>\nfinish the tree\n</goal>")])).toBe(true)
+    expect(carriesGoalGrammar([checkpoint])).toBe(true)
+    expect(carriesGoalGrammar([msg("the user's own line"), checkpoint])).toBe(true)
+    expect(carriesGoalGrammar([{ role: "user" }, null, 42, {}])).toBe(false)
   })
 })
