@@ -4233,6 +4233,17 @@
       "worktree": "worktrees/wt-goal-tui-card-breathing-room",
       "status": "claimed",
       "createdAt": "2026-11-20T13:19:52Z"
+    },
+    "prune-workflow-overlap": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/core/learning-log.ts,test/controller.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/prune-workflow-overlap",
+      "worktree": "worktrees/wt-prune-workflow-overlap",
+      "status": "done",
+      "createdAt": "2026-11-20T13:24:20Z",
+      "submittedAt": "2026-11-20T13:35:52Z",
+      "mergedAt": "2026-11-20T13:39:02Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
