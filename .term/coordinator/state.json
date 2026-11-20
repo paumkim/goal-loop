@@ -4000,6 +4000,22 @@
       "submittedAt": "2026-11-20T07:47:29Z",
       "mergedAt": "2026-11-20T08:28:14Z",
       "mergedInto": "dev"
+    },
+    "evaluator-zero-tool-turn1-guard": {
+      "agent": "iceman",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,test/controller.test.ts",
+      "branch": "wt/evaluator-zero-tool-turn1-guard",
+      "worktree": "worktrees/wt-evaluator-zero-tool-turn1-guard",
+      "status": "done",
+      "createdAt": "2026-11-20T08:36:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T08:42:17Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "submittedAt": "2026-11-20T08:42:17Z",
+      "mergedAt": "2026-11-20T08:43:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
