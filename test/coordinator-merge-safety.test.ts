@@ -405,6 +405,40 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
     expect(parsed.leases["visible"].mergeInProgress).toBe(false)
   })
 
+  test("status --json defaults to active leases + counts summary; --all includes done leases", () => {
+    setup("true")
+    claimCommitSubmit("historic", { h: "1\n" }, "2026-11-02T09:00:00+00:00", "h")
+    expect(run(join(dir, "worktrees", "wt-historic"), ["merge-next"]).status).toBe(0)
+    expect(lease("historic").status).toBe("done")
+
+    const wt = claimCommitSubmit("active-lease", { a: "2\n" }, "2026-11-02T10:00:00+00:00", "a")
+    writeFileSync(join(wt, "loose.txt"), "loose\n")
+
+    const json = run(dir, ["status", "--json"])
+    expect(json.status).toBe(0)
+    const parsed = JSON.parse(json.stdout)
+    expect(parsed.summary).toEqual({ submitted: 1, done: 1, active: 1, total: 2 })
+    expect(Object.keys(parsed.leases)).toEqual(["active-lease"])
+    expect(parsed.leases["active-lease"].worktreePath).toBe(wt)
+    expect(parsed.leases["active-lease"].uncommitted).toBe(1)
+    expect(parsed.leases["active-lease"].mergeInProgress).toBe(false)
+    expect(json.stdout).not.toContain("historic")
+
+    const all = run(dir, ["status", "--json", "--all"])
+    expect(all.status).toBe(0)
+    const full = JSON.parse(all.stdout)
+    expect(Object.keys(full.leases).sort()).toEqual(["active-lease", "historic"])
+    expect(full.summary).toEqual(parsed.summary)
+    expect(full.leases["historic"].status).toBe("done")
+  })
+
+  test("status --json rejects unknown flags", () => {
+    setup("true")
+    const bad = run(dir, ["status", "--json", "--bogus"])
+    expect(bad.status).toBe(1)
+    expect(bad.stderr).toContain("unknown status option: --bogus")
+  })
+
   test("queue is FIFO with position and ETA", () => {
     setup("true")
     claimCommitSubmit("queue-a", { a: "1\n" }, "2026-11-02T10:00:00+00:00", "a")

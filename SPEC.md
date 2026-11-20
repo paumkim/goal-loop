@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2033 -->
+<!-- spec-check files=74 tests=2035 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8070,3 +8070,50 @@ user restarts OpenCode (stated in the CLI output). GitHub releases/tags are push
 published tag rather than an automated release pipeline; `dev` tracks the current dev-branch tip and may break working
 setups, as documented. `--check` consumes one unauthenticated GitHub API request; the checker fails soft on rate limits.
 <!-- spec-check files=73 tests=2019 -->
+
+## Workstream CVII — compact coordinator status output (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`coordinator status --json` is the coarse-grained visibility command run on every armed loop re-arm and by agents
+checking lease readiness. It currently emits **every** lease ever recorded — hundreds of historical `done` entries,
+each with `agent`, `paths`, `branch`, `worktree`, timestamps, `forcedScopeFiles`, plus derived `worktreePath`,
+`uncommitted` and `mergeInProgress`. At this HEAD that is ~191 KB of JSON for a bus with zero active leases. Only
+non-`done` leases are actionable for re-arm/readiness, and the full historic dump also forces a `git status` per
+worktree. This workstream makes the default view compact while preserving a full-history escape hatch.
+
+### Acceptance criteria
+
+1. **Default**: `coordinator status --json` emits only active leases (`status != "done"`) under `leases`, plus a
+   `summary` object with `submitted`, `done`, `active` and `total` counts, and the existing `mergeLock`.
+2. **Escape hatch**: `coordinator status --json --all` emits every lease (legacy behavior) and the same `summary`.
+   `status --json <bad-flag>` fails with a clear error instead of silently ignoring the flag.
+3. **No field loss for active leases**: each emitted lease keeps `worktreePath`, `uncommitted` and
+   `mergeInProgress`; existing consumers of `parsed.leases["<active>"].<field>` are unaffected.
+4. **Human view unchanged**: plain `coordinator status` still prints `submitted: N done: M` (and merge lock when held).
+5. **Docs/help**: `coordinator --help` and `docs/parallel-work.md` describe the active-only default and `--all`;
+   `AGENTS.md` notes the compact default.
+6. **Tests**: `test/coordinator-merge-safety.test.ts` pins default exclusion of done leases, `--all` inclusion,
+   accurate `summary` counts, preserved per-lease fields, and rejection of unknown status flags.
+7. **Verification**: `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on
+   `wt/<slug>`, submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- Targeted `bun test test/coordinator-merge-safety.test.ts` → **27 pass / 0 fail** (174 expect() calls; was 25 tests —
+  two new cases pin default exclusion of done leases + `summary`, `--all` inclusion, preserved per-lease fields,
+  and unknown-flag rejection).
+- Real-repo byte count: `coordinator status --json` **557 bytes** (one active lease, `summary.done=383`) vs
+  `coordinator status --json --all` **196,317 bytes** — a ~350x reduction on a bus with zero actionable work.
+  `status --json --bogus` exits 1 with `unknown status option: --bogus`.
+- `bun run check` exit 0: **2035 pass / 0 fail** across 85 test files (29 snapshots, 30365 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2035`.
+
+### Honest limits / non-goals
+
+- `state.json` still retains all done leases (the bus and merge bookkeeping depend on them); this change only
+  filters the visibility projection, not persisted data.
+- Done leases remain lookable up via `--all` or directly in `state.json`; no archival/pruning is introduced.
+- No change to `queue`, `claim`, `submit`, `merge-next` or the lock semantics.
