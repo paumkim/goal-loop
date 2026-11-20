@@ -3,21 +3,23 @@
 <!-- naming:start -->
 **Canonical names.** The product, the package, the plugin and the CLI are `goal-loop`: `package.json` `name`
 `goal-loop`, CLI `bin/goal-loop.mjs`, server plugin id `goal-loop`, TUI plugin id `goal-loop.tui`, mirror
-`<tmpdir>/goal-loop-mirror`. The host is OpenCode, and the GitHub repository keeps the slug
-`paumkim/opencode-goalv2`, so the install specifier stays `github:paumkim/opencode-goalv2#v<version>`.
+`<tmpdir>/goal-loop-mirror`. The host is OpenCode, and the GitHub repository is `paumkim/goal-loop`, so the
+install specifier is `github:paumkim/goal-loop#v<version>`.
 
 **Pre-rename names are historical.** Every workstream before LXXVIII names the identity as it then was; that
 text is kept verbatim and read through this map: `bin/opencode-goal.mjs` → `bin/goal-loop.mjs`; server plugin id
 `opencode-goal` → `goal-loop`; TUI plugin id `opencode-goal.tui` → `goal-loop.tui`; mirror directory
-`opencode-goal-mirror` → `goal-loop-mirror`; package `opencode-goalv2` → `goal-loop`.
+`opencode-goal-mirror` → `goal-loop-mirror`; package `opencode-goalv2` → `goal-loop`; repository slug
+`github:paumkim/opencode-goalv2` → `github:paumkim/goal-loop`.
 
 **Legacy names that are still current by design:** the `opencode-goal` bin alias (same executable),
-`PLUGIN_PACKAGE = "opencode-goalv2"` (older installers wrote it), the repository slug above, and the
-`OPENCODE_GOAL_*` environment prefix (the documented configuration surface). `test/name-fields.test.ts` pins
-this declaration, the fields, and the code that carries them.
+`PLUGIN_PACKAGE = "opencode-goalv2"` (older installers wrote it), configs carrying the pre-rename
+`github:paumkim/opencode-goalv2#v…` specifier (`install` migrates the entry, `uninstall` removes it, `status`
+reports it), and the `OPENCODE_GOAL_*` environment prefix (the documented configuration surface).
+`test/name-fields.test.ts` pins this declaration, the fields, and the code that carries them.
 <!-- naming:end -->
 
-Status: current as of v1.1.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
+Status: current as of v1.2.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
 a compact segment painted on the empty left side of the host's jump-to-latest row (the 1-row strip directly
 above the input prompt, claimed through the host's `session.composer.top` slot with a zero-flow absolute box);
 left click toggles the card, right click opens the detail view; when the condition is pinned (card `pin` button
@@ -492,7 +494,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=66 tests=1821 -->
+<!-- spec-check files=66 tests=1829 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7364,3 +7366,10 @@ Finding. `docs/parallel-work.md` already told agents not to "leave claimed-but-i
 Fix. `coordinator release <slug> [--force]` (`do_release` in `packages/coordinator/bin/coordinator`) releases a claimed lease: status flips to `done` with `releasedAt` and `releaseReason`, so overlap checks and merge preflight stop counting it. Nothing is destroyed — the worktree is removed through the existing `safe_remove_worktree`, which stashes non-exempt dirt into `refs/coordinator/saved/<slug>-<ts>` and prints the recovery command; a branch carrying unique commits is kept (measured against `dev`, else `HEAD`) with a `git worktree add` rebuild line printed, and only a branch with no unique commits is deleted. Guards: a submitted lease is refused (`merge-next`/`merge-abort` own it), a claimed lease that still holds uncommitted files or commits needs `--force` (a deliberate abandon, not cleanup), a done lease is an idempotent no-op, `wt/<slug>` is accepted as the slug spelling, and a lease whose worktree is already missing is still releasable.
 Evidence. `test/coordinator.test.ts` "coordinator release" (7 tests) pins: an idle claim releases and the previously blocked overlapping claim then succeeds without `--force`; uncommitted work is refused with the lease left claimed, then preserved in `refs/coordinator/saved/` and `git stash list` under `--force`; a branch with commits is kept with the rebuild command printed; a submitted lease is refused; re-release is idempotent and an unknown slug errors; a missing worktree still releases; `doctor` stays green after the release. The suite stays at 66 packed files (tests live under `test/`).
 Honest limits. Release ends a lease; it does not judge whether the claim's owner is alive — a human or agent chooses the slug. There is no time-based expiry sweep: an idle claim is cleared by naming it (this is deliberate; an automatic TTL could release a slow but live agent mid-work). Releasing does not rebase anyone's work, and the kept branch still needs to be submitted from a rebuilt worktree if the work turns out to matter.
+
+## Workstream LXXXII — install/use/remove works on a first run, and the repository is named goal-loop (2026-11-19)
+Armed condition (verbatim): "go over the current directory. i needed to be as very easy as possible to install and removed it make sure it will just work and compatible. do full test for first time install, use and remove demonstration if there are any flaw. fix what needs fixing commit" plus "also update the githup repo the name so it just say: goal-loop".
+Finding. The documented one-liner (`curl .../main/install.sh | sh`) returned 404: `install.sh` and `bin/goal-loop.mjs` existed only on local `dev`, never on `main`, and `main` was 26 commits behind. The published plugin pin `#v1.1.0` also predated the installer. Three config-fidelity flaws showed up in a sandbox journey: (a) uninstall left a separator comma and a blank line behind when the plugin entry followed an inline comment, (b) removing the first `plugins` property shifted the following line's indentation, and (c) uninstall deleted a `$schema`-only or `{}` config the user had created, because the skeleton rule could not tell install's file from the user's; install also re-indented the following key when it inserted `plugins` before an existing first property.
+Fix. `removePluginText` removes the last element with the separator comma it added (comment material preserved) and `removePropertySpan` starts at the line beginning so no indent is stranded; `insertPluginsProperty` matches the file's own indentation and CRLF. Uninstall restores the pre-install backup when the surgical removal leaves only install's skeleton or an empty root, and deletes only a file install created. The repository is renamed to `paumkim/goal-loop`; `PLUGIN_SPEC` is `github:paumkim/goal-loop#v1.2.0`, `install.sh`/README/docs point at the new raw URL, and the pre-rename `github:paumkim/opencode-goalv2#v…` entry is still removed by `uninstall`, reported by `status`, and migrated in place by `install` (never stacked next to the new specifier).
+Evidence. Sandbox journeys with a fresh `$HOME`: `install.sh` (local source) installs the CLI, `goal-loop install` writes the skeleton, repeat install is `already installed`, `status` lists the config and opencode version, `uninstall` restores the original bytes, `uninstall --self` deletes the CLI; a comment/CRLF config round-trips byte-for-byte; a `$schema`-only config survives uninstall. `test/cli-installer.test.ts` grew by 8 tests (117 total in the file): round-trip fidelity, pre-existing skeleton/empty restore, old-slug migration, dual-entry collapse, old-slug uninstall and status. Test count 1821 → 1829; packed files stay 66 (test/ is outside `package.json` `files`).
+Honest limits. The published artifact is the tag: a client that pinned `#v1.1.0` keeps that code until it runs the new installer, which migrates the config but cannot change the tag it already resolved. `main` now carries the installer and reads the CLI from `main` while the plugin pin comes from `v1.2.0`; both must exist on the remote before the one-liner succeeds (tag pushed before `main`). GitHub redirects the old repository URL, so old links keep resolving, but clients that cached the old slug are not rewritten by GitHub.

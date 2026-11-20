@@ -5,7 +5,7 @@
  * Mechanism (verified against the installed opencode v2.3.0 binary and the v2
  * plugin docs, 2026-11-15):
  *   OpenCode v2 discovers configured plugins from the `plugins` array in its
- *   config file — `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`.
+ *   config file — `"plugins": ["github:paumkim/goal-loop#v1.2.0"]`.
  *   Git package specifiers resolve from the remote via Bun and are cached in
  *   ~/.cache/opencode/npm/git-opencode-goalv2-<hash>/ ; the GitHub release is the
  *   canonical distribution channel for this package. A `<config>/plugins/*.ts`
@@ -15,8 +15,10 @@
  *   attaches to the background service and offers no backup/restore, so we do
  *   the edit ourselves, surgically, on the config file.
  *   Back-compat: PLUGIN_PACKAGE ("opencode-goalv2") is what older installers
- *   wrote. Uninstall and status match both specifiers, so an
- *   install made by the old version uninstalls cleanly.
+ *   wrote, and installs from before the repository rename carry
+ *   github:paumkim/opencode-goalv2#v<tag>. Uninstall and status match all of them,
+ *   and install migrates the pre-rename specifier to the current one; an install
+ *   made by an old version therefore uninstalls and upgrades cleanly.
  *
  * Config discovery (mirrors the installed binary, v2.3.0):
  *   --global (default): <$XDG_CONFIG_HOME>/opencode/ when set, else
@@ -84,10 +86,15 @@ const PKG = (() => {
 export const PLUGIN_PACKAGE = "opencode-goalv2"; // legacy spec; kept for uninstall/status back-compat
 // A standalone copy (installed by install.sh) has no package.json next to it, so the
 // version is baked in here too. test/cli-installer.test.ts pins both to be equal.
-const FALLBACK_VERSION = "1.1.0";
+const FALLBACK_VERSION = "1.2.0";
 const VERSION = typeof PKG.version === "string" ? PKG.version : FALLBACK_VERSION;
-export const PLUGIN_SPEC = `github:paumkim/opencode-goalv2#v${VERSION}`;
+export const PLUGIN_SPEC = `github:paumkim/goal-loop#v${VERSION}`;
 const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
+// The repository was renamed from opencode-goalv2 to goal-loop after v1.1.0. Configs the
+// old installer wrote still carry the old slug (GitHub redirects that URL, so those
+// installs keep working). Uninstall/status must recognise them, and install migrates them
+// in place instead of stacking a second entry next to the old one.
+const LEGACY_REPO_SPEC = /^github:paumkim\/opencode-goalv2(?:#.*)?$/;
 const SCHEMA_URL = "https://opencode.ai/config.json";
 
 class CliError extends Error {}
@@ -246,8 +253,34 @@ function elementMatchesSpec(el, spec) {
   return false;
 }
 
+/** The spec string an entry carries, or null when the element is off-contract. */
+function entrySpec(el) {
+  if (el.type === "string") return el.value;
+  if (el.type === "object") {
+    const p = el.properties.find((pr) => pr.key === "package");
+    return p?.value?.type === "string" ? p.value.value : null;
+  }
+  return null;
+}
+
+function isLegacyRepoEntry(el) {
+  const spec = entrySpec(el);
+  return spec !== null && LEGACY_REPO_SPEC.test(spec);
+}
+
 function matchesPluginEntry(el) {
   return SPECS.some((spec) => elementMatchesSpec(el, spec));
+}
+
+/** True when the parsed config carries an entry from the pre-rename repository slug. */
+function hasLegacyRepoEntry(text) {
+  try {
+    const root = parseJsonc(text);
+    const prop = findPluginsProperty(root);
+    return prop?.value?.type === "array" && prop.value.elements.some(isLegacyRepoEntry);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -269,18 +302,39 @@ function headCarriesComma(head) {
   return noBlock.replace(/\/\/[^\n]*/g, "").includes(",");
 }
 
+/**
+ * Add a `plugins` property to an object that has none, matching the file's existing
+ * indentation. The old insertion always prepended two spaces to the following line, so a
+ * config that already had keys (`{$schema}` was the common case) came back with its first
+ * key indented four spaces — valid JSONC, but drift uninstall then had to undo.
+ */
+function insertPluginsProperty(text, root, entry, eol) {
+  const first = root.properties[0];
+  const afterOpen = root.start + 1;
+  const lineStart = text.lastIndexOf("\n", first.keyStart - 1) + 1;
+  if (lineStart > afterOpen) {
+    const indent = text.slice(lineStart, first.keyStart);
+    const block = `${indent}"plugins": [${eol}${indent}  ${entry}${eol}${indent}],${eol}`;
+    return text.slice(0, lineStart) + block + text.slice(lineStart);
+  }
+  // First property shares the opening brace's line: start a fresh line at the default indent.
+  const rest = text.slice(afterOpen).replace(/^[ \t]*/, "");
+  return text.slice(0, afterOpen) + `${eol}  "plugins": [${eol}    ${entry}${eol}  ],${eol}  ` + rest;
+}
+
 /** Insert (or detect) the plugin in the config text. Returns { text, already }. */
 export function addPluginText(text) {
   const root = parseJsonc(text);
   const prop = findPluginsProperty(root);
   const entry = `"${PLUGIN_SPEC}"`;
   if (!prop) {
-    const insert = `  "plugins": [\n    ${entry}\n  ],\n  `;
+    const eol = text.includes("\r\n") ? "\r\n" : "\n";
+    const insert = `  "plugins": [${eol}    ${entry}${eol}  ],${eol}  `;
     if (root.properties.length === 0) {
-      const empty = text.slice(0, root.start + 1) + `\n${insert.slice(0, -4)}\n` + text.slice(root.end - 1);
+      const empty = text.slice(0, root.start + 1) + `${eol}${insert.slice(0, -(eol.length + 3))}${eol}` + text.slice(root.end - 1);
       return { text: empty, already: false };
     }
-    return { text: text.slice(0, root.start + 1) + "\n" + insert + text.slice(root.start + 1).replace(/^\n/, ""), already: false };
+    return { text: insertPluginsProperty(text, root, entry, eol), already: false };
   }
   const arr = prop.value;
   if (arr.type !== "array") throw new CliError(`"plugins" is not an array; not touching it`);
@@ -323,6 +377,64 @@ function removeSpanWithComma(text, start, end) {
   return text.slice(0, start) + text.slice(end);
 }
 
+/**
+ * Remove a property that owns its line, indentation included. Passing the key offset to
+ * `removeSpanWithComma` left that line's indent stranded in front of the next line (a
+ * two-space shift per uninstall). When the key is the first thing on its line, start the
+ * removal at the line's beginning instead; inline properties keep the old behavior.
+ */
+function removePropertySpan(text, keyStart, valueEnd) {
+  const lineStart = text.lastIndexOf("\n", keyStart - 1) + 1;
+  const prefix = text.slice(lineStart, keyStart);
+  const ownsLine = lineStart < keyStart && /^[ \t]*$/.test(prefix);
+  return removeSpanWithComma(text, ownsLine ? lineStart : keyStart, valueEnd);
+}
+
+/** Offset of the first comma outside a comment in `region`, or -1. Separators between array elements live here. */
+function firstSeparatorComma(region) {
+  let i = 0;
+  while (i < region.length) {
+    const c = region[i];
+    if (c === "/" && region[i + 1] === "/") {
+      const nl = region.indexOf("\n", i);
+      i = nl === -1 ? region.length : nl;
+      continue;
+    }
+    if (c === "/" && region[i + 1] === "*") {
+      const close = region.indexOf("*/", i + 2);
+      i = close === -1 ? region.length : close + 2;
+      continue;
+    }
+    if (c === ",") return i;
+    i++;
+  }
+  return -1;
+}
+
+/**
+ * Remove the last element of a non-empty array together with the separator comma install
+ * added, keeping any comment that sat between the previous element and the new entry.
+ * `removeSpanWithComma` cannot do this: when a comment follows the separator comma it
+ * finds neither an adjacent comma nor a preceding one, and uninstall left `"other",` plus a
+ * blank line behind — drift that up to now survived every strict-JSON test because those
+ * configs have no comments. Only the last element needs this path; a non-last element
+ * keeps the separator and drops its following comma (the adjacent-comma branch).
+ */
+function removeLastElement(text, arr, el) {
+  const idx = arr.elements.indexOf(el);
+  const prev = idx > 0 && idx === arr.elements.length - 1 ? arr.elements[idx - 1] : undefined;
+  if (!prev) return removeSpanWithComma(text, el.start, el.end);
+  // The newline+indent immediately before the entry is install's insertion whitespace.
+  let wsStart = el.start;
+  while (wsStart > prev.end && (text[wsStart - 1] === " " || text[wsStart - 1] === "\t")) wsStart--;
+  if (text[wsStart - 1] === "\n" && text[wsStart - 2] === "\r") wsStart -= 2;
+  else if (text[wsStart - 1] === "\n" || text[wsStart - 1] === "\r") wsStart--;
+  const region = text.slice(prev.end, wsStart);
+  const comma = firstSeparatorComma(region);
+  const kept = comma === -1 ? region : region.slice(0, comma) + region.slice(comma + 1);
+  return text.slice(0, prev.end) + kept + text.slice(el.end);
+}
+
 /** Remove the plugin from the config text. Returns { text, removed, emptyRoot, skeletonRoot }. */
 export function removePluginText(text) {
   let current = text;
@@ -332,17 +444,17 @@ export function removePluginText(text) {
     const prop = findPluginsProperty(root);
     if (!prop || prop.value.type !== "array") break;
     const arr = prop.value;
-    const el = arr.elements.find(matchesPluginEntry);
+    const el = arr.elements.find((element) => matchesPluginEntry(element) || isLegacyRepoEntry(element));
     if (!el) break;
     removed = true;
-    current = removeSpanWithComma(current, el.start, el.end);
+    current = removeLastElement(current, arr, el);
   }
   if (!removed) return { text, removed: false, emptyRoot: false, skeletonRoot: false };
   // Drop the plugins property entirely when the array is empty.
   const root = parseJsonc(current);
   const prop = findPluginsProperty(root);
   if (prop && prop.value.type === "array" && prop.value.elements.length === 0) {
-    current = removeSpanWithComma(current, prop.keyStart, prop.value.end);
+    current = removePropertySpan(current, prop.keyStart, prop.value.end);
   }
   const finalRoot = parseJsonc(current);
   const remaining = finalRoot.type === "object" ? finalRoot.properties : [];
@@ -567,17 +679,25 @@ export function install(args, opts = {}) {
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
   const text = readFileSync(file, "utf8");
-  const result = addPluginText(text);
-  if (result.already) {
+  // A config written by the pre-rename installer carries the old repository slug. Replace
+  // it in place: leaving it means the old tag keeps loading, adding the new spec next to
+  // it means two copies of the plugin.
+  const migrating = hasLegacyRepoEntry(text);
+  const result = addPluginText(migrating ? removePluginText(text).text : text);
+  if (result.already && !migrating) {
     out.push(`already installed (${file}); nothing to do`);
     return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
   }
   if (!dryRun) {
     const bak = backupFile(file, text); // bytes identical to the edit base
     writeFileAtomic(file, result.text);
-    out.push(`installed ${PLUGIN_SPEC} in ${file}; restart opencode (backup: ${bak})`);
+    out.push(migrating
+      ? `updated ${file}: replaced the pre-rename github:paumkim/opencode-goalv2 specifier with ${PLUGIN_SPEC}; restart opencode (backup: ${bak})`
+      : `installed ${PLUGIN_SPEC} in ${file}; restart opencode (backup: ${bak})`);
   } else {
-    out.push(`dry-run: would add ${PLUGIN_SPEC} to ${file}`);
+    out.push(migrating
+      ? `dry-run: would replace the pre-rename github:paumkim/opencode-goalv2 specifier with ${PLUGIN_SPEC} in ${file}`
+      : `dry-run: would add ${PLUGIN_SPEC} to ${file}`);
   }
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
@@ -621,6 +741,13 @@ function selfScriptPath(entry) {
     return null;
   }
 }
+/** Dry-run counterpart of the skeleton branch: says whether the file would be restored or deleted. */
+function dryRunSkeletonLine(result, file, original) {
+  if (!result.emptyRoot && !result.skeletonRoot) return `dry-run: would remove ${PLUGIN_SPEC} from ${file}`;
+  if (original) return `dry-run: entry was the last thing in ${file}; would restore ${original} over it`;
+  return `dry-run: entry was the last thing in ${file}; would delete it (only install's skeleton remained)`;
+}
+
 function uninstallEntry(args, opts = {}) {
   const dryRun = args.includes("--dry-run");
   const restore = args.includes("--restore");
@@ -647,17 +774,28 @@ function uninstallEntry(args, opts = {}) {
   const text = readFileSync(file, "utf8");
   const result = removePluginText(text);
   if (!result.removed) return missingEntryOutcome(file, dryRun);
+  // A plugin-free backup proves the file existed before install (install only backs up
+  // existing files). When the surgical removal reduces the file to install's skeleton or
+  // to nothing, the user's original file must come back — deleting it would take a
+  // `$schema`-only or `{}` config the user created. When no such backup exists, install
+  // created the file and deleting it is the correct undo.
+  const original = result.emptyRoot || result.skeletonRoot ? preInstallBackup(file) : undefined;
   if (!dryRun) {
     const bak = backupFile(file, text); // bytes identical to the edit base
     if (result.emptyRoot || result.skeletonRoot) {
-      unlinkSync(file);
-      out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (only install's skeleton remained); restart opencode (backup: ${bak})`);
+      if (original) {
+        copyFileSync(original, file); // the pre-install config, byte for byte
+        out.push(`removed ${PLUGIN_SPEC}; restored the pre-install config ${original} over ${file}; restart opencode (backup: ${bak})`);
+      } else {
+        unlinkSync(file);
+        out.push(`removed ${PLUGIN_SPEC}; deleted ${file} (only install's skeleton remained); restart opencode (backup: ${bak})`);
+      }
     } else {
       writeFileAtomic(file, result.text);
       out.push(`removed ${PLUGIN_SPEC} from ${file}; restart opencode (backup: ${bak})`);
     }
   } else {
-    out.push(`dry-run: would remove ${PLUGIN_SPEC} from ${file}`);
+    out.push(dryRunSkeletonLine(result, file, original));
   }
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
@@ -687,6 +825,7 @@ export function status(args, opts = {}) {
   const { file } = scope;
   const out = [`scope:    ${scope.scope}`];
   let installed = false;
+  let legacy = false;
   if (existsSync(file)) {
     out.push(`config:   ${file}`);
     try {
@@ -694,6 +833,7 @@ export function status(args, opts = {}) {
       const prop = findPluginsProperty(root);
       if (prop?.value?.type === "array") {
         installed = prop.value.elements.some(matchesPluginEntry);
+        legacy = prop.value.elements.some(isLegacyRepoEntry);
       }
     } catch (err) {
       if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: cannot parse ${file}: ${err.message}\n` };
@@ -702,7 +842,9 @@ export function status(args, opts = {}) {
   } else {
     out.push(`config:   ${file} (does not exist)`);
   }
-  out.push(installed ? `installed: yes (${PLUGIN_SPEC})` : "not installed");
+  if (installed) out.push(`installed: yes (${PLUGIN_SPEC})`);
+  else if (legacy) out.push("installed: yes (pre-rename github:paumkim/opencode-goalv2 specifier; run `goal-loop install` to update it)");
+  else out.push("not installed");
   try {
     const v = spawnSync("opencode", ["--version"], { encoding: "utf8", timeout: 5000 });
     out.push(`opencode: ${probeOpencodeVersion(v)}`);

@@ -1,7 +1,7 @@
 {
   "plugins": [
     {
-      "package": "/path/to/opencode-goalv2",
+      "package": "/path/to/goal-loop",
       "options": {
         "coordinator": true
       }

@@ -1,7 +1,7 @@
 #!/bin/sh
 # goal-loop installer — one line, straight from GitHub:
 #
-#   curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/paumkim/goal-loop/main/install.sh | sh
 #
 # It puts the goal-loop CLI in ~/.local/bin (override with GOAL_LOOP_BIN_DIR)
 # and then runs `goal-loop install`, which registers the plugin in your
@@ -16,7 +16,7 @@
 #   GOAL_LOOP_NO_RUN=1 install the CLI only; do not touch the OpenCode config
 set -eu
 
-REPO="paumkim/opencode-goalv2"
+REPO="paumkim/goal-loop"
 REF="${GOAL_LOOP_REF:-main}"
 BIN_DIR="${GOAL_LOOP_BIN_DIR:-$HOME/.local/bin}"
 SOURCE="${GOAL_LOOP_SOURCE:-https://raw.githubusercontent.com/$REPO/$REF/bin/goal-loop.mjs}"

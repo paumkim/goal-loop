@@ -1,12 +1,12 @@
 # goal-loop
 Claude Code's `/goal` for OpenCode v2, rebuilt as its own project. Give the agent a finish line. It works turn after turn until an evaluator confirms the condition is met. MIT licensed.
-![/goal in the OpenCode CLI](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-status.png)
+![/goal in the OpenCode CLI](https://raw.githubusercontent.com/paumkim/goal-loop/main/assets/goal-status.png)
 ## Install
 One line, straight from GitHub:
 ```sh
-curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/paumkim/goal-loop/main/install.sh | sh
 ```
-That puts the `goal-loop` CLI in `~/.local/bin` and registers the plugin in your OpenCode config (`"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]`). No npm account or registry is involved: OpenCode fetches the tag from GitHub. Requires OpenCode 2.0.29 or newer. Restart OpenCode, then use `/goal` or `/goal-loop`.
+That puts the `goal-loop` CLI in `~/.local/bin` and registers the plugin in your OpenCode config (`"plugins": ["github:paumkim/goal-loop#v1.2.0"]`). No npm account or registry is involved: OpenCode fetches the tag from GitHub. Requires OpenCode 2.0.29 or newer. Restart OpenCode, then use `/goal` or `/goal-loop`.
 
 Remove everything — the plugin entry and the CLI script:
 ```sh
@@ -22,9 +22,9 @@ goal-loop status     # scope, config path, installed yes/no
 
 Prefer no CLI at all? Register the plugin by hand:
 ```sh
-opencode plugin add github:paumkim/opencode-goalv2#v1.1.0
+opencode plugin add github:paumkim/goal-loop#v1.2.0
 ```
-Or add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your OpenCode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/opencode-goalv2"] }`).
+Or add `"plugins": ["github:paumkim/goal-loop#v1.2.0"]` to your OpenCode config, or point `plugins` at a local clone (`{ "plugins": ["/path/to/goal-loop"] }`).
 ## Use
 
 | Command | What it does |
@@ -43,7 +43,7 @@ Or add `"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]` to your OpenCode c
 
 While a goal runs, the footer shows its state:
 
-![footer indicator](https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/assets/goal-running.png)
+![footer indicator](https://raw.githubusercontent.com/paumkim/goal-loop/main/assets/goal-running.png)
 
 Write the condition with one measurable end state, how to prove it (`npm test exits 0`), and anything that must not change. Add a limit for open-ended work, e.g. `or stop after 20 turns`.
 
@@ -157,7 +157,7 @@ All optional, set in `opencode.json`:
 {
   "plugins": [
     {
-      "package": "github:paumkim/opencode-goalv2#v1.1.0",
+      "package": "github:paumkim/goal-loop#v1.2.0",
       "options": {
         "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
         "maxTurns": 0,
@@ -273,4 +273,4 @@ All files are plain `.html` + `styles.css` + vanilla `app.js` and work by openin
 
 MIT. See [LICENSE](LICENSE).
 
-Originally derived from [`opencode-goal`](https://github.com/EL4CTEO/opencode-goal) by EL4CTEO. This is now an independent project, maintained by paumkim at https://github.com/paumkim/opencode-goalv2 — its own codebase, behavior, and interface. The original copyright notice is preserved verbatim in [LICENSE](LICENSE); the modifications and maintenance are copyright 2026 paumkim. The MIT license covers both.
+Originally derived from [`opencode-goal`](https://github.com/EL4CTEO/opencode-goal) by EL4CTEO. This is now an independent project, maintained by paumkim at https://github.com/paumkim/goal-loop — its own codebase, behavior, and interface. The original copyright notice is preserved verbatim in [LICENSE](LICENSE); the modifications and maintenance are copyright 2026 paumkim. The MIT license covers both.

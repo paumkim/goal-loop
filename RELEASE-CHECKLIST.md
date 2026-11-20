@@ -1,3 +1,10 @@
+> **1.2.0 release (2026-11-19).** The repository is renamed to `paumkim/goal-loop` and
+> `package.json` is `1.2.0`. The install specifier is `github:paumkim/goal-loop#v1.2.0`; the
+> one-liner now lives on `main`. Installs made before the rename (the
+> `github:paumkim/opencode-goalv2#v…` specifier) are removed by `uninstall`, reported by
+> `status`, and migrated in place by `install`. The 1.1.0-era text below is kept as the
+> historical record.
+
 # Release checklist — opencode-goalv2 1.1.0
 
 > **Naming note (2026-11-19, Workstream LXXVIII/LXXIX).** The product, package, plugin id and CLI are

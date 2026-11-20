@@ -9,8 +9,8 @@
 <section id="viewing"><h2>Viewing these docs</h2><p>This site is static HTML/CSS with no build step and no internet. Double-click <code>docs/index.html</code> in your file manager, or run <code>xdg-open docs/index.html</code> from the repo root. Keep the whole <code>docs/</code> folder together. Pages use relative links.</p></section>
 <section id="install"><h2>Install</h2>
 <p>One line, straight from GitHub:</p>
-<pre><code>curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh</code></pre>
-<p>The script puts the <code>goal-loop</code> CLI in <code>~/.local/bin</code> and runs <code>goal-loop install</code>, which registers the plugin in your OpenCode config as <code>"plugins": ["github:paumkim/opencode-goalv2#v1.1.0"]</code>. No npm account or registry is involved; OpenCode fetches the tag straight from GitHub. Requires OpenCode ≥2.0.29 and <code>node</code> or <code>bun</code> on PATH. Restart OpenCode afterwards; the plugin loads on the next start of both the TUI and the server.</p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/paumkim/goal-loop/main/install.sh | sh</code></pre>
+<p>The script puts the <code>goal-loop</code> CLI in <code>~/.local/bin</code> and runs <code>goal-loop install</code>, which registers the plugin in your OpenCode config as <code>"plugins": ["github:paumkim/goal-loop#v1.2.0"]</code>. No npm account or registry is involved; OpenCode fetches the tag straight from GitHub. Requires OpenCode ≥2.0.29 and <code>node</code> or <code>bun</code> on PATH. Restart OpenCode afterwards; the plugin loads on the next start of both the TUI and the server.</p>
 <h3>Three commands</h3>
 <pre><code>goal-loop            # install (default): add the plugin to the OpenCode config
 goal-loop uninstall  # remove exactly what install added
@@ -20,10 +20,10 @@ goal-loop status     # scope, config path, installed yes/no</code></pre>
 <pre><code>goal-loop uninstall           # plugin entry only; opencode is as it was
 goal-loop uninstall --self    # ...and delete the CLI script itself
 goal-loop uninstall --restore # put the pre-install backup back over the config</code></pre>
-<p>Removes exactly what the installer added (the <code>github:paumkim/opencode-goalv2#v1.1.0</code> entry in <code>plugins</code>). If the config file the installer created is left empty, it is deleted. If the plugin entry is already missing and an install-time backup exists (the oldest backup whose content provably lacks the plugin, i.e. the first install-time original), uninstall restores that pre-install config unchanged, after taking a fresh safety backup of the current state. A backup that contains the plugin is never restored automatically. <code>--restore</code> puts the pre-install backup back over the config on demand instead, taking a fresh safety backup first.</p>
+<p>Removes exactly what the installer added (the <code>github:paumkim/goal-loop#v1.2.0</code> entry in <code>plugins</code>). A config file the installer created is deleted when nothing else remains in it. A file that already existed (a <code>$schema</code>-only or <code>{}</code> config) is restored from its pre-install backup instead. If the plugin entry is already missing and an install-time backup exists (the oldest backup whose content provably lacks the plugin, i.e. the first install-time original), uninstall restores that pre-install config unchanged, after taking a fresh safety backup of the current state. A backup that contains the plugin is never restored automatically. <code>--restore</code> puts the pre-install backup back over the config on demand instead, taking a fresh safety backup first.</p>
 <h3>What the installer touches</h3>
 <p>The installer touches one file, the config opencode itself picks. For global installs it uses <code>$XDG_CONFIG_HOME/opencode/opencode.jsonc</code>, or <code>~/.config/opencode/opencode.jsonc</code> when XDG is unset (<code>opencode.json</code> wins when only it exists; <code>opencode.jsonc</code> is created when neither exists). Every file is backed up before writing (<code>&lt;file&gt;.&lt;yyyy-MM-DD-HH-mm-ss&gt;Z.bak</code>, never overwritten). Only the <code>plugins</code> array is edited. Comments, formatting and unrelated keys survive. The run is idempotent. A second install prints <code>already installed</code> and exits 0. An uninstall with nothing to do prints <code>not installed</code> and exits 0. Writes never leave the target scope, and the installer never opens your config by hand.</p>
-<p>This is a standalone MIT-licensed project. Prefer doing it yourself? Run <code>opencode plugin add github:paumkim/opencode-goalv2#v1.1.0</code>, add the same specifier to <code>"plugins": [...]</code> by hand, or point <code>plugins</code> at a local clone: <code>{ "plugins": ["/path/to/opencode-goalv2"] }</code>. The installer exists so you do not have to.</p></section>
+<p>This is a standalone MIT-licensed project. Prefer doing it yourself? Run <code>opencode plugin add github:paumkim/goal-loop#v1.2.0</code>, add the same specifier to <code>"plugins": [...]</code> by hand, or point <code>plugins</code> at a local clone: <code>{ "plugins": ["/path/to/goal-loop"] }</code>. The installer exists so you do not have to.</p></section>
 <section id="commands"><h2>Commands</h2>
 <div class="tablewrap"><table><thead><tr><th>Command</th><th>Action</th></tr></thead><tbody>
 <tr><td><code>/goal &lt;condition&gt;</code></td><td>Set goal and start immediately</td></tr>
@@ -42,7 +42,7 @@ goal-loop uninstall --restore # put the pre-install backup back over the config<
 <section id="options"><h2>opencode.json options</h2>
 <pre><code>{
   "plugins": [{
-    "package": "github:paumkim/opencode-goalv2#v1.1.0",
+    "package": "github:paumkim/goal-loop#v1.2.0",
     "options": {
       "evaluator": { "model": "opencode-go/deepseek-v4.1-flash" },
       "maxTurns": 0, "stallTurns": 0, "checkinMinutes": 30,
@@ -69,4 +69,4 @@ OPENCODE_GOAL_LOG_FILE
 OPENCODE_GOAL_MIRROR
 OPENCODE_GOAL_PROBE</code></pre></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#install">Install</a></li><li><a href="#commands">Commands</a></li><li><a href="#options">Options</a></li><li><a href="#troubleshoot">Troubleshooting</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/opencode-goalv2">https://github.com/paumkim/opencode-goalv2</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-19 22:57 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer><script src="app.js"></script></body></html>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-19 22:57 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer><script src="app.js"></script></body></html>

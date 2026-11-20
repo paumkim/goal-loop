@@ -1,17 +1,17 @@
 {
   "name": "goal-loop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Claude Code-style /goal for OpenCode v2: set a completion condition and the agent keeps working until it is met.",
   "author": "paumkim",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/paumkim/opencode-goalv2#readme",
+  "homepage": "https://github.com/paumkim/goal-loop#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/paumkim/opencode-goalv2.git"
+    "url": "git+https://github.com/paumkim/goal-loop.git"
   },
   "bugs": {
-    "url": "https://github.com/paumkim/opencode-goalv2/issues"
+    "url": "https://github.com/paumkim/goal-loop/issues"
   },
   "keywords": [
     "opencode",
