@@ -7674,4 +7674,35 @@ on a live model loop. The `completedLedgerHit` reuse changes wording only in one
 the ledger holds both an earlier near-duplicate and a later exact match of the same candidate — where the
 refusal wording (never the decision, the leading `no new gap` vocabulary or the refusal itself) would differ;
 the scanned set order puts the record's own condition first, so the common exact case is unaffected.
-<!-- spec-check files=70 tests=1957 -->
+
+## Workstream XCIV — the evaluator rubric requires verifier-command corroboration for broad conditions (2026-11-20)
+
+Follow-on to the XCIII workflow audit; closes backlog item `evaluator-rubric-evidence-types` (blind spot #5:
+the evaluator/judge is a single point of failure). Prompt-only strengthening of `src/core/prompts.ts`; the
+fresh-evidence verification gate (`verifyMet` / matrix / coverage decision), the commit policy, and all runtime
+behavior are untouched.
+1. **Two rubric contracts were already pinned.** `VERDICTS` step 2 already required, per clause/claim, a named
+   evidence type cited in observed evidence; step 3 already ran the explicit adversarial self-check ("What would
+   falsify met?" / "What important risk is untested?"), echoed in the `OUTPUT` reason contract (a). Both stay.
+2. **New: verifier-command corroboration for broad conditions.** The `"met"` bullet in `VERDICTS` gains the
+   sentence "For a broad or ambiguous condition, when a verifier command / configured required check is
+   available, a \"met\" verdict additionally needs that verifier command's fresh corroborating output scoped to
+   the change; transcript-only green does not corroborate a broad claim." A matching `RULES` entry
+   (`Broad-condition verifier corroboration: ...`) spells out that a configured verifier command whose fresh
+   scoped output is absent, unexecuted, or unscoped forces `not_met` with the missing verifier-command
+   corroboration named. Both the session and independent judge render through one shared `rubric(policy)`.
+Verification (fresh at this HEAD). `test/core.test.ts` gains "the evaluator rubric requires verifier-command
+corroboration for broad conditions (XCIV)" (asserts the three new tokens in both `evaluateInSession` and
+`evaluateIndependently`); `test/evaluator.test.ts` "the rubric both judges see carries the clause-matrix,
+adversarial, and structured-next contract (session and independent)" gains the
+`Broad-condition verifier corroboration` token for both the session and independent evaluator prompts.
+`bunx tsc --noEmit` clean; `cd test && bun test` → **1958 pass / 0 fail** (29 snapshots); `bun run check` green
+(check:spec ok — 70 files, 1958 tests). The pre-existing rubric pins stay green unchanged: the LXXXVII
+clause/evidence-matrix + adversarial-checks test, the fresh-evidence-at-HEAD and already-satisfied-at-HEAD
+wording tests, and the defensive-auditor test.
+Honest limits. Prompt-only change, so its effect is on judge behavior, which is exercised at the prompt/pin
+layer rather than on a live model loop; the verifier-command corroboration is guidance the judge is asked to
+follow and, when a verifier is actually configured, is already independently enforced by the runtime gate that
+spawns the command and downgrades a `met` with non-zero/unverifiable output. The clause does not itself change
+what the gate runs.
+<!-- spec-check files=70 tests=1958 -->

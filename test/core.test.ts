@@ -559,6 +559,17 @@ describe("prompts", () => {
       expect(independent).toContain(token)
     }
   })
+  test("the evaluator rubric requires verifier-command corroboration for broad conditions (XCIV)", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    for (const text of [
+      evaluateInSession("improve the whole codebase and verify end to end", facts, COMMIT),
+      evaluateIndependently("improve the whole codebase and verify end to end", facts, "transcript", COMMIT),
+    ]) {
+      expect(text).toContain("Broad-condition verifier corroboration")
+      expect(text).toContain("transcript-only green does not corroborate a broad claim")
+      expect(text).toContain("missing verifier-command corroboration")
+    }
+  })
   test("no commit rule in the rubric when it does not apply", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }
     expect(evaluateInSession("all tests pass", facts, NO_COMMIT)).not.toContain("Commit rule")
