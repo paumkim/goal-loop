@@ -4585,6 +4585,17 @@
       "submittedAt": "2026-11-20T21:32:56Z",
       "mergedAt": "2026-11-20T21:34:48Z",
       "mergedInto": "dev"
+    },
+    "evaluator-context-lean": {
+      "agent": "build",
+      "paths": "src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/core/prompts.ts,src/runtime/controller.ts,test/learning-log.test.ts,test/core.test.ts,test/outcome-telemetry.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-context-lean",
+      "worktree": "worktrees/wt-evaluator-context-lean",
+      "status": "done",
+      "createdAt": "2026-11-20T22:07:54Z",
+      "submittedAt": "2026-11-20T22:15:20Z",
+      "mergedAt": "2026-11-20T22:17:11Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
