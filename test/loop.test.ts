@@ -2407,6 +2407,17 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(record.loopIteration).toBe(1) // the loop did not advance
   })
 
+  test("(vii-c) a zero-tool-call producing-condition met on a later turn is accepted when the evaluator judges it met", async () => {
+    await h.setGoal("add a failing test for the parser")
+    h.verdicts.push(notMet("wrote the test but it does not fail yet"), met("test added and fails as required"))
+    await h.turn(1) // turn 1: did work
+    await h.turn(0) // turn 2: 0 tool calls, evaluator sees prior evidence in conversation
+    const record = h.controller.get(SID)!
+    expect(record.verdict).toBe("met")
+    expect(record.status).toBe("achieved")
+    expect(record.reason).toBe("test added and fails as required")
+  })
+
   test("(vii-d) the iteration cap counts retained history plus dropped entries, not the saturated slice", async () => {
     await h.setLoop("add a failing test for the parser")
     const record = h.controller.get(SID)!
