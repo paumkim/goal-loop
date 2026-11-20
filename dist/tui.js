@@ -5834,6 +5834,8 @@ var isGoalSnapshot = (value) => {
     return false;
   if (!isFiniteNumber(value.elapsedMs) || !isBoolean(value.evaluating) || !isBoolean(value.waiting))
     return false;
+  if (value.queued !== undefined && !isBoolean(value.queued))
+    return false;
   if (value.spend !== undefined && !isUsageSnapshot(value.spend))
     return false;
   if (value.contextSize !== undefined && !isFiniteNumber(value.contextSize))

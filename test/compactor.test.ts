@@ -296,6 +296,29 @@ describe("AutoCompactor.compactAtBoundary", () => {
     expect(h.compactCalls).toEqual([SID])
   })
 
+  test("re-checks in-flight before compacting when another path marks compaction during the context read", async () => {
+    const clock = new FakeClock()
+    const notices: Notice[] = []
+    const compactCalls: string[] = []
+    let compactor!: AutoCompactor
+    compactor = new AutoCompactor({
+      config: resolveConfig({ compactAtTokens: 260_000 }),
+      compact: async (sessionID) => {
+        compactCalls.push(sessionID)
+      },
+      context: async () => {
+        compactor.noteCompactionStarted(SID)
+        return [assistant({ input: 10_000, cache: { read: 255_000, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+      clock,
+      log: { info() {}, warn() {}, error() {} },
+    })
+    await compactor.maybeCompact(SID)
+    expect(compactCalls).toEqual([])
+    expect(notices.some((n) => n.kind === "compact" && n.title === "Auto-compact requested")).toBe(false)
+  })
+
   test("force skips the cooldown but never the in-flight or busy gate", async () => {
     const h = harness({ compactAtTokens: 260_000 })
     await h.compactor.compactAtBoundary(SID)
@@ -312,6 +335,30 @@ describe("AutoCompactor.compactAtBoundary", () => {
     h.setBusy(false)
     h.compactor.noteCompactionStarted(SID)
     expect(await h.compactor.compactAtBoundary(SID, { force: true })).toEqual({ requested: false, reason: "in-flight" })
+  })
+
+  test("re-checks in-flight before compacting when another path marks compaction during the context read", async () => {
+    const clock = new FakeClock()
+    const notices: Notice[] = []
+    const compactCalls: string[] = []
+    let compactor!: AutoCompactor
+    compactor = new AutoCompactor({
+      config: resolveConfig({ compactAtTokens: 260_000 }),
+      compact: async (sessionID) => {
+        compactCalls.push(sessionID)
+      },
+      context: async () => {
+        compactor.noteCompactionStarted(SID)
+        return [assistant({ input: 8_000, cache: { read: 2_500, write: 0 } })]
+      },
+      emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+      clock,
+      log: { info() {}, warn() {}, error() {} },
+    })
+    const result = await compactor.compactAtBoundary(SID)
+    expect(result).toEqual({ requested: false, reason: "in-flight" })
+    expect(compactCalls).toEqual([])
+    expect(notices.some((n) => n.kind === "compact" && n.title === "Auto-compact requested (loop boundary)")).toBe(false)
   })
 
   test("a busy check that throws fails closed (defers the compaction)", async () => {

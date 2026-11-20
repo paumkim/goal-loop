@@ -331,6 +331,7 @@ export default Plugin.define({
           if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
           await controller.status(event.sessionID)
           controller.onUserPrompt(event.sessionID)
+          event.prompt.text = "Show the current goal loop status."
           return
         }
         const maxLoops = goalLoop.maxLoops ?? config.maxLoops
