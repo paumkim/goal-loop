@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-20 05:58 UTC</code></td><td>goal-loop: escalate repeated failure signatures instead of re-arming</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 05:42 UTC</code></td><td>fix(tui): align the ambient pill's leading icon with the left accent rail</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 05:31 UTC</code></td><td>docs(coordinator): clarify merge-next ownership and readiness</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 05:23 UTC</code></td><td>feat(learning): capture session outcomes and feed learnings into planning</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-19 07:05 UTC</code></td><td>fix(events,parse): shell.created reads top-level id/owner like shell.updated; a lone quote is status — close pending_fixes 8/9; SPEC LXXVI; marker 1787→1789</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 06:08 UTC</code></td><td>feat(check): dist freshness gate — build.ts --check compares the committed dist/tui.js against a fresh build and fails when stale (restores the artifact, never repairs); wired as check:dist into bun run check; 3 tests; README pipeline; SPEC LXXIV; marker 1780→1783</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 05:52 UTC</code></td><td>fix(hud): menu selection reads delta as a direction — any integer lands on the next enabled row instead of orbiting a residue class and resting on an inert one; property test sweeps n&lt;=6 x masks x deltas; SPEC LXXIII; marker 1777→1780</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 05:24 UTC</code></td><td>fix(verify): the gate's timeout kills the process group and cancels the drains — a child holding stdout no longer outlives the budget; pre-aborted signals kill too; verifier exported and covered by 4 tests; SPEC LXXII; marker 1773→1777</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
