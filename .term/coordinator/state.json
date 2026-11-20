@@ -4214,6 +4214,25 @@
       ],
       "mergedAt": "2026-11-20T13:06:26Z",
       "mergedInto": "dev"
+    },
+    "troubleshoot-parallel-goal-loop-evaluator": {
+      "agent": "iceman",
+      "paths": "test,docs,SPEC.md",
+      "branch": "wt/troubleshoot-parallel-goal-loop-evaluator",
+      "worktree": "worktrees/wt-troubleshoot-parallel-goal-loop-evaluator",
+      "status": "done",
+      "createdAt": "2026-11-20T13:12:11Z",
+      "submittedAt": "2026-11-20T13:18:27Z",
+      "mergedAt": "2026-11-20T13:21:18Z",
+      "mergedInto": "dev"
+    },
+    "goal-tui-card-breathing-room": {
+      "agent": "orchestrator",
+      "paths": "src/hud-card.tsx,src/tui.tsx,dist/tui.js,test,scripts,SPEC.md,docs",
+      "branch": "wt/goal-tui-card-breathing-room",
+      "worktree": "worktrees/wt-goal-tui-card-breathing-room",
+      "status": "claimed",
+      "createdAt": "2026-11-20T13:19:52Z"
     }
   },
   "mergeLock": null,
