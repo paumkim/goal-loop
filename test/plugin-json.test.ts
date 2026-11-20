@@ -2,7 +2,7 @@
  * Pins the JSON examples in the user-facing docs (README.md, docs/install.html) to reality:
  *  1. every fenced-or-braced JSON block parses with JSON.parse, so the copy-pasted example is never
  *     malformed (both docs instruct the user to paste it into `opencode.json`);
- *  2. every occurrence of the plugin specifier form `github:paumkim/opencode-goalv2#…` in either file
+ *  2. every occurrence of the plugin specifier form `github:paumkim/goal-loop#…` in either file
  *     equals PLUGIN_SPEC exported by `bin/goal-loop.mjs` (and therefore `v` + package.json version).
  */
 import { describe, expect, test } from "bun:test"
@@ -56,7 +56,7 @@ const installBlocks = extractJsonBlocks("install.html", installHtml, true)
 
 /** Every occurrence of the specifier in the two docs; returns the full specifier strings. */
 const specifiersIn = (text: string): string[] =>
-  [...text.matchAll(/github:paumkim\/opencode-goalv2#[^\s"'<>)`]+/g)].map((match) => match[0] as string)
+  [...text.matchAll(/github:paumkim\/goal-loop#[^\s"'<>)`]+/g)].map((match) => match[0] as string)
 
 describe("docs JSON examples", () => {
   test("README.md has at least one JSON options block and it parses", () => {
@@ -75,7 +75,7 @@ describe("docs JSON examples", () => {
 
   test("every JSON options block that names a plugin specifier pins it to PLUGIN_SPEC", () => {
     const blocks = [...readmeBlocks, ...installBlocks]
-    const pinned = blocks.filter((block) => /github:paumkim\/opencode-goalv2/.test(block.json))
+    const pinned = blocks.filter((block) => /github:paumkim\/goal-loop/.test(block.json))
     expect(pinned.length).toBeGreaterThanOrEqual(2) // the documented install route in both files
     for (const block of pinned) {
       expect(block.json, `${block.label} must use PLUGIN_SPEC`).toContain(PLUGIN_SPEC)
@@ -106,6 +106,6 @@ describe("docs JSON examples", () => {
   })
 
   test("PLUGIN_SPEC is the github specifier with package.json's version", () => {
-    expect(PLUGIN_SPEC).toBe(`github:paumkim/opencode-goalv2#v${pkg.version}`)
+    expect(PLUGIN_SPEC).toBe(`github:paumkim/goal-loop#v${pkg.version}`)
   })
 })

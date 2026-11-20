@@ -8,7 +8,8 @@
  * the docs search index, and the documented option floors against `resolveConfig()`.
  *
  * Deliberate legacy names are NOT asserted away: `OPENCODE_GOAL_*` env vars, the `opencode-goal` bin
- * alias, `PLUGIN_PACKAGE = "opencode-goalv2"` and the GitHub repo slug are the back-compat surface.
+ * alias, `PLUGIN_PACKAGE = "opencode-goalv2"` and the pre-rename GitHub repo slug are the
+ * back-compat surface.
  */
 import { describe, expect, test } from "bun:test"
 import { existsSync, readFileSync, statSync } from "node:fs"
@@ -69,13 +70,14 @@ describe("SPEC naming declaration", () => {
     expect(namingBlock).toContain("bin/goal-loop.mjs")
     expect(namingBlock).toContain("goal-loop.tui")
     expect(namingBlock).toContain("goal-loop-mirror")
-    expect(namingBlock).toContain("github:paumkim/opencode-goalv2#v")
+    expect(namingBlock).toContain("github:paumkim/goal-loop#v")
   })
   test("every pre-rename name SPEC still uses is mapped to a current name that exists", () => {
     const pairs: Array<[string, string]> = [
       ["bin/opencode-goal.mjs", "bin/goal-loop.mjs"],
       ["opencode-goal.tui", "goal-loop.tui"],
       ["opencode-goal-mirror", "goal-loop-mirror"],
+      ["github:paumkim/opencode-goalv2", "github:paumkim/goal-loop"],
     ]
     for (const [legacy, current] of pairs) {
       expect(spec, `${legacy} still appears in SPEC history`).toContain(legacy)
@@ -97,7 +99,7 @@ describe("SPEC naming declaration", () => {
   test("the declared legacy surface is still what ships (alias, package spec, env prefix)", () => {
     expect(pkg.bin["opencode-goal"]).toBe("./bin/goal-loop.mjs")
     expect(read("bin/goal-loop.mjs")).toContain('export const PLUGIN_PACKAGE = "opencode-goalv2"')
-    expect(read("bin/goal-loop.mjs")).toContain("github:paumkim/opencode-goalv2#v")
+    expect(read("bin/goal-loop.mjs")).toContain("github:paumkim/goal-loop#v")
     expect(read("src/core/config.ts")).toContain("OPENCODE_GOAL_")
   })
 })

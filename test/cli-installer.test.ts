@@ -353,7 +353,7 @@ describe("runCli (exit codes and messages)", () => {
   test("--version prints the version and exits 0", () => {
     const r = runCli(["--version"], { env: envFor(fakeHome()), cwd: tmpdir() });
     expect(r.code).toBe(0);
-    expect(r.stdout).toMatch(/1\.1\.0/);
+    expect(r.stdout).toMatch(/\d+\.\d+\.\d+/);
   });
 });
 
@@ -508,10 +508,10 @@ describe("uninstall restore: backup chronology (regression)", () => {
 });
 
 describe("PLUGIN_SPEC pins the package version (regression)", () => {
-  test("PLUGIN_SPEC is github:paumkim/opencode-goalv2#v<package.json version>", () => {
+  test("PLUGIN_SPEC is github:paumkim/goal-loop#v<package.json version>", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(PLUGIN_SPEC).toBe(`github:paumkim/opencode-goalv2#v${pkg.version}`);
+    expect(PLUGIN_SPEC).toBe(`github:paumkim/goal-loop#v${pkg.version}`);
   });
 });
 
@@ -929,7 +929,117 @@ describe("install.sh (the GitHub one-liner)", () => {
     const file = new URL("../install.sh", import.meta.url).pathname;
     expect(statSync(file).mode & 0o111).not.toBe(0);
     const text = readFileSync(file, "utf8");
-    expect(text).toContain("curl -fsSL https://raw.githubusercontent.com/paumkim/opencode-goalv2/main/install.sh | sh");
+    expect(text).toContain("curl -fsSL https://raw.githubusercontent.com/paumkim/goal-loop/main/install.sh | sh");
     expect(text).toContain("goal-loop uninstall --self");
+  });
+});
+
+describe("install/uninstall round-trips byte-for-byte (formatting fidelity)", () => {
+  test("a comment after the last plugin, an inline block comment and CRLF all survive a round trip", () => {
+    const home = fakeHome();
+    const original =
+      '{\r\n  // my settings\r\n  "$schema": "https://opencode.ai/config.json",\r\n  "model": "x", /* keep me */\r\n  "plugins": [\r\n    "some-other-plugin" // trailing comment\r\n  ],\r\n}\r\n';
+    const file = writeGlobalConfig(home, "opencode.jsonc", original);
+    install([], { env: envFor(home), cwd: home });
+    expect(readFileSync(file, "utf8")).toContain(PLUGIN_SPEC);
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(readFileSync(file, "utf8")).toBe(original);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("the plugin entry inserted before the first key does not shift that key's indentation", () => {
+    const home = fakeHome();
+    const original = '{\n  "$schema": "https://opencode.ai/config.json",\n  "model": "x"\n}\n';
+    const file = writeGlobalConfig(home, "opencode.jsonc", original);
+    install([], { env: envFor(home), cwd: home });
+    const installed = readFileSync(file, "utf8");
+    expect(installed).toContain('\n  "$schema"');
+    expect(installed).not.toContain('\n    "$schema"');
+    uninstall([], { env: envFor(home), cwd: home });
+    expect(readFileSync(file, "utf8")).toBe(original);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a pre-existing $schema-only config is restored on uninstall, not deleted", () => {
+    const home = fakeHome();
+    const original = '{\n  "$schema": "https://opencode.ai/config.json"\n}\n';
+    const file = writeGlobalConfig(home, "opencode.jsonc", original);
+    install([], { env: envFor(home), cwd: home });
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf8")).toBe(original);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("a pre-existing empty object config is restored on uninstall, not deleted", () => {
+    const home = fakeHome();
+    const original = "{}\n";
+    const file = writeGlobalConfig(home, "opencode.jsonc", original);
+    install([], { env: envFor(home), cwd: home });
+    uninstall([], { env: envFor(home), cwd: home });
+    expect(existsSync(file)).toBe(true);
+    expect(readFileSync(file, "utf8")).toBe(original);
+    rmSync(home, { recursive: true, force: true });
+  });
+});
+
+describe("pre-rename repository slug (opencode-goalv2 → goal-loop)", () => {
+  const OLD = "github:paumkim/opencode-goalv2#v1.1.0";
+
+  test("install migrates an old specifier in place instead of stacking a second entry", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(
+      home,
+      "opencode.jsonc",
+      `{\n  "model": "test/model",\n  "plugins": [\n    "${OLD}"\n  ]\n}\n`,
+    );
+    const r = install([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("replaced the pre-rename");
+    const text = readFileSync(file, "utf8");
+    expect(text).toContain(PLUGIN_SPEC);
+    expect(text).not.toContain(OLD);
+    expect(JSON.parse(text).plugins).toEqual([PLUGIN_SPEC]);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("install collapses a config that carries both the old and the new specifier", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(
+      home,
+      "opencode.jsonc",
+      `{\n  "plugins": [\n    "${OLD}",\n    "${PLUGIN_SPEC}"\n  ]\n}\n`,
+    );
+    install([], { env: envFor(home), cwd: home });
+    const text = readFileSync(file, "utf8");
+    expect(JSON.parse(text).plugins).toEqual([PLUGIN_SPEC]);
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("uninstall removes a config written by the pre-rename installer", () => {
+    const home = fakeHome();
+    const file = writeGlobalConfig(
+      home,
+      "opencode.jsonc",
+      `{\n  "model": "test/model",\n  "plugins": [\n    "${OLD}"\n  ]\n}\n`,
+    );
+    const r = uninstall([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    const text = readFileSync(file, "utf8");
+    expect(text).not.toContain("opencode-goalv2");
+    expect(text).toContain('"model": "test/model"');
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("status reports a pre-rename install and asks for an update", () => {
+    const home = fakeHome();
+    writeGlobalConfig(home, "opencode.jsonc", `{\n  "plugins": ["${OLD}"]\n}\n`);
+    const r = status([], { env: envFor(home), cwd: home });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("installed: yes (pre-rename");
+    expect(r.stdout).toContain("goal-loop install");
+    rmSync(home, { recursive: true, force: true });
   });
 });
