@@ -7533,13 +7533,14 @@ composer's left bar. The whole pill shifts one cell left; nothing else changes.
      `test/render-scripts.test.ts` re-anchors the breath-drift assertion to cell 0 (the dot drifts; `slice(1)`
      — the rest of the line — is byte-stable across phases, and the reduced-motion frame still equals phase 1).
 
-Verification (fresh at this HEAD). `cd test && bun test` → **1893 pass / 0 fail** (29 snapshots); `tsc --noEmit`
-clean; `bun run compile` rebuilds `dist/tui.js` (the committed bundle carries exactly the two edits — the
-`paddingLeft` 0 and the `- 1` budget); `bun run check` green (check:dist ok, check:tui ok, docs:check ok,
-check:spec ok — 68 files, 1893 tests). Headless evidence: `scripts/render-pill.tsx --width=80` paints the
-leading breath glyph at cell 0 across the human wave `◦ ○ ◎ ○`, and `scripts/render-slot.tsx --width=64`
-paints the card's hanging bar at cell 0 and the pill's `◎` at cell 0 in the same column — the alignment the
-request names. Pre-change the same two frames painted the pill's icon at cell 1.
+Verification (fresh at this HEAD, rebased onto dev). `cd test && bun test` → **1905 pass / 0 fail**
+(29 snapshots; the count is dev's merged learning-log work — this change adds no tests or shipped files);
+`tsc --noEmit` clean; `bun run compile` rebuilds `dist/tui.js` (the committed bundle carries exactly the two
+edits — the `paddingLeft` 0 and the `- 1` budget); `bun run check` green (check:dist ok, check:tui ok,
+docs:check ok, check:spec ok — 69 files, 1905 tests). Headless evidence: `scripts/render-pill.tsx --width=80`
+paints the leading breath glyph at cell 0 across the human wave `◦ ○ ◎ ○`, and `scripts/render-slot.tsx
+--width=64` paints the card's hanging bar at cell 0 and the pill's `◎` at cell 0 in the same column — the
+alignment the request names. Pre-change the same two frames painted the pill's icon at cell 1.
 
 Honest limits. Verified at the headless-render and unit layers only — not on a live terminal this pass; the
 live-frame geometry was read from the user's screenshot (pill icon and composer bar one cell apart).
@@ -7548,5 +7549,5 @@ never by a frame diff. The row claim for the host's `Jump to latest ↓` row rem
 the composer slot's negative-anchor grammar, so if the host reclaims or repaints that row the geometry
 inherits it.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=69 tests=1905 -->
 
