@@ -4596,6 +4596,23 @@
       "submittedAt": "2026-11-20T22:15:20Z",
       "mergedAt": "2026-11-20T22:17:11Z",
       "mergedInto": "dev"
+    },
+    "close-remaining-todos": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/coordinator-merge-safety.test.ts,docs/improvement-backlog.json,SPEC.md,docs/changelog.html,docs/coordinator.html",
+      "branch": "wt/close-remaining-todos",
+      "worktree": "worktrees/wt-close-remaining-todos",
+      "status": "done",
+      "createdAt": "2026-11-20T22:22:28Z",
+      "submittedAt": "2026-11-20T22:33:18Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T22:33:18Z",
+      "forcedScopeFiles": [
+        "docs/parallel-work.md",
+        "test/improvement-backlog.test.ts"
+      ],
+      "mergedAt": "2026-11-20T22:35:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
