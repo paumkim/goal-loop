@@ -16,12 +16,12 @@ const BAR_EMPTY = "░"
 const BAR_FILLED_ASCII = "#"
 const BAR_EMPTY_ASCII = "-"
 
-/** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, BAR_CELLS]. `ascii` swaps the pair for the same swap the sparkline does. */
+/** Block bar for the loop progress: filled cells as `filled`, the rest empty. Never divides by zero; clamps to [0, cells]. Any completed iteration paints at least one cell — a proportional bar must not round "just started" down to "nothing happened", the same floor the pips use. `ascii` swaps the pair for the same swap the sparkline does. */
 export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS, ascii: boolean = false): { filled: number; text: string } {
   const width = Math.max(1, Math.floor(cells))
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
-  const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round((safeDone / safeMax) * width)))
+  const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round((safeDone / safeMax) * width)))
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY
   return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) }
@@ -123,19 +123,28 @@ const PIP_EMPTY = "○"
 const PIP_FILLED_ASCII = "#"
 const PIP_EMPTY_ASCII = "-"
 
+/** Cell budget for the loop-position pips. Caps at or under it paint one pip per iteration slot; larger caps compress into this fixed width (see `renderPips`). */
+export const PIP_CELLS = 8
 /**
- * Iteration pips for the prompt-footer loop indicator: one pip per completed iteration, one per
- * remaining cap slot. Rendered only for small, known caps (1–8) so the footer stays compact; empty
- * otherwise. `ascii` swaps the pair for `#`/`-` under NO_COLOR / TERM=dumb.
+ * Iteration pips for the prompt-footer loop indicator. Two forms, one reading:
+ *   - a known cap of 1..`PIP_CELLS` paints one pip per iteration slot (`v3/5` → `●●●○○`), exact;
+ *   - a larger cap (9..1000) compresses the same progress into `PIP_CELLS` cells proportionally, so
+ *     the visual never drops out of the row just because the cap is big. `v3/100` → `●○○○○○○○`
+ *     (rounded down to a whole cell, floored at one cell once any iteration completed, so "some
+ *     progress" is never painted as none). The exact position stays in the `vX/Y` text beside it.
+ * Unknown caps (missing, zero, negative, NaN) render nothing — there is no position to show.
+ * `ascii` swaps the pair for `#`/`-` under NO_COLOR / TERM=dumb.
  */
 export function renderPips(done: number, max: number | undefined, ascii: boolean = false): string {
   if (typeof max !== "number" || !Number.isFinite(max)) return ""
   const cap = Math.floor(max)
-  if (cap < 1 || cap > 8) return ""
+  if (cap < 1) return ""
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap)
   const filledGlyph = ascii ? PIP_FILLED_ASCII : PIP_FILLED
   const emptyGlyph = ascii ? PIP_EMPTY_ASCII : PIP_EMPTY
-  return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled)
+  if (cap <= PIP_CELLS) return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled)
+  const cells = filled === 0 ? 0 : Math.min(PIP_CELLS, Math.max(1, Math.round((filled / cap) * PIP_CELLS)))
+  return filledGlyph.repeat(cells) + emptyGlyph.repeat(PIP_CELLS - cells)
 }
 
 /** Mean per-iteration duration (ms) and estimated remaining wall time (ms) at that pace. Undefined when no iteration has completed or the cap is unknown/exhausted. */

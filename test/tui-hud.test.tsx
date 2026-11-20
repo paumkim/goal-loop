@@ -14,7 +14,7 @@ import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import { iterationAttestation, finalTallyLine } from "../src/core/attestation.ts"
-import { iterationDurations, loopTotals } from "../src/core/history.ts"
+import { iterationDurations, loopTotals, renderPips } from "../src/core/history.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 const theme: HudCardTheme = {
@@ -190,6 +190,16 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal({ retries: 5, status: "paused" }), 1000 * 60 * 12)
     expect(pill.tone).toBe("paused")
     expect(pill.text).toContain("· retry 5")
+  })
+  test("a large cap keeps the vX/Y position and a bounded pip visual — the indicator never drops out", () => {
+    for (const cap of [9, 50, 99, 100, 1000]) {
+      const pill = pillModel(loopedGoal({ loopMaxLoops: cap }), 1000 * 60 * 12)
+      expect(pill.text).toContain(`loop · v3/${cap}`)
+      expect(pill.text).toContain(` ${renderPips(2, cap)} `) // loopedGoal() completed 2 iterations; visual bounded, never absent
+    }
+  })
+  test("the small-cap pip row is unchanged by the compression", () => {
+    expect(pillModel(loopedGoal(), 1000 * 60 * 12).text).toContain("loop · v3/5 ●●○○○")
   })
 })
 
@@ -1034,6 +1044,15 @@ describe("HudCard", () => {
     expect(frame).toContain("[clear goal]")
     expect(frame).toContain("[esc]")
     expect(frame).not.toContain("fix")
+    await setup.renderer.destroy()
+  })
+  test("a large loop cap keeps vX/Y and a bounded pip row on the card (no cap-dependent dropout)", async () => {
+    const goal = loopedGoal({ loopMaxLoops: 100 })
+    const { frame, setup } = await render(() => (
+      <HudCard goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} />
+    ))
+    expect(frame).toContain("v3/100")
+    expect(frame).toContain("v3/100 ●○○○○○○○")
     await setup.renderer.destroy()
   })
 
