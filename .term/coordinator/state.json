@@ -3837,8 +3837,10 @@
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/keep-improving-goal-loop",
       "worktree": "worktrees/wt-keep-improving-goal-loop",
-      "status": "claimed",
-      "createdAt": "2026-11-20T04:35:27Z"
+      "status": "done",
+      "createdAt": "2026-11-20T04:35:27Z",
+      "releasedAt": "2026-11-20T05:13:20Z",
+      "releaseReason": "released"
     },
     "recent-changes-regression-review": {
       "agent": "orchestrator",
@@ -3861,6 +3863,24 @@
       "submittedAt": "2026-11-20T05:11:34Z",
       "mergedAt": "2026-11-20T05:13:02Z",
       "mergedInto": "dev"
+    },
+    "release-verification-probe": {
+      "agent": "orchestrator",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/release-verification-probe",
+      "worktree": "worktrees/wt-release-verification-probe",
+      "status": "done",
+      "createdAt": "2026-11-20T05:13:32Z",
+      "releasedAt": "2026-11-20T05:13:42Z",
+      "releaseReason": "released"
+    },
+    "record-release-bookkeeping": {
+      "agent": "orchestrator",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/record-release-bookkeeping",
+      "worktree": "worktrees/wt-record-release-bookkeeping",
+      "status": "claimed",
+      "createdAt": "2026-11-20T05:16:45Z"
     }
   },
   "mergeLock": null,
