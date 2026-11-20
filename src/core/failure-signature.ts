@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { isWindowsDrivePathOnPosix } from "./wire.ts"
 import type { Verdict, VerdictEntry, VerdictVerificationMatrix, VerifyCheckEvidence } from "./types.ts"
 
 /**
@@ -281,7 +282,7 @@ export function persistFailureDiagnosticArtifact(input: {
   condition?: string
 }): string | undefined {
   // Avoid creating literal "C:" directories on POSIX when tests pass Windows-style fixture paths.
-  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(input.directory)) return undefined
+  if (isWindowsDrivePathOnPosix(input.directory)) return undefined
   try {
     const artifact = buildRepeatedFailureDiagnosticArtifact({ ...input, directory: input.directory })
     return writeFailureDiagnosticArtifact(input.directory, artifact)

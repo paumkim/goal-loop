@@ -27,6 +27,10 @@ export const sameDirectory = (a: string, b: string) => {
   return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right
 }
 
+/** True for Windows drive-letter paths when running on a non-Windows host (test-fixture/foreign path guard). */
+export const isWindowsDrivePathOnPosix = (path: string): boolean =>
+  process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(path)
+
 /** Plain (non-array) object check; the base narrow every other guard is built on. */
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)

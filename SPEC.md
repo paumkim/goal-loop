@@ -7942,4 +7942,22 @@ load, docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
 
 Honest limits. Micro-benchmark evidence only (single-process atomic snapshot writes), not end-to-end goal-loop latency;
 behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
+
+## Workstream CIV — unify Windows drive-path-on-POSIX guard helper (2026-11-20)
+
+Behavior-preserving unification/cleanup (no intended runtime behavior change). Centralizes the Windows drive-letter fixture-path
+guard used to avoid creating literal `C:` directories on non-Windows hosts:
+
+1. **`src/core/wire.ts`**: adds exported helper `isWindowsDrivePathOnPosix(path)` (`process.platform !== "win32"` and
+   `/^[A-Za-z]:[\\/]/.test(path)`), colocated with existing path utilities.
+2. **`src/runtime/controller.ts`**: `learningLogFile` uses the shared helper for the base-directory guard.
+3. **`src/core/failure-signature.ts`**: `persistFailureDiagnosticArtifact` uses the shared helper for the target-directory guard.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/failure-signature.test.ts
+test/learning-log.test.ts test/wire.test.ts` → **73 pass / 0 fail** (3 files, 340 expect() calls); `bun run check` green
+(tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots, dist fresh, TUI load, docs freshness, invariant-sweep, spec-check
+`files=72 tests=1989`).
+
+Honest limits. Internal refactor/unification only; guard semantics unchanged for supported paths and fixture cases. Persisted
+formats, evaluator/rubric, commit/verify gates, and TUI behavior unchanged.
 <!-- spec-check files=72 tests=1989 -->
