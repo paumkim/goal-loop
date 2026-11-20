@@ -4454,6 +4454,17 @@
       ],
       "mergedAt": "2026-11-20T17:12:39Z",
       "mergedInto": "dev"
+    },
+    "ignore-goal-loop-learnings": {
+      "agent": "iceman",
+      "paths": ".gitignore",
+      "branch": "wt/ignore-goal-loop-learnings",
+      "worktree": "worktrees/wt-ignore-goal-loop-learnings",
+      "status": "done",
+      "createdAt": "2026-11-20T17:27:10Z",
+      "submittedAt": "2026-11-20T17:27:46Z",
+      "mergedAt": "2026-11-20T17:30:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
