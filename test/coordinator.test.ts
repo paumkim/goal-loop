@@ -60,9 +60,9 @@ describe("coordinator merge-next", () => {
   test("a branch whose merge fixes the gate is merged (gate runs on the merged result)", () => {
     // dev's `check` fails pre-merge (FIXED absent) and passes post-merge (wt branch adds it).
     setup("test -f FIXED")
-    claimCommitSubmit("fix-gate", { FIXED: "yes\n" }, "2026-11-02T10:00:00+00:00")
+    const wt = claimCommitSubmit("fix-gate", { FIXED: "yes\n" }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(dir, ["merge-next"])
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(0)
     expect(result.stdout).toContain("merged into dev")
     expect(git(dir, ["rev-parse", "dev"]).trim()).not.toBe(devBefore)
@@ -72,9 +72,9 @@ describe("coordinator merge-next", () => {
 
   test("a merged result that fails the check aborts; dev and the lease are untouched", () => {
     setup("test -f FIXED")
-    claimCommitSubmit("no-fix", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
+    const wt = claimCommitSubmit("no-fix", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(dir, ["merge-next"])
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(1)
     expect(result.stderr).toContain("merged result fails the check")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
@@ -84,8 +84,8 @@ describe("coordinator merge-next", () => {
 
   test("a normal green merge still lands and the lease is marked done", () => {
     setup("true")
-    claimCommitSubmit("good", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
-    const result = run(dir, ["merge-next"])
+    const wt = claimCommitSubmit("good", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(0)
     expect(fileOnDev("FILE").stdout.trim()).toBe("y")
     expect(lease("good").status).toBe("done")
@@ -93,9 +93,9 @@ describe("coordinator merge-next", () => {
 
   test("the main worktree must be clean before merging", () => {
     setup("true")
-    claimCommitSubmit("dirty", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const wt = claimCommitSubmit("dirty", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
     writeFileSync(join(dir, "package.json"), '{"name":"dirty","scripts":{"check":"true"}}\n')
-    const result = run(dir, ["merge-next"])
+    const result = run(wt, ["merge-next"])
     expect(result.status).toBe(1)
     expect(result.stderr).toContain("uncommitted changes")
     expect(fileOnDev("FILE").status).not.toBe(0)
@@ -107,10 +107,10 @@ describe("coordinator merge-next", () => {
     // with the documented COORDINATOR_TEST_FF_FAIL hook (the old "check dirties a file" scenario
     // cannot strand the main checkout anymore — the gate runs in a dedicated merge worktree).
     setup("true")
-    claimCommitSubmit("stuck", { FILE: "from-wt\n" }, "2026-11-02T10:00:00+00:00")
+    const wt = claimCommitSubmit("stuck", { FILE: "from-wt\n" }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
     const result = spawnSync(SCRIPT, ["merge-next"], {
-      cwd: dir,
+      cwd: wt,
       encoding: "utf8",
       env: { ...GIT_ENV, COORDINATOR_TEST_FF_FAIL: "1" },
     })
@@ -143,8 +143,8 @@ describe("coordinator merge-next", () => {
     git(dir, ["commit", "-q", "-m", "fresh scratch"])
     git(dir, ["checkout", "-q", "dev"])
 
-    claimCommitSubmit("green", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
-    const result = run(dir, ["merge-next"])
+    const wtGreen = claimCommitSubmit("green", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wtGreen, ["merge-next"])
     expect(result.status).toBe(0)
     const remaining = git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()
     expect(remaining).toContain("merge-check-fresh-1")
@@ -157,8 +157,8 @@ describe("coordinator merge-next", () => {
     // being merged now (exactly like the real-world record-leases branch).
     const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
     committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
-    claimCommitSubmit("record-clean", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
-    const result = run(dir, ["merge-next"])
+    const wtRc = claimCommitSubmit("record-clean", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
+    const result = run(wtRc, ["merge-next"])
     expect(result.status).toBe(0)
     expect(result.stdout).toContain("merged into dev")
     // dev gained the bookkeeping entry from the branch...
@@ -174,8 +174,8 @@ describe("coordinator merge-next", () => {
 
   test("merge-next auto-commits the state.json bookkeeping on dev", () => {
     setup("true")
-    claimCommitSubmit("bookkeep", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
-    const result = run(dir, ["merge-next"])
+    const wtBk = claimCommitSubmit("bookkeep", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wtBk, ["merge-next"])
     expect(result.status).toBe(0)
     // The lease-flip commit lands on dev itself; the main worktree carries no state.json dirt anymore.
     const log = git(dir, ["log", "--oneline", "-3", "dev"])
@@ -190,9 +190,9 @@ describe("coordinator merge-next", () => {
     setup("false")
     const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
     committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
-    claimCommitSubmit("record-fail", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
+    const wtRf = claimCommitSubmit("record-fail", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
-    const result = run(dir, ["merge-next"])
+    const result = run(wtRf, ["merge-next"])
     expect(result.status).toBe(1)
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
     const after = JSON.parse(readFileSync(join(dir, ".term/coordinator/state.json"), "utf8"))
@@ -206,8 +206,8 @@ describe("coordinator merge-next", () => {
 
   test("a failed gate run leaves no scratch branches behind", () => {
     setup("test -f FIXED")
-    claimCommitSubmit("no-fix-2", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
-    run(dir, ["merge-next"])
+    const wtNf2 = claimCommitSubmit("no-fix-2", { OTHER: "x\n" }, "2026-11-02T10:00:00+00:00")
+    run(wtNf2, ["merge-next"])
     const branches = git(dir, ["branch", "--list", "merge-check-*"]).trim()
     expect(branches).toBe("")
     expect(git(dir, ["branch", "--show-current"]).trim()).toBe("dev")
@@ -265,9 +265,9 @@ describe("coordinator scope parsing and scratch selection", () => {
 
   test("merge-done accepts a newer scratch branch, not only the oldest leftover", () => {
     setup("true")
-    claimCommitSubmit("multi", { FILE: "x\n" }, "2026-11-02T10:00:00+00:00")
-    expect(run(dir, ["merge-next", "--review"]).status).toBe(0)
-    expect(run(dir, ["merge-next", "--review"]).status).toBe(0) // second pass: lease still submitted, a newer scratch is created
+    const wtMulti = claimCommitSubmit("multi", { FILE: "x\n" }, "2026-11-02T10:00:00+00:00")
+    expect(run(wtMulti, ["merge-next", "--review"]).status).toBe(0)
+    expect(run(wtMulti, ["merge-next", "--review"]).status).toBe(0) // second pass: lease still submitted, a newer scratch is created
     const scratches = git(dir, ["branch", "--list", "merge-check-multi-*", "--sort=-committerdate"])
       .trim().split("\n").map((l) => l.trim()).filter(Boolean)
     expect(scratches.length).toBe(2)
