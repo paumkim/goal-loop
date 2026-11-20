@@ -1171,7 +1171,8 @@ export class GoalController {
     // Verifier, not transcriber: a met verdict is not accepted until the configured
     // verification command exits 0 against the current checkout. The output tail rides the
     // not_met reason, so the next turn sees exactly what failed.
-    if (result.verdict === "met" && config.evaluator.verifyCommand) {
+    const gateRan = result.verdict === "met" && !!config.evaluator.verifyCommand
+    if (gateRan) {
       result = await this.verifyMet(record, runtime, result)
       if (this.stale(record, runtime, epoch)) return
     }
@@ -1191,7 +1192,12 @@ export class GoalController {
         return undefined
       }
     })()
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}) })
+    // Explicit pass/fail evidence for the configured verification gate (when it ran this turn) rides the verdict trail,
+    // so the matrix records command outcome alongside the evaluator verdict rather than only on the mutable latest-verify field.
+    const verifyEvidence = gateRan && record.lastVerify
+      ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
+      : undefined
+    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}) })
     // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
     const historyBound = boundVerdictHistory(record.history)
     if (historyBound.dropped > 0) {

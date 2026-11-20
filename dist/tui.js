@@ -632,14 +632,23 @@ var iterationLines = (entry, spanMs) => {
   lines.push(`- Evaluator reason:`, "", ...quote(entry.reason));
   return lines;
 };
+var verifyCell = (verify) => {
+  if (!verify)
+    return GAP;
+  if (verify.timedOut)
+    return "timeout";
+  if (verify.code === null)
+    return "error";
+  return `exit ${verify.code}`;
+};
 var verdictTable = (history) => {
   const lines = [
-    "| turn | verdict | tools | commit | spend |",
-    "| ---: | --- | ---: | --- | --- |"
+    "| turn | verdict | tools | commit | spend | verify |",
+    "| ---: | --- | ---: | --- | --- | --- |"
   ];
   for (const entry of history) {
     const tools = entry.toolCalls ?? GAP;
-    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} |`);
+    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry.verify)} |`);
   }
   return lines;
 };
@@ -651,8 +660,14 @@ var verdictProse = (history) => {
       bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`);
     if (entry.sha)
       bits.push(shortSha(entry.sha));
+    if (entry.verify)
+      bits.push(`verify ${verifyCell(entry.verify)} ${inlineCode(entry.verify.command)}`);
     lines.push(`- ${bits.join(" \xB7 ")}`);
     lines.push(...quote(entry.reason));
+    if (entry.verify?.tail) {
+      lines.push(...quote(`verify output tail:
+${entry.verify.tail}`));
+    }
   }
   return lines;
 };
@@ -1160,7 +1175,7 @@ var sealedDossierName = (nowMs, attempt = 0) => {
   return `goal-dossier-sealed-${stamp}${suffix}.md`;
 };
 var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var cleanShaCount = (verification, reach, sign) => {
@@ -1200,7 +1215,7 @@ function attestationAppendix(_goal, verification, reach, sign, nowMs, directory)
   const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
   lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
   for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
   }
   const clean = cleanShaCount(verification, reach, sign);
   lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
@@ -1285,7 +1300,7 @@ var reviewName = (nowMs, attempt = 0) => {
   return `goal-dossier-review-${stamp}${suffix}.md`;
 };
 var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var reviewVerdict = (exists, onThisLine, underSeal) => {
@@ -1307,7 +1322,7 @@ function buildReview(goal, directory, nowMs, probes = {}) {
   const reachBySha = new Map(reach.checks.map((check) => [check.sha, check.status]));
   const signBySha = new Map(sign.checks.map((check) => [check.sha, check.status]));
   const rows = verification.checks.map((check) => {
-    const exists = verifyCell2(check.status);
+    const exists = verifyCell3(check.status);
     const onThisLine = reachCell2(reachBySha.get(check.sha) ?? "unknown");
     const underSeal = signCell2(signBySha.get(check.sha) ?? "unknown");
     return {
@@ -1712,7 +1727,7 @@ function parseAttestationAppendix(markdown) {
     return { kind: "unparsable" };
   return { kind: "sealed", stamp, directory, rows, gap, malformed };
 }
-var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var verifyCell4 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 var reachCell3 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 var signCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 var shasAsGoal = (rows) => ({
@@ -1741,7 +1756,7 @@ function attestSealedDossier(markdown, directory, probes = {}) {
   const verifyBySha = new Map(verification.checks.map((check) => [check.sha, check.status]));
   const rows = uniqRows.map((row) => {
     const now = {
-      exists: verifyCell3(verifyBySha.get(row.sha) ?? "unknown"),
+      exists: verifyCell4(verifyBySha.get(row.sha) ?? "unknown"),
       onThisLine: reachCell3(reachBySha.get(row.sha) ?? "unknown"),
       underSeal: signCell3(signBySha.get(row.sha) ?? "unknown")
     };
@@ -5808,10 +5823,11 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha));
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha)) && (value.verify === undefined || isVerdictVerify(value.verify));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
 var isLastVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && isFiniteNumber(value.at) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
+var isVerdictVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
 var isGoalSnapshot = (value) => {
   if (!isRecord(value))
     return false;

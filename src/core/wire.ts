@@ -105,7 +105,8 @@ const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isFiniteNumber(value.at) &&
   (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) &&
   (value.spend === undefined || isUsageSnapshot(value.spend)) &&
-  (value.sha === undefined || isString(value.sha))
+  (value.sha === undefined || isString(value.sha)) &&
+  (value.verify === undefined || isVerdictVerify(value.verify))
 
 const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&
@@ -136,6 +137,13 @@ const isLastVerify = (value: unknown): value is NonNullable<GoalSnapshot["lastVe
   isString(value.command) &&
   (value.code === null || isFiniteNumber(value.code)) &&
   isFiniteNumber(value.at) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail))
+
+const isVerdictVerify = (value: unknown): value is NonNullable<VerdictEntry["verify"]> =>
+  isRecord(value) &&
+  isString(value.command) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
   (value.timedOut === undefined || isBoolean(value.timedOut)) &&
   (value.tail === undefined || isString(value.tail))
 

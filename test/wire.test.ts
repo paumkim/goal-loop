@@ -355,6 +355,27 @@ describe("per-turn spend on verdict entries", () => {
   })
 })
 
+describe("verification evidence on verdict entries", () => {
+  const withVerify = (verify?: unknown) => ({
+    ...snapshot(),
+    history: [{ turn: 1, verdict: "met" as const, reason: "done", at: 900, ...(verify === undefined ? {} : { verify }) }],
+  })
+
+  test("an additive VerdictEntry verify record is accepted when present", () => {
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, tail: "ok" }))?.history[0]?.verify).toEqual({ command: "bun run check", code: 0, tail: "ok" })
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: null, timedOut: true }))?.history[0]?.verify).toEqual({ command: "bun run check", code: null, timedOut: true })
+  })
+
+  test("verify may be absent and malformed values are rejected", () => {
+    expect(parseGoalSnapshot(withVerify(undefined))?.history[0]?.verify).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify("ok"))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: 1, code: 0 }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: "0" }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, timedOut: "yes" }))).toBeUndefined()
+    expect(parseGoalSnapshot(withVerify({ command: "bun run check", code: 0, tail: 7 }))).toBeUndefined()
+  })
+})
+
 describe("optional GoalSnapshot fields (historyDropped, loopHistoryDropped, completedConditions, completedConditionsDropped, lastVerify, waitingSince)", () => {
   test("accepts valid additive fields and tolerates their absence", () => {
     const lastVerify = { command: "bun run check", code: 0, at: 1_234 }
