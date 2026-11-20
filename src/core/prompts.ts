@@ -640,18 +640,34 @@ export const STRICT_REPAIR = `Your previous reply was not valid. ${OUTPUT} Do no
  */
 const INSTRUCTION_TAGS = ["<goal>", "<goal-loop", "<goal-continuation", "<goal-retry", "<goal-checkin"] as const
 
-/** True when any text content part carries one of the goal-instruction tags. Unknown shapes never match, and a compaction checkpoint (which may quote a tag in its `<recent-context>`) is history, never an instruction. */
-export const isGoalInstructionMessage = (message: unknown): boolean => {
+/** True when any text content part of the message carries a goal-instruction tag — checkpoints included. */
+const carriesGoalTag = (message: unknown): boolean => {
   if (typeof message !== "object" || message === null) return false
   const content = (message as NoteMessageLike).content
   if (!Array.isArray(content)) return false
-  if (isCompactionCheckpoint(content)) return false
   return content.some((part) => {
     if (typeof part !== "object" || part === null) return false
     const { type, text } = part as { type?: unknown; text?: unknown }
     return type === "text" && typeof text === "string" && INSTRUCTION_TAGS.some((tag) => text.includes(tag))
   })
 }
+/** True when any text content part carries one of the goal-instruction tags. Unknown shapes never match, and a compaction checkpoint (which may quote a tag in its `<recent-context>`) is history, never an instruction. */
+export const isGoalInstructionMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const content = (message as NoteMessageLike).content
+  if (!Array.isArray(content)) return false
+  if (isCompactionCheckpoint(content)) return false
+  return carriesGoalTag(message)
+}
+/**
+ * True when the model-bound messages still carry goal-grammar TEXT anywhere, checkpoint quotes included.
+ * `stripGoalContext` removes the plugin's own goal messages, but a compaction checkpoint it deliberately
+ * keeps can quote an expired `<goal>` kickoff, and the strict-provider repair can keep a trailing user turn
+ * whose text names the goal. This is the predicate the `context` hook uses to decide whether the terminal
+ * ground-truth line has anything left to counter: with no goal text in the request, that line is stale
+ * boilerplate and is not injected.
+ */
+export const carriesGoalGrammar = (messages: ReadonlyArray<unknown>): boolean => messages.some(carriesGoalTag)
 
 /**
  * Drop every goal-grammar message (notes AND instructions) from a model-bound message list. Applied by the

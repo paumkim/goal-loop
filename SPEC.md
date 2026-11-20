@@ -492,7 +492,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=66 tests=1813 -->
+<!-- spec-check files=66 tests=1814 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7348,4 +7348,12 @@ used in SPEC being mapped to a target that exists, no pre-rename id in shipped c
 (bin alias, `PLUGIN_PACKAGE`, repo slug, `OPENCODE_GOAL_*` prefix) still present. Test count 1802 -> 1813; packed
 files stay 66 (the suite sits under `test/`, outside `package.json` `files`).
 Honest limits. Legacy names stay on purpose and are out of scope: `OPENCODE_GOAL_*` env vars (`test/env-vars.test.ts` owns that surface), the `opencode-goal` bin alias, `PLUGIN_PACKAGE = "opencode-goalv2"`, the GitHub repo slug, and the upstream `EL4CTEO/opencode-goal` credit. SPEC.md's older workstreams keep their historical paths, and the docs search index is curated by hand, not generated.
-<!-- spec-check files=66 tests=1813 -->
+<!-- spec-check files=66 tests=1814 -->
+
+## Workstream LXXX — the terminal ground-truth line rides only requests that still carry goal text (2026-11-19)
+Armed condition (verbatim): "can you actually updated inspect the evaluator: this seems to be after goal achieved thing. there seem to be a stale system in there."
+Finding. The evaluator does not run for a finished goal: `onExecutionSucceeded` returns unless `record.status === "active"`, verdicts land only on live records, and `restore()` adopts live records only, so an achieved goal is inert on the evaluation path. The stale artifact sits one step later, in the `context` hook: once any goal for a session ended in this process, `TERMINAL_REMINDER` was pushed into the SYSTEM part of every model request for the rest of the session, whether or not the request still contained anything goal-shaped. That is the line a session keeps carrying after achievement ("A /goal was set earlier ... Do not resume work toward it"), long after the only risk it counters — a compaction checkpoint quoting the expired `<goal>` kickoff, which `stripGoalContext` deliberately keeps — has left the context.
+Fix. `carriesGoalGrammar(messages)` (src/core/prompts.ts) scans model-bound text for the goal instruction tags, checkpoint quotes included; the shared matcher `carriesGoalTag` now backs both it and `isGoalInstructionMessage`. The hook strips first and injects the terminal line only when the surviving request still carries goal text: the checkpoint quote, or a trailing user turn the strict-provider repair kept. With no goal text in the request the line is not injected.
+Evidence. `test/notes.test.ts` pins the predicate (plain message, `null`/number/object entries, a checkpoint quoting `<goal>`). `test/plugin.test.ts` (LXVII) asserts both sides on a real achieved record: a post-achievement request whose only goal message is stripped gets no system line; a checkpoint quoting `<goal>` still gets one. Discrimination: with the gate removed the plugin test fails (Expected false, Received true) and passes again with it restored. Test count 1813 -> 1814; packed files stay 66.
+Honest limits. The line is still process-local and still rides every request that does carry a checkpoint quote — that is the case it exists for. The gate keys on the plugin's own tag grammar; goal text a compaction summary rephrases without a tag is not detectable and never was.
+<!-- spec-check files=66 tests=1814 -->

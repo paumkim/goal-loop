@@ -451,7 +451,7 @@ describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin
 describe("a terminal goal is inert in later context (LXVII)", () => {
   const message = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
 
-  test("no live goal: goal-grammar messages leave context; the terminal ground truth rides the system part", async () => {
+  test("no live goal: goal-grammar messages leave context, and the terminal line rides only a request that still carries goal text", async () => {
     const directory = repository()
     const { ctx, calls, hooks, storage } = context(directory)
     // Deliver one full turn (started -> tool -> succeeded) through the event pump once the arm lands;
@@ -486,7 +486,18 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
       }
       hooks.context!(event)
       expect(event.messages).toEqual([message("the user's own line")])
-      expect(event.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(true)
+      // Nothing goal-shaped survives, so the counter-instruction has nothing to counter: no session-long
+      // stale system line on every later request.
+      expect(event.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(false)
+      // A compaction checkpoint that quotes the expired `<goal>` kickoff is the one shape stripping keeps,
+      // so the terminal line still rides that request.
+      const checkpoint = message(
+        ["<conversation-checkpoint>", "<summary>worked</summary>", "<recent-context>", "[User]: <goal>", "the parser is correct", "</goal>", "</recent-context>", "</conversation-checkpoint>"].join("\n"),
+      )
+      const quoting = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [checkpoint], tools: {}, options: {} }
+      hooks.context!(quoting)
+      expect(quoting.messages).toEqual([checkpoint])
+      expect(quoting.system.some((part: any) => typeof part?.text === "string" && part.text.includes("Do not resume work toward it"))).toBe(true)
     } finally {
       await dispose?.()
     }
