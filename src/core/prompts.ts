@@ -86,8 +86,6 @@ export function commitStatusSuffix(policy: CommitPolicy): string {
   return commitRuleSentence(policy, "suffix")
 }
 
-/** True when the goal has no hard evidence token or reads as vague. */
-
 /**
  * Heuristic: a "broad goal" needs scoped/profile-aware verification evidence (typed checks, targeted proofs),
  * not a single green-but-unscoped gate. Conservative: obvious multi-clause improvement/refactor/audit/completion
@@ -115,6 +113,7 @@ export function isBroadGoalCondition(condition: string): boolean {
   return false
 }
 
+/** True when the goal has no hard evidence token or reads as vague. */
 export function isFuzzyCondition(condition: string): boolean {
   const text = condition.toLowerCase()
   const vague = ["look like", "like a rabbit", "pretty", "nice", "better", "improve", "redesign", "rework", "rabbit"]
@@ -152,7 +151,7 @@ function historyBlock(history: ReadonlyArray<LoopEntry>, limit: number = HISTORY
 const TREE_TRUTH: ReadonlyArray<string> = [
   `First, re-read the repository state instead of trusting that summary: git log --oneline -5, git status --short, git branch --show-current`,
   `(and, in a coordinator repo, coordinator status --json and git worktree list), plus the current check output (bun run check or the`,
-  `equivalent). What these show is the ground truth; the summary is only a hint.`,
+  `equivalent).`,
 ]
 
 /** Audit-and-stop lines, shared by every prompt that arms or re-arms a loop iteration. Kept byte-identical. */
@@ -170,7 +169,7 @@ function loopPreamble(loop: LoopPreamble): string[] {
     `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Objective (constant): ${escape(loop.objective)}`,
     `Prior iterations:\n${historyBlock(loop.history)}`,
-    `When this iteration is met, the loop summarizes it and arms the next one; you do not need to decide that. Keep the objective in mind, not just this condition.`,
+    `Keep the objective in mind, not just this condition; the loop arms the next iteration when this one is met.`,
   ]
 }
 
@@ -183,7 +182,7 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     `</goal>`,
     ``,
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
-    `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation; it cannot run commands or read files.`,
+    `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation.`,
     ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
@@ -246,7 +245,7 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
     ``,
     ...AUDIT_AND_STOP,
     ``,
-    `The compaction cut the thread, not the loop: keep working toward the armed condition. After each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Do not wait for a user message.`,
+    `The compaction cut the thread, not the loop: keep working toward the armed condition. Do not wait for a user message.`,
     `</goal-loop-reanchor>`,
   ].join("\n")
 }
@@ -385,21 +384,20 @@ interface EvaluationFacts {
 }
 
 const VERDICTS = [
-  `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD). Narration, prior claims, previous verdicts, and "should pass" are not evidence.`,
+  `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
   `1. Parse the armed condition into explicit, verifiable clauses.`,
-  `2. Build an evidence matrix per clause: {clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn}. For each claim, require and name an evidence type (command/test/build/gate output, diff or file content, commit hash/branch, artifact path, or other concrete proof) and cite that type in observed evidence.`,
+  `2. Build an evidence matrix per clause; name a concrete evidence type for each observed item (full clause schema in the OUTPUT list below).`,
   `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
   `4. Gate policy:`,
-  `   - "met": every clause is satisfied by fresh, scoped evidence (including required commits/submit/merge/checks when applicable). Green but unscoped is insufficient for broad goals (e.g. full-suite green without targeted/smoke/regression evidence for touched risk, or claims without matching artifacts). For a broad or ambiguous condition, when a verifier command / configured required check is available, a "met" verdict additionally needs that verifier command's fresh corroborating output scoped to the change; transcript-only green does not corroborate a broad claim. When a verification matrix/profile applies, required check types/evidence (typecheck, targeted tests, lint/build as applicable, and goal-declared/configured checks) must be fresh, executed, and scoped; missing, unscoped, failed, or unverifiable required checks mean "not_met" with concrete next actions and required proof.`,
+  `   - "met": every clause satisfied by fresh, scoped evidence (incl. required commits/submit/merge/checks). Green but unscoped is insufficient for broad goals; transcript-only green does not corroborate a broad claim. See the "Verification matrix/profile" and "Broad-condition verifier corroboration" rules below for the full required-check and verifier-command requirements.`,
   `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
   `   - "impossible": only with strong evidence the condition can never be satisfied (self-contradictory or depends on something verifiably unavailable). Difficulty or slow progress is "not_met".`,
   `5. Detect repeated failure signatures from recent verdicts/reasons visible in this conversation (same missing evidence, same failing gate, same flaky/error pattern, same unaddressed gap). If repeating, require strategy escalation: narrow scope, produce a diagnostic artifact, or mark blocked with the blocker.`,
 ]
 
 const RULES = [
-  `Evidence rules: evidence must be fresh and come from this turn's visible output at post-change HEAD (or clearly current). Earlier turns' claims, summaries, prior verdicts, and absence of failure are not evidence. Constraints in the condition are clauses.`,
   `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
-  `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — tests skipped/deleted/relaxed, evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
+  `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
   `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
   `Verification matrix/profile: if required verification checks or check types are configured/applicable for the goal or a broad goal profile, each required check needs fresh executed command/output/exit evidence scoped to the claimed change; treat missing, unscoped, failing, timed-out, or unverifiable required checks as not_met and name the exact check and proof still needed.`,
   `Broad-condition verifier corroboration: for a broad or ambiguous condition, when a verifier command or configured required check is available (e.g. evaluator.verifyCommand or a required verification check), a "met" verdict must be corroborated by that command's fresh executed output scoped to the claimed change; transcript-only or generic green is insufficient for the broad claim. If a verifier command is configured but its fresh corroborating output is absent, unexecuted, or unscoped, the verdict is "not_met" and the reason names the missing verifier-command corroboration.`,
@@ -447,16 +445,12 @@ const OUTPUT = [
   `{"verdict":"met"|"not_met"|"impossible","reason":"<structured reason; use \\n for line breaks>"}`,
   ``,
   `The reason must cover, in order:`,
-  `(a) Clause-by-clause judgment with evidence refs: for each clause include clause, required evidence, observed evidence, status (satisfied|missing|contradicted|unscoped), and source/turn.`,
-  `(b) Gaps/flaws/risks found, or "none material". Include an adversarial "what would falsify met?" self-check and "What important risk is untested?"`,
+  `(a) Clause-by-clause judgment with evidence refs: clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn.`,
+  `(b) Gaps/flaws/risks found, or "none material".`,
   `(c) Repeated-failure/escalation note if any (same missing evidence, same failing gate, same flaky/error pattern, or same unaddressed gap seen in recent visible verdicts/reasons/gate output); if repeating, state required escalation (narrow scope, produce a diagnostic artifact, or mark blocked with blocker). Otherwise state "none".`,
   ``,
-  `Then include next actions:`,
-  `- when not_met, or when met but improvements remain: list 1-3 prioritized concrete actions in this exact form:`,
-  `  next:`,
-  `  1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it.`,
-  `- when met and no meaningful gap remains: write "next: none".`,
-  `Never invent evidence. Keep evidence refs concrete (command/test/file/commit/gate/turn).`,
+  `Then next actions: when not_met, or when met with improvements remaining, list 1-3 in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; when met with no gap, write "next: none".`,
+  `Never invent evidence.`,
 ].join("\n")
 
 function facts(input: EvaluationFacts, policy: CommitPolicy) {
