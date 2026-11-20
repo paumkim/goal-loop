@@ -1588,3 +1588,62 @@ describe("terminal record pruning after finish (opportunistic)", () => {
   })
 
 })
+
+describe("repeated failure-signature escalation", () => {
+  test("pauses after consecutive same-signature not_met verdicts instead of re-arming", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+      { verdict: "not_met", reason: "same missing test evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("paused")
+    expect(goal.pauseCause).toBe("repeated_failure")
+    expect(goal.reason).toContain("Repeated failure signature detected")
+    expect(goal.reason).toContain("rotate strategy")
+    // Two continuations for turns 2 and 3; escalation blocks turn 4 re-arm.
+    expect(h.calls.synthetic).toHaveLength(2)
+    expect(h.notices.some((n) => n.kind === "paused" && n.message.includes("Repeated failure signature detected"))).toBe(true)
+  })
+
+  test("different failure signatures do not trigger escalation", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "missing typecheck output" },
+      { verdict: "not_met", reason: "missing commit hash" },
+      { verdict: "not_met", reason: "missing merge evidence" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("active")
+    expect(goal.pauseCause).toBeUndefined()
+    expect(h.calls.synthetic).toHaveLength(3)
+  })
+
+  test("a met verdict breaks a repeated failure streak", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      { verdict: "not_met", reason: "same missing evidence" },
+      { verdict: "not_met", reason: "same missing evidence" },
+      { verdict: "met", reason: "done" },
+    )
+    await h.turn()
+    await h.turn()
+    await h.turn()
+
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("achieved")
+    expect(h.calls.synthetic).toHaveLength(2)
+  })
+})

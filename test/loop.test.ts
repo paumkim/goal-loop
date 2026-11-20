@@ -1037,11 +1037,13 @@ describe("/goal-loop", () => {
   test("an armed loop never pauses at the turn cap; it notifies once and keeps arming", async () => {
     const h3 = harness({ maxTurns: 1 })
     await h3.setLoop("improve the parser")
-    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    // Distinct reasons avoid repeated-failure-signature escalation; this test asserts cap guards never pause loops.
+    h3.verdicts.push(notMet("not yet: turn cap check A"), notMet("not yet: turn cap check B"), notMet("not yet: turn cap check C"))
     await h3.turn()
     await h3.turn()
     await h3.turn()
     expect(h3.controller.get(SID)?.status).toBe("active")
+    expect(h3.controller.get(SID)?.pauseCause).not.toBe("repeated_failure")
     const capNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("Turn cap"))
     expect(capNotices).toHaveLength(1)
   })
@@ -1049,11 +1051,13 @@ describe("/goal-loop", () => {
   test("an armed loop never pauses at the stall guard; it notifies once and keeps running", async () => {
     const h3 = harness({ stallTurns: 2 })
     await h3.setLoop("improve the parser")
-    h3.verdicts.push(notMet("not yet"), notMet("not yet"), notMet("not yet"))
+    // Distinct reasons avoid repeated-failure-signature escalation; this test asserts stall guards never pause loops.
+    h3.verdicts.push(notMet("not yet: stall check A"), notMet("not yet: stall check B"), notMet("not yet: stall check C"))
     await h3.turn(0)
     await h3.turn(0)
     await h3.turn(0)
     expect(h3.controller.get(SID)?.status).toBe("active")
+    expect(h3.controller.get(SID)?.pauseCause).not.toBe("repeated_failure")
     const stallNotices = h3.notices.filter((n) => n.kind === "loop" && n.title.includes("No progress"))
     expect(stallNotices).toHaveLength(1)
   })

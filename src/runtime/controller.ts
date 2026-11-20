@@ -29,6 +29,7 @@ import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
+import { detectRepeatedFailureSignature, failureEscalationReason } from "../core/failure-signature.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -1248,9 +1249,19 @@ export class GoalController {
       runtime.stallNotified = true
       this.notify(sessionID, "loop", "warning", "No progress — loop keeps running", `${stall} turns in a row without tool use; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
     }
+    if (result.verdict === "not_met" && record.status === "active") {
+      const detected = detectRepeatedFailureSignature(record.history.slice(0, -1), { ...verdictEntry, verdict: "not_met" as const })
+      if (detected) {
+        const escalation = failureEscalationReason(detected)
+        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature })
+        await this.pause(record, escalation, "repeated_failure")
+        return
+      }
+    }
     this.commit(record)
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return
+    if (record.status !== "active") return
     await this.continueWith(record, {
       text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
