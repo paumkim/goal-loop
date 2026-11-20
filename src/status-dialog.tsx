@@ -184,7 +184,7 @@ export const StatusDialogBody = (props: {
     </text>
   )
   const field = (name: string, children: JSX.Element, wide = false) => (
-    <box flexDirection="row" gap={2}>
+    <box flexDirection="row" gap={2} alignItems={wide ? "flex-start" : undefined}>
       {label(name)}
       <text wrapMode="word" fg={theme().text.base} flexGrow={wide ? 1 : 0}>
         {children}
@@ -202,10 +202,16 @@ export const StatusDialogBody = (props: {
   const OTHERS_VISIBLE = FOREIGN_ROWS_VISIBLE
   const OTHERS_CONDITION_MAX = 34
   const OTHERS_TAG_MAX = 12
+  /** Fixed cell width for the loop/state column so rows align when goals pile up. */
+  const OTHERS_STATE_MAX = 7
   const sessionTag = (sessionID: string): string => {
     const label = props.sessionLabel?.(sessionID) ?? sessionID
     // Width-aware: OTHERS_TAG_MAX counts cells, not UTF-16 code units — a CJK label measured in code units blew the 12-cell tag column and bisected surrogate pairs.
     return truncate(label, OTHERS_TAG_MAX)
+  }
+  const otherStateLabel = (other: GoalSnapshot): string => {
+    const raw = other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status
+    return truncate(raw, OTHERS_STATE_MAX)
   }
   const othersLive = () => {
     const rows = foreignLiveRows(props.others, g()?.sessionID)
@@ -501,7 +507,7 @@ export const StatusDialogBody = (props: {
             <box flexDirection="column" gap={0}>
           {stripRow(goal())}
           {/* condition — click to copy the full text (host wires clipboard + toast via onCopyCondition) */}
-          <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
+          <box flexDirection="row" gap={2} alignItems="flex-start" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyCondition(goal().condition) }} onMouseOver={() => setConditionHovered(true)} onMouseOut={() => setConditionHovered(false)}>
             {label("goal")}
             <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
               {goal().condition}
@@ -515,7 +521,7 @@ export const StatusDialogBody = (props: {
                 when={props.onCopyReason}
                 fallback={field(goal().status === "active" ? "evaluator" : "reason", reason(), true)}
               >
-                <box flexDirection="row" gap={2} onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyReason(reason()) }} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
+                <box flexDirection="row" gap={2} alignItems="flex-start" onMouseUp={(event) => { if (event.button !== 0) return; event.stopPropagation(); copyReason(reason()) }} onMouseOver={() => setReasonHovered(true)} onMouseOut={() => setReasonHovered(false)}>
                   {label(goal().status === "active" ? "evaluator" : "reason")}
                   <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
                     {reason()}
@@ -757,7 +763,7 @@ export const StatusDialogBody = (props: {
               <box flexDirection="column">
                 <box flexDirection="row" gap={2}>
                   {label("elsewhere")}
-                  <text fg={theme().text.faint} wrapMode="none">
+                  <text fg={theme().text.faint} wrapMode="word" flexGrow={1}>
                     {`${rows().length} other session${rows().length === 1 ? "" : "s"} holding live goals${props.onViewTranscript ? " · click a row to open its transcript" : ""}`}
                   </text>
                 </box>
@@ -780,11 +786,11 @@ export const StatusDialogBody = (props: {
                       <text wrapMode="none" flexShrink={0} fg={stateAccentColor(theme(), other.status, isRetryStuck(other), mono())}>
                         {mono() ? (other.status === "active" ? "*" : "|") : other.status === "active" ? "●" : "‖"}
                       </text>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
+                      <text wrapMode="none" flexShrink={0} width={OTHERS_TAG_MAX} fg={theme().text.muted}>
                         {sessionTag(other.sessionID)}
                       </text>
-                      <text wrapMode="none" flexShrink={0} fg={theme().text.faint}>
-                        {other.loopEnabled ? `v${other.loopIteration ?? 1}${typeof other.loopMaxLoops === "number" && other.loopMaxLoops > 0 ? `/${other.loopMaxLoops}` : ""}` : other.status}
+                      <text wrapMode="none" flexShrink={0} width={OTHERS_STATE_MAX} fg={theme().text.faint}>
+                        {otherStateLabel(other)}
                       </text>
                       <text wrapMode="none" flexGrow={1} fg={theme().text.muted}>
                         {truncate(other.condition.replace(/\s+/g, " ").trim(), OTHERS_CONDITION_MAX, ascii ? "..." : "\u2026")}

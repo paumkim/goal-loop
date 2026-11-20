@@ -221,6 +221,25 @@ describe("StatusDialogBody", () => {
     expect(frame).toContain("no cached goal snapshot")
   })
 
+  test("a massive wrapped condition keeps the copy affordance on the leading line", async () => {
+    const long = "improve the terminal tui dialog display on detail view when goals are starting to pile up and the condition becomes massive " +
+      "so the layout must stay consistent with aligned rows and stable affordances across every wrapped line ".repeat(4)
+    const frame = await render(() => (
+      <StatusDialogBody
+        goal={plainGoal({ condition: long, history: [], turns: 0 })}
+        fallback="fb"
+        theme={theme}
+        elapsedMs={() => 0}
+        nowMs={() => now}
+        onCopyCondition={() => {}}
+      />
+    ), 100, 40)
+    const lines = frame.split("\n")
+    const goalLine = lines.find((line) => line.includes("goal") && line.includes("improve the terminal"))
+    expect(goalLine).toBeDefined()
+    expect(goalLine!).toContain("copy")
+  })
+
   test("active looped goal, overview tab: the full dashboard — state at a glance plus everything the bar's level (c) names", async () => {
     const frame = await render(() => <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("active")
@@ -1674,6 +1693,48 @@ describe("elsewhere block (other sessions holding live goals)", () => {
       <StatusDialogBody goal={loopedGoal()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />
     ))
     expect(absent).not.toContain("elsewhere")
+  })
+
+  test("pile-up: elsewhere columns align across rows with mixed session/state widths", async () => {
+    const many = [
+      loopedGoal({ sessionID: "ses_a", id: "goal_a", condition: "alpha goal condition text", loopIteration: 1, loopMaxLoops: 10 }),
+      loopedGoal({ sessionID: "ses_bb", id: "goal_b", condition: "beta goal condition text", loopEnabled: false, status: "active" }),
+      loopedGoal({ sessionID: "ses_ccc", id: "goal_c", condition: "gamma goal condition text", loopIteration: 10, loopMaxLoops: 10 }),
+      loopedGoal({ sessionID: "ses_dddd", id: "goal_d", condition: "delta goal condition text", loopEnabled: false, status: "paused", pauseCause: "cap" }),
+      loopedGoal({ sessionID: "ses_eeeee", id: "goal_e", condition: "epsilon goal condition text", loopIteration: 2, loopMaxLoops: 5 }),
+    ]
+    const labels: Record<string, string> = { ses_a: "a", ses_bb: "bee", ses_ccc: "cee", ses_dddd: "deedee", ses_eeeee: "ee" }
+    const frame = await render(() => (
+      <StatusDialogBody
+        goal={loopedGoal()}
+        fallback="fb"
+        theme={theme}
+        elapsedMs={() => 1000 * 60 * 12}
+        nowMs={() => now}
+        others={many}
+        sessionLabel={(id) => labels[id] ?? id}
+        onViewTranscript={() => {}}
+        expandedOthers={() => true}
+      />
+    ), 112, 44)
+    expect(frame).toContain("elsewhere")
+    const lines = frame.split("\n")
+    const row = (marker: string) => lines.find((line) => line.includes(marker))
+    const a = row("alpha goal condition text")
+    const b = row("beta goal condition text")
+    const c = row("gamma goal condition text")
+    const d = row("delta goal condition text")
+    expect(a).toBeDefined()
+    expect(b).toBeDefined()
+    expect(c).toBeDefined()
+    expect(d).toBeDefined()
+    // Fixed session/state columns keep the condition column start aligned across rows.
+    expect(a!.indexOf("alpha goal condition text")).toBe(b!.indexOf("beta goal condition text"))
+    expect(a!.indexOf("alpha goal condition text")).toBe(c!.indexOf("gamma goal condition text"))
+    expect(a!.indexOf("alpha goal condition text")).toBe(d!.indexOf("delta goal condition text"))
+    // The transcript affordance rides the same right-edge column in every row.
+    expect(a!.indexOf("→ transcript")).toBe(b!.indexOf("→ transcript"))
+    expect(a!.indexOf("→ transcript")).toBe(d!.indexOf("→ transcript"))
   })
 })
 
