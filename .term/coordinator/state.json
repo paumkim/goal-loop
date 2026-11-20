@@ -3850,6 +3850,17 @@
       "submittedAt": "2026-11-20T05:04:00Z",
       "mergedAt": "2026-11-20T05:05:28Z",
       "mergedInto": "dev"
+    },
+    "coordinator-release-command": {
+      "agent": "orchestrator",
+      "paths": "packages/coordinator,test,SPEC.md,docs,README.md,AGENTS.md",
+      "branch": "wt/coordinator-release-command",
+      "worktree": "worktrees/wt-coordinator-release-command",
+      "status": "done",
+      "createdAt": "2026-11-20T05:07:24Z",
+      "submittedAt": "2026-11-20T05:11:34Z",
+      "mergedAt": "2026-11-20T05:13:02Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
