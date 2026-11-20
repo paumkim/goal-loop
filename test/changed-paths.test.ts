@@ -21,6 +21,26 @@ describe("changed-paths shared collector", () => {
     expect(pathsOf([" M src/core/a.ts\r", ""])).toEqual(["src/core/a.ts"])
   })
 
+  test("pathsOf splits -> only on renames, on the first occurrence, and decodes quoted paths", () => {
+    // A rename whose destination literally contains " -> " must keep the whole destination (first split only).
+    expect(pathsOf(['R  normal.txt -> "new -> name.txt"'])).toEqual(["new -> name.txt"])
+    // Unstaged rename (status char in the Y column) uses the same rendering.
+    expect(pathsOf([' R old.ts -> src/new.ts'])).toEqual(["src/new.ts"])
+    // Copy status too.
+    expect(pathsOf(['C  orig.ts -> copy.ts'])).toEqual(["copy.ts"])
+    // C-style quoted paths: tab escapes decode, and the destination is not truncated at its embedded arrow.
+    expect(pathsOf(['R  "tab\\told.txt" -> "tab\\tnew.txt"'])).toEqual(["tab\tnew.txt"])
+    // Octal UTF-8 bytes decode to real characters.
+    expect(pathsOf([' M "caf\\303\\251.txt"'])).toEqual(["café.txt"])
+    // Escaped double-quote and backslash survive decoding.
+    expect(pathsOf(['?? "say \\"hi\\"\\\\now.txt"'])).toEqual(['say "hi"\\now.txt'])
+    // A non-rename status line whose path contains " -> " keeps its full path.
+    expect(pathsOf([" M my -> file.txt"])).toEqual(["my -> file.txt"])
+    expect(pathsOf(["A  a -> b -> c.txt"])).toEqual(["a -> b -> c.txt"])
+    // Plain diff lines (no XY prefix) are never split, even with arrows.
+    expect(pathsOf(["x -> y.txt", '"tab\\tz.txt"'])).toEqual(["tab\tz.txt", "x -> y.txt"])
+  })
+
   test("collectChangeSetPaths delegates to shared collector (best-effort, untracked all)", () => {
     expect(Array.isArray(collectChangeSetPaths(process.cwd()))).toBe(true)
   })
