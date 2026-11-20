@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=71 tests=1974 -->
+<!-- spec-check files=71 tests=1982 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7760,3 +7760,46 @@ security review. The change-set helper depends on git and inspects the working d
 introduced after arming are not re-notified by this path. Surfacing is a warning notice (awareness/stricter-gate
 cue), not an automatic block.
 <!-- spec-check files=71 tests=1974 -->
+
+## Workstream XCVI — the loop-position indicator stays visible at every cap (2026-11-20)
+
+The loop-position indicator (`v<iter>/<max>` plus its pips) must stay visible at every loop cap, on every
+zoom level. Before this workstream, `renderPips` (`src/core/history.ts`) returned an empty string for any
+known cap above 8, so `/goal-loop-9` onward painted `v3/9 · active…` in the ambient pill and
+`active v3/9 · …` in the HUD card with no pip visual at all, while `/goal-loop-5` showed `●●○○○`. The
+`v<iter>/<max>` text itself lived in the non-droppable core of each surface (the pill's ladder core, the
+card title/now row, the dialog header/position line and the loop caption `vN of at most M`) and so stayed
+present at every cap; only the pip/bar visual disappeared.
+
+Fix (one rule, all zoom levels):
+
+45. `PIP_CELLS = 8` bounds the pip visual (`src/core/history.ts`). A known cap of 1..`PIP_CELLS` still paints
+    one pip per iteration slot (exact, unchanged). A larger cap compresses progress into `PIP_CELLS` cells
+    proportionally: `cells = clamp(round(done/cap * PIP_CELLS), done>0 ? 1 : 0, PIP_CELLS)`, so a cap of 100
+    with two completed iterations paints `●○○○○○○○` rather than nothing and the visual never rounds
+    "some progress" down to "none". The exact position remains in the `vX/Y` text beside it, so `v3/100`
+    still reads as "3 of 100". Unknown caps (missing, zero, negative, NaN) still render nothing.
+46. The same monotone floor is applied to the loop progress bar (`renderBar`): any completed iteration paints
+    at least one filled cell when `max > 0`, so the proportional bar cannot round a just-started large-cap
+    loop down to an all-empty bar. `PIP_CELLS` is exported for tests.
+47. The pill (`pillModel`, `src/core/hud.ts`), the HUD card (`src/hud-card.tsx`, title/now row) and the
+    dialog (`src/tui.tsx` header, `src/status-dialog.tsx` header/position + `barCaption`/progress bar in
+    `src/tui-history.tsx`) all read the same bounded helpers, so the three surfaces stay coherent.
+
+Evidence. Headless reproduction renders (`scripts/repro-loop-cap.tsx`, not shipped) at caps 5, 9, 50, 99,
+100 and 1000 show `v3/<cap>` present in the pill, card and dialog for every cap; the small-cap row is
+unchanged (`v3/5 ●●○○○`) and large caps paint a bounded pip visual (`v3/100 ●○○○○○○○` for two completed
+iterations) instead of dropping it. Unit tests: `test/history.test.ts` pins `PIP_CELLS`, the per-slot form
+for small caps, compression/floor/width/monotonicity for caps 9..1000 and the ASCII pair, plus the
+`renderBar` one-cell floor for a just-started large cap; `test/tui-hud.test.tsx` pins `pillModel` keeping
+`v3/<cap>` and a bounded `renderPips(2, cap)` segment at caps 9/50/99/100/1000 (small-cap string unchanged)
+and a headless `HudCard` render keeping `v3/100` and its bounded pip row.
+
+Verification (fresh at this HEAD). `bun run compile` rebuilt `dist/tui.js`; `bun run check` green (tsc, tests,
+dist freshness, TUI load, docs freshness, invariant-sweep, spec-check `files=70 tests=1969`).
+
+Honest limits. The pip visual is a bounded, proportional summary at large caps (one of 8 cells per
+~cap/8 iterations), not a one-cell-per-iteration rail; the exact `v<iter>/<max>` text carries the precise
+position. The dialog's `barCaption` (`vN of at most M · k complete`) and block progress bar were already
+cap-agnostic and are unchanged except for the bar's one-cell progress floor.
+<!-- spec-check files=70 tests=1970 -->

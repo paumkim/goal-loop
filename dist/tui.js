@@ -307,7 +307,7 @@ function renderBar(done, max, cells = BAR_CELLS, ascii = false) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
   const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
-  const filled = safeMax === 0 ? 0 : Math.min(width, Math.max(0, Math.round(safeDone / safeMax * width)));
+  const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round(safeDone / safeMax * width)));
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
   return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) };
@@ -371,16 +371,20 @@ var PIP_FILLED = "\u25CF";
 var PIP_EMPTY = "\u25CB";
 var PIP_FILLED_ASCII = "#";
 var PIP_EMPTY_ASCII = "-";
+var PIP_CELLS = 8;
 function renderPips(done, max, ascii = false) {
   if (typeof max !== "number" || !Number.isFinite(max))
     return "";
   const cap = Math.floor(max);
-  if (cap < 1 || cap > 8)
+  if (cap < 1)
     return "";
   const filled = Math.min(Math.max(0, Math.floor(Number.isFinite(done) ? done : 0)), cap);
   const filledGlyph = ascii ? PIP_FILLED_ASCII : PIP_FILLED;
   const emptyGlyph = ascii ? PIP_EMPTY_ASCII : PIP_EMPTY;
-  return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled);
+  if (cap <= PIP_CELLS)
+    return filledGlyph.repeat(filled) + emptyGlyph.repeat(cap - filled);
+  const cells = filled === 0 ? 0 : Math.min(PIP_CELLS, Math.max(1, Math.round(filled / cap * PIP_CELLS)));
+  return filledGlyph.repeat(cells) + emptyGlyph.repeat(PIP_CELLS - cells);
 }
 function paceEstimate(durations, max) {
   if (durations.length === 0)
