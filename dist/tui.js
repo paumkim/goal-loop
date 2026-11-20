@@ -6140,14 +6140,30 @@ var fileFor = (dir, sessionID) => {
   return join6(dir, `${safe}.json`);
 };
 var createGoalMirror = (dir = join6(tmpdir(), "goal-loop-mirror")) => {
+  const ensured = new Set;
   const write = (snapshot) => {
-    try {
-      mkdirSync(dir, { recursive: true, mode: 448 });
-      const target = fileFor(dir, snapshot.sessionID);
-      const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
-      writeFileSync6(tmp, JSON.stringify(snapshot), { mode: 384 });
+    const target = fileFor(dir, snapshot.sessionID);
+    const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    const body = JSON.stringify(snapshot);
+    const writeOnce = () => {
+      if (!ensured.has(dir)) {
+        mkdirSync(dir, { recursive: true, mode: 448 });
+        ensured.add(dir);
+      }
+      writeFileSync6(tmp, body, { mode: 384 });
       renameSync(tmp, target);
-    } catch {}
+    };
+    try {
+      writeOnce();
+    } catch (error) {
+      if (ensured.has(dir) && error?.code === "ENOENT") {
+        try {
+          ensured.delete(dir);
+          writeOnce();
+        } catch {}
+        return;
+      }
+    }
   };
   const remove = (sessionID) => {
     try {

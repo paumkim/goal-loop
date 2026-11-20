@@ -7923,4 +7923,23 @@ dist fresh, TUI load, docs freshness, invariant-sweep, spec-check `files=72 test
 
 Honest limits. Micro-benchmark evidence only (single-process unique-file diagnostic writes), not end-to-end goal-loop latency;
 behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
+
+## Workstream CIII — cache ensured directory for goal-mirror writes (2026-11-20)
+
+Behavior-preserving performance optimization (no intended runtime behavior or persisted-format changes). `createGoalMirror().write`
+in `src/core/mirror.ts` now caches the ensured mirror directory per instance and skips redundant `mkdirSync` calls for repeated
+snapshot writes. On `ENOENT` (directory removed after being ensured), it clears the cache entry and retries directory creation +
+tmp write + rename once; failures remain swallowed so the mirror backstop never affects the commit path.
+
+Measured before/after (bun micro-benchmark, same temp-dir shape, 2000 mirror writes × 5 runs): before (mkdir on every write)
+`before_avg_ms=10.06/9.84` across two runs (`before_ms=[9.61,9.9,10.92,10.23,9.65]`, `[9.6,9.53,10.72,9.66,9.69]`); after
+(cached ensured dir + ENOENT retry) `after_avg_ms=8.88/9.03` (`after_ms=[8.44,9.51,9.16,8.1,9.18]`,
+`[8.78,9.01,9.32,8.72,9.31]`), reducing redundant mkdir syscalls in the common mirror-write path.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/mirror.test.ts` → **9 pass / 0 fail**
+(1 file, 22 expect() calls); `bun run check` green (tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots, dist fresh, TUI
+load, docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Micro-benchmark evidence only (single-process atomic snapshot writes), not end-to-end goal-loop latency;
+behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
 <!-- spec-check files=72 tests=1989 -->
