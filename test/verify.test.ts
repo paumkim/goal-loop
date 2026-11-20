@@ -157,9 +157,10 @@ describe("verification gate (verifier, not transcriber)", () => {
     const record = h.controller.get(SID)!
     expect(record.status).toBe("active")
     expect(record.verdict).toBe("not_met")
-    expect(record.reason).toContain("Verification")
+    expect(record.reason).toMatch(/Verification/i)
     expect(record.reason).toContain("bun run check")
     expect(record.reason).toContain("1 fail")
+    expect(record.reason).toContain("verify-command")
     // The failure is pushed into the transcript as a continuation, so the agent sees what to fix.
     expect(h.calls.synthetic.some((s) => s.text.includes("1 fail"))).toBe(true)
     expect(h.notices.some((n) => n.title === "Verification failed")).toBe(true)
@@ -194,7 +195,8 @@ describe("verification gate (verifier, not transcriber)", () => {
     await h.turn(1)
     expect(h.controller.get(SID)!.status).toBe("active")
     expect(h.controller.get(SID)!.verdict).toBe("not_met")
-    expect(h.controller.get(SID)!.reason).toMatch(/no verifier port/i)
+    expect(h.controller.get(SID)!.reason).toMatch(/no verifier port|fail closed/i)
+    expect(h.controller.get(SID)!.reason).toContain("verify-command")
   })
 
   test("backward compatible: no verifyCommand configured, verifier never called, met accepted as before", async () => {
@@ -334,4 +336,142 @@ describe("commit sha on ledger entries (the verdict lands on a commit the reader
     const record = h.controller.get(SID)!
     expect(record.history.at(-1)!.sha).toBeUndefined()
   })
+})
+
+describe("verification matrix (profile-aware checks)", () => {
+test("matrix: all required checks pass records per-check evidence and accepts met", async () => {
+  const h = harness({
+    evaluator: {
+      verifyChecks: [
+        { id: "typecheck", type: "typecheck", command: "bunx tsc --noEmit" },
+        { id: "tests", type: "tests", command: "bun test" },
+      ],
+    },
+  })
+  await h.set("fix the parser bug")
+  h.verdicts.push(met("parser fixed"))
+  h.verifyResults.push({ code: 0, output: "tsc ok", timedOut: false }, { code: 0, output: "12 pass", timedOut: false })
+  await h.turn(1)
+  const record = h.controller.get(SID)!
+  expect(record.status).toBe("achieved")
+  expect(h.verifyCalls.map((c) => c.command)).toEqual(["bunx tsc --noEmit", "bun test"])
+  const v = record.history.at(-1)!.verification!
+  expect(v.pass).toBe(true)
+  expect(v.broadGoal).toBe(false)
+  expect(v.checks.map((c) => [c.id, c.type, c.pass, c.code])).toEqual([
+    ["typecheck", "typecheck", true, 0],
+    ["tests", "tests", true, 0],
+  ])
+  expect(record.lastVerification?.pass).toBe(true)
+  expect(record.lastVerification?.checks).toHaveLength(2)
+})
+
+test("matrix: a failing required check downgrades met to not_met with per-check evidence and next actions", async () => {
+  const h = harness({
+    evaluator: {
+      verifyChecks: [
+        { id: "typecheck", type: "typecheck", command: "bunx tsc --noEmit" },
+        { id: "tests", type: "tests", command: "bun test targeted" },
+      ],
+    },
+  })
+  await h.set("fix the parser bug")
+  h.verdicts.push(met())
+  h.verifyResults.push({ code: 0, output: "tsc ok", timedOut: false }, { code: 1, output: "1 fail\nexpected 2", timedOut: false })
+  await h.turn(1)
+  const record = h.controller.get(SID)!
+  expect(record.status).toBe("active")
+  expect(record.verdict).toBe("not_met")
+  expect(record.reason).toContain("tests")
+  expect(record.reason).toContain("targeted")
+  expect(record.reason).toContain("next:")
+  const v = record.history.at(-1)!.verification!
+  expect(v.pass).toBe(false)
+  expect(v.missing).toEqual(["tests"])
+  expect(v.checks[0]!.pass).toBe(true)
+  expect(v.checks[1]!.pass).toBe(false)
+  expect(v.checks[1]!.tail).toContain("1 fail")
+  expect(record.lastVerification?.missing).toEqual(["tests"])
+})
+
+test("matrix: timeout/error in a required check is recorded and downgrades met", async () => {
+  const h = harness({ evaluator: { verifyChecks: [{ id: "lint", type: "lint", command: "bun run lint", timeoutMs: 5000 }] } })
+  await h.set("cleanup lint")
+  h.verdicts.push(met())
+  h.verifyResults.push({ code: null, output: "partial", timedOut: true })
+  await h.turn(1)
+  const record = h.controller.get(SID)!
+  expect(record.verdict).toBe("not_met")
+  const check = record.history.at(-1)!.verification!.checks[0]!
+  expect(check.timedOut).toBe(true)
+  expect(check.pass).toBe(false)
+  expect(check.reason).toMatch(/timed out/i)
+})
+
+test("matrix: broad goal with only generic legacy check is treated as unscoped required verification", async () => {
+  const h = harness({ evaluator: { verifyCommand: "bun run check" } })
+  await h.set("improve the entire verification matrix across the codebase and complete the backlog item")
+  h.verdicts.push(met())
+  h.verifyResults.push({ code: 0, output: "all green", timedOut: false })
+  await h.turn(1)
+  const record = h.controller.get(SID)!
+  expect(record.status).toBe("active")
+  expect(record.verdict).toBe("not_met")
+  expect(record.reason).toMatch(/unscoped for broad goal/i)
+  expect(record.reason).toMatch(/typecheck.*targeted tests|targeted tests.*typecheck/i)
+  expect(record.reason).toContain("next:")
+  expect(h.verifyCalls).toHaveLength(0) // unscoped detected before running generic-only check
+  const v = record.history.at(-1)!.verification!
+  expect(v.broadGoal).toBe(true)
+  expect(v.pass).toBe(false)
+  expect(v.missing).toContain("verify-command")
+  expect(v.checks[0]!.scoped).toBe(false)
+})
+
+test("matrix: broad profile with typed scoped checks can pass", async () => {
+  const h = harness({
+    evaluator: {
+      verifyProfile: "broad",
+      verifyChecks: [
+        { id: "typecheck", type: "typecheck", command: "bunx tsc --noEmit" },
+        { id: "tests", type: "tests", command: "bun test targeted" },
+        { id: "build", type: "build", command: "bun run compile" },
+      ],
+    },
+  })
+  await h.set("improve the entire verification matrix across the codebase")
+  h.verdicts.push(met())
+  h.verifyResults.push(
+    { code: 0, output: "ok", timedOut: false },
+    { code: 0, output: "ok", timedOut: false },
+    { code: 0, output: "ok", timedOut: false },
+  )
+  await h.turn(1)
+  const record = h.controller.get(SID)!
+  expect(record.status).toBe("achieved")
+  expect(record.history.at(-1)!.verification!.broadGoal).toBe(true)
+  expect(record.history.at(-1)!.verification!.pass).toBe(true)
+})
+
+test("config: verifyChecks and verifyProfile resolve; legacy verifyCommand synthesizes a check", () => {
+  const c = resolveConfig({
+    evaluator: {
+      verifyCommand: "bun run check",
+      verifyTimeoutMs: 30000,
+      verifyProfile: "broad",
+    },
+  })
+  expect(c.evaluator.verifyProfile).toBe("broad")
+  expect(c.evaluator.verifyChecks).toEqual([
+    { id: "verify-command", type: "custom", command: "bun run check", timeoutMs: 30000, required: true, when: "always", label: "verifyCommand" },
+  ])
+  const explicit = resolveConfig({
+    evaluator: {
+      verifyChecks: [
+        { id: "lint", type: "lint", command: "bun run lint", required: false, when: "broad", label: "Lint" },
+      ],
+    },
+  })
+  expect(explicit.evaluator.verifyChecks[0]).toMatchObject({ id: "lint", type: "lint", command: "bun run lint", required: false, when: "broad", label: "Lint" })
+})
 })

@@ -2,6 +2,18 @@ import type { CommitRequest, ModelRef } from "./types.ts"
 
 type EvaluatorMode = "auto" | "session" | "independent"
 
+export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
+
+export interface VerifyCheckConfig {
+  readonly id: string
+  readonly type: VerifyCheckType
+  readonly command: string
+  readonly timeoutMs?: number
+  readonly required?: boolean
+  readonly when?: "always" | "broad"
+  readonly label?: string
+}
+
 export interface GoalConfig {
   readonly evaluator: {
     /** `session` reuses the session's model and cached prefix; `independent` uses `model` on a transcript digest. */
@@ -10,10 +22,14 @@ export interface GoalConfig {
     readonly maxTranscriptChars: number
     readonly maxOutputTokens: number
     readonly timeoutMs: number
-    /** When set, a `met` verdict is not accepted until this command exits 0 (the verifier, not the transcriber). Empty disables. Env OPENCODE_GOAL_VERIFY_COMMAND. */
+    /** When set, a `met` verdict is not accepted until this command exits 0 (the verifier, not the transcriber). Empty disables. Env OPENCODE_GOAL_VERIFY_COMMAND. Backward-compatible single-check alias. */
     readonly verifyCommand: string
     /** Wall-clock budget for one verification run. */
     readonly verifyTimeoutMs: number
+    /** Profile-aware verification matrix: required command checks run on candidate met verdicts. Legacy `verifyCommand` is synthesized when no explicit checks are provided. */
+    readonly verifyChecks: readonly VerifyCheckConfig[]
+    /** Verification profile label for matrix policy/reporting (e.g. "default", "broad"). */
+    readonly verifyProfile: string
     /** Second-opinion gate: `2` requires two independent verdicts (session evaluator + independent model) both rule `met`; any disagreement or second-opinion failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; doubles evaluator cost when enabled. */
     readonly consensus: 1 | 2
   }
@@ -48,6 +64,7 @@ export const DEFAULTS = {
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,
+  verifyProfile: "default",
   consensus: 1,
   maxTurns: 0,
   stallTurns: 0,
@@ -98,12 +115,50 @@ const branch = (value: unknown, fallback: string) => {
   return trimmed && !/\s/.test(trimmed) ? trimmed : fallback
 }
 
+
+const VERIFY_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
+
+function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyCheckConfig[] {
+  if (!Array.isArray(value)) return []
+  const out: VerifyCheckConfig[] = []
+  for (const item of value) {
+    if (typeof item !== "object" || item === null) continue
+    const v = item as Record<string, unknown>
+    const command = typeof v.command === "string" ? v.command.trim() : ""
+    if (!command) continue
+    const typeRaw = typeof v.type === "string" ? v.type.trim().toLowerCase() : "custom"
+    const type = (VERIFY_TYPES.has(typeRaw) ? typeRaw : "custom") as VerifyCheckType
+    const idRaw = typeof v.id === "string" ? v.id.trim() : ""
+    const id = idRaw || `${type}-${out.length + 1}`
+    const when = v.when === "broad" ? "broad" : "always"
+    const required = v.required === false ? false : true
+    const timeoutMs = int(v.timeoutMs, fallbackTimeoutMs, 1_000)
+    const label = typeof v.label === "string" && v.label.trim() ? v.label.trim() : undefined
+    out.push({ id, type, command, timeoutMs, required, when, ...(label ? { label } : {}) })
+  }
+  return out
+}
+
+function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<Record<string, string | undefined>>) {
+  const verifyCommand = str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, "")
+  const verifyTimeoutMs = int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000)
+  const verifyProfile = str(env.OPENCODE_GOAL_VERIFY_PROFILE ?? evaluator.verifyProfile, DEFAULTS.verifyProfile)
+  const explicit = parseVerifyChecks(evaluator.verifyChecks, verifyTimeoutMs)
+  const verifyChecks = explicit.length > 0
+    ? explicit
+    : verifyCommand
+      ? [{ id: "verify-command", type: "custom" as const, command: verifyCommand, timeoutMs: verifyTimeoutMs, required: true, when: "always" as const, label: "verifyCommand" }]
+      : []
+  return { verifyCommand, verifyTimeoutMs, verifyProfile, verifyChecks }
+}
+
+
 /**
  * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
- * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS.
+ * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -113,6 +168,7 @@ export function resolveConfig(
   const model = parseModelRef([env.OPENCODE_GOAL_MODEL, evaluator.model, options.model].find((v) => (typeof v === "string" ? v.trim() !== "" : v != null))) // empty/whitespace strings read as unset — the `str`/`int` posture
   const requested = evaluator.mode === "session" || evaluator.mode === "independent" ? evaluator.mode : "auto"
   const mode = requested === "auto" ? (model ? "independent" : "session") : requested === "independent" && !model ? "session" : requested
+  const verify = resolveVerifyMatrix(evaluator, env)
   return {
     evaluator: {
       mode,
@@ -120,8 +176,10 @@ export function resolveConfig(
       maxTranscriptChars: int(evaluator.maxTranscriptChars, DEFAULTS.maxTranscriptChars, 4_000),
       maxOutputTokens: int(evaluator.maxOutputTokens, DEFAULTS.maxOutputTokens, 256),
       timeoutMs: int(evaluator.timeoutMs, DEFAULTS.timeoutMs, 5_000),
-      verifyCommand: str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, ""),
-      verifyTimeoutMs: int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000),
+      verifyCommand: verify.verifyCommand,
+      verifyTimeoutMs: verify.verifyTimeoutMs,
+      verifyChecks: verify.verifyChecks,
+      verifyProfile: verify.verifyProfile,
       consensus: int(evaluator.consensus, DEFAULTS.consensus, 1, 2) as 1 | 2,
     },
     maxTurns: int(env.OPENCODE_GOAL_MAX_TURNS ?? options.maxTurns, DEFAULTS.maxTurns, 0),

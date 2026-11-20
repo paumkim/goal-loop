@@ -465,8 +465,13 @@ why         ✓  met · turn 3 · 3m ago      done
 exports[`full-frame snapshots (named layout states) StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy) 1`] = `
 "overview  ·  ledger  ·  dossier                                        active  12m · 4 turns · v3/5 
 goal        ship the release notes                                                         copy     
-evaluator   Verification \`bun run check\` did not pass: exit 1: 1 fail                               
-            error: expected true                                                                    
+evaluator   Verification matrix did not pass for scoped goal (profile default); missing/unscoped/   
+            failed required checks: verify-command.                                                 
+            next:                                                                                   
+              1. [high/risk] Satisfy required verification check verify-command (custom) — evidence 
+            gap/finding: exit 1; command "bun run check"; output: 1 fail                            
+            error: expected true — required proof: fresh executed command with exit 0 and scoped    
+            output for this goal.                                                                   
 verify      $ bun run check                                                                copy     
             ✗ exit 1 · 3m ago                                                                       
             1 fail                                                                                  
@@ -484,11 +489,6 @@ trail       ✓✗✓✓✗   5 of 5 verdicts
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
             ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     

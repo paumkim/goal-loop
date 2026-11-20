@@ -10,12 +10,13 @@
       "priority": 1,
       "impact": "high",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "Correctness gates can hinge on transcript evidence and configured checks (bun run check, optional evaluator.verifyCommand) while missing integration behavior, flakiness, perf regressions, security issues, or untested edge paths.",
-      "improvement": "Define a required verification matrix per iteration/profile (typecheck, tests, lint, build plus targeted smoke/property/fuzz/perf/security checks) with explicit pass evidence recorded in the verdict trail. Treat green but unscoped verification as insufficient for broad improvement goals.",
+      "improvement": "Implemented profile-aware verification matrix (config verifyChecks/verifyProfile, legacy verifyCommand synthesis), broad-goal scoping/unscoped-required-check detection, per-check command/output/exit evidence recorded in verdict trail and dossier, and evaluator rubric/prompt guidance treating missing/unscoped required verification as not_met with concrete next actions. Backward-compatible with legacy single verifyCommand.",
       "evidence": [
         "Goal-loop blind spot #1 (2026-11-20): met can hinge on transcript evidence + configured checks but miss system health dimensions.",
-        "SPEC.md Workstream LXXVI/LXXX+: evaluator accepts only fresh evidence; verifyCommand gate is optional and command-specific."
+        "SPEC.md Workstream LXXVI/LXXX+: evaluator accepts only fresh evidence; verifyCommand gate is optional and command-specific.",
+        "Workstream LXXXVIII (2026-11-20): src/core/config.ts/types.ts/wire.ts/prompts.ts, src/runtime/controller.ts, src/core/dossier.ts record and render per-check matrix evidence; tests cover pass/fail/unscoped/broad/legacy cases; bun run check exit 0 on merge commit."
       ],
       "dedupeKeys": [
         "verification-matrix",
@@ -23,7 +24,10 @@
         "invariant-matrix",
         "evaluator-verify-command-scope"
       ],
-      "related": ["evaluator-rubric-evidence-types", "standing-invariants-sweep"]
+      "related": [
+        "evaluator-rubric-evidence-types",
+        "standing-invariants-sweep"
+      ]
     },
     {
       "id": "persistent-prioritized-backlog-dedup",
@@ -45,7 +49,10 @@
         "backlog-dedup",
         "improvement-ledger"
       ],
-      "related": ["failure-signature-strategy-escalation", "structured-outcome-telemetry"]
+      "related": [
+        "failure-signature-strategy-escalation",
+        "structured-outcome-telemetry"
+      ]
     },
     {
       "id": "failure-signature-strategy-escalation",
@@ -67,7 +74,10 @@
         "repeated-not-met",
         "progress-scoring"
       ],
-      "related": ["persistent-prioritized-backlog-dedup", "structured-outcome-telemetry"]
+      "related": [
+        "persistent-prioritized-backlog-dedup",
+        "structured-outcome-telemetry"
+      ]
     },
     {
       "id": "standing-invariants-sweep",
@@ -89,7 +99,10 @@
         "docs-spec-changelog-alignment",
         "boundary-consistency"
       ],
-      "related": ["verification-matrix-beyond-check", "change-risk-classification"]
+      "related": [
+        "verification-matrix-beyond-check",
+        "change-risk-classification"
+      ]
     },
     {
       "id": "evaluator-rubric-evidence-types",
@@ -111,7 +124,9 @@
         "adversarial-self-check",
         "dual-evaluation"
       ],
-      "related": ["verification-matrix-beyond-check"]
+      "related": [
+        "verification-matrix-beyond-check"
+      ]
     },
     {
       "id": "coordinator-semantic-drift-guard",
@@ -133,7 +148,9 @@
         "post-merge-health-pass",
         "coordinator-preflight"
       ],
-      "related": ["standing-invariants-sweep"]
+      "related": [
+        "standing-invariants-sweep"
+      ]
     },
     {
       "id": "change-risk-classification",
@@ -155,7 +172,10 @@
         "human-confirmation-gates",
         "reversible-commits"
       ],
-      "related": ["verification-matrix-beyond-check", "standing-invariants-sweep"]
+      "related": [
+        "verification-matrix-beyond-check",
+        "standing-invariants-sweep"
+      ]
     },
     {
       "id": "structured-outcome-telemetry",
@@ -177,7 +197,10 @@
         "recurring-fixes",
         "time-to-green"
       ],
-      "related": ["failure-signature-strategy-escalation", "persistent-prioritized-backlog-dedup"]
+      "related": [
+        "failure-signature-strategy-escalation",
+        "persistent-prioritized-backlog-dedup"
+      ]
     }
   ]
 }

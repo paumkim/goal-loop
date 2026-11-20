@@ -97,6 +97,36 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheRead) &&
   isFiniteNumber(value.cacheWrite)
 
+const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
+
+const isVerifyCheckType = (value: unknown): value is NonNullable<VerdictEntry["verification"]>["checks"][number]["type"] =>
+  isString(value) && VERIFY_CHECK_TYPES.has(value)
+
+const isVerifyCheckEvidence = (value: unknown): value is NonNullable<VerdictEntry["verification"]>["checks"][number] =>
+  isRecord(value) &&
+  isString(value.id) &&
+  isVerifyCheckType(value.type) &&
+  isString(value.command) &&
+  isBoolean(value.required) &&
+  isBoolean(value.scoped) &&
+  isBoolean(value.pass) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
+  (value.label === undefined || isString(value.label)) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail)) &&
+  (value.reason === undefined || isString(value.reason))
+
+const isVerdictVerificationMatrix = (value: unknown): value is NonNullable<VerdictEntry["verification"]> =>
+  isRecord(value) &&
+  isString(value.profile) &&
+  isBoolean(value.broadGoal) &&
+  isBoolean(value.pass) &&
+  Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) &&
+  Array.isArray(value.missing) && value.missing.every(isString)
+
+const isLastVerification = (value: unknown): value is NonNullable<GoalSnapshot["lastVerification"]> =>
+  isVerdictVerificationMatrix(value) && isFiniteNumber((value as unknown as Record<string, unknown>).at)
+
 const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   isRecord(value) &&
   isFiniteNumber(value.turn) &&
@@ -106,7 +136,8 @@ const isVerdictEntry = (value: unknown): value is VerdictEntry =>
   (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) &&
   (value.spend === undefined || isUsageSnapshot(value.spend)) &&
   (value.sha === undefined || isString(value.sha)) &&
-  (value.verify === undefined || isVerdictVerify(value.verify))
+  (value.verify === undefined || isVerdictVerify(value.verify)) &&
+  (value.verification === undefined || isVerdictVerificationMatrix(value.verification))
 
 const isLoopEntry = (value: unknown): value is LoopEntry =>
   isRecord(value) &&
@@ -185,6 +216,7 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact)) return false
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0)) return false
   if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify)) return false
+  if (value.lastVerification !== undefined && !isLastVerification(value.lastVerification)) return false
   if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince)) return false
   return true
 }

@@ -49,6 +49,7 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   maxOutputTokens: "evaluator.maxOutputTokens",
   timeoutMs: "evaluator.timeoutMs",
   verifyTimeoutMs: "evaluator.verifyTimeoutMs",
+  verifyProfile: "evaluator.verifyProfile",
   consensus: "evaluator.consensus",
   maxTurns: "maxTurns",
   stallTurns: "stallTurns",
@@ -83,6 +84,10 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.evaluator.verifyCommand
     case "evaluator.verifyTimeoutMs":
       return resolved.evaluator.verifyTimeoutMs
+    case "evaluator.verifyProfile":
+      return resolved.evaluator.verifyProfile
+    case "evaluator.verifyChecks":
+      return resolved.evaluator.verifyChecks
     case "evaluator.consensus":
       return resolved.evaluator.consensus
     case "systemReminder":
@@ -103,6 +108,7 @@ const norm = (value: unknown): unknown => {
   if (value === undefined || value === null) return undefined
   if (typeof value === "number" || typeof value === "boolean") return value
   const s = String(value).trim().replace(/`/g, "").trim()
+  if (Array.isArray(value) && value.length === 0) return "[]"
   if (s === "") return ""
   const numeric = Number(s.replace(/,/g, ""))
   if (!Number.isNaN(numeric) && s !== "") return numeric
@@ -111,6 +117,7 @@ const norm = (value: unknown): unknown => {
   if (s === "unlimited") return Number.MAX_SAFE_INTEGER
   if (s === "—" || s === "session model") return undefined
   if (s === '""') return ""
+  if (s === "[]") return "[]"
   return s
 }
 
@@ -122,6 +129,8 @@ const DOC_TO_CODE_NAMES = Object.keys(
       "evaluator.model",
       "evaluator.mode",
       "evaluator.verifyCommand",
+      "evaluator.verifyProfile",
+      "evaluator.verifyChecks",
       "evaluator.consensus",
       "systemReminder",
       "transcriptNotes",
@@ -170,6 +179,8 @@ describe("config defaults — documented vs code", () => {
     expect(resolved.evaluator.maxOutputTokens).toBe(DEFAULTS.maxOutputTokens)
     expect(resolved.evaluator.timeoutMs).toBe(DEFAULTS.timeoutMs)
     expect(resolved.evaluator.verifyTimeoutMs).toBe(DEFAULTS.verifyTimeoutMs)
+    expect(resolved.evaluator.verifyProfile).toBe(DEFAULTS.verifyProfile)
+    expect(resolved.evaluator.verifyChecks).toEqual([])
     expect(resolved.evaluator.consensus).toBe(DEFAULTS.consensus)
     expect(resolved.maxTurns).toBe(DEFAULTS.maxTurns)
     expect(resolved.stallTurns).toBe(DEFAULTS.stallTurns)
