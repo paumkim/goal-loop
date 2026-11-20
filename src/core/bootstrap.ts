@@ -1,25 +1,33 @@
 /**
- * Cold-start bootstrap for coordinator layout.
+ * Cold-start bootstrap for startup/workflow layout.
  *
- * A user who installs the plugin and runs /goal from a fresh project dir should
- * get `.term/coordinator` and `worktrees/` set up automatically. Everything
- * here is best effort and idempotent: existing files are never overwritten, and
- * any failure is swallowed so plugin setup cannot crash.
+ * On first bootstrap in a git repo (and safely on subsequent runs), provisions an idempotent
+ * workflow scaffold: coordinator/workplace layout, goal runtime dirs, workflow docs/templates, and
+ * gitignore rules for runtime artifacts. Everything is best effort and idempotent: existing files
+ * are never overwritten, and failures are swallowed so plugin setup/goal arming cannot crash.
  */
 import { spawnSync } from "node:child_process"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
+import {
+  appendGitignoreRules,
+  ensureCoordinatorWorkplaceLayout,
+  ensureGitRepoStartup,
+  ensureRuntimeOnlyStartup,
+  RUNTIME_GITIGNORE_RULES,
+  type WorkflowLayoutResult,
+} from "./workflow.ts"
 
-interface BootstrapResult {
+export interface BootstrapResult {
   readonly created: string[]
   readonly skipped: string[]
+  readonly notes?: string[]
 }
 
 /**
  * The plugin root from the directory the plugin module lives in.
  *
- * Falls back to the parent of `metaDir` (the `src` directory's parent), but
- * walks up at most 5 levels looking for `packages/coordinator/bin/coordinator`
+ * Walks up at most 5 levels looking for `packages/coordinator/bin/coordinator`
  * and returns the first directory that contains it.
  */
 export function pluginRootFromMeta(metaDir: string): string {
@@ -59,75 +67,67 @@ export function hasJq(): boolean {
 }
 
 /**
- * Creates `.term/coordinator` and `worktrees/` under `projectRoot` and seeds
- * `config.json` / `state.json` when they are missing. Never overwrites
- * existing files. Appends `worktrees/` and `.term/coordinator/*.lock` to
- * `.gitignore` when it exists and lacks them (idempotent). No-op outside a
- * git repository, and no-op in a git repository that neither ships the
- * coordinator package nor already carries coordinator state.
+ * Ensures coordinator/workplace layout in a git repository (`.term/coordinator/{config,state}.json`,
+ * `worktrees/`) and appends missing runtime gitignore rules. Idempotent and never overwrites
+ * existing files. No-op outside a git repository.
+ *
+ * This provisions the layout for any git repo so the claim → worktree → submit → merge-next flow
+ * can be ready (subject to coordinator bin availability and commit/coordinator policy).
  */
 export function ensureCoordinatorLayout(projectRoot: string, pluginRoot?: string): BootstrapResult {
+  void pluginRoot
   const created: string[] = []
   const skipped: string[] = []
   try {
     if (!existsSync(join(projectRoot, ".git"))) {
       return { created: [], skipped: ["not a git repository"] }
     }
-    // Only coordinator repositories get the layout: one that ships the coordinator
-    // package, or one that already carries coordinator state. A session opened in an
-    // unrelated repository must never be mutated — its `.term/` and `.gitignore` stay
-    // as the repository has them, and it is not mistaken for a coordinator repo next time.
-    const projectBin = join(projectRoot, "packages", "coordinator", "bin", "coordinator")
-    const existingConfig = join(projectRoot, ".term", "coordinator", "config.json")
-    if (!existsSync(projectBin) && !existsSync(existingConfig)) {
-      return { created: [], skipped: ["not a coordinator repository"] }
-    }
-    const coordDir = join(projectRoot, ".term", "coordinator")
-    const worktreesDir = join(projectRoot, "worktrees")
-    if (existsSync(coordDir)) skipped.push(".term/coordinator")
-    else {
-      mkdirSync(coordDir, { recursive: true })
-      created.push(".term/coordinator")
-    }
-    if (existsSync(worktreesDir)) skipped.push("worktrees")
-    else {
-      mkdirSync(worktreesDir, { recursive: true })
-      created.push("worktrees")
-    }
-    const configPath = join(coordDir, "config.json")
-    if (existsSync(configPath)) skipped.push(".term/coordinator/config.json")
-    else {
-      writeFileSync(configPath, `${JSON.stringify({ devBranch: "dev", worktreeDir: "worktrees" })}\n`, "utf8")
-      created.push(".term/coordinator/config.json")
-    }
-    const statePath = join(coordDir, "state.json")
-    if (existsSync(statePath)) skipped.push(".term/coordinator/state.json")
-    else {
-      writeFileSync(statePath, `${JSON.stringify({ version: 1, leases: {}, mergeLock: null })}\n`, "utf8")
-      created.push(".term/coordinator/state.json")
-    }
-    void pluginRoot
-    const gitignorePath = join(projectRoot, ".gitignore")
-    if (existsSync(gitignorePath)) {
-      let content = ""
-      try {
-        content = readFileSync(gitignorePath, "utf8")
-      } catch {
-        content = ""
-      }
-      const lines = content.split("\n").map((line) => line.trim())
-      const wanted = ["worktrees/", ".term/coordinator/*.lock"]
-      const missing = wanted.filter((entry) => !lines.includes(entry))
-      if (missing.length > 0) {
-        const prefix = content.length === 0 || content.endsWith("\n") ? "" : "\n"
-        writeFileSync(gitignorePath, content + prefix + missing.join("\n") + "\n", "utf8")
-        created.push(".gitignore")
-      } else {
-        skipped.push(".gitignore")
-      }
-    }
+    const coord = ensureCoordinatorWorkplaceLayout(projectRoot)
+    created.push(...coord.created)
+    skipped.push(...coord.existing)
+    const gi = appendGitignoreRules(projectRoot, RUNTIME_GITIGNORE_RULES)
+    if (gi.added.length > 0) created.push(".gitignore")
+    else skipped.push(".gitignore")
   } catch {
     // Best effort: report whatever was done so far, never throw.
   }
   return { created, skipped }
 }
+
+export interface StartupScaffoldOptions {
+  readonly projectRoot: string
+  readonly pluginRoot?: string
+  /** Learning log path from config (relative to project root or absolute). */
+  readonly learningPath?: string
+}
+
+/**
+ * Full startup scaffold for plugin bootstrap / goal arming. In git repos provisions coordinator
+ * workplace layout, goal runtime dirs, workflow docs/templates (SPEC.md, docs/README.md, MAINTAINER.md),
+ * and appends missing gitignore rules for runtime artifacts. Outside git repos provisions runtime-only
+ * goal dirs with a clear note. Always idempotent, never overwrites, never throws.
+ */
+export function ensureStartupScaffold(options: StartupScaffoldOptions): WorkflowLayoutResult {
+  const { projectRoot, pluginRoot, learningPath } = options
+  void pluginRoot
+  try {
+    if (!existsSync(join(projectRoot, ".git"))) {
+      return ensureRuntimeOnlyStartup({ projectRoot, learningPath })
+    }
+    return ensureGitRepoStartup({ projectRoot, learningPath })
+  } catch (error) {
+    return { created: [], existing: [], notes: [`startup scaffold failed: ${String(error)}`] }
+  }
+}
+
+// Re-export workflow helpers for direct use/tests.
+export {
+  appendGitignoreRules,
+  docsReadmeTemplate,
+  ensureCoordinatorWorkplaceLayout,
+  ensureGoalRuntimeLayout,
+  ensureWorkflowDocs,
+  maintainerTemplate,
+  RUNTIME_GITIGNORE_RULES,
+  specTemplate,
+} from "./workflow.ts"

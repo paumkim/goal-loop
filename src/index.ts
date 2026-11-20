@@ -10,7 +10,7 @@
  */
 import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
-import { ensureCoordinatorLayout, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
+import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
@@ -167,23 +167,28 @@ export default Plugin.define({
     const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
 
-    // The commit rule needs the session's directory: outside a git repository there is nothing to commit, and
-    // inside one the finished work has to land on a branch before the goal counts as met. In coordinator
-    // repositories (term) normal agents land on wt/<slug> and submit; the coordinator merges to the target.
+    // Startup scaffold: provision an idempotent, ready-to-use workflow on bootstrap (git repos get
+    // coordinator/workplace layout, goal runtime dirs, workflow docs/templates, and gitignore rules;
+    // non-git dirs get runtime-only setup). Never overwrites user content, never breaks goal arming.
     let coordinatorBin: string | undefined
     try {
       const pluginRoot = pluginRootFromMeta(import.meta.dir)
-      if (config.commit.enabled && config.commit.coordinator !== false) {
-        const repository = findRepository(ctx.location.directory)
-        if (repository) {
-          const bootstrap = ensureCoordinatorLayout(repository.root, pluginRoot)
-          if (bootstrap.created.length > 0) log.info("coordinator bootstrap", { created: bootstrap.created })
-          coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
-          if (!hasJq()) log.warn("jq not found; coordinator state requires jq")
+      const repository = findRepository(ctx.location.directory)
+      const projectRoot = repository?.root ?? ctx.location.directory
+      const startup = ensureStartupScaffold({ projectRoot, pluginRoot, learningPath: config.learning.path })
+      if (startup.created.length > 0 || startup.notes.length > 0) {
+        log.info("startup scaffold", { created: startup.created, existing: startup.existing, notes: startup.notes })
+      } else {
+        log.info("startup scaffold", { created: [], existing: startup.existing.length, notes: startup.notes })
+      }
+      if (repository) {
+        coordinatorBin = resolveCoordinatorBin(pluginRoot, repository.root)
+        if (config.commit.enabled && config.commit.coordinator !== false && !hasJq()) {
+          log.warn("jq not found; coordinator state requires jq")
         }
       }
     } catch (error) {
-      log.warn("coordinator bootstrap failed", { error: String(error) })
+      log.warn("startup scaffold failed", { error: String(error) })
     }
     const commit = resolveCommitPolicy(config.commit, ctx.location.directory, coordinatorBin)
     log.info("commit rule", { required: commit.required, branch: commit.branch, mode: commit.mode ?? "direct", reason: commit.reason })

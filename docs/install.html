@@ -23,6 +23,18 @@
 <pre><code>goal-loop status</code></pre>
 </li>
 <li>
+<h3>First run (startup scaffold)</h3>
+<p>On plugin bootstrap in a git repository (and safely on every subsequent run), goal-loop provisions an idempotent workflow scaffold. Existing files are never overwritten and only missing pieces are filled in. What a fresh git repo gets:</p>
+<ul>
+<li><strong>Coordinator/workplace layout:</strong> <code>.term/coordinator/config.json</code>, <code>.term/coordinator/state.json</code>, and <code>worktrees/</code> so the <code>claim → work in wt/&lt;slug&gt; → submit → merge-next</code> flow is ready (when coordinator mode is enabled/auto and the coordinator binary is available).</li>
+<li><strong>Goal runtime dirs:</strong> <code>.term/goal-loop/</code> (and any configured learning-log parent dir) for runtime artifacts; learnings/state files themselves remain managed as today.</li>
+<li><strong>Workflow docs/templates (only if absent):</strong> <code>SPEC.md</code> (acceptance/verification template), <code>docs/README.md</code> (docs index/maintenance notes), and <code>MAINTAINER.md</code> (where work goes, how it moves, how to finish/merge).</li>
+<li><strong>Gitignore (append-only):</strong> missing rules for runtime/state artifacts (e.g. <code>worktrees/</code>, <code>.term/goal-loop/</code>, coordinator locks/scratch) are appended; existing rules are never removed and tracked workflow docs remain committable.</li>
+</ul>
+<p>Outside a git repository the plugin degrades to runtime-only setup (goal runtime dirs) with a clear log note and never breaks goal arming. If the layout is partial or corrupt, only safe, missing pieces are repaired.</p>
+<p><strong>Factory workflow (short):</strong> define acceptance in <code>SPEC.md</code> → claim scope and work in an isolated <code>wt/&lt;slug&gt;</code> worktree/branch → implement and verify with fresh evidence → commit and <code>submit</code> → land via the designated merge step (<code>merge-next</code> in coordinator repos) only after required checks pass. Runtime artifacts stay untracked; workflow/docs changes are tracked.</p>
+</li>
+<li>
 <h3>Use the CLI commands</h3>
 <pre><code>goal-loop            # install (default): add the plugin to the OpenCode config
 goal-loop uninstall  # remove exactly what install added

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
@@ -334,17 +334,24 @@ describe("plugin setup", () => {
     }
   })
 
-  test("a plain git repository is not switched to the coordinator flow", async () => {
+  test("a plain git repository receives the startup scaffold and coordinator flow is ready", async () => {
     const directory = repository()
     const { ctx, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
-      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(false)
+      expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(true)
+      expect(existsSync(join(directory, ".term/coordinator/state.json"))).toBe(true)
+      expect(existsSync(join(directory, "worktrees"))).toBe(true)
+      expect(existsSync(join(directory, ".term/goal-loop"))).toBe(true)
+      expect(existsSync(join(directory, "SPEC.md"))).toBe(true)
+      expect(existsSync(join(directory, "MAINTAINER.md"))).toBe(true)
+      expect(existsSync(join(directory, "docs/README.md"))).toBe(true)
+      expect(readFileSync(join(directory, ".gitignore"), "utf8")).toContain(".term/goal-loop/")
       const goal = calls.commands.find((command) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
-      expect(directive.text).not.toContain("Coordinator repo")
+      expect(directive.text).toContain("Coordinator repo")
     } finally {
       await dispose?.()
     }
