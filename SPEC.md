@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=71 tests=1982 -->
+<!-- spec-check files=72 tests=1989 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -5044,7 +5044,7 @@ dossier established (DT) applied to the loop's own bookkeeping.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=50 tests=1110.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EB — find-in-record: the dossier spotlight, one click from the record (2026-11-16)
 
@@ -5114,7 +5114,7 @@ is the discovery surface, the way the dossier's other doors are.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=51 tests=1134.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EC — the record, on trial: the dossier answers “is this real?” (2026-11-16)
 
@@ -5183,7 +5183,7 @@ no footer furniture; the palette and the row are the discovery surfaces.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=52 tests=1159.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream ED — the record, in reach: ancestry, one click from the record (2026-11-16)
 
@@ -5248,7 +5248,7 @@ halves of “is this real?” — the object exists, and the object is on this l
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=53 tests=1181.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EF — the record, under seal: the shas the record quotes carry a signature, one click from the record (2026-11-16)
 
@@ -5321,7 +5321,7 @@ line, the object carries a verifiable mark. None substitutes for another.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=54 tests=1203.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EG — the dossier, sealed: the proofs ride the file (2026-11-16)
 
@@ -5470,7 +5470,7 @@ what it cannot prove. Plain `goal.dossier.seal` and `goal.dossier.export` are un
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=55 tests=1235.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EI — the review, in one file: every question git can answer (2026-11-16)
 
@@ -5533,7 +5533,7 @@ error — information is not accusation.
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=56 tests=1253.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EJ — the spend ledger, one file (2026-11-16)
 
@@ -5652,7 +5652,7 @@ family's exported artifacts and writes ONE O_EXCL markdown index — file name, 
 
 The `Last updated` stamp and the changelog rows are pipeline-owned (`docs-watch`); run
 `bun scripts/docs-watch.ts once` after commit and commit its output. spec-check files=57 tests=1270.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EL — the jump row stops lying once the goal ends (2026-11-16)
 
@@ -5682,7 +5682,7 @@ exactly that: the transcript says `Goal achieved (turn 1, 7m 21s).` while the pi
      a server that never answers keeps the last cache — no chrome is invented, none is hidden either;
      the fix rides the 15s tick, so a paused goal re-pulls at the same cadence as an active one.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EM — the outcome line stays on the terminal, stops riding the context (2026-11-16)
 
@@ -5714,7 +5714,7 @@ instruction.
      note from the bound request it observes, not from the durable log (it is not deletable by API);
      a model that needs the verdict finds it on disk in the goal record and the dossier; non-tagged
      goal notes still ride the context by design (they carry live instructions).
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EM2 — the crash report closes: the card speaks the v2 composer's grammar, and the dialog can no longer take the session down (2026-11-17)
 
@@ -5772,7 +5772,7 @@ inlines the two records so the outcome is pinned byte-for-byte rather than asser
      problem. The full-width card paints every terminal row (the composer's own grammar, by design),
      where the 64-cell design used to centre/clamp the panel. The teaching-hint and ceiling
      behavior at exactly `maxRows` is unchanged in kind — only the arithmetic moved one row.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EN — the live crash root-caused, and the card paints the mount, not the terminal (2026-11-17)
 
@@ -5814,7 +5814,7 @@ fixed at the seam that feeds it, and the card is pinned to the mount it actually
      that first resolution the card does not paint rather than overflow at a guessed width. The EM2 card and
      both ErrorBoundaries are unchanged; a recurrence of the dialog crash now fails loudly in-dialog with the
      real stack, not in the host.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EO — the mount-width probe mounts before the card (2026-11-17)
 
@@ -5837,7 +5837,7 @@ of the gate was inverted. This workstream fixes the structure, not the sign.
      probe box paints nothing); the probe resolves width but not height-row alignment beyond the
      `cardRows()` contract; headless coverage pins the mechanism, not the host's slot placement, which
      remains verified in the standalone tmux repro only.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EP — post-merge review fixes: one-cell border arithmetic, stale mount width (2026-11-17)
 
@@ -5889,7 +5889,7 @@ things in roughly half the cells; the operational invariants the test pins are u
      XDG_CONFIG_HOME requirement, ~/.config/opencode/opencode.jsonc mount flow, the
      binary / source / test-render / live TUI reporting rule, no stable documented tool, never
      commit to the host repo. `test/opencode-cli.test.ts` passes unchanged.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 
 ## Workstream ER — the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept (2026-11-16)
@@ -5963,7 +5963,7 @@ new test-count delta is the wiring pins in the width-measure suite.
      the repository's docs claim "UTC" times that are not UTC until the lease owner lands the fix.
      Date stamps in the three incident-named files keep the UTC convention SPEC.md uses.
      Suite: 1341 pass, 0 fail (55 files). Marker re-counted below and at the Workstream J marker.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream ES — the SPEC honesty sweep and the unused-export audit (2026-11-17)
 
@@ -6011,7 +6011,7 @@ references. Both are fixed here; no behavior changes.
      item 542) — untouched here. Date stamps in the three incident-named files keep the UTC
      convention SPEC.md uses.
      Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below and at the Workstream J marker.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream ET — noUnusedLocals / noUnusedParameters landed (2026-11-17)
 
@@ -6049,7 +6049,7 @@ removed; no tests added or deleted; no `@ts-ignore` anywhere.
      rather than being removed, which the condition explicitly permits. The docs/stamp
      mislabel remains under the stale github-single-channel lease — untouched here.
      Suite: 1341 pass, 0 fail (55 files). Marker re-affirmed below.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream EU — the stale guard can no longer be defeated at its own refresh boundary (2026-11-16)
 
 Interpretation of the armed condition: the EL workstream (2026-11-16, c326baf) added the 30s stale-live
@@ -6107,7 +6107,7 @@ counting. Root cause, with evidence:
      within the tick; the pre-fix process had to restart for ANY of this to load (plugins load `dist/tui.js`
      at process start) — this session itself still paints from pre-merge code until the TUI restarts.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EV — the bugfix sweep: audited findings land, each pinned (2026-11-17)
 
@@ -6164,7 +6164,7 @@ Interpretation of the armed condition: the two executable surfaces iteration 1 n
 665. Counts: no file removed; one shipped surface edited (packages/coordinator/bin/coordinator is shipped); 21 regression tests added (one new suite `test/e2e.test.ts`; coordinator scope/scratch/multi-root pins, docs-watch empty-repo and CRLF pins, render-argv rejection pins, spec-check launch-error and anchored-regex pins); suite 1373 → 1394 pass, 0 fail (57 files). `bun x tsc --noEmit` clean. Marker re-counted below and at the first marker.
 666. Honest limits: the coordinator changes are pinned by CLI-level fixture tests (claim/submit/merge-next/merge-done against synthetic repos) plus static review, not by a live merge of this very branch — the merge that lands this workstream runs the pre-merge (dev) copy of the script, and takes effect for the NEXT merge. The state mutex closes the lost-update race by construction, not by a reproduced interleaving. `restore_state_stash`'s cp-failure branch is not exercised (no fault injection on disk). The docs-watch watch-mode changes are unverified against a live inotify session on this kernel. The e2e guard tests stop before any `opencode serve` is spawned; the happy path is untouched. The CRLF normalization is defensive. None of the coordinator edits change the merge invariants: dev moves only via `--ff-only`, the gate still runs on the merged result, and uncommitted bytes are still never destroyed.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EX — the root surface audited: installer, CI, packaging (2026-11-17)
 
@@ -6190,7 +6190,7 @@ Interpretation of the armed condition: iteration 2 swept the two executable surf
 684. Counts: no file removed; `bin/opencode-goal.mjs` (shipped), `bin/opencode-goal.d.mts`, `package.json`, `bun.lock`, `.gitignore`, `.github/workflows/check.yml` edited; 22 regression tests added (15 cli-installer, 2 ci-workflow, 5 package-integrity); suite 1394 → 1416 pass, 0 fail (57 files). `bun x tsc --noEmit` clean. Marker re-counted below and at the first marker.
 685. Honest limits: the CI findings are pinned structurally (line assertions on the workflow), not by a GitHub run — nothing was pushed. The Windows separator fix is verified by code reading (`path.dirname`), not on a Windows host; the symlink and mode behavior pins run on Linux. `backupFile`'s exclusive-create and the realpath write are pinned with crafted fixtures, not with concurrent-fault injection. The `string-width`-as-dependency fix is verified by declaration inspection and the regenerated lockfile, not by an npm production-install load test (no registry harness exists here; the GitHub-cache route is unaffected and was already maintainer-verified). The duplicate-`plugins` refusal is fail-loud by design: a config carrying two `plugins` keys used to be edited silently (first-wins) while opencode (last-wins) never saw the entry — such a config now stops with exit 1 and must be merged by hand, which is the correct trade (a visible conflict beats an invisible no-op install). The stale `github-single-channel` lease still blocks `docs/`, `README.md`, `RELEASE-CHECKLIST.md`; this section edits SPEC.md only.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EY — scripts/e2e.ts audited: spawn/lifecycle, exit/restore, model resolution (2026-11-17)
 
@@ -6208,7 +6208,7 @@ Interpretation of the armed condition: every prior workstream swept a directory 
 695. Counts: no file removed; `scripts/e2e.ts` edited, `scripts/e2e-lib.ts` and `test/e2e-lib.test.ts` added (all three unshipped — `scripts/` is not in package.json `files`); suite 1416 → 1442 pass, 0 fail (58 files). `tsc --noEmit` clean. Marker re-counted at the first marker and below.
 696. Honest limits: the happy path against a live `opencode serve` is unchanged and not run by the suite (it needs a real server and model; `bun run e2e <empty-dir>` runs it manually). Signal forwarding and the log-flush await are verified by code reading and the suite's structural pins, not by an observed Ctrl-C into a live harness; the `skip` action is pinned at the decision function, not at the filesystem mtime; the spawn-error fail-fast is pinned by the listener's presence and by the pre-spawn guard tests, not by fault injection against a missing `opencode` binary. Docs untouched — the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream EZ — the four deferred EX nits in bin/opencode-goal.mjs (2026-11-17)
 
 Interpretation of the armed condition: iteration 3 (EX) deferred four reviewer-grade nits in the installer CLI; this workstream fixes exactly those four and pins each with a regression test. No redesign, no test weakened. The fsync pin is structural (source scan) — the honest limit is called out below. Docs untouched (the stale `github-single-channel` lease still owns `docs/`, `README.md`, `RELEASE-CHECKLIST.md`).
@@ -6220,7 +6220,7 @@ Interpretation of the armed condition: iteration 3 (EX) deferred four reviewer-g
 701. test/cli-installer.test.ts — +7 regression pins: a source-scan pin that `writeFileAtomic` calls `fsyncSync` before `renameSync`; one-`config:`-line pins for both the missing and the existing config; the skeleton-delete message pin (contains `(only install's skeleton remained)`, never `created by install`); `probeOpencodeVersion` classification pins (ENOENT / ETIMEDOUT / EACCES / exit-3 / signal / success); two spawn-based pins using a scratch `PATH` (a non-zero `opencode` shim reports `exited with code 3` and never `not found on PATH`; an empty PATH reports `not found on PATH`). The pre-existing mode/symlink/status tests pass unchanged. Suite 1442 → 1449 pass, 0 fail (58 files); `tsc --noEmit` clean.
 702. Verification: `bun run check` green in this worktree (tsc, full suite, docs freshness, spec-check after the marker bump). Honest limits: the fsync pin is a source scan, not a crash-injection durability test; the shim pins assume `/bin/sh`; signal-forwarding style behavioral risk (spawnSync's own `error` on timeout arrives with `signal` set) is handled by checking `error` before `signal` in the classifier. Marker re-counted at the first marker and below.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream EW — the .d.mts export-drift pin (2026-11-17)
 
@@ -6229,7 +6229,7 @@ Interpretation of the armed condition: `bin/opencode-goal.d.mts` is hand-maintai
 703. test/cli-installer.test.ts — new regression test "the declarations declare every export of the .mjs and carry no stale value extras". It compares, in exact set equality, the runtime export keys of the dynamically imported `../bin/opencode-goal.mjs` against the value declarations (`export const|let|var|function|class`, optional `declare`, line-anchored) published by `../bin/opencode-goal.d.mts`: every real export must be declared, and every declared value export must exist — nothing missing, nothing stale. A second leg source-scans the .mjs's own line-anchored `export` declarations and requires each to appear as a value declaration in the .d.mts. Negative control performed in this worktree: appending a stale `export function staleHelper(): void;` to the .d.mts fails the new test (61 pass / 1 fail), then the file was restored with `git checkout --`. Interfaces and type aliases in the .d.mts (`ScopeResolution`, `CliOptions`, `CliResult`, `OpencodeProbeResult`, `AddPluginResult`, `RemovePluginResult`) are supporting types for the values and are deliberately out of the comparison.
 704. Verification: `bun run check` green in this worktree (tsc, full suite, docs freshness, spec-check after the marker bump). Honest limits: the pin compares value exports only — a wrong signature on an existing declaration (e.g. wrong argument type on `status`) still passes, because nothing type-checks the .mjs source against its declarations and `tsc --noEmit` does not include `bin/`; interface-only staleness (an unused exported interface) is not detected mechanically; the source scan, like the fsync pin, is structural and line-anchored. Marker re-counted at the first marker and below.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream FF — spend rides the stream: carry-forward on `changed` + a settled-spend event at finish (2026-11-17)
 
@@ -6242,7 +6242,7 @@ Interpretation of the armed condition ("live stream update if things change in t
 709. test/controller.test.ts — +1 pin: after a met verdict settles the goal, the final `changed` event carries the settled spend vs baseline (`cost` 4 = 5 − 1 baseline). `tsc --noEmit` clean; `bun run check` green in this worktree.
 710. Honest limits: the carried spend between a `get` pull and the next event can lag the true ledger by one evaluation turn (same contract as the context estimate); the final-spend event is pinned at the controller harness, not at a live TUI frame; the rename is mechanical but any external fork importing `preserveContextSize` from `src/core/entries.ts` must rename (the module is internal — not in package.json `exports`). Marker re-counted at the first marker and below.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream GG — record identity on the carry, drop events with no goal key, commit on the planner-retry path (2026-11-17)
 
@@ -6257,7 +6257,7 @@ Source: a read-only survey of the live `changed`/carry/settle machinery (no comm
 717. Dismissed with reason: the survey's docs line-ref items (docs/runtime.html, docs/index.html) touch `docs/` (owned by the stale `github-single-channel` lease) — not touched; `.docs-watch.log` is already git-ignored via `*.log` and untracked; the `evaluating=false`-without-emit paths converge through the normal commit, and the one true hole (the planner-retry path emitting nothing) is closed by 713; the `git-tracked`/`dist freshness` unverified items were verified this iteration (`bun run check` green end-to-end in this worktree).
 718. Honest limits: the identity guard keys on the record's additive `id` field only (not `startedAt`); identity is pinned at the controller/TUI-harness level, not at a live TUI frame; the planner-retry commit persists the verdict but does not persist the summarized loop iteration (still local by design until the arm lands); the two pre-existing `evaluating` finally-blocks still flip the flag without an emit of their own and rely on the following commit — acceptable because every path after them commits.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream HH — live-stream cross-process truth: peek reads, background drain, null re-pull (2026-11-17)
 
@@ -6274,7 +6274,7 @@ Source: a survey of the goal plugin's server↔TUI live path (`GoalController.co
 727. Tests — `test/rpc-handlers.test.ts` rewritten to the peek contract (the stub carries no restore/restoreOne/snapshot/list surface at all — that is the assertion of the read-only posture; plus the peek-throws / double-failure / contextSize passthrough cases). `test/loop.test.ts` swaps the four `restoreOne` tests for the peek contract (peekSnapshot live record without adopting — storage byte-identical before/after; peekSnapshot terminal records as stored truth; peekSnapshot null for missing and foreign-directory records; peekList serves stored live records / omits terminal ones; spend falls back to the stored record) and adds a `background drain` describe block (deferred turn evaluates as soon as background work drains; no-op when nothing deferred; waits for remaining work) — the design's `expect(h.verdicts).toHaveLength(0)` drain assertion matches the existing defer test pattern. `test/tui-hud.test.tsx` gains `staleUnprovenSessionIDs` pins (stale live included, terminal excluded, fresh live excluded, missing `receivedAt` included, stale `null` included, fresh null excluded, custom floor). `test/entries.test.ts` gains `bumpReceivedAt` pins (new map, same goal reference, siblings untouched, unknown session same reference, null-goal entry). Suite 1460 → 1476 pass, 0 fail (58 files).
 728. Honest limits: a second instance's SETUP-time `restore()` still adopts live records in memory — it cannot distinguish foreign ownership at that point — but can no longer rewrite the stored record, so the cross-window turn/baseline zeroing is gone; cross-process convergence rides the TUI tick (~30s worst case) for event drops — the push path is unchanged; the drain re-runs the normal `evaluate()` path (epoch bumped, deferred tool calls carried), so a not_met verdict there arms a continuation steer like any turn; `shell.updated` fires the drain unconditionally (no-op when nothing deferred); `peekList()` serves in-memory records with their runtime truth and stored ones without; `dist/tui.js` recompiled by `bun run compile`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream II — convergence hygiene: silent flag flips announce themselves, the dialog refreshes on the tick, the cache cap holds (2026-11-17)
 
@@ -6291,7 +6291,7 @@ Source: a fresh read-only survey of the goal plugin's server↔TUI live path and
 737. Dismissed with reason: the survey's docs items (`docs/runtime.html` refs, `docs/index.html` epoch ref) touch leased docs; the explorer's suggested `pruneSnapshotEntries(bumpReceivedAt(...))` unmodified would have dropped steady null entries and re-broken the HH stale-null re-pull — the implemented fix keeps the re-pull target alive and enforces only the cap.
 738. Honest limits: the invalidate/clearDeferred emits fire synchronously at the invalidation point with the pre-mutation snapshot (the subsequent `commit()` may double-emit; the TUI dedupes via `goalsEqual`, so the render tree sees at most a `receivedAt` bump); the directory gate is defense-in-depth, not a verified host-bus scope boundary; steady null entries over `ENTRY_CAP` evicted by the cap no longer re-pull until a `changed` event re-creates them (accepted, bounded by the cap); `requested` wholesale clear permits one redundant re-pull per session in the worst case.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream III — docs citations: file:line re-anchored to symbols; the reference guard updated (2026-11-17)
 
@@ -6301,7 +6301,7 @@ Source: the docs items left open by the II survey (`docs/runtime.html` line refs
 740. test/docs-line-refs.test.ts — rewritten to the new convention (still 5 tests): `docs/*.html` are asserted to contain ZERO `file.ts[x]:N` citations; SPEC.md refs (Appendix A frozen to Phase 1) keep the existence / ordered-in-bounds / non-empty line / non-empty range guards, with the extraction-count floor lowered to >=20 (SPEC.md carries 23). The old floor of >=70 counted docs/ line refs, which is why out-of-range and semantically wrong lines sailed through — the guard pinned the count, never the truth.
 741. Honest limits: symbol citations can still drift under a rename (a rename re-anchor is one grep away, and the failure mode is loud-ish: the symbol stops appearing in the file and the docs lie less); `README.md` and `RELEASE-CHECKLIST.md` stay under the dead `github-single-channel` lease untouched; `coordinator doctor` still reports that lease's missing worktree — on the owner's machine (or a `--force` claim) it can be cleared, not from here; stamps regenerated via `docs-watch once` (docs pages 2026-11-17, changelog row appended). spec-check files=60 tests=1480 marker unchanged (no package or test-count change).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 
 ## Workstream V — TUI intake convergence: retained null re-pull targets, elapsedMs-deduped snapshots, dead guard removed (2026-11-17)
@@ -6316,7 +6316,7 @@ Source: fresh dev-tree survey after Workstreams II/III/IV merged (`ses_e14b8aa77
 747. Docs — `bun scripts/docs-watch.ts once` appended the changelog row for the fix commit and kept the 30-row window (the oldest ED row dropped). The commit was then amended to 15:02 UTC, which moved the anchor ahead of the committed footer stamp (14:13) and failed the freshness gate; re-running `once` after the amend set the row time and changelog.html's footer stamp to 2026-11-17 15:02 UTC, and `bun run check` passed on the result. The design holds throughout: `stampFor` excludes `^docs: refresh` commits precisely so the gate fails when a real content edit lands without a stamp refresh; if refresh commits counted, the stamp would always match and the gate could never fail — and the refresh commit that carries a re-stamp is itself `^docs: refresh`-excluded, so the gate is stable across it. The survey's original "changelog stamp 14:13 UTC trails its own rows" reading is by design, not staleness — but the interim wording here (which claimed no footer stamp ever moves and a 14:13 footer after the re-stamp) described a state this workstream had already left behind; this item now describes the actual sequence.
 748. Honest limits: retaining nulls grows the cache toward `ENTRY_CAP` over long sessions (bounded, oldest non-live evicted first, documented in entries.ts); a cross-process re-arm is still noticed only for sessions this TUI has cached at least one snapshot for — never for never-seen sessions (unchanged, by design); `goalsEqual` ignoring `elapsedMs` means a snapshot differing ONLY in elapsed time is "unchanged" — nothing user-visible rides on elapsedMs identity (the pill extrapolates from `receivedAt`); the terminal-entry stale chrome gap (survey finding 2: a dropped `changed(null)` after the goal went terminal leaves terminal chrome painted indefinitely) — superseded by Workstream VI (recent-terminal re-pull, items 749–755).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream VI — recent-terminal re-pull: a post-terminal clear converges instead of lingering (2026-11-17)
 
@@ -6330,7 +6330,7 @@ Source: the evaluator-flagged remainder of the fresh dev-tree survey (post-II/II
 754. SPEC honesty gate — the enforced marker (line ~466, first occurrence) and the Workstream V trailing marker are now `spec-check files=60 tests=1487`; Docker-free docs/test stay outside `package.json` `files`; spec-check passes on the merged tree.
 755. Honest limits: `terminalAt` is TUI-instance memory — a TUI that never observed the terminal transition cannot stamp, so its stale terminal entry behaves as before (pre-existing cache semantics, unchanged); the window is client-clock based like every other stamp here (elapsed extrapolation rides the same clock); past 10 minutes a post-terminal clear is still invisible until some open forces a pull — bounded residue, chosen over perpetual polling.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream VII — reconnecting RPC pumps: the TUI's event intake survives a dropped service (2026-11-17)
 
@@ -6343,7 +6343,7 @@ Source: the 2026-11-17 live incident (report from the goal-loop TUI of session `
 760. SPEC honesty gate — the enforced marker (line ~466, first occurrence) and this workstream's trailing marker are now `spec-check files=61 tests=1499` (the pump module ships; `test/` stays outside `package.json` `files`). `package-integrity.test.ts` re-pinned to 61 packed paths. `bun run check` green; `git status` clean after compile.
 761. Honest limits: (a) the pump fixes the *event* intake; the *RPC read* path (`/api/rpc/goal/get`) is harness-served and its 2026-11-17 500 storm was not root-caused (the background service had restarted by the time the investigation ran — cause unrecoverable from the log; the current service answers 200/400/401 correctly as probed). If the RPC read path 500s again, the pill converges only when it recovers — no plugin change can pull state the server refuses to serve, and `ensure()`/re-pull stay total by construction. (b) The retained `globalThis` generation guard is process-wide by design; a foreign (non-plugin) writer to that key would trip the abort — fail-safe direction, noted. (c) `notice` replays are not deduplicated across a reconnect — the bus drops, it does not replay, so no duplicate-toast path exists in practice; if the harness ever replays `notice` on reconnect, toasts double-fire (cosmetic only; out of scope). (d) Live end-to-end verification (arm a real /goal-loop in the upstream TUI and watch the pill clear on verdict) was NOT performed — provider quota in this environment is exhausted; the claim stops at the unit/integration layer plus headless render, per the task's own ordering rule.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream VIII — restore() is adopt-only: compaction only ever targets the specific session (2026-11-17)
 
@@ -6369,9 +6369,9 @@ Marker unchanged: files=61 tests=1499. No version bump, no tag, no push; v1.1.0 
 
 Verification (all run in the worktree): tsc --noEmit clean; `bun test` 1499 pass / 0 fail / 28 snapshots after `bun test -u`; headless render at 150 and 80 columns shows the full-width frame with the footer buttons inside the panel edge; `--bench=300` after the change: avg 0.15ms, min 0.10ms. Whole dialog-width class (the terminal-side empty half beyond the panel) is outside the plugin's reach — opencode's `DialogSize` caps at `xlarge`, which the dialog already requests; the note is recorded so the next workstream does not re-chase it.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream X — snapshot mirror: convergence when the RPC and the bus are both dead (2026-11-18)
 
@@ -6391,7 +6391,7 @@ Interpretation of this iteration, from the live TUI complaint: "mouse hover over
 780. `src/hud-card.tsx`, `src/status-dialog.tsx`, `src/tui-history.tsx` — a shared in-file `Affordance` cell replaces every hover-revealed `copy`/`save`/`verify`/`reach`/`sign`/`seal`/`→ transcript`/`click[· m]` hint: width 8 (13 for `→ transcript`, 9 for `click · m`, 6 for the sweep verbs), idle faint, hover base (weight under mono), never mounted or unmounted, never resized. The click acknowledgment paints inside the same cell (`✓ copied` / `+ copied` / `✓ saved`, ~1.6s) — nothing outside the cell ever changes. The row's text never changes attributes on hover, so the `wrapMode="word"` payload never rewraps and the row never reflows. The condition/why width reserve drops from 23 to 25 cells (`conditionWidth`), two cells more truncation headroom, spent on the fixed cell. The hover-revealed turn tag on the verdict trail is gone; a click copies and the ack rides the trail line (`verdicts · turn N · ✓ copied`). The outline rail chips, the `find` row and its close button, the view tabs and the rail fold row paint static chrome — the words already say "click".
 781. Text leaves bolden-on-hover are deleted on every interactive row in scope, not just the wrapping ones: the affordance cell is the only thing hover may paint. Buttons and context-menu rows (`HudButton`, `HudMenuRow`) keep the composer's raised-background hover grammar (weight under mono) — geometry-stable controls, not text rows. `src/tui.tsx` hover sites (the pill, the dialog's `esc` cell, the palette footer button's label flip) are outside this lease's claimed paths and stay as they were.
 782. Tests re-pinned in place (suite count unchanged, 1514): the two "dialog hover reveals the hint" render tests became always-mounted-affordance tests (resting frame paints the cell, hover changes no span on the row, frame restored byte-for-byte on mouse-out); "hovering the condition row paints bold and no span carries UNDERLINE" became "hover leaves every span unchanged, never underlines"; the trail test pinned `rest === frame-under-mouse` plus the click ack; the dossier chip test pinned the identical resting frame under the mouse; `render-scripts.test.ts` expects "click a row to open its transcript" (the elsewhere header copy was corrected — it said "hover a row"). Snapshots regenerated: every frame gains the always-faint affordance cell on interactive rows; the elsewhere rows paint `→ transcript` and the fold paints `click` at rest; the fold-opened frame shows both at rest.
-783. SPEC honesty gate — marker unchanged at `<!-- spec-check files=68 tests=1893 -->` (no package or test-count change; `test/` stays outside `package.json` `files`). Verification: `tsc --noEmit` clean; `bun test` 1514 pass / 0 fail / 28 snapshots; snapshot diff reviewed cell-by-cell (only affordance cells and the elsewhere header string changed); `bun --preload @opentui/solid/preload scripts/render-card.tsx` and `scripts/render-dialog.tsx --width=100 --height=92` print frames with the affordance painted at rest (the code path is also green under the smoke tests); hover byte-stability is pinned by the render tests (resting frame === frame under the mouse). `bun run check` green before submit.
+783. SPEC honesty gate — marker unchanged at `<!-- spec-check files=72 tests=1989 -->` (no package or test-count change; `test/` stays outside `package.json` `files`). Verification: `tsc --noEmit` clean; `bun test` 1514 pass / 0 fail / 28 snapshots; snapshot diff reviewed cell-by-cell (only affordance cells and the elsewhere header string changed); `bun --preload @opentui/solid/preload scripts/render-card.tsx` and `scripts/render-dialog.tsx --width=100 --height=92` print frames with the affordance painted at rest (the code path is also green under the smoke tests); hover byte-stability is pinned by the render tests (resting frame === frame under the mouse). `bun run check` green before submit.
 784. Honest limits: (a) verification is render-layer (headless grid + mock mouse); nobody re-ran the live TUI on a real terminal this pass — the class of bug this fixes (mount-under-mouse) no longer has a single carrier in the claimed surfaces, but the live feel is unverified; (b) `src/tui.tsx`'s three hover sites remain (outside the claim: `src/tui.tsx` is held by the tui-storage-convergence-fallback lease); (c) click-time transient acks (`✓ 6/6 resolve`, `✓ copied` inline on the rail summary's sibling attestation row) were moved into the cell where a cell exists; the sweep-row counts stay inline in the payload by design (they are data, not chrome); (d) the `render-card.tsx` / `render-dialog.tsx` standalone scripts crash without `--preload @opentui/solid/preload` — pre-existing on dev, not introduced here.
 
 ## Workstream XII — the ambient pill learns to breathe: a sleeping-cat indicator, not a dashboard (2026-11-18)
@@ -6416,7 +6416,7 @@ Interpretation of this iteration, from the brief's intent: the user should glanc
 791. SPEC honesty gate — the enforced marker (first occurrence) and this workstream's trailing marker are now `spec-check files=62 tests=1526` (`scripts/render-pill.tsx` is not in `package.json` `files`). `bun run check` green before submit.
 792. Honest limits: (a) verified at the headless-render layer and the unit layer, not on a live terminal — the weight axis (bold crest) is pinned by unit tests (`breathCrest`) and the mono arm by smoke tests, because `captureCharFrame` carries characters, not attributes; the one-cell glyph drift is pinned by both. (b) The full-frame `◎` → per-state-glyph swap in `pillModel` repaints the leading cell for every live state — including loops, whose `◉`-prefixed rail grammar is untouched. (c) No live smoke run on a real terminal this pass; the one behavioral risk is that 600ms ambient repaints could, on very slow hosts, cost a frame's worth of work per tick — the interval is armed only while the loop is alive and drops out entirely under reduced motion, same as before. (d) The `goal` noun was kept (criterion: legibility for a fresh glance); the cell budget stays equal to today's pill, not fewer.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XIV — the actions row hangs flush: one grid for the whole card (2026-11-17)
 
@@ -6436,7 +6436,7 @@ Interpretation of this iteration, from the user's live screenshot of the breathi
 800. SPEC honesty gate — the enforced marker (first occurrence) is now `spec-check files=62 tests=1524` (two `pillCaret` tests removed; no packaging change; `scripts/`, `test/` stay outside `package.json` `files`). Workstream XII's in-body figure stays `tests=1526` as its recorded at-the-time state; the X↔XI boundary marker is restored to `tests=1514` for the same reason. `bun run check` green before submit.
 801. Honest limits: (a) the affordance loss is real but deliberate — a fresh user loses the caret's "click me" hint on the pill; the card's `details` button, the right-click dashboard, and `/goal` remain discoverable doors, and the hover bold (weight under the pill's existing hover grammar) still answers the pointer before a click; (b) verified at the unit and headless-render layer, not on a live terminal; (c) overlap with the parallel lease resolved cleanly: the other session's `src/hud-card.tsx` flush-alignment landed as dev's Workstream XIV before this commit; the files rebased on top of it, and neither its accents nor its snapshots are touched here.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XVI — the breath swells through the bullseye family: `◦ ○ ◎ ○` (2026-11-18)
 
@@ -6444,10 +6444,10 @@ Direct follow-up to XV (same user, same screenshot session): "we already have th
 
 802. `src/core/hud.ts` — `BREATH_WAVE` is now `["\u25E6", "\u25CB", "\u25CE", "\u25CB"]` (`◦ ○ ◎ ○`): phase 0 the tiny hollow floor, phases 1 and 3 the mid ring, phase 2 the ◎ bullseye crest. `BREATH_REST` is now `○` (the mid ring — the same parity the old design had between resting `•` and the mid `•` phases). `breathCrest` is unchanged (phase 2 — the bolded ◎ is, by construction, the bullseye the user asked for). Every wave glyph measures 1 cell under `string-width`. `stateGlyph`'s `waiting` face moves from `○` to `◯` (U+25EF, large empty ring) — mandatory disjointification: waiting could not stay `○` once ○ joined the wave, and ○ remains the resting face. All other states are untouched: stuck-retry `●`, paused `‖`, the terminal acknowledgments (`●`/`◌`/`✕`), and the mono demotion (`*` wave, `o` waiting, `|` paused, `?`/`x` acks) — the NO_COLOR contract is byte-identical to XV.
 803. Tests — the pinned wave in `test/tui-hud.test.tsx` now expects `◦ ○ ◎ ○`; the resting frame expects `○`; the stuck-vs-wave, paused and distinct faces tests are unchanged because those families did not move; one test was ADDED (`the waiting hollow ring (◯) is distinct from every breath face and the resting face`) pinning the disjointness contract that motivates the waiting change, so `bun test` = **1525 pass** / 0 fail / 28 snapshots. Headless renders (`scripts/render-pill.tsx`, unicode + `--mono`, 80/150 cols) show only the ring cell drifting across phases; mono output is unchanged from XV.
-804. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=68 tests=1893 -->`. Workstream XV's trailing marker stays `tests=1524` as its recorded at-the-time state. `bun run check` green before submit.
+804. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=72 tests=1989 -->`. Workstream XV's trailing marker stays `tests=1524` as its recorded at-the-time state. `bun run check` green before submit.
 805. Honest limits: (a) verification is unit + headless render — not on a live terminal; (b) `◦ ○ ◎ ○ ◯` are East-Asian-ambiguous-width glyphs, exactly the class the previous dot family already carried (`• ●`); western terminals and `string-width` measure them as 1 cell, CJK-wide locales may paint them wider — same caveat as before, unchanged by this workstream; (c) amplitude/cadence did not move (2.4s period, phase 2 the only bold-gated phase — still ~0.42 Hz effective motion, no new frames, no new timers); (d) waiting users who were used to hollow `○` now see the larger `◯` — the grammar version is recorded here, the mono arm never changed.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XVII — the pill yields to the open card: one voice on the row above the prompt (2026-11-18)
 
@@ -6457,10 +6457,10 @@ Armed condition of this loop iteration: "Make the ambient pill and the HUD card 
 807. `src/tui.tsx` — the pill's absolute box is now wrapped in `<Show when={!cardFor()}>`: while the card is open the pill is not mounted at all. The breath effect is gated identically (`if (animated() && !cardFor() && motionOk)`): a timer advancing phases for a painter that does not exist is pure wake-up work, so the interval is never mounted either. Nothing else moved — the card's mount, probe, anchor, row plan, zIndex and opacity are unchanged; the pill's own budget math, tones and hover grammar are unchanged for the closed-card case.
 808. `scripts/render-slot.tsx` (new, not shipped — `scripts/` is outside `package.json` `files`) — headless mount of the gated composition through one slot: the real `HudCard` and the real `pillModel` line, same anchors and gate as the TUI. Prints two frames and two machine-checkable verdict lines: `pill-in-open-card-frame=no` (the pill line appears nowhere in the card-open frame; the card's `[details]` affordance is present) and `pill-in-closed-card-frame=yes` (closing the card restores the pill line; no affordance row).
 809. `test/tui-pill-card-coherence.test.tsx` (new) — four tests: (a) source contract: the pill's `top={-1}` box sits inside `<Show when={!cardFor()}>` in `src/tui.tsx`; (b) source contract: the breath timer is gated on `!cardFor()`; (c) headless render: with the card open the pill text is absent from the frame and the card's affordance row is present; (d) with the card closed the pill text paints and the card's affordance row is absent. `test/render-scripts.test.ts` gains one smoke test (render-slot.tsx exits 0, both headers, both verdict lines, 30s budget).
-810. Test count moves 1525 → **1530 pass** / 0 fail / 28 snapshots (`bun test` from `test/`); `tsc --noEmit` clean. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=68 tests=1893 -->`; the Workstream XVI trailing marker stays `tests=1525` as its recorded at-the-time state. `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62.
+810. Test count moves 1525 → **1530 pass** / 0 fail / 28 snapshots (`bun test` from `test/`); `tsc --noEmit` clean. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=72 tests=1989 -->`; the Workstream XVI trailing marker stays `tests=1525` as its recorded at-the-time state. `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62.
 811. Honest limits: (a) verified at the unit and headless-render layer — not on a live terminal; the empty strip above the prompt while the card is open is now by construction rather than by occlusion, and the jump-to-latest geometry remains the host's to reclaim if it ever grows a voice of its own. (b) While the card is open, hover/click affordances on the pill row are simply absent — that is the suppression working, not a dead zone (the card carries its own `details`/`pin`/`clear goal`/`esc` hit targets). (c) The breath phase persists in state across the card boundary (it is only the timer that is gated), so the pill re-appears mid-cycle when the card closes rather than re-entering at phase 0; under reduced motion nothing changed at all. (d) No snapshot frames reference the pill (it lives in the slot wiring, not a snapshot-tested component), so the snapshot file is untouched.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XVIII — headless alignment invariants for the card and the pill: one grid, measured cell by cell (2026-11-18)
 
@@ -6470,10 +6470,10 @@ Armed condition of this loop iteration: "Add a headless alignment-invariant suit
 813. `test/tui-alignment-invariants.test.tsx` (new, not shipped — `test/` is outside `package.json` `files`) — analyzes the captured frames cell by cell (grapheme walk + `string-width`; wide glyphs own cells, code units are not cells, so all column math and substring lookup are cell-accurate). Per painted row: (a) cell 0 carries the hanging bar; (b) the first content ink snaps to the LABEL column (3) — or, when the row's gutter is deliberately blank (the context menu's continuation rows), to the value column (14) with cells 3..12 verified blank; nothing is allowed to land between the stops; (c) no painted cell crosses the right content edge (width − 3); (d) one right affordance edge, shared across rows: the condition and why rows carry an 8-cell affordance cell flush to the edge with the 4-cell `copy` verb painted left (verb ink starts at width − 10), and the actions row's flushRight `[esc]` ends exactly at width − 3.
 814. Coverage: card arms at each of the five widths — resting and context-menu-open, color and mono (20 tests) — plus two arms for the terminal-resolved `cardWidth` path; pill arms at the same widths and modes for both the working pill and the terminal acknowledgment (`pillModel` / `terminalPill` with `budget = width − 2`, exactly the live mount's arithmetic), asserting the model's width contract AND the mounted frame (cell 0 blank, first ink at cell 1, no ink past cell width − 2) — 20 tests; 62 new tests in total.
 815. Negative control, run before submit: two deliberate one-line regressions were introduced in the worktree to prove the suite bites, then reverted — `HudButton` `flushLeft` dropped (first content ink moves to cell 4) produced 22 failures; `hud-card.tsx` `flushRight` dropped (`[esc]` ends one cell inside the edge) produced 10 failures. The committed diff touches no `src/` file; every test passes at rest.
-816. Test count moves 1530 → **1592 pass** / 0 fail / 28 snapshots (`bun test` from `test/`); `tsc --noEmit` clean. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=68 tests=1893 -->`; the Workstream XVII trailing marker stays `tests=1530` as its recorded at-the-time state. `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62.
+816. Test count moves 1530 → **1592 pass** / 0 fail / 28 snapshots (`bun test` from `test/`); `tsc --noEmit` clean. SPEC honesty gate — enforced marker (first occurrence) is now `<!-- spec-check files=72 tests=1989 -->`; the Workstream XVII trailing marker stays `tests=1530` as its recorded at-the-time state. `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62.
 817. Honest limits: (a) verified at the headless-render and unit layers — not on a live terminal. (b) The affordance-edge invariant reads the resting frame; the hover/ack payloads (`✓ copied` family) are pinned indirectly through the cell's fixed 8-cell width and `flushRight`, not by measuring a hovered frame. (c) The menu's blank-gutter continuation rows snapping to the value column is the design's gutter grammar, encoded as such — not an exception carved out of the grid. (d) No snapshot references changed (no framed component is modified), so the snapshot file is untouched.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XIX — the live layer, end to end: arm → work → evaluate → achieve, on the real binary (2026-11-18)
 
@@ -6487,10 +6487,10 @@ Named risk of this loop iteration, priority 1 per the brief: the one layer Works
 
 821. Restore-on-restart, verified live for terminal records: after the two failed-run records were on disk, a fresh instance on the same scratch dirs booted clean — no pill painted, no error dialog, plugin loaded, no `restored goals` line in the log, nothing adopted (both records terminal; `restore()` must not adopt them). The live-adopt half of restore (an active/paused record is taken into memory with reset counters) is pinned by unit tests (`test/controller.test.ts` restore arms) and could not be reproduced live on this machine: with no working console session the provider call fails fatally within ~1.1s, so no goal ever rests durable as `active`; planting a synthetic record would not be a real path and was not done.
 
-822. SPEC honesty gate — the enforced marker is unchanged at `<!-- spec-check files=68 tests=1893 -->` (no package or test-count change; this workstream adds documentation only). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` were wiped after capture, including the runtime-copied provider config; no key material remains on disk and none enters the repo.
+822. SPEC honesty gate — the enforced marker is unchanged at `<!-- spec-check files=72 tests=1989 -->` (no package or test-count change; this workstream adds documentation only). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` were wiped after capture, including the runtime-copied provider config; no key material remains on disk and none enters the repo.
 823. Honest limits: (a) verified live on `opencode v2.3.2` with KiloCode-Free; the success path exercises the single-judge session evaluator (`evaluator.mode: session`) — the independent and consensus paths remain unit-tested only, as does everything in `src/core/config.ts` that defaults off. (b) The pill's click-to-card path was not exercised (mouse injection into the headless PTY is not part of this pass); the card itself remains verified at the headless-grid layer (XIV, XVIII). (c) The goal achieved in one turn with a concrete condition; a fuzzy goal's SPEC-first gate was armed but not adjudicated live. (d) The one aesthetic artifact observed live: while the evaluator runs, the pill reads `goal checking · <1m` — by design (`evaluating`), unchanged here. (e) The commit the model made (`751562f`) lives in the throwaway repo and is gone with it; nothing of it belongs to this repository.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XX — live crash-restore: SIGKILL mid-turn, fresh host adopts the durable active record (2026-11-18)
 
@@ -6502,10 +6502,10 @@ Named risk of this loop iteration, from the brief's priority 1, closing the half
 
 826. What could not be evidenced live, and why, honestly: (a) the **`restored goals` log line** (`controller.ts` `restore()` → `deps.log.info("restored goals", { count })`) reaches no observable sink on this host. The plugin's logger is raw `console.info/warn/error` (`createLogger()` in `src/index.ts`); the standalone in-process host swallows it — across all five reboots, zero `[opencode-goal]` lines appear in `opencode.log`, the scratch filesystem, or the PTY grid (also true under `OPENCODE_PRINT_LOGS=1` and `OPENCODE_LOG_LEVEL=all`). The plugin SDK context exposes no log API (`session.log` is a read-only tail/follow of the host's session log; `ctx.app` is name/version/channel only). Named consequence: **restore is silent in production — an operator whose goal silently fails to adopt has no log anywhere to look at.** Documented, not fixed here: routing plugin logs into a host sink is a new feature with its own design choices (which sink, what format, whether to add a file fallback) and is not what this iteration's armed condition allowed; candidate for a future iteration. (b) The **fresh-boot pill** is invisible by design — the pill is session-scoped (`composer.top` slot renders `live(props.sessionID)`), and a fresh headless boot never lands on the armed session; the pill frame exists only boots that route back onto it (`OPENCODE_ROUTE`), which is exactly what (ii) did. (c) The record was adopted but never resumed — resuming an interrupted turn is the user's call (send any prompt / re-open the session); the restore path deliberately does not re-enter the turn. (d) `count.txt`, the commit, and the evaluator's judgment of the condition remain unproven live for the crash path.
 
-827. SPEC honesty gate — the enforced marker is unchanged at `<!-- spec-check files=68 tests=1893 -->` (documentation only; no package or test-count change). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` and the wrapper experiment were removed after capture (the wrapper was never exec'd — the harness spawns `/home/pauk/.opencode/bin/opencode --standalone <cwd>` by absolute path, ignoring `PATH`, confirmed via `/proc` on the live pid — so no wrapper file remains relevant; the runtime-copied provider config with the gateway key was deleted with the scratch dir; no key material remains on disk and none enters the repo).
+827. SPEC honesty gate — the enforced marker is unchanged at `<!-- spec-check files=72 tests=1989 -->` (documentation only; no package or test-count change). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` and the wrapper experiment were removed after capture (the wrapper was never exec'd — the harness spawns `/home/pauk/.opencode/bin/opencode --standalone <cwd>` by absolute path, ignoring `PATH`, confirmed via `/proc` on the live pid — so no wrapper file remains relevant; the runtime-copied provider config with the gateway key was deleted with the scratch dir; no key material remains on disk and none enters the repo).
 828. Honest limits, restated: (a) verified live on `opencode v2.3.2` + KiloCode-Free + the session evaluator only; the independent and consensus evaluator paths remain unit-tested only. (b) The crash snapshot is real — SIGKILL (not SIGTERM) at an arbitrary mid-turn point — but only one crash point was captured; a kill between `active`-write phases deeper into the turn loop may exercise different code paths (none exist — the record is written once at arm and at verdicts; the turn in flight had performed no tool-based writes). (c) The `OPENCODE_ROUTE={"type":"session",…}` boot demonstrates the host's own route mechanism; interactive session switching with the standard keybinds was not part of this pass. (d) The restore *resume* semantics (what happens after the user re-prompts in the restored session) were not exercised: re-prompting would spend provider tokens on the scratch goal; the record, pill, and transcript state are the stopping point. (e) Nothing of this run belongs to this repository; the throwaway repo is deleted.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXI — the accordion pill: the pill and the card are one surface (2026-11-18)
 
@@ -6518,10 +6518,10 @@ User request, from two screenshots attached to the brief: (1) the black-stripe p
 833. `test/tui-pill-card-coherence.test.tsx` — re-pinned to the accordion contract, coverage increased (4 → 6 tests). Source contract: (a) the pill mount is NOT gated on the card — no `<Show when={!cardFor()}>` within 400 chars before the pill's `top={-1}`; (b) the body anchors at `top={-(1 + cardRows())}`; (c) the breath gate is `if (animated() && motionOk)` and no longer references `cardFor()`; (d) the caret cell exists (`" ▴"` and `" ▾"`). Headless block (real `HudCard`, real `pillModel`): the composition mounts BOTH the body (absolute, `top={0}`, `height={cardRows}`, zIndex 10) and the pill below it at `top={cardRows}` (the real pill cell plus the caret, mirroring the source); the column is `cardRows + 1` rows as before. Assertions: with the card open the pill line IS in the frame, the `[details]` affordance row IS in the frame, the pill row index is strictly greater than the actions row index and equal to the last row of the column; with the card closed the pill paints and `[details]` is absent.
 834. `test/tui-hud-width-measure.test.tsx` — one pinned literal re-pointed: `hudCardRows(g, contextOpen(), maxCardRows(), mountWidthOr())` → `maxBodyRows()`, with the comment updated. This is a strength-preserving re-pin (same assertions, same purpose — the anchor reads `mountWidthOr()`, not the terminal width; the plan's `maxRows` identifier is what the accordion changed); no assertion was weakened or removed. No other tests touched; no snapshot files touched.
 835. Closed-state pill text is byte-identical to before this workstream except for two cells: the caret (` ▴`) and the budget floor (the text model's budget shrank by the caret's 2 cells, so an 80-column row still never clips the state the pill exists to show). `src/hud-card.tsx` logic untouched — the HudCard's painted rows are byte-identical (its only input change is the `maxRows` prop, which drops a teaching row only at the viewport ceiling).
-836. SPEC honesty gate — the enforced marker (first occurrence) is now `<!-- spec-check files=68 tests=1893 -->` (1592 → 1594: the coherence suite grew by two tests; `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62). `bun run check` green before submit.
+836. SPEC honesty gate — the enforced marker (first occurrence) is now `<!-- spec-check files=72 tests=1989 -->` (1592 → 1594: the coherence suite grew by two tests; `scripts/` and `test/` stay outside `package.json` `files`, so the packed-file count is unchanged at 62). `bun run check` green before submit.
 837. Honest limits, restated: (a) verified at the headless-render and unit layers only — NOT live-verified on a terminal this pass; the click-to-toggle accordion, the caret glyph, and the exact jump-row composition remain unverified against a real host. (b) The row claim for `Jump to latest ↓` remains the host's: the pill and the panel claim rows above the prompt by the composer slot's existing negative-anchor grammar; if the host reclaims or repaints that row, the geometry inherits it. (c) The caret widens the painted pill by 2 cells whenever the pill is shown (closed or open); the pill text budget shrank accordingly, but no headless frame was captured of the live composer slot this pass. (d) The HudCard's `maxRows` prop now reads `maxBodyRows()` so the anchor and the painted plan agree under the taller footprint; at terminals far from the ceiling this changes nothing painted.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXII — the live layer, second half: independent and consensus evaluator modes against a real gateway (2026-11-18)
 
@@ -6537,9 +6537,9 @@ Named risk of this loop iteration, priority 1 per the brief: the one evaluator p
 
 842. Verification layers, stated honestly: everything above ran live on the real binary (`opencode v2.3.2`) in the headless PTY with a scratch XDG config/data pair and throwaway `main` repos; durable records were read from the scratch sqlite stores; file bytes and commits were verified from the shell after each run. Not verified live: (a) a genuine inter-judge **disagreement** with two *working* judges ruling differently — producing it on demand is not available; it is pinned by `test/evaluator.test.ts` (disagreement → fail closed with the named reason). (b) The independent **loop** summarizer/planner (`summarizeIndependently`/`nextGoalIndependently`) — they share `ctx.generate.text`, which Run B proves works, but the loop-iteration paths themselves remain unit-tested only. (c) consensus 2 with `mode: "session"` (primary session, second opinion independent) — same code path, other operand order; not run this pass. (d) Spend attribution: the record's spend is the session's spend; the judge's tokens are not metered into the record (shape of `UsageSnapshot`), so no cost claim is made beyond the observed zero-cost entries. (e) The judge paths were exercised exactly once each (one fail-closed pair of verdicts, one met); repeatability across gateways/models for KiloCode-Free specifically is not claimed beyond these runs.
 
-843. SPEC honesty gate — the enforced marker (first occurrence) is unchanged at `<!-- spec-check files=68 tests=1893 -->` (no test-count or packaging change; this workstream adds documentation only). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` were wiped after capture, including the key-bearing shim config; both throwaway repos are deleted; no key material remains on disk and none enters the repo. Nothing of either run belongs to this repository.
+843. SPEC honesty gate — the enforced marker (first occurrence) is unchanged at `<!-- spec-check files=72 tests=1989 -->` (no test-count or packaging change; this workstream adds documentation only). `bun run check` green before submit. Scratch dirs under `/tmp/opencode/live-smoke/` were wiped after capture, including the key-bearing shim config; both throwaway repos are deleted; no key material remains on disk and none enters the repo. Nothing of either run belongs to this repository.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXIII — the context figure updates on turn boundaries, not on a 30 s backstop (2026-11-18)
 
@@ -6551,11 +6551,11 @@ User report, with a screenshot: the HUD card showed `context ~89k tokens` while 
 
 846. Tests (`test/controller.test.ts`, +2). Harness gained a controllable `estimateContext` dependency. (i) After a turn evaluates, at least one `changed` event carries `contextSize === 432_100` (the fake estimate) with `spend.cost === 6` (usage 7 vs the arm-time baseline of 1). (ii) The terminal achieved changed event carries both the settled spend (`cost === 7`) and the last measured context figure (`99_001`). tsc clean; `bun test` 1596 pass / 0 fail / 28 snapshots; `bun run check` green.
 
-847. SPEC honesty gate — the enforced marker (first occurrence) is now `<!-- spec-check files=68 tests=1893 -->` (1594 → 1596; `scripts/` and `test/` stay outside `package.json` `files`). `bun run check` green before submit.
+847. SPEC honesty gate — the enforced marker (first occurrence) is now `<!-- spec-check files=72 tests=1989 -->` (1594 → 1596; `scripts/` and `test/` stay outside `package.json` `files`). `bun run check` green before submit.
 
 848. Honest limits. (a) Freshness is per completed turn, not per streamed token: mid-turn the card shows the previous turn's figures until the step completes — there is no per-step usage event in the host's event surface, and the native footer's per-token growth is not reproducible without one. (b) The per-turn estimate costs one `ctx.session.context` round trip on top of the `session.usage` call evaluate() already made; it happens once per turn (seconds to minutes), never per tool call. (c) Accuracy against the native footer still depends on the shared `estimateContextTokens` heuristic (input + cacheRead + cacheWrite of the last assistant step); any systematic drift between them is unchanged by this workstream and unmeasured. (d) Spend/context figures are not attached to `changed` events from paths that lack measurements (failures, interruptions) — the TUI carry-forward keeps the last measured values there, by design. (e) NOT verified live on a terminal this pass — unit level only, plus the existing headless render suites.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXIV — the evaluator becomes a defensive, proactive auditor; the fuzzy objective is reworded into a concrete foundation (2026-11-18)
 
@@ -6571,11 +6571,11 @@ Interpretation. The user asked for two things joined by "reword this": (a) the f
 
 850. Tests (`test/loop.test.ts`, +2). One test pins the defensive-auditor rubric on BOTH evaluation paths (session and independent): `Defensive audit`, `weakened`, `contradicted by fresher output`, `bought by weakening a test`, `prefixed "next:"`, `single next concrete step`. A second pins the planner on BOTH paths: `defensive auditor`, the a/b/e audit-order lines, `"next:" hint`, `first-class candidate`. No existing test was touched, weakened or re-pinned. `bun test` 1598 pass / 0 fail / 28 snapshots; `tsc --noEmit` clean.
 
-851. Stale audit (the "no stale work, files" axis) — run before submit, all read-only. (i) `dist/tui.js` vs `src/tui.tsx`: no TUI source changed this iteration; `bun run compile` output matches the committed bundle (checked by `bun run check` after this section). (ii) docs freshness: this commit touches `docs/runtime.html` (one paragraph in the `/goal-loop` section recording the audit order and the `next:` carry-forward); stamps/changelog regenerate from git history via `bun scripts/docs-watch.ts once` in a follow-up docs commit, per repo convention. (iii) SPEC marker: enforced (first-occurrence) marker is now `<!-- spec-check files=68 tests=1893 -->` (1596 → 1598; `test/` stays outside `package.json` `files`). (iv) No files were deleted, no tests relaxed, no checks detached; the attribution lines and the historical workstream markers were not touched.
+851. Stale audit (the "no stale work, files" axis) — run before submit, all read-only. (i) `dist/tui.js` vs `src/tui.tsx`: no TUI source changed this iteration; `bun run compile` output matches the committed bundle (checked by `bun run check` after this section). (ii) docs freshness: this commit touches `docs/runtime.html` (one paragraph in the `/goal-loop` section recording the audit order and the `next:` carry-forward); stamps/changelog regenerate from git history via `bun scripts/docs-watch.ts once` in a follow-up docs commit, per repo convention. (iii) SPEC marker: enforced (first-occurrence) marker is now `<!-- spec-check files=72 tests=1989 -->` (1596 → 1598; `test/` stays outside `package.json` `files`). (iv) No files were deleted, no tests relaxed, no checks detached; the attribution lines and the historical workstream markers were not touched.
 
 852. Verification layers, stated honestly: unit level (prompt content pinned on both evaluation and both planner paths) and the existing suite stays green. NOT verified this pass: (a) the evaluator's actual behavior on a live model — prompts are probabilistic; one live pass showed KiloCode-Free honors the verdict JSON contract (Workstream XXII), but the new `next:` line's adoption rate on a real judge is unmeasured. (b) The `next:` → planner carry-forward is prompt-wired, not code-wired: nothing in `src/runtime/controller.ts` parses or enforces it; a judge that omits the line costs nothing, a judge that emits garbage there only pollutes a summary string the planner may ignore. (c) No Rust-equivalent layer exists; nothing to check. (d) The objective's "speed" axis is addressed only indirectly this iteration (fewer re-derivation rounds via actionable reasons; planner prefers auditable work); no benchmark was run.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXV — live verification of the proactive evaluator: one KiloCode-Free /goal-loop to met; the verdict and the chain, verbatim (2026-11-18)
 
@@ -6595,11 +6595,11 @@ Harness. Scratch XDG triple under `/tmp/opencode/live-loop-xxv/` (wiped with the
 
 858. Honest limits, restated. (a) One live sample of the judge, session evaluator only; independent and consensus paths remain unit-tested plus XXII's independent/consensus live passes. (b) `next:` adoption on this judge, this pass: **absent (n=1)** — one sample proves nothing either way; nothing in this run should be read as "the proactive duty doesn't work live". (c) The `next:` → arm carry-forward is still prompt-wired, not code-wired: nothing parses or enforces it; the chain collapsed to zero observable links this pass for a closed objective. (d) Gateway routing of the alias was spot-checked, not end-to-end proven: `KiloCode-Free` is a `combo` upstream (`baidu/ernie-5.5-flash-preview:free` was observed upstream in the curl probe); the footer name is cosmetic. (e) The `thk_live_…gaSU` keyFragment in the log excerpt above is the binary's own baked credential, not the user's; it appears in the error message opencode prints, is inert, and is recorded because it appeared verbatim in the diagnostic — no user key was copied into this repository or this spec (scratch config was wiped). (f) Scratch repo `b716ac9` and its `LOOP.txt` are deleted with the scratch; nothing of this run belongs to this repository.
 
-859. SPEC honesty gate — the enforced (first occurrence) marker is unchanged at `<!-- spec-check files=68 tests=1893 -->`; this iteration is documentation-only, `git diff --stat` shows only SPEC.md touched before the docs-watch commit. `bun run check` green before submit. The two earlier failed boots (Console `SignedOut`, OpenAI `thk_live`) produced no commits and no records worth keeping and are described here in the text only; scratch dirs under `/tmp/opencode/live-loop-xxv/` are wiped including the key-bearing config.
+859. SPEC honesty gate — the enforced (first occurrence) marker is unchanged at `<!-- spec-check files=72 tests=1989 -->`; this iteration is documentation-only, `git diff --stat` shows only SPEC.md touched before the docs-watch commit. `bun run check` green before submit. The two earlier failed boots (Console `SignedOut`, OpenAI `thk_live`) produced no commits and no records worth keeping and are described here in the text only; scratch dirs under `/tmp/opencode/live-loop-xxv/` are wiped including the key-bearing config.
 
 Candidate arms identified by this run for the next iteration (recorded, not done): (1) sanitize session-generate / compactor output — strip inline reasoning control tags and collapse the post-tag duplication before persisting to `loopHistory[].summary` (needs prompt tighten + a code filter + tests). (2) make the harness's or plugin's provider-fallback loud (out of plugin scope — belongs to the host; recorded for the host's own backlog). (3) a genuinely open objective run to arm v2 and observe the `next:` carry-forward with a `next:`-emitting judge — needs a live judge that actually adopts the duty, or a nudge like an objective with a standing backlog.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXVI — the summarizer's reasoning-tag leak is stripped deterministically before it persists or reaches the planner (2026-11-18)
 
@@ -6613,9 +6613,9 @@ Armed condition of this loop iteration (verbatim from the loop): "Strip reasonin
 
 863. Honest limits. (a) The filter is deterministic and tag-shape-based; it catches the observed leak class (reasoning-control tags + the truncated-restart duplication), not arbitrary model noise — it will not drop a reasoning preamble written in plain prose with no tag, and it cannot restore content lost to the upstream token slice (the post-tag restart is dropped, not spliced back; the pre-tag block survives, which is what the live record needed). (b) Live layer this iteration: unit + integration tests only — the loop was not re-run live, and the armed-next-condition chain remains live-unverified; re-running an open-objective live pass to observe a `next:`-adopting judge remains the standing candidate (item 859). (c) `src/core/prompts.ts` was edited beyond the claimed paths (the historyBlock/latestSummary choke points and the one prompt line); the submit is recorded with `--force` and logged to the lease per the coordinator's scope-override policy. (d) `docs/runtime.html` records the filter next to the compaction paragraph; `docs/changelog.html` and page stamps regenerate from git history via `docs-watch.ts once` after the commit.
 
-864. SPEC honesty gate — the enforced (first occurrence) marker is now `<!-- spec-check files=68 tests=1893 -->` (test count 1598 → 1613; packed files 62 → 63 because `src/core/sanitize.ts` is a new shipped source file; `scripts/`/`test/` stay outside `package.json` `files`). Unforced history: `test/package-integrity.test.ts` count 62 → 63; Appendix A's frozen steer ref (the `continuation` export) re-synced one line down after the new import shifted the file, with a dated note in Appendix A; `docs/index.html` cites the same construct by symbol name and is unaffected by line shifts. `bun run check` green before submit.
+864. SPEC honesty gate — the enforced (first occurrence) marker is now `<!-- spec-check files=72 tests=1989 -->` (test count 1598 → 1613; packed files 62 → 63 because `src/core/sanitize.ts` is a new shipped source file; `scripts/`/`test/` stay outside `package.json` `files`). Unforced history: `test/package-integrity.test.ts` count 62 → 63; Appendix A's frozen steer ref (the `continuation` export) re-synced one line down after the new import shifted the file, with a dated note in Appendix A; `docs/index.html` cites the same construct by symbol name and is unaffected by line shifts. `bun run check` green before submit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXVII — the background-wait state persists: the pill stays `waiting` across a restart/plugin reload (2026-11-18)
 
@@ -6630,9 +6630,9 @@ Interpretation. The waiting state end-to-end exists (`deferredSince` on the runt
 867. What was deliberately NOT done (the over-engineering the condition forbids): no session-list RPC resync in `BackgroundTracker` (the host SDK exposes no list; per-session `parentOf` probes from an enumeration that doesn't exist), no persisted child-session registry, no new TUI timer or heartbeat, no change to the breathing/idle motion, no change to pill/card/dialog renderers (they already carry `waiting`), no `waitingSince` on `GoalSnapshot` (it rides the record spread, which is all the mirror and `changed` need).
 868. Tests (`test/controller.test.ts`, +2): a deferred wait is persisted on the record and painted `waiting` after a fresh-process restore; the background-drain path (the child's end event) clears a restored wait, evaluates, and drops `waitingSince` from storage — a third restore sees no wait. No existing test was touched, weakened or re-pinned.
 869. Honest limits. (a) The post-reload tracker is still blind to background sessions that started before the reload (`busy()` is event-fed); the fix restores the *paint* of the wait and the *drain*, not a live enumerate of pre-reload children — a pre-reload child that ends post-reload is what triggers the drain, and that is the path verified by test. (b) `busy() == 0` post-reload means any end event drains any restored wait early — evaluated with `carriedToolCalls` lost (runtime state), so the verdict reads the transcript without the restored pre-reload tool count; acceptable (conservative: it evaluates sooner, never later) and pre-existing in shape. (c) Not verified live this pass; unit + restore simulation only. (d) The wedged-RPC 500s (`/api/rpc/goal/get`) observed throughout the session are a host/bridge issue outside this plugin's control — the mirror path is what carries this fix to the TUI under them, and it is exercised by the existing restore tests plus this one.
-870. Verification (fresh at this HEAD): `bun test` run from `test/` (the spec-check cwd) reports **1615 pass / 0 fail** (was 1613; +2); `tsc --noEmit` clean; `bun run check` green; `bash -n packages/coordinator/bin/coordinator` ok. Markers: the enforced (first occurrence) marker is now `<!-- spec-check files=68 tests=1893 -->`.
+870. Verification (fresh at this HEAD): `bun test` run from `test/` (the spec-check cwd) reports **1615 pass / 0 fail** (was 1613; +2); `tsc --noEmit` clean; `bun run check` green; `bash -n packages/coordinator/bin/coordinator` ok. Markers: the enforced (first occurrence) marker is now `<!-- spec-check files=72 tests=1989 -->`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXVIII — completion releases everything: no finished goal's chrome, pin or loop-position state sticks around for the next request or the next version (2026-11-18)
 
@@ -6646,9 +6646,9 @@ Interpretation. A finished goal left three residue classes behind. (A) The HUD c
 874. Loop-position chrome renders only while live (`src/tui.tsx` inline `/goal` dialog header, `src/status-dialog.tsx` overview line): `looped()` and `loopPosition()` require `isLive(status)`, so a finished loop shows its terminal outcome (`achieved`/`impossible`/`failed`) instead of ` · vN/M`. The loop rail in the history section and the `loop complete` ack pill are unchanged — they render the finished loop's history truthfully and are content, not arming chrome; one full-frame snapshot (`tui-snapshots.test.tsx`, the impossible-outcome dialog footer) re-baselined by exactly the removed ` · v3/5` cell.
 875. Tests (+9): `expiredTerminalSessionIDs` six cases (past-window expiry, in-window keep, exact edge, `keep` kept, null/live never, unstamped never); `dropSessions` three cases (drops named, `keep` kept, same-reference no-ops). The existing suites are otherwise untouched; no render semantics changed beyond 874.
 876. Honest limits. (a) Not verified in a live wedged session; unit + snapshot evidence only. (b) The release runs at intake — a live→terminal transition observed only via a *missed* `changed` and a lapsed mirror/RPC window is repainted terminal by the 10-minute re-pull arm and expires at 10 minutes; inside the window the dialog and palette read the finished record on purpose (dossier doors). (c) `terminalAcks` and pins for a goal that goes terminal *without any observable intake* (session deleted) self-cap as before; session deletion drops the record server-side and the mirror, and the pill disappears with the session route. (d) Palette read-only doors keep the cache fallback inside the window by design — deleting those would blind the dossier/status workflows on finished loops.
-877. Verification (fresh at this HEAD): `bun test` from `test/` reports **1624 pass / 0 fail** (was 1615; +9); `tsc --noEmit` clean; `bun run check` green, including the re-baselined snapshot suite, `check:tui`, `docs:check` and `check:spec`. Markers: the enforced (first occurrence) marker is now `<!-- spec-check files=68 tests=1893 -->`.
+877. Verification (fresh at this HEAD): `bun test` from `test/` reports **1624 pass / 0 fail** (was 1615; +9); `tsc --noEmit` clean; `bun run check` green, including the re-baselined snapshot suite, `check:tui`, `docs:check` and `check:spec`. Markers: the enforced (first occurrence) marker is now `<!-- spec-check files=72 tests=1989 -->`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXIX — the `<opencode-cli>` first-turn guide points at opencode-headless as the way to drive the real binary (2026-11-18)
 
@@ -6661,7 +6661,7 @@ Interpretation. The goal names this plugin by absolute path and asks for one cha
 880. Docs re-pointed to the headless route: `README.md` (opencode-CLI paragraph — "screenscrape … tmux/a PTY" → "through the opencode-headless plugin (api/cli/pty …)"), `docs/core.html` (the `opencode-cli.ts` card), `AGENTS.md` (the opencode-CLI goals bullet). Historical SPEC sections (Workstreams XXII–XXVIII, including the "no stable documented headless-drive tool" honest limits recorded there) are records and are deliberately not rewritten; this section supersedes that claim in the operative guide.
 881. Honest limits. (a) The guide is static text injected into the first-turn directive; opencode-headless must already be installed/mounted for the route to work — the guide says how (one line) but cannot enforce it. (b) pty capture is a screen reconstruction, not a terminal emulator — the guide says so inline. (c) Verified at unit/source+test level (guide content pinned byte-for-byte by `test/opencode-cli.test.ts`, tsc/tests green); no live agent was steered by the new block this pass — the injection path itself is unchanged (`prompts.ts` untouched). (d) `bun run check` green before submit; `docs:check`/`spec:check` markers unchanged (`files=63 tests=1624`; no shipped-file or test-count delta).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXX — the XXVIII release, verified live in a wedged-RPC session: card, context menu, Esc layer, pin, palette and ack pill all release on completion (2026-11-18)
 
@@ -6679,7 +6679,7 @@ Interpretation. The XXVIII section records its evidence as unit + snapshot only 
 889. New finding, host-side, unresolved: on opencode **2.3.2**, the standalone TUI's location-scoped RPC path fails deterministically. The TUI spawns `opencode serve --stdio --port 0`; inside it, `POST /api/rpc/goal/get` returns HTTP 500 on every call (observed at regular 30s intervals across two standalone runs, and forced by the dialog's fresh pull) with **zero** plugin-side or middleware-side log detail at any log level (debug included): no `rpc handler failed`, no `rpc call failed`, no `schema rejection` WARN, no defect line. Handlers nevertheless execute — the status notice reached the TUI and the dialog opened (886) — so the failure sits on the response path, after dispatch, not in the goal plugin. A fresh TCP `opencode serve` (same cwd, same plugins, same wire shape: `location[directory]=<cwd>`, deepObject, excess keys tolerated) answers `200` after plugin activation, `400 rpc.unavailable` during the activation window (the likely source of the live incident's `goal/list` 400), and `400 InvalidRequestError "Expected object at \"location\""` for a flat `location=…` string. Root cause not isolated — suspect the stdio transport/overlay (the in-TUI serve child) rather than the protocol stack; no host source was modified; this is reported as an observation with exact log lines, not a diagnosis. Why it matters here: every live round this pass, wedged or not, ran with dead wire-RPC and live one-way notices — XXVIII's release path never depended on a successful RPC call, and the mirror+tick carried the chrome correctly through completion. The live 2026-11-18 incident is consistent with seeing exactly this signature from the user's long-running service.
 890. Verification (fresh at the amended HEAD): `bun ../scripts/spec-check.ts` from `test/` → `spec-check: ok (63 files, 1624 tests match SPEC.md)`; SPEC.md-only amendment; branch `wt/live-completion-release-verify` based on dev `b8773cd`; coordinator lease `live-completion-release-verify` submitted; the shift 882→889 is recorded in this section. Live evidence is the transcripts above; both throwaways are preserved on disk for inspection (`/tmp/opencode/goal-verify-live/` wedge, `/tmp/opencode/goal-verify-healthy/` clean, `/tmp/opencode/goal-verify-debug/` debug-level boot).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXI — documentation/spec alignment sweep: the stale compaction-ladder and restore-compaction claims are retired (2026-11-18)
 
@@ -6695,7 +6695,7 @@ Interpretation. The repo's normative documents (SPEC.md) and inline comments had
 
 Honest limits. (a) Documentation/comments only; no shipped behavior, API, or test expectation changed. (b) The enforced (first-occurrence) spec-check marker is unchanged at `files=63 tests=1624` — no shipped-file or test-count delta; `bun run check` green before submit. (c) Stale claims could in principle linger in other historical SPEC sections; those are records and are annotated only where an agent could mistake them for the operative contract.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXII — the standalone stdio child's `POST /api/rpc/goal/get` 500 posture, re-verified live through opencode-headless (2026-11-18)
 
@@ -6712,7 +6712,7 @@ Interpretation. Workstream XXX (item 889) first recorded this host-side finding 
 
 Honest limits. (a) One goal, one model, one run — this is a posture re-verification, not a root-cause hunt; the Ernie variant named by the user remains unreachable from opencode's 9router-go (Workstream XXX, item 883). (b) The 30s-cadence claim is thinner this run — the goal reached terminal in 42s; three samples total (two ticks, one dialog pull). (c) No TCP cross-check this pass; the TCP answers (200 post-activation / 400 pre-activation / flat-`location=` 400) stand from Workstream XXX items 882 and 889. (d) The 500 response body was not captured — the TUI swallows it and the stdio child logs only the status line, which is itself part of the finding. (e) No shipped files or tests changed; the enforced first-occurrence spec-check marker is unchanged; historical SPEC sections remain annotated records.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXIII — the stdio child's `POST /api/rpc/goal/get` 500, root-caused and fixed in-repo: explicit-undefined record keys rejected by the host's JSONValue gate (2026-11-18)
 
@@ -6730,7 +6730,7 @@ Armed condition of this iteration (verbatim from the loop): "Root-cause the stdi
 
 Honest limits. (a) The armed model was Console-auth-failing at this hour; the arming path, the pause/finish state machine, the event-emit path and the RPC pull all execute model-independently and were exercised end-to-end. (b) The failing-model condition is live and current on this host (unrelated to this plugin). (c) Proof that the pull resolved is the dashboard's own stale flag plus the absence of 500/SchemaError lines — the host does not log 2xx responses, so no 200 line exists to quote; this limit is stated plainly. (d) Markers: files unchanged at 63 (no new shipped file), tests 1624 → 1628; this same commit updates the enforced (first-occurrence) marker; historical trailing markers remain as recorded. (e) Historical SPEC sections remain annotated records; this amendment carries no new file/line citations; `bun run check` green before submit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXIV — opt-in file log sink: `OPENCODE_GOAL_LOG_FILE` (2026-11-18)
 
@@ -6743,7 +6743,7 @@ Armed condition of this iteration (verbatim from the loop): "keep on improving m
 
 Honest limits. (a) The sink writes synchronously on the log path; log volume is low (arm/restore/loop/compaction bookkeeping, never per-tick), but a pathological writer could still pay fsync costs — accepted for durability simplicity. (b) No live host run was performed this iteration; the module is unit-tested and the wiring is one line in `src/index.ts` reviewed against `createLogger`. (c) `OPENCODE_GOAL_LOG_FILE` is documented as best-effort; rotation is rename-based and POSIX-atomic only in the same directory, which the implementation guarantees (`<file>.1` is a sibling). (d) Historical SPEC sections remain annotated records.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXV — completed-iteration retention cap: `loopHistory` bounded at 50 entries (2026-11-18)
 
@@ -6757,7 +6757,7 @@ Armed condition of this iteration (verbatim from the loop): "Bound loopHistory g
 
 Honest limits. (a) 50 is a fixed bound, not configurable — chosen so the planner window (10) is comfortably covered and the record stays small; a config knob was rejected as unjustified surface area. (b) No live 100-iteration session was driven; the cap is unit- and integration-tested at the controller level, including the persisted-bytes restore path. (c) Cumulative sums (spend, turns, tool calls) shown by the dossier/ledger after trimming cover retained iterations only and say so; there is no pre-drop grand total anywhere (it was never recorded). (d) `record.history` was unbounded at the time this workstream landed; it was bounded in Workstream XXXVI (`MAX_VERDICT_HISTORY_ENTRIES`, `historyDropped`) and this line is corrected accordingly (2026-11-18, Workstream XXXIX).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXVI — verdict-trail retention made explicit: `historyDropped` and honest consumers (2026-11-18)
 
@@ -6770,7 +6770,7 @@ Armed condition of this iteration (verbatim from the loop): "Bound the verdict t
 
 Honest limits. (a) The bound itself is unchanged (20) — this workstream adds provenance, not a smaller window. (b) `totalVerdictCount` covers the two retention counters only; there is still no pre-drop grand total for spend/turns across dropped verdicts (verdicts carry no token totals to sum). (c) Why-ledger rows and verdict-dot deep scrub cover the retained window only; the dropped entries are gone by design and are not recoverable from the record. (d) Iteration-mix bucketing for loop iterations whose verdicts were dropped reads as absent (unknown), which is the honest shape.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXVII — completed-condition ledger: the gates outlive the retained window (2026-11-18)
 
@@ -6782,7 +6782,7 @@ Armed condition of this iteration (verbatim from the loop): "Persist a bounded c
 
 Honest limits. (a) 100 entries is a fixed bound — older completed conditions are gone by design, and `completedConditionsDropped` counts them; there is no manifest of dropped strings. (b) The ledger stores condition strings only, not summaries or shas — it exists for the gates, not for display; no dossier/TUI surface reads it. (c) A 100-entry ledger still cannot catch a condition completed more than 100 iterations ago; the cap is the explicit, counted boundary of best effort. (d) The anti-repeat and near-duplicate thresholds themselves are unchanged; this workstream widens what they see, not how they judge.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXVIII — terminal goal records bounded at plugin storage (2026-11-18)
 
@@ -6794,7 +6794,7 @@ Armed condition of this iteration (verbatim from the loop): "Bound persisted goa
 
 Honest limits. (a) The caps are fixed constants, not config knobs — by design; widening them is a reviewed code change, not a silent drift. (b) A terminal record pruned by the cap is gone by design and is not enumerated anywhere; `pruned` is a count, not a manifest. (c) Records with no `endedAt`/`startedAt` are kept forever by the age rule (their age can never be judged) — they are reported via `unstampedKept`, not silently absorbed. (d) The prune is per-directory: terminal records of other directories at the same plugin storage are untouched; cross-directory GC is out of scope. [Resolved by Workstream XLI (2026-11-18): restore() now prunes across all directories at plugin storage, applying the same caps per directory.] (e) Live records (active/paused) are never pruned, even if ancient — paused is resumable and is not terminal. (f) This workstream's rebuilt `dist/tui.js` (core constants bundle into it) was committed but was not claimed in the lease; the submit used `--force` as the sanctioned scope override, logged to the lease (`forcedScope: true`). Recorded in the XXXIX re-audit (2026-11-18) so the next rebuild of `dist/tui.js` is claimed up front.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XXXIX — SPEC/docs honesty re-audit against the tree (2026-11-18)
 
@@ -6806,7 +6806,7 @@ Armed condition of this iteration (verbatim from the loop): "Re-audit SPEC.md ho
 
 Honest limits. (a) This audit corrects claims it could disprove from the tree and its docs; it does not re-verify every historical evidence log or pasted transcript in this file (those are dated records of what was observed at the time, kept as history). (b) In-place corrections are dated notes, not silent rewrites; the pre-correction text remains visible in git history at the parent of this workstream's commit. (c) The docs freshness stamp regenerates via `docs-watch` on the merged tree; `docs/changelog.html` rows are a pure function of git history and regenerate — they are never hand-edited to claim work that is not in history. (d) No code, test, or marker changes; `bun run check` (1683 tests) is the gate.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XL — Opportunistic terminal-record pruning on finish() (2026-11-18)
 
@@ -6818,7 +6818,7 @@ Armed condition of this iteration (verbatim from the loop): "Extend terminal-rec
 
 Honest limits. (a) The prune runs once per finish, i.e. one extra pass over `goal/v1/` per terminal goal in addition to restore's single pass; at the observed storage sizes this is the same O(#records) scan and is deliberately opportunistic rather than interval-driven (no timer, no background loop). (b) The just-finished record participates in its own prune scan; it is the newest terminal record (endedAt = now), so it is never dropped by the count cap and never aged — asserted in test (1). (c) Dropped records are gone by design; the report is counts only. (d) The finish-time prune shares the restore prune's limits: only this directory's records are considered (the cross-directory GC gap noted in the XXXIX-honest limits remains open), and memory pressure between finishes is not addressed — this bounds the durable store, not the in-memory map. [Superseded by Workstream XLIII (2026-11-18): the finish-time prune now shares the restore path's all-directory scope (`pruneAllDirectories`) with per-directory caps.]
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLI — Cross-directory terminal-record GC at restore() (2026-11-18)
 
@@ -6830,7 +6830,7 @@ Armed condition of this iteration (verbatim from the loop): "Extend terminal-rec
 
 Honest limits. (a) The restore-time prune now removes terminal records belonging to directories whose sessions may be live on another process/host sharing the same plugin storage — by the same rules that apply to this directory (live = active/paused records are never touched; only terminal records past 30 days or beyond 50 per directory), but a shared storage root serving two concurrent projects via different plugin instances will now have each restore clean the other's finished goals. That is the armed condition's intent, recorded honestly. (b) `directories` counts every directory that held at least one record in the scan, not only those that contributed prunes. (c) The prune reports counts only; no manifest of which foreign records were dropped is kept anywhere. (d) The finish-time prune remains per-directory (XL scope); unifying the two paths was deliberately not done — the armed condition named restore() only. [Resolved by Workstream XLIII (2026-11-18): the finish-time prune now calls `pruneAllDirectories`; the two paths are unified.] (e) Live records are never pruned in any directory; paused is resumable and is not terminal.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLII — Bounded in-memory terminal-goal map (2026-11-18)
 
@@ -6842,7 +6842,7 @@ Armed condition of this iteration (verbatim from the loop): "Bound the in-memory
 
 Honest limits. (a) The cap is a fixed constant, not config — same posture as the other retention caps; widening it is a reviewed code change. (b) Eviction drops memory only; it never deletes storage, so `spend`/`peekSnapshot` for an evicted record still answer from durable storage (one storage read, like post-restart behavior). (c) The per-session `runtimes` entries for evicted terminal records are retained (they are tiny, inert after `finish()` quiesces them, and some are still referenced by in-flight epoch-guarded closures); only the `goals` map and the three bookkeeping maps are bounded. (d) Evicted terminal records stop appearing in the synchronous in-memory `list()` and in `get()`; `peekSnapshot` from storage is the supported path for them. (e) The eviction runs on the `finish()` path; records that reached terminal status any other way (there are none today) would be swept on the next finish.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLIII — Finish-time prune unified with the restore-time all-directory prune (2026-11-18)
 
@@ -6854,7 +6854,7 @@ Armed condition of this iteration (verbatim from the loop): "Work the next gap, 
 
 Honest limits. (a) The finish-time prune now removes terminal records belonging to directories whose sessions may be live on another process/host sharing the same plugin storage — the same accepted trade-off recorded in XLI honest limit (a), now extended to the finish path: a shared storage root serving two concurrent projects will have each project's finishes clean the other's finished goals (only terminal records past 30 days or beyond 50 per directory; live records never touched). This is the unification the armed condition named; it is recorded honestly, not hidden. (b) The finish path now performs the same O(#records) scan over the whole store per terminal goal, not just this directory's slice — same complexity class as before, larger constant at shared storage roots; still opportunistic and fire-and-forget, never on the finish's critical path. (c) The prune reports counts only; no manifest of which foreign records were dropped is kept anywhere. (d) `GoalStore.pruneTerminal` was removed rather than kept "for compatibility" — it had exactly one caller (the finish path) and no external consumers; the public surface of the plugin is the plugin API, not `GoalStore`. (e) Evicted-from-memory records (XLII) are unaffected; durable storage remains the source of truth.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLIV — Evaluator rubric: novelty, advancement and the forward-pointer gate (2026-11-18)
 
@@ -6869,7 +6869,7 @@ Interpretation: steps 1–5 are the required change; step 6 is explicitly scoped
 
 Honest limits. (a) An LLM rubric can still misfire — CONDITION FIT and the "state that it is a duplicate pass" half of (b) are judge-side prose; the parser enforces only the already-satisfied-without-`next:` class of (b)/(c). A met carrying a vague `next:` line ("next: make it better") passes the gate; vagueness of a present pointer is not machine-checkable. (b) The "near-duplicate of a condition completed in the retained window" determination is made by the judge from the visible transcript (independent mode sees a bounded digest; detail older than the window is invisible by design) — the parser cannot re-derive containment/Jaccard from the verdict reason and does not pretend to. (c) A met on genuinely new work that quotes the phrase "Already satisfied" for an unrelated prior step (e.g. "…the test file was already satisfied before I fixed the flake") trips the gate and is downgraded; the quoted reason preserves the original for review — same trade the verification gate makes (fail closed, quoted evidence), recorded honestly. (d) STEP 6 IS OUT OF SCOPE FOR XLIV, deliberately: the arming-side near-duplicate gate (before arming an iteration condition, run it through the anti-repeat and near-duplicate gates against the persisted `completedConditions` ledger, and on a hit terminate the loop with an explicit "no new gap" reason instead of arming) was **not implemented here**. What exists at HEAD today: in `src/runtime/controller.ts` the loop advance path already runs both the exact (normalized) repeat check and the `isNearDuplicate` token gate (token containment >= 0.7 / Jaccard >= 0.6) against `record.completedConditions` before arming a planner-proposed iteration — at the planner re-arm boundary only. Nothing gates the initial `/goal-loop` arm in `arm()` against the session's prior terminal ledger, and no "no new gap" loopNotProgress-style event is emitted on a skipped arm. That is the complementary fix and remains open; do not read XLIV as closing it. (e) The arming-side gate is therefore the named next gap for this line of work.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLV — Arming-side no-new-gap gate (2026-11-18)
 
@@ -6882,7 +6882,7 @@ The armed-condition step XLIV deferred (step 6 of the loop's condition; recorded
 
 Honest limits. (a) Scope is this session's completed-condition ledger, by design (XXXVII's persistence model); near-duplicate objectives across sessions or directories are not detected — different sessions share no records today, and unioning them would cross tenant lines. (b) The initial-arm refusal ends as `achieved` — the vocabulary's cleanest "nothing new to do" (precedent: both loopAdvance gates end via endClean as achieved) with a reason beginning `no new gap`; there is no dedicated status, and the reason string is the grep target. (c) An objective reworded to underlap everything completed arms anyway (as it should) and can only be scored later at the verdict (XLIV) — token thresholds cannot read semantics. (d) The durable read is best-effort: an unreadable store degrades to the in-memory ledger with one log line; the arm is not failed. (e) No seeding: an ordinary fresh arm inherits no history — only the REFUSAL record carries the ledger forward, so a refused session is no worse off on the next attempt. (f) The re-arm gate and the initial arm gate are the two arming boundaries today; any future arming path must run the same `completedLedgerHit` test or it will re-open the hole this closes.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLVI — Clean-history audit and the docs citation contract (2026-11-18)
 
@@ -6896,7 +6896,7 @@ Armed condition of this iteration (verbatim from the loop): "everything the prev
 
 Honest limits. (a) The clean-history audit is a point-in-time read of HEAD, not a proof: the durable store can hold pre-convergence terminal records until a finish/restore prunes them (by design), and a mid-flight session keeps at most one pending re-anchor (by design, volatile). (b) The new docs path test pins file EXISTENCE, not export identity — `docs/core.html` caught `normalizeVerdict` by review; a symbol-contract test was considered and rejected as brittle (method-style card listings such as `AutoCompactor (maybeCompact, compactAtBoundary)` read correctly). (c) The plugin-pin test seeds the prior terminal record directly in stub storage; it does not exercise `restore()` + hook + arm in sequence (each is pinned separately). (d) No TUI rendering change in this workstream: `dist/tui.js` byte-identical; the loop-refusal toast rides the existing `kind: "loop"` channel like every per-iteration toast. (e) Test count moved 1714 → **1716** (the two new pinned tests); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1716` in this same commit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLVII — The docs symbol-export contract (2026-11-18)
 
@@ -6908,7 +6908,7 @@ Armed condition of this iteration (verbatim from the loop): "Pin the docs symbol
 
 Honest limits. (a) The contract covers Exports lines only — it does not verify prose claims (`smoke-test the real binary`, etc.) or the `· symbol` citations elsewhere in docs (those are the 2026-11-17 `file · symbol` convention; a same-shape pin for them is a possible future workstream, not this one). (b) The parser recognizes named export declarations and `export { }`/`export type { }` lists; it does not evaluate `export * from` re-exports (none exist in src/ today) — a future re-export would read as stale until the test is taught it. (c) The method-existence check is a textual check, not an AST walk — an `AutoCompactor`-shape class with a method defined via a getter or a class field arrow function would need the allowlist pattern extended or the card reworded. (d) Cards without an Exports line (none today) are skipped by design. (e) Test count moved 1716 → **1717** (one new pinned test); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1717` in this same commit. `dist/tui.js` byte-unchanged; no behavior change anywhere; the only file edited besides this note is `test/docs-line-refs.test.ts`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XLVIII — The docs inline-citation contract (2026-11-18)
 
@@ -6920,7 +6920,7 @@ Armed condition of this iteration (verbatim from the loop): "Pin the docs inline
 
 Honest limits. (a) The component check proves presence, not membership — `A.B` passes if both `A` and `B` appear anywhere in the module, even if `B` is never a member of `A`; a membership-grade check would need per-construct resolution and is not attempted. (b) `export * from` re-exports are untaught here as well (none exist in src/ today); a future re-export would not confound this pin since it checks source text, not exports. (c) Citations whose path part lacks a `src|packages` prefix (none today) are out of scope by design. (d) Test count moved 1717 → **1718** (one new pinned test); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1718` in this same commit. `dist/tui.js` byte-unchanged; no behavior change anywhere; the only file edited besides this note is `test/docs-line-refs.test.ts`.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream XLIX — The docs inline-citation pin gains membership-grade checking (2026-11-18)
 
 Armed condition of this iteration (verbatim from the loop): "Strengthen the docs inline-citation pin: for dotted citations whose qualifier resolves to a class or interface in the cited module, require the cited member to be defined in that construct's body (fields, methods, accessors); fix any stale citations it surfaces; check green; SPEC note; marker bumped."
@@ -6931,7 +6931,7 @@ Armed condition of this iteration (verbatim from the loop): "Strengthen the docs
 
 Honest limits. (a) Textual, not AST: a local bare assignment like `epoch = 5` inside a method would read as a "definition" of `epoch`; such shapes are rare in this codebase and are accepted. (b) Brace matching assumes type arguments contain no braces (true today; `class Foo<T = {…}>` would need an AST walk). (c) Qualifiers that are neither class nor interface in the cited module keep the presence-only check by design. (d) Test count stays **1718** and packed files stay **64** — this strengthens an existing case rather than adding one, so the enforced first-occurrence marker remains `files=64 tests=1718` (already accurate; no bump required). (e) Process note: an editing slip put the worktree's test file into the dev checkout mid-task; it was copied into `wt/docs-membership-citation-contract` and the dev checkout restored via `git checkout` before anything else — no dev commit was made. `dist/tui.js` byte-unchanged; only `test/docs-line-refs.test.ts` and this note change.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream LI — the achieved goal's outcome note stops riding the context (2026-11-18)
 
 Armed condition of this iteration (user request, not the fuzzy loop objective; handled as its own workstream): "if you are already working on the armed goal v4 why is v3 still lingering … fix it so it doesn't falsely remind you again after you have already achieved/done/completed. if done and completed and evaluator said done met? it needed to be gone no more lingering."
@@ -6944,7 +6944,7 @@ Diagnosis with durable evidence. The `kv` record for this session (`goal/v1/ses_
 
 Honest limits. (a) The host folds durable session input into context at its own discretion; this removes the note from the bound request, not from the transcript, the terminal scrollback, or the durable log — the outcome lines remain visible and auditable. (b) This does not delete or alter any goal record; the `kv` ledger is untouched. (c) The armed kickoff is unchanged and remains the model's state carrier for the armed iteration. (d) Zero-tool "Already satisfied" turns identical to the v3 landing remain possible by design (the evaluator rubric and the zero-tool guard allow the already-satisfied case); this workstream removes the stale reminder, not the possibility of a no-op iteration when a loop re-arms an objective that was completed in an earlier turn of the same session. Marker stays `files=64 tests=1718` (one assertion modified, no new test). `dist/tui.js` byte-unchanged.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream LII — legacy plain goal notes leave the model's context too (2026-11-18)
 
 Armed condition of this iteration (user request, verbatim `<goal-note>` quote of the stale outcome line): "so it doesn't falsely remind you again after you have already achieved/done/completed. if done and completed and evaluator said done met? it needed to ve gone no more lingering."
@@ -6957,7 +6957,7 @@ Diagnosis with durable evidence. Workstream LI stopped NEW loop-arm outcome note
 
 Honest limits. (a) The durable session still contains the legacy notes — the host folds durable input into context, so this removes them at the bound-request layer, not from history (per EM's standing limit). (b) A user who literally typed `<goal-note` into their own prompt would have that text part matched; goal notes are plugin-only grammar, accepted since EM. (c) `stripGoalNotes` removes plain notes wholesale rather than selectively keeping "current" ones — the armed kickoff carries the armed state, and no plain note is an instruction since LI, so wholesale stripping cannot strand the loop. (d) Marker stays `files=64 tests=1718` (rename + assertions modified, no new test). `dist/tui.js` byte-unchanged.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream LIII — the docs citation contracts gain a src-wide wildcard re-export absence pin (2026-11-18)
 
 Armed condition of this iteration (verbatim from the loop): "close the recorded `export * from` hole in the docs citation contracts — add a src-wide absence pin (or re-export resolution) so a future re-export can't silently bypass the symbol-export and inline-citation pins; negative control shown; check green; SPEC note; marker bumped."
@@ -6970,7 +6970,7 @@ Negative control (shown before the real run): a planted `src/__negative_control_
 
 Honest limits. (a) Textual, not semantic by design — consistent with every other pin in this file; a wildcard constructed so pathologically that the blanking machine misparses it (unterminated string, regex literal containing a quote) would fail loudly, never silently. (b) The pin asserts absence, not resolution: if a legitimate wildcard ever lands, this test is the place to change — deliberately, alongside re-export resolution in the two citation contracts, not as a drive-by. (c) The root entry shims remain un-audited by the citation contracts (docs cannot cite them), unchanged from before. (d) Test count moved **1718 → 1719** (one new pinned test); packed files stay **64** (no `files` entry changes; `test/` is outside `package.json` `files`); the enforced first-occurrence marker advances to `files=64 tests=1719` in this same commit. `dist/tui.js` byte-unchanged; the only files edited are `test/docs-line-refs.test.ts` and this note.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LIV — the loop-advance re-arm no-new-gap refusal speaks the arming-side grep target (2026-11-18)
 
@@ -6983,7 +6983,7 @@ Audit at HEAD `6876c68` (fresh output this turn). The re-arm boundary **already 
 
 Honest limits. (a) Scope is the refusal contract and the pin; this workstream does not widen which objectives are refused — a different record's completed conditions in the same session remain out of the re-arm gate's reach (XLV honest limits (a) and (e), unchanged, deliberately), and the initial-arm gate is untouched. (b) The re-arm refusal still ends as `achieved` with the generic "Loop complete" toast — that notice shape is pinned by existing tests and was not weakened or re-titled; distinguishing a no-new-gap refusal from a LOOP_COMPLETE ending requires the reason grep, not the toast (same posture as XLV, where the reason string is the grep target and there is no dedicated status). (c) `loopNotProgress` is NOT forced to 1 on the re-arm refusal: it counts consecutive zero-tool iterations and the just-achieved iteration may have used tools; forcing it would churn a harness-true counter to make a point. (d) Test count moved **1719 → 1721** (two new pinned tests; nothing weakened, nothing deleted); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1721` in this same commit. `dist/tui.js` byte-unchanged; the only files edited are `src/runtime/controller.ts`, `test/loop.test.ts`, and this note.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LV — docs/runtime.html's /goal-loop guards list names the loop-advance re-arm refusal (2026-11-18)
 
@@ -7162,7 +7162,7 @@ Failing-then-passing (shown this turn). With the `src/` fix stashed and the test
 
 Honest limits. (a) The model-side residue is out of scope by design: the host's compaction summary is built from the transcript and can quote the original `<goal>` kickoff directive for a finished goal; the plugin cannot edit the summary, and the plugin-side levers that carry post-compact instructions (the re-anchor, the standing reminder) are now guaranteed inert for terminal records. `stripGoalNotes` is unchanged — goal notes were already stripped from model-bound context, live or terminal. (b) The `session.compaction.ended` bookkeeping for a terminal record is now skipped entirely; the unlanded `loopCompact` marker persists on the finished record and is pruned by the usual terminal-record hygiene, never evaluated. (c) `lastReanchorAt` is cleared at finish so a re-armed loop after a future re-arm (impossible today — a terminal record is never re-armed) starts with a fresh coalescing window. (d) Test count moved **1741 → 1747** (six new cases); packed files stay **64** (no `files` entry changes); the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1747` in this same commit. `dist/tui.js` byte-unchanged (no TUI source touched). The only files edited are `src/runtime/controller.ts`, `test/loop.test.ts`, `SPEC.md`, and one shared line-ref re-point (the steer anchor shifted one line down under the new `finish()` lines).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXVII — the terminal outcome line stops parking in the session inbox; a finished goal's instruction text leaves context (2026-11-19)
 
@@ -7185,7 +7185,7 @@ Failing-then-passing. The two pre-existing assertions that pinned the retired di
 
 Honest limits. (a) The durable, already-parked outcome line in an existing session's inbox is host-owned history; the plugin cannot retroactively consume it — it flushes naturally at the next execution, or never, and the new code adds no more of them. A fresh session is clean by construction. (b) `TERMINAL_REMINDER` is gated on a terminal record in **this** process's memory; a plugin reload adopts no terminal records (by design, Workstream XLIII/XLIV), so the reminder is absent until the next terminal transition in this process — the instruction-message strip still applies everywhere, and the re-anchor/system-reminder paths are already active-only. (c) The host's compaction summary can still quote the expired kickoff text verbatim; the reminder line exists to counter it — it is one line, not a guarantee of model compliance. (d) `stripGoalContext` matches on text parts containing the tags anywhere, so a user who literally typed `<goal-loop` into their own message loses that part after their goal ended — same accepted grammar-collision posture as `<goal-note` since EM. (e) The `/goal` detail dialog, verdict trail, HIST ledger and log remain the durable audit surface; the inbox scrollback no longer carries the outcome line by design. (f) Test count moved **1747 → 1754** (+7; nothing weakened — three synthetic-dispatch assertions replaced by absence pins as above); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1754` here. The shared Appendix-A steer ref re-pointed to `controller.ts:1134` after the controller edits shifted it. `dist/tui.js` byte-unchanged (no TUI source touched).
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXVIII — the terminal-TUI consistency pass: one affordance cell, a truthful stuck state (2026-11-19)
 
@@ -7201,7 +7201,7 @@ Fix (one self-contained commit):
 
 Honest limits. (a) The raw `not_met` enum stays in the `HistoryBlock` counts line (`tui-render.test.tsx` HistoryBlock counts pin — `3 met · 2 not_met` — shifted down one block when the stuck test was added above it) and in the `remediationFor` streak strings (three suites + SPEC quote): those pins are load-bearing and flipping them is a separate decision, not a polish pass. The outlier the explorer flagged classifies as a defect only if the pin is wrong — resolved: pin wins this iteration. (b) The remaining findings are real and recorded, not fixed: (i) twin adjacent `…` rows in the rail (inert retention notice vs clickable fold with pinned wording); (ii) dossier `table` rows nowrap into a clipped scrollbox; (iii) `sessionTag` and outline chips slice UTF-16 code units, not cells; (iv) outline chips and the find row carry no hover feedback; (v) the `✕`/`✗` failure-glyph split; (vi) `compactMarkerFg` and the context-menu enabled predicates still derivate in two arms; (vii) SPEC intro glyph-wave quotes (`· • ● •` vs the shipped `◦ ○ ◎ ○`, `◯` waiting glyph, "four fixed rows" vs six, `◎ goal achieved` vs `●`). (c) `dist/tui.js` rebuilt; no other behavior change. (d) Test count moved **1757 → 1758** (one new render test; nothing weakened — one package-integrity pin re-pointed 64 → 65); packed files moved **64 → 65** (`src/affordance.tsx`); the enforced (first-occurrence) SPEC marker advances to `files=65 tests=1758` in this same commit; `test/package-integrity.test.ts` re-pinned in the same commit. No version bump, no tag, no push.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXIX — the terminal-TUI consistency pass, second tranche: affordance grammar for the fold row, cells not code units, one marker mapping, one truth about hover (2026-11-19)
 
@@ -7220,7 +7220,7 @@ Fixes:
 
 Honest limits. (a) `-` hyphen-minus strings in remediation/hints (`authentication failure - /goal clear to reset`, `the evaluator reads only the transcript - it cannot run commands`, `snapshot unavailable - showing last known state`, `turn cap reached … - a message will not extend it`) are kept: each is pinned (tui-hud, render-scripts, tui-render, snapshot) and this is a polish pass, not a re-pin. (b) `HistoryBlock` counts keep raw `not_met` for the same reason. (c) The fold row's inert twin (retention-drop notice) is distinguishable by shape now — plain row vs affordance cell — but keeps its `…` glyph deliberately. (d) Not fixed this iteration: dossier `table` markdown rows paint `wrapMode="none"` inside a clipped scrollbox (silent right-edge loss — needs a wrap-or-ellipsis decision with its own render evidence), `stateWord`'s dialog-strip one-line twin (kept by design — the strip needs the raw status + the `stuck` override inline), the mouse/keyboard context-menu enabled predicates (wired-identically today; the divergence is latent and would need a threaded signature), and SPEC intro's glyph-wave quotes (`· • ● •` vs shipped `◦ ○ ◎ ○`, `◯` hollow, "four rows" vs six, `◎` vs `●` — quoted-docs drift, not behavior). Test count 1758 → **1759**; packed files unchanged at **65**; the enforced first-occurrence marker advances in the same commit. No version bump, no tag, no push.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXX — the dossier table keeps its right edge (2026-11-19)
 
@@ -7230,7 +7230,7 @@ Fix: the dossier row classifier's `table` kind now paints `wrapMode="word"` like
 
 Honest limits. The table still reads as a Markdown table; a wrapped continuation starts on the row's next line without an indent — acceptable in a scrollable record. No other kind changed. Test count moved 1763 → 1764; packed files stay 65; the enforced (first-occurrence) SPEC marker advances in this same commit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXI — the context menu has one row source (2026-11-19)
 
@@ -7244,7 +7244,7 @@ Evidence. New test "one row source: rows the host declares win over the card's o
 
 Honest limits. The prop is a row *supplier*, not a row *override* of individual fields: a host that wants one row flipped returns the whole array. No visual change in the shipped TUI — this is divergence prevention, not a bug fix a user could see today. Test count 1772 -> 1773; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXII — the verification gate's timeout actually stops the command (2026-11-19)
 
@@ -7264,7 +7264,7 @@ Evidence (`test/verifier.test.ts`, 4 tests): happy path exit 0 + output; failing
 
 Honest limits. `detached` is POSIX-shaped — the shipped runtime is Bun on Linux, which the docs already require; no Windows claim is made. Output on timeout is the tail captured up to the kill, never a promise of complete output. Test count 1773 -> 1777; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXIII — the menu walk cannot rest on an inert row (2026-11-19)
 
@@ -7276,7 +7276,7 @@ Fix. `delta` now reads as a direction (negative = up, positive = down), which is
 
 Evidence (test/tui-hud.test.tsx, 3 tests): the multiple-of-count cases (2 rows with the second inert, 6-row menu with a full lap), the no-move case, and a property sweep over every row-count 1..6, every enabled/disabled mask with at least one enabled row, every resting index -2..n+2 and every delta in {-7,-2,-1,1,2,7} — in range and enabled, always. The property test and the multiple-of-count test failed on the previous helper (2 fail) and pass now; the pre-existing pinned selection tests are unchanged. Test count 1777 -> 1780; packed files stay 65; the enforced (first-occurrence) marker advances in this same commit.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXIV — the check gate stops shipping a stale TUI artifact (2026-11-19)
 
@@ -7290,7 +7290,7 @@ Evidence (`test/build-freshness.test.ts`, 3 tests): the committed artifact match
 
 Honest limits. The gate proves the artifact was built from the current `src/tui.tsx`, not that the build is correct — that is the TUI load check's and the render suite's job. It compares bytes, so a toolchain bump (Bun/OpenTUI) that changes output formatting will fail the gate until the artifact is rebuilt; that is the intended prompt to re-commit it.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXV — the SPEC intro quotes the shipped glyphs (2026-11-19)
 
@@ -7304,21 +7304,21 @@ Evidence (`test/spec-intro-glyphs.test.ts`, 4 tests — a new pin, not a re-quot
 
 Honest limits. The test pins the exact strings the intro quotes — glyphs, the menu count and each row label — not the surrounding prose; a reworded sentence that keeps these tokens passes. It deliberately leaves the intro's `verdict glyphs (✓ / ⊘ / ○)` parenthetical alone: that `○` is the shipped satisfied-at-HEAD `verdictEntryGlyph` (history.ts), not a stale verdict glyph.
 
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream LXXVI — the created-shell event reads its id where the others do (2026-11-19)
 Armed condition (verbatim): "review recent changes fix what needs fixing and merge and commit to dev and rebuild what needs rebuild." Fuzzy; this iteration closes the two remaining `pending_fixes.md` items (8 and 9) from the back-to-front sweep.
 Defect 1 (`src/runtime/events.ts`, `shell.created`). The event router's `shell.updated`, `shell.exited` and `shell.deleted` arms all read their id from `data.info ?? data` and fall back to a top-level `data.id`, and read the owner from either `info.metadata.sessionID` or `data.metadata.sessionID`. `shell.created` read only `info` (`asRecord(data.info)`), so a created event whose id/owner rode the top-level `data` was silently dropped: `BackgroundTracker.shellCreated` never saw it, `busy()` undercounted that session's shells, and the evaluator could run while a shell the session started was still live. The arm now mirrors `shell.updated` (id fallback, owner fallback, status fallback).
 Defect 2 (`src/core/parse.ts`, `unquote`, cosmetic). A lone unmatched quote — `/goal "` — was one character, so it failed the `length >= 2` gate and was returned unchanged; `parseGoalCommand` then set the condition to the bare `"`. It now returns empty for a single quote so the command falls back to status.
 Evidence. `test/controller.test.ts` gains "shell.created reads the id/owner at the top level too": a created event with `{ id, status, metadata }` at the top level (no `info`) registers one shell, and a present-but-empty `info` no longer masks the top-level id (two shells). `test/core.test.ts` gains "a lone unmatched quote is status": `"`, `'`, `` ` `` each parse to `status`. Discrimination: with the pre-fix `shell.created` (info-only) the controller test fails (0 shells, expected 2); with the pre-fix `unquote` the quote test fails (`set` with condition `"`, expected `status`). Both pass now.
 Honest limits. Defect 1 is defensive-shape parity, not a change to the documented event contract: the shipped opencode `shell.created` carries `info.id`, so this is the same posture `shell.updated`/`exited` already take against a top-level id. Defect 2 only affects the degenerate one-quote input; ordinary quoted conditions and unquoted text are unchanged. `pending_fixes.md` items 8 and 9 are marked fixed and item 8's stale `src/core/events.ts` path corrected to `src/runtime/events.ts`. Test count 1787 -> 1789; packed files stay 65; `dist/tui.js` byte-unchanged (no TUI source touched).
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 ## Workstream LXXVII — the compaction checkpoint is history, not goal grammar (2026-11-19)
 Armed condition (verbatim): "here is another one that triggers it. again. after the session compaction." The repro: after a landing compaction in a session whose goal has already ended, the next model request is rejected by the provider with HTTP 400 `{"error":{"message":"The last message must have role=user.","type":"invalid_request_error","code":"invalid_request_error"}}`.
 Defect (`src/core/prompts.ts`, the `context` hook's strip predicates). After a landing compaction opencode folds the whole conversation into a single user message, `<conversation-checkpoint>`: a `<summary>` plus a `<recent-context>` that quotes the compacted turns verbatim — including any `<goal>` / `<goal-continuation>` text those turns carried (`packages/core/src/session/runner/to-llm-message.ts` builds it; `history.ts` folds the kept tail into it). `stripGoalContext` (`src/core/prompts.ts`) matched on `text.includes(tag)` for both the note (`<goal-note`) and instruction (`INSTRUCTION_TAGS`) grammars, so a checkpoint whose recent text quoted the goal was classified as a goal message. When the goal is terminal (`controller.live()` is undefined — an achieved/impossible/cleared/failed record, or simply no live goal), the hook deletes every goal message, so it deleted the checkpoint. After a landing compaction that checkpoint can be the only user message in the request, so the request went out with zero messages (or, for a trailing `<goal-continuation>`, with an assistant message last) — and a strict provider rejects exactly that.
 Fix. A compaction checkpoint is history, never one of the plugin's own notes or instructions: `isGoalNoteMessage` and `isGoalInstructionMessage` now return false for any message carrying the `<conversation-checkpoint>` marker, so `stripGoalNotes` / `stripGoalContext` leave it in place. The `context` hook in `src/index.ts` also keeps a trailing-user invariant: if stripping would remove the message that leaves the request ending on a non-user role, it re-appends the original trailing message so the request still ends on a user turn (a stale goal line is harmless history; an invalid request aborts the turn). The pure strip functions keep their exact contracts — the invariant lives in the hook.
 Evidence. `test/notes.test.ts` pins the predicate: a checkpoint whose `<recent-context>` quotes `<goal>` and `<goal-note final>` is neither a note nor an instruction, and `stripGoalContext([checkpoint])` keeps it. `test/plugin.test.ts` pins the hook: a lone checkpoint message survives a no-live-goal `context` pass, and stripping a trailing `<goal-continuation>` never leaves the request without a trailing `role:"user"` message. Discrimination: before the fix `stripGoalContext([checkpoint])` returns `[]` (and `stripGoalContext([assistant, continuation])` ends on `assistant`); with it, the checkpoint survives and the continuation case is repaired. Test count 1789 -> 1793; packed files stay 65 (`test/` is outside package.json files); `dist/tui.js` byte-unchanged (no TUI source touched).
 Honest limits. The checkpoint exclusion trusts the marker string; it does not parse the checkpoint. The trailing-user repair restores the original trailing message rather than synthesising a neutral turn, so in the rare continuation race a finished goal's continuation line may ride one request — the terminal `TERMINAL_REMINDER` (system part) is the counter-instruction. This is a plugin-side repair: `9router-go` forwards tokenharbor's OpenAI-compatible 400 verbatim (the string is absent from its source and binary; its `EnsureTrailingUserTurn` repair runs only on the Claude path), so the plugin must not hand it a request ending off a user turn.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXVIII — the project is its own CLI: `goal-loop` (2026-11-19)
 Armed condition (verbatim): "turn the current directory into its own cli: goal-loop cli: having its own commands make sure to not over engineer. leaset commands is the best. the way of it is working is from plugins of opencode cli. but for the people they can use install it from goal-loop cli. easy setup very easy to remove and install and uninatall. make it as simple as abc-123. the primary source is from github." Follow-up: "and rename the plugin as well name it to goal-loop".
@@ -7327,7 +7327,7 @@ Three commands, no more. `goal-loop` (install, the default), `goal-loop uninstal
 One-line install from GitHub (`install.sh`, shipped in the tarball). It fetches `bin/goal-loop.mjs` from the repository (curl, wget, or a local `GOAL_LOOP_SOURCE`), rewrites the shebang to `bun` when only bun exists, installs to `${GOAL_LOOP_BIN_DIR:-$HOME/.local/bin}/goal-loop`, then runs `goal-loop install` — one command from a clean machine to a registered plugin. Server removal is the same one command: `goal-loop uninstall --self`. The version is baked into the standalone script as `FALLBACK_VERSION` (a copy outside the repo has no `package.json`), pinned to `package.json` by a test.
 Evidence. `test/cli-installer.test.ts` grew 9 tests: the help text names goal-loop and the three commands; `--version` prints `goal-loop <pkg.version>`; `FALLBACK_VERSION` equals `package.json`'s version; `--self` is rejected outside uninstall; `--self` deletes the script, `--self --dry-run` deletes nothing, and a non-CLI file named `goal-loop` is refused; `install.sh` installs from a local source into a temp `GOAL_LOOP_BIN_DIR` with no network and the installed copy answers `--version`; `install.sh` is executable and carries the documented one-liner. The dossier snapshots were re-recorded for the new footer text (two frames, four cells). `bun test` 1793 → **1802 pass / 0 fail**; `bun run check` green; packed files 65 → 66 (`install.sh` ships).
 Honest limits. Renaming `PLUGIN_ID` changes the plugin's storage namespace, so goal records saved by an older build are not restored into the new id — an accepted cost of the rename, not a migration path. `install.sh` needs `node` or `bun` on PATH (the CLI is a single dependency-free `.mjs`); there is no bundled binary. Legacy entrypoints (`opencode-goal` bin alias, the `opencode-goalv2` spec) are kept for back-compat, not advertised.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXIX — name fields reflect the goal-loop identity (2026-11-19)
 Armed condition (verbatim): "go over the recent changes for consistencies of code changes and updates name vaildating those things so the name fiels are reflects it." Interpretation: audit the LXXVIII rename (`opencode-goalv2` -> `goal-loop`) for fields that still name the old product, and fix the ones that no longer reflect what they name. Name surface only; no behavior changes.
@@ -7352,7 +7352,7 @@ used in SPEC being mapped to a target that exists, no pre-rename id in shipped c
 (bin alias, `PLUGIN_PACKAGE`, repo slug, `OPENCODE_GOAL_*` prefix) still present. Test count 1802 -> 1813; packed
 files stay 66 (the suite sits under `test/`, outside `package.json` `files`).
 Honest limits. Legacy names stay on purpose and are out of scope: `OPENCODE_GOAL_*` env vars (`test/env-vars.test.ts` owns that surface), the `opencode-goal` bin alias, `PLUGIN_PACKAGE = "opencode-goalv2"`, the GitHub repo slug, and the upstream `EL4CTEO/opencode-goal` credit. SPEC.md's older workstreams keep their historical paths, and the docs search index is curated by hand, not generated.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXX — the terminal ground-truth line rides only requests that still carry goal text (2026-11-19)
 Armed condition (verbatim): "can you actually updated inspect the evaluator: this seems to be after goal achieved thing. there seem to be a stale system in there."
@@ -7360,7 +7360,7 @@ Finding. The evaluator does not run for a finished goal: `onExecutionSucceeded` 
 Fix. `carriesGoalGrammar(messages)` (src/core/prompts.ts) scans model-bound text for the goal instruction tags, checkpoint quotes included; the shared matcher `carriesGoalTag` now backs both it and `isGoalInstructionMessage`. The hook strips first and injects the terminal line only when the surviving request still carries goal text: the checkpoint quote, or a trailing user turn the strict-provider repair kept. With no goal text in the request the line is not injected.
 Evidence. `test/notes.test.ts` pins the predicate (plain message, `null`/number/object entries, a checkpoint quoting `<goal>`). `test/plugin.test.ts` (LXVII) asserts both sides on a real achieved record: a post-achievement request whose only goal message is stripped gets no system line; a checkpoint quoting `<goal>` still gets one. Discrimination: with the gate removed the plugin test fails (Expected false, Received true) and passes again with it restored. Test count 1813 -> 1814; packed files stay 66.
 Honest limits. The line is still process-local and still rides every request that does carry a checkpoint quote — that is the case it exists for. The gate keys on the plugin's own tag grammar; goal text a compaction summary rephrases without a tag is not detectable and never was.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXXI — the coordinator can release a claimed lease it will never submit (2026-11-19)
 Armed condition (verbatim): "The evaluator wants the next step: release/expire the idle duplicate claim keep-improving-goal-loop."
@@ -7399,7 +7399,7 @@ Fix. `src/runtime/controller.ts` now loads/validates `docs/improvement-backlog.j
 Evidence. `test/loop.test.ts` " /goal-loop backlog planner integration" (4 tests): planner receives the highest-priority unblocked suggestion; completed conditions/history de-duplicate selected items on subsequent planning; missing ledger falls back (no `backlogSuggestion`); invalid ledger falls back. `bunx tsc --noEmit` exits 0. `cd test && bun test` exits 0 with 1861 pass / 0 fail / 28 snapshots (76 files). `bun run check` exits 0 in the worktree (`docs:watch once` refreshed changelog/stamps; `spec-check: ok (67 files, 1861 tests match SPEC.md)`).
 
 Honest limits. The backlog steers planning context (planner prompt) rather than force-arming a condition verbatim, preserving the planner's ABSENT-at-HEAD/duplicate audit. Initial `/goal-loop` arming is unchanged; consultation happens on loop advance. De-dup against completed work is heuristic (normalized text and key-substring matching), not semantic proof of completion. Backlog state is not auto-updated when work lands (items remain `open`/`in_progress` as seeded), and there is no automatic feeding from audits, failing checks, TODO/FIXME, or telemetry yet. Verification/invariant matrix (#2) and failure-signature/strategy escalation (#3) remain open backlog items.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXXV — detail dialog stays consistent when goals pile up (2026-11-20)
 Armed condition (verbatim): "improve '/home/pauk/Pictures/Screenshots/Screenshot_20261120_004938.png' the terminal tui dialog display on detail view. when the goal are starting to pile up. massive it goal? the detail display is breaking it needs to be consisten design terminal tui."
@@ -7422,7 +7422,7 @@ Fix. `src/runtime/controller.ts`: added `runtime.busyRetries` and helpers to res
 Evidence. Updated `test/controller.test.ts`: "skips evaluation when the busy check errors" → retries/recoverable waiting behavior with bounded backoff; "a busy-check rejection during drain..." now asserts warn+retry notice and eventual recovery; added regressions "busy-check failure preserves carried tool work and recovers evaluation", "straggler succeeded while awaiting retry execution is dropped, then real retry execution is evaluated", and "evaluator timeout/failure retries with bounded backoff and keeps snapshots non-stuck". Follow-up: added loop-advance supersession-race recovery for summary/next-goal stale drops so active iterations re-arm instead of losing progress, updated "user prompt during next-goal generation drops the half-advanced state" to assert recovery/no lost iteration progress, and added "loop-advance summary stale-drop recovery re-arms without losing iteration progress" in `test/loop.test.ts`. Post-arm tail: detects stale/supersession races after the armed iteration is durably committed (same active record, iteration already advanced) and recovers the pending continuation/arming steer idempotently (no duplicate re-arm, respects running/awaitingExecution), with regression "a supersession race after the arm commit still dispatches exactly one continuation for the armed iteration" and "a user prompt landing during the arm's persist recovers continuation without announcing the arm". Targeted suites: `bun test test/controller.test.ts test/loop.test.ts test/evaluator.test.ts` → 272 pass / 0 fail; `bun test test/loop.test.ts` → 165 pass / 0 fail; `bun test test/controller.test.ts` → 77 pass / 0 fail. Full verification: `cd <worktree> && bun run check` exits 0 — `tsc --noEmit` ok; `cd test && bun test` 1866 pass / 0 fail / 28 snapshots (76 files, 29389 expect() calls); `build --check` ok; `dist/tui.js` built (347735 bytes); `tui-load-check` ok (`goal-loop.tui`); docs freshness check passed; `spec-check: ok (67 files, 1872 tests match SPEC.md)`.
 
 Honest limits. Stale drops remain intentional when a newer epoch legitimately supersedes in-flight work (e.g. user prompt/execution start/clear/replace); the fix makes drops observable and recovers cases where a completed turn's tool work would otherwise be lost (busy-check/pre-evaluation resolution paths), but does not replay a verdict computed for a superseded transcript state. Event-stream gaps outside controller control (missing started/succeeded delivery) cannot be fully synthesized; recovery relies on bounded retries and future host events. Loop planner/summary transient failures still retry with capped backoff and recompute (no duplicate re-arm due iteration guards), which is the existing safe posture rather than a new persistence model.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 
 ## Workstream LXXXVII — evaluator rubric requires clause/evidence matrix, adversarial checks, and structured next actions (2026-11-20)
@@ -7442,7 +7442,7 @@ Verification.
 - Commit on `wt/<slug>` branch and `coordinator submit`; merge landed on `dev`.
 
 Honest limits. The evaluator remains transcript-evidence-only and cannot execute commands or read files; clause parsing, evidence-matrix reasoning, adversarial checks, and repeated-failure detection are enforced by prompt/rubric instructions rather than a separate runtime verifier, so quality depends on model compliance within existing generation/repair limits. "Repeated failure signatures" are limited to patterns visible in the current conversation/context available to the evaluator, not a persisted cross-session failure taxonomy. Broad "green but unscoped" judgments are heuristic (scoped to what evidence is visibly present) unless corroborated by configured verifier gates or explicit artifacts.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 
 ## Workstream LXXXVIII — profile-aware verification matrix beyond single check (2026-11-20)
@@ -7464,7 +7464,7 @@ Verification.
 - Landing: commit on `wt/verification-matrix-beyond-check`, `coordinator submit`, `coordinator merge-next` to `dev` with fresh merge/preflight/check evidence.
 
 Honest limits. "Goal-declared checks" are supported as explicitly configured/custom matrix checks (command-executed, evidence-recorded), not as free-form natural-language obligations auto-extracted from arbitrary goal text. "Broad goal" detection/profile applicability is heuristic/config-driven and cannot perfectly infer every scope boundary; unscoped-green rejection relies on configured/applicable required checks plus rubric instructions for transcript-evidenced claims. Matrix execution adds evaluator-turn latency/cost proportional to configured checks and runs only on candidate `met` verdicts (same gating point as legacy verify). Transcript-only evidence for required command checks remains insufficient when the matrix requires executed command results.
-<!-- spec-check files=68 tests=1893 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream LXXXIX — goal-declared checks, deterministic coverage, concurrency/reuse, and artifact evidence modes (2026-11-20)
 
@@ -7628,7 +7628,7 @@ A subagent audit also flagged the near-duplicate arming scan in `loopAdvance` (`
 reused there), the 5× learning-write plumbing, and `computeScopePolicy` running twice inside `verifyMet`; those
 were left alone this pass because they carry pinned reason strings / lower leverage and are out of scope for a
 minimal, provable consolidation.
-<!-- spec-check files=70 tests=1955 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XCIII — consolidate the remaining arming/learning/coverage overlaps (2026-11-20)
 
@@ -7674,7 +7674,7 @@ on a live model loop. The `completedLedgerHit` reuse changes wording only in one
 the ledger holds both an earlier near-duplicate and a later exact match of the same candidate — where the
 refusal wording (never the decision, the leading `no new gap` vocabulary or the refusal itself) would differ;
 the scanned set order puts the record's own condition first, so the common exact case is unaffected.
-<!-- spec-check files=70 tests=1957 -->
+<!-- spec-check files=72 tests=1989 -->
 
 
 ## Workstream XC — the goal card breathes at its top and bottom edges (2026-11-20)
@@ -7695,7 +7695,7 @@ actions row is followed by exactly one bar-only row below it", "mono keeps the s
 row-plan unit tests, the maxRows ceiling tests (their ceilings shifted +2 so the drop ladder stays exercised)
 and the full-frame snapshots were re-pinned in the same commit (fix-then-pin). `bun run check` exit 0
 (1954 pass / 0 fail / 29 snapshots; tsc, dist freshness, TUI load, docs freshness, invariant-sweep, spec-check).
-<!-- spec-check files=70 tests=1954 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XCIV — the evaluator rubric requires verifier-command corroboration for broad conditions (2026-11-20)
 
@@ -7727,7 +7727,7 @@ layer rather than on a live model loop; the verifier-command corroboration is gu
 follow and, when a verifier is actually configured, is already independently enforced by the runtime gate that
 spawns the command and downgrades a `met` with non-zero/unverifiable output. The clause does not itself change
 what the gate runs.
-<!-- spec-check files=71 tests=1974 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XCV — change-risk classifier and strict-gate notice for high-risk tiers (2026-11-20)
 
@@ -7759,7 +7759,7 @@ surfaces but cannot prove semantic sensitivity of arbitrary paths; it is a stric
 security review. The change-set helper depends on git and inspects the working directory at arm time, so changes
 introduced after arming are not re-notified by this path. Surfacing is a warning notice (awareness/stricter-gate
 cue), not an automatic block.
-<!-- spec-check files=71 tests=1974 -->
+<!-- spec-check files=72 tests=1989 -->
 
 ## Workstream XCVI — the loop-position indicator stays visible at every cap (2026-11-20)
 
@@ -7802,4 +7802,4 @@ Honest limits. The pip visual is a bounded, proportional summary at large caps (
 ~cap/8 iterations), not a one-cell-per-iteration rail; the exact `v<iter>/<max>` text carries the precise
 position. The dialog's `barCaption` (`vN of at most M · k complete`) and block progress bar were already
 cap-agnostic and are unchanged except for the bar's one-cell progress floor.
-<!-- spec-check files=70 tests=1970 -->
+<!-- spec-check files=72 tests=1989 -->
