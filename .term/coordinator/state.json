@@ -4203,8 +4203,17 @@
       "paths": "scripts/invariant-sweep.ts,package.json",
       "branch": "wt/invariant-sweep-gate",
       "worktree": "worktrees/wt-invariant-sweep-gate",
-      "status": "claimed",
-      "createdAt": "2026-11-20T12:50:43Z"
+      "status": "done",
+      "createdAt": "2026-11-20T12:50:43Z",
+      "submittedAt": "2026-11-20T13:00:45Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T13:00:45Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "test/invariant-sweep.test.ts"
+      ],
+      "mergedAt": "2026-11-20T13:06:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
