@@ -3879,8 +3879,11 @@
       "paths": ".term/coordinator/state.json",
       "branch": "wt/record-release-bookkeeping",
       "worktree": "worktrees/wt-record-release-bookkeeping",
-      "status": "claimed",
-      "createdAt": "2026-11-20T05:16:45Z"
+      "status": "done",
+      "createdAt": "2026-11-20T05:16:45Z",
+      "submittedAt": "2026-11-20T05:16:53Z",
+      "mergedAt": "2026-11-20T05:18:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
