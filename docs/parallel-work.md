@@ -40,9 +40,15 @@ The rules below are enforced by the binary, not by trust.
    - regenerates the changelog and page stamps on the merged tree
      (`bun scripts/docs-watch.ts once`) and commits any change on the scratch branch,
      so parallel agents never race docs/changelog.html,
-   - prints a preflight: what the merge touches and which in-flight lease overlaps it,
+   - refuses a worktree whose HEAD drifted past the submitted branch tip (post-submit commits must be
+     discarded or re-submitted); uncommitted bytes are preserved as a saved ref, never merged,
+   - prints a preflight: what the merge touches, which in-flight lease overlaps it, and a
+     `SEMANTIC-RISK` warning when another active lease shares a module (e.g. `src/core`) even without
+     a literal path overlap — re-run that lease's checks after this merge lands,
+
    - runs the gate (`bun run check`) on the merged result. Red gate: `dev` untouched,
      exact recovery printed. Green gate: `dev` fast-forwards onto the merged result,
+     a post-merge health line reports landed-tree cleanliness and the SPEC marker,
      your lease flips to done, your worktree is removed.
    - With `--review`, it stops after the green gate and prints the exact command to finish
      (`git merge --ff-only <scratch>`) or discard (`coordinator merge-abort <slug>`);
@@ -66,7 +72,8 @@ submit scope check. The SPEC.md marker does not need to be shared: merge-next re
 it on the merged tree.
 
 If your claim genuinely spans shared files, keep the edits minimal and expect conflicts.
-The preflight in merge-next names every in-flight lease whose scope your merge overlaps.
+The preflight in merge-next names every in-flight lease whose scope your merge overlaps, and separately
+warns about shared-module semantic risk when two leases touch different files of the same module.
 
 ## When you are blocked
 
