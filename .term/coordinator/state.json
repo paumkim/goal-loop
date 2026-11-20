@@ -4490,8 +4490,19 @@
       "paths": "src/runtime/controller.ts,src/runtime/evaluator.ts,src/core/config.ts,test/controller.test.ts,test/evaluator.test.ts",
       "branch": "wt/evaluator-retry-caps",
       "worktree": "worktrees/wt-evaluator-retry-caps",
-      "status": "claimed",
-      "createdAt": "2026-11-20T17:53:04Z"
+      "status": "done",
+      "createdAt": "2026-11-20T17:53:04Z",
+      "submittedAt": "2026-11-20T18:05:04Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T18:05:04Z",
+      "forcedScopeFiles": [
+        "AGENTS.md",
+        "README.md",
+        "SPEC.md",
+        "docs/config.html"
+      ],
+      "mergedAt": "2026-11-20T18:11:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
