@@ -22,7 +22,7 @@ The rules below are enforced by the binary, not by trust.
 4. `coordinator submit` marks the lease submitted when your commits stay inside your claim.
    The queue is FIFO by `submittedAt`. `coordinator queue` shows positions, wait times and a
    rough ETA; `coordinator status --json` shows every lease with its worktree path,
-   uncommitted-file count and whether a merge is in progress.
+   uncommitted-file count and whether a merge is in progress. **`submit` makes work merge-ready, not merged.**
 4a. `coordinator release <slug>` abandons a claimed lease that will never be submitted (an
    idle or dead claim). The lease flips to done — it stops blocking overlapping claims and
    stops warning in merge preflight — and its worktree is removed. Nothing is deleted:
@@ -30,7 +30,8 @@ The rules below are enforced by the binary, not by trust.
    commits is kept, with the command to rebuild its worktree printed. A lease that still
    holds unsubmitted work needs `release --force`; a submitted lease is refused (use
    `merge-next` or `merge-abort`). Releasing a done lease is a no-op.
-5. `coordinator merge-next` merges the oldest submitted lease into `dev`:
+5. **The submitting agent runs `coordinator merge-next`** from the main repo when their lease is ready/next (unless a designated integrator/process is explicitly assigned). Do not wait on an unspecified other actor. Before running it: `queue/status --json` shows your lease submitted and next/unblocked; the worktree has no uncommitted changes and the branch tip contains all intended commits; the main checkout is acceptable for merge-next (exempt `.term/coordinator/state.json` dirt is fine — never hand-edit `dev`). Run the sanctioned path (`merge-next` trial-merge + gate), never `git merge`/commit to `dev` or `main`. "Done"/merged evidence comes from `merge-next` succeeding for that lease.
+   `coordinator merge-next` merges the oldest submitted lease into `dev`:
    - builds `merge-check-<slug>-<ts>` from `dev` inside a dedicated
      `worktrees/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
    - re-counts the SPEC.md `<!-- spec-check files=N tests=N -->` marker on the merged tree
