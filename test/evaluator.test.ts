@@ -490,6 +490,7 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
       expect(prompt).toContain("What would falsify met?")
       expect(prompt).toContain("What important risk is untested?")
       expect(prompt).toContain("Green but unscoped")
+      expect(prompt).toContain("Broad-condition verifier corroboration")
       expect(prompt).toContain("repeated failure signatures")
       expect(prompt).toContain("strategy escalation")
       expect(prompt).toContain("next: none")
