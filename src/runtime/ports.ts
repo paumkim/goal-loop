@@ -55,12 +55,26 @@ export interface LoopSummaryRequest {
   readonly signal: AbortSignal
 }
 
+export interface BacklogSuggestion {
+  readonly id: string
+  readonly title: string
+  readonly category: string
+  readonly priority: number
+  readonly impact: "low" | "medium" | "high"
+  readonly risk: "low" | "medium" | "high"
+  readonly finding: string
+  readonly improvement: string
+  readonly evidence: ReadonlyArray<string>
+}
+
 export interface NextGoalRequest {
   readonly sessionID: string
   readonly objective: string
   readonly history: ReadonlyArray<LoopEntry>
   readonly latestSummary: string
   readonly signal: AbortSignal
+  /** Optional backlog hint from docs/improvement-backlog.json (de-duplicated). */
+  readonly backlogSuggestion?: BacklogSuggestion
 }
 
 export interface EvaluatorPort {

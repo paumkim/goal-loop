@@ -502,11 +502,25 @@ interface LoopSummaryInput {
   readonly maxSummaryTokens: number
 }
 
-interface NextGoalInput {
+export interface BacklogSuggestion {
+  readonly id: string
+  readonly title: string
+  readonly category: string
+  readonly priority: number
+  readonly impact: "low" | "medium" | "high"
+  readonly risk: "low" | "medium" | "high"
+  readonly finding: string
+  readonly improvement: string
+  readonly evidence: ReadonlyArray<string>
+}
+
+export interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>
   readonly latestSummary: string
+  /** Highest-priority unblocked backlog item, de-duplicated against completed work. */
+  readonly backlogSuggestion?: BacklogSuggestion
 }
 
 const summarizeFacts = (input: LoopSummaryInput) => [
@@ -582,12 +596,32 @@ export function nextGoalInSession(input: NextGoalInput): string {
   ].join("\n")
 }
 
+const backlogBlock = (suggestion: BacklogSuggestion | undefined): string[] => {
+  if (!suggestion) return []
+  const evidence = suggestion.evidence.length
+    ? suggestion.evidence.map((line) => `  - ${escape(stripReasoningControl(line))}`).join("\n")
+    : "  - (none)"
+  return [
+    ``,
+    `Suggested backlog item (highest-priority unblocked, de-duplicated against completed work):`,
+    `- id: ${escape(suggestion.id)}`,
+    `- title: ${escape(stripReasoningControl(suggestion.title))}`,
+    `- category: ${escape(suggestion.category)}; priority=${suggestion.priority}; impact=${suggestion.impact}; risk=${suggestion.risk}`,
+    `- finding: ${escape(stripReasoningControl(suggestion.finding))}`,
+    `- improvement: ${escape(stripReasoningControl(suggestion.improvement))}`,
+    `- evidence:`,
+    evidence,
+    `Prefer a concrete, verifiable next condition that advances this item when its required work is ABSENT at HEAD; otherwise choose the highest-value ABSENT-at-HEAD improvement per the audit above.`,
+  ]
+}
+
 const nextGoalFacts = (input: NextGoalInput) => [
   `Objective (constant): ${escape(input.objective)}`,
   `Completed iterations (oldest first):`,
   historyBlock(input.history),
   `Latest iteration summary:`,
   escape(stripReasoningControl(input.latestSummary)),
+  ...backlogBlock(input.backlogSuggestion),
 ]
 
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */

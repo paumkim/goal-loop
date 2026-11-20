@@ -22,7 +22,14 @@ import {
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
+import {
+  inspectImprovementBacklog,
+  normalizeDedupeKey,
+  selectNextBacklogItem,
+} from "../core/improvement-backlog.ts"
 
 /**
  * Minimum gap between two re-anchors armed for the same session. A compaction can land for several
@@ -155,6 +162,85 @@ const ledgerOf = (record: GoalRecord): Set<string> => {
   for (const entry of record.loopHistory ?? []) add(entry.condition)
   return set
 }
+/**
+ * Load the repo's improvement backlog and select the highest-priority unblocked open item
+ * for loop planning, de-duplicated against completed conditions/history. Returns undefined
+ * when the ledger is missing, unreadable, invalid, or yields no selectable item (fallback).
+ */
+const selectBacklogSuggestion = (
+  directory: string,
+  record: GoalRecord,
+  history: ReadonlyArray<LoopEntry>,
+): Prompt.BacklogSuggestion | undefined => {
+  let text: string
+  try {
+    text = readFileSync(join(directory, "docs", "improvement-backlog.json"), "utf8")
+  } catch {
+    return undefined
+  }
+
+  let inspected
+  try {
+    inspected = inspectImprovementBacklog(text)
+  } catch {
+    return undefined
+  }
+  if (!inspected.validation.ok || inspected.backlog.items.length === 0) return undefined
+
+  // Build completed text corpus for de-dup: ledger, history conditions/summaries/reasons, and current condition/objective.
+  const completedTexts: string[] = []
+  const pushText = (value: string | undefined) => {
+    if (value && value.trim()) completedTexts.push(value)
+  }
+  for (const entry of record.completedConditions ?? []) pushText(entry)
+  pushText(record.condition)
+  pushText(record.loopObjective)
+  for (const entry of record.loopHistory ?? []) {
+    pushText(entry.condition)
+    pushText(entry.summary)
+    pushText(entry.reason)
+  }
+  for (const entry of history) {
+    pushText(entry.condition)
+    pushText(entry.summary)
+    pushText(entry.reason)
+  }
+
+  const completedNormalized = completedTexts.map((value) => normalizeCondition(value)).filter(Boolean)
+  const completedHaystacks = completedNormalized.flatMap((value) => [value, normalizeDedupeKey(value)]).filter(Boolean)
+  const completedDedupeKeys = new Set<string>(completedNormalized.map(normalizeDedupeKey).filter(Boolean))
+
+  // Treat a backlog item as completed when any of its normalized id/dedupe keys appears in
+  // completed conditions/history text (substring match), not only on exact key equality.
+  const completedIds = new Set<string>()
+  for (const item of inspected.backlog.items) {
+    const keys = [item.id, ...(item.dedupeKeys ?? [])].map(normalizeDedupeKey).filter(Boolean)
+    if (keys.some((key) => completedHaystacks.some((text) => text.includes(key)))) {
+      completedIds.add(item.id)
+      for (const key of keys) completedDedupeKeys.add(key)
+    }
+  }
+
+  const selected = selectNextBacklogItem(inspected.backlog.items, {
+    completedIds: [...completedIds],
+    completedDedupeKeys: [...completedDedupeKeys],
+  })
+  if (!selected) return undefined
+
+  return {
+    id: selected.id,
+    title: selected.title,
+    category: selected.category,
+    priority: selected.priority,
+    impact: selected.impact,
+    risk: selected.risk,
+    finding: selected.finding,
+    improvement: selected.improvement,
+    evidence: [...selected.evidence],
+  }
+}
+
+
 /**
  * Workstream XLV — the arming-side no-new-gap gate, shared by the planner re-arm boundary (loopAdvance) and the
  * initial /goal-loop arm (arm()). Returns the matched ledger entry on a hit (exact normalized repeat, or token
@@ -1213,9 +1299,25 @@ export class GoalController {
     }
     const generate = new AbortController()
     runtime.abort = generate
+    const backlogSuggestion = selectBacklogSuggestion(record.directory ?? this.deps.directory, record, history)
+    if (backlogSuggestion) {
+      log.info("loop planner backlog suggestion", {
+        sessionID,
+        id: backlogSuggestion.id,
+        title: truncate(backlogSuggestion.title, 80),
+        priority: backlogSuggestion.priority,
+      })
+    }
     let reply: string
     try {
-      reply = await this.deps.evaluator.nextGoal({ sessionID, objective, history, latestSummary: entry.summary, signal: generate.signal })
+      reply = await this.deps.evaluator.nextGoal({
+        sessionID,
+        objective,
+        history,
+        latestSummary: entry.summary,
+        signal: generate.signal,
+        ...(backlogSuggestion ? { backlogSuggestion } : {}),
+      })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
       if (this.stale(record, runtime, epoch)) return
