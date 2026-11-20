@@ -5,6 +5,7 @@ import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRI
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
+import { isAlreadySatisfiedLanding } from "../core/verdict.ts"
 import * as Prompt from "../core/prompts.ts"
 import { renderTranscript } from "../core/transcript.ts"
 import { artifactEvidenceSatisfied, checkReuseKey, computeScopePolicy, currentHead, evaluateCoveragePolicy, resolveVerifyChecks } from "../core/verify-matrix.ts"
@@ -1209,10 +1210,11 @@ export class GoalController {
     // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
     // Scoped to the first evaluated turn: on later turns prior evidence may already satisfy the condition and
     // the evaluator judges from the full visible conversation, so a 0-tool-call reporting turn is legitimate.
-    // The BT already-satisfied landing has no exemption here: the forward-pointer gate in core/verdict.ts
-    // (applyForwardPointerGate) downgrades that met to not_met unless the reason names a "next:" gap, so the
-    // landing is accepted only through a forward pointer (see the rubric in core/prompts.ts).
-    if (result.verdict === "met" && tools === 0 && turn === 1 && PRODUCING_CONDITION.test(record.condition)) {
+    // An already-satisfied landing that names a concrete `next:` gap is the sanctioned forward-pointer path
+    // (core/verdict.ts · applyForwardPointerGate), not state inspection posing as work — exempt it from the
+    // zero-tool downgrade so it can proceed to the verifier matrix and loop advance. A bare already-satisfied
+    // claim without a pointer is still rejected upstream by the forward-pointer gate.
+    if (result.verdict === "met" && tools === 0 && turn === 1 && PRODUCING_CONDITION.test(record.condition) && !isAlreadySatisfiedLanding(result.reason)) {
       result = {
         verdict: "not_met" as const,
         reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",

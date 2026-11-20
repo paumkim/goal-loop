@@ -2443,6 +2443,19 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     expect(record.loopIteration).toBe(1) // the loop did not advance
   })
 
+  test("(vii-b2) a zero-tool already-satisfied met that names a next: gap advances the loop", async () => {
+    await h.setLoop("add a failing test for the parser")
+    h.verdicts.push(met("Already satisfied at HEAD deadbee. No new work is produced by this iteration.\nnext: add fuzz coverage for the parser"))
+    h.summaries.push("condition already met at HEAD; next gap is fuzz coverage")
+    h.nextGoals.push("add fuzz coverage for the parser")
+    await h.turn(0) // zero tool calls — exempt via the sanctioned forward-pointer path
+    const record = h.controller.get(SID)!
+    expect(record.condition).toBe("add fuzz coverage for the parser")
+    expect(record.loopIteration).toBe(2)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]!.reason).toContain("Already satisfied at HEAD")
+  })
+
   test("(vii-c) a zero-tool-call producing-condition met on a later turn is accepted when the evaluator judges it met", async () => {
     await h.setGoal("add a failing test for the parser")
     h.verdicts.push(notMet("wrote the test but it does not fail yet"), met("test added and fails as required"))

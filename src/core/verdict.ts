@@ -19,6 +19,15 @@ const ALREADY_SATISFIED = /(already[-\s]satisfied|no new work|nothing[_\s-](new[
 const NEXT_POINTER = /next\s*:/i
 const DUPLICATE_REASON = "duplicate-without-forward-pointer"
 
+/**
+ * True for an "already satisfied at HEAD" met landing that names a concrete next gap. The zero-tool guard in
+ * controller.ts must not downgrade such a verdict — it is the sanctioned forward-pointer path, not state
+ * inspection posing as work. Uses the same regexes as applyForwardPointerGate so the two cannot drift.
+ */
+export function isAlreadySatisfiedLanding(reason: string): boolean {
+  return ALREADY_SATISFIED.test(reason) && NEXT_POINTER.test(reason)
+}
+
 export function applyForwardPointerGate(parsed: ParsedVerdict): ParsedVerdict {
   if (parsed.verdict !== "met") return parsed
   if (!ALREADY_SATISFIED.test(parsed.reason)) return parsed

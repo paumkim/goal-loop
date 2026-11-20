@@ -15,7 +15,7 @@ import {
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
-import { parseVerdict } from "../src/core/verdict.ts"
+import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
 const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
 
@@ -127,6 +127,13 @@ describe("parseVerdict", () => {
     const out = parseVerdict('{"verdict":"met","reason":"Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: docs/core.html stale cards"}')
     expect(out?.verdict).toBe("met")
     expect(out?.reason).toContain("next: docs/core.html stale cards")
+  })
+  test("isAlreadySatisfiedLanding mirrors the gate: only already-satisfied + next: qualifies", () => {
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. next: docs/core.html stale cards")).toBe(true)
+    expect(isAlreadySatisfiedLanding("No new work is produced by this iteration.\nnext: src/runtime/store.ts")).toBe(true)
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. Nothing left to do.")).toBe(false)
+    expect(isAlreadySatisfiedLanding("merged aa5e196: work landed; next: follow-up")).toBe(false) // genuinely new work
+    expect(isAlreadySatisfiedLanding("all tests pass")).toBe(false)
   })
   test("forward-pointer gate: 'no new work' and 'nothing to do' phrasing is gated the same", () => {
     expect(parseVerdict('{"verdict":"met","reason":"no new work was needed at this HEAD"}')?.verdict).toBe("not_met")
