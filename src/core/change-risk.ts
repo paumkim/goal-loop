@@ -22,7 +22,7 @@ export interface ChangeRiskAssessment {
 const SURFACE_ORDER: readonly SensitiveSurface[] = ["deps", "auth", "migrations", "ci-release", "data"]
 
 /** Per-surface risk tier. All specified sensitive surfaces are treated as high-risk for strict gating. */
-export const SURFACE_TIER: Readonly<Record<SensitiveSurface, RiskTier>> = {
+const SURFACE_TIER: Readonly<Record<SensitiveSurface, RiskTier>> = {
   deps: "high",
   auth: "high",
   migrations: "high",

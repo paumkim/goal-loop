@@ -55,7 +55,7 @@ export interface DedupeMatch {
   readonly key: string
 }
 
-export interface NextItemOptions {
+interface NextItemOptions {
   /** Statuses considered selectable. Defaults to ["open"]. */
   readonly statuses?: readonly ImprovementStatus[]
   /** IDs to treat as already satisfied (e.g. completed conditions/history). */

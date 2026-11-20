@@ -240,7 +240,7 @@ function safeToken(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x"
 }
 
-export function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
+function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
   const diagnosticsDir = join(dir, ".term", "goal-loop", "diagnostics")
   mkdirSync(diagnosticsDir, { recursive: true })
   const stamp = artifact.at.replace(/[:.]/g, "-")

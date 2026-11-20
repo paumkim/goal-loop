@@ -60,7 +60,7 @@ export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke"
 
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
-export type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
+type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
 
 /** Evidence captured for one verification-matrix check (additive, persisted in verdict trail). */
 export interface VerifyCheckEvidence {
@@ -274,7 +274,7 @@ export const MAX_TERMINAL_RECORD_ENTRIES = 50
 /** Terminal records whose last-activity stamp (`endedAt`, falling back to `startedAt`) is older than this are pruned. */
 export const TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
-export interface TerminalPruneSelection {
+interface TerminalPruneSelection {
   /** sessionIDs of the records to remove. */
   readonly pruned: string[]
   /** How many were pruned by the age cap. */

@@ -13,7 +13,7 @@
 import { parseGetGoalOutput } from "./wire.ts"
 import type { GoalSnapshot } from "./types.ts"
 
-export interface GoalRefreshDeps {
+interface GoalRefreshDeps {
   /** Fetch the session's current snapshot from the server. May reject (RPC failure) — the caller treats it as "try again next tick". */
   readonly get: (sessionID: string) => Promise<unknown>
   /** Feed a parsed snapshot (or an explicit null) into the TUI's normal `changed` intake — the live→terminal transition arms the acknowledgment pill there. */
