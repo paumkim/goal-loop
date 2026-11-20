@@ -4275,7 +4275,7 @@
       "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,scripts/render-pill.tsx,scripts/render-card.tsx,scripts/render-slot.tsx,scripts/render-dialog.tsx,test/history.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/tui-alignment-invariants.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/,dist/tui.js",
       "branch": "wt/loop-indicator-always-visible",
       "worktree": "worktrees/wt-loop-indicator-always-visible",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-20T14:07:11Z",
       "submittedAt": "2026-11-20T14:21:30Z",
       "forcedScope": true,
@@ -4283,7 +4283,9 @@
       "forcedScopeFiles": [
         "SPEC.md",
         "scripts/repro-loop-cap.tsx"
-      ]
+      ],
+      "mergedAt": "2026-11-20T14:37:38Z",
+      "mergedInto": "dev"
     },
     "change-risk-strict-gate": {
       "agent": "orchestrator",
