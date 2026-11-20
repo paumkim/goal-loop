@@ -1365,7 +1365,7 @@ describe("loop prompts", () => {
     expect(text).toContain("Already satisfied at HEAD")
   })
 
-  test("evaluator rubric is a defensive auditor: stale/weakened state forces not_met, met reasons carry a next: hint", () => {
+  test("evaluator rubric is a defensive auditor: stale/weakened state forces not_met, reasons carry structured next actions", () => {
     for (const text of [
       Prompt.evaluateInSession("do it", { turn: 2, elapsedMs: 1000 }, { required: false, branch: "dev", reason: "t" }),
       Prompt.evaluateIndependently("do it", { turn: 2, elapsedMs: 1000 }, "transcript", { required: false, branch: "dev", reason: "t" }),
@@ -1374,8 +1374,9 @@ describe("loop prompts", () => {
       expect(text).toContain("weakened")
       expect(text).toContain("contradicted by fresher output")
       expect(text).toContain("bought by weakening a test")
-      expect(text).toContain('prefixed "next:"')
-      expect(text).toContain("single next concrete step")
+      expect(text).toContain("next: none")
+      expect(text).toContain("[priority/risk] <exact improvement>")
+      expect(text).toContain("Name the most critical falsifiable gap")
     }
   })
 

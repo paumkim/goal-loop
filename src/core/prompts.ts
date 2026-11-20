@@ -349,48 +349,22 @@ interface EvaluationFacts {
 }
 
 const VERDICTS = [
-  `Decide with these verdicts:`,
-  `- "met": every part of the condition is demonstrated by evidence in the conversation (tool output, command`,
-  `  results, file contents shown), or an explicit stop clause in the condition (turn, time, or budget limit) has`,
-  `  been reached according to the harness facts below.`,
-  `- "not_met": not demonstrated yet but still achievable. The reason must name what is missing and the`,
-  `  single next concrete step, phrased so a fresh worker can execute it without re-deriving the problem;`,
-  `  name the evidence that would settle it.`,
-  `- "impossible": can never be satisfied (self-contradictory, or depends on something verifiably unavailable).`,
-  `  Use only with strong evidence; difficulty or slow progress is "not_met".`,
+  `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD). Narration, prior claims, previous verdicts, and "should pass" are not evidence.`,
+  `1. Parse the armed condition into explicit, verifiable clauses.`,
+  `2. Build an evidence matrix per clause: {clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn}.`,
+  `3. Adversarial check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
+  `4. Gate policy:`,
+  `   - "met": every clause is satisfied by fresh, scoped evidence (including required commits/submit/merge/checks when applicable). Green but unscoped is insufficient for broad goals (e.g. full-suite green without targeted/smoke/regression evidence for touched risk, or claims without matching artifacts).`,
+  `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
+  `   - "impossible": only with strong evidence the condition can never be satisfied (self-contradictory or depends on something verifiably unavailable). Difficulty or slow progress is "not_met".`,
+  `5. Detect repeated failure signatures from recent verdicts/reasons visible in this conversation (same missing evidence, same failing gate, same flaky/error pattern, same unaddressed gap). If repeating, require strategy escalation: narrow scope, produce a diagnostic artifact, or mark blocked with the blocker.`,
 ]
 
 const RULES = [
-  `Rules: claims without evidence do not count; if the agent says tests pass but no test output is visible, the`,
-  `condition is not met. Evidence must be fresh: command output produced at the current HEAD, after the last`,
-  `change, not earlier turns' claims, the agent's summary of what it did, or a prior verdict. Judge the current`,
-  `state, not intentions. Constraints in the condition (things that must not change) are part of it.`,
-  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the`,
-  `work landed and gates green): judge met, and state exactly that in the reason — "Already satisfied at HEAD`,
-  `<sha>. No new work is produced by this iteration." Do not credit narration of effort, and do not produce`,
-  `theater (re-verification-only turns still satisfy the condition, but a planner that re-proposes an identical`,
-  `or materially equivalent condition must not be armed; the loop completes).`,
-  `Condition fit: the reason must name which clause(s) of the armed condition the in-turn evidence satisfies,`,
-  `and the evidence must come from this turn's output at the post-change HEAD. Narration, earlier turns' claims,`,
-  `a previous verdict, and the absence of failure are not evidence.`,
-  `Novelty / no-duplicate: if the armed condition is a near-duplicate of a condition completed earlier in this`,
-  `loop's retained history window (token containment >= 0.7 or Jaccard >= 0.6, case/punctuation ignored), the`,
-  `already-satisfied met above is accepted only together with the next concrete gap it leaves on a "next:" line.`,
-  `A bare "Already satisfied" with no named next concrete gap verdicts "not_met" with reason`,
-  `"duplicate-without-forward-pointer" — even when the underlying work was genuinely already done.`,
-  `A met verdict on duplicate work must state in the reason that it is a duplicate pass, not new advancement.`,
-  `Honest next gap: reasons claiming "Already satisfied" or "no work needed" must name a specific next gap drawn`,
-  `from this turn's audit — a file, symbol, or workstream (e.g. "docs/core.html stale cards"). A vague`,
-  `"could improve X" names nothing and verdicts "not_met".`,
-  `Defensive audit (applies in addition to the condition): before deciding, scan the visible evidence for`,
-  `state that is stale, weakened or self-contradictory — tests skipped, deleted or relaxed to make a check`,
-  `pass; evidence produced before the last change; SPEC or docs contradicting the visible tree; generated`,
-  `artifacts never committed; half-landed work from an earlier turn; a claim contradicted by fresher output.`,
-  `If any of these is visible and bears on the condition, or on the evidence used to support it, the verdict is`,
-  `"not_met" and the reason names the item. A green gate bought by weakening a test is not green.`,
-  `Proactive duty: when the condition genuinely holds, end the reason with one line prefixed "next:" naming`,
-  `the highest-value improvement you saw that remains — stale files, missing tests, drift, speed, friction.`,
-  `This line is a hint for the loop planner; it never downgrades a met verdict. If nothing remains, omit it.`,
+  `Evidence rules: evidence must be fresh and come from this turn's visible output at post-change HEAD (or clearly current). Earlier turns' claims, summaries, prior verdicts, and absence of failure are not evidence. Constraints in the condition are clauses.`,
+  `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
+  `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — tests skipped/deleted/relaxed, evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
+  `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
 ]
 
 /**
@@ -430,7 +404,22 @@ function rubric(policy: CommitPolicy) {
   return lines.join("\n")
 }
 
-const OUTPUT = `Reply with ONLY one JSON object and nothing else: {"verdict": "met" | "not_met" | "impossible", "reason": "<one or two sentences, under 300 characters>"}`
+const OUTPUT = [
+  `Reply with ONLY one JSON object and nothing else:`,
+  `{"verdict":"met"|"not_met"|"impossible","reason":"<structured reason; use \\n for line breaks>"}`,
+  ``,
+  `The reason must cover, in order:`,
+  `(a) Clause-by-clause judgment with evidence refs: for each clause include clause, required evidence, observed evidence, status (satisfied|missing|contradicted|unscoped), and source/turn.`,
+  `(b) Gaps/flaws/risks found, or "none material". Include adversarial checks: "What would falsify met?" and "What important risk is untested?"`,
+  `(c) Repeated-failure/escalation note if any (same missing evidence, same failing gate, same flaky/error pattern, or same unaddressed gap seen in recent visible verdicts/reasons/gate output); if repeating, state required escalation (narrow scope, produce a diagnostic artifact, or mark blocked with blocker). Otherwise state "none".`,
+  ``,
+  `Then include next actions:`,
+  `- when not_met, or when met but improvements remain: list 1-3 prioritized concrete actions in this exact form:`,
+  `  next:`,
+  `  1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it.`,
+  `- when met and no meaningful gap remains: write "next: none".`,
+  `Never invent evidence. Keep evidence refs concrete (command/test/file/commit/gate/turn).`,
+].join("\n")
 
 function facts(input: EvaluationFacts, policy: CommitPolicy) {
   const lines = [

@@ -449,17 +449,18 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
       context: async () => transcriptWith([["assistant", "merged aa5e196: unified the XL finish-time prune with the XLI restore prune"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
       modelGenerate: async (_model, prompt) => {
         seen = prompt
-        return verdictJson("not_met", "merged aa5e196 unified the finish prune; the armed condition asked for the stale docs/core.html cards. next: docs/core.html stale cards")
+        return verdictJson("not_met", "merged aa5e196 unified the finish prune; the armed condition asked for the stale docs/core.html cards.\nnext:\n1. [high] Fix stale cards on docs/core.html — gap: condition requires docs/core.html update but only unrelated merge/check evidence shown — proof: diff/commit and rendered docs showing updated cards.")
       },
     })
     const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request({ condition: "fix the stale cards on docs/core.html" }))
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("docs/core.html")
-    // Condition fit and novelty clauses are printed in the prompt the judge sees; the downgrade decision is the judge's.
-    expect(seen).toContain("Condition fit")
-    expect(seen).toContain("Novelty / no-duplicate")
-    expect(seen).toContain("Honest next gap")
+    // Clause-by-clause evidence, novelty/forward-pointer, and next-action contract are visible to the judge.
+    expect(seen).toContain("Clause-by-clause judgment")
+    expect(seen).toContain("evidence matrix")
+    expect(seen).toContain("duplicate-without-forward-pointer")
+    expect(seen).toContain("next:")
   })
 
   test("real merged gap: fresh in-turn evidence with a named gap verdicts met", async () => {
@@ -472,7 +473,7 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
     expect(result.verdict).toBe("met")
   })
 
-  test("the rubric both judges see carries the three new clauses (session and independent)", async () => {
+  test("the rubric both judges see carries the clause-matrix, adversarial, and structured-next contract (session and independent)", async () => {
     const sessionPrompts: string[] = []
     const modelPrompts: string[] = []
     const { fake } = deps({
@@ -484,10 +485,15 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
     const independent = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
     await independent.evaluate(request())
     for (const prompt of [sessionPrompts[0]!, modelPrompts[0]!]) {
-      expect(prompt).toContain("Condition fit")
-      expect(prompt).toContain("Novelty / no-duplicate")
+      expect(prompt).toContain("evidence matrix")
+      expect(prompt).toContain("satisfied|missing|contradicted|unscoped")
+      expect(prompt).toContain("What would falsify met?")
+      expect(prompt).toContain("What important risk is untested?")
+      expect(prompt).toContain("Green but unscoped")
+      expect(prompt).toContain("repeated failure signatures")
+      expect(prompt).toContain("strategy escalation")
+      expect(prompt).toContain("next: none")
       expect(prompt).toContain("duplicate-without-forward-pointer")
-      expect(prompt).toContain("Honest next gap")
     }
   })
 })
