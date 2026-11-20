@@ -4145,9 +4145,11 @@
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
       "branch": "wt/no-rearm-after-achieved",
       "worktree": "worktrees/wt-no-rearm-after-achieved",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-20T11:59:17Z",
-      "submittedAt": "2026-11-20T12:02:58Z"
+      "submittedAt": "2026-11-20T12:02:58Z",
+      "mergedAt": "2026-11-20T12:18:32Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
