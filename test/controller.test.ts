@@ -93,7 +93,7 @@ function harness(
     ? (options.log as { info(m: string, e?: unknown): void; warn(m: string, e?: unknown): void; error(m: string, e?: unknown): void })
     : silent
   const controller = new GoalController({
-    config: resolveConfig(options),
+    config: resolveConfig({ learning: { enabled: false }, ...options }),
     directory,
     commit,
     clock,

@@ -79,7 +79,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   let usageValue: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
-    config: resolveConfig(options),
+    config: resolveConfig({ learning: { enabled: false }, ...options }),
     directory: typeof options.directory === "string" ? options.directory : DIR,
     commit,
     clock,
