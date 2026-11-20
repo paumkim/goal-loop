@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test"
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
 import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { BackgroundTracker } from "../src/runtime/background.ts"
@@ -68,6 +71,7 @@ function harness(
   options: Record<string, unknown> = {},
   storage = new MemoryStorage(),
   commit: CommitPolicy = { required: false, branch: "dev", reason: "test" },
+  directory = DIR,
 ) {
   const clock = new FakeClock()
   const calls = { prompts: [] as any[], synthetic: [] as any[] }
@@ -90,7 +94,7 @@ function harness(
     : silent
   const controller = new GoalController({
     config: resolveConfig(options),
-    directory: DIR,
+    directory,
     commit,
     clock,
     store,
@@ -1658,5 +1662,44 @@ describe("repeated failure-signature escalation", () => {
     const goal = h.controller.get(SID)!
     expect(goal.status).toBe("achieved")
     expect(h.calls.synthetic).toHaveLength(2)
+  })
+
+  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ on escalation", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-loop-ctrl-diag-"))
+    try {
+      const h = harness({}, new MemoryStorage(), { required: false, branch: "dev", reason: "test" }, dir)
+      await h.set("fix the failing tests")
+      h.verdicts.push(
+        { verdict: "not_met", reason: "same missing test evidence" },
+        { verdict: "not_met", reason: "same missing test evidence" },
+        { verdict: "not_met", reason: "same missing test evidence" },
+      )
+      await h.turn()
+      await h.turn()
+      await h.turn()
+
+      const goal = h.controller.get(SID)!
+      expect(goal.status).toBe("paused")
+      expect(goal.pauseCause).toBe("repeated_failure")
+
+      const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
+      const files = await readdir(diagDir)
+      expect(files.length).toBe(1)
+      const saved = JSON.parse(await readFile(join(diagDir, files[0]!), "utf8"))
+      expect(saved.signature).toBeString()
+      expect(saved.count).toBe(3)
+      expect(saved.reason).toContain("Repeated failure signature detected")
+      expect(saved.reason).toContain("rotate strategy")
+      expect(Array.isArray(saved.failingChecks)).toBe(true)
+      expect(saved.kind).toBe("reason")
+      expect(saved.summary).toContain("repeated not_met gap")
+      expect(saved.verdictReason).toContain("same missing test evidence")
+      expect(saved.sessionID).toBe(SID)
+      expect(saved.goalID).toBe(goal.id)
+      expect(saved.turn).toBe(3)
+      expect(saved.condition).toBe("fix the failing tests")
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

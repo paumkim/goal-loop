@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1924 -->
+<!-- spec-check files=70 tests=1929 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7579,5 +7579,5 @@ Honest limits. The fix is exercised at the controller-unit layer (a fake session
 a live model loop this pass. It changes only plain-goal terminal handling; a `/goal-loop` still advances on a
 `met` verdict by design — that is the loop, not a re-arm, and `maxLoops`/`LOOP_COMPLETE`/the no-new-gap gates
 are the boundaries that end it.
-<!-- spec-check files=70 tests=1924 -->
+<!-- spec-check files=70 tests=1929 -->
 
