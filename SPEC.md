@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2038 -->
+<!-- spec-check files=74 tests=2039 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8201,3 +8201,47 @@ it treated **any** `XY path` body containing ` -> ` as a rename and kept only `b
   is not parsed.
 - This does not change how `git diff --name-only` lines are obtained; it only corrects parsing of the lines fed
   to `pathsOf`.
+
+## Workstream CXI — surrogate-safe transcript truncation (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`src/core/transcript.ts` renders the session context into the evaluator's evidence-first digest. Its two cut helpers use
+raw UTF-16 code-unit slicing: `head` (used for tool inputs, user/note text) ends with `text.slice(0, max)`, and `headTail`
+(used for tool output and shell output, and for a single oversized block against the overall `maxChars`) ends with
+`text.slice(0, front)` and `text.slice(-back)`. JavaScript strings are sequences of UTF-16 code units, so an astral
+character (e.g. 🚀 U+1F680, encoded `\uD83D\uDE80`) occupies two units. When a cut boundary lands between the high and
+low surrogate, the digest carries a lone surrogate into the evaluator prompt — corrupt evidence that can mislead the
+judgment, break downstream `encodeURIComponent`/JSON handling, and render as a replacement glyph.
+
+### Acceptance criteria
+
+1. `head` never ends its kept prefix with a lone high surrogate: if `text.slice(0, max)` would end on a high surrogate
+   whose low partner sits at the cut, back off one code unit so the pair is excluded whole.
+2. `headTail` neither ends its head prefix on a lone high surrogate nor begins its tail on a lone low surrogate: back the
+   head off one unit when it lands on a high surrogate; advance the tail start by one unit when it lands on a low
+   surrogate (dropping the orphan half). A zero tail budget still emits a bounded tail or empty string — never the
+   whole input (`slice(-0)` hazard).
+3. Existing digest markers (`… [N chars cut] …`), newest-first packing, and the zero-per-tool-budget behavior
+   (marker + bounded tail, never the whole output) remain unchanged for all non-surrogate boundaries.
+4. `test/core.test.ts` adds an astral-boundary regression test: a sweep of `maxToolChars` and `maxChars` budgets around
+   embedded astral characters asserts no lone surrogate survives at any cut, plus a non-vacuous cut check.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/core.test.ts` → **114 pass / 0 fail** (168626 expect() calls),
+  including both existing `renderTranscript` regressions and the new astral-boundary sweep (per-tool caps 1..500,
+  whole-transcript budgets 1..320, plus non-vacuous cut/whole checks).
+- `bun run check` exit 0: **2039 pass / 0 fail** across 85 test files (29 snapshots, 198666 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2039`.
+
+### Honest limits / non-goals
+
+- This guards UTF-16 surrogate pairs only; it does not do grapheme-cluster-aware cutting (ZWJ sequences, combining
+  marks) in the digest — that is a separate concern from the stated condition.
+- Line/word-boundary elision is intentionally not introduced here: the digest keeps its byte-for-byte prefix plus the
+  existing cut marker so evaluator evidence is not silently reshaped.

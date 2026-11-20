@@ -65,3 +65,4 @@
 <!-- behavior-change: CVII coordinator status --json defaults to active leases + counts summary; --all retains the full historic dump -->
 <!-- behavior-change: CIX zero-tool evaluator guard exempts already-satisfied met verdicts that carry a next: forward pointer, so armed loops can advance past a landed condition -->
 <!-- behavior-change: CX pathsOf splits -> only on rename/copy lines at the first occurrence and decodes C-style quoted paths, so arrows/special chars in filenames no longer corrupt change-risk and invariant-sweep scope -->
+<!-- behavior-change: CXI transcript digest head/headTail cuts never split a UTF-16 surrogate pair — astral evidence stays whole and no lone surrogate leaks into the evaluator corpus -->
