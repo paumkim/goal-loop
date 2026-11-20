@@ -4115,8 +4115,11 @@
       "paths": "src/core,src/runtime,test,SPEC.md,docs,README.md,dist",
       "branch": "wt/failure-signature-escalation",
       "worktree": "worktrees/wt-failure-signature-escalation",
-      "status": "claimed",
-      "createdAt": "2026-11-20T11:38:32Z"
+      "status": "done",
+      "createdAt": "2026-11-20T11:38:32Z",
+      "submittedAt": "2026-11-20T11:59:00Z",
+      "mergedAt": "2026-11-20T12:09:28Z",
+      "mergedInto": "dev"
     },
     "pill-icon-left-rail": {
       "agent": "orchestrator",
@@ -4128,6 +4131,23 @@
       "submittedAt": "2026-11-20T11:41:36Z",
       "mergedAt": "2026-11-20T11:50:25Z",
       "mergedInto": "dev"
+    },
+    "coordinator-lease-race-fix": {
+      "agent": "iceman",
+      "paths": "packages/coordinator/**,test/**",
+      "branch": "wt/coordinator-lease-race-fix",
+      "worktree": "worktrees/wt-coordinator-lease-race-fix",
+      "status": "claimed",
+      "createdAt": "2026-11-20T11:52:46Z"
+    },
+    "no-rearm-after-achieved": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
+      "branch": "wt/no-rearm-after-achieved",
+      "worktree": "worktrees/wt-no-rearm-after-achieved",
+      "status": "submitted",
+      "createdAt": "2026-11-20T11:59:17Z",
+      "submittedAt": "2026-11-20T12:02:58Z"
     }
   },
   "mergeLock": null,
