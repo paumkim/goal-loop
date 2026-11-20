@@ -240,15 +240,32 @@ function safeToken(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x"
 }
 
+const ensuredDiagnosticsDirs = new Set<string>()
+
 function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
   const diagnosticsDir = join(dir, ".term", "goal-loop", "diagnostics")
-  mkdirSync(diagnosticsDir, { recursive: true })
   const stamp = artifact.at.replace(/[:.]/g, "-")
   const session = safeToken(artifact.sessionID ?? "session")
   const turn = typeof artifact.turn === "number" ? `-t${artifact.turn}` : ""
   const name = `${stamp}-${session}${turn}-repeated-failure.json`
   const file = join(diagnosticsDir, name)
-  writeFileSync(file, JSON.stringify(artifact, null, 2) + "\n", "utf8")
+  const body = JSON.stringify(artifact, null, 2) + "\n"
+  try {
+    if (!ensuredDiagnosticsDirs.has(diagnosticsDir)) {
+      mkdirSync(diagnosticsDir, { recursive: true })
+      ensuredDiagnosticsDirs.add(diagnosticsDir)
+    }
+    writeFileSync(file, body, "utf8")
+  } catch (error) {
+    if (ensuredDiagnosticsDirs.has(diagnosticsDir) && (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      ensuredDiagnosticsDirs.delete(diagnosticsDir)
+      mkdirSync(diagnosticsDir, { recursive: true })
+      ensuredDiagnosticsDirs.add(diagnosticsDir)
+      writeFileSync(file, body, "utf8")
+    } else {
+      throw error
+    }
+  }
   return file
 }
 

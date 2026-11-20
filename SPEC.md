@@ -7903,4 +7903,24 @@ dist fresh, TUI load, docs freshness, invariant-sweep, spec-check `files=72 test
 
 Honest limits. Micro-benchmark evidence only (single-process JSONL append loop), not end-to-end goal-loop latency;
 behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
+
+## Workstream CII — cache ensured directory for failure-diagnostic writes (2026-11-20)
+
+Behavior-preserving performance optimization (no intended runtime behavior or persisted-format changes). `writeFailureDiagnosticArtifact`
+in `src/core/failure-signature.ts` now caches ensured diagnostics directories per process and skips redundant `mkdirSync` calls
+for repeated writes to the same `<dir>/.term/goal-loop/diagnostics` path. On `ENOENT` (directory removed after being ensured),
+it clears the cache entry and retries directory creation + write once, preserving prior throw/catch semantics used by
+`persistFailureDiagnosticArtifact`.
+
+Measured before/after (bun micro-benchmark, same temp-dir shape, 2000 unique diagnostic writes × 5 runs): before (mkdir on every
+write) `before_avg_ms=9.08/8.83` across two runs (`before_ms=[9.29,8.93,8.65,9.33,9.22]`, `[9.12,8.7,8.52,8.84,8.96]`);
+after (cached ensured dir + ENOENT retry) `after_avg_ms=7.36/7.16` (`after_ms=[7.68,7.28,7.01,7.17,7.64]`,
+`[7.15,6.94,7.12,7.35,7.25]`), reducing redundant mkdir syscalls in the common diagnostic-write path.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/failure-signature.test.ts` → **19 pass
+/ 0 fail** (1 file, 58 expect() calls); `bun run check` green (tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots,
+dist fresh, TUI load, docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Micro-benchmark evidence only (single-process unique-file diagnostic writes), not end-to-end goal-loop latency;
+behavior is unchanged for callers except fewer redundant directory creation calls in steady state.
 <!-- spec-check files=72 tests=1989 -->
