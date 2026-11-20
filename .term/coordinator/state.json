@@ -4043,6 +4043,17 @@
       "submittedAt": "2026-11-20T09:02:10Z",
       "mergedAt": "2026-11-20T09:03:46Z",
       "mergedInto": "dev"
+    },
+    "evaluator-rubric-evidence-matrix": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs,dist",
+      "branch": "wt/evaluator-rubric-evidence-matrix",
+      "worktree": "worktrees/wt-evaluator-rubric-evidence-matrix",
+      "status": "done",
+      "createdAt": "2026-11-20T09:10:39Z",
+      "submittedAt": "2026-11-20T09:18:01Z",
+      "mergedAt": "2026-11-20T09:19:36Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
