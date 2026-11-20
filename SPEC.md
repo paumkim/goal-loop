@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1955 -->
+<!-- spec-check files=70 tests=1957 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7630,3 +7630,48 @@ were left alone this pass because they carry pinned reason strings / lower lever
 minimal, provable consolidation.
 <!-- spec-check files=70 tests=1955 -->
 
+## Workstream XCIII — consolidate the remaining arming/learning/coverage overlaps (2026-11-20)
+
+Armed condition (verbatim): "Consolidate remaining overlaps in src/runtime/controller.ts without changing the
+fresh-evidence gate: reuse completedLedgerHit in loopAdvance's arming scan, fold the 5 learning-log writers
+into one appendLearning helper, and compute computeScopePolicy once per verifyMet; bun run check green."
+
+Follow-on to XCII, which named exactly these three overlaps and left them for a later pass (pinned reason
+strings / lower leverage). All three are behavior-preserving consolidations; the fresh-evidence verification
+gate (`verifyMet` / matrix / coverage decision) and the commit policy are untouched.
+
+1. **`loopAdvance` reuses the shared no-new-gap gate.** The planner-side anti-repeat boundary (XLV) hand-rolled
+   the same exact-repeat + near-duplicate scan that `completedLedgerHit` already encapsulates (and that the
+   initial `/goal-loop` arm runs). It now builds the ledger as raw condition strings (the record's current
+   condition, its loop objective, the retained iteration window and `completedConditions`) and calls
+   `completedLedgerHit(condition, completedLedger)` once. The refusal wording still distinguishes an exact
+   normalized repeat from a near-duplicate (derived from the returned entry's normalized equality), so both
+   `/^no new gap/` grep-target states stay byte-for-byte.
+2. **One learning write path.** The four learning-log writers (`writeLearningGoalTerminal`,
+   `writeLearningLoopIteration`, `writeLearningTurnVerdict`, `writeLearningGoalArmed`) each repeated the
+   file-resolution / clock-read / append / swallowed-warn plumbing. They now delegate to one private
+   `appendLearning(record, label, context, build)`: it resolves the file, reads the clock once (so the goal
+   terminal + session outcome pair keeps one timestamp) and appends the built entries; the caller supplies the
+   label and warn context. The warn strings (`learning log (<label>) write failed`) and their context keys are
+   unchanged.
+3. **One scope policy per gate.** `verifyMet` computed `computeScopePolicy` and then called
+   `evaluateCoveragePolicy`, which recomputed it internally. `evaluateCoveragePolicy` now takes an optional
+   precomputed `ScopePolicy` (defaulting to an internal `computeScopePolicy(opts)`, so existing one-argument
+   callers are unchanged); `verifyMet` builds one `policyOpts` object and threads the single policy into both.
+
+Verification (fresh at this HEAD). `test/loop.test.ts` gains "the re-arm refusal wording still distinguishes an
+exact repeat from a near-duplicate" (exact wording for a normalized repeat, near-duplicate wording otherwise);
+`test/verify-matrix-goal-declared.test.ts` gains "an explicitly precomputed policy yields the same coverage
+decision as the internal recompute" (`evaluateCoveragePolicy(opts, computeScopePolicy(opts))` deep-equals
+`evaluateCoveragePolicy(opts)`). `bunx tsc --noEmit` clean; `cd test && bun test` → **1957 pass / 0 fail**
+(29 snapshots); `bun run check` green (check:spec ok — 70 files, 1957 tests). The pre-existing pins stay green
+unchanged: the loop no-new-gap contract (`re-arm boundary no-new-gap refusal contract (LIV)`), the exact-repeat
+and near-duplicate end-clean tests, the coverage-policy tests, and the learning-log entries exercised through
+the controller tests.
+
+Honest limits. Behavior-preserving consolidation only, proven at the unit layer (fake sessions/verdicts), not
+on a live model loop. The `completedLedgerHit` reuse changes wording only in one pathological tie-break — when
+the ledger holds both an earlier near-duplicate and a later exact match of the same candidate — where the
+refusal wording (never the decision, the leading `no new gap` vocabulary or the refusal itself) would differ;
+the scanned set order puts the record's own condition first, so the common exact case is unaffected.
+<!-- spec-check files=70 tests=1957 -->

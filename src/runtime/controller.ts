@@ -21,6 +21,7 @@ import {
   type NoticeKind,
   type NoticeLevel, type PauseCause, // may not become its own line: docs cite controller.ts:68 for the epoch field
   type UsageSnapshot,
+  type VerdictEntry,
   type VerdictVerificationMatrix,
   type VerifyCheckEvidence,
 } from "../core/types.ts"
@@ -28,7 +29,7 @@ import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, Eval
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
-import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
+import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings, type LearningEntry } from "../core/learning-log.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
@@ -1313,7 +1314,9 @@ export class GoalController {
     }
     const cache = runtime.verifyCache.results
 
-    const policy = computeScopePolicy({ condition: record.condition, profile: config.evaluator.verifyProfile || "default", checks: resolvedChecks })
+    // One scope policy per gate: the coverage precheck below shares this object instead of recomputing it.
+    const policyOpts = { condition: record.condition, profile: config.evaluator.verifyProfile || "default", checks: resolvedChecks }
+    const policy = computeScopePolicy(policyOpts)
     const broadGoal = policy.broadGoal
     const profile = policy.profile
     const legacySingle = resolvedChecks.length === 1 && resolvedChecks[0]?.id === "verify-command" && resolvedChecks[0]?.source === "legacy"
@@ -1346,7 +1349,7 @@ export class GoalController {
     }
 
     // Deterministic coverage precheck (independent of evaluator rubric): broad goals require scoped typed coverage.
-    const coverage = evaluateCoveragePolicy({ condition: record.condition, profile: config.evaluator.verifyProfile || "default", checks: resolvedChecks })
+    const coverage = evaluateCoveragePolicy(policyOpts, policy)
     if (!coverage.ok) {
       const evidence: VerifyCheckEvidence[] = requiredNow.map((x) => ({
         id: x.def.id,
@@ -2003,32 +2006,27 @@ export class GoalController {
     if (!condition) {
       return endClean("Loop complete: the next-goal generator returned nothing usable.")
     }
-    // A planner that repeats an already-completed condition would spin the loop on the same work; end instead.
-    // Punctuation-insensitive: collapse every run of non-alphanumerics to one space (unicode letters/numbers kept).
-    const normalize = normalizeCondition
-    const completed = new Set([
-      normalize(record.condition),
-      ...(record.loopObjective ? [normalize(record.loopObjective)] : []),
-      ...history.map((entry) => normalize(entry.condition)),
-      // The ledger outlives the retained window: conditions dropped from it by the cap are gone by design (counted on the record); everything still held is scanned here.
-      ...(record.completedConditions ?? []).map(normalize),
+    // A planner that re-offers an already-completed condition — an exact (case/punctuation-insensitive) repeat,
+    // or a near-duplicate (token containment >= 0.7 / Jaccard >= 0.6) — would spin the loop on the same work;
+    // end instead. The scan reuses completedLedgerHit, the one gate the initial /goal-loop arm runs (XLV).
+    // The ledger is the record's current condition, its loop objective, the retained iteration window and the
+    // completed-condition ledger; the last outlives the window, so a condition dropped by the cap is gone by
+    // design (counted on the record) and only what is still held is scanned here.
+    const completedLedger = new Set<string>([
+      record.condition,
+      ...(record.loopObjective ? [record.loopObjective] : []),
+      ...history.map((entry) => entry.condition),
+      ...(record.completedConditions ?? []),
     ])
-    if (completed.has(normalize(condition))) {
-      log.warn("loop next-goal generator repeated a completed condition", { sessionID, iteration })
-      return endClean(`no new gap: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; ending instead of arming.`)
-    }
-    // Near-duplicate gate: a planner proposing work that materially overlaps an already-completed condition
-    // would burn the iteration on a no-op. Token containment >= 0.7 or Jaccard >= 0.6 is a near-duplicate.
-    const candidateTokens = tokensOf(normalize(condition))
-    if (candidateTokens.size > 0) {
-      for (const entry of completed) {
-        const entryTokens = tokensOf(entry)
-        if (entryTokens.size === 0) continue
-        if (isNearDuplicate(candidateTokens, entryTokens)) {
-          log.warn("loop next-goal generator offered a near-duplicate of an already-completed condition", { sessionID, iteration })
-          return endClean(`no new gap: the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); ending instead of arming.`)
-        }
-      }
+    const repeat = completedLedgerHit(condition, completedLedger)
+    if (repeat !== undefined) {
+      // Exact-repeat vs near-duplicate differ only in the refusal wording; both speak the grep-target
+      // vocabulary (/^no new gap/, "already-completed") the arming-side refusal documents.
+      const exact = normalizeCondition(repeat) === normalizeCondition(condition)
+      log.warn(exact ? "loop next-goal generator repeated a completed condition" : "loop next-goal generator offered a near-duplicate of an already-completed condition", { sessionID, iteration })
+      return endClean(exact
+        ? `no new gap: the planner keeps offering the already-completed condition "${truncate(condition, 80)}"; ending instead of arming.`
+        : `no new gap: the planner keeps offering a near-duplicate of an already-completed condition ("${truncate(condition, 80)}"); ending instead of arming.`)
     }
 
     const nextIteration = iteration + 1
@@ -2516,36 +2514,36 @@ export class GoalController {
     return join(base, path)
   }
 
-  private writeLearningGoalTerminal(record: GoalRecord): void {
+  /**
+   * One learning-log write: resolve the log file, build the entry (or entries) for this record, and append.
+   * Shared by the four writers so file resolution, the single clock read and the swallowed-warn failure mode
+   * live in one place. The build thunk receives the same `now`, so an entry pair (goal terminal + session
+   * outcome) still shares one timestamp.
+   */
+  private appendLearning(record: GoalRecord, label: string, context: { iteration?: number; turn?: number }, build: (now: number) => LearningEntry[]): void {
     try {
       const file = this.learningLogFile(record.directory ?? this.deps.directory)
       if (!file) return
       const now = this.deps.clock.now()
-      appendLearningEntry(file, buildGoalTerminalLearningEntry(record, now))
-      appendLearningEntry(file, buildSessionOutcomeLearningEntry(record, now))
+      for (const entry of build(now)) appendLearningEntry(file, entry)
     } catch (error) {
-      this.deps.log.warn("learning log (goal terminal/session outcome) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
+      this.deps.log.warn(`learning log (${label}) write failed`, { sessionID: record.sessionID, ...context, error: errorMessage(error) })
     }
+  }
+
+  private writeLearningGoalTerminal(record: GoalRecord): void {
+    this.appendLearning(record, "goal terminal/session outcome", {}, (now) => [
+      buildGoalTerminalLearningEntry(record, now),
+      buildSessionOutcomeLearningEntry(record, now),
+    ])
   }
 
   private writeLearningLoopIteration(record: GoalRecord, entry: LoopEntry): void {
-    try {
-      const file = this.learningLogFile(record.directory ?? this.deps.directory)
-      if (!file) return
-      appendLearningEntry(file, buildLoopIterationLearningEntry(record, entry, this.deps.clock.now()))
-    } catch (error) {
-      this.deps.log.warn("learning log (loop iteration) write failed", { sessionID: record.sessionID, iteration: entry.version, error: errorMessage(error) })
-    }
+    this.appendLearning(record, "loop iteration", { iteration: entry.version }, (now) => [buildLoopIterationLearningEntry(record, entry, now)])
   }
 
-  private writeLearningTurnVerdict(record: GoalRecord, entry: import("../core/types.ts").VerdictEntry): void {
-    try {
-      const file = this.learningLogFile(record.directory ?? this.deps.directory)
-      if (!file) return
-      appendLearningEntry(file, buildTurnVerdictLearningEntry(record, entry, this.deps.clock.now()))
-    } catch (error) {
-      this.deps.log.warn("learning log (turn verdict) write failed", { sessionID: record.sessionID, turn: entry.turn, error: errorMessage(error) })
-    }
+  private writeLearningTurnVerdict(record: GoalRecord, entry: VerdictEntry): void {
+    this.appendLearning(record, "turn verdict", { turn: entry.turn }, (now) => [buildTurnVerdictLearningEntry(record, entry, now)])
   }
 
   private recentLearningsForPrompt(record: GoalRecord, limit = 5): string | undefined {
@@ -2560,13 +2558,7 @@ export class GoalController {
   }
 
   private writeLearningGoalArmed(record: GoalRecord): void {
-    try {
-      const file = this.learningLogFile(record.directory ?? this.deps.directory)
-      if (!file) return
-      appendLearningEntry(file, buildGoalArmedLearningEntry(record, this.deps.clock.now()))
-    } catch (error) {
-      this.deps.log.warn("learning log (goal armed) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
-    }
+    this.appendLearning(record, "goal armed", {}, (now) => [buildGoalArmedLearningEntry(record, now)])
   }
 
   private runtime(sessionID: string): Runtime {
