@@ -1,11 +1,12 @@
-import { appendFileSync, mkdirSync } from "node:fs"
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname } from "node:path"
 import { formatDuration } from "./format.ts"
-import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot } from "./types.ts"
 
 export const LEARNING_LOG_VERSION = 1 as const
 
-export type LearningEntryKind = "goal_terminal" | "loop_iteration"
+import type { GoalRecord, GoalStatus, LoopEntry, UsageSnapshot, Verdict, VerdictEntry } from "./types.ts"
+
+export type LearningEntryKind = "goal_terminal" | "loop_iteration" | "turn_verdict" | "goal_armed"
 
 interface LearningEntryBase {
   readonly version: typeof LEARNING_LOG_VERSION
@@ -38,7 +39,19 @@ export interface LoopIterationLearningEntry extends LearningEntryBase {
   readonly verdict: "met"
 }
 
-export type LearningEntry = GoalTerminalLearningEntry | LoopIterationLearningEntry
+export interface TurnVerdictLearningEntry extends LearningEntryBase {
+  readonly kind: "turn_verdict"
+  readonly turn: number
+  readonly verdict: Verdict
+}
+
+export interface GoalArmedLearningEntry extends LearningEntryBase {
+  readonly kind: "goal_armed"
+  readonly loopEnabled: boolean
+  readonly loopMaxLoops?: number
+}
+
+export type LearningEntry = GoalTerminalLearningEntry | LoopIterationLearningEntry | TurnVerdictLearningEntry | GoalArmedLearningEntry
 
 function iso(atMs: number): string {
   const d = new Date(atMs)
@@ -140,6 +153,67 @@ export function buildLoopIterationLearningEntry(
   }
 }
 
+function turnVerdictLesson(verdict: Verdict, reason: string | undefined): string {
+  const why = clean(reason) ?? "no reason recorded"
+  switch (verdict) {
+    case "met":
+      return `Turn verdict met: ${why}. Lesson: the evidence was sufficient this turn; preserve the checks and proof that demonstrated completion.`
+    case "impossible":
+      return `Turn verdict impossible: ${why}. Lesson: stop repeating blocked work; reframe the goal or resolve the blocking constraint before continuing.`
+    case "not_met":
+    default:
+      return `Turn verdict not met: ${why}. Lesson: close the stated evidence gaps with concrete, verifiable progress on the next turn.`
+  }
+}
+
+export function buildTurnVerdictLearningEntry(
+  record: GoalRecord,
+  entry: VerdictEntry,
+  atMs = Date.now(),
+): TurnVerdictLearningEntry {
+  const reason = clean(entry.reason)
+  const objective = clean(record.loopObjective)
+  return {
+    version: LEARNING_LOG_VERSION,
+    ts: iso(atMs),
+    kind: "turn_verdict",
+    sessionID: record.sessionID,
+    goalID: record.id,
+    ...(clean(record.directory) ? { directory: clean(record.directory) } : {}),
+    condition: record.condition,
+    ...(objective ? { objective } : {}),
+    turn: entry.turn,
+    verdict: entry.verdict,
+    ...(reason ? { reason } : {}),
+    ...(typeof entry.toolCalls === "number" ? { toolCalls: entry.toolCalls } : {}),
+    elapsedMs: Math.max(0, entry.at - record.startedAt),
+    ...(entry.sha ? { sha: entry.sha } : {}),
+    ...(entry.spend ? { spend: entry.spend } : {}),
+    lesson: turnVerdictLesson(entry.verdict, reason),
+  }
+}
+
+export function buildGoalArmedLearningEntry(record: GoalRecord, atMs = Date.now()): GoalArmedLearningEntry {
+  const loop = record.loopEnabled === true
+  const objective = clean(record.loopObjective) ?? clean(record.condition)
+  const lesson = loop
+    ? `Loop armed (max ${record.loopMaxLoops ?? "?"} iterations): ${objective ?? record.condition}. Lesson: capture evidence each turn, learn from verdicts/summaries, and apply improvements in the next iteration.`
+    : `Goal armed: ${record.condition}. Lesson: define success clearly, log progress each turn, and use evidence to learn and improve until the condition holds.`
+  return {
+    version: LEARNING_LOG_VERSION,
+    ts: iso(atMs),
+    kind: "goal_armed",
+    sessionID: record.sessionID,
+    goalID: record.id,
+    ...(clean(record.directory) ? { directory: clean(record.directory) } : {}),
+    condition: record.condition,
+    ...(objective ? { objective } : {}),
+    loopEnabled: loop,
+    ...(loop && typeof record.loopMaxLoops === "number" ? { loopMaxLoops: record.loopMaxLoops } : {}),
+    lesson,
+  }
+}
+
 export function serializeLearningEntry(entry: LearningEntry): string {
   return `${JSON.stringify(entry)}\n`
 }
@@ -154,4 +228,60 @@ export function appendLearningEntry(file: string | undefined, entry: LearningEnt
   } catch {
     // Logging/learning must never break the caller.
   }
+}
+
+export interface RecentLearning {
+  readonly kind: LearningEntryKind
+  readonly ts: string
+  readonly condition?: string
+  readonly verdict?: string
+  readonly status?: string
+  readonly lesson: string
+}
+
+/** Best-effort read of recent learning entries (most recent last). Never throws. */
+export function readRecentLearnings(file: string | undefined, limit = 6): RecentLearning[] {
+  const target = typeof file === "string" ? file.trim() : ""
+  if (!target || limit <= 0) return []
+  try {
+    const text = readFileSync(target, "utf8")
+    const lines = text.trimEnd().split("\n")
+    const out: RecentLearning[] = []
+    for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+      const line = lines[i]?.trim()
+      if (!line) continue
+      try {
+        const parsed = JSON.parse(line) as Record<string, unknown>
+        const lesson = typeof parsed.lesson === "string" ? parsed.lesson.trim() : ""
+        const kind = typeof parsed.kind === "string" ? (parsed.kind as LearningEntryKind) : undefined
+        if (!lesson || !kind) continue
+        out.push({
+          kind,
+          ts: typeof parsed.ts === "string" ? parsed.ts : "",
+          ...(typeof parsed.condition === "string" ? { condition: parsed.condition } : {}),
+          ...(typeof parsed.verdict === "string" ? { verdict: parsed.verdict } : {}),
+          ...(typeof parsed.status === "string" ? { status: parsed.status } : {}),
+          lesson,
+        })
+      } catch {
+        // skip malformed line
+      }
+    }
+    return out.reverse()
+  } catch {
+    return []
+  }
+}
+
+/** Format recent learnings for prompt injection (or empty string). */
+export function formatRecentLearnings(learnings: readonly RecentLearning[], maxChars = 1200): string {
+  if (!learnings.length) return ""
+  const lines = learnings.map((l, i) => {
+    const tag = [l.kind, l.verdict ?? l.status].filter(Boolean).join("/")
+    const head = tag ? `[${tag}] ` : ""
+    return `${i + 1}. ${head}${l.lesson}`
+  })
+  let text = lines.join("\n")
+  if (text.length > maxChars) text = `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
+  return `Recent learnings from this goal/loop (apply them to improve this turn):\n${text}`
 }

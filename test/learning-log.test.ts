@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
-import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, serializeLearningEntry } from "../src/core/learning-log.ts"
+import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, formatRecentLearnings, readRecentLearnings, serializeLearningEntry } from "../src/core/learning-log.ts"
 import type { GoalRecord, LoopEntry, UsageSnapshot } from "../src/core/types.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
@@ -142,6 +142,34 @@ describe("learning-log core", () => {
     expect(entry.lesson).toContain("Improve next time")
   })
 
+  test("buildTurnVerdictLearningEntry captures per-turn verdicts and lessons", () => {
+    const { buildTurnVerdictLearningEntry } = require("../src/core/learning-log.ts") as typeof import("../src/core/learning-log.ts")
+    const record = baseRecord({ status: "active", condition: "add tests" })
+    const verdictEntry = {
+      turn: 1,
+      verdict: "not_met" as const,
+      reason: "tests missing for edge cases",
+      at: 1_700_000_010_000,
+      toolCalls: 4,
+      sha: "abc1234",
+      spend: { cost: 0.2, input: 20, output: 5, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    }
+    const entry = buildTurnVerdictLearningEntry(record, verdictEntry, 1_700_000_010_100)
+    expect(entry.kind).toBe("turn_verdict")
+    expect(entry.turn).toBe(1)
+    expect(entry.verdict).toBe("not_met")
+    expect(entry.reason).toContain("edge cases")
+    expect(entry.toolCalls).toBe(4)
+    expect(entry.sha).toBe("abc1234")
+    expect(entry.lesson).toContain("Turn verdict not met")
+    expect(entry.lesson).toContain("close the stated evidence gaps")
+
+    const metEntry = buildTurnVerdictLearningEntry(record, { ...verdictEntry, verdict: "met", reason: "all checks passed" }, 1_700_000_010_200)
+    expect(metEntry.lesson).toContain("Turn verdict met")
+    const impEntry = buildTurnVerdictLearningEntry(record, { ...verdictEntry, verdict: "impossible", reason: "API unavailable" }, 1_700_000_010_300)
+    expect(impEntry.lesson).toContain("Turn verdict impossible")
+  })
+
   test("serializeLearningEntry and appendLearningEntry write JSONL", async () => {
     const dir = await mkdtemp(join(tmpdir(), "goal-learning-log-"))
     dirs.push(dir)
@@ -164,6 +192,34 @@ describe("learning-log core", () => {
     const entry = buildGoalTerminalLearningEntry(baseRecord({ status: "cleared", reason: "x" }))
     expect(() => appendLearningEntry("", entry)).not.toThrow()
     expect(() => appendLearningEntry(undefined, entry)).not.toThrow()
+  })
+
+  test("readRecentLearnings and formatRecentLearnings surface recent lessons for feedback", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-learning-recent-"))
+    dirs.push(dir)
+    const file = join(dir, "learnings.jsonl")
+    const goal = buildGoalTerminalLearningEntry(baseRecord({ status: "achieved", reason: "done" }), 1_700_000_030_100)
+    const turn = {
+      ...buildGoalTerminalLearningEntry(baseRecord({ status: "cleared", reason: "x" })),
+      kind: "turn_verdict" as const,
+      turn: 1,
+      verdict: "not_met" as const,
+      lesson: "Turn verdict not met: missing proof. Lesson: add concrete evidence.",
+      ts: "2026-01-01T00:00:00.000Z",
+    }
+    appendLearningEntry(file, goal)
+    // write a raw turn_verdict-like entry
+    const { writeFile } = await import("node:fs/promises")
+    await writeFile(file, serializeLearningEntry(goal) + JSON.stringify(turn) + "\n")
+    const recent = readRecentLearnings(file, 5)
+    expect(recent.length).toBe(2)
+    expect(recent[1]?.lesson).toContain("missing proof")
+    const formatted = formatRecentLearnings(recent)
+    expect(formatted).toContain("Recent learnings")
+    expect(formatted).toContain("apply them to improve this turn")
+    expect(formatted).toContain("missing proof")
+    expect(formatRecentLearnings([])).toBe("")
+    expect(readRecentLearnings(undefined, 5)).toEqual([])
   })
 })
 
@@ -222,6 +278,9 @@ describe("learning-log runtime emission", () => {
     const text = await readFile(join(dir, ".term/goal-loop/learnings.jsonl"), "utf8")
     const rows = text.trim().split("\n").map((l) => JSON.parse(l))
     const goalRows = rows.filter((r) => r.kind === "goal_terminal")
+    const turnRows = rows.filter((r) => r.kind === "turn_verdict")
+    expect(turnRows.length).toBeGreaterThanOrEqual(1)
+    expect(turnRows.some((r) => r.verdict === "met")).toBe(true)
     expect(goalRows.length).toBeGreaterThanOrEqual(1)
     const last = goalRows[goalRows.length - 1]
     expect(last.status).toBe("achieved")
@@ -254,8 +313,10 @@ describe("learning-log runtime emission", () => {
     const file = join(dir, ".term/goal-loop/learnings.jsonl")
     const text = await readFile(file, "utf8")
     const rows = text.trim().split("\n").map((l) => JSON.parse(l))
+    const turnRows = rows.filter((r) => r.kind === "turn_verdict")
     const iterRows = rows.filter((r) => r.kind === "loop_iteration")
     const goalRows = rows.filter((r) => r.kind === "goal_terminal")
+    expect(turnRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows[0]?.iteration).toBe(1)
     expect(iterRows[0]?.summary || iterRows[0]?.lesson).toBeTruthy()
