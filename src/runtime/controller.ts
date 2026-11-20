@@ -32,6 +32,7 @@ import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings, type LearningEntry } from "../core/learning-log.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
+import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -2537,7 +2538,7 @@ export class GoalController {
     if (isAbsolute(path)) return path
     if (!base) return undefined
     // Avoid creating literal "C:" directories on POSIX when tests pass Windows-style fixture paths.
-    if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(base)) return undefined
+    if (isWindowsDrivePathOnPosix(base)) return undefined
     return join(base, path)
   }
 
