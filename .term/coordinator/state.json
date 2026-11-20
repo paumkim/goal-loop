@@ -3934,6 +3934,23 @@
       "submittedAt": "2026-11-20T06:21:40Z",
       "mergedAt": "2026-11-20T06:23:16Z",
       "mergedInto": "dev"
+    },
+    "wire-snapshot-optional-fields": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,test/wire.test.ts",
+      "branch": "wt/wire-snapshot-optional-fields",
+      "worktree": "worktrees/wt-wire-snapshot-optional-fields",
+      "status": "done",
+      "createdAt": "2026-11-20T06:26:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:31:30Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:31:30Z",
+      "mergedAt": "2026-11-20T06:33:06Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
