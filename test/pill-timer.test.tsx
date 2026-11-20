@@ -77,7 +77,7 @@ function harness(storage = new MemoryStorage()) {
   const usageValue: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const controller = new GoalController({
-    config: resolveConfig({}),
+    config: resolveConfig({ learning: { enabled: false } }),
     directory: DIR,
     commit,
     clock,

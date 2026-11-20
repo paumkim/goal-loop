@@ -77,7 +77,7 @@ function harness(
   const verifyResults: Array<VerifyResult | Error> = []
   const commit: CommitPolicy = { required: false, branch: "dev", reason: "test" }
   const deps: ConstructorParameters<typeof GoalController>[0] = {
-    config: resolveConfig(options),
+    config: resolveConfig({ learning: { enabled: false }, ...options }),
     directory,
     commit,
     clock,
