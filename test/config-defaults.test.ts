@@ -96,8 +96,6 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.evaluator.consensus
     case "systemReminder":
       return resolved.systemReminder
-    case "transcriptNotes":
-      return resolved.transcriptNotes
     case "learning.enabled":
       return resolved.learning.enabled
     case "learning.path":
@@ -142,7 +140,6 @@ const DOC_TO_CODE_NAMES = Object.keys(
       "evaluator.verifyChecks",
       "evaluator.consensus",
       "systemReminder",
-      "transcriptNotes",
       "learning.enabled",
       "requireCommit",
       "coordinator",

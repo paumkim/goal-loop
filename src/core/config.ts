@@ -51,8 +51,6 @@ export interface GoalConfig {
   readonly maxConditionChars: number
   /** Adds a stable system reminder while a goal is live. Costs one prompt-cache miss when toggled. */
   readonly systemReminder: boolean
-  /** Retained for compatibility; no longer gates anything — the durable transcript outcome note was retired (Workstream LXVII) because it parked in the session inbox. The end-of-record outcome surfaces via the notice toast, the HUD terminal acknowledgment and the goal record itself. */
-  readonly transcriptNotes: boolean
   /** Auto-compact when the estimated model-visible context (last assistant token usage) is at or above this many tokens. 0 disables. Env OPENCODE_GOAL_COMPACT_AT_TOKENS. */
   readonly compactAtTokens: number
   /** Request a host compaction at every loop-iteration boundary so the next version arms with a fresh context. Env OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION. */
@@ -225,7 +223,6 @@ export function resolveConfig(
     maxRetries: int(env.OPENCODE_GOAL_MAX_RETRIES ?? options.maxRetries, DEFAULTS.maxRetries, 0),
     maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 0),
     systemReminder: bool(options.systemReminder, false),
-    transcriptNotes: bool(options.transcriptNotes, true),
     compactAtTokens: int(env.OPENCODE_GOAL_COMPACT_AT_TOKENS ?? options.compactAtTokens, DEFAULTS.compactAtTokens, 0),
     compactOnLoopIteration: envBool(env.OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, bool(options.compactOnLoopIteration, DEFAULTS.compactOnLoopIteration)),
     maxLoops: int(env.OPENCODE_GOAL_MAX_LOOPS ?? options.maxLoops, DEFAULTS.maxLoops, 1, 100),
