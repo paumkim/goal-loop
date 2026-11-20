@@ -1569,17 +1569,36 @@ export class GoalController {
     // Single durable write: the achieved history and the armed iteration land together or not at all.
     // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)
-    if (this.stale(record, runtime, epoch)) {
-      this.logStaleDrop(record, runtime, epoch, "after loop arm commit")
-      return
+    const recoverPostArmContinuation = () => {
+      // Post-commit arm tail: a stale/supersession race (epoch bumped, but this record is still the active
+      // one and was already durably advanced to nextIteration) must not drop the kickoff for the armed
+      // iteration. Dispatch continuation idempotently: skip if a turn is running or a steer is already
+      // queued/dispatched, never re-run the prior-iteration advance.
+      if (this.goals.get(sessionID) !== record || record.status !== "active" || record.loopIteration !== nextIteration) return false
+      if (this.running.has(sessionID) || runtime.awaitingExecution) {
+        this.deps.log.info("loop arm continuation already pending after post-commit stale race", { sessionID, iteration: nextIteration, running: this.running.has(sessionID), awaitingExecution: runtime.awaitingExecution })
+        return true
+      }
+      this.deps.log.info("recovering loop arm continuation after post-commit stale race", { sessionID, iteration: nextIteration })
+      void this.continueWith(record, {
+        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+        description: `goal-loop · arming v${nextIteration}`,
+        turn: 1,
+      }).catch((error) => this.deps.log.error("loop arm continuation recovery failed", { sessionID, error: errorMessage(error) }))
+      return true
     }
+    const staleAfterArmCommit = (phase?: string) => {
+      if (!this.stale(record, runtime, epoch)) return false
+      if (!recoverPostArmContinuation()) {
+        if (phase) this.logStaleDrop(record, runtime, epoch, phase)
+      }
+      return true
+    }
+    if (staleAfterArmCommit("after loop arm commit")) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} of ${maxLoops} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
     // A stale step (the record was superseded by a clear/replace during the commit await) must not
     // reach the compaction request or the arming steer.
-    if (this.stale(record, runtime, epoch)) {
-      this.logStaleDrop(record, runtime, epoch, "before loop compaction/steer")
-      return
-    }
+    if (staleAfterArmCommit("before loop compaction/steer")) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
     // an earlier arm is settled first, here, before any other bookkeeping: a landed compaction is recorded as
@@ -1599,7 +1618,7 @@ export class GoalController {
       let skipRequest: "landed" | "pending" | undefined
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
         if (this.contextDropped(pending, size)) {
           this.landPending(record, pending, size)
           skipRequest = "landed"
@@ -1645,7 +1664,7 @@ export class GoalController {
           log.info("loop boundary compact miss counted at arm", { sessionID, misses, force })
           await this.commit(record)
         }
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
       }
       if (pending && !skipRequest && !force) skipRequest = "pending"
       if (skipRequest) {
@@ -1660,7 +1679,7 @@ export class GoalController {
                 log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
                 return { requested: false, reason: "read-failed" }
               })
-      if (this.stale(record, runtime, epoch)) return
+      if (staleAfterArmCommit()) return
       if (result.requested) {
         // Carry the miss count forward until a compaction actually lands: re-requesting is not evidence of landing.
         // Reads the post-settle record, not the pre-settle pending: spread it so misses, the once-per-pending
@@ -1676,7 +1695,7 @@ export class GoalController {
           misses,
         }
         await this.commit(record)
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
       }
       // A denied request stays as-is: the settle step already counted this arm as a miss when a pending request exists,
       // and a busy deferral never forces an unsafe compact.

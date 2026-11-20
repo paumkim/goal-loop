@@ -409,6 +409,35 @@ describe("/goal-loop", () => {
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))).toHaveLength(1)
   })
 
+  test("a supersession race after the arm commit still dispatches exactly one continuation for the armed iteration", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1")
+    h.nextGoals.push("v2 condition")
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    ;(h.controller as any).deps.compactAtBoundary = async (sessionID: string, opts?: { force?: boolean }) => {
+      h.compactCalls.push(opts ? { sessionID, opts } : { sessionID })
+      await gate
+      return { requested: true, estimatedTokens: 250_000 }
+    }
+    const turnPromise = h.turn(1)
+    await flush()
+    // The arm commit has durably advanced the record to v2; the tail is blocked in boundary compaction.
+    h.controller.onUserPrompt(SID)
+    release()
+    await turnPromise
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.loopIteration).toBe(2)
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    const v2Steers = h.calls.synthetic.filter((s) => String(s.description) === "goal-loop · arming v2")
+    expect(v2Steers).toHaveLength(1)
+  })
+
   test("summary failure is recorded and the loop advances anyway", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
@@ -1639,7 +1668,7 @@ describe("/goal-loop failure modes", () => {
     expect(halfArmed).toHaveLength(0)
   })
 
-  test("a user prompt landing during the arm's persist suppresses the arm announcement", async () => {
+  test("a user prompt landing during the arm's persist recovers continuation without announcing the arm", async () => {
     const storage = new MemoryStorage()
     const h = harness({}, storage)
     await h.setLoop("objective")
@@ -1662,8 +1691,9 @@ describe("/goal-loop failure modes", () => {
     await turn
     await flush()
     const record = h.controller.get(SID)!
-    // The superseded loop step must not announce the arm into a world that moved on.
-    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(0)
+    // The superseded loop step must not toast the arm into a world that moved on, but must
+    // still recover the continuation so the armed iteration cannot stall.
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming"))).toHaveLength(1)
     expect(h.notices.filter((n) => n.kind === "loop")).toHaveLength(0)
     // The armed state itself is still durably written; a restore lands on v2.
     expect(record.condition).toBe("v2 condition")
