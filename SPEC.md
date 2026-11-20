@@ -7846,4 +7846,17 @@ docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
 Honest limits. Guards are narrow (POSIX + Windows drive-letter base only) and do not normalize or rewrite fixture
 paths; tests that intentionally require learning/diagnostic writes must use platform-native writable directories.
 Persisted formats, evaluator/rubric, commit/verify gates, and public API behavior are unchanged for supported paths.
+
+## Workstream XCIX — remove unused VerifyCheckDefinition type (2026-11-20)
+
+Behavior-preserving bloat cleanup (no runtime behavior or public API changes intended). Removes the unused internal
+`VerifyCheckDefinition` interface from `src/core/types.ts` (no in-repo/type consumers found; `tsc --noEmit` and full
+tests remain green). Verification-related runtime types in active use (`VerifyCheckType`, `VerifyCheckEvidence`,
+`VerifyEvidenceMode`, etc.) are unchanged.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; `bun run check` green (tsc, 1989 pass / 0 fail, 83
+test files, 29 snapshots, dist fresh, TUI load, docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Internal dead-type removal only; no changes to persisted formats, evaluator/rubric, commit/verify
+gates, or TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
 <!-- spec-check files=72 tests=1989 -->
