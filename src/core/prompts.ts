@@ -1,4 +1,4 @@
-import { formatDuration, formatSpend, truncate } from "./format.ts"
+import { elideAtWordBoundary, formatDuration, formatSpend, truncate } from "./format.ts"
 import { stripReasoningControl } from "./sanitize.ts"
 import { isOpencodeCliCondition, opencodeCliGuide } from "./opencode-cli.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
@@ -7,6 +7,16 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 export const MARKER = "goal"
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
+
+/**
+ * Bound an evaluator reason before it rides a session steer. A verbose verdict repeated verbatim every turn is pure
+ * context bloat; short reasons are returned byte-identical and the fallback keeps its original meaning.
+ */
+const MAX_STEER_REASON_CHARS = 400
+const steerReason = (reason: string, fallback: string) => {
+  const value = typeof reason === "string" ? reason.trim() : ""
+  return escape(value ? elideAtWordBoundary(value, MAX_STEER_REASON_CHARS) : fallback)
+}
 
 /**
  * The commit rule, as the agent reads it.
@@ -207,7 +217,7 @@ export function loopContinuation(
   const learnings = input.learnings?.trim()
   return [
     `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
-    `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
+    `The previous iteration was achieved (${steerReason(input.reason, "met")}). The loop armed this condition:`,
     escape(input.condition),
     ``,
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
@@ -257,7 +267,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `The goal is not met yet. Keep working toward it.`,
     ``,
     `Goal: ${escape(input.condition)}`,
-    `Evaluator: ${escape(input.reason || "No reason given.")}`,
+    `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     ...(learnings ? [``, escape(learnings)] : []),
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,

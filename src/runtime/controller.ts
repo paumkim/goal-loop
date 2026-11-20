@@ -32,8 +32,8 @@ import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, Eval
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
-import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries, type LearningEntry } from "../core/learning-log.ts"
-import { formatOutcomeTelemetry, summarizeOutcomeTelemetry } from "../core/outcome-telemetry.ts"
+import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, readLearningEntriesTail, type LearningEntry } from "../core/learning-log.ts"
+import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
@@ -2600,15 +2600,13 @@ export class GoalController {
     this.appendLearning(record, "turn verdict", { turn: entry.turn }, (now) => [buildTurnVerdictLearningEntry(record, entry, now)])
   }
 
-  private recentLearningsForPrompt(record: GoalRecord, limit = 5): string | undefined {
+  private recentLearningsForPrompt(record: GoalRecord): string | undefined {
     try {
       const file = this.learningLogFile(record.directory ?? this.deps.directory)
       if (!file) return undefined
-      // One read feeds both channels: recent lessons and the aggregate outcome-telemetry block.
-      const entries = parseLearningEntries(readFileSync(file, "utf8"))
-      const lessonText = formatRecentLearnings(recentLearningsFromEntries(entries, limit))
-      const telemetryText = formatOutcomeTelemetry(summarizeOutcomeTelemetry(entries))
-      return [lessonText, telemetryText].filter(Boolean).join("\n\n") || undefined
+      // One bounded tail read feeds one bounded, focused block. Both the I/O window and the injected string are
+      // capped so a long session with many goal versions cannot bloat the evaluator's context turn after turn.
+      return formatLearningsForPrompt(readLearningEntriesTail(file)) || undefined
     } catch {
       return undefined
     }
