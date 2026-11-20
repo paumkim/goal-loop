@@ -4613,6 +4613,17 @@
       ],
       "mergedAt": "2026-11-20T22:35:15Z",
       "mergedInto": "dev"
+    },
+    "unify-gaxios": {
+      "agent": "goal-loop-primary",
+      "paths": "package.json,bun.lock",
+      "branch": "wt/unify-gaxios",
+      "worktree": "worktrees/wt-unify-gaxios",
+      "status": "done",
+      "createdAt": "2026-11-20T22:51:16Z",
+      "submittedAt": "2026-11-20T22:55:11Z",
+      "mergedAt": "2026-11-20T22:57:16Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
