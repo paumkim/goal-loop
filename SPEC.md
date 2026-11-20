@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2035 -->
+<!-- spec-check files=74 tests=2037 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8117,3 +8117,42 @@ worktree. This workstream makes the default view compact while preserving a full
   filters the visibility projection, not persisted data.
 - Done leases remain lookable up via `--all` or directly in `state.json`; no archival/pruning is introduced.
 - No change to `queue`, `claim`, `submit`, `merge-next` or the lock semantics.
+
+## Workstream CIX — forward-pointer exemption for the zero-tool evaluator guard (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`controller.evaluateTurn` downgrades an evaluator `met` to `not_met` when a producing-condition goal is ruled met
+on turn 1 with zero harness-counted tool calls. The adjacent code comment states that an "already satisfied at HEAD"
+landing is accepted only through its `next:` forward pointer (enforced by `core/verdict.ts · applyForwardPointerGate`).
+But the zero-tool guard runs **before** that path and unconditionally rewrites the verdict, so an already-satisfied
+landing that names a concrete next gap is still rejected. An armed loop re-arms the identical condition, and the
+same downgrade fires on every subsequent turn — an unrecoverable loop even when the condition is genuinely met and
+the evaluator supplies the required `next:` pointer. This workstream aligns the guard with its documented intent.
+
+### Acceptance criteria
+
+1. `core/verdict.ts` exports a pure `isAlreadySatisfiedLanding(reason)` helper: true only when the reason both claims
+   an already-satisfied/no-new-work landing AND names a `next:` pointer (the same regexes the forward-pointer gate uses).
+2. The zero-tool downgrade in `controller.ts` keeps rejecting bare state-inspection `met` verdicts, but does **not**
+   fire when `isAlreadySatisfiedLanding(result.reason)` is true — the verdict proceeds to the forward-pointer gate,
+   verifier matrix, and normal loop advance.
+3. `test/loop.test.ts` pins both sides: a zero-tool `met` with no `next:` gap is still downgraded with the named
+   reason (existing test), and a zero-tool already-satisfied `met` with a `next:` gap is accepted and advances.
+4. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator; plugin restarted so the new evaluator code is loaded.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/core.test.ts test/loop.test.ts` → **281 pass / 0 fail**
+  (1127 expect() calls), including the new `isAlreadySatisfiedLanding` helper cases and the zero-tool advance test.
+- `bun run check` exit 0: **2037 pass / 0 fail** across 85 test files (29 snapshots, 30374 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2037`.
+
+### Honest limits / non-goals
+
+- The exemption applies only to a `met` that names a concrete `next:` pointer; a bare "already satisfied" claim
+  without a pointer is still downgraded by the forward-pointer gate.
+- No change to the verifier matrix, rubric, or persisted record format.
