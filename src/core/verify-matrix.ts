@@ -19,7 +19,7 @@ export interface MalformedGoalDeclaredCheck {
   readonly index: number
 }
 
-export interface GoalDeclaredParseResult {
+interface GoalDeclaredParseResult {
   readonly checks: ParsedGoalDeclaredCheck[]
   readonly malformed: MalformedGoalDeclaredCheck[]
 }

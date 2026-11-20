@@ -7859,4 +7859,29 @@ test files, 29 snapshots, dist fresh, TUI load, docs freshness, invariant-sweep,
 
 Honest limits. Internal dead-type removal only; no changes to persisted formats, evaluator/rubric, commit/verify
 gates, or TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
+
+## Workstream C — unexport internal-only core symbols (2026-11-20)
+
+Behavior-preserving bloat cleanup (no runtime behavior or public API changes intended). Removes `export` from
+internal symbols with no external consumers outside their defining modules, reducing unnecessary module surface:
+
+1. **`src/core/failure-signature.ts`**: `writeFailureDiagnosticArtifact` is now module-local (used by
+   `persistFailureDiagnosticArtifact`); exported diagnostic API remains `persistFailureDiagnosticArtifact` and
+   related types/helpers already in use.
+2. **`src/core/types.ts`**: `VerifyCheckRunState` and `TerminalPruneSelection` are now module-local (used within
+   `VerifyCheckEvidence` and `selectTerminalRecordsToPrune` respectively).
+3. **`src/core/change-risk.ts`**: `SURFACE_TIER` is now module-local (used by `classifyChangeRisk` logic).
+4. **`src/core/repull.ts`**: `GoalRefreshDeps` is now module-local (used by `makeGoalRefresh`).
+5. **`src/core/rpc-pump.ts`**: `RpcPumpOptions` is now module-local (used by `pumpRpcEvent`).
+6. **`src/core/improvement-backlog.ts`**: `NextItemOptions` is now module-local (used by `pickNextWorkItem`).
+7. **`src/core/verify-matrix.ts`**: `GoalDeclaredParseResult` is now module-local (used by `parseGoalDeclaredChecks`).
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; targeted `bun test test/change-risk.test.ts
+test/failure-signature.test.ts test/improvement-backlog.test.ts test/repull.test.ts test/rpc-pump.test.ts
+test/verify-matrix-goal-declared.test.ts` → **65 pass / 0 fail** (6 files, 173 expect() calls); `bun run check`
+green (tsc, 1989 pass / 0 fail, 83 test files, 29 snapshots, dist fresh, TUI load, docs freshness,
+invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Internal-only export-surface cleanup; no changes to persisted formats, evaluator/rubric, commit/verify
+gates, or TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
 <!-- spec-check files=72 tests=1989 -->
