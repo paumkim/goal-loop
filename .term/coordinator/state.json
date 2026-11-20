@@ -3968,9 +3968,11 @@
       "paths": "src,rpc.ts,test,docs,SPEC.md,index.ts",
       "branch": "wt/backlog-planner-integration",
       "worktree": "worktrees/wt-backlog-planner-integration",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-20T06:55:25Z",
-      "submittedAt": "2026-11-20T07:11:46Z"
+      "submittedAt": "2026-11-20T07:11:46Z",
+      "mergedAt": "2026-11-20T07:26:47Z",
+      "mergedInto": "dev"
     },
     "tui-detail-pileup-consistency": {
       "agent": "iceman",
