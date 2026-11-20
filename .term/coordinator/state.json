@@ -4329,6 +4329,17 @@
       ],
       "mergedAt": "2026-11-20T15:18:01Z",
       "mergedInto": "dev"
+    },
+    "test-c-path-pollution": {
+      "agent": "iceman",
+      "paths": "test/loop.test.ts,test/controller.test.ts,test/verify.test.ts,test/pill-timer.test.tsx,test/terminal-record-prune.test.ts,test/goal-limits.test.ts,test/store.test.ts",
+      "branch": "wt/test-c-path-pollution",
+      "worktree": "worktrees/wt-test-c-path-pollution",
+      "status": "done",
+      "createdAt": "2026-11-20T15:21:35Z",
+      "submittedAt": "2026-11-20T15:25:04Z",
+      "mergedAt": "2026-11-20T15:27:08Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
