@@ -467,8 +467,8 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(1)
   })
 
-  test("transient failures retry with capped backoff, forever", async () => {
-    h = harness({ maxRetries: 2 })
+  test("transient failures retry with capped backoff and fail at maxRetries", async () => {
+    h = harness({ maxRetries: 5 })
     await h.set()
     h.controller.onExecutionStarted(SID)
     h.controller.onExecutionFailed(SID, { status: 529, message: "Overloaded" })
@@ -486,6 +486,15 @@ describe("GoalController", () => {
     await h.clock.advance(5 * 60_000)
     expect(h.calls.synthetic).toHaveLength(3)
     expect(h.controller.get(SID)?.status).toBe("active")
+    // Two more transient failures exhaust the cap (retries 4 and 5).
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { message: "connection reset" })
+    await h.clock.advance(5 * 60_000)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { message: "connection reset again" })
+    expect(h.controller.get(SID)?.status).toBe("failed")
+    expect(h.controller.get(SID)?.failureLabel).toBe("execution retries exhausted")
   })
 
   test("queued stays false during retry backoff and flips only when the retry continuation is dispatched", async () => {
@@ -555,18 +564,14 @@ describe("GoalController", () => {
     expect(h.controller.snapshot(SID)?.queued).toBe(true)
   })
 
-  test("evaluator errors retry forever with capped backoff", async () => {
+  test("evaluator errors fail the goal at maxRetries", async () => {
     h = harness({ maxRetries: 1 })
     await h.set()
     h.verdicts.push(new Error("boom"))
     await h.turn()
     expect(h.controller.get(SID)?.retries).toBe(1)
-    expect(h.controller.get(SID)?.status).toBe("active")
-    h.verdicts.push(new Error("boom again"))
-    await h.clock.advance(10_000)
-    expect(h.controller.get(SID)?.retries).toBe(2)
-    expect(h.controller.get(SID)?.status).toBe("active")
-    expect(h.controller.get(SID)?.reason).toBeUndefined()
+    expect(h.controller.get(SID)?.status).toBe("failed")
+    expect(h.controller.get(SID)?.failureLabel).toBe("evaluator retries exhausted")
   })
   test("an evaluator timeout surfaces as a named timeout in the notice and retries with bounded backoff", async () => {
     await h.set()

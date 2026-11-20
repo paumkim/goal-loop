@@ -46,7 +46,7 @@ export interface GoalConfig {
   /** First check-in interval for background work; 0 disables idle check-in nudges (automatic retries never stop). */
   readonly checkinMinutes: number
   readonly maxIdleCheckins: number
-  /** Retained for compatibility; no longer gates anything — automatic retries are unlimited with capped backoff. */
+  /** Maximum consecutive retries before the goal fails. Applies to evaluator failures and transient execution errors. 0 disables (unlimited retries with capped backoff). */
   readonly maxRetries: number
   readonly maxConditionChars: number
   /** Adds a stable system reminder while a goal is live. Costs one prompt-cache miss when toggled. */
@@ -93,6 +93,9 @@ export const DEFAULTS = {
   maxConditionChars: Number.MAX_SAFE_INTEGER,
   commitBranch: "dev",
 } as const
+
+/** Busy-state check retries before giving up and evaluating with what we have. Not config-exposed; a failed busy check is a host bug, not a user-tunable scenario. */
+export const MAX_BUSY_RETRIES = 5
 
 /** Parses `provider/model` or `provider/model#variant`. Model IDs may contain further slashes. */
 export function parseModelRef(value: unknown): ModelRef | undefined {
@@ -186,7 +189,7 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
- * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE,
+ * OPENCODE_GOAL_MAX_RETRIES, OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE,
  * OPENCODE_GOAL_VERIFY_CONCURRENCY, OPENCODE_GOAL_LEARNING_LOG, OPENCODE_GOAL_LEARNING_LOG_PATH.
  */
 export function resolveConfig(
@@ -219,7 +222,7 @@ export function resolveConfig(
     stallTurns: int(options.stallTurns, DEFAULTS.stallTurns, 0),
     checkinMinutes: int(env.OPENCODE_GOAL_CHECKIN_MINUTES ?? options.checkinMinutes, DEFAULTS.checkinMinutes, 0),
     maxIdleCheckins: int(options.maxIdleCheckins, DEFAULTS.maxIdleCheckins, 0),
-    maxRetries: int(options.maxRetries, DEFAULTS.maxRetries, 0),
+    maxRetries: int(env.OPENCODE_GOAL_MAX_RETRIES ?? options.maxRetries, DEFAULTS.maxRetries, 0),
     maxConditionChars: int(options.maxConditionChars, DEFAULTS.maxConditionChars, 0),
     systemReminder: bool(options.systemReminder, false),
     transcriptNotes: bool(options.transcriptNotes, true),

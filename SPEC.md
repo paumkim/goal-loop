@@ -879,12 +879,14 @@ bounded-backoff retry; `pause()` survives only for the interrupt and the explici
     stall-guard stops — one notice each, the loop keeps running (see Workstream Z).
 93. Failure handling: `handleFailure` — `fatal` → `finish failed` (unchanged); `pause`-class failures
     (429 rate/usage-limit, hook, unknown) → fixed `PAUSE_RETRY_MS` (15 min) retry forever; everything else
-    (`transient`) → `RETRY_BASE_MS × 4^(n-1)` capped at `RETRY_MAX_MS` (5m), unlimited retries. The
-    `checkinMinutes === 0` branch and the `maxRetries` cutoff are gone; the pause-on-retry-exhaustion is
-    gone. `evaluationFailed` likewise retries forever (`REEVALUATE_BASE_MS × 3^(n-1)` cap, no pause).
-    `checkinMinutes: 0` now only disables idle check-in nudges (the `defer()` path; unchanged). `maxRetries`
-    is retained for compatibility and no longer gates anything. Retry notifications keep the "Goal still
-    active" title; the retry description dropped the `/<maxRetries>` suffix.
+    (`transient`) → `RETRY_BASE_MS × 4^(n-1)` capped at `RETRY_MAX_MS` (5m), retries capped by `maxRetries`
+    (default 3, env `OPENCODE_GOAL_MAX_RETRIES`; `0` disables the cap for unlimited retries). `evaluationFailed`
+    likewise retries with `REEVALUATE_BASE_MS × 3^(n-1)` cap, also bounded by `maxRetries`. When retries are
+    exhausted (evaluator or transient execution), the goal settles as `failed` with a descriptive `failureLabel`
+    (`"evaluator retries exhausted"` / `"execution retries exhausted"`). `pause`-class failures (rate limits)
+    remain uncapped since they self-resolve. Busy-state check retries (`scheduleBusyRetry`) are capped at
+    `MAX_BUSY_RETRIES` (5, not config-exposed); on exhaustion the controller evaluates with carried tools
+    instead of hanging. Retry notifications keep the "Goal still active" title.
 94. Loop-advance paths that paused now never do: `notProgress >= 2` pause REMOVED (zero-tool iterations
     are recorded on `record.loopNotProgress`; the loop keeps arming — the boundary compaction of Workstream
     T refreshes its context); loop summary failure → the entry records `(summary failed: …)` and the loop
