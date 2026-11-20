@@ -334,24 +334,24 @@ describe("status", () => {
 });
 
 describe("runCli (exit codes and messages)", () => {
-  test("unknown command exits 2 with a one-line usage error", () => {
+  test("unknown command exits 2 with a one-line usage error", async () => {
     const home = fakeHome();
-    const r = runCli(["frobnicate"], { env: envFor(home), cwd: home });
+    const r = await runCli(["frobnicate"], { env: envFor(home), cwd: home });
     expect(r.code).toBe(2);
     expect(r.stderr.split("\n").filter(Boolean).length).toBeLessThanOrEqual(2);
     rmSync(home, { recursive: true, force: true });
   });
 
-  test("no arguments defaults to install", () => {
+  test("no arguments defaults to install", async () => {
     const home = fakeHome();
-    const r = runCli([], { env: envFor(home), cwd: home });
+    const r = await runCli([], { env: envFor(home), cwd: home });
     expect(r.code).toBe(0);
     expect(existsSync(join(home, ".config", "opencode", "opencode.jsonc"))).toBe(true);
     rmSync(home, { recursive: true, force: true });
   });
 
-  test("--version prints the version and exits 0", () => {
-    const r = runCli(["--version"], { env: envFor(fakeHome()), cwd: tmpdir() });
+  test("--version prints the version and exits 0", async () => {
+    const r = await runCli(["--version"], { env: envFor(fakeHome()), cwd: tmpdir() });
     expect(r.code).toBe(0);
     expect(r.stdout).toMatch(/\d+\.\d+\.\d+/);
   });
@@ -646,11 +646,11 @@ describe("JSONC validation is strict about literals and duplicate keys (regressi
     rmSync(home, { recursive: true, force: true });
   });
 
-  test('a duplicate "plugins" key is refused, not silently first-wins', () => {
+  test('a duplicate "plugins" key is refused, not silently first-wins', async () => {
     const home = fakeHome();
     writeGlobalConfig(home, "opencode.jsonc", '{\n  "plugins": ["a"],\n  "plugins": ["b"]\n}\n');
     // via the CLI entrypoint: caught, one-line error, exit 1, nothing written
-    const r = runCli(["install"], { env: envFor(home), cwd: home });
+    const r = await runCli(["install"], { env: envFor(home), cwd: home });
     expect(r.code).toBe(1);
     expect(r.stderr).toContain('duplicate "plugins"');
     // as a library call: addPluginText throws CliError instead of editing the first array
@@ -835,18 +835,21 @@ describe("bin/goal-loop.d.mts stays in sync with goal-loop.mjs (regression)", ()
 });
 
 describe("goal-loop identity", () => {
-  test("--help names goal-loop and exactly the three commands", () => {
-    const r = runCli(["--help"]);
+  test("--help names goal-loop and all six commands", async () => {
+    const r = await runCli(["--help"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toContain("goal-loop — install and remove the goal-loop plugin for OpenCode v2");
     expect(r.stdout).toContain("goal-loop [install]");
     expect(r.stdout).toContain("goal-loop uninstall");
     expect(r.stdout).toContain("goal-loop status");
+    expect(r.stdout).toContain("goal-loop update");
+    expect(r.stdout).toContain("goal-loop channel");
+    expect(r.stdout).toContain("goal-loop updates");
     expect(r.stdout).not.toContain("opencode-goal ");
   });
   test("--version prints the goal-loop name and package.json's version", async () => {
     const pkg = await Bun.file(new URL("../package.json", import.meta.url)).json();
-    const r = runCli(["--version"]);
+    const r = await runCli(["--version"]);
     expect(r.code).toBe(0);
     expect(r.stdout).toBe(`goal-loop ${pkg.version}\n`);
   });
@@ -856,8 +859,8 @@ describe("goal-loop identity", () => {
     const match = src.match(/const FALLBACK_VERSION = "([^"]+)"/);
     expect(match?.[1]).toBe(pkg.version);
   });
-  test("--self is only accepted by uninstall", () => {
-    const r = runCli(["--self"]);
+  test("--self is only accepted by uninstall", async () => {
+    const r = await runCli(["--self"]);
     expect(r.code).toBe(2);
     expect(r.stderr).toContain("--self only applies to uninstall");
   });

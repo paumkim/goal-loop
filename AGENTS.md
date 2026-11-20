@@ -10,7 +10,7 @@ Claude Code-style `/goal` loop for OpenCode v2: an evaluator judges a completion
 - `src/core/*` pure (I/O only fs reads): `config.ts` options+env, `git.ts` commit policy, `prompts.ts` directive+rubric, `opencode-cli.ts` `<opencode-cli>` guide, `bootstrap.ts` first-run layout, `parse/verdict/transcript/errors/format`.
 - `src/runtime/*` stateful: `controller.ts` state machine + `/goal-loop` advance (met→summarize→arm next; `maxLoops`/`LOOP_COMPLETE`/not-progress guards), `evaluator.ts`, `store.ts`, `events.ts`, `background.ts`, `ports.ts`.
 - `tui.ts` → `dist/tui.js` precompiled: edit `src/tui.tsx`, never `tui.ts`/`dist/`. `rpc.ts` → `src/rpc.ts` (shared client contract).
-- `bin/goal-loop.mjs` CLI install/uninstall/status; `install.sh` GitHub one-liner → `~/.local/bin` + registers plugin.
+- `bin/goal-loop.mjs` CLI install/uninstall/status + `update`/`channel <main|dev>`/`updates <auto|off>`; `install.sh` GitHub one-liner → `~/.local/bin` + registers plugin. Bare `/goal-loop` (no objective) triggers a background GitHub update check (`src/index.ts · scheduleUpdateCheck` + `handleBareLoop`) with an immediate and a result toast; no new slash command. `update.mode: off` falls back to status; use `/goal` for status otherwise. First-class options `plugins[].options.update = {channel, mode}` (default main/auto), resolved by `config.ts · resolveConfig` and read/written by `bin/goal-loop.mjs · readPluginState/writePluginState` — one source of truth, no sidecar. main = newest semver tag, dev = latest dev SHA (unstable), off = never check. `bin/goal-loop.mjs · resolveLatestRef/update` resolves the ref and surgically repins the plugin config (backup + atomic write; restart opencode to take effect); tests inject `opts.fetch`, no live network.
 
 ## Commands
 
