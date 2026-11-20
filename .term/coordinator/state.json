@@ -4503,6 +4503,17 @@
       ],
       "mergedAt": "2026-11-20T18:11:31Z",
       "mergedInto": "dev"
+    },
+    "readme-redesign-assets": {
+      "agent": "proof",
+      "paths": "README.md,assets,docs,SPEC.md,AGENTS.md,MAINTAINER.md,src/core,test",
+      "branch": "wt/readme-redesign-assets",
+      "worktree": "worktrees/wt-readme-redesign-assets",
+      "status": "done",
+      "createdAt": "2026-11-20T19:14:06Z",
+      "submittedAt": "2026-11-20T19:16:20Z",
+      "mergedAt": "2026-11-20T19:18:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
