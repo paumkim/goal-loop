@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
-import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
+import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
   normalizeDedupeKey,
@@ -1129,8 +1129,9 @@ export class GoalController {
       this.logStaleDrop(record, runtime, epoch, "before evaluation")
       return
     }
+    const spendSinceBaseline = usage ? diffUsage(usage, record.baseline) : undefined
     runtime.figures = {
-      ...(usage ? { spend: diffUsage(usage, record.baseline) } : {}),
+      ...(spendSinceBaseline !== undefined ? { spend: spendSinceBaseline } : {}),
       ...(contextSize !== undefined ? { contextSize } : {}),
     }
     const abort = new AbortController()
@@ -1144,7 +1145,7 @@ export class GoalController {
         condition: record.condition,
         turn,
         elapsedMs: clock.now() - record.startedAt,
-        ...(usage ? { spend: diffUsage(usage, record.baseline) } : {}),
+        ...(spendSinceBaseline !== undefined ? { spend: spendSinceBaseline } : {}),
         signal: abort.signal,
       })
     } catch (error) {
@@ -1197,14 +1198,7 @@ export class GoalController {
     record.reason = result.reason || undefined
     // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
     // The why ledger stamps the same HEAD sha the loop rail stamps at advance — the verdict lands on a commit the reader can inspect. Guarded like headAtAdvance: outside a repository or when HEAD cannot be read, the sha is absent, never guessed.
-    const shaAtEvaluation = (() => {
-      try {
-        const repo = findRepository(this.deps.directory)
-        return repo ? headSha(repo.gitDir) : undefined
-      } catch {
-        return undefined
-      }
-    })()
+    const shaAtEvaluation = currentHead(this.deps.directory)
     // Legacy single-check evidence remains for compatibility; matrix evidence records every required check.
     const verifyEvidence = verificationMatrix && record.lastVerify
       ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
@@ -1222,18 +1216,24 @@ export class GoalController {
 
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
-      this.finish(record, "achieved", result.reason)
-      const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
-      this.notify(sessionID, "achieved", "success", `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`, `${story} · ${result.reason || record.condition}`)
+      void this.settleTerminal(record, "achieved", {
+        kind: "achieved",
+        level: "success",
+        title: `Goal achieved in ${turn} turn${turn === 1 ? "" : "s"}`,
+        reason: result.reason,
+      })
       this.deps.log.info("goal achieved", { sessionID, turn, elapsedMs: clock.now() - record.startedAt })
       // Terminal: a met verdict on a plain goal ends the run. Returning here is load-bearing — without it control
       // falls through to the continuation dispatch at the bottom of evaluate(), which would re-arm an achieved goal.
       return
     }
     if (result.verdict === "impossible") {
-      this.finish(record, "impossible", result.reason)
-      const story = outcomeStory({ turns: turn, elapsedMs: (record.endedAt ?? clock.now()) - record.startedAt })
-      this.notify(sessionID, "impossible", "error", "Goal judged impossible", `${story} · ${result.reason || record.condition}`)
+      void this.settleTerminal(record, "impossible", {
+        kind: "impossible",
+        level: "error",
+        title: "Goal judged impossible",
+        reason: result.reason,
+      })
       this.deps.log.info("goal impossible", { sessionID, turn })
       // Terminal: same fall-through hazard as the met branch above — an impossible goal must not be re-armed.
       return
@@ -1806,14 +1806,7 @@ export class GoalController {
         ? record.loopCompact.estimatedTokens
         : undefined
     // Stamp the commit HEAD had landed on when this iteration was recorded. Read once per advance; outside a repository (or on any read failure) the field stays absent — the ledger never fabricates a sha.
-    const headAtAdvance = (() => {
-      try {
-        const repo = record.directory ? findRepository(record.directory) : undefined
-        return repo ? headSha(repo.gitDir) : undefined
-      } catch {
-        return undefined
-      }
-    })()
+    const headAtAdvance = record.directory ? currentHead(record.directory) : undefined
     // Spend attribution: the diff between the arm-time cumulative and the advance-time cumulative is
     // this iteration's cost. Absent when the arm never saw a stamp (restored runtime) or the advance
     // could not measure — never estimated, never fabricated. Clamped at zero per field (diffUsage).
@@ -1869,9 +1862,7 @@ export class GoalController {
 
     const endClean = async (reason: string) => {
       assignLoopState()
-      await this.finish(record, "achieved", reason)
-      const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt, iterations: history.length })
-      this.notify(sessionID, "achieved", "success", "Loop complete", `${story} · ${reason}`)
+      await this.settleTerminal(record, "achieved", { kind: "achieved", level: "success", title: "Loop complete", reason, iterations: history.length })
       return void this.deps.log.info("loop complete", { sessionID, iterations: history.length, reason })
     }
 
@@ -1952,6 +1943,9 @@ export class GoalController {
       })
     }
     let reply: string
+    // Read the learning journal once: the same string feeds the presence check and the payload, and the
+    // read is a synchronous file read (two reads was pure waste on the advance hot path).
+    const recentLearnings = this.recentLearningsForPrompt(record)
     try {
       reply = await this.deps.evaluator.nextGoal({
         sessionID,
@@ -1960,7 +1954,7 @@ export class GoalController {
         latestSummary: entry.summary,
         signal: generate.signal,
         ...(backlogSuggestion ? { backlogSuggestion } : {}),
-        ...(this.recentLearningsForPrompt(record) ? { recentLearnings: this.recentLearningsForPrompt(record) } : {}),
+        ...(recentLearnings ? { recentLearnings } : {}),
       })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
@@ -2213,9 +2207,7 @@ export class GoalController {
     if (failure.kind === "fatal") {
       const reason = `Goal failed after an unrecoverable error: ${failure.label}. Run /goal again to continue.`
       record.failureLabel = failure.label
-      this.finish(record, "failed", reason)
-      const story = outcomeStory({ turns: record.turns, elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt })
-      this.notify(record.sessionID, "failed", "error", "Goal failed", `${story} · ${reason}`)
+      void this.settleTerminal(record, "failed", { kind: "failed", level: "error", title: "Goal failed", reason })
       return
     }
     record.retries++
@@ -2356,6 +2348,28 @@ export class GoalController {
     }
   }
 
+  /**
+   * One terminal settle for every terminal path: persist the status, then announce it with a single outcome
+   * story. Plain met/impossible, loop completion, and fatal failure all route through here, so the
+   * finish→story→notify sequence is written once instead of copied per branch. `reason` is stored on the
+   * record and echoed in the notice body (falling back to the condition, exactly as the plain-goal paths did).
+   * Callers keep any path-specific log line; the returned promise is the durable `finish` write, so loop
+   * callers await it and plain-goal/terminal callers fire-and-forget, unchanged.
+   */
+  private settleTerminal(
+    record: GoalRecord,
+    status: Exclude<GoalStatus, "active" | "paused">,
+    input: { kind: NoticeKind; level: NoticeLevel; title: string; reason?: string; iterations?: number },
+  ): Promise<void> {
+    const saved = this.finish(record, status, input.reason)
+    const story = outcomeStory({
+      turns: record.turns,
+      elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt,
+      ...(input.iterations !== undefined ? { iterations: input.iterations } : {}),
+    })
+    this.notify(record.sessionID, input.kind, input.level, input.title, `${story} · ${input.reason || record.condition}`)
+    return saved
+  }
   /**
    * Persists the paused record before returning; the returned promise resolves once the durable write lands.
    * Non-loop callers may ignore it (fire-and-forget, as before); loop call sites await it so a restart
