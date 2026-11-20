@@ -442,6 +442,23 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.status).toBe("active")
   })
 
+  test("queued stays false during retry backoff and flips only when the retry continuation is dispatched", async () => {
+    await h.set()
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionFailed(SID, { status: 529, message: "Overloaded" })
+    // No steer dispatched during backoff.
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(14_999)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(1)
+    await flush()
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
+  })
+
   test("fatal failures clear the goal; rate limits retry with long backoff and never pause", async () => {
     await h.set()
     h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
@@ -472,8 +489,24 @@ describe("GoalController", () => {
     await h.set()
     h.controller.onExecutionInterrupted(SID, "shutdown")
     expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
     h.controller.onExecutionInterrupted(SID, "user")
     expect(h.controller.get(SID)?.status).toBe("paused")
+  })
+
+  test("inactivity interruption keeps queued false during backoff and flips only at retry dispatch", async () => {
+    await h.set()
+    h.controller.onExecutionStarted(SID)
+    h.controller.onExecutionInterrupted(SID, "inactivity")
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    expect(h.calls.synthetic).toHaveLength(0)
+    await h.clock.advance(14_999)
+    expect(h.controller.snapshot(SID)?.queued).toBe(false)
+    await h.clock.advance(1)
+    await flush()
+    expect(h.calls.synthetic).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.queued).toBe(true)
   })
 
   test("evaluator errors retry forever with capped backoff", async () => {
@@ -985,6 +1018,29 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     const third = harness({}, storage)
     expect(await third.controller.restore()).toBe(1)
     expect(third.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+
+  test("a busy-check rejection during drain is logged and fail-closed without evaluating", async () => {
+    const errors: Array<{ message: string; extra?: unknown }> = []
+    const log = {
+      info() {},
+      warn() {},
+      error(message: string, extra?: unknown) {
+        errors.push({ message, extra })
+      },
+    }
+    const h = harness({ log })
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    h.setWork({ subagents: 0, shells: 0 })
+    h.setBusyError(new Error("busy check failed"))
+    h.verdicts.push(notMet())
+    await h.controller.onBackgroundDrained()
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(errors.some((e) => e.message === "goal busy check failed; skipping evaluation")).toBeTrue()
   })
 })
 

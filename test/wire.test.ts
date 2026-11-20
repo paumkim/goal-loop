@@ -113,6 +113,15 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry("91000") })).toBeUndefined()
   })
 
+  test("accepts optional queued boolean and rejects malformed queued values", () => {
+    expect(parseGoalSnapshot({ ...snapshot(), queued: true })?.queued).toBe(true)
+    expect(parseGoalSnapshot({ ...snapshot(), queued: false })?.queued).toBe(false)
+    expect(parseGoalSnapshot(snapshot())?.queued).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: "yes" })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: 1 })).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), queued: null })).toBeUndefined()
+  })
+
   test("rejects each broken required field", () => {
     const cases: Array<[string, Record<string, unknown>]> = [
       ["not a record", {}],

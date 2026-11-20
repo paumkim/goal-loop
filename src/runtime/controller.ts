@@ -79,6 +79,8 @@ interface Runtime {
   evaluating: boolean
   /** Set when a synthetic steer was dispatched (continuation, retry, check-in, loop arm): the next execution's succeeded event evaluates; any succeeded delivered before the next started is a straggler and is ignored. */
   awaitingExecution: boolean
+  /** Ignore a duplicated succeeded event from the execution that just ended until a new execution starts. */
+  dropStragglerSucceeded: boolean
   /** Set when this iteration deferred an evaluation because background work was running: background work is real work for the zero-tool not-progress guard. */
   iterationDeferred: boolean
   abort?: AbortController
@@ -660,6 +662,7 @@ export class GoalController {
     this.invalidate(runtime)
     runtime.toolCalls = 0
     runtime.awaitingExecution = false
+    runtime.dropStragglerSucceeded = false
     if (wasQueued) {
       // The execution is in flight; the kickoff is no longer in the host's inbox. Emit so the pill
       // clears "queued" instead of holding it until an unrelated event flushes the mirror.
@@ -720,8 +723,8 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
-    if (runtime.awaitingExecution) {
-      // Straggler duplicate of the turn the plugin just steered: an evaluation must wait for the next started.
+    if (runtime.awaitingExecution || runtime.dropStragglerSucceeded) {
+      // Straggler duplicate of the previous turn or of a turn whose retry steer has not started yet.
       this.deps.log.info("goal evaluation straggler dropped", { sessionID })
       return
     }
@@ -751,9 +754,8 @@ export class GoalController {
     this.invalidate(runtime)
     this.clearDeferred(runtime, record)
     runtime.toolCalls = 0
-    // The execution is over; a straggler succeeded for it must not evaluate. The retry steer re-arms evaluation.
-    runtime.awaitingExecution = true
-    this.emit(record)
+    runtime.dropStragglerSucceeded = true
+    // Queued flips only when continueWith dispatches the retry steer, not during backoff while no continuation is in flight.
     this.handleFailure(record, runtime, classifyFailure(error))
   }
 
@@ -766,15 +768,12 @@ export class GoalController {
     this.clearDeferred(runtime, record)
     if (reason === "user") return this.pause(record, "Interrupted.", "user")
     if (reason === "inactivity") {
-      runtime.awaitingExecution = true
-      this.emit(record)
+      runtime.dropStragglerSucceeded = true
+      // Recovery is scheduled; queued flips only when continueWith dispatches the retry steer.
       return this.handleFailure(record, runtime, { kind: "transient", label: "inactivity timeout" })
     }
-    // shutdown: the goal persists and is restored; superseded: a newer execution owns the turn, its events must evaluate.
-    if (reason !== "superseded") {
-      runtime.awaitingExecution = true
-      this.emit(record)
-    }
+    // shutdown: the goal persists and is restored with no continuation dispatched; superseded: a newer execution owns the turn.
+    if (reason !== "superseded") runtime.dropStragglerSucceeded = true
   }
 
   onSessionDeleted(sessionID: string) {
@@ -1515,7 +1514,11 @@ export class GoalController {
       if (runtime.evaluating || this.running.has(sessionID)) continue
       const record = this.goals.get(sessionID)
       if (!record || record.status !== "active") continue
-      const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+      const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+        // Busy-check failure: fail closed — don't treat a possibly-busy session as idle.
+        this.deps.log.error("goal busy check failed; skipping evaluation", { sessionID, error: errorMessage(error) })
+        return undefined
+      })
       if (!work || work.subagents + work.shells > 0) continue
       const carried = runtime.carriedToolCalls
       runtime.carriedToolCalls = 0
@@ -1537,6 +1540,7 @@ export class GoalController {
     // before its started is a straggler from the previous turn. Marked before the dispatch (not after) so a user
     // turn started during the dispatch wins the flag via onExecutionStarted and its succeeded is evaluated.
     runtime.awaitingExecution = true
+    runtime.dropStragglerSucceeded = false
     if (this.goals.get(record.sessionID) === record) this.emit(record)
     try {
       await this.deps.session.synthetic({
@@ -1552,7 +1556,7 @@ export class GoalController {
         resume: true,
       })
     } catch (error) {
-      // A synthetic steer that fails to land must not stop the goal: drop the straggler flag and retry the dispatch.
+      // A synthetic steer that fails to land must not stop the goal: drop the queued/dispatched flag and retry the dispatch.
       // onUserPrompt/clear/isDisposed all call invalidate(runtime), which clears runtime.timer, so a user prompt
       // cancels the pending retry.
       runtime.awaitingExecution = false
@@ -1704,7 +1708,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, iterationDeferred: false }
+      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -1722,6 +1726,7 @@ export class GoalController {
       carriedToolCalls: 0,
       evaluating: false,
       awaitingExecution: false,
+      dropStragglerSucceeded: false,
       iterationDeferred: false,
     })
   }

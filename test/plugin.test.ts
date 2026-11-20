@@ -245,7 +245,7 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
     }
   })
 
-  test("a bare /goal-loop-12 arms nothing and shows status instead", async () => {
+  test("a bare /goal-loop-12 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
@@ -253,8 +253,58 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
       const event = promptEvent("/goal-loop-12")
       await hooks.prompt!(event)
       expect(storage.get("goal/v1/ses_1")).toBeUndefined()
-      expect(event.prompt.text).toBe("/goal-loop-12")
       expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop-3 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop-3")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop with an invalid count reports the count, shows status, and rewrites the admitted prompt", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop-abc")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => /Loop count ignored/.test(n.title))).toBe(true)
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
     }
