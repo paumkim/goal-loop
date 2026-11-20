@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1954 -->
+<!-- spec-check files=70 tests=1955 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7579,5 +7579,54 @@ Honest limits. The fix is exercised at the controller-unit layer (a fake session
 a live model loop this pass. It changes only plain-goal terminal handling; a `/goal-loop` still advances on a
 `met` verdict by design — that is the loop, not a re-arm, and `maxLoops`/`LOOP_COMPLETE`/the no-new-gap gates
 are the boundaries that end it.
-<!-- spec-check files=70 tests=1954 -->
+## Workstream XCII — workflow audit: one terminal settle, one HEAD read, one spend diff (2026-11-20)
+Armed condition (verbatim): "iron out if there are any bottlenecks, workflow without changing the core safety
+principle. if there are any extra steps that can be put together or that can safely be prune/ eliminated
+because the logic is overlapping one another. carefully examine the workflow from start to middle to finished."
+Interpretation. Audit the goal-loop runtime workflow end to end and consolidate steps whose logic overlaps,
+without touching the core safety principle (fresh-evidence verification: a `met` verdict is accepted only
+through the verification gate on fresh, scoped evidence; the commit policy is unchanged). The workflow, mapped
+start → middle → finish:
+- **Start (arm):** `/goal` / `/goal-loop` → `parseGoalCommand` → `GoalController.command`/`set` → `armFromPrompt`
+  (persist record, `writeLearningGoalArmed`, dispatch the first steer).
+- **Middle (per turn):** host event → `events.ts` router → `onToolCalled` / `onExecutionStarted` /
+  `onExecutionSucceeded` → `evaluate` (usage + context size, verdict, forward-pointer/zero-tool gates) →
+  `verifyMet` verification gate (matrix, coverage policy) → verdict trail + learning entry → continuation
+  (`continueWith`) or terminal.
+- **Finish (terminal):** `met`/`impossible` (plain) or loop `endClean` / fatal `handleFailure` → `finish`
+  (status, `writeLearningGoalTerminal`, commit, prune, final spend) → outcome notice.
+Findings (overlapping/redundant steps, all outside the safety gate).
+1. **Terminal announce copied four times.** `finish` → `outcomeStory` → `notify` (→ optional log) was written
+   out in four places: plain `met`, plain `impossible`, loop `endClean`, fatal `handleFailure`
+   (`controller.ts` ~1225/1234/1872/2216). Four near-identical blocks, one concept.
+2. **HEAD read duplicated inline.** `evaluate` and `loopAdvance` each inlined a `findRepository`+`headSha`
+   try/catch IIFE for the verdict/advance sha — re-implementing the existing `currentHead(directory)` helper
+   (`src/core/verify-matrix.ts`) already used by the verification gate.
+3. **Learning journal read twice per advance.** `loopAdvance`'s planner call read the journal twice in one
+   expression (`recentLearningsForPrompt(record)` for both the presence test and the payload) — two synchronous
+   file reads for one string.
+4. **Spend diff recomputed.** `evaluate` computed `diffUsage(usage, record.baseline)` twice (runtime figures and
+   the evaluator request).
+Fix. `src/runtime/controller.ts`:
+- New private `settleTerminal(record, status, { kind, level, title, reason?, iterations? })` owns the single
+  `finish` → `outcomeStory` → `notify` sequence and returns `finish`'s durable-write promise. The four terminal
+  sites call it (`void` fire-and-forget for plain/fatal, `await` for the loop `endClean`); each keeps its own
+  one-line, path-specific log. `reason` is stored on the record and echoed in the body with the same
+  `reason || condition` fallback the plain-goal paths always used.
+- `shaAtEvaluation` → `currentHead(this.deps.directory)`; `headAtAdvance` → `record.directory ? currentHead(record.directory) : undefined` (guard preserved). The now-unused `findRepository, headSha` import is dropped.
+- The planner's `recentLearnings` is read once into a local and reused for the presence test and the payload.
+- `spendSinceBaseline` is computed once and reused for `runtime.figures` and the evaluator request.
+Evidence. `test/controller.test.ts` gains "terminal settle: exactly one outcome-story notice per terminal path"
+(one `achieved` notice titled `Goal achieved in 1 turn` carrying the reason, and one `failed` notice carrying
+`Run /goal again`). `bunx tsc --noEmit` exits 0 in the worktree; `cd test && bun test` → **1955 pass / 0 fail**
+(29 snapshots) — the pre-existing achieved/impossible/loop-notice assertions and the verify/loop sha pins
+(`test/verify.test.ts` evaluate-path sha + absent-outside-repo, `test/loop.test.ts` advance-path sha) stay
+green unchanged, which is the behavior-preservation proof for findings 1–4.
+Honest limits. These are behavior-preserving consolidations, not new capability: the terminal notices, verdict
+shas, spend figures and planner payloads are byte-identical to the pre-change code (pinned by the tests above).
+A subagent audit also flagged the near-duplicate arming scan in `loopAdvance` (`completedLedgerHit` is not
+reused there), the 5× learning-write plumbing, and `computeScopePolicy` running twice inside `verifyMet`; those
+were left alone this pass because they carry pinned reason strings / lower leverage and are out of scope for a
+minimal, provable consolidation.
+<!-- spec-check files=70 tests=1955 -->
 

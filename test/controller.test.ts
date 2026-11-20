@@ -213,6 +213,27 @@ describe("GoalController", () => {
     expect(h.calls.synthetic).toHaveLength(0)
     expect(h.notices.some((n) => n.kind === "impossible")).toBeTrue()
   })
+  test("terminal settle: exactly one outcome-story notice per terminal path", async () => {
+    // Every terminal path now routes through the single settleTerminal helper (finish -> outcome story ->
+    // one notice). Pin the achieved message shape so a future split cannot double-announce or drop the story.
+    await h.set()
+    h.verdicts.push(met("all 40 tests pass"))
+    await h.turn()
+    const achieved = h.notices.filter((n) => n.kind === "achieved")
+    expect(achieved).toHaveLength(1)
+    expect(achieved[0]!.title).toBe("Goal achieved in 1 turn")
+    expect(achieved[0]!.message).toContain("1 turn")
+    expect(achieved[0]!.message).toContain("all 40 tests pass")
+
+    // Fatal failure is the fourth caller of the same helper: one `failed` notice, story body carrying the reason.
+    h = harness()
+    await h.set()
+    h.controller.onExecutionFailed(SID, { status: 401, message: "invalid api key" })
+    const failed = h.notices.filter((n) => n.kind === "failed")
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.title).toBe("Goal failed")
+    expect(failed[0]!.message).toContain("Run /goal again")
+  })
 
   test("the outcome toast carries the story: turns · wall time · reason", async () => {
     h = harness()
