@@ -121,7 +121,7 @@ describe("package integrity", () => {
     for (const required of ["LICENSE", "README.md", "package.json", "index.ts", "tui.ts", "rpc.ts", "dist/tui.js", "bin/goal-loop.mjs", "install.sh", "packages/coordinator/bin/coordinator", "packages/coordinator/README.md"]) {
       expect(paths, `tarball is missing ${required}`).toContain(required)
     }
-    expect(paths.length).toBe(69)
+    expect(paths.length).toBe(70)
   })
 
   test("a real npm pack produces the identical file list as the dry-run", () => {

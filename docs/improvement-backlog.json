@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-20T00:00:00.000Z",
+  "updatedAt": "2026-11-20T12:00:00.000Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -62,12 +62,14 @@
       "priority": 1,
       "impact": "high",
       "risk": "medium",
-      "status": "open",
-      "finding": "Activity is not always meaningful progress; repeated not-met loops may cycle on the same strategy without learning from repeated failure signatures.",
-      "improvement": "Score progress from objective deltas (HEAD movement tied to claimed scope, diff relevance, tests added/passing for touched risk, check outcomes over time). Detect repeated failure signatures and force strategy rotation/escalation (narrow scope, produce diagnostic artifact, or mark blocked) instead of re-arming the same approach.",
+      "status": "done",
+      "finding": "Activity is not always meaningful progress; repeated not-met evaluations could cycle on the same strategy/failure without runtime escalation.",
+      "improvement": "Implemented runtime repeated failure-signature detection for goal/loop evaluations (src/core/failure-signature.ts): consecutive same-signature not_met verdicts (default threshold 3) are detected from verdict history, including structured verification-matrix/legacy gate failures and normalized reason gaps. On detection the controller escalates by pausing with pauseCause=repeated_failure and an explicit strategy-rotation/diagnostic/block reason instead of re-arming the same approach (src/runtime/controller.ts), with HUD/wire/types support and tests.",
       "evidence": [
-        "Goal-loop blind spot #4 (2026-11-20): progress signals can be gamed/ambiguous; repeated not-met loops may cycle.",
-        "controller.ts tracks iteration tool calls and loopNotProgress but does not classify repeated failure signatures."
+        "Goal-loop blind spot #4 (2026-11-20): repeated not-met loops may cycle on the same strategy without learning from repeated failure signatures.",
+        "src/core/failure-signature.ts computes verification/reason signatures and detects trailing repeated not_met runs; src/runtime/controller.ts pauses on detection instead of continueWith.",
+        "src/core/types.ts, src/core/wire.ts, src/core/hud.ts add repeated_failure pause cause/remediation.",
+        "test/failure-signature.test.ts and test/controller.test.ts cover signature detection, verification failures, and controller escalation/block behavior; bun run check expected/passing for this iteration."
       ],
       "dedupeKeys": [
         "failure-signature-detection",
