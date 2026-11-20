@@ -3831,6 +3831,25 @@
       "submittedAt": "2026-11-20T03:42:43Z",
       "mergedAt": "2026-11-20T03:44:10Z",
       "mergedInto": "dev"
+    },
+    "keep-improving-goal-loop": {
+      "agent": "goal-loop-improver",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/keep-improving-goal-loop",
+      "worktree": "worktrees/wt-keep-improving-goal-loop",
+      "status": "claimed",
+      "createdAt": "2026-11-20T04:35:27Z"
+    },
+    "recent-changes-regression-review": {
+      "agent": "orchestrator",
+      "paths": "docs",
+      "branch": "wt/recent-changes-regression-review",
+      "worktree": "worktrees/wt-recent-changes-regression-review",
+      "status": "done",
+      "createdAt": "2026-11-20T05:01:27Z",
+      "submittedAt": "2026-11-20T05:04:00Z",
+      "mergedAt": "2026-11-20T05:05:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
