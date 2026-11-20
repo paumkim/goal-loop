@@ -21,8 +21,9 @@ The rules below are enforced by the binary, not by trust.
    logged to your lease record (`forcedScope`, `forcedScopeAt`, `forcedScopeFiles`).
 4. `coordinator submit` marks the lease submitted when your commits stay inside your claim.
    The queue is FIFO by `submittedAt`. `coordinator queue` shows positions, wait times and a
-   rough ETA; `coordinator status --json` shows every lease with its worktree path,
-   uncommitted-file count and whether a merge is in progress. **`submit` makes work merge-ready, not merged.**
+   rough ETA; `coordinator status --json` shows **active** leases (non-`done`) with their worktree path,
+   uncommitted-file count and whether a merge is in progress, plus a `summary` of submitted/done/active/total
+   counts. Pass `--all` to include historic `done` leases. **`submit` makes work merge-ready, not merged.**
 4a. `coordinator release <slug>` abandons a claimed lease that will never be submitted (an
    idle or dead claim). The lease flips to done — it stops blocking overlapping claims and
    stops warning in merge preflight — and its worktree is removed. Nothing is deleted:

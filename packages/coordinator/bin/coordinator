@@ -1367,10 +1367,28 @@ do_status() {
   need_jq
   ensure_state
   read_config
-  if [ "${1:-}" = "--json" ]; then
-    local first=1 slug out=""
-    out='{"leases":{'
-    for slug in $(jq -r '.leases | keys[]' "$STATE_FILE" 2>/dev/null); do
+  local json=0 all=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --json) json=1 ;;
+      --all) all=1 ;;
+      -h|--help) show_help; return 0 ;;
+      *) printf 'unknown status option: %s\n' "$1" >&2; return 1 ;;
+    esac
+    shift
+  done
+  if [ "$json" -eq 1 ]; then
+    local first=1 slug out="" slugs
+    # Summary keeps the full-bus picture even when the default projection hides historic done leases.
+    out='{"summary":'
+    out="$out$(jq -c '{submitted: ([.leases[] | select(.status=="submitted")] | length), done: ([.leases[] | select(.status=="done")] | length), active: ([.leases[] | select(.status!="done")] | length), total: (.leases | length)}' "$STATE_FILE")"
+    out="$out,\"leases\":{"
+    if [ "$all" -eq 1 ]; then
+      slugs=$(jq -r '.leases | keys[]' "$STATE_FILE" 2>/dev/null || true)
+    else
+      slugs=$(jq -r '.leases | to_entries[] | select(.value.status != "done") | .key' "$STATE_FILE" 2>/dev/null || true)
+    fi
+    for slug in $slugs; do
       if [ "$first" -eq 0 ]; then out="$out,"; fi
       first=0
       local lease_json
@@ -1550,7 +1568,7 @@ show_help() {
   printf '  merge-next [--review]                               merge the oldest submitted lease into $DEV_BRANCH via a dedicated merge worktree; --review stops before the fast-forward\n'
   printf '  merge-done <slug>                                   finish a --review merge after dev was fast-forwarded by hand\n'
   printf '  merge-abort <slug>                                  discard a --review merge (scratch branch deleted, lease stays submitted)\n'
-  printf '  status [--json]                                     submitted/done counts, or per-lease JSON with uncommitted counts and merge-in-progress\n'
+  printf '  status [--json] [--all]                             submitted/done counts, or per-lease JSON for active leases (--all includes done) with summary/counts/dirty state\n'
   printf '  queue [--json]                                      submitted leases FIFO with position, wait time and ETA\n'
   printf '  doctor                                              health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock\n'
 }

@@ -43,7 +43,7 @@ bun run e2e <empty-dir> [provider/model]  # real server + live model ~10min; E2E
 - Main checkout clean aside from exempt `.term/coordinator/state.json`; `merge-next` stashes/restores that dirt around trial merge; state.json-only bookkeeping branch merges cleanly.
 - `release <slug>` abandons idle/dead claim: lease done, worktree removed, dirty bytes → `refs/coordinator/saved/<slug>-<ts>`, unique-commit branch kept + rebuild command printed; unsubmitted needs `--force`; submitted leave via `merge-next`/`merge-abort`.
 - Bookkeeping: `merge-next` unions live + committed `state.json` (keys from both, live wins per key, `mergeLock` null), auto-commits on `dev` as `chore(coordinator): record <slug> lease done after merge`; union stops wt-landed bookkeeping reverted by merge's flip; chore part of merge flow (only sanctioned dev path), not direct agent dev commit; on failure dirt stays exempt, next merge-next retries; don't hand-commit `state.json`, don't extend exemption.
-- Requires `jq` (+ `git`, `bun` for gate); claim flock-locked + lease re-check; path overlap without `--force` = hard error; `status --json` lists leases (`state.json` = bus).
+- Requires `jq` (+ `git`, `bun` for gate); claim flock-locked + lease re-check; path overlap without `--force` = hard error; `status --json` lists active (non-`done`) leases + a counts `summary` (pass `--all` for historic `done` leases); `state.json` = bus.
 - `merge-next` removes worktree + `wt/` branch, marks lease `done`; leftover `worktrees/wt-*` safe to prune; `state.json` leases = source of truth.
 - Copy `opencode.json.example` → `opencode.json` (gitignored) wires coordinator; example uses placeholder path; here: claim, worktree, submit, merge-next.
 
