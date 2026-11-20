@@ -4313,6 +4313,22 @@
       "submittedAt": "2026-11-20T14:44:45Z",
       "mergedAt": "2026-11-20T14:46:53Z",
       "mergedInto": "dev"
+    },
+    "dead-internal-exports": {
+      "agent": "iceman",
+      "paths": "src/core/changed-paths.ts,src/core/file-log.ts,src/core/learning-log.ts,test",
+      "branch": "wt/dead-internal-exports",
+      "worktree": "worktrees/wt-dead-internal-exports",
+      "status": "done",
+      "createdAt": "2026-11-20T15:10:04Z",
+      "submittedAt": "2026-11-20T15:15:17Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:15:17Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T15:18:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
