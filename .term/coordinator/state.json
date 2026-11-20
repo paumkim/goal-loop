@@ -4150,6 +4150,25 @@
       "submittedAt": "2026-11-20T12:02:58Z",
       "mergedAt": "2026-11-20T12:18:32Z",
       "mergedInto": "dev"
+    },
+    "failure-diagnostic-artifact": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts,src/core/failure-diagnostics.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/failure-diagnostics.test.ts,test/controller.test.ts,SPEC.md,docs,dist",
+      "branch": "wt/failure-diagnostic-artifact",
+      "worktree": "worktrees/wt-failure-diagnostic-artifact",
+      "status": "claimed",
+      "createdAt": "2026-11-20T12:22:58Z"
+    },
+    "docs-github-pages-live": {
+      "agent": "iceman",
+      "paths": ".github/workflows/pages.yml,docs/.nojekyll,README.md",
+      "branch": "wt/docs-github-pages-live",
+      "worktree": "worktrees/wt-docs-github-pages-live",
+      "status": "done",
+      "createdAt": "2026-11-20T12:27:12Z",
+      "submittedAt": "2026-11-20T12:27:43Z",
+      "mergedAt": "2026-11-20T12:29:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
