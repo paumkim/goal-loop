@@ -1,5 +1,6 @@
 import { BOUNDARY_DROP_FACTOR, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "../core/constants.ts"
 import type { GoalConfig } from "../core/config.ts"
+import { MAX_BUSY_RETRIES } from "../core/config.ts"
 import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
 import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
@@ -904,6 +905,16 @@ export class GoalController {
   private scheduleBusyRetry(record: GoalRecord, runtime: Runtime): void {
     const sessionID = record.sessionID
     const attempt = runtime.busyRetries ?? 0
+    if (attempt >= MAX_BUSY_RETRIES) {
+      this.deps.log.warn("busy-check retries exhausted; evaluating with carried tools", { sessionID })
+      runtime.busyRetries = undefined
+      // Fall through to evaluate with whatever tools we have — better than hanging forever.
+      const carried = runtime.carriedToolCalls
+      runtime.carriedToolCalls = 0
+      this.clearDeferred(runtime, record)
+      void this.evaluate(record, runtime, ++runtime.epoch, carried).catch((e) => this.deps.log.error("fallback evaluation failed", { error: errorMessage(e) }))
+      return
+    }
     const delay = backoffMs(RETRY_BASE_MS, 4, attempt)
     runtime.busyRetries = attempt + 1
     this.notify(sessionID, "retry", "warning", "Goal still active", `Could not check background work state; retrying in ${formatDuration(delay)}.`)
@@ -2218,6 +2229,12 @@ export class GoalController {
     const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
     record.retries++
+    if (this.deps.config.maxRetries > 0 && record.retries >= this.deps.config.maxRetries) {
+      const reason = `Goal failed after ${record.retries} consecutive evaluator failures (last: ${truncate(errorMessage(error), 120)}). Lower evaluator.timeoutMs, check provider connectivity, or raise maxRetries.`
+      record.failureLabel = "evaluator retries exhausted"
+      void this.settleTerminal(record, "failed", { kind: "failed", level: "error", title: "Goal failed", reason })
+      return
+    }
     const delay = backoffMs(REEVALUATE_BASE_MS, 3, record.retries - 1)
     this.commit(record)
     this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator failed (${truncate(errorMessage(error), 120)}); retrying in ${formatDuration(delay)}.`)
@@ -2235,6 +2252,12 @@ export class GoalController {
       return
     }
     record.retries++
+    if (failure.kind !== "pause" && this.deps.config.maxRetries > 0 && record.retries >= this.deps.config.maxRetries) {
+      const reason = `Goal failed after ${record.retries} consecutive execution failures (last: ${failure.label}). Check provider status or raise maxRetries.`
+      record.failureLabel = "execution retries exhausted"
+      void this.settleTerminal(record, "failed", { kind: "failed", level: "error", title: "Goal failed", reason })
+      return
+    }
     // Rate/usage-limit windows clear on their own, so a fixed long backoff beats burning evaluations;
     // transient errors use capped exponential backoff. Both retry forever.
     const delay = failure.kind === "pause" ? PAUSE_RETRY_MS : backoffMs(RETRY_BASE_MS, 4, record.retries - 1)

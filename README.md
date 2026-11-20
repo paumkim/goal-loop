@@ -201,7 +201,7 @@ All optional, set in `opencode.json`:
 | `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default); armed `/goal-loop` runs never pause here; one notice, kept running |
 | `checkinMinutes` | `30` | First background check-in; `0` disables idle check-in nudges (automatic retries never stop) |
 | `maxIdleCheckins` | `3` | Max idle check-ins while background work runs |
-| `maxRetries` | `3` | Retained for compatibility; no longer gates anything. Automatic retries are unlimited with capped backoff |
+| `maxRetries` | `3` | Maximum consecutive retries before the goal fails. Applies to evaluator failures and transient execution errors. `0` disables (unlimited retries with capped backoff). Env `OPENCODE_GOAL_MAX_RETRIES` |
 | `maxConditionChars` | unlimited | Condition length cap (min 0); default never rejects; `0` rejects every objective |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Deprecated; no effect — the outcome note in the session inbox was retired (LXVII); outcomes surface via toast, the HUD acknowledgment and the record |
@@ -217,7 +217,7 @@ All optional, set in `opencode.json`:
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_VERIFY_PROFILE`, `OPENCODE_GOAL_VERIFY_CONCURRENCY`, `OPENCODE_GOAL_LEARNING_LOG`, `OPENCODE_GOAL_LEARNING_LOG_PATH`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
+`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_MAX_RETRIES`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_VERIFY_PROFILE`, `OPENCODE_GOAL_VERIFY_CONCURRENCY`, `OPENCODE_GOAL_LEARNING_LOG`, `OPENCODE_GOAL_LEARNING_LOG_PATH`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
 
 `OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/goal-loop-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
 
