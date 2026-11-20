@@ -15,13 +15,11 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier } from "./dossier.ts"
+import { buildLoopDossier, fileStampOf } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** Retries granted to the `-n` filename suffix before the export gives up. The stem is 1 second wide; 100 collisions means the caller should look around. */
 export const MAX_EXPORT_ATTEMPTS = 100
-
-const pad = (n: number): string => String(n).padStart(2, "0")
 
 /**
  * `goal-dossier-20261116-172233.md` from a clock; attempt > 0 appends `-attempt` (`-2`, `-3`, ...).
@@ -29,13 +27,8 @@ const pad = (n: number): string => String(n).padStart(2, "0")
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
 export const dossierExportName = (nowMs: number, attempt = 0): string => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0)
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
-  const stamp =
-    `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` +
-    `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`
   const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-${stamp}${suffix}.md`
+  return `goal-dossier-${fileStampOf(nowMs)}${suffix}.md`
 }
 
 interface DossierExportResult {

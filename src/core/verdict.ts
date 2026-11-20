@@ -1,6 +1,6 @@
 import type { Verdict } from "./types.ts"
 
-export interface ParsedVerdict {
+interface ParsedVerdict {
   readonly verdict: Verdict
   readonly reason: string
 }

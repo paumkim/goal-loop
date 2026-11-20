@@ -36,6 +36,24 @@ export const stampOf = (ms: number): string => {
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString()
 }
 
+/** Two-digit UTC component for the compact `<YYYYMMDD>-<HHMMSS>` file-name stamp. */
+const pad2 = (n: number): string => String(n).padStart(2, "0")
+
+/**
+ * `<YYYYMMDD>-<HHMMSS>` file-name stamp from a clock, shared by every dossier-family exporter.
+ * Same honesty posture as `stampOf`: a non-finite or unrepresentable clock renders the epoch rather
+ * than throwing, so the file name stays honest and deterministic. One implementation keeps the
+ * exporters' stamps from drifting apart.
+ */
+export const fileStampOf = (ms: number): string => {
+  const date = new Date(Number.isFinite(ms) ? ms : 0)
+  const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
+  return (
+    `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` +
+    `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`
+  )
+}
+
 /** First 7 chars of a hex sha; non-hex shas (legacy/odd writers) print whole rather than invented. */
 export const shortSha = (sha: string | undefined): string => {
   if (!sha) return GAP

@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2046 -->
+<!-- spec-check files=74 tests=2048 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8361,3 +8361,76 @@ This is a CLI/script behavior change, not a visual one, so verification is fresh
   never a merge blocker.
 - The health pass is a lightweight post-condition check (marker + tracked cleanliness), not a re-run of the full gate —
   the full gate already ran on the merged result before the fast-forward.
+
+## Workstream CXIV — continuous improvement pass: unify dossier stamps, trim dead exports, tighten the digest hot path (2026-11-20)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "Run a continuous,
+evidence-based improvement pass over the current repository. Clean out bloat, unify inconsistencies, and improve
+speed/responsiveness without changing intended behavior unless tests or specification require it." Coordinator repo:
+claimed `wt/continuous-improve`, worked only in `worktrees/wt-continuous-improve`, committed on `wt/continuous-improve`,
+submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+Inventory at HEAD: clean tree on `dev`, queue empty, 390 `done` leases and zero active leases; `bun run check` green
+(2046 pass / 0 fail, 74 shipped files, marker `files=74 tests=2046`); backlog `docs/improvement-backlog.json` has zero
+open items; no real `TODO`/`FIXME` markers in `src`, `bin`, `scripts` or the coordinator. Three concrete, evidence-backed
+improvements remain, all behavior-preserving:
+
+1. **Duplication (consistency/bloat).** `dossierExportName`, `dossierIndexName`, `reviewName` and `sealedDossierName`
+   each re-implement the same 8-line UTC `<YYYYMMDD>-<HHMMSS>` stamp + `-n` retry-suffix builder (a local `pad`
+   helper plus a non-finite/unrepresentable-clock epoch fallback), even though `src/core/dossier.ts` already owns the
+   stamp helpers (`stampOf`, `isoOf`). Four copies of the same logic are four chances to drift.
+2. **Bloat.** 38 internal-only type/interface exports across `src/core` and `src/affordance.tsx` have zero consumers
+   outside their defining modules (in `src`, `test` or `scripts`); they widen module surface with no runtime purpose.
+3. **Hot-path waste (speed).** `renderTranscript` in `src/core/transcript.ts` runs on every evaluator turn and calls
+   `str(x).trim()` twice per user/synthetic/text part — once for the truthiness test, again for the emitted value.
+   The duplicate string allocations are pure waste on the largest input the plugin processes.
+
+All three are pure/internal changes. No public package export (`.`, `./tui`, `./rpc`), persisted format, evaluator
+rubric, commit/verify gate, config parsing or TUI behavior changes.
+
+### Acceptance criteria
+
+1. A single shared `fileStampOf(ms)` helper lives in `src/core/dossier.ts`, producing the identical
+   `<YYYYMMDD>-<HHMMSS>` string and epoch fallback the four builders produced; each builder delegates to it and drops
+   its local `pad` helper. For a fixed `(nowMs, attempt)` every builder output is byte-identical to the old output
+   (pinned by the existing name tests plus a new equivalence test over finite, `NaN`, `+Infinity`, `-Infinity`,
+   out-of-range and year-boundary clocks).
+2. `export` is removed from the 38 enumerated internal-only symbols; `tsc --noEmit` stays clean and the full suite
+   stays green. The symbols remain usable inside their modules; no test or runtime importer breaks.
+3. `renderTranscript` computes `str(text).trim()` once per user/synthetic/text part and reuses it for the truthiness
+   test and the emitted string; output is byte-identical for the existing transcript fixtures. A before/after
+   micro-benchmark over a synthetic 6,000-message transcript (300 iterations, `maxChars: 60000`) reports a
+   non-negative speedup with identical digest bytes.
+4. `SPEC.md` gains this section and `docs/changelog.html` gains a matching entry (invariant-sweep companion gate).
+   The SPEC marker is re-stamped in the same commit for the changed test count; no shipped file count changes.
+5. `bun run check` exit 0 in the worktree; committed on `wt/<slug>`, submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- Dossier unification: targeted `bun test test/dossier.test.ts test/dossier-export.test.ts test/dossier-index.test.ts
+  test/dossier-review.test.ts test/dossier-seal.test.ts` → **89 pass / 0 fail** (346 expect() calls). The new equivalence
+  test pins `fileStampOf` against the pre-unification algorithm for finite, `NaN`, `±Infinity`, out-of-range and
+  year-9999 clocks and asserts the four exporter names embed the identical stamp and `-3` retry suffix.
+- Dead exports: `bunx tsc --noEmit` clean after removing `export` from all 38 enumerated symbols. One documented
+  contract needed alignment: `docs/core.html` no longer lists `ParsedVerdict` among `verdict.ts` exports
+  (`test/docs-line-refs.test.ts` stays green).
+- Digest hot path: A/B micro-benchmark importing the pre-change module from `HEAD` and the new module side by side,
+  4,000×3 large text messages, `maxChars: 2_000_000`, 10 warmups + 7 rounds × 60 iterations, median of rounds:
+  **9.8 ms → 9.5 ms (3.9% faster)**, with `oldFn(messages, opts) === newFn(messages, opts)` byte-identical. Targeted
+  `bun test test/core.test.ts test/evaluator.test.ts` → **146 pass / 0 fail** (168737 expect() calls).
+- `bun run check` exit 0: **2048 pass / 0 fail** across 85 test files (29 snapshots, 198754 expect() calls),
+  `tsc --noEmit` clean, `dist/tui.js` rebuilt fresh (**359413 → 358358 bytes, −1055 / −0.29%**), TUI load ok, docs
+  freshness ok, invariant-sweep ok, spec-check `files=74 tests=2048` (shipped file count unchanged).
+- Source LOC delta: 77 insertions / 79 deletions across 19 source files (net −2). Test LOC +44. The measurable wins
+  are export-surface reduction (−38 exported symbols), 4→1 stamp implementations, and the digest speedup — not LOC.
+
+### Honest limits / non-goals
+
+- The A/B speedup is small (3.9% on a deliberately text-heavy synthetic transcript) and within noise on mixed
+  tool-output transcripts; it is reported as measured, not exaggerated. The change is strictly redundant-work removal.
+- Unexporting internal types does not remove the types themselves, only their module surface; no persisted format,
+  evaluator rubric, commit/verify gate, config parsing or TUI behavior changed. Public package exports (`.`, `./tui`,
+  `./rpc`) are unchanged.
+- No new config option, new shipped file or removed shipped file, so the SPEC `files` count is unchanged.

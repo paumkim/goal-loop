@@ -14,14 +14,14 @@ import type { Verdict, VerdictEntry, VerdictVerificationMatrix, VerifyCheckEvide
 
 export const FAILURE_SIGNATURE_REPEAT_THRESHOLD = 3
 
-export interface FailureSignatureInfo {
+interface FailureSignatureInfo {
   readonly verdict: Verdict
   readonly reason: string
   readonly verification?: VerdictVerificationMatrix
   readonly verify?: VerdictEntry["verify"]
 }
 
-export interface RepeatedFailureSignature {
+interface RepeatedFailureSignature {
   readonly signature: string
   readonly count: number
   readonly kind: "verification" | "reason"
@@ -121,7 +121,7 @@ export function failureEscalationReason(detected: RepeatedFailureSignature): str
   ].join(" ")
 }
 
-export interface FailingCheckDiagnostic {
+interface FailingCheckDiagnostic {
   readonly id?: string
   readonly type?: string
   readonly label?: string
@@ -139,7 +139,7 @@ export interface FailingCheckDiagnostic {
   readonly unscoped?: boolean
 }
 
-export interface RepeatedFailureDiagnosticArtifact {
+interface RepeatedFailureDiagnosticArtifact {
   readonly signature: string
   readonly count: number
   readonly reason: string

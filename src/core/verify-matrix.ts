@@ -5,14 +5,14 @@ import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
 
-export interface ParsedGoalDeclaredCheck extends VerifyCheckConfig {
+interface ParsedGoalDeclaredCheck extends VerifyCheckConfig {
   readonly source: "goal-declared"
   readonly evidence: VerifyEvidenceMode
   readonly artifactPatterns?: readonly string[]
   readonly malformed?: false
 }
 
-export interface MalformedGoalDeclaredCheck {
+interface MalformedGoalDeclaredCheck {
   readonly malformed: true
   readonly raw: string
   readonly reason: string
@@ -24,7 +24,7 @@ interface GoalDeclaredParseResult {
   readonly malformed: MalformedGoalDeclaredCheck[]
 }
 
-export interface ResolvedVerifyCheck extends VerifyCheckConfig {
+interface ResolvedVerifyCheck extends VerifyCheckConfig {
   readonly source: VerifyCheckSource
   readonly evidence: VerifyEvidenceMode
   readonly artifactPatterns: readonly string[]
@@ -32,7 +32,7 @@ export interface ResolvedVerifyCheck extends VerifyCheckConfig {
   readonly when: "always" | "broad"
 }
 
-export interface ScopePolicy {
+interface ScopePolicy {
   readonly profile: string
   readonly broadGoal: boolean
   readonly requiredTypes: readonly VerifyCheckType[]

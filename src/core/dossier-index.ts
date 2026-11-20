@@ -39,10 +39,8 @@
 import { createHash } from "node:crypto"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { isoOf, inlineCode } from "./dossier.ts"
+import { isoOf, inlineCode, fileStampOf } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
-
-const pad = (n: number): string => String(n).padStart(2, "0")
 
 /**
  * `goal-dossier-index-20261116-172233.md` from a clock; attempt > 0 appends `-attempt` (`-2`, `-3`, ...).
@@ -50,13 +48,8 @@ const pad = (n: number): string => String(n).padStart(2, "0")
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
 export const dossierIndexName = (nowMs: number, attempt = 0): string => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0)
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
-  const stamp =
-    `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` +
-    `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`
   const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-index-${stamp}${suffix}.md`
+  return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`
 }
 
 type DossierArtifactKind = "dossier" | "review" | "sealed" | "spend ledger" | "index"

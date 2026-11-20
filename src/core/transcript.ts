@@ -74,7 +74,11 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
   const blocks: string[] = []
   const content = Array.isArray(message.content) ? (message.content as Unknown[]) : []
   for (const part of content) {
-    if (part.type === "text" && str(part.text).trim()) blocks.push(str(part.text).trim())
+    if (part.type === "text") {
+      // Trim once: the digest is rebuilt on every evaluator turn and this is its largest input.
+      const text = str(part.text).trim()
+      if (text) blocks.push(text)
+    }
     if (part.type !== "tool") continue
     const state = (part.state ?? {}) as Unknown
     const input = head(compactJson(state.input), options.maxInputChars)
@@ -96,10 +100,14 @@ function renderMessage(message: unknown, options: Required<DigestOptions>): stri
   if (typeof message !== "object" || message === null) return ""
   const m = message as Unknown
   switch (m.type) {
-    case "user":
-      return str(m.text).trim() ? `USER:\n${head(str(m.text).trim(), options.maxToolChars)}` : ""
-    case "synthetic":
-      return str(m.text).trim() ? `NOTE:\n${head(str(m.text).trim(), options.maxToolChars)}` : ""
+    case "user": {
+      const text = str(m.text).trim()
+      return text ? `USER:\n${head(text, options.maxToolChars)}` : ""
+    }
+    case "synthetic": {
+      const text = str(m.text).trim()
+      return text ? `NOTE:\n${head(text, options.maxToolChars)}` : ""
+    }
     case "assistant":
       return renderAssistant(m, options)
     case "shell": {
