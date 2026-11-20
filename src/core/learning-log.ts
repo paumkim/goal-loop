@@ -250,15 +250,34 @@ export function serializeLearningEntry(entry: LearningEntry): string {
   return `${JSON.stringify(entry)}\n`
 }
 
+const ensuredDirs = new Set<string>()
+
 /** Best-effort append of one JSONL learning entry. Never throws. */
 export function appendLearningEntry(file: string | undefined, entry: LearningEntry): void {
   const target = typeof file === "string" ? file.trim() : ""
   if (!target) return
+  const dir = dirname(target)
+  const line = serializeLearningEntry(entry)
   try {
-    mkdirSync(dirname(target), { recursive: true })
-    appendFileSync(target, serializeLearningEntry(entry))
-  } catch {
-    // Logging/learning must never break the caller.
+    if (!ensuredDirs.has(dir)) {
+      mkdirSync(dir, { recursive: true })
+      ensuredDirs.add(dir)
+    }
+    appendFileSync(target, line)
+  } catch (error) {
+    // If the directory was removed after being ensured, recover once; logging must never break the caller.
+    if (ensuredDirs.has(dir) && (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      try {
+        ensuredDirs.delete(dir)
+        mkdirSync(dir, { recursive: true })
+        ensuredDirs.add(dir)
+        appendFileSync(target, line)
+      } catch {
+        // swallow
+      }
+      return
+    }
+    // swallow
   }
 }
 
