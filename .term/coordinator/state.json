@@ -4525,6 +4525,17 @@
       "submittedAt": "2026-11-20T20:30:38Z",
       "mergedAt": "2026-11-20T20:33:59Z",
       "mergedInto": "dev"
+    },
+    "self-update-wip-landing": {
+      "agent": "build",
+      "paths": "bin,src,test,docs,AGENTS.md,README.md,SPEC.md",
+      "branch": "wt/self-update-wip-landing",
+      "worktree": "worktrees/wt-self-update-wip-landing",
+      "status": "done",
+      "createdAt": "2026-11-20T20:41:52Z",
+      "submittedAt": "2026-11-20T20:43:33Z",
+      "mergedAt": "2026-11-20T20:45:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
