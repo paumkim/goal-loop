@@ -1,4 +1,6 @@
-import type { Verdict, VerdictEntry, VerdictVerificationMatrix } from "./types.ts"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import type { Verdict, VerdictEntry, VerdictVerificationMatrix, VerifyCheckEvidence } from "./types.ts"
 
 /**
  * Repeated failure-signature detection for goal/loop evaluations.
@@ -116,4 +118,155 @@ export function failureEscalationReason(detected: RepeatedFailureSignature): str
     `Escalation required instead of re-arming the same approach: rotate strategy (narrow scope, change approach), produce a diagnostic artifact with concrete evidence of the blocker, or mark blocked with the blocking cause.`,
     `Do not repeat the same failing strategy. Send a message after changing strategy/evidence to resume, or /goal clear.`,
   ].join(" ")
+}
+
+export interface FailingCheckDiagnostic {
+  readonly id?: string
+  readonly type?: string
+  readonly label?: string
+  readonly command?: string
+  readonly code?: number | null
+  readonly timedOut?: boolean
+  readonly tail?: string
+  readonly pass?: boolean
+  readonly required?: boolean
+  readonly scoped?: boolean
+  readonly source?: string
+  readonly evidenceMode?: string
+  readonly runState?: string
+  readonly missing?: boolean
+  readonly unscoped?: boolean
+}
+
+export interface RepeatedFailureDiagnosticArtifact {
+  readonly signature: string
+  readonly count: number
+  readonly reason: string
+  readonly failingChecks: readonly FailingCheckDiagnostic[]
+  readonly kind: "verification" | "reason"
+  readonly summary: string
+  readonly verdictReason: string
+  readonly at: string
+  readonly turn?: number
+  readonly sessionID?: string
+  readonly goalID?: string
+  readonly condition?: string
+  readonly directory?: string
+  readonly verificationMissing?: readonly string[]
+  readonly verificationCoverageReasons?: readonly string[]
+}
+
+function isFailingMatrixCheck(check: VerifyCheckEvidence, v: VerdictVerificationMatrix): boolean {
+  if (!check.pass) return true
+  if (v.missing.includes(check.id)) return true
+  if (v.missing.includes(check.type)) return true
+  return !!check.required && !check.scoped
+}
+
+export function failingChecksOf(info: FailureSignatureInfo): FailingCheckDiagnostic[] {
+  if (info.verification) {
+    const v = info.verification
+    const failed = v.checks.filter((c) => isFailingMatrixCheck(c, v))
+    const relevant = failed.length ? failed : (!v.pass || v.missing.length ? v.checks.filter((c) => c.required || !c.pass) : [])
+    return relevant.map((c) => ({
+      id: c.id,
+      type: c.type,
+      ...(c.label ? { label: c.label } : {}),
+      command: c.command,
+      ...(c.code !== undefined ? { code: c.code } : {}),
+      ...(c.timedOut ? { timedOut: true } : {}),
+      ...(c.tail ? { tail: c.tail } : {}),
+      pass: c.pass,
+      required: c.required,
+      scoped: c.scoped,
+      source: c.source,
+      evidenceMode: c.evidenceMode,
+      runState: c.runState,
+      ...(v.missing.includes(c.id) || v.missing.includes(c.type) ? { missing: true } : {}),
+      ...(c.required && !c.scoped ? { unscoped: true } : {}),
+    }))
+  }
+  if (info.verify && info.verify.code !== 0) {
+    return [{
+      id: "verify-command",
+      type: "legacy",
+      command: info.verify.command,
+      code: info.verify.code,
+      ...(info.verify.timedOut ? { timedOut: true } : {}),
+      ...(info.verify.tail ? { tail: info.verify.tail } : {}),
+      pass: false,
+      required: true,
+      scoped: true,
+      source: "legacy",
+      evidenceMode: "command",
+      runState: "executed",
+    }]
+  }
+  return []
+}
+
+export function buildRepeatedFailureDiagnosticArtifact(input: {
+  detected: RepeatedFailureSignature
+  escalationReason: string
+  info: FailureSignatureInfo
+  atMs?: number
+  turn?: number
+  sessionID?: string
+  goalID?: string
+  condition?: string
+  directory?: string
+}): RepeatedFailureDiagnosticArtifact {
+  const at = new Date(input.atMs ?? Date.now()).toISOString()
+  return {
+    signature: input.detected.signature,
+    count: input.detected.count,
+    reason: input.escalationReason,
+    failingChecks: failingChecksOf(input.info),
+    kind: input.detected.kind,
+    summary: input.detected.summary,
+    verdictReason: input.info.reason ?? "",
+    at,
+    ...(typeof input.turn === "number" ? { turn: input.turn } : {}),
+    ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+    ...(input.goalID ? { goalID: input.goalID } : {}),
+    ...(input.condition ? { condition: input.condition } : {}),
+    ...(input.directory ? { directory: input.directory } : {}),
+    ...(input.info.verification?.missing?.length ? { verificationMissing: [...input.info.verification.missing] } : {}),
+    ...(input.info.verification?.coverageReasons?.length ? { verificationCoverageReasons: [...input.info.verification.coverageReasons] } : {}),
+  }
+}
+
+function safeToken(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "x"
+}
+
+export function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
+  const diagnosticsDir = join(dir, ".term", "goal-loop", "diagnostics")
+  mkdirSync(diagnosticsDir, { recursive: true })
+  const stamp = artifact.at.replace(/[:.]/g, "-")
+  const session = safeToken(artifact.sessionID ?? "session")
+  const turn = typeof artifact.turn === "number" ? `-t${artifact.turn}` : ""
+  const name = `${stamp}-${session}${turn}-repeated-failure.json`
+  const file = join(diagnosticsDir, name)
+  writeFileSync(file, JSON.stringify(artifact, null, 2) + "\n", "utf8")
+  return file
+}
+
+export function persistFailureDiagnosticArtifact(input: {
+  directory: string
+  detected: RepeatedFailureSignature
+  escalationReason: string
+  info: FailureSignatureInfo
+  atMs?: number
+  turn?: number
+  sessionID?: string
+  goalID?: string
+  condition?: string
+}): string | undefined {
+  try {
+    const artifact = buildRepeatedFailureDiagnosticArtifact({ ...input, directory: input.directory })
+    return writeFailureDiagnosticArtifact(input.directory, artifact)
+  } catch {
+    return undefined
+  }
 }

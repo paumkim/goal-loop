@@ -29,7 +29,7 @@ import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
-import { detectRepeatedFailureSignature, failureEscalationReason } from "../core/failure-signature.ts"
+import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -1258,7 +1258,17 @@ export class GoalController {
       const detected = detectRepeatedFailureSignature(record.history.slice(0, -1), { ...verdictEntry, verdict: "not_met" as const })
       if (detected) {
         const escalation = failureEscalationReason(detected)
-        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature })
+        const diagnostic = persistFailureDiagnosticArtifact({
+          directory: record.directory || this.deps.directory,
+          detected,
+          escalationReason: escalation,
+          info: { ...verdictEntry, verdict: "not_met" as const },
+          turn,
+          sessionID,
+          goalID: record.id,
+          condition: record.condition,
+        })
+        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature, ...(diagnostic ? { diagnostic } : {}) })
         await this.pause(record, escalation, "repeated_failure")
         return
       }
