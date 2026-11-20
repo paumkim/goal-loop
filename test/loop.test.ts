@@ -2701,3 +2701,129 @@ describe("terminal goals are inert after compaction", () => {
     expect(persisted?.status).toBe("cleared")
   })
 })
+
+describe("/goal-loop backlog planner integration", () => {
+  function writeBacklog(dir: string, data: unknown) {
+    const docs = join(dir, "docs")
+    mkdirSync(docs, { recursive: true })
+    writeFileSync(join(docs, "improvement-backlog.json"), JSON.stringify(data, null, 2) + "\n")
+  }
+
+  const seedBacklog = () => ({
+    version: 1,
+    items: [
+      {
+        id: "verification-matrix-beyond-check",
+        title: "Goal/profile-aware verification matrix",
+        category: "verification",
+        priority: 1,
+        impact: "high",
+        risk: "medium",
+        status: "open",
+        finding: "Gates are narrower than system health.",
+        improvement: "Add a verification/invariant matrix per iteration.",
+        evidence: ["blind spot #1"],
+        dedupeKeys: ["verification-matrix", "goal-aware-verification"],
+      },
+      {
+        id: "persistent-prioritized-backlog-dedup",
+        title: "Persistent prioritized backlog with de-dup",
+        category: "planning",
+        priority: 1,
+        impact: "high",
+        risk: "low",
+        status: "open",
+        finding: "No durable backlog.",
+        improvement: "Maintain a machine-readable backlog and de-dup.",
+        evidence: ["blind spot #3"],
+        dedupeKeys: ["persistent-backlog", "backlog-dedup"],
+      },
+      {
+        id: "failure-signature-strategy-escalation",
+        title: "Failure-signature detection and escalation",
+        category: "planning",
+        priority: 2,
+        impact: "high",
+        risk: "medium",
+        status: "open",
+        finding: "Repeated not-met loops can cycle.",
+        improvement: "Detect repeated failure signatures and escalate strategy.",
+        evidence: ["blind spot #4"],
+        dedupeKeys: ["failure-signature-detection", "strategy-escalation"],
+      },
+    ],
+  })
+
+  test("surfaces the highest-priority unblocked backlog item to the planner", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-"))
+    writeBacklog(dir, seedBacklog())
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("baseline done"))
+    h.summaries.push("baseline iteration complete")
+    h.nextGoals.push("implement the highest-priority backlog improvement")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    const suggestion = h.nextGoalRequests[0]!.backlogSuggestion
+    expect(suggestion).toBeDefined()
+    // Priority 1 tie: same impact; lower risk wins (persistent-prioritized-backlog-dedup: low risk).
+    expect(suggestion!.id).toBe("persistent-prioritized-backlog-dedup")
+    expect(suggestion!.title).toBe("Persistent prioritized backlog with de-dup")
+    expect(suggestion!.evidence).toContain("blind spot #3")
+  })
+
+  test("de-duplicates backlog items against completed conditions and history", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-"))
+    writeBacklog(dir, seedBacklog())
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    // Iteration 1 summary is neutral, so the highest-priority unblocked item is suggested.
+    // Iteration 2 summary references that item's dedupe keys, so it is excluded on the next planning call.
+    h.verdicts.push(met("baseline done"), met("backlog shipped"))
+    h.summaries.push("general baseline cleanup", "implemented persistent-backlog ledger and backlog-dedup selection")
+    h.nextGoals.push("add verification matrix coverage", "detect failure signatures")
+    await h.turn()
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(2)
+    const first = h.nextGoalRequests[0]!.backlogSuggestion
+    expect(first).toBeDefined()
+    expect(first!.id).toBe("persistent-prioritized-backlog-dedup")
+
+    const second = h.nextGoalRequests[1]!.backlogSuggestion
+    expect(second).toBeDefined()
+    expect(second!.id).not.toBe("persistent-prioritized-backlog-dedup")
+    // Iteration 2 condition/summary de-dupe both priority-1 items in this scenario, so the next unblocked item is selected.
+    expect(second!.id).toBe("failure-signature-strategy-escalation")
+  })
+
+  test("falls back when the backlog ledger is missing", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-missing-"))
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("done"))
+    h.summaries.push("done")
+    h.nextGoals.push("next step")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    expect(h.nextGoalRequests[0]!.backlogSuggestion).toBeUndefined()
+  })
+
+  test("falls back when the backlog ledger is invalid", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-backlog-invalid-"))
+    const docs = join(dir, "docs")
+    mkdirSync(docs, { recursive: true })
+    writeFileSync(join(docs, "improvement-backlog.json"), "{ not json")
+    const h = harness({ directory: dir })
+    await h.setLoop("keep improving the repo")
+    h.verdicts.push(met("done"))
+    h.summaries.push("done")
+    h.nextGoals.push("next step")
+    await h.turn()
+
+    expect(h.nextGoalRequests).toHaveLength(1)
+    expect(h.nextGoalRequests[0]!.backlogSuggestion).toBeUndefined()
+  })
+})
