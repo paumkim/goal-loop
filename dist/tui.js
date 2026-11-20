@@ -4863,6 +4863,7 @@ import { useTerminalDimensions } from "@opentui/solid";
 var stateWord2 = (goal) => goal.status === "paused" ? "paused" : goal.status === "active" ? goal.evaluating ? "checking" : goal.waiting ? "waiting" : goal.queued ? "queued" : isRetryStuck(goal) ? "stuck" : "active" : goal.status;
 var verdictColor = (theme, entry, mono) => verdictEntryAccentColor(theme, entry, mono);
 var CONTEXT_MENU_ROWS = 6;
+var CARD_VERTICAL_PADDING = 2;
 var CARD_WIDTH_MIN = 52;
 var CARD_WIDTH_MAX = 88;
 var cardWidth = (terminalWidth) => {
@@ -4884,7 +4885,7 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   const whyAvailable = Boolean(goal.reason && goal.reason.trim());
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []));
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0;
-  const fit = (hint, spend, context, why, last, fix) => 4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
+  const fit = (hint, spend, context, why, last, fix) => CARD_VERTICAL_PADDING + 4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu;
   let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted;
   let rows = fit(hint, spend, context, why, last, fix);
   if (rows <= maxRows)
@@ -5189,6 +5190,8 @@ var HudCard = (props) => {
     _$setProp4(_el$9, "borderStyle", "single");
     _$setProp4(_el$9, "paddingLeft", 2);
     _$setProp4(_el$9, "paddingRight", 2);
+    _$setProp4(_el$9, "paddingTop", 1);
+    _$setProp4(_el$9, "paddingBottom", 1);
     _$setProp4(_el$9, "onMouseUp", (event) => {
       if (event.button === 2) {
         try {
