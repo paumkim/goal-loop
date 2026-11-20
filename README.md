@@ -170,6 +170,10 @@ All optional, set in `opencode.json`:
         "compactOnLoopIteration": true,
         "maxLoops": 5,
         "maxLoopSummaryTokens": 400,
+        "learning": {
+          "enabled": true,
+          "path": ".term/goal-loop/learnings.jsonl"
+        },
         "requireCommit": true,
         "commitBranch": "dev",
         "coordinator": "auto"
@@ -189,6 +193,9 @@ All optional, set in `opencode.json`:
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
 | `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND`. A dev loop armed without it runs without the one deterministic guarantee the plugin offers |
 | `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
+| `evaluator.verifyProfile` | `default` | Verification matrix profile label/reporting (`default`/`broad`). Broad goals/profiles require scoped typed checks (typecheck, targeted tests, lint/build as applicable, goal-declared); generic-only or unscoped required verification is insufficient for broad goals. Env `OPENCODE_GOAL_VERIFY_PROFILE` |
+| `evaluator.verifyConcurrency` | `2` | Max independent verification-command executions run concurrently per matrix evaluation (1-8). Identical fresh results may be reused/cached within the same evaluated turn/HEAD when safe; timing and parallel/reuse metadata are recorded. Env `OPENCODE_GOAL_VERIFY_CONCURRENCY` |
+| `evaluator.verifyChecks` | `[]` | Profile-aware verification matrix run on candidate `met` verdicts: array of `{id,type,command,timeoutMs?,required?,when?,label?,evidence?,artifactPatterns?}` (`type`: `typecheck\|tests\|lint\|build\|smoke\|custom\|goal-declared`, `when`: `always\|broad`, `evidence`: `command\|artifact\|either`, default `command`). `artifact\|either` checks require `artifactPatterns` and may be satisfied by fresh scoped transcript/artifact evidence only when allowed; required command checks default to command-executed. Structured `verify:` directives in the goal condition are parsed/merged as goal-declared checks. Missing/unscoped/failing required checks are rejected by deterministic runtime coverage enforcement with concrete next actions; per-check evidence records source, scope decision, execution/artifact mode, timing/reuse/concurrency metadata |
 | `evaluator.consensus` | `1` | `2` requires two independent judges (session evaluator + independent model) both ruling met; any disagreement or second-judge failure fails closed to not-met, disagreement named in the reason. Opt-in per repo/loop; doubles evaluator cost |
 | `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default); armed `/goal-loop` runs never pause here; one notice, kept running |
 | `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default); armed `/goal-loop` runs never pause here; one notice, kept running |
@@ -202,15 +209,19 @@ All optional, set in `opencode.json`:
 | `compactOnLoopIteration` | `true` | Request a host compaction at every loop-iteration boundary, so each iteration arms with a fresh context. Never requested mid-work (defers while a turn or background work is in flight). An arm that just landed its request, or whose request has fewer than 2 misses, makes no request; an unlanded request warns once at 2 misses ("compaction did not land; loop is running hot; consider /compact manually") and re-requests as a trickle every 3rd arm; the 4-miss cap is a backstop only. An unmeasurable context never counts as a miss (one forced re-request at the first unmeasurable arm, then at most one per 2 arms). Env `OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION` |
 | `maxLoops` | `5` | `/goal-loop` cap on completed iterations; each met goal arms the next until the cap |
 | `maxLoopSummaryTokens` | `400` | Token budget for the per-iteration loop summary (and the next-goal input); enforced as max(200, tokens) × 4 characters |
+| `learning.enabled` | `true` | Append durable learning/outcome entries (JSONL) at goal and loop boundaries so each run logs what happened and what to improve next time. Env `OPENCODE_GOAL_LEARNING_LOG` |
+| `learning.path` | `.term/goal-loop/learnings.jsonl` | Learning journal path, relative to the goal working directory (or absolute). Env `OPENCODE_GOAL_LEARNING_LOG_PATH` |
 | `requireCommit` | `true` | Finished work has to be committed before the goal counts as met |
 | `commitBranch` | `dev` | Branch the finished work has to land on (target branch in coordinator mode) |
 | `coordinator` | `auto` | `auto` detects coordinator repos and uses `wt/<slug>` + submit; `true` forces it, `false` disables it |
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
+`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_VERIFY_PROFILE`, `OPENCODE_GOAL_VERIFY_CONCURRENCY`, `OPENCODE_GOAL_LEARNING_LOG`, `OPENCODE_GOAL_LEARNING_LOG_PATH`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
 
 `OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/goal-loop-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
+
+`OPENCODE_GOAL_LEARNING_LOG=0` disables the durable learning/outcome journal (on by default). `OPENCODE_GOAL_LEARNING_LOG_PATH=<path>` overrides the journal location (default `.term/goal-loop/learnings.jsonl`, relative to the goal working directory unless absolute). The journal appends one JSONL entry per completed loop iteration and per terminal goal outcome with what happened and a lesson for next time. Best-effort: a write failure never throws and never affects goal execution.
 
 `OPENCODE_GOAL_LOG_FILE=<path>` mirrors every plugin log line to a file as JSON Lines (`{"ts","level","message","data"?}`), one object per line. The host swallows the plugin's console logger, so this is the only way to see plugin logs (restore adoptions, coordinator notes, loop/compaction bookkeeping) from a live session — especially valuable over very long runs. Best-effort: a logging failure never throws and never affects a commit; the file rotates to `<path>.1` once it exceeds 5 MiB (one generation kept). Unset by default.
 
@@ -251,13 +262,15 @@ Every push to `dev`/`main` and every pull request runs the suite on GitHub Actio
 
 ## Documentation
 
-Full docs live in `docs/` as a single-folder, dependency-free HTML/CSS site. No build step, no internet, no frameworks.
+Full docs live in `docs/` as a single-folder, dependency-free HTML/CSS site. No build step, no internet, no frameworks. The published site is available at [paumkim.github.io/goal-loop](https://paumkim.github.io/goal-loop/), deployed from `docs/` on `main` to GitHub Pages.
 
 ```sh
 xdg-open docs/index.html   # Linux (or just double-click the file)
 ```
 
 Pages: `index.html` (landing + search + FAQ) · `architecture.html` (diagram, state machine, data flow) · `runtime.html` (controller, events, evaluator, retry) · `config.html` (every option, default, env var) · `core.html` (per-file reference) · `install.html` (install, `/goal` commands, troubleshooting) · `changelog.html` (recent changes from `git log`).
+
+Deployment: `.github/workflows/pages.yml` publishes the contents of `docs/` whenever `docs/**` changes on `main` (or when triggered manually). One-time repository setup: set **Settings → Pages → Source** to **GitHub Actions**.
 
 Every page carries a "Last updated" stamp in the footer, derived from `git log` for that page (the newest non-merge commit touching it, excluding mechanical `docs: refresh` commits). The stamp reflects the last content commit that touched the page, not necessarily the latest code change. The stamps and the changelog table are regenerated by `bun scripts/docs-watch.ts once`.
 
