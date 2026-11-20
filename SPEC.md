@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=73 tests=1997 -->
+<!-- spec-check files=74 tests=2011 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7963,3 +7963,78 @@ test/learning-log.test.ts test/wire.test.ts` → **73 pass / 0 fail** (3 files, 
 Honest limits. Internal refactor/unification only; guard semantics unchanged for supported paths and fixture cases. Persisted
 formats, evaluator/rubric, commit/verify gates, and TUI behavior unchanged.
 <!-- spec-check files=73 tests=1998 -->
+
+## Workstream CV — structured outcome telemetry over the learning journal (2026-11-20)
+
+Status: specified first (fuzzy-request rule), then implemented and verified against this section.
+
+### Interpretation
+
+`docs/improvement-backlog.json` carries an open item, `structured-outcome-telemetry`: history/spend/verdicts and
+the learning journal are retained, but the system never aggregates them into a reusable signal about *which
+interventions work*. This workstream closes that gap with a first concrete slice: a pure module that reads the
+existing JSONL learning journal (`.term/goal-loop/learnings.jsonl`) and derives an aggregate outcome-telemetry
+summary — failure taxonomy, time-to-green, recurring themes, and terminal-outcome mix — that is injected into
+the existing learnings channel used by continuation, retry, check-in, and next-goal planning prompts.
+
+No new persisted format is introduced: telemetry is derived on read from records the runtime already writes.
+No new evaluator port field is introduced: the summary is folded into the single `learnings` string already
+threaded through `Prompt.*` and `NextGoalInput.recentLearnings`, so every existing prompt path benefits without
+fake/evaluator signature churn.
+
+### Acceptance criteria
+
+1. **Pure aggregator module** `src/core/outcome-telemetry.ts` (no I/O beyond the existing text reader) that:
+   - parses best-effort JSONL learning text, skipping blank/malformed/unknown-kind lines without throwing;
+   - computes terminal outcome counts (per `goal_terminal`/`session_outcome` status) and met/not-met verdict
+     counts from `turn_verdict` entries;
+   - computes a **failure taxonomy**: normalized not-met reason themes with occurrence counts, sorted by
+     count desc then theme asc, with `recurring` flagged at a documented threshold (>= 3 occurrences);
+   - computes **time-to-green**: median and count of `goal_armed -> achieved goal_terminal` durations paired
+     by `sessionID` + `goalID`, using valid ISO timestamps only, ignoring incomplete/malformed pairs;
+   - computes **recurring conditions**: normalized condition strings seen at armed/terminal boundaries more
+     than once (a signal that the same goal keeps resurfacing);
+   - exposes a bounded `formatOutcomeTelemetry(summary, maxChars)` that returns a compact prompt-ready block,
+     or `""` when there is nothing to report, and truncates safely without cutting a multibyte code point.
+2. **Bounded, fail-closed behavior**: a missing/unreadable log, an empty log, an all-malformed log, or an
+   all-unknown-kind log yields an empty summary and empty formatted text; no exception escapes; formatting is
+   capped at a configurable character budget (default 900).
+3. **Single-hook integration**: `src/runtime/controller.ts` reads the learning log once in
+   `recentLearningsForPrompt`, derives both the recent-learnings block and the telemetry block from that one
+   read, and returns their concatenation. All existing prompt call sites (continuation, loopContinuation,
+   retry, checkin, nextGoal) receive the telemetry without interface changes.
+4. **Tests**: a new `test/outcome-telemetry.test.ts` covers parsing robustness, taxonomy grouping/threshold,
+   time-to-green pairing and malformed timestamps, recurring conditions, formatting/budget/unicode, and the
+   empty/fail-closed cases; controller-level coverage proves the telemetry text reaches the planner prompt.
+5. **Gap closure**: `docs/improvement-backlog.json` marks `structured-outcome-telemetry` `done` with evidence
+   pointing at this workstream, and corrects statuses of items already landed on `dev` but left stale
+   (`evaluator-rubric-evidence-types`, `change-risk-classification`, `standing-invariants-sweep`) so the
+   planner no longer re-suggests completed work.
+6. **Verification**: `bun run check` exits 0 in the worktree; targeted telemetry tests pass; the SPEC marker
+   is re-stamped in the same commit as the shipped-file/test changes; changes are committed on `wt/<slug>` and
+   submitted via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/outcome-telemetry.test.ts` → **13 pass / 0 fail**
+  (1 file, 47 expect() calls) covering best-effort parsing, taxonomy grouping/recurrence, time-to-green
+  pairing (valid/malformed/negative/cross-goal), condition recurrence, formatting/budget/unicode safety,
+  and controller prompt injection via `session.synthetic`.
+- End-to-end demonstration (synthetic fixture, not production evidence) emitted:
+  `Outcome telemetry (from 5 journal entries): achieved=1; not_met=3; "missing verifier output" x3
+  (recurring); median 6m 00s over 1 run; "make tests pass" x2`. An all-malformed log formats to `""`.
+- Adjacent polish in the same prompt-injection path: `formatRecentLearnings` (learning-log.ts) and the
+  telemetry cap now both route through `elideAtWordBoundary`, so an astral character at a budget boundary
+  never leaves a lone surrogate in the evaluator/planner corpus. `test/learning-log.test.ts` pins the
+  surrogate-safe truncation.
+- `bun run check` exit 0: tsc clean, **2011 pass / 0 fail** across 84 test files (29 snapshots, 30248
+  expect() calls), dist fresh, TUI load ok, docs freshness ok, invariant-sweep ok,
+  spec-check `files=74 tests=2011`. `test/package-integrity.test.ts` tarball pin raised 73→74 for the new
+  shipped core module; `test/improvement-backlog.test.ts` now pins that landed items cannot stay `open`.
+
+### Honest limits / non-goals
+
+- Telemetry is advisory context for the planner/evaluator, not a gate: it cannot by itself fail a condition.
+- No cross-session database, no network, no new config surface, no TUI rendering in this slice.
+- Flaky-check detection and automatic backlog re-prioritization from telemetry remain deferred; the summary
+  deliberately reports only signals derivable from recorded fields.

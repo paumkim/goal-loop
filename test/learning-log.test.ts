@@ -246,6 +246,27 @@ describe("learning-log core", () => {
     expect(formatRecentLearnings([])).toBe("")
     expect(readRecentLearnings(undefined, 5)).toEqual([])
   })
+
+  test("formatRecentLearnings never splits a surrogate pair at the character budget", () => {
+    const { formatRecentLearnings: fmt } = require("../src/core/learning-log.ts") as typeof import("../src/core/learning-log.ts")
+    const lesson = `x${"\u{1F389}".repeat(400)}y`
+    const out = fmt([{ kind: "goal_armed", ts: "2026-01-01T00:00:00Z", lesson }], 120)
+    expect(out.length).toBeLessThan(lesson.length)
+    const body = out.split("\n").at(-1) ?? ""
+    expect(body.endsWith("…")).toBe(true)
+    let loneSurrogate = false
+    for (let i = 0; i < body.length; i++) {
+      const c = body.charCodeAt(i) ?? 0
+      if (c >= 0xd800 && c <= 0xdbff) {
+        const next = body.charCodeAt(i + 1) ?? 0
+        if (next < 0xdc00 || next > 0xdfff) loneSurrogate = true
+      } else if (c >= 0xdc00 && c <= 0xdfff) {
+        const prev = body.charCodeAt(i - 1) ?? 0
+        if (prev < 0xd800 || prev > 0xdbff) loneSurrogate = true
+      }
+    }
+    expect(loneSurrogate).toBe(false)
+  })
 })
 
 function harness(dir: string, options: Record<string, unknown> = {}) {

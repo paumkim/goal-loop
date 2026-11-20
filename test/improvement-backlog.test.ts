@@ -159,10 +159,17 @@ describe("repo improvement backlog artifact", () => {
     // No cross-item dedupe collisions in the seed ledger.
     expect(inspected.dedupeMatches).toEqual([])
 
+    // Items whose improvements already landed on dev must not stay selectable: a stale "open"
+    // status makes the planner spend an iteration re-implementing finished work.
+    for (const landed of ["evaluator-rubric-evidence-types", "change-risk-classification", "standing-invariants-sweep", "structured-outcome-telemetry"]) {
+      expect(inspected.backlog.items.find((entry) => entry.id === landed)?.status).toBe("done")
+    }
+
     const highest = selectNextBacklogItem(inspected.backlog.items)
     expect(highest).toBeDefined()
     // Priority 1 open/in_progress items may be completed over time; highest selected open item is valid and prioritized.
     expect(highest!.priority).toBeGreaterThanOrEqual(1)
     expect(highest!.priority).toBeLessThanOrEqual(2)
+    expect(highest!.status).toBe("open")
   })
 })
