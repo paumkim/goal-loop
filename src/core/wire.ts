@@ -131,6 +131,14 @@ const isLoopCompact = (value: unknown): value is LoopCompactState =>
   (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) &&
   (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned))
 
+const isLastVerify = (value: unknown): value is NonNullable<GoalSnapshot["lastVerify"]> =>
+  isRecord(value) &&
+  isString(value.command) &&
+  (value.code === null || isFiniteNumber(value.code)) &&
+  isFiniteNumber(value.at) &&
+  (value.timedOut === undefined || isBoolean(value.timedOut)) &&
+  (value.tail === undefined || isString(value.tail))
+
 /**
  * Structural check for the read model our own server emits over RPC. Optional additive fields (loop state,
  * spend, imported reason/verdict) are validated when present; unknown extra fields are tolerated so older
@@ -161,9 +169,15 @@ export const isGoalSnapshot = (value: unknown): value is GoalSnapshot => {
   if (value.loopObjective !== undefined && !isString(value.loopObjective)) return false
   if (value.loopMaxLoops !== undefined && !isFiniteNumber(value.loopMaxLoops)) return false
   if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress)) return false
+  if (value.historyDropped !== undefined && (!isFiniteNumber(value.historyDropped) || value.historyDropped < 0)) return false
   if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry))) return false
+  if (value.loopHistoryDropped !== undefined && (!isFiniteNumber(value.loopHistoryDropped) || value.loopHistoryDropped < 0)) return false
+  if (value.completedConditions !== undefined && (!Array.isArray(value.completedConditions) || !value.completedConditions.every(isString))) return false
+  if (value.completedConditionsDropped !== undefined && (!isFiniteNumber(value.completedConditionsDropped) || value.completedConditionsDropped < 0)) return false
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact)) return false
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0)) return false
+  if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify)) return false
+  if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince)) return false
   return true
 }
 
