@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process"
+import { collectChangedPaths } from "./changed-paths.ts"
 
 export type RiskTier = "low" | "medium" | "high"
 export type SensitiveSurface = "deps" | "auth" | "migrations" | "ci-release" | "data"
@@ -203,44 +203,5 @@ export const STRICT_GATE_NOTICE_TITLE = "Strict gate: high-risk change set"
 
 /** Best-effort collection of changed paths in a git working directory (working tree/index + commits ahead of base). */
 export function collectChangeSetPaths(directory: string): string[] {
-  try {
-    const out = new Set<string>()
-    const run = (args: string[]) => {
-      try {
-        return execFileSync("git", args, { cwd: directory, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).replace(/\n$/, "")
-      } catch {
-        return undefined
-      }
-    }
-    const porcelain = run(["status", "--porcelain", "--untracked-files=all"])
-    if (porcelain) {
-      for (const raw of porcelain.split("\n")) {
-        if (!raw.trim()) continue
-        if (/^.. /.test(raw)) {
-          const body = raw.slice(3)
-          const renamed = body.includes(" -> ") ? body.split(" -> ").pop()! : body
-          out.add(renamed.trim())
-        } else {
-          out.add(raw.trim())
-        }
-      }
-    }
-    let baseRef: string | undefined
-    for (const ref of ["dev", "origin/dev", "main", "origin/main"]) {
-      const mb = run(["merge-base", "HEAD", ref])
-      if (mb?.trim()) {
-        baseRef = mb.trim()
-        break
-      }
-    }
-    if (baseRef) {
-      const committed = run(["diff", "--name-only", "--diff-filter=ACMRD", `${baseRef}..HEAD`])
-      if (committed?.trim()) {
-        for (const line of committed.split("\n")) if (line.trim()) out.add(line.trim())
-      }
-    }
-    return [...out].sort()
-  } catch {
-    return []
-  }
+  return collectChangedPaths(directory, { untrackedFiles: "all", bestEffort: true })
 }
