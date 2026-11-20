@@ -4264,8 +4264,19 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-rubric-verifier-corroboration",
       "worktree": "worktrees/wt-evaluator-rubric-verifier-corroboration",
+      "status": "done",
+      "createdAt": "2026-11-20T13:55:22Z",
+      "submittedAt": "2026-11-20T14:01:55Z",
+      "mergedAt": "2026-11-20T14:08:10Z",
+      "mergedInto": "dev"
+    },
+    "loop-indicator-always-visible": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,scripts/render-pill.tsx,scripts/render-card.tsx,scripts/render-slot.tsx,scripts/render-dialog.tsx,test/history.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/tui-alignment-invariants.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/,dist/tui.js",
+      "branch": "wt/loop-indicator-always-visible",
+      "worktree": "worktrees/wt-loop-indicator-always-visible",
       "status": "claimed",
-      "createdAt": "2026-11-20T13:55:22Z"
+      "createdAt": "2026-11-20T14:07:11Z"
     }
   },
   "mergeLock": null,
