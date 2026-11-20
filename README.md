@@ -189,6 +189,8 @@ All optional, set in `opencode.json`:
 | `evaluator.timeoutMs` | `120000` | Evaluation timeout in ms (min 5000) |
 | `evaluator.verifyCommand` | `""` | When set, a met verdict is accepted only after this command exits 0 against the current checkout; empty disables. Env `OPENCODE_GOAL_VERIFY_COMMAND`. A dev loop armed without it runs without the one deterministic guarantee the plugin offers |
 | `evaluator.verifyTimeoutMs` | `600000` | Wall-clock budget for one verification run; a timeout counts as failure, never as a pass. Env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS` |
+| `evaluator.verifyProfile` | `default` | Verification matrix profile label/reporting (`default`/`broad`). Broad goals/profiles require scoped typed checks (typecheck, targeted tests, lint/build as applicable, goal-declared); generic-only or unscoped required verification is insufficient for broad goals. Env `OPENCODE_GOAL_VERIFY_PROFILE` |
+| `evaluator.verifyChecks` | `[]` | Profile-aware verification matrix run on candidate `met` verdicts: array of `{id,type,command,timeoutMs?,required?,when?,label?}` (`type`: `typecheck\|tests\|lint\|build\|smoke\|custom\|goal-declared`, `when`: `always\|broad`). Empty + `verifyCommand` synthesizes a legacy check; each required check records fresh command/output/exit evidence and missing/unscoped/failing required checks downgrade to `not_met` with concrete next actions |
 | `evaluator.consensus` | `1` | `2` requires two independent judges (session evaluator + independent model) both ruling met; any disagreement or second-judge failure fails closed to not-met, disagreement named in the reason. Opt-in per repo/loop; doubles evaluator cost |
 | `maxTurns` | `0` | Hard turn cap, opt-in; `0` = none (default); armed `/goal-loop` runs never pause here; one notice, kept running |
 | `stallTurns` | `0` | Turns without tool use before pausing, opt-in; `0` = never (default); armed `/goal-loop` runs never pause here; one notice, kept running |
@@ -208,7 +210,7 @@ All optional, set in `opencode.json`:
 
 Environment overrides: `OPENCODE_GOAL_MODEL`, `OPENCODE_GOAL_MAX_TURNS`, `OPENCODE_GOAL_CHECKIN_MINUTES`,
 `OPENCODE_GOAL_COMMIT_BRANCH`, `OPENCODE_GOAL_REQUIRE_COMMIT`, `OPENCODE_GOAL_COORDINATOR`, `OPENCODE_GOAL_COMPACT_AT_TOKENS`,
-`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
+`OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION`, `OPENCODE_GOAL_MAX_LOOPS`, `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, `OPENCODE_GOAL_VERIFY_COMMAND`, `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`, `OPENCODE_GOAL_VERIFY_PROFILE`, `OPENCODE_GOAL_MIRROR`, `OPENCODE_GOAL_LOG_FILE`.
 
 `OPENCODE_GOAL_MIRROR=0` disables the mirror file (on by default): after every `changed` snapshot the server plugin atomically writes a small owner-only JSON copy of it (`<tmpdir>/goal-loop-mirror/<sessionID>.json`) which the TUI reads when a re-pull is due and both RPC paths are wedged — see Workstream IX in SPEC.md. The mirror never leaves the machine, is removed when the goal clears, and failing to write it never affects a commit.
 

@@ -56,6 +56,47 @@ export interface UsageSnapshot {
 
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
+export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
+
+export interface VerifyCheckDefinition {
+  readonly id: string
+  readonly type: VerifyCheckType
+  readonly command: string
+  readonly timeoutMs?: number
+  /** Default true: required for applicable goals/profiles unless explicitly false. */
+  readonly required?: boolean
+  /** When this check applies: always (default) or only for broad goals. */
+  readonly when?: "always" | "broad"
+  readonly label?: string
+}
+
+export interface VerifyCheckEvidence {
+  readonly id: string
+  readonly type: VerifyCheckType
+  readonly label?: string
+  readonly command: string
+  readonly required: boolean
+  /** True when this check was applicable/scoped for the evaluated goal/profile. */
+  readonly scoped: boolean
+  readonly pass: boolean
+  readonly code: number | null
+  readonly timedOut?: boolean
+  readonly tail?: string
+  /** Machine-readable failure/scoping reason (e.g. failed, timeout, unscoped, missing). */
+  readonly reason?: string
+}
+
+/** Profile-aware matrix evidence recorded for a candidate met verdict (legacy single verifyCommand is represented as one check). */
+export interface VerdictVerificationMatrix {
+  /** Resolved profile label (e.g. default, broad, custom). */
+  readonly profile: string
+  readonly broadGoal: boolean
+  readonly pass: boolean
+  readonly checks: readonly VerifyCheckEvidence[]
+  /** Required check ids/types that were missing, unscoped, or not satisfied. */
+  readonly missing: readonly string[]
+}
+
 export interface VerdictEntry {
   readonly turn: number
   readonly verdict: Verdict
@@ -77,6 +118,8 @@ export interface VerdictEntry {
     readonly timedOut?: boolean
     readonly tail?: string
   }
+  /** Profile-aware verification matrix evidence for this turn (additive; preferred over legacy single `verify` when present). */
+  readonly verification?: VerdictVerificationMatrix
 }
 
 /** One completed iteration of a `/goal-loop`. Kept as a compact record — never the transcript. */
@@ -310,6 +353,8 @@ export interface GoalRecord {
     /** ms since epoch (the shared clock). */
     readonly at: number
   }
+  /** Latest profile-aware verification matrix run (additive; observational, persisted like lastVerify). */
+  lastVerification?: (VerdictVerificationMatrix & { readonly at: number })
   /** Automatic retries since the last successful turn. */
   retries: number
   /** Idle check-ins since the last user prompt. */

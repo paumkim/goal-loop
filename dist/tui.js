@@ -632,7 +632,15 @@ var iterationLines = (entry, spanMs) => {
   lines.push(`- Evaluator reason:`, "", ...quote(entry.reason));
   return lines;
 };
-var verifyCell = (verify) => {
+var verifyCell = (entry) => {
+  const m = entry.verification;
+  if (m) {
+    const req = m.checks.filter((c) => c.required);
+    const pass = req.filter((c) => c.pass && c.scoped).length;
+    const label = `${pass}/${req.length || m.checks.length} ${m.pass ? "pass" : "fail"}`;
+    return m.broadGoal ? `${label} (broad)` : label;
+  }
+  const verify = entry.verify;
   if (!verify)
     return GAP;
   if (verify.timedOut)
@@ -641,6 +649,13 @@ var verifyCell = (verify) => {
     return "error";
   return `exit ${verify.code}`;
 };
+var matrixCheckLine = (check) => {
+  const state = !check.scoped ? "unscoped" : check.pass ? "pass" : check.timedOut ? "timeout" : check.code === null ? "error" : `exit ${check.code}`;
+  const bits = [check.id, check.type, check.required ? "required" : "optional", state];
+  if (check.label)
+    bits.push(`label=${check.label}`);
+  return bits.join(" \xB7 ");
+};
 var verdictTable = (history) => {
   const lines = [
     "| turn | verdict | tools | commit | spend | verify |",
@@ -648,7 +663,7 @@ var verdictTable = (history) => {
   ];
   for (const entry of history) {
     const tools = entry.toolCalls ?? GAP;
-    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry.verify)} |`);
+    lines.push(`| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry)} |`);
   }
   return lines;
 };
@@ -660,11 +675,29 @@ var verdictProse = (history) => {
       bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`);
     if (entry.sha)
       bits.push(shortSha(entry.sha));
-    if (entry.verify)
-      bits.push(`verify ${verifyCell(entry.verify)} ${inlineCode(entry.verify.command)}`);
+    if (entry.verification) {
+      const req = entry.verification.checks.filter((c) => c.required).length;
+      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required)`);
+    } else if (entry.verify) {
+      const v = entry.verify;
+      const state = v.timedOut ? "timeout" : v.code === null ? "error" : `exit ${v.code}`;
+      bits.push(`verify ${state} ${inlineCode(v.command)}`);
+    }
     lines.push(`- ${bits.join(" \xB7 ")}`);
     lines.push(...quote(entry.reason));
-    if (entry.verify?.tail) {
+    if (entry.verification) {
+      lines.push(...quote("verification matrix checks:"));
+      for (const check of entry.verification.checks) {
+        lines.push(...quote(`- ${matrixCheckLine(check)} cmd=${check.command}`));
+        if (check.reason)
+          lines.push(...quote(`  reason: ${check.reason}`));
+        if (check.tail)
+          lines.push(...quote(`  output tail:
+${check.tail}`));
+      }
+      if (entry.verification.missing.length)
+        lines.push(...quote(`missing/unscoped/failed required checks: ${entry.verification.missing.join(", ")}`));
+    } else if (entry.verify?.tail) {
       lines.push(...quote(`verify output tail:
 ${entry.verify.tail}`));
     }
@@ -706,10 +739,32 @@ var boundaryCompactLines = (goal, nowMs) => {
   return lines;
 };
 var verifyLines = (goal) => {
+  const matrix = goal.lastVerification;
+  if (matrix) {
+    const req = matrix.checks.filter((c) => c.required);
+    const passed = req.filter((c) => c.pass && c.scoped).length;
+    const lines = [
+      `- Matrix profile: ${matrix.profile}${matrix.broadGoal ? " (broad goal)" : ""}`,
+      `- Result: ${matrix.pass ? "pass" : "fail"} \xB7 ${passed}/${req.length} required checks satisfied \xB7 ${isoOf(matrix.at)}`
+    ];
+    if (matrix.missing.length)
+      lines.push(`- Missing/unscoped/failed required checks: ${matrix.missing.join(", ")}`);
+    lines.push("- Checks:");
+    for (const check of matrix.checks) {
+      lines.push(`  - ${matrixCheckLine(check)} cmd=${inlineCode(check.command)}`);
+      if (check.reason)
+        lines.push(`    - reason: ${check.reason}`);
+      if (check.tail) {
+        lines.push("    - output tail:");
+        lines.push(...fenceBlock(check.tail).map((l) => `      ${l}`));
+      }
+    }
+    return lines;
+  }
   const verify = goal.lastVerify;
   if (!verify) {
     return [
-      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when `evaluator.verifyCommand` is configured.)"
+      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when verification is configured.)"
     ];
   }
   const result = verify.timedOut ? "timed out" : verify.code === null ? "no exit code (spawn error or timeout)" : `exit ${verify.code}`;
@@ -5823,7 +5878,12 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha)) && (value.verify === undefined || isVerdictVerify(value.verify));
+var VERIFY_CHECK_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]);
+var isVerifyCheckType = (value) => isString(value) && VERIFY_CHECK_TYPES.has(value);
+var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason));
+var isVerdictVerificationMatrix = (value) => isRecord(value) && isString(value.profile) && isBoolean(value.broadGoal) && isBoolean(value.pass) && Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) && Array.isArray(value.missing) && value.missing.every(isString);
+var isLastVerification = (value) => isVerdictVerificationMatrix(value) && isFiniteNumber(value.at);
+var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha)) && (value.verify === undefined || isVerdictVerify(value.verify)) && (value.verification === undefined || isVerdictVerificationMatrix(value.verification));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
 var isLastVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && isFiniteNumber(value.at) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
@@ -5892,6 +5952,8 @@ var isGoalSnapshot = (value) => {
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0))
     return false;
   if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify))
+    return false;
+  if (value.lastVerification !== undefined && !isLastVerification(value.lastVerification))
     return false;
   if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince))
     return false;

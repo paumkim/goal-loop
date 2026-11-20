@@ -88,11 +88,26 @@ const iterationLines = (entry: LoopEntry, spanMs: number): string[] => {
   return lines
 }
 
-const verifyCell = (verify: VerdictEntry["verify"]): string => {
+const verifyCell = (entry: VerdictEntry): string => {
+  const m = entry.verification
+  if (m) {
+    const req = m.checks.filter((c) => c.required)
+    const pass = req.filter((c) => c.pass && c.scoped).length
+    const label = `${pass}/${req.length || m.checks.length} ${m.pass ? "pass" : "fail"}`
+    return m.broadGoal ? `${label} (broad)` : label
+  }
+  const verify = entry.verify
   if (!verify) return GAP
   if (verify.timedOut) return "timeout"
   if (verify.code === null) return "error"
   return `exit ${verify.code}`
+}
+
+const matrixCheckLine = (check: NonNullable<VerdictEntry["verification"]>["checks"][number]): string => {
+  const state = !check.scoped ? "unscoped" : check.pass ? "pass" : check.timedOut ? "timeout" : check.code === null ? "error" : `exit ${check.code}`
+  const bits = [check.id, check.type, check.required ? "required" : "optional", state]
+  if (check.label) bits.push(`label=${check.label}`)
+  return bits.join(" · ")
 }
 
 /** One row per evaluated turn in the verdict trail. */
@@ -104,7 +119,7 @@ const verdictTable = (history: readonly VerdictEntry[]): string[] => {
   for (const entry of history) {
     const tools = entry.toolCalls ?? GAP
     lines.push(
-      `| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry.verify)} |`,
+      `| ${entry.turn} | ${entry.verdict} | ${tools} | ${shortSha(entry.sha)} | ${spendCell(entry.spend)} | ${verifyCell(entry)} |`,
     )
   }
   return lines
@@ -117,10 +132,25 @@ const verdictProse = (history: readonly VerdictEntry[]): string[] => {
     const bits = [`turn ${entry.turn}`, entry.verdict, isoOf(entry.at)]
     if (entry.toolCalls !== undefined) bits.push(`${entry.toolCalls} tool${entry.toolCalls === 1 ? "" : "s"}`)
     if (entry.sha) bits.push(shortSha(entry.sha))
-    if (entry.verify) bits.push(`verify ${verifyCell(entry.verify)} ${inlineCode(entry.verify.command)}`)
+    if (entry.verification) {
+      const req = entry.verification.checks.filter((c) => c.required).length
+      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required)`)
+    } else if (entry.verify) {
+      const v = entry.verify
+      const state = v.timedOut ? "timeout" : v.code === null ? "error" : `exit ${v.code}`
+      bits.push(`verify ${state} ${inlineCode(v.command)}`)
+    }
     lines.push(`- ${bits.join(" · ")}`)
     lines.push(...quote(entry.reason))
-    if (entry.verify?.tail) {
+    if (entry.verification) {
+      lines.push(...quote("verification matrix checks:"))
+      for (const check of entry.verification.checks) {
+        lines.push(...quote(`- ${matrixCheckLine(check)} cmd=${check.command}`))
+        if (check.reason) lines.push(...quote(`  reason: ${check.reason}`))
+        if (check.tail) lines.push(...quote(`  output tail:\n${check.tail}`))
+      }
+      if (entry.verification.missing.length) lines.push(...quote(`missing/unscoped/failed required checks: ${entry.verification.missing.join(", ")}`))
+    } else if (entry.verify?.tail) {
       lines.push(...quote(`verify output tail:\n${entry.verify.tail}`))
     }
   }
@@ -168,10 +198,30 @@ const boundaryCompactLines = (goal: GoalSnapshot, nowMs: number): string[] => {
 }
 
 const verifyLines = (goal: GoalSnapshot): string[] => {
+  const matrix = goal.lastVerification
+  if (matrix) {
+    const req = matrix.checks.filter((c) => c.required)
+    const passed = req.filter((c) => c.pass && c.scoped).length
+    const lines = [
+      `- Matrix profile: ${matrix.profile}${matrix.broadGoal ? " (broad goal)" : ""}`,
+      `- Result: ${matrix.pass ? "pass" : "fail"} · ${passed}/${req.length} required checks satisfied · ${isoOf(matrix.at)}`,
+    ]
+    if (matrix.missing.length) lines.push(`- Missing/unscoped/failed required checks: ${matrix.missing.join(", ")}`)
+    lines.push("- Checks:")
+    for (const check of matrix.checks) {
+      lines.push(`  - ${matrixCheckLine(check)} cmd=${inlineCode(check.command)}`)
+      if (check.reason) lines.push(`    - reason: ${check.reason}`)
+      if (check.tail) {
+        lines.push("    - output tail:")
+        lines.push(...fenceBlock(check.tail).map((l) => `      ${l}`))
+      }
+    }
+    return lines
+  }
   const verify = goal.lastVerify
   if (!verify) {
     return [
-      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when `evaluator.verifyCommand` is configured.)",
+      "No verify gate result on this record. (The gate runs only after a `met` verdict, and only when verification is configured.)",
     ]
   }
   const result = verify.timedOut

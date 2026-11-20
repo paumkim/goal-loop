@@ -207,7 +207,7 @@ describe("full-frame snapshots (named layout states)", () => {
 
   test("StatusDialogBody · verify (the gate ran — the output tail is on screen, click-to-copy)", async () => {
     const downgraded = loopedGoal({
-      reason: "Verification `bun run check` did not pass: exit 1: 1 fail\nerror: expected true",
+      reason: "Verification matrix did not pass for scoped goal (profile default); missing/unscoped/failed required checks: verify-command.\nnext:\n  1. [high/risk] Satisfy required verification check verify-command (custom) — evidence gap/finding: exit 1; command \"bun run check\"; output: 1 fail\nerror: expected true — required proof: fresh executed command with exit 0 and scoped output for this goal.",
       lastVerify: { command: "bun run check", code: 1, tail: "1 fail\nerror: expected true", at: now - 1000 * 60 * 3 },
     })
     const snapshot = await frame(

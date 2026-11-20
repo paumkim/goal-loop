@@ -4,6 +4,7 @@ import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.t
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
+import { isBroadGoalCondition } from "../core/prompts.ts"
 import {
   EMPTY_USAGE, MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES,
   isLive,
@@ -19,6 +20,8 @@ import {
   type NoticeKind,
   type NoticeLevel, type PauseCause, // may not become its own line: docs cite controller.ts:68 for the epoch field
   type UsageSnapshot,
+  type VerdictVerificationMatrix,
+  type VerifyCheckEvidence,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
@@ -1168,12 +1171,14 @@ export class GoalController {
       }
     }
 
-    // Verifier, not transcriber: a met verdict is not accepted until the configured
-    // verification command exits 0 against the current checkout. The output tail rides the
-    // not_met reason, so the next turn sees exactly what failed.
-    const gateRan = result.verdict === "met" && !!config.evaluator.verifyCommand
-    if (gateRan) {
-      result = await this.verifyMet(record, runtime, result)
+    // Verifier, not transcriber: a candidate met verdict is accepted only when the applicable
+    // verification matrix (legacy verifyCommand or configured checks/profile) passes with fresh,
+    // scoped command evidence. Missing/unscoped required verification for broad goals downgrades to not_met.
+    let verificationMatrix: VerdictVerificationMatrix | undefined
+    if (result.verdict === "met") {
+      const verified = await this.verifyMet(record, runtime, result)
+      result = verified.result
+      verificationMatrix = verified.matrix
       if (this.stale(record, runtime, epoch)) return
     }
 
@@ -1192,12 +1197,11 @@ export class GoalController {
         return undefined
       }
     })()
-    // Explicit pass/fail evidence for the configured verification gate (when it ran this turn) rides the verdict trail,
-    // so the matrix records command outcome alongside the evaluator verdict rather than only on the mutable latest-verify field.
-    const verifyEvidence = gateRan && record.lastVerify
+    // Legacy single-check evidence remains for compatibility; matrix evidence records every required check.
+    const verifyEvidence = verificationMatrix && record.lastVerify
       ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
       : undefined
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}) })
+    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}), ...(verificationMatrix ? { verification: verificationMatrix } : {}) })
     // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
     const historyBound = boundVerdictHistory(record.history)
     if (historyBound.dropped > 0) {
@@ -1246,61 +1250,164 @@ export class GoalController {
   }
 
   /**
-   * Runs the configured verification command and returns the (possibly downgraded) verdict.
-   * A missing verifier is a fail-closed error, not a pass: the whole point of the gate is that
-   * met claims are backed by fresh command output, not transcript summaries.
+   * Runs the applicable verification matrix for a candidate met verdict and returns the (possibly downgraded) verdict
+   * plus matrix evidence. Legacy `verifyCommand` is represented as a synthesized matrix check. Missing verifier or
+   * required checks/evidence for the active profile (including broad-goal scoping) fail closed to not_met.
    */
   private async verifyMet(
     record: GoalRecord,
     runtime: Runtime,
     result: EvaluationResult,
-  ): Promise<EvaluationResult> {
+  ): Promise<{ result: EvaluationResult; matrix?: VerdictVerificationMatrix }> {
     const { config, log } = this.deps
     const sessionID = record.sessionID
-    const command = config.evaluator.verifyCommand
-    // The dashboard paints the gate's own output, so persist a display-safe tail on the record at every exit.
-    const mark = (entry: { code: number | null; timedOut?: boolean; output?: string }) => {
-      const cleaned = entry.output ? stripControls(entry.output).trim() : ""
-      const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
-      record.lastVerify = { command, code: entry.code, ...(entry.timedOut ? { timedOut: true } : {}), ...(tail ? { tail } : {}), at: this.deps.clock.now() }
+    const checks = config.evaluator.verifyChecks ?? []
+    if (checks.length === 0) return { result }
+
+    const broadGoal = config.evaluator.verifyProfile === "broad" || isBroadGoalCondition(record.condition)
+    const profile = config.evaluator.verifyProfile || (broadGoal ? "broad" : "default")
+    const applicable = checks.map((check) => ({
+      def: check,
+      requiredNow: (check.required !== false) && (check.when === "broad" ? broadGoal : true),
+      scopedNow: check.when === "broad" ? broadGoal : true,
+    }))
+    const requiredNow = applicable.filter((x) => x.requiredNow)
+
+    const legacySingle = checks.length === 1 && checks[0]?.id === "verify-command"
+    const fail = (reason: string, matrix: VerdictVerificationMatrix): { result: EvaluationResult; matrix: VerdictVerificationMatrix } => {
+      log.warn("goal verification gate downgraded met verdict", { sessionID, reason, profile, broadGoal })
+      this.notify(sessionID, "retry", "warning", legacySingle ? "Verification failed" : "Verification matrix did not pass", truncate(reason, 180))
+      record.lastVerification = { ...matrix, at: this.deps.clock.now() }
+      return { result: { verdict: "not_met", reason }, matrix }
     }
-    const fail = (detail: string): EvaluationResult => {
-      log.warn("met verdict downgraded to not_met by the verification gate", { sessionID, command, detail })
-      this.notify(sessionID, "retry", "warning", "Verification failed", `${command}: ${truncate(detail, 160)}`)
-      return { verdict: "not_met", reason: `Verification \`${truncate(command, 120)}\` did not pass: ${truncate(detail, 240)}` }
+
+    // A broad goal must have scoped/profile-aware required verification; a generic-only legacy gate is unscoped.
+    if (broadGoal && requiredNow.length > 0) {
+      const hasScopedTyped = requiredNow.some((x) => x.def.type !== "custom" || (x.def.id && x.def.id !== "verify-command"))
+      if (!hasScopedTyped) {
+        const evidence: VerifyCheckEvidence[] = requiredNow.map((x) => ({
+          id: x.def.id,
+          type: x.def.type,
+          ...(x.def.label ? { label: x.def.label } : {}),
+          command: x.def.command,
+          required: true,
+          scoped: false,
+          pass: false,
+          code: null,
+          reason: "unscoped for broad goal (configure typed/profile checks: typecheck, targeted tests, lint/build as applicable, goal-declared checks)",
+        }))
+        const matrix: VerdictVerificationMatrix = { profile, broadGoal, pass: false, checks: evidence, missing: requiredNow.map((x) => x.def.id) }
+        const primary = evidence[0]
+        if (primary) record.lastVerify = { command: primary.command, code: null, at: this.deps.clock.now() }
+        return fail(
+          `Verification matrix unscoped for broad goal: required typed/scoped checks missing (need typecheck, targeted tests, lint/build as applicable, and/or goal-declared checks).\nnext:\n  1. [high/risk] Configure evaluator.verifyChecks/profile with scoped required checks — evidence gap/finding: only generic/unscoped verification configured for a broad goal — required proof: fresh executed command/output/exit evidence for each required check type scoped to the claimed change.`,
+          matrix,
+        )
+      }
     }
+
+    if (requiredNow.length === 0) return { result }
+
     const verifier = this.deps.verifier
-    if (!verifier) {
-      const detail = "no verifier port is wired for this plugin instance (fail closed)"
-      mark({ code: null, output: detail })
-      return fail(detail)
-    }
+    const evidence: VerifyCheckEvidence[] = []
     runtime.evaluating = true
     this.emit(record)
-    // Registered on the runtime so invalidate() during verification cancels the child instead of
-    // letting it run to the timeout; the stale-epoch check in evaluate() drops its result either way.
-    const verification = new AbortController()
-    runtime.abort = verification
     try {
-      const signal = AbortSignal.any([AbortSignal.timeout(config.evaluator.verifyTimeoutMs), verification.signal])
-      const run = await verifier.verify({ command, cwd: this.deps.directory, timeoutMs: config.evaluator.verifyTimeoutMs, signal })
-      if (run.code === 0) {
-        mark({ code: 0, output: run.output })
-        return result
+      for (const item of applicable) {
+        if (!item.requiredNow) {
+          evidence.push({
+            id: item.def.id,
+            type: item.def.type,
+            ...(item.def.label ? { label: item.def.label } : {}),
+            command: item.def.command,
+            required: false,
+            scoped: item.scopedNow,
+            pass: true,
+            code: null,
+            reason: item.scopedNow ? "not required" : "not applicable",
+          })
+          continue
+        }
+        if (!verifier) {
+          evidence.push({
+            id: item.def.id,
+            type: item.def.type,
+            ...(item.def.label ? { label: item.def.label } : {}),
+            command: item.def.command,
+            required: true,
+            scoped: item.scopedNow,
+            pass: false,
+            code: null,
+            reason: "no verifier port is wired for this plugin instance (fail closed)",
+          })
+          continue
+        }
+        const timeoutMs = item.def.timeoutMs ?? config.evaluator.verifyTimeoutMs
+        const verification = new AbortController()
+        runtime.abort = verification
+        try {
+          const signal = AbortSignal.any([AbortSignal.timeout(timeoutMs), verification.signal])
+          const run = await verifier.verify({ command: item.def.command, cwd: this.deps.directory, timeoutMs, signal })
+          const cleaned = run.output ? stripControls(run.output).trim() : ""
+          const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
+          const pass = run.code === 0 && !run.timedOut
+          evidence.push({
+            id: item.def.id,
+            type: item.def.type,
+            ...(item.def.label ? { label: item.def.label } : {}),
+            command: item.def.command,
+            required: true,
+            scoped: item.scopedNow,
+            pass,
+            code: run.code ?? null,
+            ...(run.timedOut ? { timedOut: true } : {}),
+            ...(tail ? { tail } : {}),
+            ...(pass ? {} : { reason: run.timedOut ? `timed out after ${formatDuration(timeoutMs)}` : `exit ${run.code ?? "unknown"}` }),
+          })
+        } catch (error) {
+          if (verification.signal.aborted) throw error
+          evidence.push({
+            id: item.def.id,
+            type: item.def.type,
+            ...(item.def.label ? { label: item.def.label } : {}),
+            command: item.def.command,
+            required: true,
+            scoped: item.scopedNow,
+            pass: false,
+            code: null,
+            reason: `verification failed to run: ${errorMessage(error)}`,
+          })
+        } finally {
+          if (runtime.abort === verification) runtime.abort = undefined
+        }
       }
-      const tail = stripControls(run.output).trim().split("\n").slice(-12).join("\n")
-      mark({ code: run.code ?? null, timedOut: run.timedOut, output: run.output })
-      return fail(run.timedOut ? `timed out after ${formatDuration(config.evaluator.verifyTimeoutMs)}` : `exit ${run.code ?? "unknown"}: ${tail || "(no output)"}`)
-    } catch (error) {
-      const detail = `verification errored: ${errorMessage(error)}`
-      mark({ code: null, output: detail })
-      return fail(detail)
     } finally {
-      if (runtime.abort === verification) {
-        runtime.abort = undefined
-        runtime.evaluating = false
+      runtime.evaluating = false
+    }
+
+    const missing = evidence.filter((e) => e.required && (!e.pass || !e.scoped)).map((e) => e.id)
+    const matrix: VerdictVerificationMatrix = { profile, broadGoal, pass: missing.length === 0, checks: evidence, missing }
+    const primary = evidence.find((e) => e.required) ?? evidence[0]
+    if (primary) {
+      record.lastVerify = {
+        command: primary.command,
+        code: primary.code,
+        ...(primary.timedOut ? { timedOut: true } : {}),
+        ...(primary.tail ? { tail: primary.tail } : {}),
+        at: this.deps.clock.now(),
       }
     }
+    record.lastVerification = { ...matrix, at: this.deps.clock.now() }
+    if (missing.length === 0) return { result, matrix }
+
+    const problems = evidence.filter((e) => e.required && (!e.pass || !e.scoped))
+    const lines = problems.map((e, i) => {
+      const detail = e.reason ?? (e.pass ? "scoping insufficient" : "not satisfied")
+      const out = e.tail ? `; output: ${truncate(e.tail, 180)}` : ""
+      return `  ${i + 1}. [high/risk] Satisfy required verification check ${e.id} (${e.type}) — evidence gap/finding: ${detail}${e.scoped ? "" : ", unscoped"}; command ${JSON.stringify(e.command)}${out} — required proof: fresh executed command with exit 0 and scoped output for this goal.`
+    })
+    const reason = `Verification matrix did not pass for ${broadGoal ? "broad" : "scoped"} goal (profile ${profile}); missing/unscoped/failed required checks: ${missing.join(", ")}.\nnext:\n${lines.join("\n")}`
+    return fail(reason, matrix)
   }
 
   /**

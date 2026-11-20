@@ -87,6 +87,34 @@ export function commitStatusSuffix(policy: CommitPolicy): string {
 }
 
 /** True when the goal has no hard evidence token or reads as vague. */
+
+/**
+ * Heuristic: a "broad goal" needs scoped/profile-aware verification evidence (typed checks, targeted proofs),
+ * not a single green-but-unscoped gate. Conservative: obvious multi-clause improvement/refactor/audit/completion
+ * goals are broad; precise single-scope conditions are not.
+ */
+export function isBroadGoalCondition(condition: string): boolean {
+  const text = condition.trim()
+  if (!text) return false
+  const words = text.split(/\s+/).filter(Boolean)
+  const lower = text.toLowerCase()
+  const broadSignals = [
+    /\b(improve|refactor|harden|audit|review|optimi[sz]e|stabili[sz]e|cleanup|clean up|overhaul|migrate|redesign|moderni[sz]e)\b/,
+    /\b(entire|whole|all|every|across|codebase|project|repository|repo)\b/,
+    /\b(backlog|roadmap|complete|finish|end[- ]to[- ]end|comprehensive|systemic|profile[- ]aware|verification matrix)\b/,
+    /\b(and|plus|also|including|as well as)\b.*\b(test|lint|typecheck|build|docs|spec|verify|check)\b/,
+  ]
+  let hits = 0
+  for (const re of broadSignals) if (re.test(lower)) hits++
+  const clauses = text.split(/[.;\n]+|\bthen\b|\band then\b/i).map((x) => x.trim()).filter(Boolean)
+  if (hits >= 2) return true
+  if (hits >= 1 && (words.length >= 14 || clauses.length >= 2)) return true
+  if (clauses.length >= 3 && words.length >= 18) return true
+  // Reuse fuzzy heuristic as a strong broad signal for open-ended goals.
+  if (isFuzzyCondition(text) && (hits >= 1 || words.length >= 12)) return true
+  return false
+}
+
 export function isFuzzyCondition(condition: string): boolean {
   const text = condition.toLowerCase()
   const vague = ["look like", "like a rabbit", "pretty", "nice", "better", "improve", "redesign", "rework", "rabbit"]
@@ -354,7 +382,7 @@ const VERDICTS = [
   `2. Build an evidence matrix per clause: {clause, required evidence, observed evidence, status: satisfied|missing|contradicted|unscoped, source/turn}.`,
   `3. Adversarial check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
   `4. Gate policy:`,
-  `   - "met": every clause is satisfied by fresh, scoped evidence (including required commits/submit/merge/checks when applicable). Green but unscoped is insufficient for broad goals (e.g. full-suite green without targeted/smoke/regression evidence for touched risk, or claims without matching artifacts).`,
+  `   - "met": every clause is satisfied by fresh, scoped evidence (including required commits/submit/merge/checks when applicable). Green but unscoped is insufficient for broad goals (e.g. full-suite green without targeted/smoke/regression evidence for touched risk, or claims without matching artifacts). When a verification matrix/profile applies, required check types/evidence (typecheck, targeted tests, lint/build as applicable, and goal-declared/configured checks) must be fresh, executed, and scoped; missing, unscoped, failed, or unverifiable required checks mean "not_met" with concrete next actions and required proof.`,
   `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
   `   - "impossible": only with strong evidence the condition can never be satisfied (self-contradictory or depends on something verifiably unavailable). Difficulty or slow progress is "not_met".`,
   `5. Detect repeated failure signatures from recent verdicts/reasons visible in this conversation (same missing evidence, same failing gate, same flaky/error pattern, same unaddressed gap). If repeating, require strategy escalation: narrow scope, produce a diagnostic artifact, or mark blocked with the blocker.`,
@@ -365,6 +393,7 @@ const RULES = [
   `If the armed condition was already satisfied at HEAD before the turn began (fresh evidence this turn shows the work landed and gates green): clause-by-clause evidence must still show it satisfied now; state "Already satisfied at HEAD <sha>" in the reason when true, and do not credit narration. A re-proposed identical or materially equivalent condition must still name a concrete next gap on a "next:" line (novelty/no-duplicate: a bare already-satisfied met with no named next concrete gap is downgraded to not_met as duplicate-without-forward-pointer).`,
   `Defensive audit: scan visible evidence for stale, weakened, or self-contradictory state — tests skipped/deleted/relaxed, evidence before last change, SPEC/docs contradicting tree, generated artifacts never committed, half-landed work, or claims contradicted by fresher output. If any bears on the condition or its evidence, verdict is "not_met" and the reason names it. A green gate bought by weakening a test is not green.`,
   `Commit/submit evidence: when the condition or coordinator flow requires commits/submit/merge, treat missing or unverifiable commit hash/branch/submit/merge-next/status evidence as not_met (coordinator: commit on wt/<slug> plus submit/merge evidence; direct: commit on required branch).`,
+  `Verification matrix/profile: if required verification checks or check types are configured/applicable for the goal or a broad goal profile, each required check needs fresh executed command/output/exit evidence scoped to the claimed change; treat missing, unscoped, failing, timed-out, or unverifiable required checks as not_met and name the exact check and proof still needed.`,
 ]
 
 /**
