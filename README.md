@@ -195,7 +195,7 @@ All optional, set in `opencode.json`:
 | `checkinMinutes` | `30` | First background check-in; `0` disables idle check-in nudges (automatic retries never stop) |
 | `maxIdleCheckins` | `3` | Max idle check-ins while background work runs |
 | `maxRetries` | `3` | Retained for compatibility; no longer gates anything. Automatic retries are unlimited with capped backoff |
-| `maxConditionChars` | unlimited | Condition length cap (min 100); default never rejects |
+| `maxConditionChars` | unlimited | Condition length cap (min 0); default never rejects; `0` rejects every objective |
 | `systemReminder` | `false` | Also put the goal in the system prompt (costs one cache miss) |
 | `transcriptNotes` | `true` | Deprecated; no effect — the outcome note in the session inbox was retired (LXVII); outcomes surface via toast, the HUD acknowledgment and the record |
 | `compactAtTokens` | `0` | Auto-compact at this many estimated model-visible tokens; `0` disables |

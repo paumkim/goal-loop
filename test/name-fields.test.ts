@@ -1,0 +1,61 @@
+/**
+ * Name-field consistency after the `goal-loop` rename (Workstream LXXIX).
+ *
+ * The rename touched the product, package, plugin ids, CLI file and mirror dir. Every field that names
+ * the product must agree with the one shipped identity, so this suite pins the fields that can drift
+ * independently: `package.json` `name`, the lockfile workspace `name`, the `bin` map (including the
+ * legacy alias), the server/TUI plugin ids (source and shipped `dist/tui.js`), the mirror directory,
+ * the docs search index, and the documented option floors against `resolveConfig()`.
+ *
+ * Deliberate legacy names are NOT asserted away: `OPENCODE_GOAL_*` env vars, the `opencode-goal` bin
+ * alias, `PLUGIN_PACKAGE = "opencode-goalv2"` and the GitHub repo slug are the back-compat surface.
+ */
+import { describe, expect, test } from "bun:test"
+import { readFileSync, statSync } from "node:fs"
+import { join } from "node:path"
+import { resolveConfig } from "../src/core/config.ts"
+const ROOT = join(import.meta.dir, "..")
+const read = (path: string): string => readFileSync(join(ROOT, path), "utf8")
+const pkg = JSON.parse(read("package.json")) as {
+  name: string
+  version: string
+  bin: Record<string, string>
+  files: string[]
+}
+describe("name fields", () => {
+  test("package.json names the package goal-loop", () => {
+    expect(pkg.name).toBe("goal-loop")
+  })
+  test("bun.lock's workspace name equals package.json's name", () => {
+    const locked = /"workspaces":\s*\{\s*"":\s*\{\s*"name":\s*"([^"]+)"/.exec(read("bun.lock"))?.[1]
+    expect(locked).toBe(pkg.name)
+  })
+  test("bin maps goal-loop to the executable CLI and keeps opencode-goal as an alias", () => {
+    expect(pkg.bin["goal-loop"]).toBe("./bin/goal-loop.mjs")
+    expect(pkg.bin["opencode-goal"]).toBe("./bin/goal-loop.mjs")
+    const cli = statSync(join(ROOT, "bin/goal-loop.mjs"))
+    expect(cli.mode & 0o111).not.toBe(0)
+    expect(read("bin/goal-loop.mjs")).toContain(`const FALLBACK_VERSION = "${pkg.version}"`)
+    expect(pkg.files).toContain("install.sh")
+  })
+  test("plugin ids are goal-loop (server) and goal-loop.tui (TUI), in source and shipped dist", () => {
+    expect(read("src/index.ts")).toContain('const PLUGIN_ID = "goal-loop"')
+    expect(read("src/tui.tsx")).toContain('id: "goal-loop.tui"')
+    expect(read("dist/tui.js")).toContain("goal-loop.tui")
+    expect(read("dist/tui.js")).not.toContain("opencode-goal.tui")
+  })
+  test("the mirror directory is goal-loop-mirror in code and in the config docs", () => {
+    expect(read("src/core/mirror.ts")).toContain('join(tmpdir(), "goal-loop-mirror")')
+    expect(read("docs/config.html")).toContain("/goal-loop-mirror/")
+  })
+  test("the docs search index advertises the goal-loop CLI, not a removed npm global install", () => {
+    const keywords = /keywords:"install ([^"]*)"/.exec(read("docs/index.html"))?.[1] ?? ""
+    expect(keywords).toContain("goal-loop")
+    expect(keywords).not.toContain("npm i -g")
+  })
+  test("maxConditionChars: documented floor (0) matches resolveConfig()", () => {
+    expect(resolveConfig({ maxConditionChars: 0 }, {}).maxConditionChars).toBe(0)
+    expect(read("README.md")).toContain("Condition length cap (min 0)")
+    expect(read("docs/config.html")).toContain("<code>maxConditionChars</code></td><td>int ≥0</td>")
+  })
+})

@@ -1,4 +1,4 @@
-/* opencode-goalv2 docs — extended design system.
+/* goal-loop docs (repo paumkim/opencode-goalv2) — extended design system.
    Original variable names are kept and extended, never forked. */
 :root{
   --ink:#111827;--bg:#f5f7fc;--panel:#ffffff;--panel2:#eceff6;--acc:#2563eb;--acc-soft:rgba(37,99,235,.08);

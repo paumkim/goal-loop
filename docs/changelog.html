@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-19 21:28 UTC</code></td><td>fix(names): name fields reflect the goal-loop identity; docs follow the maxConditionChars floor</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 08:26 UTC</code></td><td>feat(cli): the project is its own CLI — goal-loop install / uninstall / status</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 07:45 UTC</code></td><td>fix(prompts,index): keep the compaction checkpoint and a trailing user turn</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 07:05 UTC</code></td><td>fix(events,parse): shell.created reads top-level id/owner like shell.updated; a lone quote is status — close pending_fixes 8/9; SPEC LXXVI; marker 1787→1789</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>docs: guards list gains the loop-advance re-arm no-new-gap refusal bullet (LV)</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>test+fix: unify re-arm no-new-gap refusal with the arming-side grep target (LIV)</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix: strip plain goal notes from model context too (LII)</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 03:37 UTC</code></td><td>fix: the achieved loop outcome note stops riding the context (LI)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
