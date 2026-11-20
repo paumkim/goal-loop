@@ -4438,6 +4438,22 @@
       ],
       "mergedAt": "2026-11-20T16:55:00Z",
       "mergedInto": "dev"
+    },
+    "unify-windows-drive-guard": {
+      "agent": "iceman",
+      "paths": "src/core/wire.ts,src/runtime/controller.ts,src/core/failure-signature.ts",
+      "branch": "wt/unify-windows-drive-guard",
+      "worktree": "worktrees/wt-unify-windows-drive-guard",
+      "status": "done",
+      "createdAt": "2026-11-20T17:08:29Z",
+      "submittedAt": "2026-11-20T17:10:51Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T17:10:51Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T17:12:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
