@@ -11,6 +11,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-20 04:19 UTC</code></td><td>feat(verify): auto goal-declared checks, deterministic coverage, and artifact evidence modes</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 03:38 UTC</code></td><td>feat(verify): add profile-aware verification matrix with per-check evidence</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 03:17 UTC</code></td><td>feat(evaluator): require clause evidence matrix, adversarial checks, and structured next actions</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 03:02 UTC</code></td><td>feat(runtime): record verification gate evidence in verdict trail</td><td>commit</td></tr>
@@ -40,7 +41,6 @@
 <tr><td><code>2026-11-19 04:24 UTC</code></td><td>fix(evaluator): per-attempt abort budget + app-level race — a slow provider can no longer hang the evaluator or loop on &quot;unreadable verdict&quot;</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 04:05 UTC</code></td><td>fix(evaluator): escalate unreadable verdicts — empty/garbage replies retried with REPAIR then STRICT_REPAIR before EvaluationError; regression tests cover empty-reply recovery and the 3-attempt failure; SPEC marker re-stamped 1758→1760</td><td>commit</td></tr>
 <tr><td><code>2026-11-19 03:59 UTC</code></td><td>fix(evaluator): escalate unreadable verdicts — empty/garbage replies retried with REPAIR then STRICT_REPAIR before EvaluationError; regression tests cover empty-reply recovery and the 3-attempt failure; SPEC marker re-stamped 1758→1760</td><td>commit</td></tr>
-<tr><td><code>2026-11-19 03:41 UTC</code></td><td>chore(terminal-tui): terminal-TUI consistency pass — claimant uncommitted edits, docs stamps and changelog refreshed</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
