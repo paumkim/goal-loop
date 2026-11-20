@@ -7825,4 +7825,25 @@ freshness, invariant-sweep, spec-check `files=72 tests=1989`).
 
 Honest limits. Internal-only cleanup; no changes to persisted formats, evaluator/rubric, commit/verify gates, or
 TUI behavior. Package public exports (`.`, `./tui`, `./rpc`) unchanged.
+
+## Workstream XCVIII — unify learning-log path default and guard fixture-path pollution (2026-11-20)
+
+Behavior-preserving hardening and config consistency (no intended runtime behavior change for valid repository
+paths). Prevents test-harness pollution and removes a duplicated default:
+
+1. **`src/runtime/controller.ts` (`learningLogFile`)**: when the learning log is enabled, the relative-path
+   fallback now uses the resolved `config.learning.path` (instead of a duplicated literal) and skips learning-log
+   writes on non-Windows platforms when the base directory is a Windows drive-style path (`C:\` / `C:/`), avoiding
+   literal `C:` directory creation from Windows-style fixture paths on POSIX.
+2. **`src/core/failure-signature.ts` (`persistFailureDiagnosticArtifact`)**: skips diagnostic artifact writes on
+   non-Windows platforms when the target directory is a Windows drive-style path, preventing the same POSIX fixture
+   pollution for repeated-failure diagnostics. `writeFailureDiagnosticArtifact` behavior is unchanged for valid paths.
+
+Verification (fresh at this HEAD). Targeted `bun test test/failure-signature.test.ts test/learning-log.test.ts`
+→ **31 pass / 0 fail** (2 files, 135 expect() calls); `bun run check` green (tsc, tests, dist fresh, TUI load,
+docs freshness, invariant-sweep, spec-check `files=72 tests=1989`).
+
+Honest limits. Guards are narrow (POSIX + Windows drive-letter base only) and do not normalize or rewrite fixture
+paths; tests that intentionally require learning/diagnostic writes must use platform-native writable directories.
+Persisted formats, evaluator/rubric, commit/verify gates, and public API behavior are unchanged for supported paths.
 <!-- spec-check files=72 tests=1989 -->

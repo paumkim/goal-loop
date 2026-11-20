@@ -263,6 +263,8 @@ export function persistFailureDiagnosticArtifact(input: {
   goalID?: string
   condition?: string
 }): string | undefined {
+  // Avoid creating literal "C:" directories on POSIX when tests pass Windows-style fixture paths.
+  if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(input.directory)) return undefined
   try {
     const artifact = buildRepeatedFailureDiagnosticArtifact({ ...input, directory: input.directory })
     return writeFailureDiagnosticArtifact(input.directory, artifact)

@@ -2533,9 +2533,11 @@ export class GoalController {
     if (!learning?.enabled) return undefined
     const base = directory ?? this.deps.directory
     const raw = typeof learning.path === "string" ? learning.path.trim() : ""
-    const path = raw || ".term/goal-loop/learnings.jsonl"
+    const path = raw || learning.path
     if (isAbsolute(path)) return path
     if (!base) return undefined
+    // Avoid creating literal "C:" directories on POSIX when tests pass Windows-style fixture paths.
+    if (process.platform !== "win32" && /^[A-Za-z]:[\\/]/.test(base)) return undefined
     return join(base, path)
   }
 
