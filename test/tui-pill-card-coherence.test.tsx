@@ -95,7 +95,7 @@ describe("the accordion geometry, headless (the real pill model and the real Hud
   const maxCardRows = Math.max(8, MAX_ROWS - 2)
   const maxBodyRows = Math.max(8, maxCardRows - 1)
   const cardRows = hudCardRows(g, false, maxBodyRows, TERMINAL)
-  const pillLine = pillModel(g, 1000 * 60 * 42, false, TERMINAL - 2 - 2, 2)!.text
+  const pillLine = pillModel(g, 1000 * 60 * 42, false, TERMINAL - 1 - 2, 2)!.text
 
   const compose = (cardOpen: boolean): JSX.Element => (
     <box flexDirection="column" width={TERMINAL} height={cardRows + 1}>
@@ -118,7 +118,7 @@ describe("the accordion geometry, headless (the real pill model and the real Hud
         </box>
       )}
       {/* The pill, always mounted while showing(): the panel's bottom seam when open, the stripe when closed. */}
-      <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={1} flexDirection="row">
+      <box position="absolute" top={cardRows} left={0} height={1} paddingLeft={0} flexDirection="row">
         <text fg={theme.text.muted} wrapMode="none">
           {pillLine}
         </text>

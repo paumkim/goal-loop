@@ -21,7 +21,9 @@ reports it), and the `OPENCODE_GOAL_*` environment prefix (the documented config
 
 Status: current as of v1.2.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
 a compact segment painted on the empty left side of the host's jump-to-latest row (the 1-row strip directly
-above the input prompt, claimed through the host's `session.composer.top` slot with a zero-flow absolute box);
+above the input prompt, claimed through the host's `session.composer.top` slot with a zero-flow absolute box;
+its leading icon begins the line at cell 0 — one left rail with the card's hanging bar and the composer's own
+left bar);
 left click toggles the card, right click opens the detail view; when the condition is pinned (card `pin` button
 or `p` in the dialog) the pill appends the condition truncated to the remaining width so it stays visible while
 the conversation scrolls; a slow breathing dot marks a live, working goal — it swells through `◦ ○ ◎ ○` on a
@@ -7501,4 +7503,50 @@ Verification.
 - Coordinator: commit on `wt/<slug>`, `coordinator submit`, `coordinator merge-next` from `/home/pauk/Projects/goal-loop` with fresh merge/preflight/check evidence; landed on `dev`.
 
 Honest limits. Only explicit, structured `verify:` directives in the goal condition are parsed (not arbitrary natural-language extraction); malformed directives are reported and never executed. "Fresh scoped transcript/artifact evidence" is matched as required literal patterns against rendered session transcript/context available at evaluation time (best-effort scoping to current session evidence) and cannot prove provenance beyond what transcript content shows; command checks remain the default and strongest proof. Broad-goal classification still uses heuristic/profile hints for applicability selection, but required coverage enforcement is deterministic runtime policy over resolved checks/profile and fails closed with concrete next actions when coverage is missing/unscoped. Reuse/caching is limited to identical check semantics within the same evaluated turn/HEAD (or coalesced identical in-flight checks in the same matrix run) and records reuse metadata; it never reuses across different turns/HEADs. Concurrency is bounded and applies to independent command executions; total latency remains proportional to required work not satisfied by allowed artifact evidence or reuse.
+
+## Workstream XC — the ambient pill's leading icon joins the left accent rail (2026-11-20)
+
+Armed condition (verbatim, with a screenshot of the live TUI): "I have a design/terminal TUI improvement
+request for this goal-loop plugin. Look at that goal-loop animation blinkering [screenshot]. I need that icon
+to move on the left a bit so it aligns perfectly [with the] UI: ◎ loop · v1/5 ○○○○○ · checking · 35m · 1 turn."
+
+Interpretation. In the live frame the pill's breathing icon sat one cell right of the left accent rail the
+rest of the chrome hangs on: the host composer's own left bar and the HUD card's hanging bar both own cell 0,
+while the pill painted its leading icon at cell 1 (measured off the screenshot: pill icon ink at x≈54, the
+composer's left bar at x≈42, one 17.5px cell apart — cells are the unit, not pixels). The ask is positional,
+not textual: the icon should begin the line at cell 0, sharing the rail with the card's hanging bar and the
+composer's left bar. The whole pill shifts one cell left; nothing else changes.
+
+930. `src/tui.tsx` (pill mount) — the `session.composer.top` absolute box drops its 1-cell leading padding
+     (`paddingLeft={1}` → `paddingLeft={0}`). The leading breath dot now paints at cell 0. The mount anchor
+     (`top={-1}`, `left={0}`, `height={1}`), the caret cell (▴/▾), the left/right-click contract and the card
+     mount are untouched; the card's hanging bar already owned cell 0, so the accordion's stripe and panel now
+     share one left rail.
+931. `src/tui.tsx` (label budget) — the reclaimed cell moves to the right margin: `mountWidthOr() - 2 - … - 2`
+     → `mountWidthOr() - 1 - … - 2` (1-cell right margin + the 2-cell caret; no left padding). The degradation
+     ladder is unchanged; truncation shifts one cell later at every tier, and the mounted row still never
+     paints past cell `width − 2`.
+932. Scripts and tests mirror the mount: `scripts/render-pill.tsx` and `scripts/render-slot.tsx` drop the
+     leading padding; `test/tui-alignment-invariants.test.tsx` pins the new invariant (the working and
+     terminal pills ink cell 0 first and never past cell `width − 2`, model ≤ `width − 1`, at 52/64/80/88/112
+     columns, color and mono); `test/tui-pill-card-coherence.test.tsx` follows the new budget; and
+     `test/render-scripts.test.ts` re-anchors the breath-drift assertion to cell 0 (the dot drifts; `slice(1)`
+     — the rest of the line — is byte-stable across phases, and the reduced-motion frame still equals phase 1).
+
+Verification (fresh at this HEAD). `cd test && bun test` → **1893 pass / 0 fail** (29 snapshots); `tsc --noEmit`
+clean; `bun run compile` rebuilds `dist/tui.js` (the committed bundle carries exactly the two edits — the
+`paddingLeft` 0 and the `- 1` budget); `bun run check` green (check:dist ok, check:tui ok, docs:check ok,
+check:spec ok — 68 files, 1893 tests). Headless evidence: `scripts/render-pill.tsx --width=80` paints the
+leading breath glyph at cell 0 across the human wave `◦ ○ ◎ ○`, and `scripts/render-slot.tsx --width=64`
+paints the card's hanging bar at cell 0 and the pill's `◎` at cell 0 in the same column — the alignment the
+request names. Pre-change the same two frames painted the pill's icon at cell 1.
+
+Honest limits. Verified at the headless-render and unit layers only — not on a live terminal this pass; the
+live-frame geometry was read from the user's screenshot (pill icon and composer bar one cell apart).
+`captureCharFrame` carries characters, not attributes, so the breath's bold crest stays pinned by unit tests,
+never by a frame diff. The row claim for the host's `Jump to latest ↓` row remains the host's: the pill keeps
+the composer slot's negative-anchor grammar, so if the host reclaims or repaints that row the geometry
+inherits it.
+
+<!-- spec-check files=68 tests=1893 -->
 
