@@ -4536,6 +4536,17 @@
       "submittedAt": "2026-11-20T20:43:33Z",
       "mergedAt": "2026-11-20T20:45:28Z",
       "mergedInto": "dev"
+    },
+    "coordinator-status-compact": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/coordinator-merge-safety.test.ts,SPEC.md,docs/changelog.html,docs/parallel-work.md,AGENTS.md",
+      "branch": "wt/coordinator-status-compact",
+      "worktree": "worktrees/wt-coordinator-status-compact",
+      "status": "done",
+      "createdAt": "2026-11-20T20:46:54Z",
+      "submittedAt": "2026-11-20T20:51:35Z",
+      "mergedAt": "2026-11-20T20:53:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
