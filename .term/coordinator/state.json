@@ -4389,6 +4389,22 @@
       ],
       "mergedAt": "2026-11-20T16:07:20Z",
       "mergedInto": "dev"
+    },
+    "optimize-learning-log-mkdir": {
+      "agent": "iceman",
+      "paths": "src/core/learning-log.ts",
+      "branch": "wt/optimize-learning-log-mkdir",
+      "worktree": "worktrees/wt-optimize-learning-log-mkdir",
+      "status": "done",
+      "createdAt": "2026-11-20T16:12:43Z",
+      "submittedAt": "2026-11-20T16:16:26Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:16:26Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:18:15Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
