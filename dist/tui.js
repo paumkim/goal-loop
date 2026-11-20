@@ -5803,6 +5803,7 @@ var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) &
 var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));
 var isLoopCompact = (value) => isRecord(value) && isFiniteNumber(value.requestedAt) && isFiniteNumber(value.iteration) && isFiniteNumber(value.misses) && (value.estimatedTokens === undefined || isFiniteNumber(value.estimatedTokens)) && (value.landedAt === undefined || isFiniteNumber(value.landedAt)) && (value.unmeasurableTicks === undefined || isFiniteNumber(value.unmeasurableTicks)) && (value.stalenessUnknown === undefined || isBoolean(value.stalenessUnknown)) && (value.unwillingWarned === undefined || isBoolean(value.unwillingWarned));
+var isLastVerify = (value) => isRecord(value) && isString(value.command) && (value.code === null || isFiniteNumber(value.code)) && isFiniteNumber(value.at) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail));
 var isGoalSnapshot = (value) => {
   if (!isRecord(value))
     return false;
@@ -5852,11 +5853,23 @@ var isGoalSnapshot = (value) => {
     return false;
   if (value.loopNotProgress !== undefined && !isFiniteNumber(value.loopNotProgress))
     return false;
+  if (value.historyDropped !== undefined && (!isFiniteNumber(value.historyDropped) || value.historyDropped < 0))
+    return false;
   if (value.loopHistory !== undefined && (!Array.isArray(value.loopHistory) || !value.loopHistory.every(isLoopEntry)))
+    return false;
+  if (value.loopHistoryDropped !== undefined && (!isFiniteNumber(value.loopHistoryDropped) || value.loopHistoryDropped < 0))
+    return false;
+  if (value.completedConditions !== undefined && (!Array.isArray(value.completedConditions) || !value.completedConditions.every(isString)))
+    return false;
+  if (value.completedConditionsDropped !== undefined && (!isFiniteNumber(value.completedConditionsDropped) || value.completedConditionsDropped < 0))
     return false;
   if (value.loopCompact !== undefined && !isLoopCompact(value.loopCompact))
     return false;
   if (value.reanchorCount !== undefined && (!isFiniteNumber(value.reanchorCount) || value.reanchorCount < 0))
+    return false;
+  if (value.lastVerify !== undefined && !isLastVerify(value.lastVerify))
+    return false;
+  if (value.waitingSince !== undefined && !isFiniteNumber(value.waitingSince))
     return false;
   return true;
 };
