@@ -4054,6 +4054,22 @@
       "submittedAt": "2026-11-20T09:18:01Z",
       "mergedAt": "2026-11-20T09:19:36Z",
       "mergedInto": "dev"
+    },
+    "verification-matrix-beyond-check": {
+      "agent": "iceman",
+      "paths": "src,test,SPEC.md,docs,dist",
+      "branch": "wt/verification-matrix-beyond-check",
+      "worktree": "worktrees/wt-verification-matrix-beyond-check",
+      "status": "done",
+      "createdAt": "2026-11-20T09:23:02Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T09:38:45Z",
+      "forcedScopeFiles": [
+        "README.md"
+      ],
+      "submittedAt": "2026-11-20T09:38:45Z",
+      "mergedAt": "2026-11-20T09:40:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
