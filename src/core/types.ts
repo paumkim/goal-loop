@@ -58,18 +58,6 @@ export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reason
 
 export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
 
-export interface VerifyCheckDefinition {
-  readonly id: string
-  readonly type: VerifyCheckType
-  readonly command: string
-  readonly timeoutMs?: number
-  /** Default true: required for applicable goals/profiles unless explicitly false. */
-  readonly required?: boolean
-  /** When this check applies: always (default) or only for broad goals. */
-  readonly when?: "always" | "broad"
-  readonly label?: string
-}
-
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
 export type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
