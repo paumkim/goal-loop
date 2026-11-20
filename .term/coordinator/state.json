@@ -4302,6 +4302,17 @@
       ],
       "mergedAt": "2026-11-20T14:30:40Z",
       "mergedInto": "dev"
+    },
+    "shared-changed-path-collector": {
+      "agent": "orchestrator",
+      "paths": "src/core/changed-paths.ts,src/core/change-risk.ts,scripts/invariant-sweep.ts,test/invariant-sweep.test.ts,test/change-risk.test.ts,test/changed-paths.test.ts,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
+      "branch": "wt/shared-changed-path-collector",
+      "worktree": "worktrees/wt-shared-changed-path-collector",
+      "status": "done",
+      "createdAt": "2026-11-20T14:37:44Z",
+      "submittedAt": "2026-11-20T14:44:45Z",
+      "mergedAt": "2026-11-20T14:46:53Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
