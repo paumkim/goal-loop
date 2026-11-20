@@ -50,6 +50,7 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   timeoutMs: "evaluator.timeoutMs",
   verifyTimeoutMs: "evaluator.verifyTimeoutMs",
   verifyProfile: "evaluator.verifyProfile",
+  verifyConcurrency: "evaluator.verifyConcurrency",
   consensus: "evaluator.consensus",
   maxTurns: "maxTurns",
   stallTurns: "stallTurns",
@@ -86,6 +87,8 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.evaluator.verifyTimeoutMs
     case "evaluator.verifyProfile":
       return resolved.evaluator.verifyProfile
+    case "evaluator.verifyConcurrency":
+      return resolved.evaluator.verifyConcurrency
     case "evaluator.verifyChecks":
       return resolved.evaluator.verifyChecks
     case "evaluator.consensus":
@@ -130,6 +133,7 @@ const DOC_TO_CODE_NAMES = Object.keys(
       "evaluator.mode",
       "evaluator.verifyCommand",
       "evaluator.verifyProfile",
+      "evaluator.verifyConcurrency",
       "evaluator.verifyChecks",
       "evaluator.consensus",
       "systemReminder",
@@ -180,6 +184,7 @@ describe("config defaults — documented vs code", () => {
     expect(resolved.evaluator.timeoutMs).toBe(DEFAULTS.timeoutMs)
     expect(resolved.evaluator.verifyTimeoutMs).toBe(DEFAULTS.verifyTimeoutMs)
     expect(resolved.evaluator.verifyProfile).toBe(DEFAULTS.verifyProfile)
+    expect(resolved.evaluator.verifyConcurrency).toBe(DEFAULTS.verifyConcurrency)
     expect(resolved.evaluator.verifyChecks).toEqual([])
     expect(resolved.evaluator.consensus).toBe(DEFAULTS.consensus)
     expect(resolved.maxTurns).toBe(DEFAULTS.maxTurns)

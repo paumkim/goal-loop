@@ -638,7 +638,13 @@ var verifyCell = (entry) => {
     const req = m.checks.filter((c) => c.required);
     const pass = req.filter((c) => c.pass && c.scoped).length;
     const label = `${pass}/${req.length || m.checks.length} ${m.pass ? "pass" : "fail"}`;
-    return m.broadGoal ? `${label} (broad)` : label;
+    const extras = [];
+    if (m.timing?.reused)
+      extras.push(`reused ${m.timing.reused}`);
+    if (m.timing?.parallel)
+      extras.push(`parallel x${m.timing.concurrency}`);
+    const suffix = extras.length ? `, ${extras.join(", ")}` : "";
+    return m.broadGoal ? `${label} (broad${suffix})` : `${label}${suffix ? ` (${extras.join(", ")})` : ""}`;
   }
   const verify = entry.verify;
   if (!verify)
@@ -650,10 +656,23 @@ var verifyCell = (entry) => {
   return `exit ${verify.code}`;
 };
 var matrixCheckLine = (check) => {
-  const state = !check.scoped ? "unscoped" : check.pass ? "pass" : check.timedOut ? "timeout" : check.code === null ? "error" : `exit ${check.code}`;
-  const bits = [check.id, check.type, check.required ? "required" : "optional", state];
+  const result = !check.scoped && check.required ? "unscoped" : check.pass ? "pass" : check.skipped ? "skipped" : check.timedOut ? "timeout" : check.code === null ? "error/unavailable" : `exit ${check.code}`;
+  const bits = [
+    check.id,
+    check.type,
+    check.required ? "required" : "optional",
+    `source=${check.source ?? "configured"}`,
+    `mode=${check.executionMode ?? check.runState ?? check.evidenceMode ?? "command"}`,
+    result
+  ];
   if (check.label)
     bits.push(`label=${check.label}`);
+  if (check.reused)
+    bits.push("reused");
+  if (check.parallel)
+    bits.push(`parallel${check.concurrency ? `@${check.concurrency}` : ""}`);
+  if (typeof check.durationMs === "number")
+    bits.push(`${check.durationMs}ms`);
   return bits.join(" \xB7 ");
 };
 var verdictTable = (history) => {
@@ -677,7 +696,9 @@ var verdictProse = (history) => {
       bits.push(shortSha(entry.sha));
     if (entry.verification) {
       const req = entry.verification.checks.filter((c) => c.required).length;
-      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required)`);
+      const t = entry.verification.timing;
+      const timing = t ? `, ${t.totalMs}ms${t.parallel ? ` parallel x${t.concurrency}` : ""}${t.reused ? ` reused ${t.reused}` : ""}` : "";
+      bits.push(`matrix ${entry.verification.profile}${entry.verification.broadGoal ? "/broad" : ""} ${entry.verification.pass ? "pass" : "fail"} (${req} required${timing})`);
     } else if (entry.verify) {
       const v = entry.verify;
       const state = v.timedOut ? "timeout" : v.code === null ? "error" : `exit ${v.code}`;
@@ -686,17 +707,34 @@ var verdictProse = (history) => {
     lines.push(`- ${bits.join(" \xB7 ")}`);
     lines.push(...quote(entry.reason));
     if (entry.verification) {
-      lines.push(...quote("verification matrix checks:"));
-      for (const check of entry.verification.checks) {
+      const m = entry.verification;
+      lines.push(...quote(`verification matrix checks (profile=${m.profile}, broad=${m.broadGoal}, deterministic coverage enforced):`));
+      if (m.coverageReasons?.length)
+        lines.push(...quote(`coverage reasons: ${m.coverageReasons.join("; ")}`));
+      if (m.timing)
+        lines.push(...quote(`timing: total ${m.timing.totalMs}ms, concurrency ${m.timing.concurrency}, executed ${m.timing.executed}, reused ${m.timing.reused}, skipped ${m.timing.skipped}, parallel ${m.timing.parallel}`));
+      for (const check of m.checks) {
         lines.push(...quote(`- ${matrixCheckLine(check)} cmd=${check.command}`));
+        if (check.scopeDecision)
+          lines.push(...quote(`  scope decision: ${check.scopeDecision}`));
+        if (check.artifactPatterns?.length)
+          lines.push(...quote(`  artifact patterns: ${check.artifactPatterns.join(" || ")}`));
+        if (check.artifactMatched?.length)
+          lines.push(...quote(`  artifact matched: ${check.artifactMatched.join(" || ")}`));
+        if (check.artifactMissing?.length)
+          lines.push(...quote(`  artifact missing: ${check.artifactMissing.join(" || ")}`));
         if (check.reason)
           lines.push(...quote(`  reason: ${check.reason}`));
+        if (check.nextAction && !check.pass)
+          lines.push(...quote(`  next action: ${check.nextAction}`));
         if (check.tail)
-          lines.push(...quote(`  output tail:
+          lines.push(...quote(`  evidence/output tail:
 ${check.tail}`));
       }
-      if (entry.verification.missing.length)
-        lines.push(...quote(`missing/unscoped/failed required checks: ${entry.verification.missing.join(", ")}`));
+      if (m.missing.length)
+        lines.push(...quote(`missing/unscoped/failed required checks: ${m.missing.join(", ")}`));
+      if (m.malformedGoalChecks?.length)
+        lines.push(...quote(`malformed goal-declared directives ignored (never executed): ${m.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`));
     } else if (entry.verify?.tail) {
       lines.push(...quote(`verify output tail:
 ${entry.verify.tail}`));
@@ -747,15 +785,31 @@ var verifyLines = (goal) => {
       `- Matrix profile: ${matrix.profile}${matrix.broadGoal ? " (broad goal)" : ""}`,
       `- Result: ${matrix.pass ? "pass" : "fail"} \xB7 ${passed}/${req.length} required checks satisfied \xB7 ${isoOf(matrix.at)}`
     ];
+    if (matrix.timing)
+      lines.push(`- Timing: total ${matrix.timing.totalMs}ms, concurrency ${matrix.timing.concurrency}, executed ${matrix.timing.executed}, reused ${matrix.timing.reused}, skipped ${matrix.timing.skipped}, parallel ${matrix.timing.parallel}`);
+    if (matrix.coverageReasons?.length)
+      lines.push(`- Coverage reasons: ${matrix.coverageReasons.join("; ")}`);
     if (matrix.missing.length)
       lines.push(`- Missing/unscoped/failed required checks: ${matrix.missing.join(", ")}`);
+    if (matrix.malformedGoalChecks?.length)
+      lines.push(`- Malformed goal-declared directives ignored (never executed): ${matrix.malformedGoalChecks.map((x) => `${x.raw} (${x.reason})`).join("; ")}`);
     lines.push("- Checks:");
     for (const check of matrix.checks) {
       lines.push(`  - ${matrixCheckLine(check)} cmd=${inlineCode(check.command)}`);
+      if (check.scopeDecision)
+        lines.push(`    - scope decision: ${check.scopeDecision}`);
+      if (check.artifactPatterns?.length)
+        lines.push(`    - artifact patterns: ${check.artifactPatterns.join(" || ")}`);
+      if (check.artifactMatched?.length)
+        lines.push(`    - artifact matched: ${check.artifactMatched.join(" || ")}`);
+      if (check.artifactMissing?.length)
+        lines.push(`    - artifact missing: ${check.artifactMissing.join(" || ")}`);
       if (check.reason)
         lines.push(`    - reason: ${check.reason}`);
+      if (check.nextAction && !check.pass)
+        lines.push(`    - next action: ${check.nextAction}`);
       if (check.tail) {
-        lines.push("    - output tail:");
+        lines.push("    - evidence/output tail:");
         lines.push(...fenceBlock(check.tail).map((l) => `      ${l}`));
       }
     }
@@ -5879,9 +5933,16 @@ var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
 var VERIFY_CHECK_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]);
+var VERIFY_SOURCES = new Set(["configured", "legacy", "goal-declared"]);
+var VERIFY_EVIDENCE_MODES = new Set(["command", "artifact", "either"]);
+var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);
+var VERIFY_EXECUTION_MODES = new Set(["command", "artifact", "reused-command", "reused-artifact", "skipped"]);
+var isStringArray = (value) => Array.isArray(value) && value.every(isString);
 var isVerifyCheckType = (value) => isString(value) && VERIFY_CHECK_TYPES.has(value);
-var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason));
-var isVerdictVerificationMatrix = (value) => isRecord(value) && isString(value.profile) && isBoolean(value.broadGoal) && isBoolean(value.pass) && Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) && Array.isArray(value.missing) && value.missing.every(isString);
+var isVerifyCheckEvidence = (value) => isRecord(value) && isString(value.id) && isVerifyCheckType(value.type) && isString(value.command) && isBoolean(value.required) && isBoolean(value.scoped) && isBoolean(value.pass) && (value.code === null || isFiniteNumber(value.code)) && (value.label === undefined || isString(value.label)) && (value.timedOut === undefined || isBoolean(value.timedOut)) && (value.tail === undefined || isString(value.tail)) && (value.reason === undefined || isString(value.reason)) && (value.source === undefined || isString(value.source) && VERIFY_SOURCES.has(value.source)) && (value.evidenceMode === undefined || isString(value.evidenceMode) && VERIFY_EVIDENCE_MODES.has(value.evidenceMode)) && (value.runState === undefined || isString(value.runState) && VERIFY_RUN_STATES.has(value.runState)) && (value.scopeDecision === undefined || isString(value.scopeDecision)) && (value.nextAction === undefined || isString(value.nextAction)) && (value.durationMs === undefined || isFiniteNumber(value.durationMs)) && (value.reused === undefined || isBoolean(value.reused)) && (value.reusedFrom === undefined || isString(value.reusedFrom)) && (value.parallel === undefined || isBoolean(value.parallel)) && (value.concurrency === undefined || isFiniteNumber(value.concurrency)) && (value.skipped === undefined || isBoolean(value.skipped)) && (value.artifactPatterns === undefined || isStringArray(value.artifactPatterns)) && (value.artifactMatched === undefined || isStringArray(value.artifactMatched)) && (value.artifactMissing === undefined || isStringArray(value.artifactMissing)) && (value.executionMode === undefined || isString(value.executionMode) && VERIFY_EXECUTION_MODES.has(value.executionMode));
+var isVerifyTiming = (value) => isRecord(value) && isFiniteNumber(value.totalMs) && isFiniteNumber(value.concurrency) && isBoolean(value.parallel) && isFiniteNumber(value.reused) && isFiniteNumber(value.executed) && isFiniteNumber(value.skipped);
+var isMalformedGoalCheck = (value) => isRecord(value) && isString(value.raw) && isString(value.reason);
+var isVerdictVerificationMatrix = (value) => isRecord(value) && isString(value.profile) && isBoolean(value.broadGoal) && isBoolean(value.pass) && Array.isArray(value.checks) && value.checks.every(isVerifyCheckEvidence) && Array.isArray(value.missing) && value.missing.every(isString) && (value.coverageReasons === undefined || isStringArray(value.coverageReasons)) && (value.timing === undefined || isVerifyTiming(value.timing)) && (value.malformedGoalChecks === undefined || Array.isArray(value.malformedGoalChecks) && value.malformedGoalChecks.every(isMalformedGoalCheck));
 var isLastVerification = (value) => isVerdictVerificationMatrix(value) && isFiniteNumber(value.at);
 var isVerdictEntry = (value) => isRecord(value) && isFiniteNumber(value.turn) && isVerdict(value.verdict) && isString(value.reason) && isFiniteNumber(value.at) && (value.toolCalls === undefined || isFiniteNumber(value.toolCalls)) && (value.spend === undefined || isUsageSnapshot(value.spend)) && (value.sha === undefined || isString(value.sha)) && (value.verify === undefined || isVerdictVerify(value.verify)) && (value.verification === undefined || isVerdictVerificationMatrix(value.verification));
 var isLoopEntry = (value) => isRecord(value) && isFiniteNumber(value.version) && isString(value.condition) && isString(value.summary) && isString(value.reason) && isFiniteNumber(value.turns) && isFiniteNumber(value.toolCalls) && isFiniteNumber(value.endedAt) && (value.contextTokens === undefined || isFiniteNumber(value.contextTokens)) && (value.sha === undefined || typeof value.sha === "string") && (value.spend === undefined || isUsageSnapshot(value.spend));

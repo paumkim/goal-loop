@@ -12,11 +12,12 @@
       "risk": "medium",
       "status": "done",
       "finding": "Correctness gates can hinge on transcript evidence and configured checks (bun run check, optional evaluator.verifyCommand) while missing integration behavior, flakiness, perf regressions, security issues, or untested edge paths.",
-      "improvement": "Implemented profile-aware verification matrix (config verifyChecks/verifyProfile, legacy verifyCommand synthesis), broad-goal scoping/unscoped-required-check detection, per-check command/output/exit evidence recorded in verdict trail and dossier, and evaluator rubric/prompt guidance treating missing/unscoped required verification as not_met with concrete next actions. Backward-compatible with legacy single verifyCommand.",
+      "improvement": "Implemented profile-aware verification matrix (config verifyChecks/verifyProfile, legacy verifyCommand synthesis), broad-goal scoping/unscoped-required-check detection, per-check command/output/exit evidence recorded in verdict trail and dossier, and evaluator rubric/prompt guidance treating missing/unscoped required verification as not_met with concrete next actions. Backward-compatible with legacy single verifyCommand. Follow-up: NL goal-declared checks, deterministic coverage enforcement, concurrency/reuse/timing, and artifact-evidence modes reduce prior honest limits while preserving fresh-evidence guarantees.",
       "evidence": [
         "Goal-loop blind spot #1 (2026-11-20): met can hinge on transcript evidence + configured checks but miss system health dimensions.",
         "SPEC.md Workstream LXXVI/LXXX+: evaluator accepts only fresh evidence; verifyCommand gate is optional and command-specific.",
-        "Workstream LXXXVIII (2026-11-20): src/core/config.ts/types.ts/wire.ts/prompts.ts, src/runtime/controller.ts, src/core/dossier.ts record and render per-check matrix evidence; tests cover pass/fail/unscoped/broad/legacy cases; bun run check exit 0 on merge commit."
+        "Workstream LXXXVIII (2026-11-20): src/core/config.ts/types.ts/wire.ts/prompts.ts, src/runtime/controller.ts, src/core/dossier.ts record and render per-check matrix evidence; tests cover pass/fail/unscoped/broad/legacy cases; bun run check exit 0 on merge commit.",
+        "Follow-up (2026-11-20): reduced honest limits with goal-declared verify directives parsed/merged from condition (structured verify: syntax), deterministic runtime coverage policy (rubric-independent) for broad/scope required checks, concurrent command execution with cap/reuse-caching/timing metadata, and explicit command|artifact|either evidence modes with artifact patterns (no narration fallback); tests cover NL parse/malformed, deterministic unscoped rejection, parallel/reuse, artifact-vs-command, backward compat; bun run check exit 0."
       ],
       "dedupeKeys": [
         "verification-matrix",

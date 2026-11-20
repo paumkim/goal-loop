@@ -12,6 +12,10 @@ export interface VerifyCheckConfig {
   readonly required?: boolean
   readonly when?: "always" | "broad"
   readonly label?: string
+  /** How this required check may be satisfied. Default: command (executed). */
+  readonly evidence?: "command" | "artifact" | "either"
+  /** Required literal patterns for fresh scoped transcript/artifact evidence (evidence artifact|either). */
+  readonly artifactPatterns?: readonly string[]
 }
 
 export interface GoalConfig {
@@ -30,6 +34,8 @@ export interface GoalConfig {
     readonly verifyChecks: readonly VerifyCheckConfig[]
     /** Verification profile label for matrix policy/reporting (e.g. "default", "broad"). */
     readonly verifyProfile: string
+    /** Max concurrent verification-command executions per matrix run (independent checks). Capped 1..8. */
+    readonly verifyConcurrency: number
     /** Second-opinion gate: `2` requires two independent verdicts (session evaluator + independent model) both rule `met`; any disagreement or second-opinion failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; doubles evaluator cost when enabled. */
     readonly consensus: 1 | 2
   }
@@ -65,6 +71,7 @@ export const DEFAULTS = {
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,
   verifyProfile: "default",
+  verifyConcurrency: 2,
   consensus: 1,
   maxTurns: 0,
   stallTurns: 0,
@@ -134,7 +141,20 @@ function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyChe
     const required = v.required === false ? false : true
     const timeoutMs = int(v.timeoutMs, fallbackTimeoutMs, 1_000)
     const label = typeof v.label === "string" && v.label.trim() ? v.label.trim() : undefined
-    out.push({ id, type, command, timeoutMs, required, when, ...(label ? { label } : {}) })
+    const evidence = v.evidence === "artifact" || v.evidence === "either" ? (v.evidence as "artifact" | "either") : "command"
+    const artifactPatterns = Array.isArray(v.artifactPatterns)
+      ? (v.artifactPatterns as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim()).filter(Boolean)
+      : typeof v.artifactPatterns === "string" && v.artifactPatterns.trim()
+        ? v.artifactPatterns.split("||").map((x) => x.trim()).filter(Boolean)
+        : []
+    // artifact/either checks require at least one pattern; malformed definitions are dropped deterministically.
+    if ((evidence === "artifact" || evidence === "either") && artifactPatterns.length === 0) continue
+    out.push({
+      id, type, command, timeoutMs, required, when,
+      ...(label ? { label } : {}),
+      ...(evidence !== "command" ? { evidence } : {}),
+      ...(artifactPatterns.length ? { artifactPatterns } : {}),
+    })
   }
   return out
 }
@@ -143,13 +163,14 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
   const verifyCommand = str(env.OPENCODE_GOAL_VERIFY_COMMAND ?? evaluator.verifyCommand, "")
   const verifyTimeoutMs = int(env.OPENCODE_GOAL_VERIFY_TIMEOUT_MS ?? evaluator.verifyTimeoutMs, DEFAULTS.verifyTimeoutMs, 1_000)
   const verifyProfile = str(env.OPENCODE_GOAL_VERIFY_PROFILE ?? evaluator.verifyProfile, DEFAULTS.verifyProfile)
+  const verifyConcurrency = int(env.OPENCODE_GOAL_VERIFY_CONCURRENCY ?? evaluator.verifyConcurrency, DEFAULTS.verifyConcurrency, 1, 8)
   const explicit = parseVerifyChecks(evaluator.verifyChecks, verifyTimeoutMs)
   const verifyChecks = explicit.length > 0
     ? explicit
     : verifyCommand
-      ? [{ id: "verify-command", type: "custom" as const, command: verifyCommand, timeoutMs: verifyTimeoutMs, required: true, when: "always" as const, label: "verifyCommand" }]
+      ? [{ id: "verify-command", type: "custom" as const, command: verifyCommand, timeoutMs: verifyTimeoutMs, required: true, when: "always" as const, label: "verifyCommand", evidence: "command" as const }]
       : []
-  return { verifyCommand, verifyTimeoutMs, verifyProfile, verifyChecks }
+  return { verifyCommand, verifyTimeoutMs, verifyProfile, verifyChecks, verifyConcurrency }
 }
 
 
@@ -158,7 +179,8 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
- * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE.
+ * OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE,
+ * OPENCODE_GOAL_VERIFY_CONCURRENCY.
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
@@ -180,6 +202,7 @@ export function resolveConfig(
       verifyTimeoutMs: verify.verifyTimeoutMs,
       verifyChecks: verify.verifyChecks,
       verifyProfile: verify.verifyProfile,
+      verifyConcurrency: verify.verifyConcurrency,
       consensus: int(evaluator.consensus, DEFAULTS.consensus, 1, 2) as 1 | 2,
     },
     maxTurns: int(env.OPENCODE_GOAL_MAX_TURNS ?? options.maxTurns, DEFAULTS.maxTurns, 0),

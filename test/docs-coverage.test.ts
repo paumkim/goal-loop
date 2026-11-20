@@ -41,6 +41,7 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   timeoutMs: "evaluator.timeoutMs",
   verifyTimeoutMs: "evaluator.verifyTimeoutMs",
   verifyProfile: "evaluator.verifyProfile",
+  verifyConcurrency: "evaluator.verifyConcurrency",
   consensus: "evaluator.consensus",
   maxTurns: "maxTurns",
   stallTurns: "stallTurns",
@@ -63,7 +64,7 @@ const sorted = (set: Set<string>): string[] => [...set].sort()
 describe("docs coverage gate — docs/config.html covers the resolveConfig surface", () => {
   test("the gate cannot pass vacuously: config.ts references the full env surface and config.html parses rows", () => {
     // resolveConfig reads 12 env vars today; a regex that matched nothing must fail here, not pass silently.
-    expect(configEnvVars().size).toBeGreaterThanOrEqual(13)
+    expect(configEnvVars().size).toBeGreaterThanOrEqual(14)
     expect(htmlRows.size).toBeGreaterThanOrEqual(20)
   })
 

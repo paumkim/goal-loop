@@ -4,7 +4,8 @@ import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.t
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import * as Prompt from "../core/prompts.ts"
-import { isBroadGoalCondition } from "../core/prompts.ts"
+import { renderTranscript } from "../core/transcript.ts"
+import { artifactEvidenceSatisfied, checkReuseKey, computeScopePolicy, currentHead, evaluateCoveragePolicy, resolveVerifyChecks } from "../core/verify-matrix.ts"
 import {
   EMPTY_USAGE, MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES,
   isLive,
@@ -70,6 +71,8 @@ interface ControllerDeps {
   readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean }) => Promise<BoundaryCompactResult>
   /** Estimated model-visible context size in tokens, or undefined when unknown. Used to detect a landed boundary compaction. */
   readonly estimateContext?: (sessionID: string) => Promise<number | undefined>
+  /** Session context/messages for scoped transcript/artifact evidence checks (best-effort). */
+  readonly context?: (sessionID: string) => Promise<readonly unknown[]>
   readonly clock: Clock
   readonly log: Logger
   readonly newId?: () => string
@@ -112,6 +115,8 @@ interface Runtime {
   turnUsage?: UsageSnapshot
   /** Last host-measured figures, computed at evaluation time: spend vs the record baseline and the estimated prompt-context size. Carried by every `changed` snapshot this session emits until recomputed (compaction landing drops or replaces the context half — it describes a context the host just replaced). Runtime-local like armUsage; a restored runtime drops it. */
   figures?: { readonly spend?: UsageSnapshot; readonly contextSize?: number }
+  /** Reuse cache for identical fresh verification-command results within the same evaluated turn/HEAD. */
+  verifyCache?: { head?: string; turn: number; results: Map<string, import("../core/types.ts").VerifyCheckEvidence> }
 }
 
 const RETRY_BASE_MS = 15_000
@@ -1261,19 +1266,48 @@ export class GoalController {
   ): Promise<{ result: EvaluationResult; matrix?: VerdictVerificationMatrix }> {
     const { config, log } = this.deps
     const sessionID = record.sessionID
-    const checks = config.evaluator.verifyChecks ?? []
-    if (checks.length === 0) return { result }
 
-    const broadGoal = config.evaluator.verifyProfile === "broad" || isBroadGoalCondition(record.condition)
-    const profile = config.evaluator.verifyProfile || (broadGoal ? "broad" : "default")
-    const applicable = checks.map((check) => ({
-      def: check,
-      requiredNow: (check.required !== false) && (check.when === "broad" ? broadGoal : true),
-      scopedNow: check.when === "broad" ? broadGoal : true,
-    }))
+    const { checks: resolvedChecks, malformed } = resolveVerifyChecks({
+      configured: config.evaluator.verifyChecks ?? [],
+      condition: record.condition,
+    })
+    if (resolvedChecks.length === 0) {
+      // malformed goal-declared directives alone do not create a matrix, but record/report if present? no checks to gate.
+      return { result }
+    }
+
+    const head = currentHead(this.deps.directory)
+    const turn = record.turns
+    if (!runtime.verifyCache || runtime.verifyCache.turn !== turn || runtime.verifyCache.head !== head) {
+      runtime.verifyCache = { head, turn, results: new Map() }
+    }
+    const cache = runtime.verifyCache.results
+
+    const policy = computeScopePolicy({ condition: record.condition, profile: config.evaluator.verifyProfile || "default", checks: resolvedChecks })
+    const broadGoal = policy.broadGoal
+    const profile = policy.profile
+    const legacySingle = resolvedChecks.length === 1 && resolvedChecks[0]?.id === "verify-command" && resolvedChecks[0]?.source === "legacy"
+
+    // Fresh transcript/artifact corpus for evidence-mode checks (best-effort, scoped to current evaluation context).
+    let transcriptText = ""
+    const needsTranscript = resolvedChecks.some((c) => c.evidence === "artifact" || c.evidence === "either")
+    if (needsTranscript && this.deps.context) {
+      try {
+        const messages = await this.deps.context(sessionID)
+        transcriptText = renderTranscript(messages as readonly any[], { maxChars: Math.max(20_000, config.evaluator.maxTranscriptChars) })
+      } catch (error) {
+        log.warn("goal verification transcript read failed; artifact evidence unavailable", { sessionID, error: errorMessage(error) })
+        transcriptText = ""
+      }
+    }
+
+    const applicable = resolvedChecks.map((def) => {
+      const requiredNow = def.required && (def.when === "broad" ? broadGoal : true)
+      const inScope = def.when === "broad" ? broadGoal : true
+      return { def, requiredNow, inScope }
+    })
     const requiredNow = applicable.filter((x) => x.requiredNow)
 
-    const legacySingle = checks.length === 1 && checks[0]?.id === "verify-command"
     const fail = (reason: string, matrix: VerdictVerificationMatrix): { result: EvaluationResult; matrix: VerdictVerificationMatrix } => {
       log.warn("goal verification gate downgraded met verdict", { sessionID, reason, profile, broadGoal })
       this.notify(sessionID, "retry", "warning", legacySingle ? "Verification failed" : "Verification matrix did not pass", truncate(reason, 180))
@@ -1281,112 +1315,401 @@ export class GoalController {
       return { result: { verdict: "not_met", reason }, matrix }
     }
 
-    // A broad goal must have scoped/profile-aware required verification; a generic-only legacy gate is unscoped.
-    if (broadGoal && requiredNow.length > 0) {
-      const hasScopedTyped = requiredNow.some((x) => x.def.type !== "custom" || (x.def.id && x.def.id !== "verify-command"))
-      if (!hasScopedTyped) {
-        const evidence: VerifyCheckEvidence[] = requiredNow.map((x) => ({
-          id: x.def.id,
-          type: x.def.type,
-          ...(x.def.label ? { label: x.def.label } : {}),
-          command: x.def.command,
-          required: true,
-          scoped: false,
-          pass: false,
-          code: null,
-          reason: "unscoped for broad goal (configure typed/profile checks: typecheck, targeted tests, lint/build as applicable, goal-declared checks)",
-        }))
-        const matrix: VerdictVerificationMatrix = { profile, broadGoal, pass: false, checks: evidence, missing: requiredNow.map((x) => x.def.id) }
-        const primary = evidence[0]
-        if (primary) record.lastVerify = { command: primary.command, code: null, at: this.deps.clock.now() }
-        return fail(
-          `Verification matrix unscoped for broad goal: required typed/scoped checks missing (need typecheck, targeted tests, lint/build as applicable, and/or goal-declared checks).\nnext:\n  1. [high/risk] Configure evaluator.verifyChecks/profile with scoped required checks — evidence gap/finding: only generic/unscoped verification configured for a broad goal — required proof: fresh executed command/output/exit evidence for each required check type scoped to the claimed change.`,
-          matrix,
-        )
+    // Deterministic coverage precheck (independent of evaluator rubric): broad goals require scoped typed coverage.
+    const coverage = evaluateCoveragePolicy({ condition: record.condition, profile: config.evaluator.verifyProfile || "default", checks: resolvedChecks })
+    if (!coverage.ok) {
+      const evidence: VerifyCheckEvidence[] = requiredNow.map((x) => ({
+        id: x.def.id,
+        type: x.def.type,
+        ...(x.def.label ? { label: x.def.label } : {}),
+        command: x.def.command,
+        source: x.def.source,
+        evidenceMode: x.def.evidence,
+        runState: "skipped" as const,
+        executionMode: "skipped" as const,
+        required: true,
+        scoped: false,
+        scopeDecision: "unscoped by deterministic coverage policy",
+        pass: false,
+        code: null,
+        skipped: true,
+        durationMs: 0,
+        ...(x.def.artifactPatterns.length ? { artifactPatterns: [...x.def.artifactPatterns] } : {}),
+        reason: coverage.reasons.join("; ") || "missing/unscoped required coverage",
+        nextAction: `Configure scoped required verification checks/profile (typecheck, targeted tests, lint/build as applicable, goal-declared) so each required type has fresh scoped evidence.`,
+      }))
+      // if no required checks, still report malformed/policy issue
+      const checksEvidence = evidence.length ? evidence : applicable.map((x) => ({
+        id: x.def.id,
+        type: x.def.type,
+        ...(x.def.label ? { label: x.def.label } : {}),
+        command: x.def.command,
+        source: x.def.source,
+        evidenceMode: x.def.evidence,
+        runState: "skipped" as const,
+        executionMode: "skipped" as const,
+        required: x.requiredNow,
+        scoped: false,
+        scopeDecision: "coverage policy not satisfied",
+        pass: false,
+        code: null,
+        skipped: true,
+        durationMs: 0,
+        ...(x.def.artifactPatterns.length ? { artifactPatterns: [...x.def.artifactPatterns] } : {}),
+        reason: coverage.reasons.join("; "),
+      }))
+      const missingIds = checksEvidence.filter((e) => e.required).map((e) => e.id)
+      const matrix: VerdictVerificationMatrix = {
+        profile,
+        broadGoal,
+        pass: false,
+        checks: checksEvidence,
+        missing: missingIds,
+        coverageReasons: coverage.reasons,
+        timing: { totalMs: 0, concurrency: config.evaluator.verifyConcurrency, parallel: false, reused: 0, executed: 0, skipped: checksEvidence.length },
+        ...(malformed.length ? { malformedGoalChecks: malformed.map((m) => ({ raw: m.raw, reason: m.reason })) } : {}),
       }
+      const primary = checksEvidence.find((e) => e.required) ?? checksEvidence[0]
+      if (primary) record.lastVerify = { command: primary.command, code: primary.code, at: this.deps.clock.now() }
+      const next = [
+        "  1. [high/risk] Satisfy deterministic required verification coverage for this goal/profile — evidence gap/finding: " + (coverage.reasons.join("; ") || "required scoped coverage missing") + " — required proof: fresh scoped executed command or allowed artifact evidence for each required check type (typecheck, targeted tests, lint/build as applicable, goal-declared).",
+      ]
+      if (malformed.length) next.push("  2. [medium] Fix malformed goal-declared verify directives (ignored, never executed): " + malformed.map((m) => `${m.raw} (${m.reason})`).join("; ") + " — required proof: valid `verify: type=... cmd=\"...\" ...` directives.")
+      return fail(`Verification matrix coverage not satisfied for ${broadGoal ? "broad" : "scoped"} goal (profile ${profile}): ${coverage.reasons.join("; ") || "missing/unscoped required coverage"}.\nnext:\n${next.join("\n")}`, matrix)
     }
 
-    if (requiredNow.length === 0) return { result }
+    if (requiredNow.length === 0) {
+      // nothing required now; still record applicability/malformed for observability
+      const checksEvidence: VerifyCheckEvidence[] = applicable.map((x) => ({
+        id: x.def.id,
+        type: x.def.type,
+        ...(x.def.label ? { label: x.def.label } : {}),
+        command: x.def.command,
+        source: x.def.source,
+        evidenceMode: x.def.evidence,
+        runState: "skipped" as const,
+        executionMode: "skipped" as const,
+        required: false,
+        scoped: x.inScope,
+        scopeDecision: x.inScope ? "not required (applicable)" : "not applicable for this scope",
+        pass: true,
+        code: null,
+        skipped: true,
+        durationMs: 0,
+        ...(x.def.artifactPatterns.length ? { artifactPatterns: [...x.def.artifactPatterns] } : {}),
+        reason: x.inScope ? "not required" : "not applicable",
+      }))
+      const matrix: VerdictVerificationMatrix = {
+        profile, broadGoal, pass: true, checks: checksEvidence, missing: [], coverageReasons: [],
+        timing: { totalMs: 0, concurrency: config.evaluator.verifyConcurrency, parallel: false, reused: 0, executed: 0, skipped: checksEvidence.length },
+        ...(malformed.length ? { malformedGoalChecks: malformed.map((m) => ({ raw: m.raw, reason: m.reason })) } : {}),
+      }
+      return { result, matrix }
+    }
 
+    const startedAt = this.deps.clock.now()
     const verifier = this.deps.verifier
-    const evidence: VerifyCheckEvidence[] = []
+    const evidenceByIndex = new Array<VerifyCheckEvidence | undefined>(applicable.length)
+    let reusedCount = 0
+    let executedCount = 0
+    let skippedCount = 0
+
     runtime.evaluating = true
     this.emit(record)
     try {
-      for (const item of applicable) {
+      // First pass: resolve non-required and artifact/either satisfaction without command execution where possible.
+      const commandTasks: Array<{ idx: number; item: (typeof applicable)[number] }> = []
+      const pendingByKey = new Map<string, Promise<VerifyCheckEvidence>>()
+      const pendingWaiters: Array<{ idx: number; item: (typeof applicable)[number]; key: string }> = []
+      for (let idx = 0; idx < applicable.length; idx++) {
+        const item = applicable[idx]!
+        const base = {
+          id: item.def.id,
+          type: item.def.type,
+          ...(item.def.label ? { label: item.def.label } : {}),
+          command: item.def.command,
+          source: item.def.source,
+          evidenceMode: item.def.evidence,
+          required: item.requiredNow,
+          scoped: item.inScope,
+          ...(item.def.artifactPatterns.length ? { artifactPatterns: [...item.def.artifactPatterns] } : {}),
+        }
+
         if (!item.requiredNow) {
-          evidence.push({
-            id: item.def.id,
-            type: item.def.type,
-            ...(item.def.label ? { label: item.def.label } : {}),
-            command: item.def.command,
-            required: false,
-            scoped: item.scopedNow,
+          evidenceByIndex[idx] = {
+            ...base,
+            runState: "skipped",
+            executionMode: "skipped",
+            scopeDecision: item.inScope ? "not required for this scope" : "not applicable (when/profile)",
             pass: true,
             code: null,
-            reason: item.scopedNow ? "not required" : "not applicable",
-          })
+            skipped: true,
+            durationMs: 0,
+            reason: item.inScope ? "not required" : "not applicable",
+          }
+          skippedCount++
           continue
         }
+
+        // Artifact satisfaction (fresh scoped transcript/artifact evidence) when allowed.
+        if (item.def.evidence === "artifact" || item.def.evidence === "either") {
+          const t0 = this.deps.clock.now()
+          const art = artifactEvidenceSatisfied(transcriptText, item.def.artifactPatterns)
+          const artOk = art.ok
+          if (artOk) {
+            evidenceByIndex[idx] = {
+              ...base,
+              runState: "artifact",
+              executionMode: "artifact",
+              scopeDecision: "satisfied by fresh scoped transcript/artifact evidence",
+              pass: true,
+              code: null,
+              durationMs: Math.max(0, this.deps.clock.now() - t0),
+              parallel: false,
+              artifactMatched: art.matched,
+              artifactMissing: art.missing,
+              tail: truncate(art.matched.join(" || "), 400),
+              reason: "fresh scoped transcript/artifact evidence matched required patterns",
+            }
+            executedCount++
+            continue
+          }
+          if (item.def.evidence === "artifact") {
+            evidenceByIndex[idx] = {
+              ...base,
+              runState: "artifact",
+              executionMode: "artifact",
+              scopeDecision: item.inScope ? "artifact evidence required but not satisfied/scoped" : "not applicable",
+              pass: false,
+              code: null,
+              durationMs: Math.max(0, this.deps.clock.now() - t0),
+              parallel: false,
+              artifactMatched: art.matched,
+              artifactMissing: art.missing,
+              reason: art.missing.length ? `missing required artifact patterns in fresh scoped transcript evidence: ${art.missing.join(", ")}` : "artifact evidence not satisfied",
+              nextAction: `Provide fresh scoped transcript/artifact evidence containing required patterns (${item.def.artifactPatterns.join(" || ")}) for check ${item.def.id}.`,
+            }
+            executedCount++
+            continue
+          }
+          // evidence=either: fall through to command execution if verifier available
+        }
+
+        // Command execution path (required command checks default; either-mode fallback)
+        const key = checkReuseKey(item.def) + "|head:" + (head ?? "none")
+        const cached = cache.get(key)
+        if (cached) {
+          const reused: VerifyCheckEvidence = {
+            ...cached,
+            id: item.def.id,
+            type: item.def.type,
+            ...(item.def.label ? { label: item.def.label } : {}),
+            command: item.def.command,
+            source: item.def.source,
+            evidenceMode: item.def.evidence,
+            required: item.requiredNow,
+            ...(item.def.artifactPatterns.length ? { artifactPatterns: [...item.def.artifactPatterns] } : {}),
+            runState: "reused",
+            executionMode: cached.executionMode === "artifact" ? "reused-artifact" : "reused-command",
+            reused: true,
+            reusedFrom: `${cached.id}@turn${runtime.verifyCache!.turn}`,
+            durationMs: 0,
+            parallel: false,
+          }
+          evidenceByIndex[idx] = reused
+          reusedCount++
+          continue
+        }
+        if (pendingByKey.has(key)) {
+          pendingWaiters.push({ idx, item, key })
+          continue
+        }
+
         if (!verifier) {
-          evidence.push({
-            id: item.def.id,
-            type: item.def.type,
-            ...(item.def.label ? { label: item.def.label } : {}),
-            command: item.def.command,
-            required: true,
-            scoped: item.scopedNow,
+          const noVerifier: VerifyCheckEvidence = {
+            ...base,
+            runState: "skipped",
+            executionMode: "skipped",
+            scopeDecision: "no verifier available (fail closed)",
             pass: false,
             code: null,
+            skipped: true,
+            durationMs: 0,
             reason: "no verifier port is wired for this plugin instance (fail closed)",
-          })
+            nextAction: `Run ${JSON.stringify(item.def.command)} and provide fresh scoped exit-0 evidence for check ${item.def.id} (verifier unavailable).`,
+          }
+          evidenceByIndex[idx] = noVerifier
+          skippedCount++
           continue
         }
-        const timeoutMs = item.def.timeoutMs ?? config.evaluator.verifyTimeoutMs
-        const verification = new AbortController()
-        runtime.abort = verification
-        try {
-          const signal = AbortSignal.any([AbortSignal.timeout(timeoutMs), verification.signal])
-          const run = await verifier.verify({ command: item.def.command, cwd: this.deps.directory, timeoutMs, signal })
-          const cleaned = run.output ? stripControls(run.output).trim() : ""
-          const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
-          const pass = run.code === 0 && !run.timedOut
-          evidence.push({
-            id: item.def.id,
-            type: item.def.type,
-            ...(item.def.label ? { label: item.def.label } : {}),
-            command: item.def.command,
-            required: true,
-            scoped: item.scopedNow,
-            pass,
-            code: run.code ?? null,
-            ...(run.timedOut ? { timedOut: true } : {}),
-            ...(tail ? { tail } : {}),
-            ...(pass ? {} : { reason: run.timedOut ? `timed out after ${formatDuration(timeoutMs)}` : `exit ${run.code ?? "unknown"}` }),
-          })
-        } catch (error) {
-          if (verification.signal.aborted) throw error
-          evidence.push({
-            id: item.def.id,
-            type: item.def.type,
-            ...(item.def.label ? { label: item.def.label } : {}),
-            command: item.def.command,
-            required: true,
-            scoped: item.scopedNow,
-            pass: false,
-            code: null,
-            reason: `verification failed to run: ${errorMessage(error)}`,
-          })
-        } finally {
-          if (runtime.abort === verification) runtime.abort = undefined
+
+        // mark as pending now so identical checks later in this matrix reuse the in-flight result
+        pendingByKey.set(key, Promise.resolve(undefined as unknown as VerifyCheckEvidence))
+        commandTasks.push({ idx, item })
+      }
+
+      // Execute command checks concurrently with a cap; coalesce identical keys within this run.
+      const cap = Math.max(1, Math.min(8, Math.floor(config.evaluator.verifyConcurrency || 2)))
+      let cursor = 0
+      const runOne = async (slot: number) => {
+        while (cursor < commandTasks.length) {
+          const my = cursor++
+          const task = commandTasks[my]!
+          const item = task.item
+          const def = item.def
+          const key = checkReuseKey(def) + "|head:" + (head ?? "none")
+          const timeoutMs = def.timeoutMs ?? config.evaluator.verifyTimeoutMs
+          const started = this.deps.clock.now()
+          const verification = new AbortController()
+          runtime.abort = verification
+          let resolvePending!: (v: VerifyCheckEvidence) => void
+          const pending = new Promise<VerifyCheckEvidence>((r) => { resolvePending = r })
+          pendingByKey.set(key, pending)
+          let ev: VerifyCheckEvidence
+          try {
+            const signal = AbortSignal.any([AbortSignal.timeout(timeoutMs), verification.signal])
+            const run = await verifier!.verify({ command: def.command, cwd: this.deps.directory, timeoutMs, signal })
+            const cleaned = run.output ? stripControls(run.output).trim() : ""
+            const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
+            const pass = run.code === 0 && !run.timedOut
+            ev = {
+              id: def.id,
+              type: def.type,
+              ...(def.label ? { label: def.label } : {}),
+              command: def.command,
+              source: def.source,
+              evidenceMode: def.evidence,
+              runState: "executed",
+              executionMode: "command",
+              required: true,
+              scoped: item.inScope,
+              scopeDecision: pass && item.inScope ? "fresh executed command evidence scoped to current checkout/HEAD" : item.inScope ? "executed but not satisfied" : "unscoped for this goal/profile",
+              pass: pass && item.inScope,
+              code: run.code ?? null,
+              ...(run.timedOut ? { timedOut: true } : {}),
+              ...(tail ? { tail } : {}),
+              durationMs: Math.max(0, this.deps.clock.now() - started),
+              parallel: cap > 1 && commandTasks.length > 1,
+              concurrency: slot,
+              ...(def.artifactPatterns.length ? { artifactPatterns: [...def.artifactPatterns] } : {}),
+              ...(pass && item.inScope ? {} : {
+                reason: !item.inScope
+                  ? "unscoped for this goal/profile"
+                  : run.timedOut
+                    ? `timed out after ${formatDuration(timeoutMs)}`
+                    : `exit ${run.code ?? "unknown"}`,
+                nextAction: `Satisfy required verification check ${def.id} (${def.type}) with a fresh scoped command: run ${JSON.stringify(def.command)} at current HEAD and fix failures until exit 0.`,
+              }),
+            }
+          } catch (error) {
+            if (verification.signal.aborted) throw error
+            ev = {
+              id: def.id,
+              type: def.type,
+              ...(def.label ? { label: def.label } : {}),
+              command: def.command,
+              source: def.source,
+              evidenceMode: def.evidence,
+              runState: "executed",
+              executionMode: "command",
+              required: true,
+              scoped: item.inScope,
+              scopeDecision: "command execution failed (fail closed)",
+              pass: false,
+              code: null,
+              durationMs: Math.max(0, this.deps.clock.now() - started),
+              parallel: cap > 1 && commandTasks.length > 1,
+              concurrency: slot,
+              ...(def.artifactPatterns.length ? { artifactPatterns: [...def.artifactPatterns] } : {}),
+              reason: `verification failed to run: ${errorMessage(error)}`,
+              nextAction: `Run ${JSON.stringify(def.command)} successfully at current HEAD and provide fresh scoped exit-0 evidence for check ${def.id}.`,
+            }
+          } finally {
+            if (runtime.abort === verification) runtime.abort = undefined
+          }
+          cache.set(key, ev)
+          evidenceByIndex[task.idx] = ev
+          resolvePending!(ev)
+          executedCount++
+        }
+      }
+      if (commandTasks.length > 0) {
+        const workers = Array.from({ length: Math.min(cap, commandTasks.length) }, (_, slot) => runOne(slot + 1))
+        await Promise.all(workers)
+      }
+      if (pendingWaiters.length > 0) {
+        for (const waiter of pendingWaiters) {
+          const baseEv = await (pendingByKey.get(waiter.key) ?? Promise.resolve(cache.get(waiter.key)!))
+          const reused: VerifyCheckEvidence = {
+            ...baseEv,
+            id: waiter.item.def.id,
+            type: waiter.item.def.type,
+            ...(waiter.item.def.label ? { label: waiter.item.def.label } : {}),
+            command: waiter.item.def.command,
+            source: waiter.item.def.source,
+            evidenceMode: waiter.item.def.evidence,
+            required: waiter.item.requiredNow,
+            ...(waiter.item.def.artifactPatterns.length ? { artifactPatterns: [...waiter.item.def.artifactPatterns] } : {}),
+            runState: "reused",
+            executionMode: baseEv.executionMode === "artifact" ? "reused-artifact" : "reused-command",
+            reused: true,
+            reusedFrom: `${baseEv.id}@turn${runtime.verifyCache!.turn}`,
+            durationMs: 0,
+            parallel: false,
+          }
+          evidenceByIndex[waiter.idx] = reused
+          reusedCount++
         }
       }
     } finally {
       runtime.evaluating = false
     }
 
+    const evidence = evidenceByIndex.map((e, i) => e ?? ({
+      id: applicable[i]!.def.id,
+      type: applicable[i]!.def.type,
+      command: applicable[i]!.def.command,
+      source: applicable[i]!.def.source,
+      evidenceMode: applicable[i]!.def.evidence,
+      runState: "skipped" as const,
+      executionMode: "skipped" as const,
+      required: applicable[i]!.requiredNow,
+      scoped: false,
+      scopeDecision: "missing evaluation result",
+      pass: false,
+      code: null,
+      skipped: true,
+      durationMs: 0,
+      reason: "internal: no evidence produced",
+      nextAction: `Re-run required verification for check ${applicable[i]!.def.id}.`,
+    }))
+
+    // recompute counts from evidence for accuracy
+    reusedCount = evidence.filter((e) => e.reused).length
+    executedCount = evidence.filter((e) => e.runState === "executed" || e.runState === "artifact").length
+    skippedCount = evidence.filter((e) => e.runState === "skipped").length
+
     const missing = evidence.filter((e) => e.required && (!e.pass || !e.scoped)).map((e) => e.id)
-    const matrix: VerdictVerificationMatrix = { profile, broadGoal, pass: missing.length === 0, checks: evidence, missing }
+    const totalMs = Math.max(0, this.deps.clock.now() - startedAt)
+    const timing = {
+      totalMs,
+      concurrency: Math.max(1, Math.min(8, Math.floor(config.evaluator.verifyConcurrency || 2))),
+      parallel: evidence.some((e) => e.parallel),
+      reused: reusedCount,
+      executed: executedCount,
+      skipped: skippedCount,
+    }
+    const matrix: VerdictVerificationMatrix = {
+      profile,
+      broadGoal,
+      pass: missing.length === 0,
+      checks: evidence,
+      missing,
+      coverageReasons: coverage.reasons,
+      timing,
+      ...(malformed.length ? { malformedGoalChecks: malformed.map((m) => ({ raw: m.raw, reason: m.reason })) } : {}),
+    }
+
     const primary = evidence.find((e) => e.required) ?? evidence[0]
     if (primary) {
       record.lastVerify = {
@@ -1403,10 +1726,18 @@ export class GoalController {
     const problems = evidence.filter((e) => e.required && (!e.pass || !e.scoped))
     const lines = problems.map((e, i) => {
       const detail = e.reason ?? (e.pass ? "scoping insufficient" : "not satisfied")
-      const out = e.tail ? `; output: ${truncate(e.tail, 180)}` : ""
-      return `  ${i + 1}. [high/risk] Satisfy required verification check ${e.id} (${e.type}) — evidence gap/finding: ${detail}${e.scoped ? "" : ", unscoped"}; command ${JSON.stringify(e.command)}${out} — required proof: fresh executed command with exit 0 and scoped output for this goal.`
+      const mode = e.executionMode ?? e.runState
+      const src = e.source ?? "configured"
+      const timingInfo = e.durationMs !== undefined ? `, ${e.durationMs}ms` : ""
+      const reuseInfo = e.reused ? " reused" : e.parallel ? " parallel" : ""
+      const out = e.tail ? `; output/evidence: ${truncate(e.tail, 160)}` : ""
+      const action = e.nextAction ?? `Provide fresh scoped ${e.evidenceMode === "artifact" ? "transcript/artifact" : "command"} evidence for check ${e.id}.`
+      return `  ${i + 1}. [high/risk] ${e.id} (${e.type}, source=${src}, mode=${mode}${reuseInfo}${timingInfo}) — evidence gap/finding: ${detail}${e.scoped ? "" : ", unscoped"}; scope: ${e.scopeDecision ?? "n/a"}; command ${JSON.stringify(e.command)}${out} — required proof: ${e.evidenceMode === "artifact" ? "fresh scoped transcript/artifact evidence matching required patterns" : "fresh executed command with exit 0 and scoped output at current HEAD"}; next action: ${action}`
     })
-    const reason = `Verification matrix did not pass for ${broadGoal ? "broad" : "scoped"} goal (profile ${profile}); missing/unscoped/failed required checks: ${missing.join(", ")}.\nnext:\n${lines.join("\n")}`
+    if (malformed.length) {
+      lines.push(`  ${lines.length + 1}. [medium] malformed goal-declared verify directives ignored (never executed): ${malformed.map((m) => `${m.raw} (${m.reason})`).join("; ")} — next action: fix directive syntax so checks can be merged deterministically.`)
+    }
+    const reason = `Verification matrix did not pass for ${broadGoal ? "broad" : "scoped"} goal (profile ${profile}); missing/unscoped/failed required checks: ${missing.join(", ")}. Deterministic coverage enforced (rubric-independent).\nnext:\n${lines.join("\n")}`
     return fail(reason, matrix)
   }
 

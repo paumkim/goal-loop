@@ -243,6 +243,7 @@ export default Plugin.define({
       verifier: createVerifier(),
       compactAtBoundary: (sessionID, opts) => compactor.compactAtBoundary(sessionID, opts),
       estimateContext: async (sessionID) => estimateContextTokens((await ctx.session.context({ sessionID })) as readonly unknown[]),
+      context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
       clock: systemClock,
       log,
     })
