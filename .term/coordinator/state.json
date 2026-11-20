@@ -4547,6 +4547,22 @@
       "submittedAt": "2026-11-20T20:51:35Z",
       "mergedAt": "2026-11-20T20:53:34Z",
       "mergedInto": "dev"
+    },
+    "evaluator-forward-pointer-exemption": {
+      "agent": "build",
+      "paths": "src/core/verdict.ts,src/runtime/controller.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-forward-pointer-exemption",
+      "worktree": "worktrees/wt-evaluator-forward-pointer-exemption",
+      "status": "done",
+      "createdAt": "2026-11-20T21:07:14Z",
+      "submittedAt": "2026-11-20T21:13:37Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T21:13:37Z",
+      "forcedScopeFiles": [
+        "test/core.test.ts"
+      ],
+      "mergedAt": "2026-11-20T21:15:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
