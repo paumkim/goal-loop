@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -275,5 +275,105 @@ describe("coordinator scope parsing and scratch selection", () => {
     const done = run(dir, ["merge-done", "multi"])
     expect(done.status).toBe(0)
     expect(lease("multi").status).toBe("done")
+  })
+})
+
+describe("coordinator release", () => {
+  test("releasing an idle claim unblocks an overlapping claim", () => {
+    setup("true")
+    expect(run(dir, ["claim", "idle", "--agent", "t", "--paths", "src"]).status).toBe(0)
+    const blocked = run(dir, ["claim", "other", "--agent", "t", "--paths", "src"])
+    expect(blocked.status).toBe(1)
+    expect(blocked.stderr).toContain("path overlap with idle")
+
+    const released = run(dir, ["release", "idle"])
+    expect(released.status).toBe(0)
+    expect(released.stdout).toContain("released idle")
+    const idle = lease("idle")
+    expect(idle.status).toBe("done")
+    expect(idle.releaseReason).toBe("released")
+    expect(idle.releasedAt).toBeTruthy()
+    expect(existsSync(join(dir, "worktrees", "wt-idle"))).toBe(false)
+    expect(git(dir, ["branch", "--list", "wt/idle"]).trim()).toBe("")
+
+    // the same claim that was rejected now succeeds without --force
+    expect(run(dir, ["claim", "other", "--agent", "t", "--paths", "src"]).status).toBe(0)
+  })
+
+  test("uncommitted work is refused without --force and preserved in a ref with it", () => {
+    setup("true")
+    expect(run(dir, ["claim", "busy", "--agent", "t", "--paths", "."]).status).toBe(0)
+    const wt = join(dir, "worktrees", "wt-busy")
+    writeFileSync(join(wt, "half-done.ts"), "export const half = 1\n")
+
+    const refused = run(dir, ["release", "busy"])
+    expect(refused.status).toBe(1)
+    expect(refused.stderr).toContain("unsubmitted work")
+    expect(lease("busy").status).toBe("claimed")
+    expect(existsSync(wt)).toBe(true)
+
+    const forced = run(dir, ["release", "busy", "--force"])
+    expect(forced.status).toBe(0)
+    expect(lease("busy").status).toBe("done")
+    expect(existsSync(wt)).toBe(false)
+    const saved = git(dir, ["for-each-ref", "--format=%(refname)", "refs/coordinator/saved/"]).trim()
+    expect(saved).toContain("refs/coordinator/saved/busy-")
+    expect(git(dir, ["stash", "list"])).toContain("coordinator: uncommitted work for lease busy")
+  })
+
+  test("a branch with unique commits is kept and the recovery command printed", () => {
+    setup("true")
+    expect(run(dir, ["claim", "wip", "--agent", "t", "--paths", "."]).status).toBe(0)
+    const wt = join(dir, "worktrees", "wt-wip")
+    writeFileSync(join(wt, "wip.txt"), "wip\n")
+    git(wt, ["add", "-A"])
+    git(wt, ["commit", "-q", "-m", "wip"], "2026-11-02T10:00:00+00:00")
+
+    expect(run(dir, ["release", "wip"]).status).toBe(1)
+    const forced = run(dir, ["release", "wip", "--force"])
+    expect(forced.status).toBe(0)
+    expect(forced.stdout).toContain("kept branch wt/wip")
+    expect(forced.stdout).toContain("worktree add")
+    expect(git(dir, ["branch", "--list", "wt/wip"]).trim()).toContain("wt/wip")
+    expect(existsSync(wt)).toBe(false)
+    expect(lease("wip").status).toBe("done")
+  })
+
+  test("a submitted lease is refused (merge-next or merge-abort owns it)", () => {
+    setup("true")
+    claimCommitSubmit("done-work", { FILE: "y\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(dir, ["release", "done-work"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("is submitted")
+    expect(lease("done-work").status).toBe("submitted")
+  })
+
+  test("releasing again is idempotent, wt/<slug> is accepted, and an unknown slug errors", () => {
+    setup("true")
+    expect(run(dir, ["claim", "idle-2", "--agent", "t", "--paths", "."]).status).toBe(0)
+    expect(run(dir, ["release", "wt/idle-2"]).status).toBe(0)
+    const again = run(dir, ["release", "idle-2"])
+    expect(again.status).toBe(0)
+    expect(again.stdout).toContain("already done")
+    expect(run(dir, ["release", "nope"]).status).toBe(1)
+  })
+
+  test("a claimed lease whose worktree is missing is still releasable", () => {
+    setup("true")
+    expect(run(dir, ["claim", "ghost", "--agent", "t", "--paths", "."]).status).toBe(0)
+    git(dir, ["worktree", "remove", join(dir, "worktrees", "wt-ghost")])
+    const result = run(dir, ["release", "ghost"])
+    expect(result.status).toBe(0)
+    expect(lease("ghost").status).toBe("done")
+  })
+
+  test("a released idle claim leaves doctor green", () => {
+    setup("true")
+    expect(run(dir, ["claim", "idle-3", "--agent", "t", "--paths", "."]).status).toBe(0)
+    expect(run(dir, ["doctor"]).status).toBe(0)
+    expect(run(dir, ["release", "idle-3"]).status).toBe(0)
+    const doc = run(dir, ["doctor"])
+    expect(doc.status).toBe(0)
+    expect(doc.stdout).not.toContain("done lease idle-3")
   })
 })

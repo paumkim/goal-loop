@@ -23,6 +23,13 @@ The rules below are enforced by the binary, not by trust.
    The queue is FIFO by `submittedAt`. `coordinator queue` shows positions, wait times and a
    rough ETA; `coordinator status --json` shows every lease with its worktree path,
    uncommitted-file count and whether a merge is in progress.
+4a. `coordinator release <slug>` abandons a claimed lease that will never be submitted (an
+   idle or dead claim). The lease flips to done — it stops blocking overlapping claims and
+   stops warning in merge preflight — and its worktree is removed. Nothing is deleted:
+   uncommitted bytes go to `refs/coordinator/saved/<slug>-<ts>` and a branch with unique
+   commits is kept, with the command to rebuild its worktree printed. A lease that still
+   holds unsubmitted work needs `release --force`; a submitted lease is refused (use
+   `merge-next` or `merge-abort`). Releasing a done lease is a no-op.
 5. `coordinator merge-next` merges the oldest submitted lease into `dev`:
    - builds `merge-check-<slug>-<ts>` from `dev` inside a dedicated
      `worktrees/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
@@ -82,6 +89,6 @@ Exit code 1 means at least one check failed; the output says what and how to fix
   and its bookkeeping commits (`chore(coordinator): record <slug> lease done`).
 - Touch the `github-single-channel` lease or worktree. It belongs to another pipeline.
 - Force-push anything. There is no remote in this flow.
-- Leave claimed-but-idle leases lying around. Claim, work, submit or abandon.
+- Leave claimed-but-idle leases lying around. Claim, work, submit or `release`. Releasing an idle claim (`coordinator release <slug>`) clears it without losing a byte; a claim that still holds unsubmitted work needs `--force`.
 - `git worktree remove` a linked worktree that carries uncommitted bytes.
   `coordinator merge-next` and `merge-abort` handle this safely; use them.

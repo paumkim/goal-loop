@@ -572,6 +572,121 @@ do_submit() {
   printf 'submitted %s\n' "$branch"
 }
 
+# --- release --------------------------------------------------------------
+
+# Release a claimed lease that will never be submitted (an idle or abandoned
+# claim). The lease flips to done, so it stops blocking overlapping claims and
+# stops warning in merge preflight. Nothing is destroyed: uncommitted bytes are
+# preserved in refs/coordinator/saved/<slug>-<ts> (the same mechanism every
+# worktree removal uses) and a branch with unique commits is kept, never
+# deleted. A submitted lease is refused: merge-next lands it, merge-abort
+# discards it. Without --force a lease that still holds unsubmitted work is
+# refused, because releasing it is a deliberate abandon, not cleanup.
+do_release() {
+  need_jq
+  ensure_state
+  read_config
+  local slug="" force=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --help|-h)
+        printf 'usage: coordinator release <slug> [--force]\n'
+        printf '\n  Release a claimed lease that will never be submitted (idle or abandoned claim).\n'
+        printf '  Marks the lease done, removes its worktree, keeps uncommitted bytes in\n'
+        printf '  refs/coordinator/saved/<slug>-<ts>, and keeps a branch that carries unique\n'
+        printf '  commits (prints how to recreate its worktree). Submitted leases leave via\n'
+        printf '  merge-next or merge-abort; done leases are already released.\n'
+        return 0 ;;
+      --force)
+        force=1; shift ;;
+      -*)
+        printf 'error: unknown flag %s\n' "$1" >&2; exit 1 ;;
+      *)
+        if [ -z "$slug" ]; then slug="$1"; else
+          printf 'error: unexpected argument %s\n' "$1" >&2; exit 1
+        fi
+        shift ;;
+    esac
+  done
+  if [ -z "$slug" ]; then
+    printf 'usage: coordinator release <slug> [--force]\n' >&2
+    exit 1
+  fi
+  # accept the branch spelling too: release wt/<slug> == release <slug>
+  case "$slug" in
+    wt/*) slug="${slug#wt/}" ;;
+  esac
+
+  local status
+  status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
+  if [ -z "$status" ]; then
+    printf 'error: no lease for %s\n' "$slug" >&2
+    exit 1
+  fi
+  if [ "$status" = "done" ]; then
+    printf 'already done: %s (nothing to release)\n' "$slug"
+    return 0
+  fi
+  if [ "$status" = "submitted" ]; then
+    printf 'error: lease %s is submitted; merge it with merge-next or discard it with merge-abort\n' "$slug" >&2
+    exit 1
+  fi
+
+  local branch wt_rel wt_abs
+  branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
+  wt_rel=$(jq -r --arg s "$slug" --arg d "$WORKTREE_DIR" '.leases[$s].worktree // ($d + "/wt-" + $s)' "$STATE_FILE" 2>/dev/null || printf '%s/wt-%s' "$WORKTREE_DIR" "$slug")
+  wt_abs="$MAIN_ROOT/$wt_rel"
+
+  # Unique commits: counted against dev when it exists, else against the main
+  # checkout's HEAD. The branch is never deleted while it carries any.
+  local ahead=0 against
+  if git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    against="$DEV_BRANCH"
+    git -C "$MAIN_ROOT" rev-parse --verify --quiet "$DEV_BRANCH" >/dev/null 2>&1 || against="HEAD"
+    ahead=$(git -C "$MAIN_ROOT" rev-list --count "$against..$branch" 2>/dev/null | tr -d ' ' || printf '0')
+    [ -z "$ahead" ] && ahead=0
+  fi
+
+  local dirty_n=0
+  if [ -d "$wt_abs" ]; then
+    dirty_n=$(git -C "$wt_abs" status --porcelain -- . ':(exclude).term/coordinator/state.json' 2>/dev/null | wc -l | tr -d ' ')
+    [ -z "$dirty_n" ] && dirty_n=0
+  fi
+
+  if [ "$ahead" != "0" ] || [ "$dirty_n" != "0" ]; then
+    if [ "$force" -ne 1 ]; then
+      printf 'error: lease %s holds unsubmitted work (%s commit(s) ahead of %s, %s uncommitted file(s)); submit it, or release --force to abandon it deliberately\n' "$slug" "$ahead" "$against" "$dirty_n" >&2
+      printf '  nothing is deleted either way: a branch with commits stays and uncommitted bytes go to refs/coordinator/saved/\n' >&2
+      exit 1
+    fi
+  fi
+
+  # Keep every byte: safe_remove_worktree stashes non-exempt dirt into a named
+  # ref and prints the recovery command before this worktree is removed.
+  if [ -d "$wt_abs" ]; then
+    if ! safe_remove_worktree "$wt_abs" "$slug" "released"; then
+      printf 'error: could not remove worktree %s; lease for %s left claimed\n' "$wt_rel" "$slug" >&2
+      exit 1
+    fi
+  fi
+
+  local ts
+  ts=$(now_iso)
+  state_jq --arg s "$slug" --arg ts "$ts" \
+    '.leases[$s].status = "done" | .leases[$s].releasedAt = $ts | .leases[$s].releaseReason = "released"'
+  printf 'released %s (status done)\n' "$slug"
+  if [ "$ahead" != "0" ]; then
+    printf 'kept branch %s (%s commit(s) ahead of %s)\n' "$branch" "$ahead" "$against"
+    printf 'recover: git -C %s worktree add %s %s\n' "$MAIN_ROOT" "$wt_rel" "$branch"
+  elif git -C "$MAIN_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    if git -C "$MAIN_ROOT" branch -d "$branch" >/dev/null 2>&1; then
+      printf 'removed branch %s (no unique commits)\n' "$branch"
+    else
+      printf 'kept branch %s (could not delete it safely)\n' "$branch"
+    fi
+  fi
+}
+
 # --- merge ----------------------------------------------------------------
 
 # Module-level state-stash plumbing. The coordinator's own state.json dirt is
@@ -1270,10 +1385,11 @@ do_doctor() {
 }
 
 show_help() {
-  printf 'usage: coordinator <claim|heartbeat|submit|merge-next|merge-done|merge-abort|status|queue|doctor> [--help]\n'
+  printf 'usage: coordinator <claim|heartbeat|submit|release|merge-next|merge-done|merge-abort|status|queue|doctor> [--help]\n'
   printf '  claim <task> --agent <you> --paths <scope> [--force]   claim a wt/<slug> lease (existing lease and overlapping live paths need --force)\n'
   printf '  heartbeat                                           liveness check\n'
   printf '  submit [--force]                                    submit the current wt/<slug> claimed lease; commits are checked against the claimed paths (--force overrides, logged to the lease)\n'
+  printf '  release <slug> [--force]                            release a claimed lease that will never be submitted (idle or abandoned): done, worktree removed, dirty bytes saved to a ref, a branch with commits kept\n'
   printf '  merge-next [--review]                               merge the oldest submitted lease into $DEV_BRANCH via a dedicated merge worktree; --review stops before the fast-forward\n'
   printf '  merge-done <slug>                                   finish a --review merge after dev was fast-forwarded by hand\n'
   printf '  merge-abort <slug>                                  discard a --review merge (scratch branch deleted, lease stays submitted)\n'
@@ -1291,6 +1407,8 @@ main() {
       do_heartbeat ;;
     submit)
       shift; do_submit "$@" ;;
+    release)
+      shift; do_release "$@" ;;
     merge-next)
       shift; do_merge_next "$@" ;;
     merge-done)
