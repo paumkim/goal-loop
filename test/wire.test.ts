@@ -96,6 +96,13 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot({ ...snapshot(), loopHistory: entry(91000) })).toBeUndefined()
   })
 
+  test("accepts an additive VerdictEntry sha and rejects non-string values when present", () => {
+    const verdict = (sha?: unknown) => [{ turn: 1, verdict: "not_met" as const, reason: "r", at: 900, ...(sha === undefined ? {} : { sha }) }]
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict("b".repeat(40)) })?.history[0]?.sha).toBe("b".repeat(40))
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict(undefined) })?.history[0]?.sha).toBeUndefined()
+    expect(parseGoalSnapshot({ ...snapshot(), history: verdict(91000) })).toBeUndefined()
+  })
+
   test("accepts an additive LoopEntry spend delta and rejects broken values when present", () => {
     const spend = { cost: 0.42, input: 1000, output: 200, reasoning: 50, cacheRead: 800, cacheWrite: 10 }
     const entry = (value?: unknown) => [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 1, toolCalls: 2, endedAt: 800, ...(value === undefined ? {} : { spend: value }) }]
