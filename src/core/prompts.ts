@@ -202,9 +202,10 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
 
 /** Synthetic prompt arming iteration N+1 after iteration N was met. */
 export function loopContinuation(
-  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string },
+  input: { iteration: number; maxLoops: number; condition: string; previousSummary: string; reason: string; learnings?: string },
   policy: CommitPolicy,
 ): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
     `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
@@ -212,6 +213,7 @@ export function loopContinuation(
     ``,
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
     escape(input.previousSummary),
+    ...(learnings ? [``, escape(learnings)] : []),
     ``,
     ...TREE_TRUTH,
     ``,
@@ -249,13 +251,15 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
   ].join("\n")
 }
 
-export function continuation(input: { condition: string; turn: number; reason: string }, policy: CommitPolicy): string {
+export function continuation(input: { condition: string; turn: number; reason: string; learnings?: string }, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-continuation turn="${input.turn}">`,
     `The goal is not met yet. Keep working toward it.`,
     ``,
     `Goal: ${escape(input.condition)}`,
     `Evaluator: ${escape(input.reason || "No reason given.")}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
     policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
@@ -263,18 +267,20 @@ export function continuation(input: { condition: string; turn: number; reason: s
   ].join("\n")
 }
 
-export function retry(input: { condition: string; label: string }, policy: CommitPolicy): string {
+export function retry(input: { condition: string; label: string; learnings?: string }, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
   return [
     `<goal-retry>`,
     `The previous turn failed (${input.label}). The goal is still active; continue from where you left off.`,
     `Goal: ${escape(input.condition)}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "prompt") : ``,
     `</goal-retry>`,
   ].join("\n")
 }
 
 export function checkin(
-  input: { condition: string; waitedMs: number; subagents: number; shells: number },
+  input: { condition: string; waitedMs: number; subagents: number; shells: number; learnings?: string },
   policy: CommitPolicy,
 ): string {
   const running = input.subagents + input.shells > 0
@@ -284,12 +290,14 @@ export function checkin(
   ]
     .filter(Boolean)
     .join(" and ")
+  const learnings = input.learnings?.trim()
   return [
     `<goal-checkin>`,
     running
       ? `Background work (${work}) has kept the goal waiting for ${formatDuration(input.waitedMs)}. Read their output: keep waiting if they are progressing, and fix or stop any that are stuck.`
       : `Background work stopped without reporting a result. Continue toward the goal.`,
     `Goal: ${escape(input.condition)}`,
+    ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "checkin") : ``,
     `</goal-checkin>`,
   ].join("\n")
@@ -539,6 +547,8 @@ export interface NextGoalInput {
   readonly latestSummary: string
   /** Highest-priority unblocked backlog item, de-duplicated against completed work. */
   readonly backlogSuggestion?: BacklogSuggestion
+  /** Recent learning journal entries (formatted) to apply in planning. */
+  readonly recentLearnings?: string
 }
 
 const summarizeFacts = (input: LoopSummaryInput) => [
@@ -633,14 +643,18 @@ const backlogBlock = (suggestion: BacklogSuggestion | undefined): string[] => {
   ]
 }
 
-const nextGoalFacts = (input: NextGoalInput) => [
-  `Objective (constant): ${escape(input.objective)}`,
-  `Completed iterations (oldest first):`,
-  historyBlock(input.history),
-  `Latest iteration summary:`,
-  escape(stripReasoningControl(input.latestSummary)),
-  ...backlogBlock(input.backlogSuggestion),
-]
+const nextGoalFacts = (input: NextGoalInput) => {
+  const learnings = input.recentLearnings?.trim()
+  return [
+    `Objective (constant): ${escape(input.objective)}`,
+    `Completed iterations (oldest first):`,
+    historyBlock(input.history),
+    `Latest iteration summary:`,
+    escape(stripReasoningControl(input.latestSummary)),
+    ...backlogBlock(input.backlogSuggestion),
+    ...(learnings ? [``, `Recent learnings (apply when choosing the next improvement):`, escape(learnings)] : []),
+  ]
+}
 
 /** Standalone prompt for an independent planner model; the summary replaces the transcript. */
 export function nextGoalIndependently(input: NextGoalInput): string {

@@ -27,7 +27,8 @@ import {
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import { isAbsolute, join } from "node:path"
+import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, formatRecentLearnings, readRecentLearnings } from "../core/learning-log.ts"
 import { findRepository, headSha } from "../core/git.ts"; import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
   inspectImprovementBacklog,
@@ -668,6 +669,7 @@ export class GoalController {
     }
     // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
+    if (record.status === "active") this.writeLearningGoalArmed(record)
     const loopLabel = loop ? "Loop" : "Goal"
     const detail = loop ? `iteration="1" max="${maxLoops}" · ${condition}` : condition
     this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, detail)
@@ -1206,7 +1208,8 @@ export class GoalController {
     const verifyEvidence = verificationMatrix && record.lastVerify
       ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
       : undefined
-    record.history.push({ turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}), ...(verificationMatrix ? { verification: verificationMatrix } : {}) })
+    const verdictEntry = { turn, verdict: result.verdict, reason: result.reason, at: clock.now(), toolCalls: tools, ...(turnSpend ? { spend: turnSpend } : {}), ...(shaAtEvaluation ? { sha: shaAtEvaluation } : {}), ...(verifyEvidence ? { verify: verifyEvidence } : {}), ...(verificationMatrix ? { verification: verificationMatrix } : {}) }
+    record.history.push(verdictEntry)
     // Verdict-trail retention cap: the persisted record (and the changed-snapshot clone of it) stays bounded no matter how many turns a long session evaluates. The drop delta accumulates onto `historyDropped` so displays can say "N most recent of M evaluated turns" instead of silently showing a 20-turn window.
     const historyBound = boundVerdictHistory(record.history)
     if (historyBound.dropped > 0) {
@@ -1214,6 +1217,7 @@ export class GoalController {
       record.historyDropped = (record.historyDropped ?? 0) + historyBound.dropped
       this.deps.log.info("verdict trail retention cap: dropped oldest evaluated-turn records", { sessionID, dropped: historyBound.dropped, retained: historyBound.retained.length, totalDropped: record.historyDropped })
     }
+    this.writeLearningTurnVerdict(record, verdictEntry)
 
     if (result.verdict === "met") {
       if (record.loopEnabled) return this.loopAdvance(record, runtime, epoch, result, turn)
@@ -1248,7 +1252,7 @@ export class GoalController {
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return
     await this.continueWith(record, {
-      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason }, this.deps.commit),
+      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
     })
@@ -1803,6 +1807,10 @@ export class GoalController {
     // Loop bookkeeping lives only in locals until every await is behind us; a superseded loop step drops without saving.
     // The armed/terminal record is built in one shot and persisted with a single commit so a restart mid-loop
     // restores either the pre-step or the fully-advanced state, never a half-advanced one.
+    const logIteration = (entry: LoopEntry | undefined) => {
+      if (!entry || entry.version !== iteration) return
+      this.writeLearningLoopIteration(record, entry)
+    }
     const assignLoopState = () => {
       // Retention cap: persisted records and (via structuredClone) outbound snapshots stay bounded no matter how many
       // iterations a long-running loop lands. The local `history` keeps everything — messages and the maxLoops guard read it —
@@ -1823,6 +1831,14 @@ export class GoalController {
         record.completedConditionsDropped = (record.completedConditionsDropped ?? 0) + ledgerBound.dropped
         log.info("completed-condition ledger cap: dropped oldest entries", { sessionID, dropped: ledgerBound.dropped, retained: ledgerBound.retained.length, totalDropped: record.completedConditionsDropped })
       }
+      let landed: LoopEntry | undefined
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i]?.version === iteration) {
+          landed = history[i]
+          break
+        }
+      }
+      logIteration(landed)
     }
 
     const endClean = async (reason: string) => {
@@ -1918,6 +1934,7 @@ export class GoalController {
         latestSummary: entry.summary,
         signal: generate.signal,
         ...(backlogSuggestion ? { backlogSuggestion } : {}),
+        ...(this.recentLearningsForPrompt(record) ? { recentLearnings: this.recentLearningsForPrompt(record) } : {}),
       })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
@@ -2027,7 +2044,7 @@ export class GoalController {
       }
       this.deps.log.info("recovering loop arm continuation after post-commit stale race", { sessionID, iteration: nextIteration })
       void this.continueWith(record, {
-        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
         description: `goal-loop · arming v${nextIteration}`,
         turn: 1,
       }).catch((error) => this.deps.log.error("loop arm continuation recovery failed", { sessionID, error: errorMessage(error) }))
@@ -2147,7 +2164,7 @@ export class GoalController {
       // and a busy deferral never forces an unsafe compact.
     }
     await this.continueWith(record, {
-      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
       description: `goal-loop · arming v${nextIteration}`,
       turn: 1,
     })
@@ -2184,7 +2201,7 @@ export class GoalController {
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
       void this.continueWith(record, {
-        text: Prompt.retry({ condition: record.condition, label: failure.label }, this.deps.commit),
+        text: Prompt.retry({ condition: record.condition, label: failure.label, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
         description: `goal \u00B7 retry ${record.retries}`,
         turn: record.turns + 1,
       }).catch((e) => this.deps.log.error("retry continuation failed", { error: errorMessage(e) }))
@@ -2229,7 +2246,7 @@ export class GoalController {
       `Background work has kept the goal waiting ${formatDuration(waitedMs)}.${last ? " Idle check-ins are paused until you send another prompt." : ""}`,
     )
     await this.continueWith(record, {
-      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work }, this.deps.commit),
+      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
       description: `goal \u00B7 check-in ${record.checkins}`,
       turn: record.turns + 1,
     })
@@ -2356,6 +2373,7 @@ export class GoalController {
     record.status = status
     if (reason) record.reason = reason
     record.endedAt = this.deps.clock.now()
+    this.writeLearningGoalTerminal(record)
     // Terminal records are inert: drop any one-shot re-anchor armed before the finish so it cannot
     // ride a later model request (a compaction landing between the arm and the finish would
     // otherwise inject "keep working" ground truth for a finished goal).
@@ -2446,6 +2464,70 @@ export class GoalController {
   }
 
   // ---------------------------------------------------------------- plumbing
+
+  private learningLogFile(directory: string | undefined): string | undefined {
+    const learning = this.deps.config.learning
+    if (!learning?.enabled) return undefined
+    const base = directory ?? this.deps.directory
+    const raw = typeof learning.path === "string" ? learning.path.trim() : ""
+    const path = raw || ".term/goal-loop/learnings.jsonl"
+    if (isAbsolute(path)) return path
+    if (!base) return undefined
+    return join(base, path)
+  }
+
+  private writeLearningGoalTerminal(record: GoalRecord): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      const now = this.deps.clock.now()
+      appendLearningEntry(file, buildGoalTerminalLearningEntry(record, now))
+      appendLearningEntry(file, buildSessionOutcomeLearningEntry(record, now))
+    } catch (error) {
+      this.deps.log.warn("learning log (goal terminal/session outcome) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    }
+  }
+
+  private writeLearningLoopIteration(record: GoalRecord, entry: LoopEntry): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      appendLearningEntry(file, buildLoopIterationLearningEntry(record, entry, this.deps.clock.now()))
+    } catch (error) {
+      this.deps.log.warn("learning log (loop iteration) write failed", { sessionID: record.sessionID, iteration: entry.version, error: errorMessage(error) })
+    }
+  }
+
+  private writeLearningTurnVerdict(record: GoalRecord, entry: import("../core/types.ts").VerdictEntry): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      appendLearningEntry(file, buildTurnVerdictLearningEntry(record, entry, this.deps.clock.now()))
+    } catch (error) {
+      this.deps.log.warn("learning log (turn verdict) write failed", { sessionID: record.sessionID, turn: entry.turn, error: errorMessage(error) })
+    }
+  }
+
+  private recentLearningsForPrompt(record: GoalRecord, limit = 5): string | undefined {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return undefined
+      const text = formatRecentLearnings(readRecentLearnings(file, limit))
+      return text || undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  private writeLearningGoalArmed(record: GoalRecord): void {
+    try {
+      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      if (!file) return
+      appendLearningEntry(file, buildGoalArmedLearningEntry(record, this.deps.clock.now()))
+    } catch (error) {
+      this.deps.log.warn("learning log (goal armed) write failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    }
+  }
 
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)

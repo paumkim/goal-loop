@@ -61,6 +61,7 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   compactOnLoopIteration: "compactOnLoopIteration",
   maxLoops: "maxLoops",
   maxLoopSummaryTokens: "maxLoopSummaryTokens",
+  learningPath: "learning.path",
   maxConditionChars: "maxConditionChars",
   commitBranch: "commitBranch",
 }
@@ -97,6 +98,10 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.systemReminder
     case "transcriptNotes":
       return resolved.transcriptNotes
+    case "learning.enabled":
+      return resolved.learning.enabled
+    case "learning.path":
+      return resolved.learning.path
     case "requireCommit":
       return resolved.commit.enabled
     case "coordinator":
@@ -138,6 +143,7 @@ const DOC_TO_CODE_NAMES = Object.keys(
       "evaluator.consensus",
       "systemReminder",
       "transcriptNotes",
+      "learning.enabled",
       "requireCommit",
       "coordinator",
     ].map((name) => [name, name] as const),
@@ -197,6 +203,8 @@ describe("config defaults — documented vs code", () => {
     expect(resolved.compactOnLoopIteration).toBe(DEFAULTS.compactOnLoopIteration)
     expect(resolved.maxLoops).toBe(DEFAULTS.maxLoops)
     expect(resolved.maxLoopSummaryTokens).toBe(DEFAULTS.maxLoopSummaryTokens)
+    expect(resolved.learning.enabled).toBe(true)
+    expect(resolved.learning.path).toBe(DEFAULTS.learningPath)
     expect(resolved.commit.branch).toBe(DEFAULTS.commitBranch)
   })
 
