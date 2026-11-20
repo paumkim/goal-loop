@@ -11,7 +11,7 @@
  * alias, `PLUGIN_PACKAGE = "opencode-goalv2"` and the GitHub repo slug are the back-compat surface.
  */
 import { describe, expect, test } from "bun:test"
-import { readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { resolveConfig } from "../src/core/config.ts"
 const ROOT = join(import.meta.dir, "..")
@@ -57,5 +57,47 @@ describe("name fields", () => {
     expect(resolveConfig({ maxConditionChars: 0 }, {}).maxConditionChars).toBe(0)
     expect(read("README.md")).toContain("Condition length cap (min 0)")
     expect(read("docs/config.html")).toContain("<code>maxConditionChars</code></td><td>int ≥0</td>")
+  })
+})
+
+/** SPEC's naming declaration: the one place that defines the current identity and the legacy map. */
+const spec = read("SPEC.md")
+const namingBlock = /<!-- naming:start -->([\s\S]*?)<!-- naming:end -->/.exec(spec)?.[1] ?? ""
+describe("SPEC naming declaration", () => {
+  test("the SPEC title and naming block name goal-loop, not the repo slug", () => {
+    expect(spec.split("\n")[0]).toBe("# SPEC — current behavior of goal-loop")
+    expect(namingBlock).toContain("bin/goal-loop.mjs")
+    expect(namingBlock).toContain("goal-loop.tui")
+    expect(namingBlock).toContain("goal-loop-mirror")
+    expect(namingBlock).toContain("github:paumkim/opencode-goalv2#v")
+  })
+  test("every pre-rename name SPEC still uses is mapped to a current name that exists", () => {
+    const pairs: Array<[string, string]> = [
+      ["bin/opencode-goal.mjs", "bin/goal-loop.mjs"],
+      ["opencode-goal.tui", "goal-loop.tui"],
+      ["opencode-goal-mirror", "goal-loop-mirror"],
+    ]
+    for (const [legacy, current] of pairs) {
+      expect(spec, `${legacy} still appears in SPEC history`).toContain(legacy)
+      expect(namingBlock, `${legacy} is declared legacy`).toContain(legacy)
+      expect(namingBlock, `${legacy} maps to ${current}`).toContain(current)
+    }
+    expect(existsSync(join(ROOT, "bin/goal-loop.mjs"))).toBe(true)
+    expect(read("src/tui.tsx")).toContain("goal-loop.tui")
+    expect(read("src/core/mirror.ts")).toContain("goal-loop-mirror")
+  })
+  test("shipped code carries no pre-rename product name outside the declared legacy surface", () => {
+    for (const file of ["src/index.ts", "src/tui.tsx", "src/core/mirror.ts", "dist/tui.js", "bin/goal-loop.mjs"]) {
+      const text = read(file)
+      expect(text, file).not.toContain("opencode-goal.tui")
+      expect(text, file).not.toContain("opencode-goal-mirror")
+      expect(text, file).not.toContain('PLUGIN_ID = "opencode-goal"')
+    }
+  })
+  test("the declared legacy surface is still what ships (alias, package spec, env prefix)", () => {
+    expect(pkg.bin["opencode-goal"]).toBe("./bin/goal-loop.mjs")
+    expect(read("bin/goal-loop.mjs")).toContain('export const PLUGIN_PACKAGE = "opencode-goalv2"')
+    expect(read("bin/goal-loop.mjs")).toContain("github:paumkim/opencode-goalv2#v")
+    expect(read("src/core/config.ts")).toContain("OPENCODE_GOAL_")
   })
 })

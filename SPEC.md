@@ -1,4 +1,21 @@
-# SPEC — current behavior of opencode-goal
+# SPEC — current behavior of goal-loop
+
+<!-- naming:start -->
+**Canonical names.** The product, the package, the plugin and the CLI are `goal-loop`: `package.json` `name`
+`goal-loop`, CLI `bin/goal-loop.mjs`, server plugin id `goal-loop`, TUI plugin id `goal-loop.tui`, mirror
+`<tmpdir>/goal-loop-mirror`. The host is OpenCode, and the GitHub repository keeps the slug
+`paumkim/opencode-goalv2`, so the install specifier stays `github:paumkim/opencode-goalv2#v<version>`.
+
+**Pre-rename names are historical.** Every workstream before LXXVIII names the identity as it then was; that
+text is kept verbatim and read through this map: `bin/opencode-goal.mjs` → `bin/goal-loop.mjs`; server plugin id
+`opencode-goal` → `goal-loop`; TUI plugin id `opencode-goal.tui` → `goal-loop.tui`; mirror directory
+`opencode-goal-mirror` → `goal-loop-mirror`; package `opencode-goalv2` → `goal-loop`.
+
+**Legacy names that are still current by design:** the `opencode-goal` bin alias (same executable),
+`PLUGIN_PACKAGE = "opencode-goalv2"` (older installers wrote it), the repository slug above, and the
+`OPENCODE_GOAL_*` environment prefix (the documented configuration surface). `test/name-fields.test.ts` pins
+this declaration, the fields, and the code that carries them.
+<!-- naming:end -->
 
 Status: current as of v1.1.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
 a compact segment painted on the empty left side of the host's jump-to-latest row (the 1-row strip directly
@@ -475,7 +492,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=66 tests=1809 -->
+<!-- spec-check files=66 tests=1813 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7315,6 +7332,20 @@ Armed condition (verbatim): "go over the recent changes for consistencies of cod
 3. `docs/config.html` (`int ≥100`) and `README.md` ("min 100") documented the `maxConditionChars` floor that `resolveConfig` had already lowered to 0: the option accepts `0` and then rejects every objective. The type cell and the README row now say `int ≥0` / `min 0; 0 rejects every objective`, and the test asserts `resolveConfig({ maxConditionChars: 0 }) === 0` next to the documented strings, so code and docs can no longer disagree silently.
 4. `docs/styles.css`'s header comment called the site "opencode-goalv2 docs"; it now names the product (`goal-loop`) and keeps the repo slug as the qualifier.
 5. `RELEASE-CHECKLIST.md` documents the 1.1.0-era artifact (`bin/opencode-goal.mjs`, `opencode-goal --version`). The historical steps stay verbatim; a naming note at the top maps them to today's `goal-loop` names so the checklist is not silently wrong when re-run.
-Evidence. `test/name-fields.test.ts` (7 tests) pins: the package name; the lockfile workspace name; the bin map (`goal-loop` plus the legacy `opencode-goal` alias onto the same executable file, its exec bit, `FALLBACK_VERSION` equal to `package.json`'s version, and `install.sh` in `files`); the plugin ids in `src/index.ts`, `src/tui.tsx` and the shipped `dist/tui.js` (and no `opencode-goal.tui` there); the `goal-loop-mirror` directory in code and docs; the docs search keywords; and the `maxConditionChars` floor in code plus both docs. Test count 1802 -> 1809; packed files stay 66 (the suite sits under `test/`, outside `package.json` `files`).
+6. SPEC.md itself still named the pre-rename product in its title and carried ~90 historical `opencode-goal*`
+   references with no declared reading. The title now names `goal-loop`, and a `naming:start`/`naming:end` block
+   right under it states the canonical identity, maps each pre-rename name to its current one, and lists the
+   legacy names that stay current by design. Workstreams before LXXVIII keep their text; the declaration is
+   what makes it readable. `test/name-fields.test.ts` pins the declaration (title, current names, the map's
+   targets existing on disk, no pre-rename id in shipped code, and the legacy surface still present).
+Evidence. `test/name-fields.test.ts` (11 tests) pins the fields: the package name; the lockfile workspace name; the bin map
+(`goal-loop` plus the legacy `opencode-goal` alias onto the same executable file, its exec bit, `FALLBACK_VERSION`
+equal to `package.json`'s version, and `install.sh` in `files`); the plugin ids in `src/index.ts`, `src/tui.tsx`
+and the shipped `dist/tui.js` (and no `opencode-goal.tui` there); the `goal-loop-mirror` directory in code and
+docs; the docs search keywords; and the `maxConditionChars` floor in code plus both docs. It also pins SPEC's own
+declaration: the title, the current names in the `naming:start`/`naming:end` block, every pre-rename name still
+used in SPEC being mapped to a target that exists, no pre-rename id in shipped code, and the legacy surface
+(bin alias, `PLUGIN_PACKAGE`, repo slug, `OPENCODE_GOAL_*` prefix) still present. Test count 1802 -> 1813; packed
+files stay 66 (the suite sits under `test/`, outside `package.json` `files`).
 Honest limits. Legacy names stay on purpose and are out of scope: `OPENCODE_GOAL_*` env vars (`test/env-vars.test.ts` owns that surface), the `opencode-goal` bin alias, `PLUGIN_PACKAGE = "opencode-goalv2"`, the GitHub repo slug, and the upstream `EL4CTEO/opencode-goal` credit. SPEC.md's older workstreams keep their historical paths, and the docs search index is curated by hand, not generated.
-<!-- spec-check files=66 tests=1809 -->
+<!-- spec-check files=66 tests=1813 -->
