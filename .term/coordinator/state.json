@@ -3995,8 +3995,11 @@
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/fix-evaluator-staleness",
       "worktree": "worktrees/wt-fix-evaluator-staleness",
-      "status": "claimed",
-      "createdAt": "2026-11-20T07:28:40Z"
+      "status": "done",
+      "createdAt": "2026-11-20T07:28:40Z",
+      "submittedAt": "2026-11-20T07:47:29Z",
+      "mergedAt": "2026-11-20T08:28:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
