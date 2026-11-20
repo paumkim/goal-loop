@@ -4465,6 +4465,33 @@
       "submittedAt": "2026-11-20T17:27:46Z",
       "mergedAt": "2026-11-20T17:30:10Z",
       "mergedInto": "dev"
+    },
+    "startup-workflow-scaffold": {
+      "agent": "iceman",
+      "paths": "src/core/bootstrap.ts,src/index.ts,src/core/workflow.ts,test/bootstrap.test.ts,test/workflow.test.ts,docs/changelog.html,docs/config.html,docs/install.html,docs/index.html,SPEC.md,.gitignore,README.md",
+      "branch": "wt/startup-workflow-scaffold",
+      "worktree": "worktrees/wt-startup-workflow-scaffold",
+      "status": "done",
+      "createdAt": "2026-11-20T17:42:12Z",
+      "submittedAt": "2026-11-20T17:54:28Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T17:54:28Z",
+      "forcedScopeFiles": [
+        "AGENTS.md",
+        "docs/core.html",
+        "test/package-integrity.test.ts",
+        "test/plugin.test.ts"
+      ],
+      "mergedAt": "2026-11-20T17:57:02Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-retry-caps": {
+      "agent": "antigravity",
+      "paths": "src/runtime/controller.ts,src/runtime/evaluator.ts,src/core/config.ts,test/controller.test.ts,test/evaluator.test.ts",
+      "branch": "wt/evaluator-retry-caps",
+      "worktree": "worktrees/wt-evaluator-retry-caps",
+      "status": "claimed",
+      "createdAt": "2026-11-20T17:53:04Z"
     }
   },
   "mergeLock": null,
