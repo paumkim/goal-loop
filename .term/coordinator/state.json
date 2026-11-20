@@ -4373,6 +4373,22 @@
       ],
       "mergedAt": "2026-11-20T15:54:34Z",
       "mergedInto": "dev"
+    },
+    "unexport-internal-core-symbols": {
+      "agent": "iceman",
+      "paths": "src/core/failure-signature.ts,src/core/types.ts,src/core/change-risk.ts,src/core/repull.ts,src/core/rpc-pump.ts,src/core/improvement-backlog.ts,src/core/verify-matrix.ts",
+      "branch": "wt/unexport-internal-core-symbols",
+      "worktree": "worktrees/wt-unexport-internal-core-symbols",
+      "status": "done",
+      "createdAt": "2026-11-20T16:01:11Z",
+      "submittedAt": "2026-11-20T16:05:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T16:05:32Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-20T16:07:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
