@@ -8,7 +8,7 @@ import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
-import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
+import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
 import { EvaluationTimeoutError } from "../src/runtime/evaluator.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 import { MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES, MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
@@ -1701,5 +1701,247 @@ describe("repeated failure-signature escalation", () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe("parallel mixed /goal and /goal-loop sessions", () => {
+  function parallelHarness(options: Record<string, unknown> = {}, storage = new MemoryStorage()) {
+    const clock = new FakeClock()
+    const calls = { prompts: [] as any[], synthetic: [] as any[] }
+    const verdictQueues = new Map<string, Array<EvaluationResult | Error | (() => Promise<EvaluationResult>)>>()
+    const summaryQueues = new Map<string, string[]>()
+    const nextGoalQueues = new Map<string, string[]>()
+    const notices: Notice[] = []
+    const changes: Array<{ sessionID: string; goal: GoalSnapshot | null }> = []
+    const logs: Array<{ level: string; message: string; extra?: unknown }> = []
+    const log = {
+      info: (message: string, extra?: unknown) => void logs.push({ level: "info", message, extra }),
+      warn: (message: string, extra?: unknown) => void logs.push({ level: "warn", message, extra }),
+      error: (message: string, extra?: unknown) => void logs.push({ level: "error", message, extra }),
+    }
+    const background = new BackgroundTracker({ parentOf: async () => undefined })
+    const store = new GoalStore(storage, (e) => {
+      throw e
+    })
+    const controller = new GoalController({
+      config: resolveConfig(options),
+      directory: DIR,
+      commit: { required: false, branch: "dev", reason: "test" },
+      clock,
+      store,
+      log,
+      newId: (() => {
+        let n = 0
+        return () => `goal_${++n}`
+      })(),
+      session: {
+        prompt: async (input) => void calls.prompts.push(input),
+        synthetic: async (input) => void calls.synthetic.push(input),
+        usage: async () => ({ cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }),
+        compact: async () => {},
+      },
+      evaluator: {
+        evaluate: async (request: EvaluationRequest) => {
+          const queue = verdictQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (!next) throw new Error(`no verdict queued for ${request.sessionID} turn ${request.turn}`)
+          if (next instanceof Error) throw next
+          return typeof next === "function" ? next() : next
+        },
+        summarize: async (request: LoopSummaryRequest) => {
+          const queue = summaryQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (next === undefined) throw new Error(`no summary queued for ${request.sessionID}`)
+          return next
+        },
+        nextGoal: async (request: NextGoalRequest) => {
+          const queue = nextGoalQueues.get(request.sessionID) ?? []
+          const next = queue.shift()
+          if (next === undefined) throw new Error(`no next goal queued for ${request.sessionID}`)
+          return next
+        },
+      },
+      background,
+      emitter: {
+        changed: (sessionID, goal) => void changes.push({ sessionID, goal }),
+        notice: (n) => void notices.push(n),
+      },
+    })
+    const compactor = new AutoCompactor({
+      config: resolveConfig(options),
+      compact: async () => {},
+      context: async () => [],
+      emitter: { changed: () => {}, notice: (n) => void notices.push(n) },
+      clock,
+      log,
+    })
+    const route = createRouter({ controller, background, log, compactor })
+    let eid = 0
+    const ev = (type: string, data: any) => route({ id: `e${++eid}`, type, data })
+    const pushVerdict = (sessionID: string, ...items: Array<EvaluationResult | Error | (() => Promise<EvaluationResult>)>) => {
+      const queue = verdictQueues.get(sessionID) ?? []
+      queue.push(...items)
+      verdictQueues.set(sessionID, queue)
+    }
+    const pushSummary = (sessionID: string, ...items: string[]) => {
+      const queue = summaryQueues.get(sessionID) ?? []
+      queue.push(...items)
+      summaryQueues.set(sessionID, queue)
+    }
+    const pushNext = (sessionID: string, ...items: string[]) => {
+      const queue = nextGoalQueues.get(sessionID) ?? []
+      queue.push(...items)
+      nextGoalQueues.set(sessionID, queue)
+    }
+    const turn = async (sessionID: string, tools = 1) => {
+      controller.onExecutionStarted(sessionID)
+      for (let i = 0; i < tools; i++) controller.onToolCalled(sessionID)
+      await controller.onExecutionSucceeded(sessionID)
+      await flush()
+    }
+    return { clock, calls, notices, changes, logs, controller, background, route, ev, pushVerdict, pushSummary, pushNext, turn }
+  }
+
+  test("parallel plain goal and goal-loop: interleaved completions apply verdicts to correct sessions and loop re-arms on met", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "all tests pass", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "improve the repo", delivery: "steer", loop: true })
+    await flush()
+
+    h.pushVerdict("ses_goal", { verdict: "not_met", reason: "goal still failing" })
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "iteration 1 complete" })
+    h.pushSummary("ses_loop", "summary v1")
+    h.pushNext("ses_loop", "ship v2 improvement")
+
+    // Near-simultaneous completions routed through the real event router (including background drains).
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    await flush()
+
+    const goal = h.controller.get("ses_goal")!
+    const loop = h.controller.get("ses_loop")!
+    expect(goal.status).toBe("active")
+    expect(goal.turns).toBe(1)
+    expect(goal.verdict).toBe("not_met")
+    expect(loop.status).toBe("active")
+    expect(loop.loopEnabled).toBe(true)
+    expect(loop.loopIteration).toBe(2)
+    expect(loop.condition).toBe("ship v2 improvement")
+    expect(loop.loopHistory).toHaveLength(1)
+
+    expect(h.notices.some((n) => n.sessionID === "ses_loop" && n.kind === "loop")).toBe(true)
+    expect(h.calls.synthetic.some((s) => String(s.description).includes("goal · turn 2") && String(s.text).includes("goal still failing"))).toBe(true)
+    expect(h.calls.synthetic.some((s) => String(s.description).includes("arming v2"))).toBe(true)
+    expect(h.logs.filter((l) => l.level === "error")).toHaveLength(0)
+  })
+
+  test("slow evaluation in one session does not stall or stale the other session", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await flush()
+
+    let resolveGoal: ((v: EvaluationResult) => void) | undefined
+    h.pushVerdict("ses_goal", () => new Promise<EvaluationResult>((resolve) => { resolveGoal = resolve }))
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "loop met" })
+    h.pushSummary("ses_loop", "loop summary")
+    h.pushNext("ses_loop", "loop v2")
+
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    await flush()
+
+    await h.turn("ses_loop")
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+    expect(resolveGoal).toBeDefined()
+
+    resolveGoal!({ verdict: "not_met", reason: "goal pending" })
+    await flush()
+    await flush()
+
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+    expect(h.logs.some((l) => l.level === "warn" && String(l.message).includes("stale"))).toBe(false)
+  })
+
+  test("cross-session background-drain events during in-flight evaluations do not drop verdicts or loop re-arm", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await flush()
+
+    let resolveGoal: ((v: EvaluationResult) => void) | undefined
+    let resolveLoop: ((v: EvaluationResult) => void) | undefined
+    h.pushVerdict("ses_goal", () => new Promise<EvaluationResult>((resolve) => { resolveGoal = resolve }))
+    h.pushVerdict("ses_loop", () => new Promise<EvaluationResult>((resolve) => { resolveLoop = resolve }))
+
+    h.ev("session.execution.started", { sessionID: "ses_goal" })
+    h.ev("session.tool.called", { sessionID: "ses_goal" })
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_goal" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    await flush()
+    expect(resolveGoal).toBeDefined()
+    expect(resolveLoop).toBeDefined()
+
+    for (let i = 0; i < 5; i++) {
+      h.ev("shell.updated", { info: { id: `sh_${i}`, status: "running", metadata: { sessionID: "other" } } })
+      h.ev("shell.exited", { id: `sh_${i}` })
+    }
+    await flush()
+
+    h.pushSummary("ses_loop", "summary")
+    h.pushNext("ses_loop", "v2")
+    resolveLoop!({ verdict: "met", reason: "loop done" })
+    await flush()
+    await flush()
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+
+    resolveGoal!({ verdict: "not_met", reason: "goal not yet" })
+    await flush()
+    await flush()
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+    expect(h.logs.filter((l) => l.level === "error")).toHaveLength(0)
+  })
+
+  test("background work owned by one session does not block or hide the other session's evaluation", async () => {
+    const h = parallelHarness()
+    await h.controller.command({ sessionID: "ses_loop", text: "loop objective", delivery: "steer", loop: true })
+    await h.controller.command({ sessionID: "ses_goal", text: "goal condition", delivery: "steer" })
+    await flush()
+
+    h.ev("shell.created", { info: { id: "sh_loop", status: "running", metadata: { sessionID: "ses_loop" } } })
+    await flush()
+
+    h.pushVerdict("ses_goal", { verdict: "not_met", reason: "goal progressed" })
+    await h.turn("ses_goal")
+    expect(h.controller.get("ses_goal")!.turns).toBe(1)
+    expect(h.controller.get("ses_goal")!.verdict).toBe("not_met")
+
+    h.ev("session.execution.started", { sessionID: "ses_loop" })
+    h.ev("session.tool.called", { sessionID: "ses_loop" })
+    h.ev("session.execution.succeeded", { sessionID: "ses_loop" })
+    await flush()
+    expect(h.controller.get("ses_loop")!.turns).toBe(0)
+    expect(h.controller.snapshot("ses_loop")?.waiting).toBe(true)
+
+    h.pushVerdict("ses_loop", { verdict: "met", reason: "loop v1" })
+    h.pushSummary("ses_loop", "sum")
+    h.pushNext("ses_loop", "loop v2")
+    h.ev("shell.exited", { id: "sh_loop" })
+    await flush()
+    await flush()
+
+    expect(h.controller.get("ses_loop")!.loopIteration).toBe(2)
+    expect(h.controller.get("ses_loop")!.condition).toBe("loop v2")
   })
 })
