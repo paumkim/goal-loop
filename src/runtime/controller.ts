@@ -930,6 +930,38 @@ export class GoalController {
     })
   }
 
+
+  /** If a loop-advance step was superseded but the same active iteration still needs advancing, retry it so progress is not lost. */
+  private recoverLoopAdvanceIfActive(
+    record: GoalRecord,
+    runtime: Runtime,
+    iteration: number,
+    result: EvaluationResult,
+    turn: number,
+    phase: string,
+  ): void {
+    const sessionID = record.sessionID
+    const stillActive = !this.disposed && this.goals.get(sessionID) === record && record.status === "active"
+    this.deps.log.warn("goal evaluation step dropped as stale", {
+      sessionID,
+      phase,
+      iteration,
+      runtimeEpoch: runtime.epoch,
+      active: stillActive,
+      willRecover: stillActive && record.loopIteration === iteration,
+    })
+    if (!stillActive) return
+    // Iteration already advanced/finished by another path: nothing to recover for this step.
+    if ((record.loopIteration ?? 1) !== iteration) return
+    this.schedule(runtime, RETRY_BASE_MS, () => {
+      if (this.disposed) return
+      if (this.goals.get(sessionID) !== record || record.status !== "active") return
+      if ((record.loopIteration ?? 1) !== iteration) return
+      void this.loopAdvance(record, runtime, ++runtime.epoch, result, turn).catch((error) => {
+        this.deps.log.error("loop advance recovery failed", { sessionID, iteration, error: errorMessage(error) })
+      })
+    })
+  }
   private logStaleDrop(record: GoalRecord, runtime: Runtime, epoch: number, phase: string): void {
     this.deps.log.warn("goal evaluation step dropped as stale", {
       sessionID: record.sessionID,
@@ -1385,7 +1417,10 @@ export class GoalController {
         summary = elideAtWordBoundary(summarized, Math.max(200, config.maxLoopSummaryTokens) * 4)
       } catch (error) {
         if (runtime.abort === summarize) runtime.abort = undefined
-        if (this.stale(record, runtime, epoch)) return
+        if (this.stale(record, runtime, epoch)) {
+          this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "loop summary aborted/stale")
+          return
+        }
         log.error("loop summary failed", { sessionID, error: errorMessage(error) })
         summary = `(summary failed: ${truncate(errorMessage(error), 80)})`
       } finally {
@@ -1397,7 +1432,7 @@ export class GoalController {
       summary = "(summary unavailable: this evaluator cannot summarize)"
     }
     if (this.stale(record, runtime, epoch)) {
-      this.logStaleDrop(record, runtime, epoch, "after loop summary")
+      this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "after loop summary")
       return
     }
 
@@ -1440,7 +1475,10 @@ export class GoalController {
       })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
-      if (this.stale(record, runtime, epoch)) return
+      if (this.stale(record, runtime, epoch)) {
+        this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "loop next-goal aborted/stale")
+        return
+      }
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
       // The summary and history stay local until the arm lands, so a retry recomputes them identically;
       // record.loopNotProgress is untouched here on purpose. The turn verdict and its spend are NOT local:
@@ -1465,7 +1503,7 @@ export class GoalController {
       if (runtime.abort === generate) runtime.abort = undefined
     }
     if (this.stale(record, runtime, epoch)) {
-      this.logStaleDrop(record, runtime, epoch, "after next-goal generation")
+      this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "after next-goal generation")
       return
     }
     // A met verdict advances the loop exactly once: if this iteration was already armed while we awaited

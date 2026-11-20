@@ -58,8 +58,8 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
   const nextGoals: string[] = []
   const summaryRequests: LoopSummaryRequest[] = []
   const nextGoalRequests: NextGoalRequest[] = []
-  // Test hook: when set, the next-goal generator awaits this gate before replying (simulates an in-flight planner).
-  const gate: { nextGoal?: Promise<void>; evaluate?: Promise<void> } = {}
+  // Test hook: when set, the summarizer/next-goal generator/evaluator awaits this gate before replying (simulates in-flight steps).
+  const gate: { summarize?: Promise<void>; nextGoal?: Promise<void>; evaluate?: Promise<void> } = {}
   // Test hook: when set, the first matching synthetic call awaits this gate before delivering (simulates a slow steer round-trip).
   const syntheticGate: { promise?: Promise<void>; match?: string } = {}
   // Test hook: when set, every synthetic call throws (simulates the host rejecting the dispatch).
@@ -115,6 +115,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
       },
       summarize: async (request: LoopSummaryRequest) => {
         summaryRequests.push(request)
+        if (gate.summarize) await gate.summarize
         const next = summaries.shift()
         if (next === undefined) throw new Error("no summary queued")
         return next
@@ -357,11 +358,11 @@ describe("/goal-loop", () => {
     expect(record.loopHistory?.map((e) => e.toolCalls)).toEqual([0, 0])
   })
 
-  test("user prompt during next-goal generation drops the half-advanced state", async () => {
+  test("user prompt during next-goal generation recovers the loop advance without losing iteration progress", async () => {
     await h.setLoop("objective")
     h.verdicts.push(met("v1 done"))
-    h.summaries.push("s1")
-    h.nextGoals.push("v2 condition")
+    h.summaries.push("s1", "s1")
+    h.nextGoals.push("v2 condition", "v2 condition")
     let release!: () => void
     h.gate.nextGoal = new Promise<void>((resolve) => (release = resolve))
     const turnPromise = h.turn(1)
@@ -370,11 +371,42 @@ describe("/goal-loop", () => {
     release()
     await turnPromise
     await flush()
+    // Supersession-race recovery retries the advance instead of dropping progress.
+    await h.clock.advance(15_000)
+    await flush()
     const record = h.controller.get(SID)!
-    expect(record.condition).toBe("objective")
-    expect(record.loopIteration ?? 1).toBe(1)
-    expect(record.loopHistory ?? []).toHaveLength(0)
     expect(record.status).toBe("active")
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopIteration).toBe(2)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    const v2Arming = h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))
+    expect(v2Arming).toHaveLength(1)
+  })
+
+
+  test("loop-advance summary stale-drop recovery re-arms without losing iteration progress", async () => {
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("s1", "s1")
+    h.nextGoals.push("v2 condition", "v2 condition")
+    let release!: () => void
+    h.gate.summarize = new Promise<void>((resolve) => (release = resolve))
+    const turnPromise = h.turn(1)
+    await flush() // evaluation finished; the loop is now awaiting the gated summary step
+    h.controller.onUserPrompt(SID) // supersession race invalidates the in-flight summary step
+    release()
+    await turnPromise
+    await flush()
+    await h.clock.advance(15_000)
+    await flush()
+    const record = h.controller.get(SID)!
+    expect(record.status).toBe("active")
+    expect(record.condition).toBe("v2 condition")
+    expect(record.loopIteration).toBe(2)
+    expect(record.loopHistory).toHaveLength(1)
+    expect(record.loopHistory![0]).toMatchObject({ version: 1, condition: "objective", summary: "s1" })
+    expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v2"))).toHaveLength(1)
   })
 
   test("summary failure is recorded and the loop advances anyway", async () => {
