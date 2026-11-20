@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
-import { HudCard, hudCardRows, cardRowPlan, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
+import { HudCard, hudCardRows, cardRowPlan, CARD_VERTICAL_PADDING, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
 import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
@@ -658,26 +658,26 @@ describe("evaluatorHint", () => {
   })
 
   test("hudCardRows grows one row for the teaching hint while the goal is fresh", () => {
-    expect(hudCardRows(fresh())).toBe(5)
+    expect(hudCardRows(fresh())).toBe(7)
     // After the first turn lands, the hint is gone and the card relaxes to its pre-hint size.
-    expect(hudCardRows(loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBe(6)
+    expect(hudCardRows(loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "no", at: now }] }))).toBe(8)
   })
 })
 
 describe("hudCardRows", () => {
   test("grows by exactly one row when the snapshot carries a spend estimate", () => {
     const spend = { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }
-    expect(hudCardRows(loopedGoal({ spend }))).toBe(7)
+    expect(hudCardRows(loopedGoal({ spend }))).toBe(9)
     const { history: _h, spend: _s, ...bare } = loopedGoal({ spend })
-    expect(hudCardRows(bare as unknown as GoalSnapshot)).toBe(5)
+    expect(hudCardRows(bare as unknown as GoalSnapshot)).toBe(7)
   })
 
   test("grows by one row for the last-verdict line and one for the remediation", () => {
-    expect(hudCardRows(loopedGoal())).toBe(6)
-    expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(8)
-    expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(8)
+    expect(hudCardRows(loopedGoal())).toBe(8)
+    expect(hudCardRows(loopedGoal({ loopCompact: { requestedAt: now, iteration: 3, misses: 2 } }))).toBe(10)
+    expect(hudCardRows(loopedGoal({ status: "paused", pauseCause: "cap" }))).toBe(10)
     const { history: _h, ...noHistory } = loopedGoal()
-    expect(hudCardRows(noHistory as GoalSnapshot)).toBe(5)
+    expect(hudCardRows(noHistory as GoalSnapshot)).toBe(7)
   })
 })
 
@@ -781,47 +781,48 @@ describe("hudCardRows viewport ceiling (maxRows) — optional rows drop until th
   test("a one-line remediation costs one row, not the flat two it reserved before", () => {
     // 'goal failed — /goal clear to reset' is 34 cells — one row at the 49-cell remediation width
     const failed = loopedGoal({ status: "failed", history: undefined as unknown as GoalSnapshot["history"] })
-    expect(hudCardRows(failed)).toBe(6)
+    expect(hudCardRows(failed)).toBe(8)
   })
 
   test("a long failureLabel costs the rows it actually wraps to, not a flat two", () => {
     const failed = loopedGoal({ status: "failed", failureLabel: "x".repeat(100), history: undefined as unknown as GoalSnapshot["history"] })
-    expect(hudCardRows(failed)).toBe(8) // 4 + why 1 + 3 wrapped remediation rows
+    expect(hudCardRows(failed)).toBe(10) // 6 core (2 padding + 4) + why 1 + 3 wrapped remediation rows
   })
 
   test("under a ceiling the teaching hint drops first, then spend", () => {
     const goal = hinted()
-    // full: 4 + spend 1 + hint 1 + why 1 = 7
-    expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 6)).toBe(6) // hint gone, spend and why kept
-    expect(hudCardRows(goal, false, 5)).toBe(5) // hint and spend gone, why kept
-    expect(hudCardRows(goal, false, 4)).toBe(4) // hint, spend and why gone
-    expect(hudCardRows(goal, false, 3)).toBe(4)
+    // full: 6 core (2 padding + 4) + spend 1 + hint 1 + why 1 = 9
+    expect(hudCardRows(goal)).toBe(9)
+    expect(hudCardRows(goal, false, 8)).toBe(8) // hint gone, spend and why kept
+    expect(hudCardRows(goal, false, 7)).toBe(7) // hint and spend gone, why kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint, spend and why gone: the core (with its breathing room) remains
+    expect(hudCardRows(goal, false, 5)).toBe(6)
   })
 
   test("under a ceiling the remediation drops only after hint, spend and last", () => {
-    const goal = hot() // 4 + why 1 + remediation 2 = 7 (hot compaction wraps to two rows at 49 cells)
-    expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 5)).toBe(4) // why and remediation gone: hint/spend/context/last all unavailable
-    expect(hudCardRows(goal, false, 3)).toBe(4) // remediation gone: the irreducible core remains
+    const goal = hot() // 6 core + why 1 + remediation 2 = 9 (hot compaction wraps to two rows at 49 cells)
+    expect(hudCardRows(goal)).toBe(9)
+    expect(hudCardRows(goal, false, 8)).toBe(8) // why gone, remediation kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // remediation gone: the irreducible core remains
   })
 
   test("the last-verdict row drops after spend; the menu never drops", () => {
     const paused = loopedGoal({ status: "paused", pauseCause: "cap", spend: { cost: 1, input: 1, output: 1, reasoning: 0, cacheRead: 0, cacheWrite: 0 } })
-    // 4 + spend 1 + why 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 9
-    expect(hudCardRows(paused)).toBe(9)
-    expect(hudCardRows(paused, false, 7)).toBe(7) // spend and why gone
-    expect(hudCardRows(paused, false, 5)).toBe(4) // spend, why, last and remediation gone: the irreducible core
-    expect(hudCardRows(paused, true, 2)).toBe(10) // menu rows never drop; remediation gone: 4 + menu 6
+    // 6 core + spend 1 + why 1 + last 1 + remediation('turn cap…' 79 cells → 2 rows) = 11
+    expect(hudCardRows(paused)).toBe(11)
+    expect(hudCardRows(paused, false, 9)).toBe(9) // spend and why gone
+    expect(hudCardRows(paused, false, 6)).toBe(6) // spend, why, last and remediation gone: the irreducible core
+    expect(hudCardRows(paused, true, 2)).toBe(12) // menu rows never drop; remediation gone: 6 core + menu 6
   })
 
   test("cardRowPlan and hudCardRows agree — the painted rows are the anchored rows", () => {
-    expect(cardRowPlan(hinted())).toEqual({ rows: 7, hint: true, spend: true, context: false, why: true, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: true, context: false, why: true, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, why: true, last: false, remediation: false })
-    expect(cardRowPlan(hinted(), false, 4)).toEqual({ rows: 4, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
-    expect(cardRowPlan(hot(), false, 5)).toEqual({ rows: 4, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
-    expect(cardRowPlan(hot())).toEqual({ rows: 7, hint: false, spend: false, context: false, why: true, last: false, remediation: true })
+    expect(cardRowPlan(hinted())).toEqual({ rows: 9, hint: true, spend: true, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 8)).toEqual({ rows: 8, hint: false, spend: true, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 7)).toEqual({ rows: 7, hint: false, spend: false, context: false, why: true, last: false, remediation: false })
+    expect(cardRowPlan(hinted(), false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
+    expect(cardRowPlan(hot(), false, 8)).toEqual({ rows: 8, hint: false, spend: false, context: false, why: false, last: false, remediation: true })
+    expect(cardRowPlan(hot(), false, 6)).toEqual({ rows: 6, hint: false, spend: false, context: false, why: false, last: false, remediation: false })
+    expect(cardRowPlan(hot())).toEqual({ rows: 9, hint: false, spend: false, context: false, why: true, last: false, remediation: true })
   })
 })
 
@@ -830,42 +831,42 @@ describe("hudCardRows context meter row", () => {
     loopedGoal({ turns: 0, history: [], loopHistory: [], spend: { cost: 0.42, input: 120_000, output: 8_400, reasoning: 0, cacheRead: 30_000, cacheWrite: 0 }, contextSize: 95_000, compactAtTokens: 150_000 })
 
   test("grows by exactly one row when the snapshot carries a context estimate", () => {
-    // hinted() shape (4 + spend 1 + hint 1 + why 1 = 7) plus the context row = 8; without spend = 7
-    expect(hudCardRows(metered())).toBe(8)
+    // hinted() shape (6 core + spend 1 + hint 1 + why 1 = 9) plus the context row = 10; without spend = 9
+    expect(hudCardRows(metered())).toBe(10)
     const { spend: _s, ...noSpend } = metered()
-    expect(hudCardRows(noSpend as GoalSnapshot)).toBe(7) // hint 1 + context 1 + why 1
+    expect(hudCardRows(noSpend as GoalSnapshot)).toBe(9) // hint 1 + context 1 + why 1 + 6 core
     const { contextSize: _c, ...noContext } = metered()
-    expect(hudCardRows(noContext as GoalSnapshot)).toBe(7) // unchanged from the pre-context plan
+    expect(hudCardRows(noContext as GoalSnapshot)).toBe(9) // unchanged from the pre-context plan
   })
 
   test("under a ceiling the context row drops after spend and before the last-verdict row", () => {
     const goal = metered()
-    expect(hudCardRows(goal, false, 6)).toBe(6) // hint and spend gone; context and why kept
-    expect(hudCardRows(goal, false, 5)).toBe(5) // hint, spend and context gone; why kept
-    expect(hudCardRows(goal, false, 4)).toBe(4) // hint, spend, context and why gone: the irreducible core
+    expect(hudCardRows(goal, false, 8)).toBe(8) // hint and spend gone; context and why kept
+    expect(hudCardRows(goal, false, 7)).toBe(7) // hint, spend and context gone; why kept
+    expect(hudCardRows(goal, false, 6)).toBe(6) // hint, spend, context and why gone: the irreducible core
     // a verdicts-bearing goal: why drops after context, before the last-verdict row
     const withLast = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
-    expect(hudCardRows(withLast)).toBe(7) // 4 + context 1 + why 1 + last 1
-    expect(hudCardRows(withLast, false, 5)).toBe(5) // context and why gone, last kept
-    expect(cardRowPlan(withLast, false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
+    expect(hudCardRows(withLast)).toBe(9) // 6 core + context 1 + why 1 + last 1
+    expect(hudCardRows(withLast, false, 7)).toBe(7) // context and why gone, last kept
+    expect(cardRowPlan(withLast, false, 7)).toEqual({ rows: 7, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
   })
 })
 
 describe("hudCardRows why row", () => {
   test("grows by exactly one row when the snapshot carries an evaluator reason", () => {
-    expect(hudCardRows(loopedGoal())).toBe(6) // 4 + why 1 + last 1
+    expect(hudCardRows(loopedGoal())).toBe(8) // 6 core + why 1 + last 1
     const { reason: _r, ...noReason } = loopedGoal()
-    expect(hudCardRows(noReason as GoalSnapshot)).toBe(5) // last kept
-    expect(hudCardRows(loopedGoal({ reason: "   " }))).toBe(5) // whitespace-only reason paints no row
+    expect(hudCardRows(noReason as GoalSnapshot)).toBe(7) // last kept
+    expect(hudCardRows(loopedGoal({ reason: "   " }))).toBe(7) // whitespace-only reason paints no row
   })
 
   test("under a ceiling the why row drops after context and before the last-verdict row", () => {
     const goal = loopedGoal({ contextSize: 95_000, compactAtTokens: 150_000, spend: undefined })
-    // full: 4 + context 1 + why 1 + last 1 = 7
-    expect(hudCardRows(goal)).toBe(7)
-    expect(hudCardRows(goal, false, 6)).toBe(6) // context gone, why and last kept
-    expect(hudCardRows(goal, false, 5)).toBe(5) // why gone too, last kept
-    expect(cardRowPlan(goal, false, 5)).toEqual({ rows: 5, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
+    // full: 6 core + context 1 + why 1 + last 1 = 9
+    expect(hudCardRows(goal)).toBe(9)
+    expect(hudCardRows(goal, false, 8)).toBe(8) // context gone, why and last kept
+    expect(hudCardRows(goal, false, 7)).toBe(7) // why gone too, last kept
+    expect(cardRowPlan(goal, false, 7)).toEqual({ rows: 7, hint: false, spend: false, context: false, why: false, last: true, remediation: false })
   })
 })
 
@@ -876,7 +877,7 @@ describe("cardRowPlan under a ceiling (render)", () => {
 
   test("under a ceiling the teaching hint gives way to the rows below it", async () => {
     const { frame } = await render(() => (
-      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={8} />
     ), 80, 12)
     expect(frame).not.toContain("the evaluator reads only the transcript") // teaching row dropped
     expect(frame).toContain("spend") // cost row still painted
@@ -885,7 +886,7 @@ describe("cardRowPlan under a ceiling (render)", () => {
 
   test("tightened further, the spend row also gives way — the actions row never does", async () => {
     const { frame } = await render(() => (
-      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={4} />
+      <HudCard goal={hinted()} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
     ), 80, 12)
     expect(frame).not.toContain("the evaluator reads only the transcript")
     expect(frame).not.toContain("spend")
@@ -896,7 +897,7 @@ describe("cardRowPlan under a ceiling (render)", () => {
   test("a brutal ceiling drops the remediation — the actions row and esc always survive", async () => {
     const hot = loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
     const { frame } = await render(() => (
-      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={4} />
+      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
     ), 80, 12)
     expect(frame).not.toContain("compact pending") // remediation (last rung) gave way
     expect(frame).toContain("esc") // the dismiss affordance never drops
@@ -905,7 +906,7 @@ describe("cardRowPlan under a ceiling (render)", () => {
   test("a ceiling with one row to spare keeps the remediation", async () => {
     const hot = loopedGoal({ turns: 0, history: [], loopHistory: [], loopCompact: { requestedAt: now, iteration: 1, misses: 2 } })
     const { frame } = await render(() => (
-      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={6} />
+      <HudCard goal={hot} theme={theme} elapsedMs={() => 1000 * 60 * 3} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} maxRows={8} />
     ), 80, 12)
     expect(frame).toContain("compact pending")
     expect(frame).toContain("esc")
@@ -1415,7 +1416,7 @@ describe("HudCard context menu — keyboard selection paints like hover", () => 
   test("the clear row paints bold under the selection, hue stays the danger contract (mono keeps the word)", async () => {
     const { setup } = await render(() => (
       <HudCard goal={loopedGoal()} theme={theme} elapsedMs={() => 1000 * 60 * 12} onClose={() => {}} onDetails={() => {}} onClear={() => {}} onCopyCondition={() => {}} mono={true} contextOpen={true} menuSelected={() => 5} />
-    ))
+    ), 80, 18)
     const spans = setup.captureSpans().lines.flatMap((line) => line.spans)
     const clearRow = spans.find((span) => span.text === "clear goal")
     expect(clearRow).toBeDefined()
@@ -1627,5 +1628,14 @@ describe("expiredTerminalSessionIDs", () => {
   test("an entry without a terminalAt stamp is never expired on a guess", () => {
     const entries = { ses_unstamped: { goal: loopedGoal({ status: "achieved" }), receivedAt: now - 20 * 60_000 } }
     expect(expiredTerminalSessionIDs(entries, now)).toEqual([])
+  })
+})
+
+describe("card breathing room — the core plan reserves the padding rows", () => {
+  test("CARD_VERTICAL_PADDING is two rows and every plan pays for it", () => {
+    expect(CARD_VERTICAL_PADDING).toBe(2)
+    // the irreducible core (title + condition + now + actions) is four rows; the padding lifts it to six.
+    const { history: _h, reason: _r, spend: _s, contextSize: _c, ...bare } = loopedGoal()
+    expect(cardRowPlan(bare as unknown as GoalSnapshot).rows).toBe(6)
   })
 })

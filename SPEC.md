@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=70 tests=1958 -->
+<!-- spec-check files=70 tests=1962 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7674,6 +7674,28 @@ on a live model loop. The `completedLedgerHit` reuse changes wording only in one
 the ledger holds both an earlier near-duplicate and a later exact match of the same candidate — where the
 refusal wording (never the decision, the leading `no new gap` vocabulary or the refusal itself) would differ;
 the scanned set order puts the record's own condition first, so the common exact case is unaffected.
+<!-- spec-check files=70 tests=1957 -->
+
+
+## Workstream XC — the goal card breathes at its top and bottom edges (2026-11-20)
+The compact HUD card (`src/hud-card.tsx`) painted its title as the first content row and its actions row as the
+last, so the text sat flush against the card's top and bottom edges. It now paints one blank row of breathing
+room above the title and one below the actions row. The card keeps the composer's grammar it was built in: a
+single left accent bar spanning the full height, including the two padding rows, and no other frame — the
+content is simply inset from the card's top and bottom edges, the way the input prompt pads its own text. The
+padding is two whole rows, exported as `CARD_VERTICAL_PADDING`, and `cardRowPlan` pays for them in every plan
+(the irreducible core is now six rows: two padding + title + condition + now + actions), so the mount anchor
+(`hudCardRows`) and the painted height still agree.
+
+Evidence. `bun run compile` rebuilt `dist/tui.js`; `bun scripts/render-slot.tsx` and `scripts/render-card.tsx`
+paint the card with a bar-only row above the title and below the actions row. New pins:
+`test/tui-alignment-invariants.test.tsx` ("the first painted row is a bar-only row above the title", "the
+actions row is followed by exactly one bar-only row below it", "mono keeps the same two padding rows") and
+`test/tui-hud.test.tsx` ("CARD_VERTICAL_PADDING is two rows and every plan pays for it"). The `hudCardRows`
+row-plan unit tests, the maxRows ceiling tests (their ceilings shifted +2 so the drop ladder stays exercised)
+and the full-frame snapshots were re-pinned in the same commit (fix-then-pin). `bun run check` exit 0
+(1954 pass / 0 fail / 29 snapshots; tsc, dist freshness, TUI load, docs freshness, invariant-sweep, spec-check).
+<!-- spec-check files=70 tests=1954 -->
 
 ## Workstream XCIV — the evaluator rubric requires verifier-command corroboration for broad conditions (2026-11-20)
 
@@ -7705,4 +7727,4 @@ layer rather than on a live model loop; the verifier-command corroboration is gu
 follow and, when a verifier is actually configured, is already independently enforced by the runtime gate that
 spawns the command and downgrades a `met` with non-zero/unverifiable output. The clause does not itself change
 what the gate runs.
-<!-- spec-check files=70 tests=1958 -->
+<!-- spec-check files=70 tests=1962 -->

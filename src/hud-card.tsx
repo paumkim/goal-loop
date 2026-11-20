@@ -6,7 +6,9 @@
  * headlessly testable — every side effect (copy, open dialog, clear, dismiss) is a callback wired up
  * in `src/tui.tsx`.
  *
- * Layout (the composer mount's width, left bar in the state accent):
+ * Layout (the composer mount's width, left bar in the state accent; one blank padding row above the
+ * title and one below the actions row, so the text never sits flush with the card's top/bottom edges):
+ *   ▎
  *   ▎ ◎ /goal-loop · v3/5
  *   ▎ condition  ship the release notes…        (copy)
  *   ▎ now        active · v3/5 ○○○○● · 4 turns · 12m
@@ -16,6 +18,7 @@
  *   ▎ why        docs build still fails…              (evaluator's reason; click to copy)
  *   ▎ fix        2x not_met in a row · consider evaluator.verifyCommand  (only when remediation exists)
  *   ▎ [details] [pin] [clear goal]                                     esc
+ *   ▎
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import stringWidth from "string-width"
@@ -67,6 +70,14 @@ const verdictColor = (theme: HudCardTheme, entry: { verdict: Verdict; toolCalls?
 /** Rows the context menu occupies (one per action row, fixed so the mount anchor never shifts mid-toggle). */
 const CONTEXT_MENU_ROWS = 6
 
+/**
+ * Vertical breathing room inside the card, in whole rows: one blank row above the title row and one
+ * below the actions row. The card shares the composer's grammar (a single left accent bar, no other
+ * frame), so it matches the composer's own top/bottom padding — the content sits *inside* the card
+ * instead of flush with its top and bottom edges. Counted by `cardRowPlan` so the mount anchor and the
+ * painted height agree (see `hudCardRows`).
+ */
+export const CARD_VERTICAL_PADDING = 2
 /** Narrowest card the layout serves: left accent border (1) + padding (4) + LABEL (10) leaves a 37-cell content lane at the floor. */
 const CARD_WIDTH_MIN = 52
 /** Widest card the layout serves: past this the condition stops being a glance and the card stops being a HUD. */
@@ -131,9 +142,11 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
   const whyAvailable = Boolean(goal.reason && goal.reason.trim())
   const lastAvailable = Boolean(lastVerdict(goal.history ?? []))
   const menu = contextOpen ? CONTEXT_MENU_ROWS : 0
-  // Base rows: title row + condition + now + buttons (the left-accent card paints no top/bottom border).
+  // Base rows: the vertical breathing room (one blank row above the title, one below the actions row)
+  // plus title row + condition + now + buttons. The left-accent card paints no top/bottom border, so
+  // the padding rows are pure air between the card's text and the conversation above / jump row below.
   const fit = (hint: boolean, spend: boolean, context: boolean, why: boolean, last: boolean, fix: boolean): number =>
-    4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
+    CARD_VERTICAL_PADDING + 4 + (spend && spendAvailable ? 1 : 0) + (context && contextAvailable ? 1 : 0) + (why && whyAvailable ? 1 : 0) + (last && lastAvailable ? 1 : 0) + (fix ? remediationRows : 0) + (hint && hintAvailable ? 1 : 0) + menu
   let hint = hintAvailable, spend = spendAvailable, context = contextAvailable, why = whyAvailable, last = lastAvailable, fix = remediationWanted
   let rows = fit(hint, spend, context, why, last, fix)
   if (rows <= maxRows) return { rows, hint, spend, context, why, last, remediation: fix }
@@ -421,6 +434,8 @@ export const HudCard = (props: {
       backgroundColor={theme().background?.raised?.high}
       paddingLeft={2}
       paddingRight={2}
+      paddingTop={1}
+      paddingBottom={1}
       onMouseUp={(event) => {
         // Right-click anywhere on the card toggles the context menu; left clicks fall through to the rows/buttons.
         if (event.button === 2) {
