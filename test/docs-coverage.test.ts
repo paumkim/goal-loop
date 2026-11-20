@@ -50,6 +50,8 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   maxRetries: "maxRetries",
   compactAtTokens: "compactAtTokens",
   compactOnLoopIteration: "compactOnLoopIteration",
+  updateChannel: "update.channel",
+  updateMode: "update.mode",
   maxLoops: "maxLoops",
   maxLoopSummaryTokens: "maxLoopSummaryTokens",
   learningPath: "learning.path",

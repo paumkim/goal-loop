@@ -27,11 +27,12 @@ import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
 import { withFileSink } from "./core/file-log.ts"
+import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
 
 const DESCRIPTION = "keep working until a condition is met"
-const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"
+const LOOP_DESCRIPTION = "keep working toward an objective; bare /goal-loop checks for plugin updates; each achieved goal arms an improved one"
 
 function createLogger(): Logger {
   const tag = `[${PLUGIN_ID}]`
@@ -287,6 +288,58 @@ export default Plugin.define({
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
+    // ---- bare /goal-loop = update check
+    // `plugins[].options.update` is the one source of truth, already parsed into `config.update` alongside
+    // every other option. The check never blocks prompt admission: it is deferred to the next macrotask,
+    // so a fast plugin disposal aborts it before any network request leaves the machine. An immediate
+    // toast tells the user the check started; a second toast carries the result. `mode: off` (and probe
+    // mode) keep the old status-only behavior.
+    const updateTimers = new Set<ReturnType<typeof setTimeout>>()
+    const scheduleUpdateCheck = (sessionID: string) => {
+      if (probe || config.update.mode !== "auto") return
+      emit.notice({
+        sessionID,
+        kind: "set",
+        level: "info",
+        title: "goal-loop update",
+        message: `Checking GitHub for the ${config.update.channel} channel…`,
+      })
+      const timer = setTimeout(() => {
+        updateTimers.delete(timer)
+        if (lifetime.signal.aborted) return
+        void (async () => {
+          try {
+            const result = await cliUpdate([], { env: process.env, cwd: ctx.location.directory })
+            const text = (result.stdout || result.stderr).trim() || "Update check produced no output."
+            if (!lifetime.signal.aborted) emit.notice({
+              sessionID,
+              kind: "set",
+              level: result.code === 0 ? "info" : "warning",
+              title: "goal-loop update",
+              message: text,
+            })
+          } catch (error) {
+            if (!lifetime.signal.aborted) emit.notice({
+              sessionID,
+              kind: "set",
+              level: "warning",
+              title: "goal-loop update",
+              message: `Update check failed: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        })()
+      }, 0)
+      updateTimers.add(timer)
+    }
+    const handleBareLoop = async (sessionID: string): Promise<"update" | "status"> => {
+      if (probe || config.update.mode !== "auto") {
+        await controller.status(sessionID)
+        return "status"
+      }
+      scheduleUpdateCheck(sessionID)
+      return "update"
+    }
+
     // ---- the /goal and /goal-loop commands
     await ctx.command.transform((editor) => {
       const addCommand = (name: string, description: string, loop: boolean) =>
@@ -294,6 +347,10 @@ export default Plugin.define({
           name,
           description,
           execute: async ({ sessionID, prompt, delivery }) => {
+            if (loop && (prompt.text ?? "").trim() === "") {
+              await handleBareLoop(sessionID)
+              return
+            }
             await controller.command({
               sessionID,
               text: prompt.text ?? "",
@@ -333,11 +390,13 @@ export default Plugin.define({
           return
         }
         if (objective === "") {
-          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): same as bare /goal-loop — show status.
+          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): update check (or status when off).
           if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
-          await controller.status(event.sessionID)
+          const action = await handleBareLoop(event.sessionID)
           controller.onUserPrompt(event.sessionID)
-          event.prompt.text = "Show the current goal loop status."
+          event.prompt.text = action === "update"
+            ? "A goal-loop update check was requested; acknowledge briefly and do not set a goal."
+            : "Show the current goal loop status."
           return
         }
         const maxLoops = goalLoop.maxLoops ?? config.maxLoops
@@ -430,6 +489,8 @@ export default Plugin.define({
 
     return async () => {
       lifetime.abort()
+      for (const timer of updateTimers) clearTimeout(timer)
+      updateTimers.clear()
       await controller.dispose()
     }
   },

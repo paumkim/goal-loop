@@ -65,6 +65,11 @@ export interface GoalConfig {
     /** Path relative to the goal working directory, or absolute. */
     readonly path: string
   }
+  /** Plugin self-update behavior. `main` follows the newest stable tag; `dev` follows the latest dev commit. `off` disables checks. */
+  readonly update: {
+    readonly channel: "main" | "dev"
+    readonly mode: "auto" | "off"
+  }
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
 }
@@ -84,6 +89,8 @@ export const DEFAULTS = {
   maxRetries: 3,
   compactAtTokens: 0,
   compactOnLoopIteration: true,
+  updateChannel: "main",
+  updateMode: "auto",
   maxLoops: 5,
   maxLoopSummaryTokens: 400,
   learningPath: ".term/goal-loop/learnings.jsonl",
@@ -122,6 +129,12 @@ const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" 
 
 /** A free-form string option: trimmed; anything else falls back. */
 const str = (value: unknown, fallback: string) => (typeof value === "string" && value.trim() ? value.trim() : fallback)
+
+/** A constrained string option: trimmed; anything outside the allowed set falls back. */
+const choice = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => {
+  const trimmed = typeof value === "string" ? value.trim() : ""
+  return (allowed as readonly string[]).includes(trimmed) ? trimmed as T : fallback
+}
 
 /** A branch name: a non-empty string with no whitespace. */
 const branch = (value: unknown, fallback: string) => {
@@ -183,7 +196,9 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
 
 
 /**
- * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
+ * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides. The nested
+ * `update: { channel: "main"|"dev", mode: "auto"|"off" }` group is option-only (no env override) so the
+ * CLI and the plugin always read the same source of truth from the config file. Env overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
@@ -202,6 +217,7 @@ export function resolveConfig(
   const learning = (typeof options.learning === "object" && options.learning !== null ? options.learning : {}) as Record<string, unknown>
   const learningEnabled = envBool(env.OPENCODE_GOAL_LEARNING_LOG, bool(learning.enabled ?? options.learningLog, true))
   const learningPath = str(env.OPENCODE_GOAL_LEARNING_LOG_PATH ?? learning.path ?? options.learningLogPath, DEFAULTS.learningPath)
+  const update = (typeof options.update === "object" && options.update !== null ? options.update : {}) as Record<string, unknown>
   return {
     evaluator: {
       mode,
@@ -230,6 +246,10 @@ export function resolveConfig(
     learning: {
       enabled: learningEnabled,
       path: learningPath,
+    },
+    update: {
+      channel: choice(update.channel, ["main", "dev"], DEFAULTS.updateChannel),
+      mode: choice(update.mode, ["auto", "off"], DEFAULTS.updateMode),
     },
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),

@@ -95,7 +95,20 @@ const SPECS = [PLUGIN_SPEC, PLUGIN_PACKAGE];
 // installs keep working). Uninstall/status must recognise them, and install migrates them
 // in place instead of stacking a second entry next to the old one.
 const LEGACY_REPO_SPEC = /^github:paumkim\/opencode-goalv2(?:#.*)?$/;
+// Any pin from the current repository slug — stable tag, floating `dev`, or a pinned commit SHA.
+// Update/channel/status must recognize all three; install/uninstall keep their narrower matchers.
+const CURRENT_REPO_SPEC = /^github:paumkim\/goal-loop(?:#.*)?$/;
 const SCHEMA_URL = "https://opencode.ai/config.json";
+
+// ---- update preferences & channels ---------------------------------------------------------------
+const GITHUB_API = "https://api.github.com/repos/paumkim/goal-loop";
+const GITHUB_RAW = "https://raw.githubusercontent.com/paumkim/goal-loop";
+const CHANNELS = ["main", "dev"];
+const UPDATE_MODES = ["auto", "off"];
+const DEFAULT_UPDATE_TIMEOUT_MS = 8000;
+const DEFAULT_PREFS = Object.freeze({ channel: "main", mode: "auto" });
+const SEMVER_REF = /^v?\d+\.\d+\.\d+/;
+const SHA_REF = /^[0-9a-f]{7,40}$/;
 
 class CliError extends Error {}
 
@@ -322,11 +335,11 @@ function insertPluginsProperty(text, root, entry, eol) {
   return text.slice(0, afterOpen) + `${eol}  "plugins": [${eol}    ${entry}${eol}  ],${eol}  ` + rest;
 }
 
-/** Insert (or detect) the plugin in the config text. Returns { text, already }. */
-export function addPluginText(text) {
+/** Insert (or detect) the plugin in the config text. Returns { text, already }. `spec` lets update/channel add a non-default pin. */
+export function addPluginText(text, spec = PLUGIN_SPEC) {
   const root = parseJsonc(text);
   const prop = findPluginsProperty(root);
-  const entry = `"${PLUGIN_SPEC}"`;
+  const entry = JSON.stringify(spec);
   if (!prop) {
     const eol = text.includes("\r\n") ? "\r\n" : "\n";
     const insert = `  "plugins": [${eol}    ${entry}${eol}  ],${eol}  `;
@@ -338,7 +351,9 @@ export function addPluginText(text) {
   }
   const arr = prop.value;
   if (arr.type !== "array") throw new CliError(`"plugins" is not an array; not touching it`);
-  if (arr.elements.some(matchesPluginEntry)) return { text, already: true };
+  // Any pin from this repo counts as installed — the standalone CLI's baked version can lag
+  // an updated config, and a second entry would load the plugin twice.
+  if (arr.elements.some((el) => matchesPluginEntry(el) || matchesGoalLoopEntry(el))) return { text, already: true };
   if (arr.elements.length === 0) {
     const inner = text.slice(arr.start + 1, arr.end - 1);
     const kept = inner.trim();
@@ -444,7 +459,7 @@ export function removePluginText(text) {
     const prop = findPluginsProperty(root);
     if (!prop || prop.value.type !== "array") break;
     const arr = prop.value;
-    const el = arr.elements.find((element) => matchesPluginEntry(element) || isLegacyRepoEntry(element));
+    const el = arr.elements.find((element) => matchesPluginEntry(element) || isLegacyRepoEntry(element) || matchesGoalLoopEntry(element));
     if (!el) break;
     removed = true;
     current = removeLastElement(current, arr, el);
@@ -605,7 +620,7 @@ function backupPluginFree(bak) {
     const prop = findPluginsProperty(root);
     if (!prop) return true; // parsed, no plugins key at all
     if (prop.value.type !== "array") return null; // unverifiable, never auto-restore
-    return !prop.value.elements.some(matchesPluginEntry);
+    return !prop.value.elements.some((el) => matchesPluginEntry(el) || matchesGoalLoopEntry(el));
   } catch {
     return null; // unparseable backup — never restore from it
   }
@@ -660,8 +675,8 @@ function missingEntryOutcome(file, dryRun) {
 // Commands — each returns { code, stdout, stderr }
 // ---------------------------------------------------------------------------
 
-const skeleton = () =>
-  `{\n  "$schema": "${SCHEMA_URL}",\n  "plugins": [\n    "${PLUGIN_SPEC}"\n  ]\n}\n`;
+const skeleton = (spec = PLUGIN_SPEC) =>
+  `{\n  "$schema": "${SCHEMA_URL}",\n  "plugins": [\n    ${JSON.stringify(spec)}\n  ]\n}\n`;
 
 export function install(args, opts = {}) {
   const dryRun = args.includes("--dry-run");
@@ -820,6 +835,260 @@ export function probeOpencodeVersion(v) {
   return "--version outcome unknown";
 }
 
+// ---------------------------------------------------------------------------
+// Updates: preferences, ref resolution and config pin rewrite
+// ---------------------------------------------------------------------------
+
+// ---- update preferences (stored in plugins[].options.update — one source of truth) ---------------
+
+/** True for any pin from the current repo (tag, branch or SHA) — unlike matchesPluginEntry, which pins one exact spec. */
+function matchesGoalLoopEntry(el) {
+  const spec = entrySpec(el);
+  return spec !== null && CURRENT_REPO_SPEC.test(spec);
+}
+
+const normalizePrefs = (raw) => ({
+  channel: CHANNELS.includes(raw?.channel) ? raw.channel : DEFAULT_PREFS.channel,
+  mode: UPDATE_MODES.includes(raw?.mode) ? raw.mode : DEFAULT_PREFS.mode,
+});
+
+/** Materialize a parsed JSONC value node as plain JSON data (options may hold arbitrary user settings). */
+function plainValue(node) {
+  if (!node) return undefined;
+  if (node.type === "string") return node.value;
+  if (node.type === "literal") {
+    if (node.value === "true") return true;
+    if (node.value === "false") return false;
+    if (node.value === "null") return null;
+    const n = Number(node.value);
+    return Number.isFinite(n) ? n : node.value;
+  }
+  if (node.type === "array") return node.elements.map(plainValue);
+  if (node.type === "object") {
+    const out = {};
+    for (const prop of node.properties) out[prop.key] = plainValue(prop.value);
+    return out;
+  }
+  return undefined;
+}
+
+/** Read the goal-loop plugin entry: its pin, its options, and the update preferences nested in them. */
+function readPluginState(args, opts) {
+  const scope = resolveScope(args, opts);
+  const empty = { scope, text: null, el: null, spec: null, ref: null, channel: null, options: {}, prefs: { ...DEFAULT_PREFS } };
+  if (!existsSync(scope.file)) return empty;
+  const text = readFileSync(scope.file, "utf8");
+  const root = parseJsonc(text);
+  const prop = findPluginsProperty(root);
+  const el = prop?.value?.type === "array"
+    ? prop.value.elements.find((e) => matchesPluginEntry(e) || matchesGoalLoopEntry(e) || isLegacyRepoEntry(e))
+    : undefined;
+  if (!el) return { ...empty, text };
+  let spec = null;
+  let options = {};
+  if (el.type === "string") spec = el.value;
+  else if (el.type === "object") {
+    const pkg = el.properties.find((pr) => pr.key === "package" && pr.value.type === "string");
+    if (pkg) spec = pkg.value.value;
+    const optionsProp = el.properties.find((pr) => pr.key === "options" && pr.value.type === "object");
+    if (optionsProp) options = plainValue(optionsProp.value);
+  }
+  const ref = spec && spec.includes("#") ? spec.slice(spec.indexOf("#") + 1) : null;
+  const channel = ref === null ? null
+    : SEMVER_REF.test(ref) ? "main"
+    : ref === "dev" || SHA_REF.test(ref) ? "dev"
+    : null;
+  return { scope, text, el, spec, ref, channel, options, prefs: normalizePrefs(options?.update) };
+}
+
+/** Locate the goal-loop entry in already-parsed config text (used after addPluginText creates one). */
+function findGoalLoopNode(text) {
+  const root = parseJsonc(text);
+  const prop = findPluginsProperty(root);
+  return prop?.value?.type === "array"
+    ? prop.value.elements.find((el) => matchesPluginEntry(el) || matchesGoalLoopEntry(el)) ?? null
+    : null;
+}
+
+/** Replace the whole plugin entry with a canonical object form; everything outside the entry is byte-identical. */
+function writePluginState(state, { spec, options }) {
+  let text = state.text;
+  let el = state.el;
+  if (!el) {
+    text = addPluginText(text, spec).text;
+    el = findGoalLoopNode(text);
+  }
+  const replacement = JSON.stringify({ package: spec, options });
+  return text.slice(0, el.start) + replacement + text.slice(el.end);
+}
+
+/** Backup + atomic write of a rewritten config. Returns the backup path for the success message. */
+function commitStateChange(state, spec, options) {
+  const bak = backupFile(state.scope.file, state.text);
+  writeFileAtomic(state.scope.file, writePluginState(state, { spec, options }));
+  return bak;
+}
+
+export function readUpdatePrefs(args, opts = {}) {
+  return opts.prefs ? normalizePrefs(opts.prefs) : readPluginState(args, opts).prefs;
+}
+
+export function writeUpdatePrefs(args, opts, prefs) {
+  const state = readPluginState(args, opts);
+  if (!state.spec) throw new CliError(`goal-loop is not installed in ${state.scope.file}; run 'goal-loop install' first`);
+  const bak = commitStateChange(state, state.spec, { ...state.options, update: normalizePrefs(prefs) });
+  return { file: state.scope.file, backup: bak };
+}
+
+/** JSON GET with a user agent and a hard timeout. `opts.fetch` is injectable so tests never hit the network. */
+async function fetchJson(url, opts) {
+  const impl = opts.fetch ?? globalThis.fetch;
+  if (typeof impl !== "function") throw new Error("no fetch implementation available");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? DEFAULT_UPDATE_TIMEOUT_MS);
+  try {
+    const response = await impl(url, {
+      headers: { "User-Agent": `goal-loop/${VERSION}`, Accept: "application/vnd.github+json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Numeric semver compare for tag names (`v` prefix optional); non-numeric tails are ignored. */
+function compareSemver(a, b) {
+  const parts = (s) => s.replace(/^v/, "").split(".").map((p) => Number.parseInt(p, 10) || 0);
+  const left = parts(a);
+  const right = parts(b);
+  for (let i = 0; i < 3; i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * Resolve the ref each channel means right now:
+ *   main -> the newest semver tag (fallbacks: latest GitHub Release, package.json on main)
+ *   dev  -> the latest commit SHA on dev (pinned, so a restart always re-fetches a new build)
+ * A tag list is primary because releases are pushed manually and can lag the newest stable tag.
+ */
+export async function resolveLatestRef(channel, opts = {}) {
+  if (channel === "dev") {
+    const url = `${GITHUB_API}/commits/dev`;
+    const data = await fetchJson(url, opts);
+    const sha = typeof data?.sha === "string" ? data.sha : "";
+    if (!SHA_REF.test(sha)) throw new Error("the dev commit response carried no usable sha");
+    const short = sha.slice(0, 7);
+    return { channel, ref: sha, label: short, spec: `github:paumkim/goal-loop#${sha}`, source: "dev commit", url };
+  }
+  let tag = "";
+  let source = "latest tag";
+  let url = `${GITHUB_API}/tags`;
+  try {
+    const data = await fetchJson(url, opts);
+    const names = Array.isArray(data) ? data.map((t) => (typeof t?.name === "string" ? t.name : "")).filter((n) => SEMVER_REF.test(n)) : [];
+    tag = names.length > 0 ? names.sort(compareSemver).at(-1) ?? "" : "";
+  } catch {
+    // Older repos may have no tag listing available; try the release below.
+  }
+  if (!tag) {
+    source = "latest release";
+    url = `${GITHUB_API}/releases/latest`;
+    try {
+      const data = await fetchJson(url, opts);
+      tag = typeof data?.tag_name === "string" ? data.tag_name : "";
+    } catch {
+      // Tags are pushed manually; a repo with no Release still has a version on main.
+    }
+  }
+  if (!tag) {
+    url = `${GITHUB_RAW}/main/package.json`;
+    const data = await fetchJson(url, opts);
+    const version = typeof data?.version === "string" ? data.version : "";
+    if (!SEMVER_REF.test(version)) throw new Error("could not resolve the latest stable version from GitHub");
+    tag = version;
+  }
+  const ref = tag.startsWith("v") ? tag : `v${tag}`;
+  return { channel: "main", ref, label: ref, spec: `github:paumkim/goal-loop#${ref}`, source, url };
+}
+
+/**
+ * Check GitHub for the channel's current ref and, unless --check/--dry-run, rewrite the config pin.
+ * Network failures are reported, never thrown: a bare /goal-loop must not break the user's turn.
+ */
+export async function update(args, opts = {}) {
+  const checkOnly = args.includes("--check");
+  const dryRun = args.includes("--dry-run");
+  const prefs = opts.prefs ?? readUpdatePrefs(args, opts);
+  try {
+    if (prefs.mode === "off") {
+      return { code: 0, stdout: `update mode is off (channel ${prefs.channel}); nothing was checked; enable with 'goal-loop updates auto'\n`, stderr: "" };
+    }
+    const state = readPluginState(args, opts);
+    if (!state.spec) {
+      return { code: 1, stdout: "", stderr: `goal-loop: plugin is not installed in ${state.scope.file}; run 'goal-loop install' first\n` };
+    }
+    const latest = await resolveLatestRef(prefs.channel, opts);
+    const current = state.ref ?? state.spec;
+    if (state.spec === latest.spec) {
+      return { code: 0, stdout: `up to date: ${prefs.channel} @ ${current} (${latest.source})\n`, stderr: "" };
+    }
+    if (checkOnly) {
+      return { code: 0, stdout: `update available: ${current} → ${latest.label} (channel ${prefs.channel}); run 'goal-loop update' to apply\n`, stderr: "" };
+    }
+    if (dryRun) {
+      return { code: 0, stdout: `dry-run: would update ${state.scope.file} from ${current} to ${latest.label} (channel ${prefs.channel})\n`, stderr: "" };
+    }
+    const bak = commitStateChange(state, latest.spec, state.options);
+    return { code: 0, stdout: `updated ${state.scope.file}: ${current} → ${latest.label} (channel ${prefs.channel}, ${latest.source}); restart opencode (backup: ${bak})\n`, stderr: "" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { code: 1, stdout: "", stderr: `goal-loop: update check failed: ${message}\n` };
+  }
+}
+
+/** Persist the channel preference and move the installed pin to that channel in one atomic write. */
+export async function setChannel(args, opts = {}) {
+  const requested = args.find((a) => a === "main" || a === "dev");
+  if (!requested) return { code: 2, stdout: "", stderr: "goal-loop: channel must be 'main' or 'dev'\n" };
+  const prefs = { ...readUpdatePrefs(args, opts), channel: requested };
+  if (args.includes("--dry-run")) {
+    const result = await update(args, { ...opts, prefs });
+    return { ...result, stdout: `channel: ${requested}\n${result.stdout}` };
+  }
+  try {
+    const state = readPluginState(args, opts);
+    if (!state.spec) return { code: 1, stdout: "", stderr: `goal-loop: plugin is not installed in ${state.scope.file}; run 'goal-loop install' first\n` };
+    const latest = await resolveLatestRef(requested, opts);
+    const options = { ...state.options, update: prefs };
+    const bak = commitStateChange(state, latest.spec, options);
+    return {
+      code: 0,
+      stdout: `channel: ${requested}\nupdated ${state.scope.file}: ${state.ref ?? state.spec} → ${latest.label} (${latest.source}); restart opencode (backup: ${bak})\n`,
+      stderr: "",
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { code: 1, stdout: "", stderr: `goal-loop: channel switch failed: ${message}\n` };
+  }
+}
+
+/** Turn automatic update checks on or off for the selected scope. */
+export function setUpdates(args, opts = {}) {
+  const requested = args.find((a) => a === "auto" || a === "off");
+  if (!requested) return { code: 2, stdout: "", stderr: "goal-loop: updates must be 'auto' or 'off'\n" };
+  const prefs = { ...readUpdatePrefs(args, opts), mode: requested };
+  if (args.includes("--dry-run")) {
+    return { code: 0, stdout: `dry-run: would set update mode to '${requested}' (channel ${prefs.channel})\n`, stderr: "" };
+  }
+  writeUpdatePrefs(args, opts, prefs);
+  return { code: 0, stdout: `updates: ${requested} (channel ${prefs.channel}); bare /goal-loop now ${requested === "off" ? "shows status only" : "checks for updates"}\n`, stderr: "" };
+}
+
 export function status(args, opts = {}) {
   const scope = resolveScope(args, opts);
   const { file } = scope;
@@ -832,7 +1101,7 @@ export function status(args, opts = {}) {
       const root = parseJsonc(readFileSync(file, "utf8"));
       const prop = findPluginsProperty(root);
       if (prop?.value?.type === "array") {
-        installed = prop.value.elements.some(matchesPluginEntry);
+        installed = prop.value.elements.some((el) => matchesPluginEntry(el) || matchesGoalLoopEntry(el));
         legacy = prop.value.elements.some(isLegacyRepoEntry);
       }
     } catch (err) {
@@ -842,9 +1111,12 @@ export function status(args, opts = {}) {
   } else {
     out.push(`config:   ${file} (does not exist)`);
   }
-  if (installed) out.push(`installed: yes (${PLUGIN_SPEC})`);
+  if (installed) out.push(`installed: yes (${readPluginState(args, opts).spec ?? PLUGIN_SPEC})`);
   else if (legacy) out.push("installed: yes (pre-rename github:paumkim/opencode-goalv2 specifier; run `goal-loop install` to update it)");
   else out.push("not installed");
+  const prefs = readUpdatePrefs(args, opts);
+  out.push(`channel:  ${prefs.channel}`);
+  out.push(`mode:     ${prefs.mode}`);
   try {
     const v = spawnSync("opencode", ["--version"], { encoding: "utf8", timeout: 5000 });
     out.push(`opencode: ${probeOpencodeVersion(v)}`);
@@ -855,7 +1127,7 @@ export function status(args, opts = {}) {
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
 
-export function runCli(argv, opts = {}) {
+export async function runCli(argv, opts = {}) {
   const args = [...argv];
   if (args.includes("--help") || args.includes("-h")) {
     return { code: 0, stdout: usage(), stderr: "" };
@@ -863,13 +1135,16 @@ export function runCli(argv, opts = {}) {
   if (args.includes("--version") || args.includes("-v")) {
     return { code: 0, stdout: `goal-loop ${VERSION}\n`, stderr: "" };
   }
-  const flags = new Set(["--global", "--project", "--dry-run", "--restore", "--self"]);
+  const flags = new Set(["--global", "--project", "--dry-run", "--restore", "--self", "--check"]);
   const unknownFlag = args.find((a) => a.startsWith("--") && !flags.has(a));
   if (unknownFlag) return { code: 2, stdout: "", stderr: `goal-loop: unknown flag ${unknownFlag} (try: goal-loop --help)\n` };
   const positional = args.filter((a) => !a.startsWith("--"));
   const cmd = positional[0] ?? "install";
-  if (positional.length > 1) return { code: 2, stdout: "", stderr: `goal-loop: unexpected argument ${positional[1]} (try: goal-loop --help)\n` };
-  if (!["install", "uninstall", "status"].includes(cmd)) {
+  const wantsArg = cmd === "channel" || cmd === "updates";
+  if (positional.length > (wantsArg ? 2 : 1)) {
+    return { code: 2, stdout: "", stderr: `goal-loop: unexpected argument ${positional[wantsArg ? 2 : 1]} (try: goal-loop --help)\n` };
+  }
+  if (!["install", "uninstall", "status", "update", "channel", "updates"].includes(cmd)) {
     return { code: 2, stdout: "", stderr: `goal-loop: unknown command '${cmd}' (try: goal-loop --help)\n` };
   }
   if (args.includes("--restore") && cmd !== "uninstall") {
@@ -878,10 +1153,16 @@ export function runCli(argv, opts = {}) {
   if (args.includes("--self") && cmd !== "uninstall") {
     return { code: 2, stdout: "", stderr: `goal-loop: --self only applies to uninstall\n` };
   }
+  if (args.includes("--check") && cmd !== "update" && cmd !== "channel") {
+    return { code: 2, stdout: "", stderr: `goal-loop: --check only applies to update and channel\n` };
+  }
   try {
     if (cmd === "install") return install(args, opts);
     if (cmd === "uninstall") return uninstall(args, opts);
-    return status(args, opts);
+    if (cmd === "status") return status(args, opts);
+    if (cmd === "update") return await update(args, opts);
+    if (cmd === "channel") return await setChannel(args, opts);
+    return setUpdates(args, opts);
   } catch (err) {
     if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: ${err.message}\n` };
     const message = err instanceof Error ? err.message : String(err);
@@ -897,7 +1178,14 @@ function usage() {
     "  goal-loop [install] [--global|--project] [--dry-run]",
     "  goal-loop uninstall [--global|--project] [--dry-run] [--restore|--self]",
     "  goal-loop status    [--global|--project]",
+    "  goal-loop update    [--check|--dry-run] [--global|--project]",
+    "  goal-loop channel   <main|dev> [--dry-run] [--global|--project]",
+    "  goal-loop updates   <auto|off> [--dry-run] [--global|--project]",
     "",
+    "  main   newest stable release tag from GitHub (default)",
+    "  dev    latest dev commit — fast, may break things",
+    "  off    never check for updates; bare /goal-loop stays a status request",
+    "  --check     report whether an update exists; do not change the config",
     "  --global    per-machine config (default): $XDG_CONFIG_HOME/opencode or ~/.config/opencode",
     "  --project   the current directory's project config (opencode.json[c] or .opencode/opencode.json[c])",
     "  --dry-run   print what would change; write nothing",
@@ -918,7 +1206,7 @@ const isMain = (() => {
 })();
 
 if (isMain) {
-  const result = runCli(process.argv.slice(2));
+  const result = await runCli(process.argv.slice(2));
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
   process.exitCode = result.code;

@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2011 -->
+<!-- spec-check files=74 tests=2033 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8038,3 +8038,35 @@ fake/evaluator signature churn.
 - No cross-session database, no network, no new config surface, no TUI rendering in this slice.
 - Flaky-check detection and automatic backlog re-prioritization from telemetry remain deferred; the summary
   deliberately reports only signals derivable from recorded fields.
+
+## Workstream CVI — self-update system with main/dev channels (2026-11-20)
+
+Bare `/goal-loop` (no objective) becomes the low-friction update trigger — no new slash command is registered, so the
+user's slash interface is unchanged. With `update.mode: off` it falls back to the old status request.
+
+1. **`bin/goal-loop.mjs`**: `resolveLatestRef(channel, opts)` resolves `main` to the newest semver GitHub tag (falling
+   back to the latest Release, then `package.json` on the raw main branch) and `dev` to the latest commit SHA on `dev` (pinned, so every update
+   re-fetches). `update()` compares that ref with the installed pin and, unless `--check`/`--dry-run`, surgically rewrites
+   only the pin — preserving object-form entries, options, comments and unrelated keys — with the existing backup +
+   atomic-write safety. Network failures return a one-line error and never touch the config.
+2. **Channels/preferences**: `update.channel` and `update.mode` are first-class options in `plugins[].options`,
+   resolved into `GoalConfig.update` by `src/core/config.ts · resolveConfig` (`main`/`auto` by default). The CLI reads and
+   rewrites the same object via `bin/goal-loop.mjs · readPluginState/writePluginState`, so there is one source of truth
+   and no sidecar file. `mode: off` disables all checks; `goal-loop status` reports channel, mode and the installed ref. New CLI commands: `goal-loop update`, `goal-loop channel <main|dev>`, `goal-loop updates <auto|off>`.
+3. **`src/index.ts`**: both bare-directive paths (registered command and raw prompt hook) call `handleBareLoop`, which
+   schedules a background check on the next macrotask, guarded by the lifetime signal, probe mode and
+   `config.update.mode`. An immediate toast announces the check; a second `set`-kind toast carries the result. Prompt
+   admission is never blocked and a disposed plugin never emits.
+4. **Tests**: `test/updates.test.ts` exercises ref resolution, options-based preference persistence, channel
+   switching, off/auto behavior, option preservation and graceful network failure with an injected `opts.fetch` stub —
+   no live network. `test/plugin.test.ts` pins the new bare-directive prompt and toast; config/doc gates pin the new
+   options in both tables.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; `bun test` **2019 pass / 0 fail** (84 files, 29 snapshots);
+`check:spec` marker `files=74 tests=2019` (no new shipped file: `bin/` was already in `package.json` `files`).
+
+Honest limits. The installed plugin is a git-pinned OpenCode dependency, so an applied update takes effect only after the
+user restarts OpenCode (stated in the CLI output). GitHub releases/tags are pushed manually, so `main` tracks the newest
+published tag rather than an automated release pipeline; `dev` tracks the current dev-branch tip and may break working
+setups, as documented. `--check` consumes one unauthenticated GitHub API request; the checker fails soft on rate limits.
+<!-- spec-check files=73 tests=2019 -->

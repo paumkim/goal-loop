@@ -59,6 +59,8 @@ const DEFAULTS_TO_DOC_NAME: Record<keyof typeof DEFAULTS, string> = {
   maxRetries: "maxRetries",
   compactAtTokens: "compactAtTokens",
   compactOnLoopIteration: "compactOnLoopIteration",
+  updateChannel: "update.channel",
+  updateMode: "update.mode",
   maxLoops: "maxLoops",
   maxLoopSummaryTokens: "maxLoopSummaryTokens",
   learningPath: "learning.path",
@@ -100,6 +102,10 @@ const codeDefaultFor = (name: string): unknown => {
       return resolved.learning.enabled
     case "learning.path":
       return resolved.learning.path
+    case "update.channel":
+      return resolved.update.channel
+    case "update.mode":
+      return resolved.update.mode
     case "requireCommit":
       return resolved.commit.enabled
     case "coordinator":
@@ -198,6 +204,8 @@ describe("config defaults — documented vs code", () => {
     expect(resolved.maxConditionChars).toBe(DEFAULTS.maxConditionChars)
     expect(resolved.compactAtTokens).toBe(DEFAULTS.compactAtTokens)
     expect(resolved.compactOnLoopIteration).toBe(DEFAULTS.compactOnLoopIteration)
+    expect(resolved.update.channel).toBe(DEFAULTS.updateChannel)
+    expect(resolved.update.mode).toBe(DEFAULTS.updateMode)
     expect(resolved.maxLoops).toBe(DEFAULTS.maxLoops)
     expect(resolved.maxLoopSummaryTokens).toBe(DEFAULTS.maxLoopSummaryTokens)
     expect(resolved.learning.enabled).toBe(true)

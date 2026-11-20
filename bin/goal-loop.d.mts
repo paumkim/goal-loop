@@ -18,6 +18,29 @@ export interface CliOptions {
   homedir?: string;
   /** uninstall --self: the script to delete. Defaults to process.argv[1]; tests inject it. */
   selfPath?: string;
+  /** Injectable fetch for update checks (tests pass a stub; production uses globalThis.fetch). */
+  fetch?: (url: string, init?: {
+    headers?: Record<string, string>;
+    signal?: AbortSignal;
+  }) => Promise<{ ok: boolean; status?: number; json(): Promise<unknown> }>;
+  /** Wall-clock budget for one update check, in milliseconds. */
+  timeoutMs?: number;
+  /** Pre-resolved update preferences; skips reading the preferences file. */
+  prefs?: UpdatePrefs;
+}
+
+export interface UpdatePrefs {
+  channel: "main" | "dev";
+  mode: "auto" | "off";
+}
+
+export interface LatestRef {
+  channel: "main" | "dev";
+  ref: string;
+  label: string;
+  spec: string;
+  source: string;
+  url: string;
 }
 
 export interface CliResult {
@@ -45,11 +68,17 @@ export interface RemovePluginResult {
   skeletonRoot: boolean;
 }
 
-export function addPluginText(text: string): AddPluginResult;
+export function addPluginText(text: string, spec?: string): AddPluginResult;
 export function removePluginText(text: string): RemovePluginResult;
 export function resolveScope(args: string[], opts?: CliOptions): ScopeResolution;
 export function install(args: string[], opts?: CliOptions): CliResult;
 export function uninstall(args: string[], opts?: CliOptions): CliResult;
 export function probeOpencodeVersion(v: OpencodeProbeResult): string;
 export function status(args: string[], opts?: CliOptions): CliResult;
-export function runCli(argv: string[], opts?: CliOptions): CliResult;
+export function readUpdatePrefs(args: string[], opts?: CliOptions): UpdatePrefs;
+export function writeUpdatePrefs(args: string[], opts?: CliOptions, prefs?: UpdatePrefs): { file: string; backup: string };
+export function resolveLatestRef(channel: "main" | "dev", opts?: CliOptions): Promise<LatestRef>;
+export function update(args: string[], opts?: CliOptions): Promise<CliResult>;
+export function setChannel(args: string[], opts?: CliOptions): Promise<CliResult>;
+export function setUpdates(args: string[], opts?: CliOptions): CliResult;
+export function runCli(argv: string[], opts?: CliOptions): Promise<CliResult>;

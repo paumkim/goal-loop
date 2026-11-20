@@ -38,7 +38,11 @@
 <h3>Use the CLI commands</h3>
 <pre><code>goal-loop            # install (default): add the plugin to the OpenCode config
 goal-loop uninstall  # remove exactly what install added
-goal-loop status     # scope, config path, installed yes/no</code></pre>
+goal-loop status     # scope, config path, installed ref, channel, updates
+goal-loop update     # check GitHub; repin the plugin when a newer ref exists
+goal-loop channel    # main (stable tag) or dev (latest dev commit)
+goal-loop updates    # auto (check on bare /goal-loop) or off (never check)</code></pre>
+<p><strong>Updates.</strong> Bare <code>/goal-loop</code> checks GitHub and applies any available update; no new slash command is registered, and an immediate toast says the check started. Use <code>/goal</code> for status while checks are on. <code>goal-loop update --check</code> only reports what is available. <code>goal-loop channel main</code> (the default) follows the newest semver tag on GitHub — the most stable option. <code>goal-loop channel dev</code> pins the current dev-branch commit: updates arrive quickly but may break working setups. <code>goal-loop updates off</code> disables all checks, so bare <code>/goal-loop</code> shows loop status again. Preferences are ordinary plugin options — <code>plugins[].options.update = { "channel": "main", "mode": "auto" }</code> in the same config as the pin; there is no sidecar file. An applied update changes only the plugin pin, keeps other options/comments/unrelated keys, backs up the config, and takes effect after you restart OpenCode.</p>
 <p><code>--global</code> (default) and <code>--project</code> are mutually exclusive. <code>--project</code> targets the current directory's OpenCode config. It searches <code>opencode.json</code>, <code>opencode.jsonc</code>, <code>.opencode/opencode.json</code>, <code>.opencode/opencode.jsonc</code> in that order; the first existing one wins. <code>./opencode.json</code> is created when none exists. <code>--dry-run</code> prints what would change and writes nothing.</p>
 </li>
 <li>
@@ -59,7 +63,7 @@ goal-loop uninstall --restore # put the pre-install backup back over the config<
 <tr><td><code>/goal</code></td><td>Show status</td></tr>
 <tr><td><code>/goal clear</code></td><td>Remove goal (aliases: <code>stop</code>, <code>off</code>, <code>reset</code>, <code>none</code>, <code>cancel</code>)</td></tr>
 <tr><td><code>/goal-loop &lt;objective&gt;</code></td><td>Set a goal; each achieved goal arms an improved one until <code>maxLoops</code>, <code>LOOP_COMPLETE</code>, an impossible verdict, or clear</td></tr>
-<tr><td><code>/goal-loop</code></td><td>Show loop status (objective, iteration, history)</td></tr>
+<tr><td><code>/goal-loop</code></td><td>Check GitHub for a plugin update and apply it (use <code>/goal</code> for status; set <code>update.mode: off</code> to make bare <code>/goal-loop</code> show status again)</td></tr>
 <tr><td><code>/goal-loop clear</code></td><td>End the loop (same aliases as <code>/goal clear</code>)</td></tr>
 <tr><td><code>/goal-loop-&lt;N&gt; &lt;objective&gt;</code></td><td>Like <code>/goal-loop</code>, capped at <code>N</code> iterations for this run only (integer 1–1000; <code>/goal-loop=N</code> works too). Invalid counts (<code>/goal-loop-abc</code>, <code>/goal-loop-0</code>, <code>/goal-loop-1001</code>) are called out and the configured limit applies</td></tr></tbody></table></div>
 <pre><code>/goal-loop make the docs site faster and more complete
