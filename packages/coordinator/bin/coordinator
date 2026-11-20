@@ -326,6 +326,41 @@ check_overlap() {
   return 0
 }
 
+# Coarse semantic module for a repo-relative path. Two leases that touch different files of the same module share an
+# API/test surface even when no declared path literally overlaps — surface that as a warning, never a blocker.
+module_of() {
+  local p="${1%/}"
+  case "$p" in
+    src/core/*) printf 'src/core' ;;
+    src/runtime/*) printf 'src/runtime' ;;
+    src/tui*|tui.ts|dist/tui.js) printf 'src/tui' ;;
+    src/*) printf 'src/other' ;;
+    scripts/*) printf 'scripts' ;;
+    packages/coordinator/*) printf 'packages/coordinator' ;;
+    packages/*) printf 'packages/other' ;;
+    bin/*) printf 'bin' ;;
+    test/*) printf 'test' ;;
+    docs/*) printf 'docs' ;;
+    .term/*) printf '.term' ;;
+    *.md|*.json|*.html|LICENSE) printf 'root-docs' ;;
+    *) printf 'root-other' ;;
+  esac
+}
+
+# De-duplicated, space-separated module list for a comma/space separated path scope.
+modules_of_paths() {
+  local paths="$1" out="" tok m
+  local -a raw
+  IFS=$', \t\n' read -r -a raw <<<"$paths"
+  for tok in "${raw[@]}"; do
+    tok="$(trim "$tok")"
+    [ -z "$tok" ] && continue
+    m=$(module_of "$tok")
+    case " $out " in *" $m "*) ;; *) out="${out:+$out }$m" ;; esac
+  done
+  printf '%s' "$out"
+}
+
 do_claim() {
   need_jq
   ensure_state
@@ -1025,6 +1060,26 @@ do_merge_next() {
       "git -C $wt_abs fetch && git -C $wt_abs rebase $DEV_BRANCH, resolve conflicts, git -C $wt_abs add <resolved>, git -C $wt_abs rebase --continue, re-run 'bun run check' in $wt_abs, then coordinator merge-next"
   fi
 
+  # Worktree drift guard: a submitted worktree whose HEAD moved past the submitted branch means the agent kept
+  # committing after submit — the branch we would merge is not the work it validated. Refuse, dev untouched.
+  # Uncommitted bytes are NOT a failure: the existing saved-ref mechanism preserves them (see below); report them.
+  wt_rel=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || printf '')
+  [ -z "$wt_rel" ] && wt_rel="$WORKTREE_DIR/wt-$slug"
+  wt_abs="$MAIN_ROOT/$wt_rel"
+  if [ -d "$wt_abs" ]; then
+    local wt_head br_head loose
+    wt_head=$(git -C "$wt_abs" rev-parse HEAD 2>/dev/null || printf '')
+    br_head=$(git -C "$MAIN_ROOT" rev-parse "$branch" 2>/dev/null || printf '')
+    if [ -n "$wt_head" ] && [ -n "$br_head" ] && [ "$wt_head" != "$br_head" ]; then
+      fail "worktree drift for lease $slug: worktree HEAD $wt_head differs from submitted branch $branch tip $br_head; dev untouched" \
+        "discard the post-submit commits (git -C $wt_abs reset --hard $branch) or re-submit them, then re-run coordinator merge-next"
+    fi
+    loose=$(git -C "$wt_abs" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -c . || true)
+    if [ "${loose:-0}" != "0" ]; then
+      printf 'drift: worktree %s has %s uncommitted change(s); they are preserved as a saved ref (never merged)\n' "$wt_rel" "$loose" >&2
+    fi
+  fi
+
   # Stash the exempt dirt for the trial merge (see above): the worktree copy must equal HEAD for the
   # merge to touch the file, and the submitted lease record it carries must survive the merge.
   if ! git -C "$MAIN_ROOT" diff --quiet -- .term/coordinator/state.json ||
@@ -1116,7 +1171,7 @@ do_merge_next() {
   fi
 
   # Preflight: say, BEFORE the gate runs, what this merge touches and which in-flight leases it invalidates.
-  local touched others other ostatus overlap_found=0
+  local touched others other ostatus overlap_found=0 semantic_found=0 touched_modules other_modules shared mod agency
   touched=$(git -C "$MAIN_ROOT" diff --name-only "$DEV_BRANCH"..."$scratch" 2>/dev/null || true)
   local touched_count
   touched_count=$(printf '%s' "$touched" | grep -c . || true)
@@ -1140,6 +1195,26 @@ do_merge_next() {
     fi
   done
   [ "$overlap_found" = "0" ] && printf 'preflight: no non-done lease overlaps this merge\n'
+
+  # Semantic risk: a literal path-overlap check cannot see two leases touching different files of the same module
+  # (shared APIs, shared test surface). Warn — never block — so the submitting agents know to re-validate.
+  touched_modules=$(modules_of_paths "$(printf '%s\n' "$touched" | tr '\n' ',' )")
+  for other in $others; do
+    [ "$other" = "$slug" ] && continue
+    opaths=$(jq -r --arg o "$other" '.leases[$o].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
+    [ -z "$opaths" ] && continue
+    agency=$(jq -r --arg o "$other" '.leases[$o].agent // "?"' "$STATE_FILE" 2>/dev/null || printf '?')
+    other_modules=$(modules_of_paths "$opaths")
+    shared=""
+    for mod in $touched_modules; do
+      case " $other_modules " in *" $mod "*) shared="${shared:+$shared }$mod" ;; esac
+    done
+    if [ -n "$shared" ]; then
+      semantic_found=1
+      printf 'preflight: SEMANTIC-RISK: lease %s (agent %s) shares module(s) %s with this merge; re-run its checks after this merge lands\n' "$other" "$agency" "$shared" >&2
+    fi
+  done
+  [ "$semantic_found" = "0" ] && printf 'preflight: no shared-module semantic risk with active leases\n'
 
   # The gate runs on the merged result, not on dev's pre-merge HEAD.
   if command -v bun >/dev/null 2>&1; then
@@ -1187,6 +1262,18 @@ do_merge_next() {
     release_merge_lock
     exit 1
   fi
+  # Post-merge health pass: a lightweight post-condition on the landed tree. The full gate already ran on the
+  # merged result before the fast-forward; this checks that dev actually landed clean and the marker is present.
+  # It reports problems but never undoes a successful merge.
+  local health_dirty health_marker
+  health_dirty=$(git -C "$MAIN_ROOT" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -v ' \.term/coordinator/\.' | grep -v ' worktrees/' | grep -c . || true)
+  health_marker=$(grep -o 'spec-check files=[0-9]* tests=[0-9]*' "$MAIN_ROOT/SPEC.md" 2>/dev/null | head -1 || true)
+  if [ "${health_dirty:-0}" = "0" ]; then
+    printf 'post-merge: health ok (clean tracked tree; %s)\n' "${health_marker:-marker absent}"
+  else
+    printf 'post-merge: WARNING: %s uncommitted change(s) on %s after landing%s\n' "$health_dirty" "$DEV_BRANCH" "${health_marker:+; $health_marker}" >&2
+  fi
+
   # remove the merge worktree first, then delete the scratch branch (a branch checked out
   # in a linked worktree refuses to be deleted — silently swallowed by `|| true`)
   safe_remove_worktree "$merge_wt" "${scratch}" "merged" || true

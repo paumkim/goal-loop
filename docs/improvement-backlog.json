@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-20T18:30:00.000Z",
+  "updatedAt": "2026-11-20T16:30:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -141,12 +141,13 @@
       "priority": 2,
       "impact": "medium",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "Leases/merge-next reduce direct conflicts, but semantic conflicts, stale assumptions after other merges, or environment/worktree drift can slip through if re-validation is incomplete.",
       "improvement": "Enforce pre-submit/pre-merge rebase+full-gate on the merged result with explicit drift/failure reporting, run a quick post-merge health pass, and surface overlapping semantic risk (shared modules/APIs) before merge.",
       "evidence": [
         "Goal-loop blind spot #6 (2026-11-20): coordinator/concurrency and drift risks.",
-        "packages/coordinator/bin/coordinator merge-next already trial-merges and gates merged result; semantic overlap surfacing is limited."
+        "packages/coordinator/bin/coordinator merge-next already trial-merges and gates merged result; semantic overlap surfacing is limited.",
+        "Closed 2026-11-20 (Workstream CXIII): merge preflight now prints SEMANTIC-RISK for shared-module active leases, a worktree HEAD-tip drift guard fails merges with dev untouched, and a post-merge health pass reports landed-tree cleanliness + SPEC marker. Tests in test/coordinator-merge-safety.test.ts."
       ],
       "dedupeKeys": [
         "semantic-conflict-detection",

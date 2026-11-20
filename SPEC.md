@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2043 -->
+<!-- spec-check files=74 tests=2046 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8302,3 +8302,62 @@ is reset. **But three residual leaks accumulate inside a version and across vers
 - The composed learnings block is deliberately a recent window, not a full-history digest: aggregate telemetry now
   summarizes the tail window (≤256 KiB of journal), not all historical entries. That is the intended "focused" tradeoff.
 - No new config option is added; the budgets are module constants so the behavior is uniform across sessions.
+
+## Workstream CXIII — close the last remaining TODO: coordinator semantic/drift guards (2026-11-20)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "fix what needs
+fixing from the previous history untill there are no more remaining todo meaning everything still works."
+
+### Interpretation
+
+Fresh audit of this turn: main clean, no active leases, queue empty, gate green. The single remaining open item in
+`docs/improvement-backlog.json` is `coordinator-semantic-drift-guard`; every other backlog item is `done`. Its finding
+is that leases/merge-next reduce direct conflicts, but **semantic conflicts, stale assumptions after other merges, and
+environment/worktree drift can slip through** because re-validation is incomplete. The existing coordinator already
+has: a stale-base guard (merge-base must equal the dev tip), a trial merge on a scratch branch, gate on the merged
+result, and a path-level preflight warning. Missing: (a) shared-module semantic risk when two leases touch *different
+files of the same module*, (b) worktree drift detection, (c) a post-merge health pass. Closing this item means the
+backlog has **zero open entries** and the full gate is still green.
+
+This is a CLI/script behavior change, not a visual one, so verification is fresh command output (no screenshot applies).
+
+### Acceptance criteria
+
+1. `packages/coordinator/bin/coordinator` surfaces **shared-module semantic risk** in merge preflight: touched files
+   are mapped to coarse modules (`src/core`, `src/runtime`, `scripts`, `test`, `docs`, `packages/coordinator`, `bin`,
+   root docs), and when another non-done lease declares a path in any of those modules the preflight prints a
+   `preflight: SEMANTIC-RISK` line naming the shared modules and the lease, even when no declared path literally
+   overlaps. Existing path-overlap warning and the green case (`no non-done lease overlaps`) stay intact.
+2. A **worktree drift guard** runs before merging: when the submitted lease has a worktree on disk, its `HEAD` must
+   equal the submitted branch tip; a post-submit commit mismatch fails `merge-next` with dev untouched and an explicit
+   recovery hint. Uncommitted changes are **reported** (`drift: ... preserved as a saved ref`) but never fail the merge —
+   the existing saved-ref mechanism already preserves them. Missing worktree is tolerated, preserving existing
+   fixtures.
+3. A **post-merge health pass** runs after the fast-forward lands and before the success line: it prints
+   `post-merge: health ok` with the SPEC marker and a clean tracked tree, or `post-merge: WARNING: ...` when the tree
+   is dirty or the marker mismatches. It never undoes a successful merge.
+4. `docs/improvement-backlog.json`: `coordinator-semantic-drift-guard` flipped to `done` with a dated evidence line.
+   All items `done`; zero `open`.
+5. Tests in `test/coordinator-merge-safety.test.ts` pin the new behaviors: semantic-risk line for a same-module
+   non-overlapping lease, drift failure with dev untouched and worktree tip mismatch, and the post-merge health line.
+   All prior coordinator suites (`coordinator.test.ts`, `coordinator-lease-races.test.ts`) stay green.
+6. `bun run check` exit 0 in the worktree; SPEC marker re-stamped; committed on `wt/<slug>`, submitted and merged via
+   coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bash -n packages/coordinator/bin/coordinator` clean; `bunx tsc --noEmit` clean.
+- Targeted `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts
+  test/coordinator-lease-races.test.ts` → **57 pass / 0 fail** (402 expect() calls), including the new shared-module
+  SEMANTIC-RISK line, post-submit worktree HEAD drift refusal, and post-merge health line.
+- `jq '[.items[] | select(.status=="open")] | length' docs/improvement-backlog.json` → **0**.
+  `test/improvement-backlog.test.ts` updated so a fully-landed ledger legitimately selects nothing (14 pass).
+- `bun run check` exit 0: **2046 pass / 0 fail** across 85 test files (29 snapshots, 198709 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2046`.
+
+### Honest limits / non-goals
+
+- Semantic risk is module-level (a deterministic path grouping), not an AST/API-dependency analysis; it is a warning,
+  never a merge blocker.
+- The health pass is a lightweight post-condition check (marker + tracked cleanliness), not a re-run of the full gate —
+  the full gate already ran on the merged result before the fast-forward.
