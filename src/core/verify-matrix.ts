@@ -232,8 +232,7 @@ export function evaluateCoveragePolicy(opts: {
   condition: string
   profile: string
   checks: readonly ResolvedVerifyCheck[]
-}): { policy: ScopePolicy; ok: boolean; missing: string[]; unscoped: string[]; reasons: string[] } {
-  const policy = computeScopePolicy(opts)
+}, policy: ScopePolicy = computeScopePolicy(opts)): { policy: ScopePolicy; ok: boolean; missing: string[]; unscoped: string[]; reasons: string[] } {
   const reasons: string[] = []
   const missing: string[] = []
   const unscoped: string[] = []

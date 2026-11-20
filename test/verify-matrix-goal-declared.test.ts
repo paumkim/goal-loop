@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseGoalDeclaredChecks, resolveVerifyChecks, evaluateCoveragePolicy } from "../src/core/verify-matrix.ts"
+import { computeScopePolicy, parseGoalDeclaredChecks, resolveVerifyChecks, evaluateCoveragePolicy } from "../src/core/verify-matrix.ts"
 
 describe("goal-declared verify directive parsing", () => {
   test("parses explicit structured directives and merges as typed command-executed checks", () => {
@@ -87,5 +87,14 @@ describe("deterministic verification coverage policy", () => {
     const coverage = evaluateCoveragePolicy({ condition: "fix parser bug in file.test.ts", profile: "default", checks: resolved.checks })
     expect(coverage.policy.broadGoal).toBe(false)
     expect(coverage.ok).toBe(true)
+  })
+
+  test("an explicitly precomputed policy yields the same coverage decision as the internal recompute", () => {
+    // verifyMet computes the scope policy once and hands it to the coverage precheck (Workstream XCIII); the
+    // explicit-policy path must be identical to the default (recompute) path, else the shared object would drift.
+    const condition = 'improve the entire codebase\nverify: type=typecheck cmd="bunx tsc --noEmit" id=tc'
+    const resolved = resolveVerifyChecks({ configured: [], condition })
+    const opts = { condition, profile: "default", checks: resolved.checks }
+    expect(evaluateCoveragePolicy(opts, computeScopePolicy(opts))).toEqual(evaluateCoveragePolicy(opts))
   })
 })

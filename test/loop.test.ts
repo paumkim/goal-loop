@@ -1868,6 +1868,37 @@ describe("re-arm boundary no-new-gap refusal contract (LIV)", () => {
     expect(record.loopIteration).toBe(2)
     expect(h.calls.synthetic.filter((s) => String(s.description).includes("arming v3"))).toHaveLength(0)
   })
+
+  // The arming scan reuses completedLedgerHit (Workstream XCIII); refusing an exact normalized repeat must
+  // keep the exact-repeat wording while a near-duplicate keeps its own, so the two remain distinguishable.
+  test("the re-arm refusal wording still distinguishes an exact repeat from a near-duplicate", async () => {
+    const exact = harness()
+    await exact.setLoop("objective")
+    exact.verdicts.push(met("v1 done"))
+    exact.summaries.push("s1")
+    exact.nextGoals.push("tighten the widget")
+    await exact.turn() // arms v2 = "tighten the widget"
+    exact.verdicts.push(met("v2 done"))
+    exact.summaries.push("s2")
+    exact.nextGoals.push("Tighten the widget.") // normalized repeat of the completed v2 condition
+    await exact.turn()
+    const exactReason = exact.controller.get(SID)!.reason!
+    expect(exactReason).toContain("already-completed condition")
+    expect(exactReason).not.toContain("near-duplicate")
+
+    const near = harness()
+    await near.setLoop("objective")
+    near.verdicts.push(met("v1 done"))
+    near.summaries.push("s1")
+    near.nextGoals.push("tighten the widget")
+    await near.turn() // arms v2 = "tighten the widget"
+    near.verdicts.push(met("v2 done"))
+    near.summaries.push("s2")
+    near.nextGoals.push("tighten the widgets in the widget suite") // token containment 1.0 vs the completed v2 condition
+    await near.turn()
+    const nearReason = near.controller.get(SID)!.reason!
+    expect(nearReason).toContain("near-duplicate of an already-completed condition")
+  })
 })
 
 describe("/goal-loop straggler completions after failure", () => {
