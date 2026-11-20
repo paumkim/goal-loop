@@ -610,6 +610,46 @@ describe("renderTranscript", () => {
     expect(text).toContain("file locked")
     expect(text).toContain("earlier messages omitted")
   })
+  test("truncation never splits an astral surrogate pair at any cut boundary", () => {
+    const rocket = "\uD83D\uDE80" // 🚀 — two UTF-16 code units
+    // Fails on any lone surrogate: a high not followed by a low, or a low not preceded by one.
+    const wellFormed = (t: string) => {
+      for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i)!
+        if (c >= 0xd800 && c <= 0xdbff) {
+          const lo = t.charCodeAt(i + 1) ?? 0
+          expect(lo >= 0xdc00 && lo <= 0xdfff).toBe(true)
+          i++
+        } else {
+          expect(c < 0xd800 || c > 0xdfff).toBe(true)
+        }
+      }
+      expect(() => encodeURIComponent(t)).not.toThrow() // URIError on any lone surrogate
+    }
+    const toolOutput = `${"a".repeat(100)}${rocket}${"b".repeat(100)}` // pair at indices 100/101
+    const astralMessages = [
+      { type: "user", text: `ship ${rocket} now` }, // head() cut can land between its high/low
+      {
+        type: "assistant",
+        content: [{ type: "tool", name: "shell", state: { status: "completed", input: {}, content: [{ type: "text", text: toolOutput }] } }],
+      },
+    ]
+    // Sweep the per-tool cap: front=101 (head cut right after the high surrogate) lands at maxToolChars=404;
+    // tail start=101 (lone low surrogate) lands near maxToolChars=134. The user-text head cut lands near cap=6.
+    for (let cap = 1; cap <= 500; cap++) {
+      wellFormed(renderTranscript(astralMessages, { maxChars: 100_000, maxToolChars: cap }))
+    }
+    // Sweep the whole-transcript budget: a single oversized block is cut via headTail(block, maxChars),
+    // whose tail start lands on the embedded pair near maxChars=134.
+    for (let budget = 1; budget <= 320; budget++) {
+      wellFormed(renderTranscript(astralMessages, { maxChars: budget }))
+    }
+    // Not vacuous: small caps really do cut, and the pair survives intact when nothing is cut.
+    const cut = renderTranscript(astralMessages, { maxChars: 100_000, maxToolChars: 20 })
+    expect(cut).toContain("chars cut]")
+    const whole = renderTranscript(astralMessages, { maxChars: 100_000 })
+    expect(whole).toContain(rocket)
+  })
 })
 describe("wrapLines", () => {
   test("an empty string still paints one line", () => {
