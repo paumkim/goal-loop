@@ -7,7 +7,9 @@ import { resolveConfig } from "../src/core/config.ts"
 import { parseLearningEntries, serializeLearningEntry, type LearningEntry } from "../src/core/learning-log.ts"
 import {
   DEFAULT_TELEMETRY_MAX_CHARS,
+  PROMPT_LEARNINGS_MAX_CHARS,
   RECURRING_THEME_THRESHOLD,
+  formatLearningsForPrompt,
   formatOutcomeTelemetry,
   normalizeReason,
   summarizeLearningText,
@@ -213,6 +215,23 @@ describe("formatOutcomeTelemetry", () => {
     const short = formatOutcomeTelemetry(s, 40)
     expect(short.length).toBeLessThanOrEqual(40)
     expect(short).not.toContain("\uFFFD")
+  })
+})
+
+describe("formatLearningsForPrompt", () => {
+  test("stays bounded and focused: a few recent lessons plus compact telemetry", () => {
+    const entries = Array.from({ length: 40 }, (_, i) =>
+      verdict(`reason ${i}`, `2026-01-01T00:${String(i % 60).padStart(2, "0")}:00.000Z`),
+    )
+    const out = formatLearningsForPrompt(entries)
+    expect(out).toContain("Recent learnings")
+    expect(out).toContain("Outcome telemetry")
+    expect(out).toContain("not met: reason 39") // newest lesson survives
+    expect(out).not.toContain("not met: reason 0") // old lessons are not surfaced (telemetry themes are compact)
+    expect(out.length).toBeLessThanOrEqual(PROMPT_LEARNINGS_MAX_CHARS + 80) // formatters' header lines
+    expect(formatLearningsForPrompt([])).toBe("")
+    // A smaller explicit budget is honored.
+    expect(formatLearningsForPrompt(entries, 200).length).toBeLessThanOrEqual(280)
   })
 })
 

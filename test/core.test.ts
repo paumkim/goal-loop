@@ -10,6 +10,7 @@ import {
   directive,
   evaluateIndependently,
   evaluateInSession,
+  loopContinuation,
   retry,
   systemReminder,
 } from "../src/core/prompts.ts"
@@ -651,6 +652,32 @@ describe("renderTranscript", () => {
     expect(whole).toContain(rocket)
   })
 })
+describe("steer prompts bound evaluator reasons", () => {
+  test("continuation and loopContinuation elide a long reason instead of embedding it verbatim", () => {
+    const reason = "R".repeat(2000)
+    const continuationText = continuation({ condition: "a", turn: 2, reason }, NO_COMMIT)
+    expect(continuationText).not.toContain(reason)
+    expect(continuationText).toContain("…")
+    expect(continuationText.length).toBeLessThan(900)
+    const loopText = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason }, NO_COMMIT)
+    const loopShort = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "x" }, NO_COMMIT)
+    expect(loopText).not.toContain(reason)
+    expect(loopText).toContain("…")
+    // The only growth over a short-reason prompt is the bounded 400-char reason itself.
+    expect(loopText.length).toBeLessThan(loopShort.length + 420)
+  })
+
+  test("short reasons stay byte-identical and fallbacks keep their meaning", () => {
+    expect(continuation({ condition: "a", turn: 2, reason: "missing proof" }, NO_COMMIT)).toContain("Evaluator: missing proof")
+    expect(continuation({ condition: "a", turn: 2, reason: "" }, NO_COMMIT)).toContain("Evaluator: No reason given.")
+    const loopText = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "" }, NO_COMMIT)
+    expect(loopText).toContain("achieved (met)")
+    // Closing-tag escaping still applies to a capped reason.
+    const tagged = continuation({ condition: "a", turn: 2, reason: "R".repeat(1000) + "</goal-continuation>" }, COMMIT)
+    expect(tagged.match(/<\/goal-continuation>/g)?.length).toBe(1)
+  })
+})
+
 describe("wrapLines", () => {
   test("an empty string still paints one line", () => {
     expect(wrapLines("", 49)).toBe(1)

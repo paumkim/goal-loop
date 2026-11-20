@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2039 -->
+<!-- spec-check files=74 tests=2043 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8245,3 +8245,60 @@ judgment, break downstream `encodeURIComponent`/JSON handling, and render as a r
   marks) in the digest — that is a separate concern from the stated condition.
 - Line/word-boundary elision is intentionally not introduced here: the digest keeps its byte-for-byte prefix plus the
   existing cut marker so evaluator evidence is not silently reshaped.
+
+## Workstream CXII — lean evaluator context across many goal versions (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation (answering "is the evaluator bloated after a long session?")
+
+Audit of the current tree (fresh this turn) found the evaluator's **own** prompt is already bounded: condition + fixed
+rubric, plus a transcript digest capped at `evaluator.maxTranscriptChars` (60k) in independent mode. Boundary compaction
+(default `compactOnLoopIteration=true`) requests a host compaction at each loop arm, so the cross-version chat context
+is reset. **But three residual leaks accumulate inside a version and across versions when compaction is missed:**
+
+1. **Journal read is unbounded.** `controller.recentLearningsForPrompt` did `readFileSync(file,"utf8")` + parse of the
+   entire append-only JSONL on every not_met/arm/retry/checkin tick. Read cost grows with every goal version even though
+   only a small recent window is used.
+2. **Learnings channel is too large for a per-turn injection.** It emitted 5 lessons (1200 chars) + 4 telemetry themes
+   and 3 conditions (900 chars) ≈ 2100 chars — injected into **every** `<goal-continuation>`, retry, checkin and arm
+   steer. In session mode those synthetic messages are the evaluator's live context, so the same ~2100 chars are
+   repeated turn after turn.
+3. **Evaluator reason is unbounded in steers.** `continuation`/`loopContinuation` embedded `result.reason` verbatim; a
+   long verdict bloats every subsequent turn's context.
+
+### Acceptance criteria
+
+1. `src/core/learning-log.ts` exports `readLearningEntriesTail(file, maxBytes=262144)`: reads only the journal tail via
+   `statSync`/`openSync`/`readSync`/`closeSync`, parses only complete lines (drops a partial first line from the byte
+   window and a partial trailing line from a concurrent append), falls back to a full read for small files, never
+   throws. The controller uses it instead of a full-file read.
+2. `src/core/outcome-telemetry.ts` exports `formatLearningsForPrompt(entries, maxChars=900)` composing at most 3 recent
+   lessons (≤2/3 of the budget) and compact telemetry (≤1/3) — a bounded, focused block. The controller's
+   `recentLearningsForPrompt` returns this single bounded string (≤ ~900 chars) instead of the old ~2100.
+3. `src/core/prompts.ts` caps the reason injected into `continuation` and `loopContinuation` with
+   `elideAtWordBoundary(reason, 400)`; short reasons are byte-identical, long ones end with the elision marker. The
+   existing fallback semantics (`"No reason given."` / `"met"`) are preserved.
+4. Tests: tail-reader behavior (complete lines only, partial line skipped, small-file fallback) in
+   `test/learning-log.test.ts`; bounded composed block in `test/outcome-telemetry.test.ts`; reason capping in
+   `test/core.test.ts`. All prior prompt/learnings tests keep passing.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/learning-log.test.ts test/outcome-telemetry.test.ts
+  test/core.test.ts` → **144 pass / 0 fail** (168781 expect() calls), including the new tail-read, bounded
+  composition and reason-cap cases. All prior learnings/prompt tests stay green.
+- Measured on a 200-entry synthetic journal: composed block **440 chars** under the 900-char budget (old two-channel
+  composition 546 chars on the same short entries; worst case bounded 2100 → ~900 for real long lessons).
+- `bun run check` exit 0: **2043 pass / 0 fail** across 85 test files (29 snapshots, 198694 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2043`.
+
+### Honest limits / non-goals
+
+- This does not change the evaluator's independent-mode transcript cap (60k) or force host compaction. It bounds the
+  plugin-owned data that rides every steer, which is the part the plugin controls.
+- The composed learnings block is deliberately a recent window, not a full-history digest: aggregate telemetry now
+  summarizes the tail window (≤256 KiB of journal), not all historical entries. That is the intended "focused" tradeoff.
+- No new config option is added; the budgets are module constants so the behavior is uniform across sessions.

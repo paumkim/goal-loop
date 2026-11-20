@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs"
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readSync, statSync } from "node:fs"
 import { dirname } from "node:path"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
 
@@ -340,6 +340,41 @@ export function recentLearningsFromEntries(entries: readonly LearningEntry[], li
     })
   }
   return out.reverse()
+}
+
+/**
+ * Default byte window for the prompt-facing tail read. The journal is append-only and grows with every goal version;
+ * reading the tail keeps per-tick I/O bounded regardless of how many historical entries exist.
+ */
+export const LEARNING_TAIL_MAX_BYTES = 256 * 1024
+
+/**
+ * Best-effort read of learning entries from the tail of a JSONL journal without loading the whole file.
+ * Only complete lines are parsed: a partial first line (the byte window starts mid-line) and a partial trailing line
+ * (a concurrent append) are dropped. Small files fall back to a plain full read. Never throws.
+ */
+export function readLearningEntriesTail(file: string | undefined, maxBytes = LEARNING_TAIL_MAX_BYTES): LearningEntry[] {
+  const target = typeof file === "string" ? file.trim() : ""
+  if (!target || maxBytes <= 0) return []
+  try {
+    const size = statSync(target).size
+    if (size <= maxBytes) return parseLearningEntries(readFileSync(target, "utf8"))
+    const fd = openSync(target, "r")
+    try {
+      const buf = Buffer.alloc(maxBytes)
+      const read = readSync(fd, buf, 0, maxBytes, size - maxBytes)
+      let text = buf.subarray(0, read).toString("utf8")
+      const firstNl = text.indexOf("\n")
+      if (firstNl !== -1) text = text.slice(firstNl + 1) // window start is mid-line — drop the partial line
+      const lastNl = text.lastIndexOf("\n")
+      if (lastNl !== -1) text = text.slice(0, lastNl) // trailing partial line from a concurrent append
+      return parseLearningEntries(text)
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    return []
+  }
 }
 
 /** Best-effort read of recent learning entries (most recent last). Never throws. */

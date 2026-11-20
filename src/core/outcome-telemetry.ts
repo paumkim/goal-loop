@@ -6,7 +6,7 @@
  * malformed data — a missing/empty/all-garbage journal must never affect a goal run.
  * Telemetry is advisory context for prompts, not a gate on any verdict.
  */
-import { parseLearningEntries } from "./learning-log.ts"
+import { formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries } from "./learning-log.ts"
 import type { LearningEntry } from "./learning-log.ts"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
 
@@ -14,6 +14,10 @@ import { elideAtWordBoundary, formatDuration } from "./format.ts"
 export const RECURRING_THEME_THRESHOLD = 3
 /** Default cap for the prompt-ready telemetry block (characters). */
 export const DEFAULT_TELEMETRY_MAX_CHARS = 900
+/** Default cap for the composed prompt-facing learnings block (recent lessons + telemetry together). */
+export const PROMPT_LEARNINGS_MAX_CHARS = 900
+/** Maximum recent lessons surfaced in the composed prompt block (down from the diagnostic default of 5). */
+const PROMPT_LESSON_LIMIT = 3
 /** Maximum number of themes/conditions surfaced in the formatted block. */
 const MAX_THEMES = 4
 const MAX_CONDITIONS = 3
@@ -233,4 +237,18 @@ export function formatOutcomeTelemetry(summary: OutcomeTelemetry, maxChars = DEF
 
   const limit = Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : DEFAULT_TELEMETRY_MAX_CHARS
   return elideAtWordBoundary(lines.join("\n"), limit)
+}
+
+/**
+ * Composition of the two prompt-facing learnings channels into one bounded block. This string rides every
+ * continuation/arm/retry/checkin steer and, in session mode, is part of the evaluator's live context — so it is kept
+ * deliberately small and focused (at most `maxChars` code units after both components are elided). Aggregate telemetry
+ * is summarized over the bounded journal tail the caller supplies, not the whole historical journal.
+ */
+export function formatLearningsForPrompt(entries: readonly LearningEntry[], maxChars = PROMPT_LEARNINGS_MAX_CHARS): string {
+  const budget = Number.isFinite(maxChars) && maxChars > 0 ? Math.floor(maxChars) : PROMPT_LEARNINGS_MAX_CHARS
+  // Leave room for the formatters' own header lines so the combined block stays at or under `budget`.
+  const lessons = formatRecentLearnings(recentLearningsFromEntries(entries, PROMPT_LESSON_LIMIT), Math.max(1, Math.floor(budget * 0.6)))
+  const telemetry = formatOutcomeTelemetry(summarizeOutcomeTelemetry(entries), Math.max(1, Math.floor(budget * 0.3)))
+  return [lessons, telemetry].filter(Boolean).join("\n\n")
 }
