@@ -401,11 +401,19 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
-  test("skips evaluation when the busy check errors", async () => {
+  test("retries evaluation when the busy check errors instead of skipping permanently", async () => {
     await h.set()
     h.setBusyError(new Error("busy check failed"))
     await h.turn()
     expect(h.requests).toHaveLength(0)
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "retry" && n.message.includes("Could not check background work state"))).toBeTrue()
+
+    h.setBusyError(undefined)
+    h.verdicts.push(notMet("recovered"))
+    await h.clock.advance(15_000)
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 
   test("idle check-ins stop after the cap until the user prompts", async () => {
@@ -1020,14 +1028,14 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     expect(third.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 
-  test("a busy-check rejection during drain is logged and fail-closed without evaluating", async () => {
-    const errors: Array<{ message: string; extra?: unknown }> = []
+  test("a busy-check rejection during drain is logged, kept waiting, and retried until it can evaluate", async () => {
+    const warns: Array<{ message: string; extra?: unknown }> = []
     const log = {
       info() {},
-      warn() {},
-      error(message: string, extra?: unknown) {
-        errors.push({ message, extra })
+      warn(message: string, extra?: unknown) {
+        warns.push({ message, extra })
       },
+      error() {},
     }
     const h = harness({ log })
     await h.set()
@@ -1036,11 +1044,17 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
     h.setWork({ subagents: 0, shells: 0 })
     h.setBusyError(new Error("busy check failed"))
-    h.verdicts.push(notMet())
+    h.verdicts.push(notMet("recovered"))
     await h.controller.onBackgroundDrained()
     expect(h.requests).toHaveLength(0)
     expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
-    expect(errors.some((e) => e.message === "goal busy check failed; skipping evaluation")).toBeTrue()
+    expect(warns.some((e) => e.message === "goal busy check failed; will retry")).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "retry" && n.message.includes("Could not check background work state"))).toBeTrue()
+
+    h.setBusyError(undefined)
+    await h.clock.advance(15_000)
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
   })
 })
 
@@ -1492,4 +1506,85 @@ describe("terminal record pruning after finish (opportunistic)", () => {
     const report = logs.find((l) => l.message === "terminal goal records at plugin storage")
     expect(report?.extra).toMatchObject({ pruned: 1, droppedAged: 1, directories: 2 })
   })
+
+  describe("staleness, straggler ordering, and recovery regressions", () => {
+    test("busy-check failure preserves carried tool work and recovers evaluation", async () => {
+      const h = harness()
+      await h.set()
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.controller.onToolCalled(SID)
+      h.setBusyError(new Error("busy check failed"))
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(0)
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      h.setBusyError(undefined)
+      h.verdicts.push(notMet())
+      await h.clock.advance(15_000)
+      expect(h.requests).toHaveLength(1)
+      expect(h.controller.get(SID)?.stall).toBe(0)
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    })
+
+    test("straggler succeeded while awaiting retry execution is dropped, then real retry execution is evaluated", async () => {
+      const h = harness()
+      await h.set()
+      // Fail the turn so a retry continuation is scheduled.
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.controller.onExecutionFailed(SID, { message: "socket hang up" })
+      await flush()
+      expect(h.controller.snapshot(SID)?.queued).toBeFalse() // retry dispatch not yet sent
+
+      // Retry continuation dispatches now and marks the session awaiting execution.
+      await h.clock.advance(15_000)
+      expect(h.controller.snapshot(SID)?.queued).toBeTrue()
+      expect(h.calls.synthetic).toHaveLength(1)
+
+      // A stale succeeded delivered before the retry execution starts must be dropped.
+      h.verdicts.push(notMet("spurious"))
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(0)
+      expect(h.controller.get(SID)?.turns).toBe(0)
+
+      // The retry execution starts and completes normally; it must be evaluated.
+      h.controller.onExecutionStarted(SID)
+      h.controller.onToolCalled(SID)
+      h.verdicts[0] = notMet("real")
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.requests).toHaveLength(1)
+      expect(h.controller.get(SID)?.turns).toBe(1)
+      expect(h.controller.snapshot(SID)?.queued).toBeTrue() // continuation after not_met queued
+    })
+
+    test("evaluator timeout/failure retries with bounded backoff and keeps snapshots non-stuck", async () => {
+      const h = harness()
+      await h.set("the sky is blue")
+      h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 1/3)"))
+      h.controller.onExecutionStarted(SID)
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.controller.get(SID)?.status).toBe("active")
+      expect(h.controller.get(SID)?.retries).toBe(1)
+      expect(h.controller.snapshot(SID)?.evaluating).toBeFalse()
+      expect(h.controller.snapshot(SID)?.queued).toBeFalse()
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+      expect(h.notices.at(-1)?.message).toContain("retrying in 10s")
+
+      h.verdicts.push(new EvaluationTimeoutError("evaluator timed out after 120s (attempt 2/3)"))
+      await h.clock.advance(10_000)
+      expect(h.controller.get(SID)?.retries).toBe(2)
+      expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
+
+      h.verdicts.push(met("recovered"))
+      await h.clock.advance(30_000)
+      expect(h.controller.get(SID)?.status).toBe("achieved")
+      expect(h.controller.snapshot(SID)?.evaluating).toBeFalse()
+    })
+  })
+
 })

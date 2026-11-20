@@ -96,6 +96,8 @@ interface Runtime {
   lastCheckinAt?: number
   /** Backoff counter for retrying a failed loop-planner step. */
   loopRetries?: number
+  /** Backoff counter for retrying a failed busy/background-state check. */
+  busyRetries?: number
   /** One-shot notice flags for caps an armed loop runs past without pausing (never re-fired; anti-stacking). */
   capNotified?: boolean
   stallNotified?: boolean
@@ -811,25 +813,163 @@ export class GoalController {
     const runtime = this.runtime(sessionID)
     if (runtime.awaitingExecution || runtime.dropStragglerSucceeded) {
       // Straggler duplicate of the previous turn or of a turn whose retry steer has not started yet.
-      this.deps.log.info("goal evaluation straggler dropped", { sessionID })
+      this.deps.log.info("goal evaluation straggler dropped", { sessionID, awaitingExecution: runtime.awaitingExecution, dropStragglerSucceeded: runtime.dropStragglerSucceeded })
       return
     }
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
+    await this.resolveBackgroundAndEvaluate(record, runtime, epoch, tools)
+  }
+
+  /** Resolve background/busy state and evaluate (or defer) the completed turn's tool work. Tools not yet added to carriedToolCalls. */
+  private async resolveBackgroundAndEvaluate(record: GoalRecord, runtime: Runtime, epoch: number, tools: number): Promise<void> {
+    const sessionID = record.sessionID
     const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
-      // Busy-check failure: fail closed — don't treat a possibly-busy session as idle. The next
-      // background-drained/execution-start event re-runs the deferred evaluation.
-      this.deps.log.error("goal busy check failed; skipping evaluation", { sessionID, error: errorMessage(error) })
+      this.deps.log.warn("goal busy check failed; will retry", { sessionID, error: errorMessage(error) })
       return undefined
     })
-    if (!work) return
-    if (this.stale(record, runtime, epoch)) return
+    if (this.stale(record, runtime, epoch)) {
+      this.preserveToolsOnStaleDrop(record, runtime, tools, "after busy check")
+      return
+    }
+    if (!work) {
+      runtime.carriedToolCalls += tools
+      runtime.iterationDeferred = true
+      this.ensureDeferredState(record, runtime)
+      this.scheduleBusyRetry(record, runtime)
+      return
+    }
+    runtime.busyRetries = undefined
     if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
     const carried = runtime.carriedToolCalls
     runtime.carriedToolCalls = 0
     this.clearDeferred(runtime, record)
     await this.evaluate(record, runtime, epoch, tools + carried)
+  }
+
+  /** Ensure deferred/waiting state is persisted and emitted when a turn must wait. */
+  private ensureDeferredState(record: GoalRecord, runtime: Runtime): void {
+    if (runtime.deferredSince === undefined) {
+      runtime.deferredSince = this.deps.clock.now()
+      record.waitingSince = runtime.deferredSince
+      void this.commit(record)
+    } else if (record.waitingSince === undefined) {
+      record.waitingSince = runtime.deferredSince
+      void this.commit(record)
+    } else {
+      this.emit(record)
+    }
+  }
+
+  /** Retry background-state resolution with bounded backoff when a busy check fails. */
+  private scheduleBusyRetry(record: GoalRecord, runtime: Runtime): void {
+    const sessionID = record.sessionID
+    const attempt = runtime.busyRetries ?? 0
+    const delay = backoffMs(RETRY_BASE_MS, 4, attempt)
+    runtime.busyRetries = attempt + 1
+    this.notify(sessionID, "retry", "warning", "Goal still active", `Could not check background work state; retrying in ${formatDuration(delay)}.`)
+    this.schedule(runtime, delay, () => {
+      void this.retryDeferredBackgroundCheck(record, runtime).catch((error) => {
+        this.deps.log.error("busy-check retry failed", { sessionID, error: errorMessage(error) })
+      })
+    })
+  }
+
+  /** Re-attempt busy/background resolution for a deferred turn (busy-check failure or drain retry). */
+  private async retryDeferredBackgroundCheck(record: GoalRecord, runtime: Runtime): Promise<void> {
+    const sessionID = record.sessionID
+    if (this.disposed) return
+    if (this.goals.get(sessionID) !== record || record.status !== "active") return
+    if (runtime.evaluating || this.running.has(sessionID)) return
+    const epoch = ++runtime.epoch
+    const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+      this.deps.log.warn("goal busy check failed; will retry", { sessionID, error: errorMessage(error) })
+      return undefined
+    })
+    if (this.stale(record, runtime, epoch)) {
+      this.logStaleDrop(record, runtime, epoch, "busy-check retry")
+      return
+    }
+    if (!work) {
+      runtime.iterationDeferred = true
+      this.ensureDeferredState(record, runtime)
+      this.scheduleBusyRetry(record, runtime)
+      return
+    }
+    runtime.busyRetries = undefined
+    if (work.subagents + work.shells > 0) {
+      // Still busy: keep deferred state and arm a normal check-in schedule.
+      runtime.iterationDeferred = true
+      this.ensureDeferredState(record, runtime)
+      this.defer(record, runtime, work, 0)
+      return
+    }
+    const carried = runtime.carriedToolCalls
+    runtime.carriedToolCalls = 0
+    this.clearDeferred(runtime, record)
+    await this.evaluate(record, runtime, epoch, carried)
+  }
+
+  /** Preserve turn tool work when an async evaluation step becomes stale, so the turn is not silently lost. */
+  private preserveToolsOnStaleDrop(record: GoalRecord, runtime: Runtime, tools: number, phase: string): void {
+    const sessionID = record.sessionID
+    if (tools > 0) runtime.carriedToolCalls += tools
+    const stillOurs = this.goals.get(sessionID) === record && record.status === "active"
+    this.deps.log.warn("goal evaluation step dropped as stale", { sessionID, phase, tools, stillOurs, epoch: runtime.epoch })
+    if (!stillOurs || this.disposed) return
+    // The record is still active but this attempt's epoch is stale (superseded by another event).
+    // Preserve carried work and schedule a recovery pass so the turn is not permanently skipped.
+    runtime.iterationDeferred = true
+    this.ensureDeferredState(record, runtime)
+    const delay = RETRY_BASE_MS
+    this.schedule(runtime, delay, () => {
+      void this.retryDeferredBackgroundCheck(record, runtime).catch((error) => {
+        this.deps.log.error("stale-drop recovery failed", { sessionID, error: errorMessage(error) })
+      })
+    })
+  }
+
+
+  /** If a loop-advance step was superseded but the same active iteration still needs advancing, retry it so progress is not lost. */
+  private recoverLoopAdvanceIfActive(
+    record: GoalRecord,
+    runtime: Runtime,
+    iteration: number,
+    result: EvaluationResult,
+    turn: number,
+    phase: string,
+  ): void {
+    const sessionID = record.sessionID
+    const stillActive = !this.disposed && this.goals.get(sessionID) === record && record.status === "active"
+    this.deps.log.warn("goal evaluation step dropped as stale", {
+      sessionID,
+      phase,
+      iteration,
+      runtimeEpoch: runtime.epoch,
+      active: stillActive,
+      willRecover: stillActive && record.loopIteration === iteration,
+    })
+    if (!stillActive) return
+    // Iteration already advanced/finished by another path: nothing to recover for this step.
+    if ((record.loopIteration ?? 1) !== iteration) return
+    this.schedule(runtime, RETRY_BASE_MS, () => {
+      if (this.disposed) return
+      if (this.goals.get(sessionID) !== record || record.status !== "active") return
+      if ((record.loopIteration ?? 1) !== iteration) return
+      void this.loopAdvance(record, runtime, ++runtime.epoch, result, turn).catch((error) => {
+        this.deps.log.error("loop advance recovery failed", { sessionID, iteration, error: errorMessage(error) })
+      })
+    })
+  }
+  private logStaleDrop(record: GoalRecord, runtime: Runtime, epoch: number, phase: string): void {
+    this.deps.log.warn("goal evaluation step dropped as stale", {
+      sessionID: record.sessionID,
+      phase,
+      epoch,
+      runtimeEpoch: runtime.epoch,
+      active: this.goals.get(record.sessionID) === record && record.status === "active",
+    })
   }
 
   onExecutionFailed(sessionID: string, error: FailureInfo | undefined) {
@@ -974,7 +1114,10 @@ export class GoalController {
     // Per-turn spend: the delta against the previous reading (the arm-time reading seeds the first turn). Runtime-local — after a restore there is no previous reading, so the verdict carries no spend rather than a cumulative-since-set number.
     const turnSpend = usage && runtime.turnUsage ? diffUsage(usage, runtime.turnUsage) : undefined
     if (usage) runtime.turnUsage = usage
-    if (this.stale(record, runtime, epoch)) return
+    if (this.stale(record, runtime, epoch)) {
+      this.logStaleDrop(record, runtime, epoch, "before evaluation")
+      return
+    }
     runtime.figures = {
       ...(usage ? { spend: diffUsage(usage, record.baseline) } : {}),
       ...(contextSize !== undefined ? { contextSize } : {}),
@@ -994,7 +1137,10 @@ export class GoalController {
         signal: abort.signal,
       })
     } catch (error) {
-      if (abort.signal.aborted || this.stale(record, runtime, epoch)) return
+      if (abort.signal.aborted || this.stale(record, runtime, epoch)) {
+        if (!abort.signal.aborted) this.logStaleDrop(record, runtime, epoch, "evaluator failed but stale")
+        return
+      }
       runtime.evaluating = false
       return this.evaluationFailed(record, runtime, tools, error)
     } finally {
@@ -1003,7 +1149,10 @@ export class GoalController {
         runtime.evaluating = false
       }
     }
-    if (this.stale(record, runtime, epoch)) return
+    if (this.stale(record, runtime, epoch)) {
+      this.logStaleDrop(record, runtime, epoch, "after evaluation verdict")
+      return
+    }
 
     // A met verdict on a turn with zero tool calls, where the condition names production of a thing, is not a
     // verdict — it is state inspection. Downgrade to not_met; the next turn re-attempts with tools in hand.
@@ -1268,7 +1417,10 @@ export class GoalController {
         summary = elideAtWordBoundary(summarized, Math.max(200, config.maxLoopSummaryTokens) * 4)
       } catch (error) {
         if (runtime.abort === summarize) runtime.abort = undefined
-        if (this.stale(record, runtime, epoch)) return
+        if (this.stale(record, runtime, epoch)) {
+          this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "loop summary aborted/stale")
+          return
+        }
         log.error("loop summary failed", { sessionID, error: errorMessage(error) })
         summary = `(summary failed: ${truncate(errorMessage(error), 80)})`
       } finally {
@@ -1279,7 +1431,10 @@ export class GoalController {
       log.warn("loop summary unavailable: this evaluator cannot summarize", { sessionID })
       summary = "(summary unavailable: this evaluator cannot summarize)"
     }
-    if (this.stale(record, runtime, epoch)) return
+    if (this.stale(record, runtime, epoch)) {
+      this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "after loop summary")
+      return
+    }
 
     const entry = makeEntry(summary.trim())
     history.push(entry)
@@ -1320,7 +1475,10 @@ export class GoalController {
       })
     } catch (error) {
       if (runtime.abort === generate) runtime.abort = undefined
-      if (this.stale(record, runtime, epoch)) return
+      if (this.stale(record, runtime, epoch)) {
+        this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "loop next-goal aborted/stale")
+        return
+      }
       log.error("loop next-goal generation failed", { sessionID, error: errorMessage(error) })
       // The summary and history stay local until the arm lands, so a retry recomputes them identically;
       // record.loopNotProgress is untouched here on purpose. The turn verdict and its spend are NOT local:
@@ -1344,7 +1502,10 @@ export class GoalController {
     } finally {
       if (runtime.abort === generate) runtime.abort = undefined
     }
-    if (this.stale(record, runtime, epoch)) return
+    if (this.stale(record, runtime, epoch)) {
+      this.recoverLoopAdvanceIfActive(record, runtime, iteration, result, turn, "after next-goal generation")
+      return
+    }
     // A met verdict advances the loop exactly once: if this iteration was already armed while we awaited
     // (duplicate delivery), drop the step instead of re-arming the same objective.
     if (record.loopIteration !== iteration) {
@@ -1408,11 +1569,36 @@ export class GoalController {
     // Single durable write: the achieved history and the armed iteration land together or not at all.
     // a restart from here restores either the pre-arm or the armed state, never a half-advanced one.
     await this.commit(record)
-    if (this.stale(record, runtime, epoch)) return
+    const recoverPostArmContinuation = () => {
+      // Post-commit arm tail: a stale/supersession race (epoch bumped, but this record is still the active
+      // one and was already durably advanced to nextIteration) must not drop the kickoff for the armed
+      // iteration. Dispatch continuation idempotently: skip if a turn is running or a steer is already
+      // queued/dispatched, never re-run the prior-iteration advance.
+      if (this.goals.get(sessionID) !== record || record.status !== "active" || record.loopIteration !== nextIteration) return false
+      if (this.running.has(sessionID) || runtime.awaitingExecution) {
+        this.deps.log.info("loop arm continuation already pending after post-commit stale race", { sessionID, iteration: nextIteration, running: this.running.has(sessionID), awaitingExecution: runtime.awaitingExecution })
+        return true
+      }
+      this.deps.log.info("recovering loop arm continuation after post-commit stale race", { sessionID, iteration: nextIteration })
+      void this.continueWith(record, {
+        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason }, this.deps.commit),
+        description: `goal-loop · arming v${nextIteration}`,
+        turn: 1,
+      }).catch((error) => this.deps.log.error("loop arm continuation recovery failed", { sessionID, error: errorMessage(error) }))
+      return true
+    }
+    const staleAfterArmCommit = (phase?: string) => {
+      if (!this.stale(record, runtime, epoch)) return false
+      if (!recoverPostArmContinuation()) {
+        if (phase) this.logStaleDrop(record, runtime, epoch, phase)
+      }
+      return true
+    }
+    if (staleAfterArmCommit("after loop arm commit")) return
     this.notify(sessionID, "loop", "info", `Loop ${iteration} of ${maxLoops} achieved`, `→ v${nextIteration}: ${truncate(condition, 160)}`)
     // A stale step (the record was superseded by a clear/replace during the commit await) must not
     // reach the compaction request or the arming steer.
-    if (this.stale(record, runtime, epoch)) return
+    if (staleAfterArmCommit("before loop compaction/steer")) return
     // Queue a boundary compaction BEFORE the armed iteration's synthetic steer, so the next version arms
     // with a fresh context. Awaiting only waits for the host's acceptance of the request. Any request made at
     // an earlier arm is settled first, here, before any other bookkeeping: a landed compaction is recorded as
@@ -1432,7 +1618,7 @@ export class GoalController {
       let skipRequest: "landed" | "pending" | undefined
       if (pending) {
         const size = this.deps.estimateContext ? await this.deps.estimateContext(sessionID).catch(() => undefined) : undefined
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
         if (this.contextDropped(pending, size)) {
           this.landPending(record, pending, size)
           skipRequest = "landed"
@@ -1478,7 +1664,7 @@ export class GoalController {
           log.info("loop boundary compact miss counted at arm", { sessionID, misses, force })
           await this.commit(record)
         }
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
       }
       if (pending && !skipRequest && !force) skipRequest = "pending"
       if (skipRequest) {
@@ -1493,7 +1679,7 @@ export class GoalController {
                 log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
                 return { requested: false, reason: "read-failed" }
               })
-      if (this.stale(record, runtime, epoch)) return
+      if (staleAfterArmCommit()) return
       if (result.requested) {
         // Carry the miss count forward until a compaction actually lands: re-requesting is not evidence of landing.
         // Reads the post-settle record, not the pre-settle pending: spread it so misses, the once-per-pending
@@ -1509,7 +1695,7 @@ export class GoalController {
           misses,
         }
         await this.commit(record)
-        if (this.stale(record, runtime, epoch)) return
+        if (staleAfterArmCommit()) return
       }
       // A denied request stays as-is: the settle step already counted this arm as a miss when a pending request exists,
       // and a busy deferral never forces an unsafe compact.
@@ -1616,16 +1802,24 @@ export class GoalController {
       if (runtime.evaluating || this.running.has(sessionID)) continue
       const record = this.goals.get(sessionID)
       if (!record || record.status !== "active") continue
+      const epoch = ++runtime.epoch
       const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
-        // Busy-check failure: fail closed — don't treat a possibly-busy session as idle.
-        this.deps.log.error("goal busy check failed; skipping evaluation", { sessionID, error: errorMessage(error) })
+        this.deps.log.warn("goal busy check failed; will retry", { sessionID, error: errorMessage(error) })
         return undefined
       })
-      if (!work || work.subagents + work.shells > 0) continue
+      if (this.stale(record, runtime, epoch)) {
+        this.logStaleDrop(record, runtime, epoch, "background drain busy check")
+        continue
+      }
+      if (!work) {
+        this.scheduleBusyRetry(record, runtime)
+        continue
+      }
+      runtime.busyRetries = undefined
+      if (work.subagents + work.shells > 0) continue
       const carried = runtime.carriedToolCalls
       runtime.carriedToolCalls = 0
       this.clearDeferred(runtime, record)
-      const epoch = ++runtime.epoch
       try {
         await this.evaluate(record, runtime, epoch, carried)
       } catch (error) {
@@ -1844,6 +2038,7 @@ export class GoalController {
     runtime.deferredSince = undefined
     runtime.carriedToolCalls = 0
     runtime.lastCheckinAt = undefined
+    runtime.busyRetries = undefined
     if (!wasWaiting) return
     const ours = record !== undefined && this.goals.get(record.sessionID) === record
     if (record && record.waitingSince !== undefined) delete record.waitingSince
