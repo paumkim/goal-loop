@@ -4340,6 +4340,23 @@
       "submittedAt": "2026-11-20T15:25:04Z",
       "mergedAt": "2026-11-20T15:27:08Z",
       "mergedInto": "dev"
+    },
+    "unify-learning-path-default": {
+      "agent": "iceman",
+      "paths": "src/runtime/controller.ts",
+      "branch": "wt/unify-learning-path-default",
+      "worktree": "worktrees/wt-unify-learning-path-default",
+      "status": "done",
+      "createdAt": "2026-11-20T15:32:02Z",
+      "submittedAt": "2026-11-20T15:37:44Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T15:37:44Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "src/core/failure-signature.ts"
+      ],
+      "mergedAt": "2026-11-20T15:39:38Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
