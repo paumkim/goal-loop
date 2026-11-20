@@ -4016,6 +4016,17 @@
       "submittedAt": "2026-11-20T08:42:17Z",
       "mergedAt": "2026-11-20T08:43:53Z",
       "mergedInto": "dev"
+    },
+    "resume-stash2-path-fixes": {
+      "agent": "iceman",
+      "paths": "CURRENT_TASK.md,test/dialog-crash-records.test.tsx",
+      "branch": "wt/resume-stash2-path-fixes",
+      "worktree": "worktrees/wt-resume-stash2-path-fixes",
+      "status": "done",
+      "createdAt": "2026-11-20T08:50:03Z",
+      "submittedAt": "2026-11-20T08:52:46Z",
+      "mergedAt": "2026-11-20T08:54:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
