@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2037 -->
+<!-- spec-check files=74 tests=2038 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8156,3 +8156,48 @@ the evaluator supplies the required `next:` pointer. This workstream aligns the 
 - The exemption applies only to a `met` that names a concrete `next:` pointer; a bare "already satisfied" claim
   without a pointer is still downgraded by the forward-pointer gate.
 - No change to the verifier matrix, rubric, or persisted record format.
+
+## Workstream CX — pathsOf rename/quote correctness (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`src/core/changed-paths.ts · pathsOf` is the shared parser behind both change-risk classification
+(`collectChangeSetPaths`) and the invariant-sweep gate (`scripts/invariant-sweep.ts`). For a porcelain status line
+it treated **any** `XY path` body containing ` -> ` as a rename and kept only `body.split(" -> ").pop()`. Two defects:
+
+1. **Over-broad split.** A non-rename status line whose path literally contains ` -> ` (e.g. ` M my -> file.txt`)
+   was truncated to `file.txt` — a wrong path reaches classification and the gate.
+2. **Last-occurrence split.** `git status --porcelain` renders a rename to a path containing ` -> ` as
+   `R  old -> "new -> name.txt"`. Splitting on *all* separators and taking the last piece yields `name.txt"` —
+   the new path is corrupted. Git probe (fresh this turn) confirmed this exact rendering.
+3. **No C-style decoding.** Git quotes special-character paths (`"tab\tnew.txt"`, octal UTF-8 bytes); these were
+   added to the changed-path set with the quotes and escapes still embedded, so scope matching could miss them.
+
+### Acceptance criteria
+
+1. `pathsOf` splits ` -> ` **only** on rename/copy porcelain lines (X or Y status char is `R` or `C`), and then
+   only on the **first** occurrence (`indexOf` + slice), taking the destination path.
+2. Non-rename status lines keep their full path even when it contains ` -> `; plain diff lines (no `XY ` prefix)
+   are never split.
+3. C-style quoted paths are decoded: `\"`, `\\`, `\a\b\f\n\r\t\v`, and octal byte runs decoded as UTF-8.
+4. `test/changed-paths.test.ts` adds regression tests: quoted rename with ` -> ` in the destination, literal
+   ` -> ` in a non-rename path, and C-style quoted/escaped paths. Existing tests keep passing.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/changed-paths.test.ts test/invariant-sweep.test.ts` →
+  **23 pass / 0 fail** (51 expect() calls), including the new quoted-rename-with-arrow, non-rename-arrow,
+  C-style-escape and octal-UTF-8 cases.
+- `bun run check` exit 0: **2038 pass / 0 fail** across 85 test files (29 snapshots, 30383 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2038`.
+
+### Honest limits / non-goals
+
+- Porcelain v1 is assumed (the collector already requests `--porcelain` without `-z`); NUL-delimited `-z` output
+  is not parsed.
+- This does not change how `git diff --name-only` lines are obtained; it only corrects parsing of the lines fed
+  to `pathsOf`.

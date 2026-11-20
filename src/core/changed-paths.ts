@@ -33,6 +33,61 @@ export function createGitRun(cwd: string): GitRun {
   }
 }
 
+/**
+ * Decode a git C-style quoted path (the default `core.quotePath` rendering) into a real path.
+ * Unquoted paths are returned unchanged. Escapes: `\"`, `\\`, `\a\b\f\n\r\t\v`, and octal byte runs
+ * (up to three digits) which are decoded as UTF-8. An unknown escape keeps its backslash.
+ */
+function decodeGitPath(path: string): string {
+  if (path.length < 2 || path[0] !== '"' || path[path.length - 1] !== '"') return path
+  const inner = path.slice(1, -1)
+  const simple: Record<string, string> = {
+    a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v", "\\": "\\", '"': '"',
+  }
+  let out = ""
+  let octal: number[] = []
+  const flushOctal = () => {
+    if (octal.length) {
+      out += Buffer.from(octal).toString("utf8")
+      octal = []
+    }
+  }
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]!
+    if (ch !== "\\") {
+      flushOctal()
+      out += ch
+      continue
+    }
+    const next = inner[++i]
+    if (next === undefined) {
+      flushOctal()
+      out += "\\"
+      break
+    }
+    if (next in simple) {
+      flushOctal()
+      out += simple[next]!
+      continue
+    }
+    if (/[0-7]/.test(next)) {
+      let digits = next
+      while (digits.length < 3 && i + 1 < inner.length && /[0-7]/.test(inner[i + 1]!)) digits += inner[++i]
+      octal.push(parseInt(digits, 8))
+      continue
+    }
+    flushOctal()
+    out += `\\${next}`
+  }
+  flushOctal()
+  return out
+}
+
+/** Rename/copy status chars in porcelain v1 (`XY`), in either the index or worktree column. */
+function isRenameOrCopy(status: string): boolean {
+  return status[0] === "R" || status[0] === "C" || status[1] === "R" || status[1] === "C"
+}
+
 /** Stable, de-duplicated list of changed paths (repo-root relative, POSIX) parsed from git output lines. */
 export function pathsOf(lines: readonly string[]): string[] {
   const out = new Set<string>()
@@ -42,11 +97,19 @@ export function pathsOf(lines: readonly string[]): string[] {
     // porcelain "XY path" or "XY orig -> path" (leading status chars are significant)
     if (/^.. /.test(line)) {
       const body = line.slice(3)
-      const renamed = body.includes(" -> ") ? body.split(" -> ").pop()! : body
-      out.add(renamed.trim())
+      // Only renames/copies use the "orig -> dest" rendering; split on the FIRST separator so a destination
+      // path that itself contains " -> " survives intact. Every other status line keeps its full path.
+      if (isRenameOrCopy(line.slice(0, 2))) {
+        const sep = body.indexOf(" -> ")
+        if (sep !== -1) {
+          out.add(decodeGitPath(body.slice(sep + 4).trim()))
+          continue
+        }
+      }
+      out.add(decodeGitPath(body.trim()))
       continue
     }
-    out.add(line.trim())
+    out.add(decodeGitPath(line.trim()))
   }
   return [...out].sort()
 }
