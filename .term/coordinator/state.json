@@ -4563,6 +4563,17 @@
       ],
       "mergedAt": "2026-11-20T21:15:28Z",
       "mergedInto": "dev"
+    },
+    "paths-of-rename-quote-fix": {
+      "agent": "build",
+      "paths": "src/core/changed-paths.ts,test/changed-paths.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/paths-of-rename-quote-fix",
+      "worktree": "worktrees/wt-paths-of-rename-quote-fix",
+      "status": "done",
+      "createdAt": "2026-11-20T21:21:41Z",
+      "submittedAt": "2026-11-20T21:24:38Z",
+      "mergedAt": "2026-11-20T21:26:29Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
