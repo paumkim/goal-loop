@@ -192,9 +192,22 @@ describe("GoalController", () => {
     expect(goal.status).toBe("achieved")
     expect(goal.turns).toBe(2)
     expect(goal.endedAt).toBeDefined()
+    // Regression: a met verdict on a plain goal is terminal — evaluate() must not fall through to the
+    // continuation dispatch and re-arm the achieved goal (turn 3 steer seen before the fix).
+    expect(h.calls.synthetic).toHaveLength(1)
     // The verdict outcome note is retired (LXVII): the steer resumes the goal, and no synthetic note rides the achievement.
     expect(h.calls.synthetic.some((synthetic) => String(synthetic.description ?? "").startsWith("Goal achieved"))).toBe(false)
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
+  })
+  test("an impossible verdict is terminal: it does not re-arm the goal", async () => {
+    await h.set()
+    h.verdicts.push({ verdict: "impossible", reason: "the target cannot be built here" })
+    await h.turn()
+    const goal = h.controller.get(SID)!
+    expect(goal.status).toBe("impossible")
+    // Regression: like met, an impossible verdict must not fall through to the continuation dispatch.
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "impossible")).toBeTrue()
   })
 
   test("the outcome toast carries the story: turns · wall time · reason", async () => {
