@@ -3900,6 +3900,23 @@
       "submittedAt": "2026-11-20T05:38:01Z",
       "mergedAt": "2026-11-20T05:39:33Z",
       "mergedInto": "dev"
+    },
+    "runtime-correctness-batch": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,src/runtime/compactor.ts,src/core/wire.ts,src/index.ts,test/controller.test.ts,test/compactor.test.ts,test/wire.test.ts,test/plugin.test.ts",
+      "branch": "wt/runtime-correctness-batch",
+      "worktree": "worktrees/wt-runtime-correctness-batch",
+      "status": "done",
+      "createdAt": "2026-11-20T05:50:39Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T06:03:21Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "submittedAt": "2026-11-20T06:03:21Z",
+      "mergedAt": "2026-11-20T06:04:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
