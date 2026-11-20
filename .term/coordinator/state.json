@@ -4137,8 +4137,11 @@
       "paths": "packages/coordinator/**,test/**",
       "branch": "wt/coordinator-lease-race-fix",
       "worktree": "worktrees/wt-coordinator-lease-race-fix",
-      "status": "claimed",
-      "createdAt": "2026-11-20T12:31:45Z"
+      "status": "done",
+      "createdAt": "2026-11-20T12:31:45Z",
+      "submittedAt": "2026-11-20T12:55:24Z",
+      "mergedAt": "2026-11-20T12:58:09Z",
+      "mergedInto": "dev"
     },
     "no-rearm-after-achieved": {
       "agent": "orchestrator",
@@ -4194,6 +4197,14 @@
       "submittedAt": "2026-11-20T12:44:47Z",
       "mergedAt": "2026-11-20T12:46:33Z",
       "mergedInto": "dev"
+    },
+    "invariant-sweep-gate": {
+      "agent": "iceman",
+      "paths": "scripts/invariant-sweep.ts,package.json",
+      "branch": "wt/invariant-sweep-gate",
+      "worktree": "worktrees/wt-invariant-sweep-gate",
+      "status": "claimed",
+      "createdAt": "2026-11-20T12:50:43Z"
     }
   },
   "mergeLock": null,
