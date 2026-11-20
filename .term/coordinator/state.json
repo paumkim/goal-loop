@@ -3884,6 +3884,22 @@
       "submittedAt": "2026-11-20T05:16:53Z",
       "mergedAt": "2026-11-20T05:18:24Z",
       "mergedInto": "dev"
+    },
+    "install-ux": {
+      "agent": "orchestrator",
+      "paths": "bin/goal-loop.mjs,install.sh,package.json,README.md,docs,SPEC.md,test,RELEASE-CHECKLIST.md",
+      "branch": "wt/install-ux",
+      "worktree": "worktrees/wt-install-ux",
+      "status": "done",
+      "createdAt": "2026-11-20T05:30:37Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-20T05:38:01Z",
+      "forcedScopeFiles": [
+        "opencode.json.example"
+      ],
+      "submittedAt": "2026-11-20T05:38:01Z",
+      "mergedAt": "2026-11-20T05:39:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
