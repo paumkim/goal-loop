@@ -72,7 +72,7 @@ const staleSession = (): GoalSnapshot => ({
   version: 1,
   id: "642b9bc6-0e5a-4238-91a7-4ff27b0e1f3f",
   sessionID: "ses_e19875b93ffe4VE5pBdsyF7poG",
-  directory: "/home/pauk/Projects/opencode-v2-goal/opencode-goalv2",
+  directory: "/home/pauk/Projects/goal-loop",
   condition: "review recent changes for stale works and bugs merged them to dev after they are all ready.",
   status: "achieved",
   reason: "All three submitted works were reviewed, fixed where stale/buggy (9043e20 on wt/coordinator-scratch-branch-order; 56a8f83 on wt/dz-evidence-fresh), and landed via merge-next: outputs show 'merged into dev' for each, dev HEAD 2f966cc carries the merge commits. Fresh post-merge evidence at dev: 35 pass / 0 fail on the two coordinator suites, spec-check ok (59 files, 1308 tests), merge queue empty, submitted count 0. The one stale item (github-single-channel) has no branch/commit to merge and was reported, not landed.",
