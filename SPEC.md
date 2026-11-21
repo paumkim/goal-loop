@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2202 -->
+<!-- spec-check files=143 tests=2207 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9955,3 +9955,24 @@ worker re-delegated three times because the judge returned verdicts about condit
 - `bun run check` green; marker re-counted to `files=143 tests=2202` in-commit.
 - Tests pin: the judge's own delegation call never reaching the digest, a pure-text reply being kept as evidence,
   narration beside tool work still dropped, and the enriched child prompt naming `<condition>` as the sole goal.
+
+## Judge context isolation + single-turn digest (CXXXVIII)
+
+Live session `ses_dffecb743ffee` (armed condition `reply: hi`) needed six worker messages and six native judge
+children before a verdict landed. Every child received the correct injected `<condition>`, but each also carried a
+~7,168-token cached project prefix (AGENTS.md/SPEC.md from the child's directory) and a digest that accumulated
+every reply since session start. On `9router-go/KiloCode-Free` that noise won: four judges returned verdicts about
+other sessions' goals (build/TUI/tests/GUI), and the worker answered each with another delegation.
+
+- `src/index.ts · context hook` strips host-injected system parts from evaluator children except their own identity
+  part, so the judge's system prefix carries no project docs or other conditions. Worker sessions are untouched.
+- `src/core/transcript.ts · currentTurnStart` finds the newest `<goal>` kickoff / goal steer, and
+  `renderParentSummary` accepts a `since` index. The enrichment hook scopes the digest to that turn only: pre-goal
+  chatter and prior replies no longer compete with the current answer.
+- `src/core/prompts.ts · DELEGATE_VERDICT` now says to delegate exactly once per turn and not re-delegate after a
+  report arrives — the harness decides whether another turn is needed.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2207` in-commit.
+- Tests pin: evaluator system isolation vs. worker rules, turn-start detection, and `since`-scoped digest.

@@ -17,7 +17,7 @@ import {
   retry,
   systemReminder,
 } from "../src/core/prompts.ts"
-import { renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
+import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
 import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport, echoedCondition, conditionEchoMatches } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
@@ -910,6 +910,33 @@ describe("renderParentSummary: native evaluator gets fresh tool evidence, not st
     const text = renderParentSummary(messages, { maxChars: 4_000 })
     expect(text).toContain("12 pass 0 fail")
     expect(text).not.toContain("dogfood merge")
+  })
+})
+
+describe("the judge's digest starts at the current turn", () => {
+  const reply = (text: string) => ({ type: "assistant", content: [{ type: "text", text }] })
+
+  test("uses the <goal> kickoff when no steer was written yet", () => {
+    const messages = [reply("pre goal chatter"), { type: "user", text: "<goal>reply: hi</goal>" }, reply("hi")]
+    expect(currentTurnStart(messages)).toBe(2)
+    expect(renderParentSummary(messages, { maxChars: 4_000, since: currentTurnStart(messages) })).toBe("hi")
+  })
+
+  test("uses the newest goal continuation, not an older one", () => {
+    const messages = [
+      { type: "user", text: "<goal>reply: hi</goal>" },
+      reply("first attempt"),
+      { type: "synthetic", text: '<goal-continuation turn="2">Evaluator: not met</goal-continuation>', metadata: { source: "goal", turn: 2 } },
+      reply("second attempt"),
+    ]
+    expect(currentTurnStart(messages)).toBe(3)
+    const text = renderParentSummary(messages, { maxChars: 4_000, since: currentTurnStart(messages) })
+    expect(text).toContain("second attempt")
+    expect(text).not.toContain("first attempt")
+  })
+
+  test("falls back to the whole transcript when no marker exists", () => {
+    expect(currentTurnStart([reply("one"), reply("two")])).toBe(0)
   })
 })
 

@@ -16,7 +16,7 @@ import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUB
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
-import { renderParentSummary, renderTranscript } from "./core/transcript.ts"
+import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
 import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
@@ -670,12 +670,16 @@ export default Plugin.define({
           const condition = controller.activeCondition(child.parentID)
           if (condition) {
             const parent = controller.live(child.parentID)
-            let summary = renderParentSummary(await evaluatorContext(child.parentID, lifetime.signal), { maxChars: EVALUATION_SUMMARY_CHARS })
+            // Only this turn's work is evidence. Older replies and pre-goal chatter are a different turn; on a
+            // small judge they read as a competing answer and it exports a stale condition from them.
+            const digest = (ctx: readonly unknown[]) =>
+              renderParentSummary(ctx, { maxChars: EVALUATION_SUMMARY_CHARS, since: currentTurnStart(ctx) })
+            let summary = digest(await evaluatorContext(child.parentID, lifetime.signal))
             if (!summary.trim()) {
               // Empty digest = the judge's own delegation was the only tool call and no answer text has landed yet.
               // Give the parent a bounded window to emit its reply, then re-read before the child's prompt is admitted.
               await settle(EVALUATION_SETTLE_MS, lifetime.signal)
-              summary = renderParentSummary(await evaluatorContext(child.parentID, lifetime.signal), { maxChars: EVALUATION_SUMMARY_CHARS })
+              summary = digest(await evaluatorContext(child.parentID, lifetime.signal))
             }
             const block = nativeEvaluationRequest({
               condition,
@@ -768,6 +772,20 @@ export default Plugin.define({
     // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
     // request still carrying goal text, so it never becomes a session-long stale system line.
     await ctx.session.hook("context", (event) => {
+      // A native judge child inherits the project's AGENTS.md/SPEC.md rules through the host system prefix. On a
+      // small free-tier model those thousands of cached tokens drown the ~100-token condition block, so the judge
+      // replays a verdict about a condition it saw in the project docs. Keep only the evaluator's own identity
+      // part — the per-turn <goal-evaluation> prompt already carries the complete role and output contract.
+      const agentID = typeof event.agent === "string" ? event.agent : ""
+      if (agentID === EVALUATOR_AGENT_ID && Array.isArray(event.system)) {
+        const sys = event.system
+        for (let i = sys.length - 1; i >= 0; i--) {
+          const text = (sys[i] as { text?: unknown } | undefined)?.text
+          if (typeof text !== "string" || !text.includes("You are the Evaluator, a subagent shipped by the goal-loop plugin")) {
+            sys.splice(i, 1)
+          }
+        }
+      }
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
