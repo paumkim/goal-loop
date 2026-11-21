@@ -608,6 +608,10 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     const result = run(dir, ["merge-next", "--target", "drifted"])
     expect(result.status).toBe(1)
     expect(result.stderr).toContain("worktree drift")
+    // Regression: a submitted lease cannot be re-submitted (submit requires status "claimed").
+    expect(result.stderr).toContain("cannot be re-submitted")
+    expect(result.stderr).toContain("release + re-claim")
+    expect(result.stderr).not.toContain("or re-submit them")
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
     expect(lease("drifted").status).toBe("submitted")
   })
