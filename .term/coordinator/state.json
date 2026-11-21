@@ -4699,6 +4699,17 @@
       "submittedAt": "2026-11-21T01:35:24Z",
       "mergedAt": "2026-11-21T01:44:29Z",
       "mergedInto": "dev"
+    },
+    "audit-dedupe-and-prompter": {
+      "agent": "primary",
+      "paths": "AGENTS.md,README.md,SPEC.md,bun.lock,docs,package.json,packages,bin,prompts,src,test",
+      "branch": "wt/audit-dedupe-and-prompter",
+      "worktree": "worktrees/wt-audit-dedupe-and-prompter",
+      "status": "done",
+      "createdAt": "2026-11-21T07:48:45Z",
+      "submittedAt": "2026-11-21T07:48:51Z",
+      "mergedAt": "2026-11-21T07:50:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
