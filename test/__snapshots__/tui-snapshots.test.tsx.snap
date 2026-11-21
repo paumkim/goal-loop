@@ -237,7 +237,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                               · last ✗ this turn 
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -279,7 +279,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                               · last ✗ this turn 
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -427,7 +427,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                               · last ✗ this turn 
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -484,7 +484,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                               · last ✗ this turn 
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -522,7 +522,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 10m elapsed                               · last ✗ this turn 
+now         ◎  v3 · active · 4 turns · 10m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -587,7 +587,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                         copy     
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall   copy     
 │           │ Trail renders up to 24 verdicts.                                             copy     
-now         ◎  v3 · active · 15 turns · 12m elapsed                         · last ✗ 10 turns since 
+now         ◎  v3 · active · 15 turns · 12m elapsed   last ✗ 10 turns since                         
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                             copy     
             ✓  met · turn 4 · 2m ago      done                                             copy     
@@ -634,7 +634,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · 1✓ 1✗ · ended 12m ago at 07:48 · 50% of wall    
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                            · last ✓ 1 turn since 
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✓ 1 turn since                            
 trail       ✓✗✓   3 of 3 verdicts                                                                   
 why         ✓  met · turn 1 · 26m ago · b1e4d7a      done                                           
             ✗  not met · turn 2 · 14m ago · a3f5c8e  no evidence of work toward the condition       
@@ -771,7 +771,7 @@ v1          ✓  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33
 │           │ Added an 18-cell block progress bar.                                                  
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · paused · 4 turns · stall 0 · retries 0 · 12m elapsed         · last ✗ this turn 
+now         ◎  v3 · paused · 4 turns · stall 0 · retries 0 · 12m elapsed   last ✗ this turn         
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -863,7 +863,7 @@ v1          ○  met · 2 turns · 0 tools · 15m 00s · no tools · already sat
 │           │ Inspection only — nothing to build.                                                   
 v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 │           │ Trail renders up to 24 verdicts.                                                      
-now         ◎  v3 · active · 4 turns · 12m elapsed                                · last ✗ this turn
+now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
 why         ✓  met · turn 3 · 3m ago      done                                                      
             ✓  met · turn 4 · 2m ago      done                                                      
@@ -958,7 +958,7 @@ v1          +  met · 9 turns · 41 tools · 15m 00s · ended 27m ago at 07:33 �
 |           | Added an 18-cell block progress bar.                                          copy    
 v2          +  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 · 50% of wall            
 |           | Trail renders up to 24 verdicts.                                              copy    
-now         *  v3 · active · 4 turns · 12m elapsed                                · last x this turn
+now         *  v3 · active · 4 turns · 12m elapsed   last x this turn                               
 trail       +x++x   5 of 5 verdicts                                                                 
 why         +  met · turn 3 · 3m ago      done                                                      
             +  met · turn 4 · 2m ago      done                                                      
