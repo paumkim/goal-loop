@@ -4667,6 +4667,36 @@
       "submittedAt": "2026-11-21T00:52:13Z",
       "mergedAt": "2026-11-21T00:54:12Z",
       "mergedInto": "dev"
+    },
+    "tui-polish": {
+      "agent": "tui-polisher",
+      "paths": "src/tui.tsx,src/status-dialog.tsx,src/hud-card.tsx,src/tui-history.tsx,src/core/hud.ts,src/core/scrollbar.ts,dist/tui.js,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/tui-hud.test.tsx,test/__snapshots__,SPEC.md",
+      "branch": "wt/tui-polish",
+      "worktree": "worktrees/wt-tui-polish",
+      "status": "done",
+      "createdAt": "2026-11-21T01:17:18Z",
+      "submittedAt": "2026-11-21T01:17:46Z",
+      "mergedAt": "2026-11-21T01:37:28Z",
+      "mergedInto": "dev"
+    },
+    "eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md": {
+      "agent": "",
+      "paths": "",
+      "branch": "wt/eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md",
+      "worktree": "worktrees/wt-eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md",
+      "status": "done",
+      "createdAt": "2026-11-21T01:27:55Z",
+      "releasedAt": "2026-11-21T01:28:12Z",
+      "releaseReason": "released"
+    },
+    "eval-malformed-verdict": {
+      "agent": "builder",
+      "paths": "src/core/verdict.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md",
+      "branch": "wt/eval-malformed-verdict",
+      "worktree": "worktrees/wt-eval-malformed-verdict",
+      "status": "submitted",
+      "createdAt": "2026-11-21T01:28:22Z",
+      "submittedAt": "2026-11-21T01:35:24Z"
     }
   },
   "mergeLock": null,
