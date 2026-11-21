@@ -4866,6 +4866,17 @@
       "submittedAt": "2026-11-21T13:50:08Z",
       "mergedAt": "2026-11-21T13:52:21Z",
       "mergedInto": "dev"
+    },
+    "review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing": {
+      "agent": "goal-loop",
+      "paths": "src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
+      "worktree": "worktrees/wt-review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
+      "status": "done",
+      "createdAt": "2026-11-21T15:23:34Z",
+      "submittedAt": "2026-11-21T15:34:49Z",
+      "mergedAt": "2026-11-21T15:37:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
