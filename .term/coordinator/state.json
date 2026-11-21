@@ -4766,9 +4766,11 @@
       "paths": "src/core/config.ts,src/runtime/evaluator.ts,src/index.ts,test/evaluator.test.ts,test/core.test.ts,SPEC.md,README.md,docs/config.html,docs/changelog.html",
       "branch": "wt/evaluator-inherit-parent-model",
       "worktree": "worktrees/wt-evaluator-inherit-parent-model",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-21T08:57:14Z",
-      "submittedAt": "2026-11-21T09:12:45Z"
+      "submittedAt": "2026-11-21T09:12:45Z",
+      "mergedAt": "2026-11-21T09:21:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
