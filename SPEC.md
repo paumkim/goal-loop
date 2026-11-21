@@ -8934,8 +8934,9 @@ models (a `/model` change, an agent default change, a fallback provider).
   `ModelRef` is passed to `modelGenerate`; a mid-goal model change is picked up; a failing/absent port falls back
   to session mode with a warning; summaries and next-goal generation inherit too; pinned/session modes are
   unchanged.
-- Full suite `bun run check`: `tsc --noEmit` clean; `cd test && bun test` → **2118 pass / 0 fail** (91 files,
-  29 snapshots, 199,098 expect() calls), up from 2109 (+9 regressions: 3 config-sentinel, 6 evaluator);
+- Full suite `bun run check`: `tsc --noEmit` clean; `cd test && bun test` → **2119 pass / 0 fail** (91 files,
+  29 snapshots, 199,104 expect() calls), up from 2110 on rebased dev (+9 regressions: 3 config-sentinel,
+  6 evaluator);
   `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed. `check:invariant` requires
   `docs/changelog.html` in the same change set for a `src/core|src/runtime` behavior change — regenerated with
   `bun scripts/docs-watch.ts once` after the content commit and committed as the docs refresh. `check:spec` ok
