@@ -62,9 +62,13 @@ export function createRouter(input: { controller: GoalController; background: Ba
     // one, not the directory captured when this plugin instance was set up. The host carries it on the event
     // (top-level `location`) and, for `session.moved`, inside `data.location` too — accept both shapes.
     const locationData = asRecord(data.location)
-    const locationDirectory =
-      (typeof event.location?.directory === "string" ? event.location.directory : undefined) ??
-      (typeof locationData.directory === "string" ? locationData.directory : undefined)
+    const envelopeDirectory = typeof event.location?.directory === "string" ? event.location.directory : undefined
+    const dataDirectory = typeof locationData.directory === "string" ? locationData.directory : undefined
+    // For `session.moved` the destination lives in `data.location`. The envelope `location` is stamped from
+    // the producer's location at publish time and can be the PRE-move directory (the host bus itself keys the
+    // move transition off `data.location`), so prefer the data copy for moves; other events keep the old
+    // envelope-first precedence.
+    const locationDirectory = event.type === "session.moved" ? (dataDirectory ?? envelopeDirectory) : (envelopeDirectory ?? dataDirectory)
     const seq = typeof event.durable?.seq === "number" ? event.durable.seq : undefined
     if (event.type !== "session.moved" && sessionID && locationDirectory)
       guard(() => controller.noteSessionDirectory(sessionID, locationDirectory, "event", seq))

@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2150 -->
+<!-- spec-check files=141 tests=2153 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9201,3 +9201,102 @@ call site) built their paths from the session's directory verbatim, so a goal ar
    asserts the journal lands at the repo root, never in the subfolder. Counts 2143 → 2148, files unchanged at
    141; marker re-counted and `docs/changelog.html` behavior-change note added in-commit.
 4. `bun run check` green: tsc clean, 2148 pass / 0 fail, dist/tui/docs freshness ok, invariant-sweep ok.
+## Workstream CXXIV — audit recent changes for bugs (follow-up) (2026-11-21)
+
+Armed by the user's fuzzy goal: "audit recent changes for bugs fix what needs fixing." This is a follow-up
+to the earlier audit workstream (which produced 7b416d5 and 879a00b); it reviews the commits merged since
+then for *real* correctness bugs and fixes only what is confirmed, with a regression test per fix.
+
+### Interpretation / scope
+
+"Recent changes" = the substantive commits merged onto `dev` since the prior audit:
+
+1. `e2c2507` — evaluator inherits the parent session's fingerprint on judge generations (inherit mode).
+2. `8281b6a` — a goal follows the session that armed it across directory moves.
+3. `7b416d5` — the prior audit's verdict-inversion / stuck-pill / evaluator-timeout / prompter-caps fixes.
+
+Every hunk in these commits is a candidate. A "bug" is a concrete, reproducible defect in behavior — an
+inverted condition, a stale value, a wrong target directory, a lost race, a scope leak — not a style nit,
+a new feature, or a speculative refactor. Each confirmed defect gets a minimal fix and a test that fails
+before and passes after. Anything larger than a focused fix is recorded as a follow-up, not smuggled in.
+Out of scope: the repo-root .term anchoring edits that were uncommitted in the primary checkout at the time (a
+separate change, since landed as Workstream CXXIII); this workstream starts from committed `d49912d` in its own coordinator worktree.
+
+### Acceptance criteria
+
+1. Each of the three commits is reviewed hunk-by-hunk for correctness, with findings recorded here.
+2. Every confirmed bug is fixed minimally in `src/` and covered by a regression test that would fail on
+   the unfixed code.
+3. `bun run check` is green: `tsc --noEmit`, all `bun test` suites, dist/tui/docs freshness, invariant
+   sweep, and `check:spec` all pass.
+4. The `spec-check files=N tests=N` marker in this file is re-counted in the same commit as any shipped
+   file/test change; `docs/changelog.html` carries a behavior-change note for each user-visible fix.
+5. Work stays on `wt/audit-recent-changes-bugs-followup`; `dev`/`main` are never committed to directly;
+   `coordinator submit` runs when the checks are green.
+
+### Verification
+
+- Focused: `bun test test/<affected>.test.ts` for each area touched.
+- Full: `bun run check` (tsc first, then all suites, then dist/tui/docs/invariant/spec gates).
+- Evidence: command output in the transcript; honest disclosure of anything not run (e.g. live model)
+  and why.
+
+### Findings
+
+Three concrete bugs were confirmed, all in `8281b6a` (session-directory moves). Each was reproduced by a test
+that fails on `d49912d` and passes with its fix; no other change was needed.
+
+**F1 — the prompt hook and the standing system reminder kept the setup-time commit rule after a move.**
+`src/index.ts` captured `commit` once at setup for the `/goal-loop` directive (`directivePrompt(objective, commit, …)`)
+and the context hook (`systemReminder(condition, commit)`), while the controller re-resolves the rule per moved
+session (`commitFor` → `commitPolicies`). After a move the model was told to commit to the *old* checkout's
+branch/coordinator policy — the exact contradiction of the change's own promise ("gets the new repository's rule
+in its prompts"). Fix: `GoalController.commitForSession` is now public and both host hook sites call it with
+`event.sessionID`; the internal callers share the same method, so there is one source of truth. Regression:
+`test/plugin.test.ts` routes a `session.moved` to a repo whose only branch is `release`, then asserts the prompt
+directive and the system reminder name `` `release` `` and never `` `dev` ``. Fails before (setup `dev` leaks),
+passes after.
+
+**F2 — a move during an in-flight evaluation left the pill stuck on "checking" and let the stale judge run.**
+`noteSessionDirectory` did `verifyCache = undefined; epoch++` but never aborted the running generation. The
+epoch guard correctly stopped the stale verdict from landing, but the judge kept running up to its full timeout in
+old-checkout context, and `evaluate()`'s `finally` cleared `runtime.evaluating` with no `changed` emit — leaving
+the TUI painting "checking" for a verdict that could never land (the same stale-pill class `7b416d5` fixed for
+other drop paths). Fix: when a move happens while `runtime.evaluating`, abort the in-flight generation, clear the
+flag, and emit the off state immediately; the persisted `pendingEvaluation` is kept for restart recovery.
+Regression: `test/session-directory.test.ts` arms a goal, starts a turn with a deliberately pending verdict,
+routes a move, and asserts a `changed` snapshot with `evaluating:false` follows the move and the stale verdict
+never lands. Fails before (last snapshot still `evaluating:true`), passes after.
+
+**F3 — `session.moved` could move the goal to the pre-move directory.** `src/runtime/events.ts` preferred the
+envelope `event.location.directory` for every event. For `session.moved` the destination is carried in
+`data.location`; the envelope `location` is stamped by the host from the producer's location at publish time and
+can be the *old* directory. Host source confirms this: `packages/core/src/session/move.ts` publishes
+`SessionEvent.Moved` with `{sessionID, ...destination}`, and `packages/core/src/bus.ts` keys the move transition
+off `event.data.location` while noting "even if the producer supplied an envelope location"; durable replays do
+not even carry a top-level `location`. Fix: for `session.moved`, prefer `data.location.directory` (falling back to
+the envelope); other events keep envelope-first precedence. Regression: `test/session-directory.test.ts` routes a
+move with top-level `OLD_DIR` and `data.location = NEW_DIR` and asserts the goal ends at `NEW_DIR`. Fails before
+(no-op on the old directory), passes after.
+
+**Reviewed, no change:**
+- `e2c2507` (evaluator fingerprint inheritance): a reviewer flagged a possible unbudgeted `sessionModelGenerate`
+  call leaking past the timeout. Investigated and rejected: `independentVerdict` calls `ask()`, and `ask()`
+  wraps *every* generation attempt in `underBudget`; `summarize`/`nextGoal` likewise wrap their generation. The
+  mode routing (pinned → stateless, inherit → session-bound), consensus second opinion, and in-flight tracking all
+  check out; no bug found.
+- `7b416d5` (prior audit fixes): verdict parser inversion/string-awareness, stuck-pill heartbeat ordering,
+  bounded model resolution, live budget/token caps and relative `stateFile` were traced end-to-end; no concrete
+  failing trigger found. (One optional coverage note, not a bug: the live-budget helpers are tested directly but
+  the `runTask` poll-loop call is not.)
+- `8281b6a` beyond F1–F3: per-session `directoryFor` precedence, store visibility/restore isolation, `durable.seq`
+  guards, same-directory no-ops, verify-cache drop and per-directory commit rule are all consistent; learning-log
+  history not following a cross-repo move is a design choice, not a defect.
+
+### Verification (this workstream)
+
+- Focused: `bun test plugin.test.ts session-directory.test.ts` from `test/` — 46 pass / 0 fail after the fixes;
+  each of the three new tests was re-run against the unfixed source and failed as expected (43/45, 43/45, 13/14).
+- Full: `bun run check` — tsc clean, all suites green, dist/tui/docs freshness ok, invariant sweep ok, `check:spec`
+  ok; evidence in the transcript.
+- SPEC honesty gate: enforced marker re-counted in-commit; `docs/changelog.html` records each user-visible fix.
