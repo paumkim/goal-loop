@@ -4810,9 +4810,11 @@
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/audit-recent-changes-bugs-followup",
       "worktree": "worktrees/wt-audit-recent-changes-bugs-followup",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-21T11:02:47Z",
-      "submittedAt": "2026-11-21T11:17:28Z"
+      "submittedAt": "2026-11-21T11:17:28Z",
+      "mergedAt": "2026-11-21T11:55:46Z",
+      "mergedInto": "dev"
     },
     "evaluator-usage-limit-pause": {
       "agent": "build",
