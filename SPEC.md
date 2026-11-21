@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=142 tests=2173 -->
+<!-- spec-check files=142 tests=2176 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9762,7 +9762,7 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
 
 1. A delivered evaluator report is consumed as the verdict with no generation call; absent report uses the fallback.
 2. The digest shows `command: <text>` and structured output, never `{"command":…}`.
-3. `bun run check` green; marker re-counted in-commit (`tests=2173`); packed files unchanged at 142.
+3. `bun run check` green; marker re-counted in-commit (`tests=2176`); packed files unchanged at 142.
 
 ### Review fixes (same workstream)
 
@@ -9776,6 +9776,17 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
 - `EvaluatorPort.nativeVerdict` was declared but never implemented or called (the constructor dep is the real
   wiring); removed so the port contract is genuinely unchanged. `<condition>` in the enrichment block is escaped
   like `directive()` does, and tool-argument summaries now share one budget instead of capping each field.
+
+### Audit fixes (same workstream)
+
+- A failed or unreadable native report used to be returned as a legitimate `not_met`, starving both the generation
+  fallback and the quota pause (`evaluationFailed` never saw a 429). `verdictFromNativeReport` now **throws** on
+  `state: "error"` and unreadable bodies; `Evaluator.evaluate` degrades to the generation judge, which surfaces the
+  classified provider error.
+- Native reports had no turn association, so a report left unconsumed by a failed/superseded read could be replayed
+  as a later turn's verdict. `findNativeReport` now takes the current `turn`, ignores any report delivered before
+  that turn's `<marker>` steer (`metadata.source: "goal"`, `metadata.turn`), and rejects reports first observed in a
+  different turn via `seenNativeTurns` — a stale `met` can no longer advance the goal on outdated evidence.
 
 ### Honest limits
 

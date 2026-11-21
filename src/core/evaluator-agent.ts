@@ -1,3 +1,5 @@
+import { parseVerdict } from "./verdict.ts"
+
 /**
  * The evaluator as a first-class agent type shipped by the plugin.
  *
@@ -37,8 +39,22 @@ export function findNativeReport(
   messages: readonly unknown[],
   consumed: ReadonlySet<string>,
   pluginJudgeIDs: ReadonlySet<string>,
+  seenTurns: Map<string, number>,
+  turn: number,
 ): NativeReportCandidate | undefined {
+  // Context is chronological (newest last). The controller's per-turn steer carries metadata.turn, so every
+  // native report delivered for an *earlier* turn sits before it — reject those instead of replaying a stale
+  // verdict when a prior read failed or the worker did not delegate this turn.
+  let start = 0
   for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as Record<string, unknown> | undefined
+    const md = m?.metadata as Record<string, unknown> | undefined
+    if (m?.type === "synthetic" && md?.source === "goal" && md?.turn === turn) {
+      start = i + 1
+      break
+    }
+  }
+  for (let i = messages.length - 1; i >= start; i--) {
     const message = messages[i]
     if (!message || typeof message !== "object") continue
     const m = message as Record<string, unknown>
@@ -46,12 +62,28 @@ export function findNativeReport(
     const metadata = m.metadata as Record<string, unknown>
     if (typeof metadata.childID === "string" && pluginJudgeIDs.has(metadata.childID)) continue
     const key = String(m.id ?? (m.time as Record<string, unknown> | undefined)?.created ?? m.text)
+    // A report first observed in a different turn (e.g. after a goal switch) is stale even without a marker.
+    const known = seenTurns.get(key)
+    if (known !== undefined && known !== turn) continue
+    if (seenTurns.get(key) === undefined) seenTurns.set(key, turn)
     if (consumed.has(key)) continue
     const report = parseSubagentReport(String(m.text ?? ""))
     if (!report || report.state === "running") continue
     return { key, body: report.body, state: report.state }
   }
   return undefined
+}
+
+/**
+ * Turn a native report into the verdict. A failed or unreadable report *throws* so `Evaluator.evaluate` falls
+ * back to the generation judge (and a quota error can still be classified), rather than silently scoring a
+ * dead judge as a legitimate `not_met`.
+ */
+export function verdictFromNativeReport(candidate: NativeReportCandidate) {
+  if (candidate.state === "error") throw new Error(`evaluator subagent failed: ${candidate.body.slice(0, 500)}`)
+  const parsed = parseVerdict(candidate.body)
+  if (parsed) return parsed
+  throw new Error(`evaluator subagent returned an unreadable verdict: ${candidate.body.slice(0, 500)}`)
 }
 
 /**
@@ -77,6 +109,7 @@ export function parseSubagentReport(text: string): { body: string; state: string
  * by clause and emitting the verdict object are the per-turn prompt's job. The judge has no tools (deny-all
  * permissions plus the generate hook), so asking it to run commands would only produce an empty reply.
  */
+
 export const EVALUATOR_SYSTEM_PROMPT = `You are the Evaluator, a subagent shipped by the goal-loop plugin. Your only job is to decide whether the armed completion condition holds.
 
 You receive one evaluation request with the condition, harness facts, a rubric and the evidence transcript. Judge solely from that evidence. You have no tools and cannot run commands or read files.

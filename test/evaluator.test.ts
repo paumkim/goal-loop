@@ -260,6 +260,18 @@ describe("Evaluator.evaluate — native delegated subagent report", () => {
     expect(result.verdict).toBe("met")
     expect(calls.session).toHaveLength(1)
   })
+
+  test("the current turn is passed to the native report reader so stale reports can be rejected", async () => {
+    const { fake } = deps()
+    let seenTurn: number | undefined
+    const nativeVerdict = async (_sessionID: string, _signal: AbortSignal, turn: number) => {
+      seenTurn = turn
+      return undefined
+    }
+    const evaluator = new Evaluator({ ...fake, nativeVerdict }, sessionConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request({ turn: 7 }))
+    expect(seenTurn).toBe(7)
+  })
 })
 
 describe("Evaluator.evaluate — a native report still passes through consensus: 2", () => {
