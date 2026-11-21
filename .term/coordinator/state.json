@@ -4981,6 +4981,17 @@
       "submittedAt": "2026-11-21T22:54:08Z",
       "mergedAt": "2026-11-21T22:56:12Z",
       "mergedInto": "dev"
+    },
+    "fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md",
+      "branch": "wt/fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
+      "worktree": "worktrees/wt-fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
+      "status": "done",
+      "createdAt": "2026-11-21T23:09:32Z",
+      "submittedAt": "2026-11-21T23:30:42Z",
+      "mergedAt": "2026-11-21T23:33:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
