@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseModelRef, resolveConfig } from "../src/core/config.ts"
+import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
@@ -301,6 +301,45 @@ describe("config", () => {
     expect(resolveConfig({ evaluator: { model: "a/b" } }).evaluator.mode).toBe("independent")
     expect(resolveConfig({ evaluator: { mode: "independent" } }).evaluator.mode).toBe("session")
     expect(resolveConfig({ evaluator: { model: "a/b", mode: "session" } }).evaluator.mode).toBe("session")
+  })
+  test("inherit sentinel: all sources, aliases, case and whitespace", () => {
+    expect(isInheritModelValue("inherit")).toBe(true)
+    expect(isInheritModelValue(" INHERIT ")).toBe(true)
+    for (const alias of ["session", "parent", "current", "active"]) {
+      expect(isInheritModelValue(alias.toUpperCase())).toBe(true)
+    }
+    expect(isInheritModelValue("provider/model")).toBe(false)
+    expect(isInheritModelValue(undefined)).toBe(false)
+    expect(isInheritModelValue(42)).toBe(false)
+  })
+  test("inherit sentinel resolves to inheritModel, not a pinned model", () => {
+    const nested = resolveConfig({ evaluator: { model: "Inherit" } })
+    expect(nested.evaluator.inheritModel).toBe(true)
+    expect(nested.evaluator.model).toBeUndefined()
+    expect(nested.evaluator.mode).toBe("independent")
+    const env = resolveConfig({}, { OPENCODE_GOAL_MODEL: " parent " })
+    expect(env.evaluator.inheritModel).toBe(true)
+    expect(env.evaluator.model).toBeUndefined()
+    expect(env.evaluator.mode).toBe("independent")
+    const top = resolveConfig({ model: "CURRENT" })
+    expect(top.evaluator.inheritModel).toBe(true)
+    expect(top.evaluator.model).toBeUndefined()
+    expect(top.evaluator.mode).toBe("independent")
+    for (const alias of ["inherit", "session", "parent", "current", "active"]) {
+      expect(resolveConfig({ evaluator: { model: alias } }).evaluator.inheritModel).toBe(true)
+    }
+  })
+  test("inherit sentinel: explicit mode overrides, default stays byte-compatible", () => {
+    expect(resolveConfig({ evaluator: { model: "inherit", mode: "session" } }).evaluator.mode).toBe("session")
+    expect(resolveConfig({ evaluator: { model: "inherit", mode: "independent" } }).evaluator.mode).toBe("independent")
+    const plain = resolveConfig({})
+    expect(plain.evaluator.inheritModel).toBe(false)
+    expect(plain.evaluator.model).toBeUndefined()
+    expect(plain.evaluator.mode).toBe("session")
+    const pinned = resolveConfig({ evaluator: { model: "a/b" } })
+    expect(pinned.evaluator.inheritModel).toBe(false)
+    expect(pinned.evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(pinned.evaluator.mode).toBe("independent")
   })
   test("env overrides and clamping", () => {
     const config = resolveConfig({ maxTurns: 10, stallTurns: -4 }, { OPENCODE_GOAL_CHECKIN_MINUTES: "0", OPENCODE_GOAL_MODEL: "x/y" })

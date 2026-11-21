@@ -171,7 +171,7 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `model` | — | Fallback model for `evaluator.model` |
-| `evaluator.model` | session model | Independent model that evaluates goal completion |
+| `evaluator.model` | session model | Independent model that evaluates goal completion; set to `inherit` (aliases `session`/`parent`/`current`/`active`) to judge on the parent session's current model instead of a pinned one |
 | `evaluator.mode` | `auto` | Evaluator mode: `session`, `independent`, or `auto` |
 | `evaluator.maxTranscriptChars` | `20000` | Max transcript digest characters for evaluation |
 | `evaluator.maxOutputTokens` | `4096` | Max token budget for evaluator verdict |
