@@ -26,20 +26,24 @@ interface FakeDeps {
 
 function deps(overrides: Partial<FakeDeps> = {}) {
   const calls = { session: [] as string[], model: [] as string[], context: 0 }
-  const fake: FakeDeps = {
-    sessionGenerate: async (_sid, prompt) => {
+  const modelOverride = overrides.modelGenerate
+  // Individual tests keep the simple (model, prompt, signal) mock shape; the parent session ID the real host
+  // needs for the child's `parentID` is pinned here by the adapter.
+  const fake = {
+    sessionGenerate: overrides.sessionGenerate ?? (async (_sid: string, prompt: string) => {
       calls.session.push(prompt)
       return verdictJson("met")
-    },
-    modelGenerate: async (_model, prompt) => {
+    }),
+    modelGenerate: async (sessionID: string, model: unknown, prompt: string, signal: AbortSignal) => {
+      void sessionID
       calls.model.push(prompt)
-      return verdictJson("met")
+      return modelOverride ? modelOverride(model, prompt, signal) : verdictJson("met")
     },
-    context: async () => {
+    context: overrides.context ?? (async () => {
       calls.context++
       return [{ role: "user", content: "hello" }]
-    },
-    ...overrides,
+    }),
+    sessionModel: overrides.sessionModel,
   }
   return { fake, calls }
 }

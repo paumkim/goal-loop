@@ -375,9 +375,9 @@ export const isGoalNoteMessage = (message: unknown): boolean => {
 export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isGoalNoteMessage(m))
 
 /**
- * The evaluator's own voice echoed back into the transcript. `session.generate` appends the `<goal-evaluation>`
- * rubric prompt to the live session on every evaluation turn, and nothing removes it: it then rides model-bound
- * context on every later turn and floods the independent evaluator's transcript digest (~5 KB of self-talk per
+ * The evaluator's own voice echoed back into the transcript. Every judge child carries the `<goal-evaluation>`
+ * rubric prompt, and nothing removes it: it then rides model-bound context on every later turn and floods the
+ * evaluator's transcript digest (~5 KB of self-talk per
  * turn, ~27% of a saturated digest). The rubric explicitly discounts prior verdicts, so this text is not evidence —
  * it is the evaluator talking to itself. Use-and-forget: drop it from model-bound context once it has been answered.
  * Compaction checkpoints are history, never a live evaluation prompt, so they are never mistaken for one.
@@ -530,7 +530,7 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
   return lines.join("\n")
 }
 
-/** Appended to the live session transcript by `session.generate` (session evaluator). */
+/** Prompt for a session-mode evaluator child (its parent digest is embedded around it). */
 export function evaluateInSession(condition: string, input: EvaluationFacts, policy: CommitPolicy): string {
   return [
     `<goal-evaluation>`,
@@ -626,7 +626,7 @@ const SUMMARY_ASK = (input: LoopSummaryInput) => [
   historyBlock(input.history),
 ]
 
-/** Appended to the live session transcript by `session.generate` (session summarizer). */
+/** Prompt for a session-mode loop summarizer child. */
 export function summarizeInSession(input: LoopSummaryInput): string {
   return [
     `<goal-loop-summary>`,
@@ -670,7 +670,7 @@ const NEXT_GOAL_ASK = [
   `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
 ]
 
-/** Appended to the live session transcript by `session.generate` (session generator). */
+/** Prompt for a session-mode next-condition generator child. */
 export function nextGoalInSession(input: NextGoalInput): string {
   return [
     `<goal-loop-next>`,
