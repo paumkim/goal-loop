@@ -4959,6 +4959,17 @@
       "submittedAt": "2026-11-21T22:00:35Z",
       "mergedAt": "2026-11-21T22:02:40Z",
       "mergedInto": "dev"
+    },
+    "arm-plan-checking-and-foreign-verdict-guard": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/arm-plan-checking-and-foreign-verdict-guard",
+      "worktree": "worktrees/wt-arm-plan-checking-and-foreign-verdict-guard",
+      "status": "done",
+      "createdAt": "2026-11-21T22:36:43Z",
+      "submittedAt": "2026-11-21T22:38:10Z",
+      "mergedAt": "2026-11-21T22:40:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
