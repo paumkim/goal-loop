@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2067 -->
+<!-- spec-check files=74 tests=2068 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8526,7 +8526,7 @@ Two independent leaks, neither a sensing capability:
 - The 20,000 default is a behavior change for repos that did not set `maxTranscriptChars`; explicit settings still win,
   and the ≥4,000 floor is unchanged. It is deliberate, documented, and test-pinned, not a silent default swap.
 
-<!-- spec-check files=74 tests=2067 -->
+<!-- spec-check files=74 tests=2068 -->
 
 ## Workstream CXVI — resume an interrupted evaluation after restart (2026-11-21)
 
@@ -8573,4 +8573,4 @@ Status: specified first, then implemented and verified against this section. Obj
 - A user interrupt (`onUserPrompt` → `invalidate`) leaves the marker until the next execution's evaluation overwrites it; if no next turn arrives before a restart, the interrupted turn is re-evaluated from fresh evidence — the evaluator re-judges the visible transcript, so this is safe but may repeat a verdict.
 - No change to the evaluator's rubric, consensus, retry ladder, verifier gate, or the use-and-forget context strip from Workstream CXV.
 
-<!-- spec-check files=74 tests=2067 -->
+<!-- spec-check files=74 tests=2068 -->

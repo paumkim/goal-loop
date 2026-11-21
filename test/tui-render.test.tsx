@@ -340,6 +340,16 @@ describe("LoopSection edge paths", () => {
     expect(frame).toContain("2 turns since")
   })
 
+  test("the now row keeps the streak phrase together before the last-verdict suffix at 80 cells", async () => {
+    // A separate right-aligned "· last" flex sibling used to paint between "2x not met" and "in a
+    // row" once the status wrapped. Strip whitespace so a phrase broken only by a line wrap still
+    // reads contiguous, while an interleaved suffix (the old bug) cannot.
+    const frame = await render(() => <LoopSection goal={loopedGoal({ status: "paused", stall: 3, retries: 2, history: verdicts(["met", "not_met", "not_met"]) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />, 80, 40)
+    const flat = frame.replace(/\s+/g, "")
+    expect(flat).toContain("2xnotmetinarow")
+    expect(flat.indexOf("last")).toBeGreaterThan(flat.indexOf("2xnotmetinarow"))
+  })
+
   test("a verdict streak of two renders the streak suffix in the now row", async () => {
     const frame = await render(() => <LoopSection goal={loopedGoal({ history: verdicts(["met", "not_met", "not_met"]) })} theme={theme} elapsedMs={() => 1000 * 60 * 12} nowMs={() => now} />)
     expect(frame).toContain("2x not met in a row")
