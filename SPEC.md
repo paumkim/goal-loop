@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2145 -->
+<!-- spec-check files=141 tests=2150 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9178,3 +9178,26 @@ Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evalua
 2. Fix. `core/errors.ts` adds `isUsageLimitError(error)` — a deliberately narrow detector (429 status, "rate limit", "too many requests", "usage limit", "free usage"/"FreeUsageLimitError") so a generic error or a credit/auth failure is never mistaken for a self-clearing limit. `src/runtime/controller.ts · evaluationFailed` uses it: usage-limit errors skip the `maxRetries` exhaustion check, back off a fixed `PAUSE_RETRY_MS` (15m), notify `Evaluator paused (free usage limit — judge shares this session's model/quota); retrying in 15m`, and retry forever until the verdict lands. Transient evaluator errors (timeouts, connections, unreadable verdicts) and fatal ones keep their existing fast-backoff/`maxRetries` behavior byte-for-byte.
 3. Verified at the source/test layer: binary header extraction (above) confirms the evaluator already rides the session model/fingerprint; host log confirms the error class. Live gateway replay was not re-run (free quota is an account-level resource); the pause/resume cycle is exercised deterministically in `test/controller.test.ts` with a fake clock, including recovery to `achieved` after the window clears.
 4. Tests (`test/controller.test.ts`, +2): a `Free usage limit reached` evaluator error with `maxRetries: 1` stays `active`, pauses at 15m, never exhausts the cap across repeated hits, and succeeds after the window clears; `isUsageLimitError` is scoped narrowly (429 / rate/usage/free-usage true; generic error, credit balance, timeout false). Full `bun run check` green; marker re-counted in-commit.
+## Workstream CXXIII — repo-scoped .term artifacts always anchor at the git root (2026-11-21)
+
+Armed by the user's report: launching OpenCode from a subfolder (`Projects/goal-loop/docs/`) left a `.term/`
+in that subfolder instead of only at the project root. Reading the tree: the startup scaffold in `src/index.ts`
+already resolved the repo root via `findRepository`, but the two runtime `.term` writers did not — the learning
+journal (`GoalController.learningLogFile`) and repeated-failure diagnostics (`persistFailureDiagnosticArtifact`
+call site) built their paths from the session's directory verbatim, so a goal armed from `docs/` wrote
+`docs/.term/goal-loop/...`. The system had no single notion of "project root vs subfolder".
+
+1. Fix. `src/core/git.ts` exports `resolveProjectRoot(directory)`: `findRepository(directory)?.root` when the
+   directory sits inside a git repo, otherwise the resolved directory itself. This is the one place that
+   encodes the subfolder/root distinction.
+2. Wiring. `src/index.ts` bootstrap anchors `projectRoot` through `resolveProjectRoot` (same result as before,
+   now explicit). `src/runtime/controller.ts` resolves the learning-journal base and the diagnostic-artifact
+   directory through the same helper. Absolute configured paths are still returned untouched, and the
+   "goal follows the session across directory moves" behavior is preserved: a move to another checkout is
+   resolved against that checkout's own repo root.
+3. Tests. `test/git.test.ts` (+3) pins `resolveProjectRoot` for a nested subfolder, the repo root itself, and a
+   plain directory. `test/plugin.test.ts` (+1) boots the plugin with the host location set to `docs/` and asserts
+   the full scaffold appears only at the repo root. `test/learning-log.test.ts` (+1) arms a goal from `docs/` and
+   asserts the journal lands at the repo root, never in the subfolder. Counts 2143 → 2148, files unchanged at
+   141; marker re-counted and `docs/changelog.html` behavior-change note added in-commit.
+4. `bun run check` green: tsc clean, 2148 pass / 0 fail, dist/tui/docs freshness ok, invariant-sweep ok.

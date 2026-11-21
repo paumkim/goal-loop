@@ -35,6 +35,7 @@ import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, readLearningEntriesTail, type LearningEntry } from "../core/learning-log.ts"
 import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
 import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
+import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
 import {
@@ -1479,7 +1480,8 @@ export class GoalController {
       if (detected) {
         const escalation = failureEscalationReason(detected)
         const diagnostic = persistFailureDiagnosticArtifact({
-          directory: this.directoryFor(sessionID),
+          // Same anchoring rule as the learning journal: repo root for a subfolder, directory itself outside a repo.
+          directory: resolveProjectRoot(this.directoryFor(sessionID)),
           detected,
           escalationReason: escalation,
           info: { ...verdictEntry, verdict: "not_met" as const },
@@ -2761,7 +2763,9 @@ export class GoalController {
     if (!base) return undefined
     // Avoid creating literal "C:" directories on POSIX when tests pass Windows-style fixture paths.
     if (isWindowsDrivePathOnPosix(base)) return undefined
-    return join(base, path)
+    // Anchor the journal at the repository root so a goal armed from a subfolder never leaves a
+    // .term/ in that subfolder. Outside a repo, resolveProjectRoot returns `base` unchanged.
+    return join(resolveProjectRoot(base), path)
   }
 
   /**

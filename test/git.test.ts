@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
-import { branchExists, currentBranch, detectCoordinator, findRepository, headSha, resolveCommitPolicy } from "../src/core/git.ts"
+import { branchExists, currentBranch, detectCoordinator, findRepository, headSha, resolveCommitPolicy, resolveProjectRoot } from "../src/core/git.ts"
 
 /** A throwaway directory that is removed when the test ends. */
 function scratch(): string {
@@ -41,6 +41,26 @@ describe("findRepository", () => {
     mkdirSync(worktree, { recursive: true })
     writeFileSync(join(worktree, ".git"), `gitdir: ${real}\n`)
     expect(findRepository(worktree)?.gitDir).toBe(real)
+  })
+})
+
+describe("resolveProjectRoot", () => {
+  test("a subfolder resolves to the repository root, never the subfolder", () => {
+    const root = repo(["dev"], "dev")
+    const docs = join(root, "docs")
+    mkdirSync(docs, { recursive: true })
+    const deep = join(docs, "guides")
+    mkdirSync(deep, { recursive: true })
+    expect(resolveProjectRoot(docs)).toBe(root)
+    expect(resolveProjectRoot(deep)).toBe(root)
+  })
+  test("the repository root resolves to itself", () => {
+    const root = repo(["dev"], "dev")
+    expect(resolveProjectRoot(root)).toBe(root)
+  })
+  test("a directory outside any repository resolves to itself", () => {
+    const plain = scratch()
+    expect(resolveProjectRoot(plain)).toBe(plain)
   })
 })
 
