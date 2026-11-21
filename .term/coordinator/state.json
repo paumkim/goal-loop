@@ -4921,6 +4921,22 @@
       "submittedAt": "2026-11-21T18:34:22Z",
       "mergedAt": "2026-11-21T18:36:26Z",
       "mergedInto": "dev"
+    },
+    "evaluator-summary-digest-fix": {
+      "agent": "primary",
+      "paths": "src/core/transcript.ts,src/index.ts,src/core/evaluator-agent.ts,src/core/prompts.ts,test/plugin.test.ts,SPEC.md,docs/config.html",
+      "branch": "wt/evaluator-summary-digest-fix",
+      "worktree": "worktrees/wt-evaluator-summary-digest-fix",
+      "status": "done",
+      "createdAt": "2026-11-21T18:52:00Z",
+      "submittedAt": "2026-11-21T19:11:18Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-21T19:11:18Z",
+      "forcedScopeFiles": [
+        "test/core.test.ts"
+      ],
+      "mergedAt": "2026-11-21T19:13:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
