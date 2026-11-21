@@ -9044,4 +9044,27 @@ behavioral gain.
 
 ### Verification
 
-(recorded after the audit — see below)
+- `bun run check` exit 0 in the worktree at this HEAD: `tsc --noEmit` clean; `cd test && bun test` → **2126 pass /
+  0 fail** across 91 files (29 snapshots, 199,128 expect() calls), up from the 2119-pass baseline (+7 regression
+  tests: 2 verdict, 1 controller, 1 evaluator, 3 prompter-driver; the prompter-config assertion was added to an
+  existing test); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed;
+  `invariant-sweep` ok (SPEC.md + `docs/changelog.html` both in the change set for the `src/core`/`src/runtime`
+  behavior changes); `check:spec` ok (141 files, 2126 tests match SPEC.md). The enforced first marker was
+  re-counted in-commit via `spec-check --write` (141/2119 → 141/2126).
+- Fix-then-pin discrimination: with the fixes absent, the two verdict cases returned `met`/`undefined` instead
+  of `not_met`; the controller case held `waiting === false`; the evaluator case returned `HUNG` after 1s; the
+  prompter-driver suite failed at import (helpers absent); the prompter-config case returned `"journal.jsonl"`.
+  With all fixes present every targeted suite passes, and the full 267-test controller+loop and 39-test
+  evaluator suites stayed green.
+- Live reproductions before fixing: `bun /tmp/opencode/verify-verdict.ts` printed
+  `{"verdict":"met","reason":""}` for the outer-`not_met` input and `undefined` for the embedded-token input;
+  after fixing the same script printed `not_met` for both.
+- Honest limits. (a) The prompter caps are now enforced at the driver's poll boundary (per the live goal record)
+  and fail closed to `failed` — this is polling-level enforcement, not a hard kill of an in-flight provider call;
+  a single generation between polls can still overshoot before the next poll observes it. (b) The inherited-model
+  timeout degrades to the session evaluator rather than surfacing `EvaluationTimeoutError` for the lookup itself,
+  by design ("inherit never hard-fails"); it is bounded and warned, not silent. (c) The heartbeat fix was verified
+  at the unit layer with the fake clock; no live terminal was driven this pass. (d) No config option, record
+  schema, TUI bundle or prompt changed; no test was weakened or deleted.
+
+<!-- spec-check files=141 tests=2126 -->
