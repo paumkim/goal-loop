@@ -119,16 +119,21 @@ export class Evaluator implements EvaluatorPort {
     return this.ask((text, s) => this.deps.modelGenerate(model, text, s), prompt, signal)
   }
 
+  /** Track a session's in-flight generative work so maxTokens throttling can see contention. */
+  private async trackInflight<T>(sessionID: string, run: () => Promise<T>): Promise<T> {
+    this.inflight.set(sessionID, (this.inflight.get(sessionID) ?? 0) + 1)
+    try {
+      return await run()
+    } finally {
+      const left = (this.inflight.get(sessionID) ?? 1) - 1
+      if (left > 0) this.inflight.set(sessionID, left)
+      else this.inflight.delete(sessionID)
+    }
+  }
+
   private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
     const prompt = evaluateInSession(request.condition, facts, this.commit)
-    this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
-    try {
-      return await this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal)
-    } finally {
-      const left = (this.inflight.get(request.sessionID) ?? 1) - 1
-      if (left > 0) this.inflight.set(request.sessionID, left)
-      else this.inflight.delete(request.sessionID)
-    }
+    return this.trackInflight(request.sessionID, () => this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal))
   }
 
   /** Loop step: compact one achieved iteration into a machine-consumable block. */
@@ -146,15 +151,10 @@ export class Evaluator implements EvaluatorPort {
         this.log.warn("independent summarizer failed; falling back to session summarizer", { error: String(error) })
       }
     }
-    this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
-    try {
+    return this.trackInflight(request.sessionID, async () => {
       const text = await this.underBudget((s) => this.deps.sessionGenerate(request.sessionID, summarizeInSession(request), s), signal, "summary")
       return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
-    } finally {
-      const left = (this.inflight.get(request.sessionID) ?? 1) - 1
-      if (left > 0) this.inflight.set(request.sessionID, left)
-      else this.inflight.delete(request.sessionID)
-    }
+    })
   }
 
   /** Loop step: generate the next condition (or LOOP_COMPLETE). Returns the raw reply, trimmed. */
@@ -170,15 +170,10 @@ export class Evaluator implements EvaluatorPort {
         this.log.warn("independent next-goal generator failed; falling back to session generator", { error: String(error) })
       }
     }
-    this.inflight.set(request.sessionID, (this.inflight.get(request.sessionID) ?? 0) + 1)
-    try {
+    return this.trackInflight(request.sessionID, async () => {
       const text = await this.underBudget((s) => this.deps.sessionGenerate(request.sessionID, nextGoalInSession(request), s), signal, "next-condition")
       return text.trim().slice(0, 4_000)
-    } finally {
-      const left = (this.inflight.get(request.sessionID) ?? 1) - 1
-      if (left > 0) this.inflight.set(request.sessionID, left)
-      else this.inflight.delete(request.sessionID)
-    }
+    })
   }
 
   /** Hard budget per the documented formula: at most `max(200, tokens) * 4` characters, single trailing ellipsis when cut. */
