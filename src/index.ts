@@ -12,10 +12,9 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX, findNativeReport } from "./core/evaluator-agent.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX, findNativeReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { parseVerdict } from "./core/verdict.ts"
 import { renderTranscript } from "./core/transcript.ts"
 import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
@@ -345,15 +344,13 @@ export default Plugin.define({
     // not re-arm from the same report). `findNativeReport` excludes this plugin's own fallback-judge reports so a
     // prior turn's verdict is never replayed as a fresh one.
     const consumedReports = new Set<string>()
-    const nativeVerdict = async (sessionID: string, signal: AbortSignal) => {
+    const seenNativeTurns = new Map<string, number>()
+    const nativeVerdict = async (sessionID: string, signal: AbortSignal, turn: number) => {
       const messages = await evaluatorContext(sessionID, signal)
-      const candidate = findNativeReport(messages, consumedReports, pluginJudgeIDs)
+      const candidate = findNativeReport(messages, consumedReports, pluginJudgeIDs, seenNativeTurns, turn)
       if (!candidate) return undefined
       consumedReports.add(candidate.key)
-      if (candidate.state === "error") return { verdict: "not_met" as const, reason: `evaluator subagent failed: ${candidate.body.slice(0, 200)}` }
-      const parsed = parseVerdict(candidate.body)
-      if (parsed) return parsed
-      return { verdict: "not_met" as const, reason: `evaluator subagent returned an unreadable verdict: ${candidate.body.slice(0, 200)}` }
+      return verdictFromNativeReport(candidate)
     }
 
     // Resolve per generation so a /model switch mid-goal is followed on the next verdict.

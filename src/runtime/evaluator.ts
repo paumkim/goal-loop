@@ -21,7 +21,7 @@ interface EvaluatorDeps {
    * The verdict delivered by a worker-delegated `evaluator` subagent, if one arrived for this turn. Native
    * delegation is the preferred (visible) judge path; when no report exists the generation paths below run.
    */
-  nativeVerdict?(sessionID: string, signal: AbortSignal): Promise<EvaluationResult | undefined>
+  nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
   /** Generation on a specific model. The host runs one judge generation in a fresh child of `sessionID`. */
@@ -104,7 +104,7 @@ export class Evaluator implements EvaluatorPort {
     let primary: { result: EvaluationResult; via: "session" | "independent" } | undefined
     if (this.deps.nativeVerdict) {
       try {
-        const native = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s), signal, "native verdict")
+        const native = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
         if (native) primary = { result: native, via: "session" }
       } catch (error) {
         if (signal.aborted) throw error

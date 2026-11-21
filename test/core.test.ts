@@ -15,7 +15,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
-import { findNativeReport, isEvaluatorReport, parseSubagentReport } from "../src/core/evaluator-agent.ts"
+import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
@@ -938,27 +938,46 @@ describe("native evaluator delegation", () => {
     text: `<subagent sessionID="${childID}" state="${state}" description="evaluator">\n{"verdict":"${verdict}","reason":"r"}\n</subagent>`,
     metadata: { source: "subagent", childID, agent: "Evaluator", state },
   })
+  const marker = (turn: number) => ({ id: `kickoff_${turn}`, type: "synthetic", metadata: { source: "goal", goal: "g1", turn } })
+  const pick = (messages: unknown[], turn = 1, consumed = new Set<string>(), pluginJudgeIDs = new Set<string>(), seenTurns = new Map<string, number>()) =>
+    findNativeReport(messages, consumed, pluginJudgeIDs, seenTurns, turn)
 
   test("the newest report is picked once; a consumed report is never replayed", () => {
     const messages = [report("a", "not_met"), report("b", "met")]
     const consumed = new Set<string>()
-    const pluginJudgeIDs = new Set<string>()
-    expect(findNativeReport(messages, consumed, pluginJudgeIDs)?.body).toContain('"met"')
+    expect(pick(messages, 1, consumed)?.body).toContain('"met"')
     consumed.add("b")
-    expect(findNativeReport(messages, consumed, pluginJudgeIDs)?.body).toContain('"not_met"')
+    expect(pick(messages, 1, consumed)?.body).toContain('"not_met"')
   })
 
   test("plugin fallback-judge reports and still-running reports are never read as verdicts", () => {
     const native = report("c", "met")
     const fallback = report("judge", "not_met", "plugin_judge_1")
     const running = report("d", "met", "ses_d", "running")
-    const pluginJudgeIDs = new Set(["plugin_judge_1"])
-    expect(findNativeReport([fallback, running, native], new Set(), pluginJudgeIDs)).toEqual({
+    expect(pick([fallback, running, native], 1, new Set(), new Set(["plugin_judge_1"]))).toEqual({
       key: "c",
       body: '{"verdict":"met","reason":"r"}',
       state: "completed",
     })
-    expect(findNativeReport([fallback], new Set(), pluginJudgeIDs)).toBeUndefined()
+    expect(pick([fallback], 1, new Set(), new Set(["plugin_judge_1"]))).toBeUndefined()
+  })
+
+  test("a report delivered before this turn's kickoff is stale and never replayed", () => {
+    const stale = report("old", "met")
+    const fresh = report("new", "not_met")
+    const messages = [stale, marker(2), fresh]
+    // turn 2: only the report after the marker is eligible, even though the stale met is unconsumed.
+    expect(pick(messages, 2)?.key).toBe("new")
+    // With no marker in context (e.g. the first turn), first-observed-turn is the fallback guard.
+    const seen = new Map([["old", 1]])
+    expect(pick([stale], 2, new Set(), new Set(), seen)).toBeUndefined()
+    expect(pick([stale], 2, new Set(), new Set(), new Map())?.key).toBe("old")
+  })
+
+  test("a failed or unreadable native report throws so the generation judge can take over", () => {
+    expect(() => verdictFromNativeReport({ key: "x", body: "Free usage limit reached (429)", state: "error" })).toThrow(/evaluator subagent failed: Free usage limit reached/)
+    expect(() => verdictFromNativeReport({ key: "x", body: "no verdict here", state: "completed" })).toThrow(/unreadable verdict/)
+    expect(verdictFromNativeReport({ key: "x", body: '{"verdict":"met","reason":"ok"}', state: "completed" })).toEqual({ verdict: "met", reason: "ok" })
   })
 
   test("a tool call digest shows a readable command, not the raw input JSON", () => {
