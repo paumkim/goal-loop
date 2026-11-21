@@ -107,6 +107,11 @@ interface Runtime {
   abort?: AbortController
   timer?: unknown
   deferredSince?: number
+  /** True while the main session is heartbeating (an execution started or a tool was called): the pill paints
+   *  `active`, not `waiting`, while the agent is actually working — even when a background deferral is pending. */
+  heartbeating?: boolean
+  /** Last `waiting` value pushed to the TUI; the heartbeat sync emits only when the computed paint actually flips. */
+  waitingPaint?: boolean
   lastCheckinAt?: number
   /** Backoff counter for retrying a failed loop-planner step. */
   loopRetries?: number
@@ -350,8 +355,11 @@ export class GoalController {
       elapsedMs: (record.endedAt ?? this.deps.clock.now()) - record.startedAt,
       evaluating: runtime?.evaluating ?? false,
       // Runtime truth wins when present (fresh); the persisted `waitingSince` covers restored waits whose
-      // runtime was rebuilt empty by a restart/plugin reload.
-      waiting: runtime?.deferredSince !== undefined || record.waitingSince !== undefined,
+      // runtime was rebuilt empty by a restart/plugin reload. A deferral holds the *evaluation*, but the pill
+      // follows the session's heartbeats: while the main agent is working (execution/tool events) it reads
+      // `active`, flipping to `waiting` only once the main session goes quiet with the deferral still pending.
+      // The event handlers push that flip as an immediate `changed` event — no 15s mirror tick needed.
+      waiting: runtime?.heartbeating !== true && (runtime?.deferredSince !== undefined || record.waitingSince !== undefined),
       // Arm→execution transition visibility (Workstream LX): true from the moment the kickoff steer is
       // dispatched until the host reports the execution started. Absence on records adopted before this
       // field landed — never coerced. Only meaningful on a live record; terminal/paused records say false.
@@ -787,6 +795,7 @@ export class GoalController {
     // and every tool event before the first execution-end would otherwise be dropped.
     const runtime = this.goals.has(sessionID) ? this.runtime(sessionID) : this.runtimes.get(sessionID)
     if (!runtime) return
+    runtime.heartbeating = true
     const wasQueued = runtime.awaitingExecution
     this.invalidate(runtime)
     runtime.toolCalls = 0
@@ -798,6 +807,8 @@ export class GoalController {
       const live = this.goals.get(sessionID)
       if (live) this.emit(live)
     }
+    // The session is working again: flip `waiting` -> `active` now, not at the next execution boundary.
+    this.syncWaitingPaint(sessionID)
   }
 
   onToolCalled(sessionID: string) {
@@ -807,6 +818,10 @@ export class GoalController {
     runtime.toolCalls++
     // Counted eagerly so a turn whose evaluation is later superseded or dropped still counts as work for the loop.
     runtime.iterationToolCalls++
+    // A tool call is a heartbeat too: even if the execution-started event was missed (restart/reconnect), the
+    // pill flips back to `active` immediately. syncWaitingPaint dedupes a turn's many calls into one event.
+    runtime.heartbeating = true
+    this.syncWaitingPaint(sessionID)
   }
 
   /** A user prompt was admitted (not synthetic). Resumes a paused goal and re-arms idle check-ins. */
@@ -857,6 +872,10 @@ export class GoalController {
       this.deps.log.info("goal evaluation straggler dropped", { sessionID, awaitingExecution: runtime.awaitingExecution, dropStragglerSucceeded: runtime.dropStragglerSucceeded })
       return
     }
+    // The main session went quiet: if a background deferral is still pending, the pill flips straight back
+    // to `waiting` on this event — it no longer rides a check-in or the 15s mirror tick.
+    runtime.heartbeating = false
+    this.syncWaitingPaint(sessionID)
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0
@@ -1028,6 +1047,7 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
+    runtime.heartbeating = false
     this.invalidate(runtime)
     this.clearDeferred(runtime, record)
     runtime.toolCalls = 0
@@ -1041,6 +1061,7 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
+    runtime.heartbeating = false
     // A host 'shutdown' interrupt is the graceful-cancel twin of dispose(): keep the resume breadcrumb.
     this.invalidate(runtime, reason === "shutdown")
     this.clearDeferred(runtime, record)
@@ -1109,7 +1130,12 @@ export class GoalController {
     const runtime = this.runtime(record.sessionID)
     // Revive the persisted deferral so a restart/plugin reload mid-wait paints `waiting` again (and the
     // drain path, check-in math and `waitedMs` all see the original start) instead of forgetting the wait.
-    if (record.waitingSince !== undefined) runtime.deferredSince = record.waitingSince
+    if (record.waitingSince !== undefined) {
+      runtime.deferredSince = record.waitingSince
+      // The mirror already paints `waiting`; seed the dedupe cache so the first post-reload heartbeat pushes
+      // the flip to `active` as an immediate `changed` event instead of waiting for a mirror tick.
+      runtime.waitingPaint = true
+    }
     // Adoption normalizes in memory only; no commit here. Writing the stored record on a read/adopt path is
     // what zeroed turns/baseline for other processes sharing the storage; the next real commit persists the
     // normalized state (the record's JSON differs from the no-op cache marker anyway, since adopt mutates
@@ -2690,7 +2716,7 @@ export class GoalController {
   private runtime(sessionID: string): Runtime {
     let runtime = this.runtimes.get(sessionID)
     if (!runtime) {
-      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false }
+      runtime = { sessionID, epoch: 0, toolCalls: 0, iterationToolCalls: 0, carriedToolCalls: 0, evaluating: false, awaitingExecution: false, dropStragglerSucceeded: false, iterationDeferred: false, heartbeating: false, waitingPaint: false }
       this.runtimes.set(sessionID, runtime)
     }
     return runtime
@@ -2710,6 +2736,8 @@ export class GoalController {
       awaitingExecution: false,
       dropStragglerSucceeded: false,
       iterationDeferred: false,
+      heartbeating: previous?.heartbeating ?? false,
+      waitingPaint: false,
     })
   }
 
@@ -2798,10 +2826,32 @@ export class GoalController {
     })
   }
 
+  /**
+   * Push the `waiting` ⇄ `active` pill flip as an immediate `changed` event on session heartbeats. The
+   * deferral itself is untouched — evaluation still waits for background work to drain — but the indicator
+   * follows the main session: an execution start or a tool call paints `active` at once, and the turn end
+   * paints `waiting` again only while the deferral is still pending. `waitingPaint` dedupes a turn's many
+   * tool calls into one event; `emit()` re-syncs it so every emission path (commit, clearDeferred, verdict)
+   * keeps the cache honest.
+   */
+  private syncWaitingPaint(sessionID: string): void {
+    const record = this.goals.get(sessionID)
+    if (!record || record.status !== "active") return
+    const runtime = this.runtimes.get(sessionID)
+    const deferred = runtime?.deferredSince !== undefined || record.waitingSince !== undefined
+    const waiting = deferred && runtime?.heartbeating !== true
+    if (runtime?.waitingPaint === waiting) return
+    if (runtime) runtime.waitingPaint = waiting
+    this.emit(record)
+  }
+
   private emit(record: GoalRecord) {
     if (this.goals.get(record.sessionID) !== record) return
-    const figures = this.runtimes.get(record.sessionID)?.figures
-    this.deps.emitter.changed(record.sessionID, this.snapshot(record.sessionID, figures?.spend, figures?.contextSize))
+    const runtime = this.runtimes.get(record.sessionID)
+    const figures = runtime?.figures
+    const snapshot = this.snapshot(record.sessionID, figures?.spend, figures?.contextSize)
+    if (runtime && snapshot) runtime.waitingPaint = snapshot.waiting
+    this.deps.emitter.changed(record.sessionID, snapshot)
   }
 
   private notify(sessionID: string, kind: NoticeKind, level: NoticeLevel, title: string, body: string) {

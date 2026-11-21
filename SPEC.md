@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2098 -->
+<!-- spec-check files=141 tests=2101 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8643,3 +8643,58 @@ token and reason were present in the reply; the parser, not the judgment, was th
 **Honest limits.** A live headless `/goal` run was not executed here (no model credits spent); the driver is adapted from goal-loop's proven `scripts/e2e.ts` pattern and is type-checked against `@opencode/client@2.3.2`. The original library directory is left untouched and can be archived once this copy is confirmed. No `/prompter` slash command is registered — this integration ships the CLI and bundled prompts; a session-side command can be added later if wanted.
 
 <!-- spec-check files=141 tests=2098 -->
+
+## Workstream: the waiting pill flips back to active on session heartbeats, instantly (2026-11-21)
+
+**Goal / screenshot.** `Screenshot_20261121_021145.png`: the ambient pill read `goal waiting · 4m` while the
+footer showed `↓ 1 subagent` and the main session was visibly working. The user: "the waiting is perfect but
+active flipping back is delayed — it has to be instant, changed based on the heartbeats of what is going on in
+the session." Workstream XXVII had already fixed the inverse (a deferral lost across a restart painted `active`
+while the user waited). This pass fixes the remaining half: a deferral that is still pending kept painting
+`waiting` even while the main session was actively doing work, and the flip back rode an execution boundary or
+the 15s mirror tick instead of the session's own activity.
+
+**Interpretation.** `waiting` is a derived flag: `deferredSince` (runtime) or `waitingSince` (persisted twin)
+means an evaluation was held back because background work was running. That is correct when the main session is
+idle. But the controller had no signal for "the main session itself is working again" — `onBackgroundDrained`
+explicitly skips while the session is `running`, so a long turn with a subagent still in flight sat on `waiting`
+until the turn ended. The deferral was doing its job (holding evaluation); only the *indicator* was wrong. The
+fix separates the two: the deferral still governs evaluation/check-ins, while the paint follows the session's
+heartbeats.
+
+**Change** (`src/runtime/controller.ts` only — no TUI, render or record-schema change):
+1. `Runtime` gains two volatile fields: `heartbeating` (set by `onExecutionStarted` and `onToolCalled`, cleared
+   by the execution-end handlers) and `waitingPaint` (the last `waiting` value pushed to the TUI, a dedupe
+   cache). Both are memory-only; `waitingSince` on the persisted record is untouched.
+2. `snapshotRecord` computes `waiting` as `heartbeating !== true && (deferredSince !== undefined || waitingSince !== undefined)`,
+   i.e. a pending deferral paints `waiting` only while the main session is quiet. Tool calls count as heartbeats
+   too, so a missed `execution.started` after a restart/reconnect cannot leave the pill stuck.
+3. New single choke point `syncWaitingPaint(sessionID)` compares the computed paint with `waitingPaint` and
+   emits a `changed` event only on a real flip. It runs on every heartbeat (execution start, tool call) and on
+   the turn end (`onExecutionSucceeded` after `running.delete`), so the flip reaches the TUI in the same event —
+   no 15s tick, no check-in. `emit()` re-syncs `waitingPaint` from the snapshot it actually sends, keeping every
+   other emission path (commit, clearDeferred, verdict) honest. A restored wait seeds `waitingPaint = true` on
+   adoption so the first post-reload heartbeat pushes the flip instead of waiting for a mirror re-read.
+4. Dedupe means a turn with hundreds of tool calls costs one extra `changed` event, not one per call. The
+   evaluation deferral, carried tool counts, check-in backoff, drain path and persisted `waitingSince` semantics
+   are unchanged; only the paint and its push timing moved.
+
+**Evidence (fresh at this HEAD).** `bun test` from `test/`: **2101 pass / 0 fail** (was 2098; +3 in
+`test/controller.test.ts`, no existing test weakened) — the new cases pin (a) the full `waiting → active →
+waiting` cycle driven purely by execution/tool events with zero clock advance, one deduped `changed` event per
+flip, the deferral and `waitingSince` intact, and no verdict consumed; (b) a tool call alone flipping the pill
+after a missed start event; (c) a restored wait flipping on the first heartbeat with an immediate `changed`
+event. `bunx tsc --noEmit` clean; `bun run check` green (incl. `check:spec`, `docs:check`, `check:tui`).
+`npm pack --dry-run --json` still 141 files (no new shipped file). SPEC marker re-stamped in this commit:
+`files=141 tests=2101`.
+
+**Honest limits.** (a) The heartbeat signal is process-local and event-fed, like the rest of the runtime: a
+session whose every start/tool event is dropped by the host bus still converges via the existing mirror/re-pull
+tick — this pass makes the normal event path instant, it does not add a new transport. (b) Verified at the unit
+layer (snapshot + `changed` emissions with the fake clock); no live terminal was driven this pass, so the
+instant flip is proven at the contract boundary the HUD paints from, not by a pixel capture. (c) The pill shows
+`active` while the main session works even though evaluation is still deferred; that is intentional — waiting
+means "nothing is happening in the session but background work", not "a judge is pending". (d) No config,
+prompt, HUD renderer, persisted record shape or TUI bundle changed.
+
+<!-- spec-check files=141 tests=2101 -->

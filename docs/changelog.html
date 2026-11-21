@@ -68,3 +68,4 @@
 <!-- behavior-change: CXI transcript digest head/headTail cuts never split a UTF-16 surrogate pair — astral evidence stays whole and no lone surrogate leaks into the evaluator corpus -->
 <!-- behavior-change: CXII evaluator context stays lean across goal versions — learning journal tail-read, one bounded ~900-char learnings block per steer, and 400-char cap on injected evaluator reasons -->
 <!-- behavior-change: CXIII coordinator semantic/drift guards — merge preflight warns on shared-module leases, a post-submit worktree HEAD mismatch fails the merge, and a post-merge health line reports the landed tree; last backlog item closed -->
+<!-- behavior-change: the waiting pill flips back to active instantly on session heartbeats (execution/tool events) while the background deferral still holds evaluation; deduped changed-event push via syncWaitingPaint -->
