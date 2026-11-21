@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=73 tests=1997 -->
+<!-- spec-check files=141 tests=2155 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1240,7 +1240,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
   Proposed fix: rewrite the comment.
   Resolution: Workstream AN — comment rewritten to match the never-pause policy.
-- **A-14 (low) — `src/runtime/events.ts:17` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
+- **A-14 (low) — `src/runtime/events.ts:16` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
   payloads are only destructured defensively at read sites. Proposed fix: `Record<string, unknown>` + a tiny guard helper (or keep `any`
   contained to this file and document).
   Resolution: Workstream AO — `Record<string, unknown>` + `asRecord` guard; closure-narrowing gap fixed.
@@ -6135,7 +6135,7 @@ Interpretation of the armed condition: three read-only reviews (core, runtime, T
 639. src/core/config.ts — an empty or whitespace-only `OPENCODE_GOAL_MODEL` (or `evaluator.model`/`model: ""`) reads as unset and falls back down the chain, the same posture `str`/`int` already take — a stray empty env var no longer silently downgrades the evaluator from independent to session mode. A non-empty invalid value still yields no model (unchanged).
 640. src/core/dossier-attest.ts — `attestSealedDossier` deduplicates appendix rows by sha (first spelling kept) before counting and reporting: a hand-assembled or tampered file repeating a sha no longer double-counts it in `unique`, `sealedClean`, `held`, `regressed`, `unknown` and `wasNotClean`. The exporters never produce such a file; the parser is the boundary, so the count is honest at the boundary.
 641. Refutation by verification, not by argument: the reviewer's "chatty stderr wedges the verification gate for 10 minutes" was NOT reproducible on this host — Bun's spawn pipes buffer eagerly and the pre-fix ordering completes against 8 MB of unread stderr — the fix lands as a hardening of the already-shipped concurrent-drain guidance, not as a demonstrated local deadlock. The reviewer's `attestation`/`unique` reading (rows counted per mention) was correct and is fixed per the interface's own "unique shas" contract; the reviewer's `headTail` mis-read of `slice(-0)` was correct and is confirmed by the pinned test.
-642. Docs untouched — `docs/`, `README.md` and `RELEASE-CHECKLIST.md` remain under the stale `github-single-channel` lease. The two source hunks the docs line references point into (`src/core/transcript.ts:91`, `src/core/config.ts:162`) are net-zero line edits, so `docs/core.html` and `docs/config.html` stay accurate; the docs-line-refs suite passes unchanged.
+642. Docs untouched — `docs/`, `README.md` and `RELEASE-CHECKLIST.md` remain under the stale `github-single-channel` lease. The two source hunks the docs line references point into (`src/core/transcript.ts:91`, `src/core/config.ts:176`) are net-zero line edits, so `docs/core.html` and `docs/config.html` stay accurate; the docs-line-refs suite passes unchanged.
 643. Counts: no file created or removed (60 shipped files unchanged); 19 regression tests added across twelve suites (store, history, compactor, git, goal-limits, controller, loop, core, dossier, dossier.test, dossier-attest, controller/event-router); suite 1354 → 1373 pass, 0 fail (56 files). `bun x tsc --noEmit` clean. Marker re-counted below and at the first marker.
 644. Honest limits: three reviewers worked read-only (no shell); every finding was re-derived at the seam before editing, but none of the fixes is exercised against a live OpenCode host or a real SHA-256 repository — the SHA-256 case is pinned by a synthetic `packed-refs` fixture, the restore/compaction races by unit-level interleaving, the malformed-record cases by hand-assembled storage entries. The verifier concurrent-drain fix is verified against Bun's documented contract and a live probe of both orderings, not against a host that backpressures pipes. The status-less `shell.updated` handling is defensive only — no evidence the host emits one. The `copied` acknowledgment fix and the `ensure()` marker release are headless-unverifiable against a real TUI. The final-spend-at-shutdown fix is pinned with a parked-usage interleaving; a host that resolves usage synchronously at shutdown never needed it.
 
@@ -7963,3 +7963,1431 @@ test/learning-log.test.ts test/wire.test.ts` → **73 pass / 0 fail** (3 files, 
 Honest limits. Internal refactor/unification only; guard semantics unchanged for supported paths and fixture cases. Persisted
 formats, evaluator/rubric, commit/verify gates, and TUI behavior unchanged.
 <!-- spec-check files=73 tests=1998 -->
+
+## Workstream CV — structured outcome telemetry over the learning journal (2026-11-20)
+
+Status: specified first (fuzzy-request rule), then implemented and verified against this section.
+
+### Interpretation
+
+`docs/improvement-backlog.json` carries an open item, `structured-outcome-telemetry`: history/spend/verdicts and
+the learning journal are retained, but the system never aggregates them into a reusable signal about *which
+interventions work*. This workstream closes that gap with a first concrete slice: a pure module that reads the
+existing JSONL learning journal (`.term/goal-loop/learnings.jsonl`) and derives an aggregate outcome-telemetry
+summary — failure taxonomy, time-to-green, recurring themes, and terminal-outcome mix — that is injected into
+the existing learnings channel used by continuation, retry, check-in, and next-goal planning prompts.
+
+No new persisted format is introduced: telemetry is derived on read from records the runtime already writes.
+No new evaluator port field is introduced: the summary is folded into the single `learnings` string already
+threaded through `Prompt.*` and `NextGoalInput.recentLearnings`, so every existing prompt path benefits without
+fake/evaluator signature churn.
+
+### Acceptance criteria
+
+1. **Pure aggregator module** `src/core/outcome-telemetry.ts` (no I/O beyond the existing text reader) that:
+   - parses best-effort JSONL learning text, skipping blank/malformed/unknown-kind lines without throwing;
+   - computes terminal outcome counts (per `goal_terminal`/`session_outcome` status) and met/not-met verdict
+     counts from `turn_verdict` entries;
+   - computes a **failure taxonomy**: normalized not-met reason themes with occurrence counts, sorted by
+     count desc then theme asc, with `recurring` flagged at a documented threshold (>= 3 occurrences);
+   - computes **time-to-green**: median and count of `goal_armed -> achieved goal_terminal` durations paired
+     by `sessionID` + `goalID`, using valid ISO timestamps only, ignoring incomplete/malformed pairs;
+   - computes **recurring conditions**: normalized condition strings seen at armed/terminal boundaries more
+     than once (a signal that the same goal keeps resurfacing);
+   - exposes a bounded `formatOutcomeTelemetry(summary, maxChars)` that returns a compact prompt-ready block,
+     or `""` when there is nothing to report, and truncates safely without cutting a multibyte code point.
+2. **Bounded, fail-closed behavior**: a missing/unreadable log, an empty log, an all-malformed log, or an
+   all-unknown-kind log yields an empty summary and empty formatted text; no exception escapes; formatting is
+   capped at a configurable character budget (default 900).
+3. **Single-hook integration**: `src/runtime/controller.ts` reads the learning log once in
+   `recentLearningsForPrompt`, derives both the recent-learnings block and the telemetry block from that one
+   read, and returns their concatenation. All existing prompt call sites (continuation, loopContinuation,
+   retry, checkin, nextGoal) receive the telemetry without interface changes.
+4. **Tests**: a new `test/outcome-telemetry.test.ts` covers parsing robustness, taxonomy grouping/threshold,
+   time-to-green pairing and malformed timestamps, recurring conditions, formatting/budget/unicode, and the
+   empty/fail-closed cases; controller-level coverage proves the telemetry text reaches the planner prompt.
+5. **Gap closure**: `docs/improvement-backlog.json` marks `structured-outcome-telemetry` `done` with evidence
+   pointing at this workstream, and corrects statuses of items already landed on `dev` but left stale
+   (`evaluator-rubric-evidence-types`, `change-risk-classification`, `standing-invariants-sweep`) so the
+   planner no longer re-suggests completed work.
+6. **Verification**: `bun run check` exits 0 in the worktree; targeted telemetry tests pass; the SPEC marker
+   is re-stamped in the same commit as the shipped-file/test changes; changes are committed on `wt/<slug>` and
+   submitted via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/outcome-telemetry.test.ts` → **13 pass / 0 fail**
+  (1 file, 47 expect() calls) covering best-effort parsing, taxonomy grouping/recurrence, time-to-green
+  pairing (valid/malformed/negative/cross-goal), condition recurrence, formatting/budget/unicode safety,
+  and controller prompt injection via `session.synthetic`.
+- End-to-end demonstration (synthetic fixture, not production evidence) emitted:
+  `Outcome telemetry (from 5 journal entries): achieved=1; not_met=3; "missing verifier output" x3
+  (recurring); median 6m 00s over 1 run; "make tests pass" x2`. An all-malformed log formats to `""`.
+- Adjacent polish in the same prompt-injection path: `formatRecentLearnings` (learning-log.ts) and the
+  telemetry cap now both route through `elideAtWordBoundary`, so an astral character at a budget boundary
+  never leaves a lone surrogate in the evaluator/planner corpus. `test/learning-log.test.ts` pins the
+  surrogate-safe truncation.
+- `bun run check` exit 0: tsc clean, **2011 pass / 0 fail** across 84 test files (29 snapshots, 30248
+  expect() calls), dist fresh, TUI load ok, docs freshness ok, invariant-sweep ok,
+  spec-check `files=74 tests=2011`. `test/package-integrity.test.ts` tarball pin raised 73→74 for the new
+  shipped core module; `test/improvement-backlog.test.ts` now pins that landed items cannot stay `open`.
+
+### Honest limits / non-goals
+
+- Telemetry is advisory context for the planner/evaluator, not a gate: it cannot by itself fail a condition.
+- No cross-session database, no network, no new config surface, no TUI rendering in this slice.
+- Flaky-check detection and automatic backlog re-prioritization from telemetry remain deferred; the summary
+  deliberately reports only signals derivable from recorded fields.
+
+## Workstream CVI — self-update system with main/dev channels (2026-11-20)
+
+Bare `/goal-loop` (no objective) becomes the low-friction update trigger — no new slash command is registered, so the
+user's slash interface is unchanged. With `update.mode: off` it falls back to the old status request.
+
+1. **`bin/goal-loop.mjs`**: `resolveLatestRef(channel, opts)` resolves `main` to the newest semver GitHub tag (falling
+   back to the latest Release, then `package.json` on the raw main branch) and `dev` to the latest commit SHA on `dev` (pinned, so every update
+   re-fetches). `update()` compares that ref with the installed pin and, unless `--check`/`--dry-run`, surgically rewrites
+   only the pin — preserving object-form entries, options, comments and unrelated keys — with the existing backup +
+   atomic-write safety. Network failures return a one-line error and never touch the config.
+2. **Channels/preferences**: `update.channel` and `update.mode` are first-class options in `plugins[].options`,
+   resolved into `GoalConfig.update` by `src/core/config.ts · resolveConfig` (`main`/`auto` by default). The CLI reads and
+   rewrites the same object via `bin/goal-loop.mjs · readPluginState/writePluginState`, so there is one source of truth
+   and no sidecar file. `mode: off` disables all checks; `goal-loop status` reports channel, mode and the installed ref. New CLI commands: `goal-loop update`, `goal-loop channel <main|dev>`, `goal-loop updates <auto|off>`.
+3. **`src/index.ts`**: both bare-directive paths (registered command and raw prompt hook) call `handleBareLoop`, which
+   schedules a background check on the next macrotask, guarded by the lifetime signal, probe mode and
+   `config.update.mode`. An immediate toast announces the check; a second `set`-kind toast carries the result. Prompt
+   admission is never blocked and a disposed plugin never emits.
+4. **Tests**: `test/updates.test.ts` exercises ref resolution, options-based preference persistence, channel
+   switching, off/auto behavior, option preservation and graceful network failure with an injected `opts.fetch` stub —
+   no live network. `test/plugin.test.ts` pins the new bare-directive prompt and toast; config/doc gates pin the new
+   options in both tables.
+
+Verification (fresh at this HEAD). `bunx tsc --noEmit` clean; `bun test` **2019 pass / 0 fail** (84 files, 29 snapshots);
+`check:spec` marker `files=74 tests=2019` (no new shipped file: `bin/` was already in `package.json` `files`).
+
+Honest limits. The installed plugin is a git-pinned OpenCode dependency, so an applied update takes effect only after the
+user restarts OpenCode (stated in the CLI output). GitHub releases/tags are pushed manually, so `main` tracks the newest
+published tag rather than an automated release pipeline; `dev` tracks the current dev-branch tip and may break working
+setups, as documented. `--check` consumes one unauthenticated GitHub API request; the checker fails soft on rate limits.
+<!-- spec-check files=73 tests=2019 -->
+
+## Workstream CVII — compact coordinator status output (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`coordinator status --json` is the coarse-grained visibility command run on every armed loop re-arm and by agents
+checking lease readiness. It currently emits **every** lease ever recorded — hundreds of historical `done` entries,
+each with `agent`, `paths`, `branch`, `worktree`, timestamps, `forcedScopeFiles`, plus derived `worktreePath`,
+`uncommitted` and `mergeInProgress`. At this HEAD that is ~191 KB of JSON for a bus with zero active leases. Only
+non-`done` leases are actionable for re-arm/readiness, and the full historic dump also forces a `git status` per
+worktree. This workstream makes the default view compact while preserving a full-history escape hatch.
+
+### Acceptance criteria
+
+1. **Default**: `coordinator status --json` emits only active leases (`status != "done"`) under `leases`, plus a
+   `summary` object with `submitted`, `done`, `active` and `total` counts, and the existing `mergeLock`.
+2. **Escape hatch**: `coordinator status --json --all` emits every lease (legacy behavior) and the same `summary`.
+   `status --json <bad-flag>` fails with a clear error instead of silently ignoring the flag.
+3. **No field loss for active leases**: each emitted lease keeps `worktreePath`, `uncommitted` and
+   `mergeInProgress`; existing consumers of `parsed.leases["<active>"].<field>` are unaffected.
+4. **Human view unchanged**: plain `coordinator status` still prints `submitted: N done: M` (and merge lock when held).
+5. **Docs/help**: `coordinator --help` and `docs/parallel-work.md` describe the active-only default and `--all`;
+   `AGENTS.md` notes the compact default.
+6. **Tests**: `test/coordinator-merge-safety.test.ts` pins default exclusion of done leases, `--all` inclusion,
+   accurate `summary` counts, preserved per-lease fields, and rejection of unknown status flags.
+7. **Verification**: `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on
+   `wt/<slug>`, submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- Targeted `bun test test/coordinator-merge-safety.test.ts` → **27 pass / 0 fail** (174 expect() calls; was 25 tests —
+  two new cases pin default exclusion of done leases + `summary`, `--all` inclusion, preserved per-lease fields,
+  and unknown-flag rejection).
+- Real-repo byte count: `coordinator status --json` **557 bytes** (one active lease, `summary.done=383`) vs
+  `coordinator status --json --all` **196,317 bytes** — a ~350x reduction on a bus with zero actionable work.
+  `status --json --bogus` exits 1 with `unknown status option: --bogus`.
+- `bun run check` exit 0: **2035 pass / 0 fail** across 85 test files (29 snapshots, 30365 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2035`.
+
+### Honest limits / non-goals
+
+- `state.json` still retains all done leases (the bus and merge bookkeeping depend on them); this change only
+  filters the visibility projection, not persisted data.
+- Done leases remain lookable up via `--all` or directly in `state.json`; no archival/pruning is introduced.
+- No change to `queue`, `claim`, `submit`, `merge-next` or the lock semantics.
+
+## Workstream CIX — forward-pointer exemption for the zero-tool evaluator guard (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`controller.evaluateTurn` downgrades an evaluator `met` to `not_met` when a producing-condition goal is ruled met
+on turn 1 with zero harness-counted tool calls. The adjacent code comment states that an "already satisfied at HEAD"
+landing is accepted only through its `next:` forward pointer (enforced by `core/verdict.ts · applyForwardPointerGate`).
+But the zero-tool guard runs **before** that path and unconditionally rewrites the verdict, so an already-satisfied
+landing that names a concrete next gap is still rejected. An armed loop re-arms the identical condition, and the
+same downgrade fires on every subsequent turn — an unrecoverable loop even when the condition is genuinely met and
+the evaluator supplies the required `next:` pointer. This workstream aligns the guard with its documented intent.
+
+### Acceptance criteria
+
+1. `core/verdict.ts` exports a pure `isAlreadySatisfiedLanding(reason)` helper: true only when the reason both claims
+   an already-satisfied/no-new-work landing AND names a `next:` pointer (the same regexes the forward-pointer gate uses).
+2. The zero-tool downgrade in `controller.ts` keeps rejecting bare state-inspection `met` verdicts, but does **not**
+   fire when `isAlreadySatisfiedLanding(result.reason)` is true — the verdict proceeds to the forward-pointer gate,
+   verifier matrix, and normal loop advance.
+3. `test/loop.test.ts` pins both sides: a zero-tool `met` with no `next:` gap is still downgraded with the named
+   reason (existing test), and a zero-tool already-satisfied `met` with a `next:` gap is accepted and advances.
+4. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator; plugin restarted so the new evaluator code is loaded.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/core.test.ts test/loop.test.ts` → **281 pass / 0 fail**
+  (1127 expect() calls), including the new `isAlreadySatisfiedLanding` helper cases and the zero-tool advance test.
+- `bun run check` exit 0: **2037 pass / 0 fail** across 85 test files (29 snapshots, 30374 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2037`.
+
+### Honest limits / non-goals
+
+- The exemption applies only to a `met` that names a concrete `next:` pointer; a bare "already satisfied" claim
+  without a pointer is still downgraded by the forward-pointer gate.
+- No change to the verifier matrix, rubric, or persisted record format.
+
+## Workstream CX — pathsOf rename/quote correctness (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`src/core/changed-paths.ts · pathsOf` is the shared parser behind both change-risk classification
+(`collectChangeSetPaths`) and the invariant-sweep gate (`scripts/invariant-sweep.ts`). For a porcelain status line
+it treated **any** `XY path` body containing ` -> ` as a rename and kept only `body.split(" -> ").pop()`. Two defects:
+
+1. **Over-broad split.** A non-rename status line whose path literally contains ` -> ` (e.g. ` M my -> file.txt`)
+   was truncated to `file.txt` — a wrong path reaches classification and the gate.
+2. **Last-occurrence split.** `git status --porcelain` renders a rename to a path containing ` -> ` as
+   `R  old -> "new -> name.txt"`. Splitting on *all* separators and taking the last piece yields `name.txt"` —
+   the new path is corrupted. Git probe (fresh this turn) confirmed this exact rendering.
+3. **No C-style decoding.** Git quotes special-character paths (`"tab\tnew.txt"`, octal UTF-8 bytes); these were
+   added to the changed-path set with the quotes and escapes still embedded, so scope matching could miss them.
+
+### Acceptance criteria
+
+1. `pathsOf` splits ` -> ` **only** on rename/copy porcelain lines (X or Y status char is `R` or `C`), and then
+   only on the **first** occurrence (`indexOf` + slice), taking the destination path.
+2. Non-rename status lines keep their full path even when it contains ` -> `; plain diff lines (no `XY ` prefix)
+   are never split.
+3. C-style quoted paths are decoded: `\"`, `\\`, `\a\b\f\n\r\t\v`, and octal byte runs decoded as UTF-8.
+4. `test/changed-paths.test.ts` adds regression tests: quoted rename with ` -> ` in the destination, literal
+   ` -> ` in a non-rename path, and C-style quoted/escaped paths. Existing tests keep passing.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/changed-paths.test.ts test/invariant-sweep.test.ts` →
+  **23 pass / 0 fail** (51 expect() calls), including the new quoted-rename-with-arrow, non-rename-arrow,
+  C-style-escape and octal-UTF-8 cases.
+- `bun run check` exit 0: **2038 pass / 0 fail** across 85 test files (29 snapshots, 30383 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2038`.
+
+### Honest limits / non-goals
+
+- Porcelain v1 is assumed (the collector already requests `--porcelain` without `-z`); NUL-delimited `-z` output
+  is not parsed.
+- This does not change how `git diff --name-only` lines are obtained; it only corrects parsing of the lines fed
+  to `pathsOf`.
+
+## Workstream CXI — surrogate-safe transcript truncation (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation
+
+`src/core/transcript.ts` renders the session context into the evaluator's evidence-first digest. Its two cut helpers use
+raw UTF-16 code-unit slicing: `head` (used for tool inputs, user/note text) ends with `text.slice(0, max)`, and `headTail`
+(used for tool output and shell output, and for a single oversized block against the overall `maxChars`) ends with
+`text.slice(0, front)` and `text.slice(-back)`. JavaScript strings are sequences of UTF-16 code units, so an astral
+character (e.g. 🚀 U+1F680, encoded `\uD83D\uDE80`) occupies two units. When a cut boundary lands between the high and
+low surrogate, the digest carries a lone surrogate into the evaluator prompt — corrupt evidence that can mislead the
+judgment, break downstream `encodeURIComponent`/JSON handling, and render as a replacement glyph.
+
+### Acceptance criteria
+
+1. `head` never ends its kept prefix with a lone high surrogate: if `text.slice(0, max)` would end on a high surrogate
+   whose low partner sits at the cut, back off one code unit so the pair is excluded whole.
+2. `headTail` neither ends its head prefix on a lone high surrogate nor begins its tail on a lone low surrogate: back the
+   head off one unit when it lands on a high surrogate; advance the tail start by one unit when it lands on a low
+   surrogate (dropping the orphan half). A zero tail budget still emits a bounded tail or empty string — never the
+   whole input (`slice(-0)` hazard).
+3. Existing digest markers (`… [N chars cut] …`), newest-first packing, and the zero-per-tool-budget behavior
+   (marker + bounded tail, never the whole output) remain unchanged for all non-surrogate boundaries.
+4. `test/core.test.ts` adds an astral-boundary regression test: a sweep of `maxToolChars` and `maxChars` budgets around
+   embedded astral characters asserts no lone surrogate survives at any cut, plus a non-vacuous cut check.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/core.test.ts` → **114 pass / 0 fail** (168626 expect() calls),
+  including both existing `renderTranscript` regressions and the new astral-boundary sweep (per-tool caps 1..500,
+  whole-transcript budgets 1..320, plus non-vacuous cut/whole checks).
+- `bun run check` exit 0: **2039 pass / 0 fail** across 85 test files (29 snapshots, 198666 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2039`.
+
+### Honest limits / non-goals
+
+- This guards UTF-16 surrogate pairs only; it does not do grapheme-cluster-aware cutting (ZWJ sequences, combining
+  marks) in the digest — that is a separate concern from the stated condition.
+- Line/word-boundary elision is intentionally not introduced here: the digest keeps its byte-for-byte prefix plus the
+  existing cut marker so evaluator evidence is not silently reshaped.
+
+## Workstream CXII — lean evaluator context across many goal versions (2026-11-20)
+
+Status: specified first, then implemented and verified against this section.
+
+### Interpretation (answering "is the evaluator bloated after a long session?")
+
+Audit of the current tree (fresh this turn) found the evaluator's **own** prompt is already bounded: condition + fixed
+rubric, plus a transcript digest capped at `evaluator.maxTranscriptChars` (60k) in independent mode. Boundary compaction
+(default `compactOnLoopIteration=true`) requests a host compaction at each loop arm, so the cross-version chat context
+is reset. **But three residual leaks accumulate inside a version and across versions when compaction is missed:**
+
+1. **Journal read is unbounded.** `controller.recentLearningsForPrompt` did `readFileSync(file,"utf8")` + parse of the
+   entire append-only JSONL on every not_met/arm/retry/checkin tick. Read cost grows with every goal version even though
+   only a small recent window is used.
+2. **Learnings channel is too large for a per-turn injection.** It emitted 5 lessons (1200 chars) + 4 telemetry themes
+   and 3 conditions (900 chars) ≈ 2100 chars — injected into **every** `<goal-continuation>`, retry, checkin and arm
+   steer. In session mode those synthetic messages are the evaluator's live context, so the same ~2100 chars are
+   repeated turn after turn.
+3. **Evaluator reason is unbounded in steers.** `continuation`/`loopContinuation` embedded `result.reason` verbatim; a
+   long verdict bloats every subsequent turn's context.
+
+### Acceptance criteria
+
+1. `src/core/learning-log.ts` exports `readLearningEntriesTail(file, maxBytes=262144)`: reads only the journal tail via
+   `statSync`/`openSync`/`readSync`/`closeSync`, parses only complete lines (drops a partial first line from the byte
+   window and a partial trailing line from a concurrent append), falls back to a full read for small files, never
+   throws. The controller uses it instead of a full-file read.
+2. `src/core/outcome-telemetry.ts` exports `formatLearningsForPrompt(entries, maxChars=900)` composing at most 3 recent
+   lessons (≤2/3 of the budget) and compact telemetry (≤1/3) — a bounded, focused block. The controller's
+   `recentLearningsForPrompt` returns this single bounded string (≤ ~900 chars) instead of the old ~2100.
+3. `src/core/prompts.ts` caps the reason injected into `continuation` and `loopContinuation` with
+   `elideAtWordBoundary(reason, 400)`; short reasons are byte-identical, long ones end with the elision marker. The
+   existing fallback semantics (`"No reason given."` / `"met"`) are preserved.
+4. Tests: tail-reader behavior (complete lines only, partial line skipped, small-file fallback) in
+   `test/learning-log.test.ts`; bounded composed block in `test/outcome-telemetry.test.ts`; reason capping in
+   `test/core.test.ts`. All prior prompt/learnings tests keep passing.
+5. `bun run check` exit 0 in the worktree; SPEC marker re-stamped in the same commit; committed on `wt/<slug>`,
+   submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bunx tsc --noEmit` clean; targeted `bun test test/learning-log.test.ts test/outcome-telemetry.test.ts
+  test/core.test.ts` → **144 pass / 0 fail** (168781 expect() calls), including the new tail-read, bounded
+  composition and reason-cap cases. All prior learnings/prompt tests stay green.
+- Measured on a 200-entry synthetic journal: composed block **440 chars** under the 900-char budget (old two-channel
+  composition 546 chars on the same short entries; worst case bounded 2100 → ~900 for real long lessons).
+- `bun run check` exit 0: **2043 pass / 0 fail** across 85 test files (29 snapshots, 198694 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2043`.
+
+### Honest limits / non-goals
+
+- This does not change the evaluator's independent-mode transcript cap (60k) or force host compaction. It bounds the
+  plugin-owned data that rides every steer, which is the part the plugin controls.
+- The composed learnings block is deliberately a recent window, not a full-history digest: aggregate telemetry now
+  summarizes the tail window (≤256 KiB of journal), not all historical entries. That is the intended "focused" tradeoff.
+- No new config option is added; the budgets are module constants so the behavior is uniform across sessions.
+
+## Workstream CXIII — close the last remaining TODO: coordinator semantic/drift guards (2026-11-20)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "fix what needs
+fixing from the previous history untill there are no more remaining todo meaning everything still works."
+
+### Interpretation
+
+Fresh audit of this turn: main clean, no active leases, queue empty, gate green. The single remaining open item in
+`docs/improvement-backlog.json` is `coordinator-semantic-drift-guard`; every other backlog item is `done`. Its finding
+is that leases/merge-next reduce direct conflicts, but **semantic conflicts, stale assumptions after other merges, and
+environment/worktree drift can slip through** because re-validation is incomplete. The existing coordinator already
+has: a stale-base guard (merge-base must equal the dev tip), a trial merge on a scratch branch, gate on the merged
+result, and a path-level preflight warning. Missing: (a) shared-module semantic risk when two leases touch *different
+files of the same module*, (b) worktree drift detection, (c) a post-merge health pass. Closing this item means the
+backlog has **zero open entries** and the full gate is still green.
+
+This is a CLI/script behavior change, not a visual one, so verification is fresh command output (no screenshot applies).
+
+### Acceptance criteria
+
+1. `packages/coordinator/bin/coordinator` surfaces **shared-module semantic risk** in merge preflight: touched files
+   are mapped to coarse modules (`src/core`, `src/runtime`, `scripts`, `test`, `docs`, `packages/coordinator`, `bin`,
+   root docs), and when another non-done lease declares a path in any of those modules the preflight prints a
+   `preflight: SEMANTIC-RISK` line naming the shared modules and the lease, even when no declared path literally
+   overlaps. Existing path-overlap warning and the green case (`no non-done lease overlaps`) stay intact.
+2. A **worktree drift guard** runs before merging: when the submitted lease has a worktree on disk, its `HEAD` must
+   equal the submitted branch tip; a post-submit commit mismatch fails `merge-next` with dev untouched and an explicit
+   recovery hint. Uncommitted changes are **reported** (`drift: ... preserved as a saved ref`) but never fail the merge —
+   the existing saved-ref mechanism already preserves them. Missing worktree is tolerated, preserving existing
+   fixtures.
+3. A **post-merge health pass** runs after the fast-forward lands and before the success line: it prints
+   `post-merge: health ok` with the SPEC marker and a clean tracked tree, or `post-merge: WARNING: ...` when the tree
+   is dirty or the marker mismatches. It never undoes a successful merge.
+4. `docs/improvement-backlog.json`: `coordinator-semantic-drift-guard` flipped to `done` with a dated evidence line.
+   All items `done`; zero `open`.
+5. Tests in `test/coordinator-merge-safety.test.ts` pin the new behaviors: semantic-risk line for a same-module
+   non-overlapping lease, drift failure with dev untouched and worktree tip mismatch, and the post-merge health line.
+   All prior coordinator suites (`coordinator.test.ts`, `coordinator-lease-races.test.ts`) stay green.
+6. `bun run check` exit 0 in the worktree; SPEC marker re-stamped; committed on `wt/<slug>`, submitted and merged via
+   coordinator.
+
+### Verification (fresh at this HEAD)
+
+- `bash -n packages/coordinator/bin/coordinator` clean; `bunx tsc --noEmit` clean.
+- Targeted `bun test test/coordinator-merge-safety.test.ts test/coordinator.test.ts
+  test/coordinator-lease-races.test.ts` → **57 pass / 0 fail** (402 expect() calls), including the new shared-module
+  SEMANTIC-RISK line, post-submit worktree HEAD drift refusal, and post-merge health line.
+- `jq '[.items[] | select(.status=="open")] | length' docs/improvement-backlog.json` → **0**.
+  `test/improvement-backlog.test.ts` updated so a fully-landed ledger legitimately selects nothing (14 pass).
+- `bun run check` exit 0: **2046 pass / 0 fail** across 85 test files (29 snapshots, 198709 expect() calls), dist
+  fresh, TUI load ok, docs freshness ok, invariant-sweep ok, spec-check `files=74 tests=2046`.
+
+### Honest limits / non-goals
+
+- Semantic risk is module-level (a deterministic path grouping), not an AST/API-dependency analysis; it is a warning,
+  never a merge blocker.
+- The health pass is a lightweight post-condition check (marker + tracked cleanliness), not a re-run of the full gate —
+  the full gate already ran on the merged result before the fast-forward.
+
+## Workstream CXIV — continuous improvement pass: unify dossier stamps, trim dead exports, tighten the digest hot path (2026-11-20)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "Run a continuous,
+evidence-based improvement pass over the current repository. Clean out bloat, unify inconsistencies, and improve
+speed/responsiveness without changing intended behavior unless tests or specification require it." Coordinator repo:
+claimed `wt/continuous-improve`, worked only in `worktrees/wt-continuous-improve`, committed on `wt/continuous-improve`,
+submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+Inventory at HEAD: clean tree on `dev`, queue empty, 390 `done` leases and zero active leases; `bun run check` green
+(2046 pass / 0 fail, 74 shipped files, marker `files=74 tests=2046`); backlog `docs/improvement-backlog.json` has zero
+open items; no real `TODO`/`FIXME` markers in `src`, `bin`, `scripts` or the coordinator. Three concrete, evidence-backed
+improvements remain, all behavior-preserving:
+
+1. **Duplication (consistency/bloat).** `dossierExportName`, `dossierIndexName`, `reviewName` and `sealedDossierName`
+   each re-implement the same 8-line UTC `<YYYYMMDD>-<HHMMSS>` stamp + `-n` retry-suffix builder (a local `pad`
+   helper plus a non-finite/unrepresentable-clock epoch fallback), even though `src/core/dossier.ts` already owns the
+   stamp helpers (`stampOf`, `isoOf`). Four copies of the same logic are four chances to drift.
+2. **Bloat.** 38 internal-only type/interface exports across `src/core` and `src/affordance.tsx` have zero consumers
+   outside their defining modules (in `src`, `test` or `scripts`); they widen module surface with no runtime purpose.
+3. **Hot-path waste (speed).** `renderTranscript` in `src/core/transcript.ts` runs on every evaluator turn and calls
+   `str(x).trim()` twice per user/synthetic/text part — once for the truthiness test, again for the emitted value.
+   The duplicate string allocations are pure waste on the largest input the plugin processes.
+
+All three are pure/internal changes. No public package export (`.`, `./tui`, `./rpc`), persisted format, evaluator
+rubric, commit/verify gate, config parsing or TUI behavior changes.
+
+### Acceptance criteria
+
+1. A single shared `fileStampOf(ms)` helper lives in `src/core/dossier.ts`, producing the identical
+   `<YYYYMMDD>-<HHMMSS>` string and epoch fallback the four builders produced; each builder delegates to it and drops
+   its local `pad` helper. For a fixed `(nowMs, attempt)` every builder output is byte-identical to the old output
+   (pinned by the existing name tests plus a new equivalence test over finite, `NaN`, `+Infinity`, `-Infinity`,
+   out-of-range and year-boundary clocks).
+2. `export` is removed from the 38 enumerated internal-only symbols; `tsc --noEmit` stays clean and the full suite
+   stays green. The symbols remain usable inside their modules; no test or runtime importer breaks.
+3. `renderTranscript` computes `str(text).trim()` once per user/synthetic/text part and reuses it for the truthiness
+   test and the emitted string; output is byte-identical for the existing transcript fixtures. A before/after
+   micro-benchmark over a synthetic 6,000-message transcript (300 iterations, `maxChars: 60000`) reports a
+   non-negative speedup with identical digest bytes.
+4. `SPEC.md` gains this section and `docs/changelog.html` gains a matching entry (invariant-sweep companion gate).
+   The SPEC marker is re-stamped in the same commit for the changed test count; no shipped file count changes.
+5. `bun run check` exit 0 in the worktree; committed on `wt/<slug>`, submitted and merged via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- Dossier unification: targeted `bun test test/dossier.test.ts test/dossier-export.test.ts test/dossier-index.test.ts
+  test/dossier-review.test.ts test/dossier-seal.test.ts` → **89 pass / 0 fail** (346 expect() calls). The new equivalence
+  test pins `fileStampOf` against the pre-unification algorithm for finite, `NaN`, `±Infinity`, out-of-range and
+  year-9999 clocks and asserts the four exporter names embed the identical stamp and `-3` retry suffix.
+- Dead exports: `bunx tsc --noEmit` clean after removing `export` from all 38 enumerated symbols. One documented
+  contract needed alignment: `docs/core.html` no longer lists `ParsedVerdict` among `verdict.ts` exports
+  (`test/docs-line-refs.test.ts` stays green).
+- Digest hot path: A/B micro-benchmark importing the pre-change module from `HEAD` and the new module side by side,
+  4,000×3 large text messages, `maxChars: 2_000_000`, 10 warmups + 7 rounds × 60 iterations, median of rounds:
+  **9.8 ms → 9.5 ms (3.9% faster)**, with `oldFn(messages, opts) === newFn(messages, opts)` byte-identical. Targeted
+  `bun test test/core.test.ts test/evaluator.test.ts` → **146 pass / 0 fail** (168737 expect() calls).
+- `bun run check` exit 0: **2048 pass / 0 fail** across 85 test files (29 snapshots, 198754 expect() calls),
+  `tsc --noEmit` clean, `dist/tui.js` rebuilt fresh (**359413 → 358358 bytes, −1055 / −0.29%**), TUI load ok, docs
+  freshness ok, invariant-sweep ok, spec-check `files=74 tests=2048` (shipped file count unchanged).
+- Source LOC delta: 77 insertions / 79 deletions across 19 source files (net −2). Test LOC +44. The measurable wins
+  are export-surface reduction (−38 exported symbols), 4→1 stamp implementations, and the digest speedup — not LOC.
+
+### Honest limits / non-goals
+
+- The A/B speedup is small (3.9% on a deliberately text-heavy synthetic transcript) and within noise on mixed
+  tool-output transcripts; it is reported as measured, not exaggerated. The change is strictly redundant-work removal.
+- Unexporting internal types does not remove the types themselves, only their module surface; no persisted format,
+  evaluator rubric, commit/verify gate, config parsing or TUI behavior changed. Public package exports (`.`, `./tui`,
+  `./rpc`) are unchanged.
+- No new config option, new shipped file or removed shipped file, so the SPEC `files` count is unchanged.
+
+## Workstream CXV — evaluator use-and-forget context: strip self-echo and compact the digest budget (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): implement
+(1) "Use-and-forget for the evaluator's own output (primary fix). Strip `<goal-evaluation>` messages from both the
+model-bound context hook and the `context()` feed that builds the independent digest. That removes the ~5.2 KB/turn
+self-echo that grows to ~15 KB (27% of the digest) at steady state — without touching the rubric, consensus,
+verifier-matrix, learnings, or any other sensing." and (2) "Compact evidence instead of raw dumps. The evaluator
+cannot call tools, so it doesn't need 60 KB of tool output. Keep the newest-first head+tail packing, but tighten the
+per-tool cap so a few verbose command outputs can't each eat 5 KB." Recommended budget: `maxTranscriptChars = 20,000`
+(per-tool cap `max(1500, budget/12)` = 1,666). Coordinator repo: claimed `wt/evaluator-context-forget`, worked only in
+`worktrees/wt-evaluator-context-forget`, committed on `wt/evaluator-context-forget`, submitted via coordinator; no
+direct commits to `dev`/`main`.
+
+### Interpretation
+
+The evaluator never calls a tool. Its `<goal-evaluation>` prompt (6,174 B, 96.7% constant rubric) is appended to the
+live session transcript by `session.generate` on every evaluation turn and never removed. It therefore rides model-bound
+context on every later turn and, in `independent` mode, floods the digest built from `ctx.session.context()`. Measured
+baseline (synthetic working turn = 1 continuation steer + 4 tool calls of 2/8/15/0.6 KB; `renderTranscript` newest-first,
+per-tool cap `max(1500, 60000/12)` = 5,000):
+
+- Per evaluation turn **+~7.0 KB** is added to the live transcript (6,174 B prompt + ~256 B verdict + ~600 B continuation):
+  ~69 KiB at 10 turns, ~137 KiB at 20, ~343 KiB at 50.
+- The 60K digest **saturates in ~3 turns** with self-talk (evidence-only saturates in ~4). By turn 10, **27 older messages
+  are omitted** and ~15 KB (**27%**) of the digest is the evaluator's own `<goal-evaluation>` prompts, displacing real
+  evidence. Cumulative self-echo reaches **15.6 KB by turn 3** if the budget were unbounded.
+- 4 tool calls × 5,000-char cap = up to **~20 KB/turn** of raw tool text alone — the dominant driver of saturation.
+
+Two independent leaks, neither a sensing capability:
+
+1. **Use-and-forget.** Drop the evaluator's own `<goal-evaluation>` prompts from (a) the model-bound context hook on
+   working turns (guarded by `evaluator.isEvaluating` so an in-flight evaluation keeps its current rubric prompt — only
+   older echoes are dropped) and (b) the `context()` feed that builds the independent digest (unconditional: the digest
+   is paired with a freshly constructed `evaluateIndependently` prompt, so no rubric lives in the feed). The rubric,
+   verdict grammar, consensus, retry ladder, verifier-matrix/scope-policy, learnings, history and re-anchor blocks are
+   untouched.
+2. **Compact budget.** `evaluator.maxTranscriptChars` default 60,000 → 20,000. The existing `max(1500, maxChars/12)`
+   formula yields a 1,666-char per-tool cap; head+tail packing is unchanged, so failures reported last stay visible.
+   A ~4–6 KB working turn then lets 20K hold the current plus 2–3 prior turns of real evidence.
+
+### Acceptance criteria
+
+1. `src/core/prompts.ts` exports `isGoalEvaluationMessage` and `stripGoalEvaluations(messages, { keepLast })`, matching
+   the `<goal-evaluation` opening tag on text content parts, never matching a compaction checkpoint, and returning a
+   fresh array with the same splice-back contract as `stripGoalNotes`. `keepLast` retains only the most recent
+   evaluation prompt (the live rubric an in-flight evaluator must answer).
+2. `src/index.ts` context hook strips evaluation prompts from working turns and, while `evaluator.isEvaluating`, keeps
+   only the most recent one; the strict-provider trailing-user repair and the terminal-line gate are unchanged.
+3. The evaluator's `context()` feed in `src/index.ts` strips all evaluation prompts before they reach
+   `renderTranscript`; independent-mode verdicts and loop summaries therefore digest evidence only.
+4. `src/core/config.ts` `DEFAULTS.maxTranscriptChars` is 20,000; `README.md`, `docs/config.html` and the
+   `config-defaults`/`docs-coverage` gates are updated deliberately (no weakened/skipped assertions); the ≥4,000 min
+   is unchanged.
+5. New regression tests pin the helper (recognition, unknown shapes, checkpoint immunity, keep-last), the context hook
+   (working-turn strip, trailing-user repair) and the digest feed (no `<goal-evaluation>` in the independent prompt).
+6. `SPEC.md` gains this section, `docs/changelog.html` gains a companion row, and the enforced marker is re-stamped in
+   the same commit for the changed test count. No shipped file is added or removed (`files` stays 74).
+7. `bun run check` exit 0 in the worktree; commit on `wt/<slug>`, submit, merge-next via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- **Injected-text sizes (unchanged sensing).** `evaluateInSession` is **6,174 B** before and after — the rubric,
+  verdict grammar, OUTPUT list, commit rule and `<opencode-cli>` path are byte-identical. `systemReminder`,
+  `continuation`, `loopContinuation`, `loopReanchor` and loop `directive` are untouched.
+- **Digest A/B** (synthetic turn = 1 continuation + 4 tool calls of 2/8/15/0.6 KB; newest-first packing): before
+  (60K budget, 5,000-char per-tool cap, no strip) the digest is 18.5 KB at turn 1, saturates at **turn 3** (55.6 KB),
+  and at turn 10 holds **3 `<goal-evaluation>` blocks (~15 KB / 27%)** with **27 older messages omitted**. After
+  (20K budget, 1,666-char per-tool cap, strip at the feed) the digest is 6.6 KB at turn 1, is 19.9 KB at turn 3, and
+  holds **0 `<goal-evaluation>` blocks** at every turn with 21 older messages omitted at turn 10 — **~2.8× less
+  injected text** and **100% of the budget spent on real evidence**.
+- **Model-bound accumulation A/B** (N completed evaluations + a working-turn steer): before, self-talk bytes left in
+  context are 6,174 (N=1) → **308,782 (N=50)**; after, **0 at every N** (only the tiny prior verdict lines remain,
+  ~39 B/eval, which are working evidence for repeated-failure detection, not the evaluator's rubric prompt). The
+  persisted transcript still records the prompts; no model request carries them.
+- **Tests.** Targeted `bun test test/notes.test.ts test/plugin.test.ts test/config-defaults.test.ts
+  test/evaluator.test.ts` → **93 pass / 0 fail** before the last digest-feed test was added, then **53 pass / 0 fail**
+  for `notes`+`plugin` after; full `cd test && bun test` → **2059 pass / 0 fail** across 85 files (29 snapshots,
+  198,789 expect() calls), up from **2048 pass / 0 fail** (+11 new regression tests; no existing test weakened or
+  skipped). `bunx tsc --noEmit` clean. `npm pack --dry-run --json` → **74** shipped files (unchanged).
+- **Gates.** `bun run check` exit 0: tsc, all tests, `check:dist`, `compile`, `check:tui`, `docs:check`,
+  `check:invariant`, `check:spec` (`files=74 tests=2059`). SPEC marker re-stamped in this commit; changelog companion
+  row regenerated via `bun scripts/docs-watch.ts once` after commit.
+
+### Honest limits / non-goals
+
+- This is context *accumulation* hygiene, not capability removal: every sensing block and gate stays byte-identical.
+- The persisted session transcript still records the evaluation prompts (the context hook filters the model-bound copy
+  only); "forget" is from the model's context and the digest, not from durable storage.
+- The 20,000 default is a behavior change for repos that did not set `maxTranscriptChars`; explicit settings still win,
+  and the ≥4,000 floor is unchanged. It is deliberate, documented, and test-pinned, not a silent default swap.
+
+<!-- spec-check files=74 tests=2074 -->
+
+## Workstream CXVI — resume an interrupted evaluation after restart (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "there is a bug. if i restart while the evaluator is checking. it completely cancled it out. it need that gracefull continue just like how the opencode itself is working." Coordinator repo: claimed `wt/eval-restart-resume`, worked only in `worktrees/wt-eval-restart-resume`, committed on `wt/eval-restart-resume`, submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+`GoalController.evaluate()` sets `runtime.evaluating = true` and holds an in-memory `AbortController`. `dispose()` on shutdown calls `invalidate()` for every runtime, which aborts that controller; the evaluation's `catch` sees `abort.signal.aborted` and returns silently. Nothing is written to the `GoalRecord`, so after a restart `restore()` adopts an `active` goal whose interrupted turn is simply gone: no new `session.execution.succeeded` event arrives, no evaluation is re-dispatched, and the goal sits active forever. This is the same class of bug already fixed for background waits in Workstream XXVII (`waitingSince` is the persisted twin of `deferredSince`): a runtime-only flag is silently dropped on reload. Workstream XXV explicitly recorded "the record was adopted but never resumed — resuming an interrupted turn is the user's call" as an honest limit; this workstream lifts that limit for the evaluation phase only, at the user's request.
+
+### Acceptance criteria
+
+1. `GoalRecord` gains one additive field `pendingEvaluation?: { turn: number; tools: number; condition: string; phase: "evaluate" | "continue"; at: number }`: the in-flight turn's identity and the step still owed, persisted before the evaluator request leaves the machine. `version` stays 1; legacy records are unaffected. `phase: "evaluate"` means the verdict has not landed; `phase: "continue"` means it has and the post-turn steer is still owed.
+2. `evaluate()` stamps `pendingEvaluation` on the record before calling the evaluator (fire-and-forget `commit`, flushed by `dispose()`), and `commit()` clears it on the first write at or past that turn — so a verdict that lands is never re-evaluated, while an aborted/shutdown evaluation leaves the marker intact.
+3. `restore()` revives the marker: after adoption, live `active` records with a matching `condition` re-dispatch exactly the owed step — `phase: "evaluate"` re-enters `evaluate()` with the persisted tool count and turn number (turn continuity preserved by exempting a marked record from the adoption-time `turns: 0` reset); `phase: "continue"` re-dispatches the continuation steer from the persisted `reason` without a second evaluation. A stale marker (verdict already recorded for an `evaluate` marker, condition changed by a loop re-arm, non-active status, or a live execution already in flight) is cleared, never replayed. The marker is deleted before re-dispatch so a second restore cannot double-fire.
+4. The resume is announced (one info log + one `changed` emission via the normal evaluation start) so the UI leaves "checking" only when the new evaluation is actually running; no new config option, timer, or TUI code.
+5. Regression tests pin: marker persistence across a simulated restart, resume re-enters evaluation with the original turn/tools, no resume when the verdict already landed or the condition changed, no resume for paused/terminal records, and no double-evaluation while a turn is live. No existing test weakened or skipped.
+6. `SPEC.md` gains this section with the marker re-stamped in the same commit for the changed test count; `docs/changelog.html` gains the companion row via the two-commit docs-watch convention.
+7. `bun run check` exit 0 in the worktree; commit on `wt/<slug>`, submit, merge-next via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- **Before (reproduced by the new test's setup).** A turn starts, the evaluator is in flight, `dispose()` aborts it;
+  the stored record has no in-flight breadcrumb, so a fresh controller's `restore()` adopts an `active` goal with
+  zero evaluation requests and zero continuation steers — the goal parks until a new host turn ends.
+- **After.** `evaluate()` stamps `pendingEvaluation` before its first await; `dispose()`/`shutdown` interrupts keep
+  it and `store.flush()` lands it. On restore, `resumePendingEvaluations()` deletes the marker first (single-dispatch
+  guard), then re-enters `evaluate()` with the persisted turn and tool count (phase `evaluate`) or re-sends the
+  continuation from the persisted `reason` (phase `continue`). Targeted tests pin: marker flush across dispose,
+  resume with original turn/tools, stale-marker clear, condition-changed clear, paused clear, continue-phase steer
+  without a second evaluation, probe `resume:false`, and shutdown-vs-user interrupt semantics —
+  **8 new tests in `test/controller.test.ts`**.
+- **Invariant preserved.** One resumed step per marker, guarded by `status === "active"`, `!running.has(sessionID)`,
+  condition equality, turn ordering, and a fresh epoch. A newer execution or a changed goal clears the marker
+  instead of replaying it; user interrupts and supersedes clear it immediately (the new turn owns the step).
+- **Tests.** Full `cd test && bun test` → **2067 pass / 0 fail** across 85 files (29 snapshots, 198,822 expect()
+  calls), up from **2059 pass / 0 fail** (+8; no existing test weakened or skipped). `bunx tsc --noEmit` clean.
+- **Gates.** `npm pack --dry-run --json` still 74 files; SPEC marker re-stamped to `files=74 tests=2067`; changelog
+  companion row regenerated via the two-commit docs-watch convention. No config option, rubric, verifier gate or
+  TUI change; `dist/tui.js` byte-unchanged.
+
+### Honest limits / non-goals
+
+- The two persisted phases cover the whole post-turn window, but a crash *inside* the steer admission (`continueWith`'s `session.synthetic`) can still leave a `phase: "continue"` marker that re-dispatches a steer which may already be queued; the existing straggler guards make that duplicate harmless, and it is reported honestly rather than claimed away.
+- A user interrupt (`onUserPrompt` → `invalidate`) leaves the marker until the next execution's evaluation overwrites it; if no next turn arrives before a restart, the interrupted turn is re-evaluated from fresh evidence — the evaluator re-judges the visible transcript, so this is safe but may repeat a verdict.
+- No change to the evaluator's rubric, consensus, retry ladder, verifier gate, or the use-and-forget context strip from Workstream CXV.
+
+<!-- spec-check files=74 tests=2074 -->
+
+## Workstream CXVII — accept malformed-but-readable evaluator verdicts (2026-11-21)
+
+Status: implemented and verified against this section. Trigger: a live TUI notice —
+`Goal still active · Evaluator failed (unreadable verdict after 3 attempts: "{\"verdict\":\"met\",\"reason\":\"(a) Clause-by-clause judgment with evidence ref…"); retrying in 10s.` —
+showed the evaluator's own `met` verdict text being rejected by the parser and burning all three repair attempts.
+
+### Interpretation
+
+`parseVerdict` (`src/core/verdict.ts`) tried only strict `JSON.parse` on balanced `{…}` spans. The rubric
+(`src/core/prompts.ts` `OUTPUT`) asks for a structured reason with `\n` line breaks, but live models emit raw
+newlines and occasional unescaped quotes inside the reason string; that makes the whole object invalid JSON, so
+the retry ladder in `src/runtime/evaluator.ts` re-asked three times and then threw `EvaluationError`, which the
+controller counted as an evaluator failure. A second observed shape is a verdict double-encoded with
+`JSON.stringify({verdict,reason})` — quoted braces defeat `jsonObjects` outright. In both cases the verdict
+token and reason were present in the reply; the parser, not the judgment, was the failure.
+
+### Change
+
+1. `verdictCandidates` peels up to three JSON-string layers (a double-encoded verdict) and feeds each layer's
+   balanced object spans and raw text to the parser. Strict JSON remains the first and authoritative path — a
+   well-formed verdict is handled byte-for-byte as before.
+2. A narrow lenient pass runs only after strict parsing fails on every candidate. It reads the same field
+   aliases (`verdict`/`status`/`result`/`met`, `reason`/`explanation`/`rationale`) from a JSON-ish object,
+   requires an object brace before the verdict key, accepts only a recognized verdict token, decodes the escapes
+   the model did use (`\n`, `\r`, `\t`, `\"`, `\\`), and stops the reason at the next field or end of text
+   (so an object truncated mid-reason still yields its verdict). The result goes through the existing
+   `clampReason` and forward-pointer gate — no new verdict vocabulary, no gate bypass.
+3. Garbage, reason-only JSON, unknown verdict tokens, and a quoted `"verdict":"met"` in prose still return
+   `undefined`, so the repair ladder and fail-closed behavior are unchanged for genuinely unreadable replies.
+
+### Verification (fresh at this HEAD)
+
+- **Discrimination.** With `src/core/verdict.ts` restored to the pre-fix HEAD, the six new tests fail:
+  `147 pass / 5 fail` for `test/core.test.ts` + `test/evaluator.test.ts`; the evaluator test reproduces the exact
+  toast error with raw newlines in the reason. With the fix: **152 pass / 0 fail** for those two files.
+- **Tests.** Full `cd test && bun test` → **2074 pass / 0 fail** across 85 files (29 snapshots, 198,837 expect()
+  calls), up from **2068** (+5 parser cases in `test/core.test.ts`, +1 end-to-end case in `test/evaluator.test.ts`;
+  no existing test weakened or skipped). `bunx tsc --noEmit` clean.
+- **Gates.** `bun run check` exit 0 (tsc, tests, `check:dist`, `compile`, `check:tui`, `docs:check`,
+  `check:invariant`, `check:spec`); `npm pack --dry-run --json` still 74 files (`src/core/verdict.ts` already ships).
+  SPEC marker re-stamped in this commit to `files=74 tests=2074`.
+
+### Honest limits / non-goals
+
+- The lenient pass is a reader, not a judge: it does not infer a verdict from prose or from a reason's content,
+  and it never upgrades `not_met`/`impossible`. If the model truly never emitted a recognized verdict token,
+  all three attempts still fail as before.
+- An object truncated mid-reason yields the token with a partial reason; downstream gates (verifier command,
+  zero-tool guard, forward-pointer gate) are untouched and still apply. No attempt is made to salvage a verdict
+  from text before the first `{` or from plain prose.
+- The rubric's `use \n for line breaks` instruction is unchanged; the parser now tolerates models that ignore it,
+  rather than penalizing the whole evaluation. No config option, prompt, verifier, TUI or persisted record changed.
+
+<!-- spec-check files=74 tests=2074 -->
+
+## Workstream: single-package autonomous loop (prompter + prompt library)
+
+**Goal.** The user asked to stop prompting entirely and to stop maintaining two projects. The prompt library (`/home/pauk/Documents/userfullPrompt/prompts`) and the autonomous orchestrator (`/home/pauk/Projects/prompter`) are now both bundled into this one plugin package: `prompts/` holds the 52 imported Markdown prompts, `src/prompter/*` holds the orchestrator, and `bin/prompter.mjs` is a second binary of the same npm package. Installing goal-loop installs the whole loop; there is no separate project to install, version, or maintain.
+
+**Wiring.** `package.json` `files` adds `prompts` and `bin/prompter.mjs`; `bin` adds `prompter`; `@opencode/client@2.3.2` moved from devDependencies to dependencies because the headless driver imports it at runtime. The default `promptLibrary` resolves from `src/prompter/defaults.ts · DEFAULT_PROMPT_LIBRARY` to `<package-root>/prompts` instead of a machine-specific absolute path, so it works from any install location. `PROMPTER_*` env vars and `<repo>/.prompter/config.json` still override per repo.
+
+**Safety preserved (review-before-merge).** One `in_review` task at a time; a tick refuses new work while one awaits a decision. Tasks run in `~/.prompter/worktrees/<repo>/<id>` on `autonomy/<id>` branched from the base branch; the main checkout is never switched or committed to. Dirty-tree gate, task/dollar/token/wall-clock caps, kill switches (`PROMPTER_STOP`, global/per-repo STOP files, SIGINT/SIGTERM), and a verifier gate forwarded to goal-loop. `prompter approve` refuses until `git merge-base --is-ancestor <commit> <baseBranch>` succeeds and prints the exact merge command otherwise — no auto-merge path exists in the shipped code.
+
+**Gates.** `bun install` clean (one lockfile). `bun run typecheck` clean. `cd test && bun test` → **2098 pass / 0 fail** across 91 files (29 snapshots), up from 2074 (+24 `prompter-*.test.ts` cases). `npm pack --dry-run --json` → **141 files** (74 previous + 52 prompts + 14 `src/prompter` modules + 1 bin); `test/package-integrity.test.ts` re-pinned 74 → 141. SPEC marker re-stamped in this change to `files=141 tests=2098`. A stale `.term/` runtime file from the imported library was removed from `prompts/` before packing.
+
+**Honest limits.** A live headless `/goal` run was not executed here (no model credits spent); the driver is adapted from goal-loop's proven `scripts/e2e.ts` pattern and is type-checked against `@opencode/client@2.3.2`. The original library directory is left untouched and can be archived once this copy is confirmed. No `/prompter` slash command is registered — this integration ships the CLI and bundled prompts; a session-side command can be added later if wanted.
+
+<!-- spec-check files=141 tests=2098 -->
+
+## Workstream: the waiting pill flips back to active on session heartbeats, instantly (2026-11-21)
+
+**Goal / screenshot.** `Screenshot_20261121_021145.png`: the ambient pill read `goal waiting · 4m` while the
+footer showed `↓ 1 subagent` and the main session was visibly working. The user: "the waiting is perfect but
+active flipping back is delayed — it has to be instant, changed based on the heartbeats of what is going on in
+the session." Workstream XXVII had already fixed the inverse (a deferral lost across a restart painted `active`
+while the user waited). This pass fixes the remaining half: a deferral that is still pending kept painting
+`waiting` even while the main session was actively doing work, and the flip back rode an execution boundary or
+the 15s mirror tick instead of the session's own activity.
+
+**Interpretation.** `waiting` is a derived flag: `deferredSince` (runtime) or `waitingSince` (persisted twin)
+means an evaluation was held back because background work was running. That is correct when the main session is
+idle. But the controller had no signal for "the main session itself is working again" — `onBackgroundDrained`
+explicitly skips while the session is `running`, so a long turn with a subagent still in flight sat on `waiting`
+until the turn ended. The deferral was doing its job (holding evaluation); only the *indicator* was wrong. The
+fix separates the two: the deferral still governs evaluation/check-ins, while the paint follows the session's
+heartbeats.
+
+**Change** (`src/runtime/controller.ts` only — no TUI, render or record-schema change):
+1. `Runtime` gains two volatile fields: `heartbeating` (set by `onExecutionStarted` and `onToolCalled`, cleared
+   by the execution-end handlers) and `waitingPaint` (the last `waiting` value pushed to the TUI, a dedupe
+   cache). Both are memory-only; `waitingSince` on the persisted record is untouched.
+2. `snapshotRecord` computes `waiting` as `heartbeating !== true && (deferredSince !== undefined || waitingSince !== undefined)`,
+   i.e. a pending deferral paints `waiting` only while the main session is quiet. Tool calls count as heartbeats
+   too, so a missed `execution.started` after a restart/reconnect cannot leave the pill stuck.
+3. New single choke point `syncWaitingPaint(sessionID)` compares the computed paint with `waitingPaint` and
+   emits a `changed` event only on a real flip. It runs on every heartbeat (execution start, tool call) and on
+   the turn end (`onExecutionSucceeded` after `running.delete`), so the flip reaches the TUI in the same event —
+   no 15s tick, no check-in. `emit()` re-syncs `waitingPaint` from the snapshot it actually sends, keeping every
+   other emission path (commit, clearDeferred, verdict) honest. A restored wait seeds `waitingPaint = true` on
+   adoption so the first post-reload heartbeat pushes the flip instead of waiting for a mirror re-read.
+4. Dedupe means a turn with hundreds of tool calls costs one extra `changed` event, not one per call. The
+   evaluation deferral, carried tool counts, check-in backoff, drain path and persisted `waitingSince` semantics
+   are unchanged; only the paint and its push timing moved.
+
+**Evidence (fresh at this HEAD).** `bun test` from `test/`: **2101 pass / 0 fail** (was 2098; +3 in
+`test/controller.test.ts`, no existing test weakened) — the new cases pin (a) the full `waiting → active →
+waiting` cycle driven purely by execution/tool events with zero clock advance, one deduped `changed` event per
+flip, the deferral and `waitingSince` intact, and no verdict consumed; (b) a tool call alone flipping the pill
+after a missed start event; (c) a restored wait flipping on the first heartbeat with an immediate `changed`
+event. `bunx tsc --noEmit` clean; `bun run check` green (incl. `check:spec`, `docs:check`, `check:tui`).
+`npm pack --dry-run --json` still 141 files (no new shipped file). SPEC marker re-stamped in this commit:
+`files=141 tests=2101`.
+
+**Honest limits.** (a) The heartbeat signal is process-local and event-fed, like the rest of the runtime: a
+session whose every start/tool event is dropped by the host bus still converges via the existing mirror/re-pull
+tick — this pass makes the normal event path instant, it does not add a new transport. (b) Verified at the unit
+layer (snapshot + `changed` emissions with the fake clock); no live terminal was driven this pass, so the
+instant flip is proven at the contract boundary the HUD paints from, not by a pixel capture. (c) The pill shows
+`active` while the main session works even though evaluation is still deferred; that is intentional — waiting
+means "nothing is happening in the session but background work", not "a judge is pending". (d) No config,
+prompt, HUD renderer, persisted record shape or TUI bundle changed.
+
+## Workstream: review recent changes, fix bugs, run the normal routines
+
+**Goal / interpretation.** The user asked to "review recent changes for bugs, fix what needs fixing, and do the normal routines until there are nothing else todo." *Recent changes* = the code commits landed on `dev` since the last review sweep: the single-package prompter bundle (`0dccc1b`) and the malformed-but-readable verdict parser fix (`aa4da0c`), plus their supporting chore/doc commits. *Normal routines* = `bun run check` (tsc → tests → check:dist → compile → check:tui → docs:check → invariant-sweep → spec-check). *Nothing else to do* = no open defects from the review, no stale open items in `CURRENT_TASK.md` / `pending_fixes.md`, a green suite, and the work submitted through the coordinator.
+
+**Acceptance criteria.**
+1. Every recent code change is reviewed against its own tests and the documented contract; findings are classified as real bugs vs. pinned-by-design behavior.
+2. Each real defect found is fixed with a regression test that fails on the pre-fix code and passes after (fix-then-pin discipline), without weakening existing tests.
+3. `bun run check` passes in the worktree with fresh output recorded below.
+4. No unreviewed open items remain in `CURRENT_TASK.md` or `pending_fixes.md`; items kept by design are explicitly recorded as such.
+5. Changes are committed on `wt/<slug>` and submitted via the coordinator; no direct commit to `dev`/`main`.
+6. This SPEC section records the interpretation, the acceptance criteria, and the fresh verification evidence.
+
+### Findings verified and fixed (fresh at this HEAD)
+
+Two independent read-only reviews covered (a) the bundled prompter loop (`src/prompter/*`, `bin/prompter.mjs`) and (b) the malformed-verdict fix plus its neighboring core/runtime changes. Each reported defect was reproduced live before changing code, then fixed with a regression test; with only the source fix stashed, the new tests fail (prompter: 3 fails + 2 module errors; verdict: 2 fails), and with the fix present they pass.
+
+**Prompter.**
+1. `src/prompter/backlog.ts` — `selectNextTask` excluded any id present in the append-only journal, so the documented "remove the marker to retry" flow could never retry a failed, rejected or interrupted task. It now excludes only *live* states (`running`, `in_review`); terminal records no longer disqualify an unmarked line. Regression tests in `test/prompter-backlog.test.ts` cover all four terminal statuses and both live statuses.
+2. `src/prompter/goal-rpc.ts` — the CLI imported `Rpc` from `@opencode/plugin/rpc` at runtime although `@opencode/plugin` is an *optional* peer that a clean install does not provide; every `prompter` subcommand (including the kill switches) would fail to load. The contract is now a local `as const` literal accepted structurally by `client.rpc()`; no runtime peer import. `test/prompter-driver.test.ts` guards the source against reintroducing it.
+3. `src/prompter/cli.ts` + `src/prompter/config.ts` — `tick` injected `PROMPTER_ALLOWED_REPOS` from `--repo` into `loadConfig`, so the flag rewrote the whitelist it was supposed to be checked against. The override is removed and `isRepoAllowed` is the single check; regression test in `test/prompter-config.test.ts`.
+4. `src/prompter/driver.ts` — a SIGTERM called `fileLog.end()` while the spawned server's stdout/stderr handlers kept writing, causing `ERR_STREAM_WRITE_AFTER_END` and a crash mid-shutdown. Writes are now guarded by `writable`, an `error` listener is attached, and the stream is closed once in `finally`; `writeLogLine` is pinned in `test/prompter-driver.test.ts`.
+5. `src/prompter/cli.ts` — `cleanup` skipped a finished task whose worktree was gone but whose branch remained; `cleanupWorktree` already checks both independently, so the caller now reaches it unconditionally. The retry instructions in `src/prompter/defaults.ts` and `src/prompter/review.ts` now mention `prompter cleanup`.
+
+**Verdict parser (`src/core/verdict.ts`).**
+6. `NEXT_POINTER` matched any `next:` substring, so an "already satisfied" met ending in `next: none` (the rubric's own no-gap output), `next: n/a`, or a bare `next:` was treated as a concrete forward pointer — defeating the duplicate gate and the zero-tool advancement guard. It now requires a non-empty, non-`none`/`n/a` payload while staying newline-tolerant for the rubric's numbered form. Both `applyForwardPointerGate` and `isAlreadySatisfiedLanding` share the constant, so the gate and the guard tighten together. Regression test in `test/core.test.ts`.
+7. The lenient pass matched `"verdict":"met"` inside a *reason string*, manufacturing a met from an object with no verdict field. It now requires the quoted key to sit at an object-key position (even/odd unescaped-quote scan from the object brace), so a token a model quoted while discussing another evaluation is ignored. Regression test in `test/core.test.ts`.
+
+**Reviewed, not changed (by design / pinned).** `maxTasksPerTick > 1` still processes at most one task per tick — the documented one-unit-at-a-time review gate wins; `reject` resolves the repo via `--repo` (as its usage states) rather than a trailing positional, unlike `approve`. The remaining hardening observation (verification-reuse cache keyed on turn+HEAD across loop iterations when no commit landed) is consistent with "fresh evidence at current HEAD" and was left untouched.
+
+### Verification (fresh output at this HEAD)
+
+- `bun run check` exit 0: `tsc --noEmit` clean; `cd test && bun test` → **2104 pass / 0 fail** across 91 files (29 snapshots, 199,018 expect() calls), up from 2098 (+6 regression tests: 4 prompter, 2 verdict); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed; `invariant-sweep` ok (SPEC.md + docs/changelog.html both updated for the `src/core` behavior change); `check:spec` ok (141 files, 2104 tests match SPEC.md). The canonical marker at line 499 was re-counted in-commit via `spec-check --write`.
+- Fix-then-pin discrimination (source fix stashed, tests kept): prompter suite 3 fails + 2 errors; `test/core.test.ts` 2 fails. With fixes restored all targeted suites pass.
+- Live reproductions before fixing: `next: none` / `next:` / `n/a` on the already-satisfied path parsed as `met` and `isAlreadySatisfiedLanding === true`; a verdict token embedded in a reason parsed as `met`. After fixing all of these fail closed.
+
+## Workstream — empty-verdict evaluator: strip tools from judge generations, fail loudly (2026-11-21)
+
+Status: implemented and verified against this section. Trigger: the recurring live notice
+`Evaluator failed (unreadable verdict after 3 attempts: ""); retrying in 10s.` — a judge reply with no text,
+burning all three repair attempts and stalling the goal.
+
+### Root cause (widen the search beyond `Evaluator.ask`)
+
+Earlier workstreams hardened the retry ladder (per-attempt abort budget, repair prompts, lenient verdict parsing)
+but treated the empty reply as a parse/timing symptom. Reading the host implementation
+(`opencode/packages/core/src/session/generate.ts` + `packages/ai/src/loop.ts`) shows the actual cause:
+`session.generate` is a **single model step** — `llm.generate` folds one stream with no tool-execution loop.
+Its `.text` is assembled from text events only (`LLMResponse.text`), so a tool call or a reasoning-only reply
+yields `""`. That request is sent with the session's **full tool set** (`tools: selection.tools`), and small judges
+routinely answer the rubric with a tool call instead of text. `STRICT_REPAIR`'s "do not call tools" is only prose —
+the tools stayed available, so all three escalating attempts repeated the same tool-bearing request and returned
+`""` three times. On top of that, `ask()` discarded the raw reply on every failure, so the notice carried nothing
+but the empty string: a silent failure.
+
+### Change
+
+1. `src/index.ts` · `generate` hook: while `evaluator.isEvaluating(sessionID)`, delete every key of `event.tools`
+   in place (the SDK's documented mutation pattern) in addition to bounding `maxTokens`. Ordinary turns keep their
+   tools. The host keys the prompt cache on session affinity, not on the tool list, and the `context` hook already
+   edits system/messages for these requests, so this does not break the cached prefix. With no tools on the request
+   the judge must answer in text, which is what `response.text` can carry back to `parseVerdict`.
+2. `src/runtime/evaluator.ts` · `ask()`: every unreadable reply is now logged at `warn` with its attempt number, raw
+   character count and a preview of the exact text; the terminal `EvaluationError` names the likely cause ("no text
+   event in the judge reply — usually a tool call or reasoning-only response"). The failure is no longer silent.
+
+### Verification
+
+- New `test/plugin.test.ts` regression drives a real turn with a pending judge reply, invokes the captured `generate`
+  hook mid-evaluation, and asserts tools are removed and output bounded while in flight, then restored after the
+  verdict lands. Reverting the hook change fails this test.
+- New `test/evaluator.test.ts` regression asserts three unreadable attempts produce three raw-text warnings and an
+  error naming the cause.
+- Full `cd test && bun test`: 2109 pass / 0 fail (91 files) on the rebased tree (dev advanced under this lease; the review lease's 2107 count plus these 2 regressions). `tsc --noEmit` clean. Marker re-counted 2107 → 2109.
+
+### Honest limits
+
+- The empty reply's internal provider detail (finish reason, tool-call names) is not exposed by `session.generate`,
+  which returns only `{ text, tokens, cost }`; the warning logs the raw text we actually receive, not the provider's
+  part list. If a provider emits no text even with tools removed, that is now a visible, diagnosed failure rather
+  than a silent `""`.
+- Tool stripping applies to all session-mode evaluator generations (verdict, loop summary, next condition) — all of
+  them want text, none of them need tools. Independent mode uses stateless `generate.text` and is unaffected.
+- No change to the verdict parser, retry ladder, config, rubric, verifier gate, persisted record shape or TUI.
+
+<!-- spec-check files=141 tests=2109 -->
+
+## Workstream — Audit of "Coordinator workflow gotchas": verify each claim, fix the discoverability gaps (2026-11-21)
+
+Status: specified here first, then implemented and verified against this section. Trigger: a field note
+with eight numbered gotchas about the coordinator flow was handed over with "go over this and see if
+there are any improvements can be done. auditing." This section is the interpretation, the acceptance
+criteria and the verification record — the tree is truth, so every verdict below cites the code that
+settles it.
+
+### Interpretation
+
+The note is a practitioner's map of coordinator surprises, not a spec. "Improvements" means two things,
+both in scope here: (1) separate the claims that the binary actually enforces from the ones that are
+outdated or imprecise, so a reader stops guessing; (2) fix the small tooling gaps that *caused* the
+surprises, where the fix is a low-risk help/message change with a regression test. The workflow itself
+(claim → work in worktree → submit → merge-next) is not redesigned; `docs/parallel-work.md` stays the
+canonical how-to and gains a concise, corrected field-gotcha reference.
+
+### Acceptance criteria
+
+- AC1 — Verdict table: all eight pasted claims are classified (accurate / partially accurate / outdated)
+  against `packages/coordinator/bin/coordinator`, each with a line-level citation. No claim is accepted
+  on the note's word alone.
+- AC2 — Discoverability fix: the top-level `coordinator --help` advertises
+  `merge-next [<slug>|--target <slug>] [--review]`. The detailed `merge-next --help` already documents
+  `--target`; the summary that agents actually read first does not, which is the root cause of gotcha 4.
+- AC3 — Message fix: the worktree-drift recovery in `merge-next` stops advising "re-submit them".
+  `submit` refuses a lease whose status is `submitted` ("expected claimed"), so that advice is impossible
+  as written; the corrected message points to discard or release + re-claim. A regression test pins both
+  message fixes.
+- AC4 — Corrected field reference: `docs/parallel-work.md` carries a gotcha table that records the
+  accurate claims, marks the two corrections (claim `--force` is a transient warning, not a persisted
+  lease field; after a rebase, do **not** re-submit — `merge-next` tracks the branch tip), and adds the
+  omitted edge cases (drift from post-submit detached commits, shared-path exemptions, auto re-count of
+  SPEC/changelog on the merged tree).
+- AC5 — Green gate: `bun run check` exit 0 (tsc, full `bun test`, dist, compile, TUI load, docs freshness,
+  invariant sweep, SPEC honesty). The enforced (first-occurrence) marker and this section's trailing
+  marker are re-counted in-commit. No secrets, no deletions, no relaxed tests.
+- AC6 — Clean hand-off: all edits committed on `wt/<slug>` only; `submit` succeeds; `dev`/`main` untouched
+  by direct commit.
+
+### Findings (AC1) — verdicts against source
+
+1. **Claim path overlap — accurate.** `do_claim` calls `check_overlap` and exits 1 unless `--force`
+   (coordinator:438-442); overlap is checked only against non-`done` leases (301-304). **Correction:** the
+   note says the override "is logged"; it is not — claim `--force` emits a transient stderr warning
+   `path overlap with <slug> (forced)` (316-318) and writes no `forced*` field. Only `submit --force` is
+   persisted (`forcedScope`, `forcedScopeAt`, `forcedScopeFiles`:608-610).
+2. **Scope enforced at submit — accurate.** Violations are the three-dot diff `base...HEAD` against the
+   claimed paths, minus `SHARED_PATHS` (561-572); `--force` logs the override (608-610). **Addition:**
+   shared paths (`.term/coordinator/state.json`, `docs/changelog.html`, config `sharedPaths`) never fail
+   the check, so a wide claim is rarely needed just for bookkeeping files.
+3. **submit takes no slug — accurate.** Any positional argument hits `unexpected argument` (504-505);
+   the slug is derived from the current `wt/<slug>` branch (508-519).
+4. **merge-next needs an explicit target — accurate, but self-inflicted.** From the main repo there is no
+   `caller_slug`, so with no target it errors `must target a lease explicitly; run from your wt/<slug>
+   worktree or pass --target <slug>` (857-871). `--target`/`--target=`/bare positional slug all work
+   (823-843). **Root cause fixed by AC2:** the top-level usage string lists only `merge-next [--review]`
+   (1648), hiding `--target`.
+5. **dev can move while you work — accurate.** The stale-base guard fails when `merge-base(dev,branch)
+   != dev` tip, leaves dev untouched, and prints the exact `rebase dev` recovery (1051-1060). Checking
+   `status --json`/`queue --json` before merging is already the documented habit.
+6. **Rebase conflicts in SPEC.md / docs/changelog.html — accurate as observation, outdated as advice.**
+   Both are shared/contested. But `merge-next` re-counts the SPEC marker on the merged tree and commits
+   it (1124-1144) and regenerates changelog/stamps there (1146-1168), so the agent does not have to ship
+   those fixes to land a merge; local regeneration is only needed to make the agent's own `bun run check`
+   green. Keeping both workstream sections and dropping stale markers remains sound (only the first
+   marker is enforced — see 7).
+7. **First marker is the enforced one — accurate.** `parseMarker` and `writeMarker` use a non-global
+   regex, so only the first `<!-- spec-check files=N tests=N -->` is read or rewritten
+   (scripts/spec-check.ts:76-80, 114-120). Trailing per-workstream markers are historical annotations.
+8. **A submitted lease cannot be re-submitted — accurate, but the conclusion is too hedged.** `submit`
+   requires status `claimed` (542-546), so a submitted lease is refused. The definitive answer is
+   "don't re-submit": after `git rebase dev`, `wt/<slug>` itself is rewritten, so the branch tip *is* the
+   rebased commit, the worktree HEAD matches it, the stale-base check passes and the drift guard passes —
+   `merge-next` tracks the branch tip. Release + re-claim is unnecessary and loses queue position.
+   **Correction made by AC3:** the drift-guard error currently says "or re-submit them" (1073-1074),
+   which is impossible; it now points to discard or release + re-claim.
+
+### Omitted gotchas added to the field reference (AC4)
+
+- Worktree drift is not "committed after submit" on the checked-out branch (that advances the branch tip
+  too); it needs a detached HEAD or a branch reset, and merge-next refuses it with dev untouched
+  (1062-1075). Recovery: `git reset --hard <branch>` to discard.
+- `merge-next` also requires the main checkout clean apart from exempt `state.json` dirt (1041-1045);
+  the preflight names overlapping in-flight leases and `SEMANTIC-RISK` module neighbours (1170-1220).
+- `claim --force` on an existing lease keeps the existing branch/worktree (idempotent creation,
+  444-476) and only rewrites the lease record — useful to know before "fixing" a stale claim.
+
+### Verification
+
+Recorded after implementation:
+- `bun test coordinator.test.ts coordinator-merge-safety.test.ts` → **52 pass / 0 fail** (329 expect calls),
+  including the new top-level-help test and the drift-message regression assertions.
+- `packages/coordinator/bin/coordinator --help` now prints
+  `merge-next [<slug>|--target <slug>] [--review]`; `spec-check --write` re-counted the enforced marker
+  `141/2109 → 141/2110` (the one added test). No packed-file change: all edits are in already-shipped
+  `packages/coordinator/bin/coordinator`, docs, SPEC and tests.
+- Full `bun run check` exit 0 at this HEAD: `tsc --noEmit` clean; `cd test && bun test` → **2110 pass /
+  0 fail** across 91 files (29 snapshots, 199,057 expect() calls); `check:dist` ok; `compile` rebuilt
+  `dist/tui.js`; `check:tui` ok; `docs:check` passed; `invariant-sweep` ok; `check:spec` ok
+  (141 files, 2110 tests match SPEC.md). The shipped-file count is unchanged, so only the test count
+  moved (2109 → 2110) and the enforced marker was re-counted in-commit.
+
+<!-- spec-check files=141 tests=2110 -->
+
+## Workstream — inherit the parent session's model for the evaluator (2026-11-21)
+
+Status: specified first (fuzzy request), then implemented and verified against this section.
+
+### Interpretation
+
+The evaluator's judging model was configured **statically**: `evaluator.model` (or `OPENCODE_GOAL_MODEL`,
+or the top-level `model` fallback) pinned a specific `providerID/model` for the independent judge. When that
+pinned model is unavailable or unsuitable, evaluation fails and the goal stalls. The user's diagnosis: "it is
+pinned to the specific model … make it inherit current active model/provider of parent's model … whatever model
+is being used to run the session it has to be inherited easily."
+
+"Parent" here means the session the goal is armed in. The host already tracks the active generation model on
+that session (`SessionInfo.model = { providerID, id, variant? }`, exposed as `ctx.session.get({ sessionID })`).
+"Easily" means a single config token, with no copied model string that can go stale when the session switches
+models (a `/model` change, an agent default change, a fallback provider).
+
+### Acceptance criteria
+
+1. A new sentinel value **`inherit`** (case-insensitive, trimmed; aliases `session`, `parent`, `current`, `active`)
+   is accepted wherever a model is configured: `evaluator.model`, `OPENCODE_GOAL_MODEL`, and top-level `model`.
+2. `resolveConfig` resolves the sentinel to `evaluator.inheritModel === true` with `evaluator.model === undefined`;
+   it never manufactures a fake pinned `ModelRef`. Auto mode with the sentinel selects the `independent` pipeline
+   (transcript digest judged separately) so the judge remains isolated from the working turn, but runs on the
+   inherited model instead of a pinned one.
+3. At evaluation time the evaluator resolves the **current** session model via a new optional
+   `EvaluatorDeps.sessionModel(sessionID)` port wired to `ctx.session.get({ sessionID }).model`, and uses it for
+   `modelGenerate`. Resolution happens per generation, so a model switch mid-goal is followed on the next verdict.
+   No configured model means no host call — behavior for pinned/session modes is byte-compatible.
+4. If the host cannot resolve a session model (missing/errored), the evaluator falls back to the session evaluator
+   (which already uses the session's own model) and logs a warning — never a hard failure from the inherit path.
+5. Backward compatibility: no config change → `inheritModel === false`, `model === undefined`, mode `session`
+   (unchanged); a pinned `ModelRef` still selects `independent` and is used verbatim; explicit `mode: "session"`
+   still means session mode.
+6. Documentation: README and `docs/config.html` document the sentinel on the existing `evaluator.model` row
+   (no new option key, so the defaults-sync test stays green); SPEC describes behavior and verification.
+
+### Verification (run against this tree; actual output recorded after implementation)
+
+- Config-sentinel unit tests: `test/core.test.ts` — sentinel and aliases across all three config sources,
+  `inheritModel`/`model`/`mode` assertions, case/whitespace handling, explicit-mode overrides, pinned-model
+  regression.
+- Evaluator wiring tests: `test/evaluator.test.ts` — with `inheritModel` the model port is called and its
+  `ModelRef` is passed to `modelGenerate`; a mid-goal model change is picked up; a failing/absent port falls back
+  to session mode with a warning; summaries and next-goal generation inherit too; pinned/session modes are
+  unchanged.
+- Full suite `bun run check`: `tsc --noEmit` clean; `cd test && bun test` → **2119 pass / 0 fail** (91 files,
+  29 snapshots, 199,104 expect() calls), up from 2110 on rebased dev (+9 regressions: 3 config-sentinel,
+  6 evaluator);
+  `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed. `check:invariant` requires
+  `docs/changelog.html` in the same change set for a `src/core|src/runtime` behavior change — regenerated with
+  `bun scripts/docs-watch.ts once` after the content commit and committed as the docs refresh. `check:spec` ok
+  (141 files, 2118 tests match SPEC.md); the marker was re-counted in-commit via `spec-check --write`.
+- Ready-log surface: with `inheritModel` set, `src/index.ts` logs `model: session (inherited)` instead of a pinned
+  `provider/model`; no model string has to be copied into config and kept in sync with a `/model` switch.
+- Line-shift bookkeeping: the new config helper shifts the historical docs reference into `src/core/config.ts`
+  from old line 162 to line 176 (from an earlier workstream); the referenced code text is unchanged, and
+  `docs-line-refs` is re-run.
+
+## Workstream — audit recent changes for bugs (2026-11-21)
+
+Status: specified first (fuzzy request), then audited and verified against this section.
+
+### Interpretation
+
+The user asked to "audit recent changes for bugs". *Recent changes* = the code-behavior commits landed on `dev`
+in the window `aa4da0c^..HEAD` (2026-11-20/21), i.e. the malformed-but-readable verdict parser (`aa4da0c`),
+the single-package prompter bundle + dedupe (`0dccc1b`), the instant waiting-pill heartbeat flip (`55c6134`),
+the review fixes for prompter retry/whitelist/shutdown + verdict forward-pointer/lenient parser (`690ba9d`),
+the evaluator tool-strip + unreadable-reply logging (`70d2ed6`), the coordinator gotcha/help fixes (`32e1bba`),
+and the evaluator parent-model inheritance (`e17020b`), plus their supporting chore/doc commits. Each of these
+already carries its own SPEC workstream; this pass is a fresh, independent bug hunt over the combined tree,
+not a re-narration of those sections. *Audit* = read-only review of the code against its tests and documented
+contract, classify each finding as a real bug vs. pinned-by-design behavior, reproduce every claimed bug,
+then fix confirmed defects with regression tests, run the full routine, and hand off through the coordinator.
+
+### Acceptance criteria
+
+1. Every recent code-behavior change is reviewed against its own tests and the documented contract; findings
+   are classified as real bugs vs. pinned-by-design behavior, each with a line-level citation.
+2. Each real defect is reproduced with fresh evidence before changing code, then fixed with a regression test
+   that fails on the pre-fix code and passes after (fix-then-pin discipline), without weakening existing tests.
+3. `bun run check` passes in the worktree with fresh output recorded below.
+4. No unreviewed open defect from this audit remains; items kept by design are explicitly recorded as such.
+5. Changes are committed on `wt/<slug>` and submitted via the coordinator; no direct commit to `dev`/`main`.
+6. This SPEC section records the interpretation, the acceptance criteria, the findings and the fresh evidence.
+
+### Findings
+
+Four independent read-only reviews covered the evaluator/config/plugin changes, the runtime controller, the
+bundled prompter loop, and the verdict parser/coordinator. Six real defects were reproduced with fresh evidence
+before any code changed, then fixed with regression tests that fail on the pre-fix code. Fix-then-pin
+discrimination is recorded per finding below.
+
+**Verdict parser (`src/core/verdict.ts`) — two parser-inversion bugs.**
+
+1. **HIGH — a verdict object quoted inside a malformed reason overrode the real verdict.** `jsonObjects()`
+   restarted its balanced-object scan at *every* `{`, including braces inside a string value, so the inner
+   `{"verdict":"met"}` was emitted as a strict candidate and parsed before the real outer field. The
+   `isObjectKeyPosition` guard protected only the lenient path. Live reproduction:
+   `{"verdict":"not_met","reason":"prior eval returned\n{"verdict":"met"} but it was wrong"}` parsed as `met`
+   (and the mirror parsed a `met` outer as `not_met`); a false `met` can end/advance a goal on failed work.
+   Fix: one left-to-right string-aware pass yields only top-level object spans. Regression test in
+   `test/core.test.ts` failed pre-fix (`Expected "not_met", Received "met"`).
+2. **MEDIUM — the lenient pass hid a real verdict behind an embedded token.** `lenientFields()` used
+   `.exec()` (first match only); an embedded `"verdict":"met"` inside the reason failed the object-key guard
+   and the loop moved to the next *key* instead of the next *occurrence*, so a genuine
+   `"verdict":"not_met"` after it was never seen. Live reproduction returned `undefined`, burning all three
+   repair attempts exactly like the stall CXVII removed. Fix: global regex, scan all occurrences, accept the
+   first at an object-key position. Regression test in `test/core.test.ts` failed pre-fix (`undefined`).
+
+**Runtime (`src/runtime/controller.ts`) — one stuck-pill bug.**
+
+3. **MEDIUM — a straggler `succeeded` left the pill stuck on `active`.** `onExecutionSucceeded` returned at
+   the straggler guard (`awaitingExecution || dropStragglerSucceeded`) *before* clearing `heartbeating`. When a
+   continuation's `execution.started` was swallowed (restart/reconnect) but tool events and the succeeded
+   arrived, the drop left `heartbeating === true` forever; `snapshotRecord` derives `waiting` from that flag,
+   so a deferred session painted `active` permanently — and the 15s mirror re-read the same stuck flag. Fix:
+   clear the heartbeat and `syncWaitingPaint` before the drop guard (an execution ended regardless of whether
+   it is evaluated). Regression test in `test/controller.test.ts` drove an idle check-in continuation with a
+   missed start and failed pre-fix (`waiting === false`, no flip event).
+
+**Evaluator (`src/runtime/evaluator.ts`) — one unbounded-await bug.**
+
+4. **LOW (conditional) — inherited-model resolution had no timeout.** `resolveModel()` awaited the
+   `sessionModel` host port outside `underBudget`, so a hung `ctx.session.get` stalled `evaluate()`/`summarize()`/
+   `nextGoal()` indefinitely with no `EvaluationTimeoutError`, retry or diagnostic — the failure mode
+   `underBudget` exists to prevent. Fix: wrap the port call in `underBudget(..., "model resolution")`; the
+   existing catch degrades to the session evaluator, so inherit still never hard-fails. Regression test in
+   `test/evaluator.test.ts` used a never-settling, signal-ignoring port and hung pre-fix (race returned `HUNG`).
+
+**Prompter (`src/prompter/*`) — one safety-cap bug and one path bug.**
+
+5. **MEDIUM — dollar/token caps were never enforced.** `budgetStop` checks `budget.costUsd`/`tokens`, but
+   `tick` only calls `noteUsage` *after* `awaitRunTask` returns and always breaks after one task; the driver's
+   `shouldStop` polled the same still-zero budget, so spend/token breaches could never fire (the wall-clock
+   cap did, because it reads `Date.now()`). An over-budget task was still parked `in_review`. Fix: new pure
+   `liveBudgetStop(config, record)` reads cost/tokens from the live goal record each poll and halts mid-task;
+   `budgetStoppedResult` forces `failed` so a breach is never presented as achieved. Regression tests in
+   `test/prompter-driver.test.ts` failed pre-fix (module error — the helpers did not exist).
+6. **LOW — a relative `stateFile` was not resolved against the repo.** `normalize` resolved every other path
+   field but used `stateFile` verbatim, so a configured relative journal landed in the CLI's CWD when invoked
+   from elsewhere — misplacing state and potentially bypassing the one-`in_review` guard. Fix: resolve it like
+   `promptLibrary` (absolute as-is, else relative to `repo`). Regression assertion in
+   `test/prompter-config.test.ts` failed pre-fix (`"journal.jsonl"` vs `"/repo/journal.jsonl"`).
+
+**Reviewed, not changed (by design / pinned).** Coordinator help/drift messages and dedupe logic match their
+tests and source; tool-stripping, config-sentinel resolution and the ready-log match their contracts; the MPC
+consensus paths and verdict forward-pointer/zero-tool interaction are pinned. One latent note was deliberately
+left alone: the downgrade reason in `applyForwardPointerGate` contains a literal `next:` token, so
+`isAlreadySatisfiedLanding(gateOutput.reason)` is true — harmless today because the only caller requires
+`verdict === "met"` and the gate emits `not_met`; changing it would rewrite a pinned reason string for no
+behavioral gain.
+
+### Verification
+
+- `bun run check` exit 0 in the worktree at this HEAD: `tsc --noEmit` clean; `cd test && bun test` → **2126 pass /
+  0 fail** across 91 files (29 snapshots, 199,128 expect() calls), up from the 2119-pass baseline (+7 regression
+  tests: 2 verdict, 1 controller, 1 evaluator, 3 prompter-driver; the prompter-config assertion was added to an
+  existing test); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed;
+  `invariant-sweep` ok (SPEC.md + `docs/changelog.html` both in the change set for the `src/core`/`src/runtime`
+  behavior changes); `check:spec` ok (141 files, 2126 tests match SPEC.md). The enforced first marker was
+  re-counted in-commit via `spec-check --write` (141/2119 → 141/2126).
+- Fix-then-pin discrimination: with the fixes absent, the two verdict cases returned `met`/`undefined` instead
+  of `not_met`; the controller case held `waiting === false`; the evaluator case returned `HUNG` after 1s; the
+  prompter-driver suite failed at import (helpers absent); the prompter-config case returned `"journal.jsonl"`.
+  With all fixes present every targeted suite passes, and the full 267-test controller+loop and 39-test
+  evaluator suites stayed green.
+- Live reproductions before fixing: `bun /tmp/opencode/verify-verdict.ts` printed
+  `{"verdict":"met","reason":""}` for the outer-`not_met` input and `undefined` for the embedded-token input;
+  after fixing the same script printed `not_met` for both.
+- Honest limits. (a) The prompter caps are now enforced at the driver's poll boundary (per the live goal record)
+  and fail closed to `failed` — this is polling-level enforcement, not a hard kill of an in-flight provider call;
+  a single generation between polls can still overshoot before the next poll observes it. (b) The inherited-model
+  timeout degrades to the session evaluator rather than surfacing `EvaluationTimeoutError` for the lookup itself,
+  by design ("inherit never hard-fails"); it is bounded and warned, not silent. (c) The heartbeat fix was verified
+  at the unit layer with the fake clock; no live terminal was driven this pass. (d) No config option, record
+  schema, TUI bundle or prompt changed; no test was weakened or deleted.
+
+## Workstream — the goal follows the session that armed it across directory moves (2026-11-21)
+
+### Interpretation
+
+`/goal` and `/goal-loop` are session-scoped today (one record per `sessionID`), but every directory-sensitive
+operation reads a single directory captured once at plugin setup (`ctx.location.directory` →
+`ControllerDeps.directory`). When the host moves the *session* to another directory — OpenCode emits
+`session.moved` with the new directory — the goal keeps pointing at the old checkout: verification commands
+run there, HEAD evidence is read there, and a plugin that reloads in the new directory cannot restore the
+record. The goal belongs to the session, so it must travel with it. "It follows whichever session activated
+it" means the association is by `sessionID` and the directory is a property of that session's current
+location, not a fixed property of the plugin instance.
+
+### Acceptance criteria
+
+1. A goal is owned by the `sessionID` that armed it. Arming in session `S` changes only `S`'s record; a goal
+   in session `T` is never moved or cleared by `S`'s activity.
+2. The host's `session.moved` event moves `S`'s goal: the persisted `GoalRecord.directory` becomes the new
+   directory, the write is durable, one `changed` snapshot carrying the new directory is emitted, and a log
+   line records the transition. The new directory is read from `event.location.directory`, falling back to
+   `data.location.directory` (both shapes occur in the host's generated event contract).
+3. From the move onward, every directory-sensitive operation for `S` uses `S`'s current directory instead of
+   the plugin's setup directory: verification command `cwd`, HEAD stamping for verdict evidence, the verify
+   cache key, the change-risk gate, repeated-failure diagnostic artifacts, backlog suggestions, learning-log
+   writes, loop-advance HEAD, the commit rule injected into agent directives and the evaluator rubric, and a
+   replacement goal armed later in the same moved session.
+4. Any event that carries both a `sessionID` and a location directory reconciles that session's goal
+   directory (robust when `session.moved` is missed, replayed, or delivered as a differently named event).
+   A later event with an older `durable.seq` is ignored, and a sequence-less generic report cannot undo an
+   explicit `session.moved`. A real move bumps the session epoch, invalidating any evaluation in flight so its
+   HEAD and commit-rule evidence cannot land against the old checkout. An event whose directory equals the
+   goal's current directory is a true no-op: no store write, no `changed` event, no log line.
+5. Read surfaces follow the session: `peekSnapshot(S)` serves the moved record (no false "foreign directory"
+   rejection), `peekList()` includes it, and after a reload with the new setup directory
+   `store.loadLive(newDirectory)` restores it. The `changed` snapshot also rewrites the TUI's global mirror, so
+   the new directory's card paints the goal immediately. A record from a session that never moved is still
+   rejected for an unrelated directory — directory isolation is not weakened.
+6. Backward compatibility: no location-bearing event and no move → byte-identical behavior. `GoalRecord`
+   stays `version: 1` with no new required field; no config key or environment variable is added; the
+   commit policy and all prompts keep working when the directory is unchanged.
+7. No visual surface changes: the TUI pill/card/dialog grammar is untouched, so no screenshot or render is
+   required for this workstream. Verification is behavioral (transcript-visible logs and automated tests).
+
+### Verification
+
+- Router tests: `session.moved` with the directory at `event.location.directory` and at
+  `data.location.directory` calls the controller; a move with no `sessionID` or no directory is ignored;
+  replayed event IDs are still deduped; a late event with an older `durable.seq` and a sequence-less generic
+  report after an explicit move both leave the goal in the new directory.
+- Controller tests: after a move the live record, the persisted record, and the emitted snapshot all carry
+  the new directory; a second identical move is a no-op (write count unchanged); another session's goal is
+  untouched; arming a replacement goal in the moved session records the new directory; a verify-gated `met`
+  runs its command with `cwd` set to the new directory; `peekSnapshot`/`peekList` and a fresh
+  `loadLive(newDirectory)` find the goal while `loadLive(oldDirectory)` no longer does.
+- Full suite `bun run check` run against this tree: `tsc --noEmit` clean; `cd test && bun test` → **2138 pass /
+  0 fail** (92 files, 29 snapshots, 199,158 expect() calls), up from 2126 on the rebased dev tip (+12 regressions
+  in `test/session-directory.test.ts`); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok;
+  `docs:check` passed; `check:invariant` ok with the matching `docs/changelog.html` behavior-change note;
+  `check:spec` ok (141 files, 2127 tests match SPEC.md; the marker was re-counted in-commit).
+- Line-shift bookkeeping: the `location` field and its comment on `ServerEvent` move `type Data` in
+  `src/runtime/events.ts` down two lines, so the historical A-14 SPEC reference was re-pointed from line 17
+  to line 16 (where `type Data` now lives). The referenced code text is unchanged and `docs-line-refs` is green.
+
+## Workstream CXXI — the evaluator inherits the parent session's fingerprint (2026-11-21)
+
+Armed by the user's screenshot of a live `/goal`: the card read "Evaluator failed (Free usage limit reached …);
+retrying in 10s" while the working session kept running on the same `opencode/hy4-flash-free` model/provider.
+Reading the current tree before touching anything: `evaluator.mode: independent` with `evaluator.model: inherit`
+resolves the parent session's model correctly (`e17020b`) but then judges through the host's **stateless**
+`ctx.generate.text`. OpenCode v2's own `packages/core/src/generate.ts` sets
+`headers: { "x-opencode-session": SessionID.create() }` on that path — a brand-new session identity per call —
+whereas session requests set `x-opencode-session` from `SessionAffinity.get(session)`
+(`session.parentID ?? fork ?? session.id`, `packages/core/src/session/model-request.ts`). The gateway enforces
+free-model usage per session fingerprint, so every evaluator call arrived as a fresh session and was rejected
+with `Free usage limit reached` even though the parent session still had quota. This is the "same model and
+provider and session — it should inherit the same session fingerprint" symptom.
+
+1. Fix. `src/runtime/evaluator.ts` — `resolveModel` now returns `ModelChoice { model, bindToSession }`; a
+   pinned model keeps `bindToSession: false`, an inherited (session-own) model sets it `true`. A new optional
+   `sessionModelGenerate(sessionID, prompt, signal)` port is used by `judgeGenerate` when `bindToSession` is
+   true, falling back to the existing stateless `modelGenerate` when the port is absent (legacy callers/tests).
+   All three judge call sites (verdict, loop summary, next-goal) plus consensus's second opinion share the
+   closure, so every inherit-mode generation — not just the first verdict — rides the session. The
+   session-bound step is wrapped in `trackInflight` so the host's existing `generate` hook still strips tools
+   and caps output tokens for it (`session.generate` carries the session's tool set; a small judge answering
+   with a tool call would otherwise return empty text and exhaust the three repair attempts).
+2. Host wiring. `src/index.ts` implements the new port with
+   `ctx.session.generate({ sessionID, prompt }, { signal }).text`: a single model step that carries the
+   session's `x-opencode-session` affinity headers and does not mutate session history (OpenCode's
+   `SessionGenerate.generate` documents both). No config key, env var, prompt, verdict rule, or persisted
+   record shape changed; pinned independent and plain session modes are byte-compatible.
+3. Verified at the host-source layer against `Projects/opencode` v2.3.0 checkout and the installed v2.3.2
+   binary: `generate.ts` mints a fresh `SessionID.create()` per stateless call; `model-request.ts` binds session
+   requests to `SessionAffinity.get(session)`; `session/generate.ts` is history-free. Live gateway replay was
+   not run this pass (the free quota is an account-level resource); the wiring is exercised by unit tests and
+   the read-only source evidence above. Honest limit: an account whose free quota is genuinely exhausted for
+   the session itself still fails — this fix removes the *extra* fingerprint mismatch, not the provider's quota.
+4. Tests (`test/evaluator.test.ts`, +5): inherit mode calls `sessionModelGenerate` with the parent sessionID
+   and not `modelGenerate`; loop summary and next-goal ride the same session-bound port; a pinned independent
+   judge stays stateless even when the port is present; the session-bound call is marked in-flight while it runs;
+   and without the port inherit degrades to the stateless model port. Full `bun run check` green; marker
+   re-counted in-commit.
+
+## Workstream CXXII — evaluator free-usage limits pause instead of failing the goal (2026-11-21)
+
+Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evaluator failed (Free usage limit reached …); retrying in 30s" while the session kept running on the same `opencode/hy4-flash-free` model/provider. Re-reading the tree before touching anything: CXXI already routes inherit-mode judge generations through `ctx.session.generate`, and plain `session` mode (the default, and the mode of every failing session in `.term/goal-loop/learnings.jsonl`) has always used it. Verified against the installed v2.3.2 binary (`strings` around `x-opencode-session`): stateless `generate.ts` sets a fresh `SessionID.create()` per call, while `session.generate` → `model-request.ts` binds `x-opencode-session` to `SessionAffinity.get(session)`. Host log (`~/.local/share/opencode/log/opencode.log`) shows the error is a gateway `429`/`QuotaExceeded` with `FreeUsageLimitError` in the body — a self-clearing rate limit ("Rate limit exceeded. Please try again later"), not a misconfigured model. The model/fingerprint inheritance is correct; the remaining bug is **failure classification**.
+
+1. Root cause. `GoalController.evaluationFailed` treated every evaluator error as a generic transient: 3 fast retries (`REEVALUATE_BASE_MS × 3ⁿ` = 10s → 30s → 90s) then `maxRetries` (default 3) → terminal `failed`. The *execution* path already knows better — `core/errors.ts · classifyFailure` maps usage/rate limits to `"pause"`, which `handleFailure` services with a 15-minute fixed backoff and unlimited retries because those windows clear on their own. The evaluator, which judges on the session's own model/fingerprint, shares that session's free-usage bucket; a temporary bucket exhaustion therefore killed an otherwise healthy goal instead of waiting it out. That is the "same model works for the session but the evaluator fails" symptom at its root.
+2. Fix. `core/errors.ts` adds `isUsageLimitError(error)` — a deliberately narrow detector (429 status, "rate limit", "too many requests", "usage limit", "free usage"/"FreeUsageLimitError") so a generic error or a credit/auth failure is never mistaken for a self-clearing limit. `src/runtime/controller.ts · evaluationFailed` uses it: usage-limit errors skip the `maxRetries` exhaustion check, back off a fixed `PAUSE_RETRY_MS` (15m), notify `Evaluator paused (free usage limit — judge shares this session's model/quota); retrying in 15m`, and retry forever until the verdict lands. Transient evaluator errors (timeouts, connections, unreadable verdicts) and fatal ones keep their existing fast-backoff/`maxRetries` behavior byte-for-byte.
+3. Verified at the source/test layer: binary header extraction (above) confirms the evaluator already rides the session model/fingerprint; host log confirms the error class. Live gateway replay was not re-run (free quota is an account-level resource); the pause/resume cycle is exercised deterministically in `test/controller.test.ts` with a fake clock, including recovery to `achieved` after the window clears.
+4. Tests (`test/controller.test.ts`, +2): a `Free usage limit reached` evaluator error with `maxRetries: 1` stays `active`, pauses at 15m, never exhausts the cap across repeated hits, and succeeds after the window clears; `isUsageLimitError` is scoped narrowly (429 / rate/usage/free-usage true; generic error, credit balance, timeout false). Full `bun run check` green; marker re-counted in-commit.
+## Workstream CXXIII — repo-scoped .term artifacts always anchor at the git root (2026-11-21)
+
+Armed by the user's report: launching OpenCode from a subfolder (`Projects/goal-loop/docs/`) left a `.term/`
+in that subfolder instead of only at the project root. Reading the tree: the startup scaffold in `src/index.ts`
+already resolved the repo root via `findRepository`, but the two runtime `.term` writers did not — the learning
+journal (`GoalController.learningLogFile`) and repeated-failure diagnostics (`persistFailureDiagnosticArtifact`
+call site) built their paths from the session's directory verbatim, so a goal armed from `docs/` wrote
+`docs/.term/goal-loop/...`. The system had no single notion of "project root vs subfolder".
+
+1. Fix. `src/core/git.ts` exports `resolveProjectRoot(directory)`: `findRepository(directory)?.root` when the
+   directory sits inside a git repo, otherwise the resolved directory itself. This is the one place that
+   encodes the subfolder/root distinction.
+2. Wiring. `src/index.ts` bootstrap anchors `projectRoot` through `resolveProjectRoot` (same result as before,
+   now explicit). `src/runtime/controller.ts` resolves the learning-journal base and the diagnostic-artifact
+   directory through the same helper. Absolute configured paths are still returned untouched, and the
+   "goal follows the session across directory moves" behavior is preserved: a move to another checkout is
+   resolved against that checkout's own repo root.
+3. Tests. `test/git.test.ts` (+3) pins `resolveProjectRoot` for a nested subfolder, the repo root itself, and a
+   plain directory. `test/plugin.test.ts` (+1) boots the plugin with the host location set to `docs/` and asserts
+   the full scaffold appears only at the repo root. `test/learning-log.test.ts` (+1) arms a goal from `docs/` and
+   asserts the journal lands at the repo root, never in the subfolder. Counts 2143 → 2148, files unchanged at
+   141; marker re-counted and `docs/changelog.html` behavior-change note added in-commit.
+4. `bun run check` green: tsc clean, 2148 pass / 0 fail, dist/tui/docs freshness ok, invariant-sweep ok.
+## Workstream CXXIV — audit recent changes for bugs (follow-up) (2026-11-21)
+
+Armed by the user's fuzzy goal: "audit recent changes for bugs fix what needs fixing." This is a follow-up
+to the earlier audit workstream (which produced 7b416d5 and 879a00b); it reviews the commits merged since
+then for *real* correctness bugs and fixes only what is confirmed, with a regression test per fix.
+
+### Interpretation / scope
+
+"Recent changes" = the substantive commits merged onto `dev` since the prior audit:
+
+1. `e2c2507` — evaluator inherits the parent session's fingerprint on judge generations (inherit mode).
+2. `8281b6a` — a goal follows the session that armed it across directory moves.
+3. `7b416d5` — the prior audit's verdict-inversion / stuck-pill / evaluator-timeout / prompter-caps fixes.
+
+Every hunk in these commits is a candidate. A "bug" is a concrete, reproducible defect in behavior — an
+inverted condition, a stale value, a wrong target directory, a lost race, a scope leak — not a style nit,
+a new feature, or a speculative refactor. Each confirmed defect gets a minimal fix and a test that fails
+before and passes after. Anything larger than a focused fix is recorded as a follow-up, not smuggled in.
+Out of scope: the repo-root .term anchoring edits that were uncommitted in the primary checkout at the time (a
+separate change, since landed as Workstream CXXIII); this workstream starts from committed `d49912d` in its own coordinator worktree.
+
+### Acceptance criteria
+
+1. Each of the three commits is reviewed hunk-by-hunk for correctness, with findings recorded here.
+2. Every confirmed bug is fixed minimally in `src/` and covered by a regression test that would fail on
+   the unfixed code.
+3. `bun run check` is green: `tsc --noEmit`, all `bun test` suites, dist/tui/docs freshness, invariant
+   sweep, and `check:spec` all pass.
+4. The `spec-check files=N tests=N` marker in this file is re-counted in the same commit as any shipped
+   file/test change; `docs/changelog.html` carries a behavior-change note for each user-visible fix.
+5. Work stays on `wt/audit-recent-changes-bugs-followup`; `dev`/`main` are never committed to directly;
+   `coordinator submit` runs when the checks are green.
+
+### Verification
+
+- Focused: `bun test test/<affected>.test.ts` for each area touched.
+- Full: `bun run check` (tsc first, then all suites, then dist/tui/docs/invariant/spec gates).
+- Evidence: command output in the transcript; honest disclosure of anything not run (e.g. live model)
+  and why.
+
+### Findings
+
+Three concrete bugs were confirmed, all in `8281b6a` (session-directory moves). Each was reproduced by a test
+that fails on `d49912d` and passes with its fix; no other change was needed.
+
+**F1 — the prompt hook and the standing system reminder kept the setup-time commit rule after a move.**
+`src/index.ts` captured `commit` once at setup for the `/goal-loop` directive (`directivePrompt(objective, commit, …)`)
+and the context hook (`systemReminder(condition, commit)`), while the controller re-resolves the rule per moved
+session (`commitFor` → `commitPolicies`). After a move the model was told to commit to the *old* checkout's
+branch/coordinator policy — the exact contradiction of the change's own promise ("gets the new repository's rule
+in its prompts"). Fix: `GoalController.commitForSession` is now public and both host hook sites call it with
+`event.sessionID`; the internal callers share the same method, so there is one source of truth. Regression:
+`test/plugin.test.ts` routes a `session.moved` to a repo whose only branch is `release`, then asserts the prompt
+directive and the system reminder name `` `release` `` and never `` `dev` ``. Fails before (setup `dev` leaks),
+passes after.
+
+**F2 — a move during an in-flight evaluation left the pill stuck on "checking" and let the stale judge run.**
+`noteSessionDirectory` did `verifyCache = undefined; epoch++` but never aborted the running generation. The
+epoch guard correctly stopped the stale verdict from landing, but the judge kept running up to its full timeout in
+old-checkout context, and `evaluate()`'s `finally` cleared `runtime.evaluating` with no `changed` emit — leaving
+the TUI painting "checking" for a verdict that could never land (the same stale-pill class `7b416d5` fixed for
+other drop paths). Fix: when a move happens while `runtime.evaluating`, abort the in-flight generation, clear the
+flag, and emit the off state immediately; the persisted `pendingEvaluation` is kept for restart recovery.
+Regression: `test/session-directory.test.ts` arms a goal, starts a turn with a deliberately pending verdict,
+routes a move, and asserts a `changed` snapshot with `evaluating:false` follows the move and the stale verdict
+never lands. Fails before (last snapshot still `evaluating:true`), passes after.
+
+**F3 — `session.moved` could move the goal to the pre-move directory.** `src/runtime/events.ts` preferred the
+envelope `event.location.directory` for every event. For `session.moved` the destination is carried in
+`data.location`; the envelope `location` is stamped by the host from the producer's location at publish time and
+can be the *old* directory. Host source confirms this: `packages/core/src/session/move.ts` publishes
+`SessionEvent.Moved` with `{sessionID, ...destination}`, and `packages/core/src/bus.ts` keys the move transition
+off `event.data.location` while noting "even if the producer supplied an envelope location"; durable replays do
+not even carry a top-level `location`. Fix: for `session.moved`, prefer `data.location.directory` (falling back to
+the envelope); other events keep envelope-first precedence. Regression: `test/session-directory.test.ts` routes a
+move with top-level `OLD_DIR` and `data.location = NEW_DIR` and asserts the goal ends at `NEW_DIR`. Fails before
+(no-op on the old directory), passes after.
+
+**Reviewed, no change:**
+- `e2c2507` (evaluator fingerprint inheritance): a reviewer flagged a possible unbudgeted `sessionModelGenerate`
+  call leaking past the timeout. Investigated and rejected: `independentVerdict` calls `ask()`, and `ask()`
+  wraps *every* generation attempt in `underBudget`; `summarize`/`nextGoal` likewise wrap their generation. The
+  mode routing (pinned → stateless, inherit → session-bound), consensus second opinion, and in-flight tracking all
+  check out; no bug found.
+- `7b416d5` (prior audit fixes): verdict parser inversion/string-awareness, stuck-pill heartbeat ordering,
+  bounded model resolution, live budget/token caps and relative `stateFile` were traced end-to-end; no concrete
+  failing trigger found. (One optional coverage note, not a bug: the live-budget helpers are tested directly but
+  the `runTask` poll-loop call is not.)
+- `8281b6a` beyond F1–F3: per-session `directoryFor` precedence, store visibility/restore isolation, `durable.seq`
+  guards, same-directory no-ops, verify-cache drop and per-directory commit rule are all consistent; learning-log
+  history not following a cross-repo move is a design choice, not a defect.
+
+### Verification (this workstream)
+
+- Focused: `bun test plugin.test.ts session-directory.test.ts` from `test/` — 46 pass / 0 fail after the fixes;
+  each of the three new tests was re-run against the unfixed source and failed as expected (43/45, 43/45, 13/14).
+- Full: `bun run check` — tsc clean, all suites green, dist/tui/docs freshness ok, invariant sweep ok, `check:spec`
+  ok; evidence in the transcript.
+- SPEC honesty gate: enforced marker re-counted in-commit; `docs/changelog.html` records each user-visible fix.
+
+## Workstream CXXV — bound evaluator deliberation without weakening the evidence contract (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "auto this it it
+could cause that classic thinking loop. improve what needs improving if not leave it as it is." plus the quoted
+critique #3: prompt/rubric instructions that demand exhaustive analysis ("be thorough, consider every edge case,
+verify every claim independently, don't miss anything") push a model toward unbounded deliberation; in goal-loop the
+evaluator rubric ("fresh evidence only, report layer per claim, verify via headless render") is exactly the kind of
+instruction that can produce a massive thought if the goal is vague. Coordinator repo: claimed
+`wt/rubric-thinking-loop`, worked only in `worktrees/wt-rubric-thinking-loop`, committed on `wt/rubric-thinking-loop`,
+submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+The critique names a real failure mode, but it does not by itself prove this codebase has the bug. Investigation
+found that goal-loop already bounds the *downstream* size of evaluator output in several places:
+`MAX_STEER_REASON_CHARS = 400` (`src/core/prompts.ts`) elides a verdict reason before it rides a steer;
+`clampReason` / `MAX_REASON = 4000` (`src/core/verdict.ts`) clamps the parsed reason; Workstream CXV strips the
+evaluator's `<goal-evaluation>` self-echo from model-bound context and caps the digest at 20,000 chars; and
+`STRICT_REPAIR` already says "do not reason out loud — output only the JSON object" on the final retry.
+
+The gap is at the *prompt* level: both evaluation prompts (`evaluateInSession`, `evaluateIndependently`) carry the
+full exhaustive rubric (evidence matrix per clause, adversarial self-check, defensive audit, repeated-failure scan,
+structured reason with clause-by-clause judgment) but contain **no instruction to be decisive or to bound the reason**.
+The judge is therefore asked to produce a large structured answer whose useful part is later truncated to 400 chars
+on a steer — wasted deliberation, and exactly the shape the critique flags as risky for a vague condition. The
+`<opencode-cli>` work guide has the matching reporting phrasing: "report which layer ... each claim was verified at",
+with no hint that reporting is deliberately brief and need not be an exhaustive audit of every possibility.
+
+Decision: improve, additively. Keep every pinned sensing capability and gate byte-identical (evidence matrix,
+adversarial self-check, verifier corroboration, forward-pointer, commit rule, next actions). Add one short
+decisiveness/verbosity bound to the shared rubric and a brief-reporting nudge to the opencode-cli guide. No capability
+is removed, no gate is relaxed, no default is changed. If the investigation had shown the exhaustive contract itself
+to be the cause (or a pin requiring its removal), the correct outcome would have been to leave it as-is; it did not.
+
+### Acceptance criteria
+
+1. `src/core/prompts.ts` injects a bounded-effort instruction into the shared rubric used by both `evaluateInSession`
+   and `evaluateIndependently`. It (a) directs the judge to decide from the evidence actually shown rather than
+   exhaustive hypotheticals, (b) to judge only clauses bearing on the verdict and name the single most critical gap
+   when not met, and (c) to keep the reason short (a few lines), explicitly not enumerating every edge case or
+   re-auditing irrelevant claims for a vague condition. The exhaustive contract (VERDICTS/RULES/OUTPUT) is unchanged.
+2. `src/core/opencode-cli.ts` keeps the `binary / source / test-render / live TUI` layer vocabulary byte-identical
+   but frames the report as brief and limited to claims actually made, with no obligation to audit every possibility.
+3. Regression tests pin the new bound in both evaluation prompts and the brief-reporting nudge in the guide; no
+   existing assertion is weakened, skipped, or deleted.
+4. `SPEC.md` gains this section and the enforced `spec-check` marker is re-stamped in the same commit for the changed
+   test count. No shipped file is added or removed by this change.
+5. `bun run check` exits 0 in the worktree.
+
+### Verification
+
+- Textual change only — no visual surface, so no screenshot/render is applicable; verification is by prompt-text
+  assertions and the repo's gates.
+- Focused: `bun test test/core.test.ts test/evaluator.test.ts test/opencode-cli.test.ts` passes, including the new
+  pins.
+- Full: `cd <worktree> && bun run check` exits 0 (tsc, all suites, dist/compile/tui/docs/invariant/spec gates);
+  tail recorded in the transcript.
+- Discrimination: the new pins fail against the pre-change prompt text (bounded-effort/brief-reporting phrases
+  absent) and pass with the change.
+- Changes committed on `wt/rubric-thinking-loop` and submitted via coordinator.
+
+## Workstream CXXVI — evaluator free-usage limits pause the goal and wait for the user (2026-11-21)
+
+Armed by the user's report of a live card stuck on "◎ Goal still active / Evaluator paused (free usage limit — judge
+shares this session's model/quota); retrying in 15m 00s", pointing at the upstream plugin
+(`EL4CTEO/opencode-goal`) for the intended handling. Re-reading the tree before touching anything: CXXII classified
+a judge-side `429`/`FreeUsageLimitError` as a self-clearing limit and made `GoalController.evaluationFailed` back off
+a fixed 15 minutes and retry **forever**, leaving the record `active`. The upstream plugin's documented safety rail
+is different: on rate limits it **pauses** the goal and waits for a user message to resume. An account-level free
+quota is not something another judge call from the same session can clear, so an unbounded 15m timer leaves the
+goal stuck with no exit and no clear instruction.
+
+1. Root cause. `evaluationFailed` conflated two different meanings of "pause": the execution path's
+   `classifyFailure -> "pause"` already pausing via `handleFailure` in some paths, and the evaluator path's
+   "pause" meaning "sleep 15m, try again, status stays active". With the judge riding the session's own
+   model/fingerprint (CXXI) and therefore its free-usage bucket, a genuine gateway 429 parked the goal on a retry
+   treadmill instead of handing control back to the user.
+2. Fix. `src/runtime/controller.ts · evaluationFailed` now routes `isUsageLimitError` failures to
+   `this.pause(record, reason, "usage_limit")`: status `paused`, a persisted `pauseCause`, a durable commit, and a
+   "Goal paused" notice naming both exits — set a separate `evaluator.model` (which has its own quota), or wait for
+   the window to reset and send a message to resume. No retry timer is armed; `onUserPrompt` resumes as it does for
+   every other pause cause. Transient and fatal evaluator errors keep their fast-backoff/`maxRetries` behavior
+   byte-for-byte; the execution path is untouched.
+3. Surface. `PauseCause` gains `usage_limit` (`src/core/types.ts`, `src/core/wire.ts` validation), and
+   `src/core/hud.ts · remediationFor` renders an exact remedy (separate judge model or quota window, then resume) so
+   the card and dialog never fall back to the generic line.
+4. Tests (`test/controller.test.ts`, `test/wire.test.ts`, `test/tui-hud.test.tsx`): the usage-limit case now pauses
+   with `pauseCause: "usage_limit"`, arms no timer (advancing the clock does not re-evaluate), resumes on a user
+   message, and lands `achieved` once the quota clears; the wire validator accepts the new cause; the HUD names the
+   escape hatch. Full `bun run check` green; marker re-counted in-commit.

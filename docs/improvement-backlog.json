@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-20T12:00:00.000Z",
+  "updatedAt": "2026-11-20T16:30:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -37,12 +37,13 @@
       "priority": 1,
       "impact": "high",
       "risk": "low",
-      "status": "in_progress",
+      "status": "done",
       "finding": "Next iterations rely on summaries/hints and repo re-reads; without a persistent backlog, prioritization can be ad hoc and important issues can be forgotten or repeated.",
       "improvement": "Maintain a machine-readable backlog/ledger in-repo (findings, impact, risk, evidence, status, dedupe keys). Have the planner select the highest-value unblocked item and de-duplicate against completed conditions/history. Feed from audits, failing checks, TODO/FIXME, and telemetry.",
       "evidence": [
         "Goal-loop blind spot #3 (2026-11-20): no durable prioritized backlog; planning relies on summaries/hints.",
-        "This iteration seeds docs/improvement-backlog.json and src/core/improvement-backlog.ts."
+        "This iteration seeds docs/improvement-backlog.json and src/core/improvement-backlog.ts.",
+        "Mechanism shipped: src/core/improvement-backlog.ts (validate/parse/dedupe/select) plus docs/improvement-backlog.json and src/runtime/controller.ts selectBacklogSuggestion() de-duplicating against completed conditions/history and feeding NextGoalRequest.backlogSuggestion; pinned by test/improvement-backlog.test.ts and test/loop.test.ts."
       ],
       "dedupeKeys": [
         "persistent-backlog",
@@ -89,12 +90,13 @@
       "priority": 2,
       "impact": "high",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "A loop can land a valid local fix while leaving adjacent invariants, API/doc drift, or latent debt untouched.",
       "improvement": "Add standing invariants for improvement loops: no new warnings, docs/SPEC/changelog alignment when behavior changes, boundary/type/schema consistency checks, and regression tests required for risky-path changes. Consider a post-merge invariant sweep iteration.",
       "evidence": [
         "Goal-loop blind spot #2 (2026-11-20): local fix != repository-wide improvement.",
-        "Recent passes caught wire.ts boundary gaps during audit rather than as a standing gate."
+        "Recent passes caught wire.ts boundary gaps during audit rather than as a standing gate.",
+        "Already landed on dev before this audit: scripts/invariant-sweep.ts fails when src/core|src/runtime behavior changes lack SPEC.md + docs/changelog.html in the same change set; wired into bun run check; pinned by test/invariant-sweep.test.ts. Remaining sub-items (no-new-warnings, full boundary consistency) stay tracked as general polish rather than re-opening the landed gate."
       ],
       "dedupeKeys": [
         "standing-invariants",
@@ -114,12 +116,13 @@
       "priority": 2,
       "impact": "high",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "A single evaluator interpreting transcript evidence can misjudge completeness, accept weak evidence, or miss subtle regressions; calibration is not visible.",
       "improvement": "Require evidence types per claim in the rubric, add adversarial self-check ('what would falsify met?'), and for high-risk/ambiguous conditions use dual-evaluation or mandatory verifier-command corroboration.",
       "evidence": [
         "Goal-loop blind spot #5 (2026-11-20): evaluator/judge is a single point of failure.",
-        "src/core/prompts.ts contains the evaluator rubric; evaluator.verifyCommand is optional."
+        "src/core/prompts.ts contains the evaluator rubric; evaluator.verifyCommand is optional.",
+        "Already landed on dev before this audit: src/core/prompts.ts carries the adversarial falsify-met self-check, evidence-type/verifier-corroboration rule; evaluator.consensus (1|2) is wired in src/runtime/evaluator.ts and src/core/config.ts; pinned by test/core.test.ts."
       ],
       "dedupeKeys": [
         "evaluator-rubric",
@@ -138,12 +141,13 @@
       "priority": 2,
       "impact": "medium",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "Leases/merge-next reduce direct conflicts, but semantic conflicts, stale assumptions after other merges, or environment/worktree drift can slip through if re-validation is incomplete.",
       "improvement": "Enforce pre-submit/pre-merge rebase+full-gate on the merged result with explicit drift/failure reporting, run a quick post-merge health pass, and surface overlapping semantic risk (shared modules/APIs) before merge.",
       "evidence": [
         "Goal-loop blind spot #6 (2026-11-20): coordinator/concurrency and drift risks.",
-        "packages/coordinator/bin/coordinator merge-next already trial-merges and gates merged result; semantic overlap surfacing is limited."
+        "packages/coordinator/bin/coordinator merge-next already trial-merges and gates merged result; semantic overlap surfacing is limited.",
+        "Closed 2026-11-20 (Workstream CXIII): merge preflight now prints SEMANTIC-RISK for shared-module active leases, a worktree HEAD-tip drift guard fails merges with dev untouched, and a post-merge health pass reports landed-tree cleanliness + SPEC marker. Tests in test/coordinator-merge-safety.test.ts."
       ],
       "dedupeKeys": [
         "semantic-conflict-detection",
@@ -162,12 +166,13 @@
       "priority": 2,
       "impact": "high",
       "risk": "high",
-      "status": "open",
+      "status": "done",
       "finding": "Autonomous improvement may touch sensitive surfaces (deps, auth, migrations, CI/release, data paths) without proportional scrutiny.",
       "improvement": "Classify changes by risk; require stricter gates/review or human confirmation for high-risk areas, and prefer small, reversible commits with clear rollback points.",
       "evidence": [
         "Goal-loop blind spot #7 (2026-11-20): safety and change-risk classification.",
-        "Autonomous loops can edit src/runtime, coordinator, install/release paths without explicit risk tiers."
+        "Autonomous loops can edit src/runtime, coordinator, install/release paths without explicit risk tiers.",
+        "Already landed on dev before this audit: src/core/change-risk.ts implements surface matchers/tiers and formatStrictGateNotice; src/runtime/controller.ts surfaceChangeRiskStrictGate() surfaces the strict-gate notice; pinned by test/change-risk.test.ts."
       ],
       "dedupeKeys": [
         "risk-classification",
@@ -187,12 +192,13 @@
       "priority": 3,
       "impact": "medium",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "History/spend/verdicts are retained, but the system may not learn which interventions reduce failures fastest or where regressions recur.",
       "improvement": "Add structured outcome telemetry (failure taxonomy, time-to-green, reverted/recurring fixes, flaky checks) and use it to tune prompts, gates, and backlog priority over time.",
       "evidence": [
         "Goal-loop blind spot #8 (2026-11-20): limited learning from history.",
-        "Records retain verdict/history/spend fields but lack aggregated failure taxonomy and recurrence tracking."
+        "Records retain verdict/history/spend fields but lack aggregated failure taxonomy and recurrence tracking.",
+        "Workstream CV (2026-11-20): src/core/outcome-telemetry.ts aggregates the JSONL learning journal into failure taxonomy, time-to-green, recurring conditions and terminal/verdict counts; src/core/learning-log.ts shares one best-effort parser; src/runtime/controller.ts injects the formatted block through the existing learnings channel; test/outcome-telemetry.test.ts (13 tests) covers parsing, grouping, pairing, formatting/budget and prompt injection; bun run check exit 0."
       ],
       "dedupeKeys": [
         "outcome-telemetry",

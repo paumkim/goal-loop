@@ -44,6 +44,8 @@
     "dist",
     "packages/coordinator/bin/coordinator",
     "packages/coordinator/README.md",
+    "prompts",
+    "bin/prompter.mjs",
     "install.sh"
   ],
   "engines": {
@@ -65,6 +67,7 @@
     "check:dist": "bun scripts/build.ts --check"
   },
   "dependencies": {
+    "@opencode/client": "2.3.2",
     "string-width": "7.2.0"
   },
   "peerDependencies": {
@@ -88,13 +91,17 @@
     }
   },
   "devDependencies": {
-    "@opencode/client": "2.0.29",
     "@opencode/plugin": "2.0.29",
     "@opentui/core": "0.5.17",
     "@opentui/solid": "0.5.17",
     "@types/bun": "1.4.0",
     "solid-js": "1.9.15",
     "typescript": "5.8.2"
+  },
+  "overrides": {
+    "gaxios": "7.3.1",
+    "google-logging-utils": "1.2.0",
+    "@babel/helper-module-imports": "7.29.7"
   },
   "publishConfig": {
     "access": "public"
@@ -104,6 +111,7 @@
   ],
   "bin": {
     "goal-loop": "./bin/goal-loop.mjs",
-    "opencode-goal": "./bin/goal-loop.mjs"
+    "opencode-goal": "./bin/goal-loop.mjs",
+    "prompter": "./bin/prompter.mjs"
   }
 }

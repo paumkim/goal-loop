@@ -159,10 +159,23 @@ describe("repo improvement backlog artifact", () => {
     // No cross-item dedupe collisions in the seed ledger.
     expect(inspected.dedupeMatches).toEqual([])
 
+    // Items whose improvements already landed on dev must not stay selectable: a stale "open"
+    // status makes the planner spend an iteration re-implementing finished work.
+    for (const landed of ["evaluator-rubric-evidence-types", "change-risk-classification", "standing-invariants-sweep", "structured-outcome-telemetry", "coordinator-semantic-drift-guard"]) {
+      expect(inspected.backlog.items.find((entry) => entry.id === landed)?.status).toBe("done")
+    }
+
+    // The ledger starts with open work but is allowed to reach zero: a fully-landed backlog must select nothing
+    // rather than keep re-arming finished work. When open items exist, selection stays priority-ordered and open.
     const highest = selectNextBacklogItem(inspected.backlog.items)
-    expect(highest).toBeDefined()
-    // Priority 1 open/in_progress items may be completed over time; highest selected open item is valid and prioritized.
-    expect(highest!.priority).toBeGreaterThanOrEqual(1)
-    expect(highest!.priority).toBeLessThanOrEqual(2)
+    const open = inspected.backlog.items.filter((entry) => entry.status === "open")
+    if (open.length === 0) {
+      expect(highest).toBeUndefined()
+    } else {
+      expect(highest).toBeDefined()
+      expect(highest!.priority).toBeGreaterThanOrEqual(1)
+      expect(highest!.priority).toBeLessThanOrEqual(2)
+      expect(highest!.status).toBe("open")
+    }
   })
 })

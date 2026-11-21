@@ -18,7 +18,7 @@ import {
   type WorkflowLayoutResult,
 } from "./workflow.ts"
 
-export interface BootstrapResult {
+interface BootstrapResult {
   readonly created: string[]
   readonly skipped: string[]
   readonly notes?: string[]
@@ -94,7 +94,7 @@ export function ensureCoordinatorLayout(projectRoot: string, pluginRoot?: string
   return { created, skipped }
 }
 
-export interface StartupScaffoldOptions {
+interface StartupScaffoldOptions {
   readonly projectRoot: string
   readonly pluginRoot?: string
   /** Learning log path from config (relative to project root or absolute). */

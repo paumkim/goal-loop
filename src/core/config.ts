@@ -23,6 +23,8 @@ export interface GoalConfig {
     /** `session` reuses the session's model and cached prefix; `independent` uses `model` on a transcript digest. */
     readonly mode: Exclude<EvaluatorMode, "auto">
     readonly model?: ModelRef
+    /** True when the judging model is inherited from the parent session at evaluation time instead of pinned via `model`. Set by the `inherit` sentinel in `evaluator.model` / `OPENCODE_GOAL_MODEL` / `model`. */
+    readonly inheritModel: boolean
     readonly maxTranscriptChars: number
     readonly maxOutputTokens: number
     readonly timeoutMs: number
@@ -65,12 +67,17 @@ export interface GoalConfig {
     /** Path relative to the goal working directory, or absolute. */
     readonly path: string
   }
+  /** Plugin self-update behavior. `main` follows the newest stable tag; `dev` follows the latest dev commit. `off` disables checks. */
+  readonly update: {
+    readonly channel: "main" | "dev"
+    readonly mode: "auto" | "off"
+  }
   /** Finished work has to be committed before the goal counts as met. */
   readonly commit: CommitRequest
 }
 
 export const DEFAULTS = {
-  maxTranscriptChars: 60_000,
+  maxTranscriptChars: 20_000,
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,
@@ -84,6 +91,8 @@ export const DEFAULTS = {
   maxRetries: 3,
   compactAtTokens: 0,
   compactOnLoopIteration: true,
+  updateChannel: "main",
+  updateMode: "auto",
   maxLoops: 5,
   maxLoopSummaryTokens: 400,
   learningPath: ".term/goal-loop/learnings.jsonl",
@@ -94,6 +103,20 @@ export const DEFAULTS = {
 
 /** Busy-state check retries before giving up and evaluating with what we have. Not config-exposed; a failed busy check is a host bug, not a user-tunable scenario. */
 export const MAX_BUSY_RETRIES = 5
+
+/**
+ * Config tokens that mean "use the parent session's current model" instead of a pinned `provider/model`.
+ * `inherit` is canonical; the others are accepted aliases so the intent reads naturally in any config style.
+ * Matching is trimmed and case-insensitive (see `isInheritModelValue`).
+ */
+export const INHERIT_MODEL_TOKENS = ["inherit", "session", "parent", "current", "active"] as const
+
+/** True for a string that asks the evaluator to inherit the parent session's active model. */
+export function isInheritModelValue(value: unknown): boolean {
+  if (typeof value !== "string") return false
+  const token = value.trim().toLowerCase()
+  return (INHERIT_MODEL_TOKENS as readonly string[]).includes(token)
+}
 
 /** Parses `provider/model` or `provider/model#variant`. Model IDs may contain further slashes. */
 export function parseModelRef(value: unknown): ModelRef | undefined {
@@ -122,6 +145,12 @@ const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" 
 
 /** A free-form string option: trimmed; anything else falls back. */
 const str = (value: unknown, fallback: string) => (typeof value === "string" && value.trim() ? value.trim() : fallback)
+
+/** A constrained string option: trimmed; anything outside the allowed set falls back. */
+const choice = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => {
+  const trimmed = typeof value === "string" ? value.trim() : ""
+  return (allowed as readonly string[]).includes(trimmed) ? trimmed as T : fallback
+}
 
 /** A branch name: a non-empty string with no whitespace. */
 const branch = (value: unknown, fallback: string) => {
@@ -183,29 +212,42 @@ function resolveVerifyMatrix(evaluator: Record<string, unknown>, env: Readonly<R
 
 
 /**
- * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides:
+ * Resolves plugin options (opencode.json `plugins[].options`) with environment overrides. The nested
+ * `update: { channel: "main"|"dev", mode: "auto"|"off" }` group is option-only (no env override) so the
+ * CLI and the plugin always read the same source of truth from the config file. Env overrides:
  * OPENCODE_GOAL_MODEL, OPENCODE_GOAL_CHECKIN_MINUTES, OPENCODE_GOAL_MAX_TURNS, OPENCODE_GOAL_COMMIT_BRANCH,
  * OPENCODE_GOAL_REQUIRE_COMMIT, OPENCODE_GOAL_COORDINATOR, OPENCODE_GOAL_COMPACT_AT_TOKENS,
  * OPENCODE_GOAL_COMPACT_ON_LOOP_ITERATION, OPENCODE_GOAL_MAX_LOOPS, OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS,
  * OPENCODE_GOAL_MAX_RETRIES, OPENCODE_GOAL_VERIFY_COMMAND, OPENCODE_GOAL_VERIFY_TIMEOUT_MS, OPENCODE_GOAL_VERIFY_PROFILE,
  * OPENCODE_GOAL_VERIFY_CONCURRENCY, OPENCODE_GOAL_LEARNING_LOG, OPENCODE_GOAL_LEARNING_LOG_PATH.
+ *
+ * Model sources (`OPENCODE_GOAL_MODEL`, `evaluator.model`, top-level `model`, first non-empty wins) also accept
+ * the `inherit` sentinel (aliases `session`/`parent`/`current`/`active`, case-insensitive): the judge then uses
+ * the parent session's current model instead of a pinned `provider/model` (see `isInheritModelValue`).
  */
 export function resolveConfig(
   options: Readonly<Record<string, unknown>> = {},
   env: Readonly<Record<string, string | undefined>> = {},
 ): GoalConfig {
   const evaluator = (typeof options.evaluator === "object" && options.evaluator !== null ? options.evaluator : {}) as Record<string, unknown>
-  const model = parseModelRef([env.OPENCODE_GOAL_MODEL, evaluator.model, options.model].find((v) => (typeof v === "string" ? v.trim() !== "" : v != null))) // empty/whitespace strings read as unset — the `str`/`int` posture
+  // empty/whitespace strings read as unset — the `str`/`int` posture. The first non-empty source wins, exactly
+  // as before; a sentinel value in that source switches the judge from pinned to parent-inherited.
+  const rawModel = [env.OPENCODE_GOAL_MODEL, evaluator.model, options.model].find((v) => (typeof v === "string" ? v.trim() !== "" : v != null))
+  const inheritModel = isInheritModelValue(rawModel)
+  const model = inheritModel ? undefined : parseModelRef(rawModel)
   const requested = evaluator.mode === "session" || evaluator.mode === "independent" ? evaluator.mode : "auto"
-  const mode = requested === "auto" ? (model ? "independent" : "session") : requested === "independent" && !model ? "session" : requested
+  const configured = model !== undefined || inheritModel
+  const mode = requested === "auto" ? (configured ? "independent" : "session") : requested === "independent" && !configured ? "session" : requested
   const verify = resolveVerifyMatrix(evaluator, env)
   const learning = (typeof options.learning === "object" && options.learning !== null ? options.learning : {}) as Record<string, unknown>
   const learningEnabled = envBool(env.OPENCODE_GOAL_LEARNING_LOG, bool(learning.enabled ?? options.learningLog, true))
   const learningPath = str(env.OPENCODE_GOAL_LEARNING_LOG_PATH ?? learning.path ?? options.learningLogPath, DEFAULTS.learningPath)
+  const update = (typeof options.update === "object" && options.update !== null ? options.update : {}) as Record<string, unknown>
   return {
     evaluator: {
       mode,
       ...(model ? { model } : {}),
+      inheritModel,
       maxTranscriptChars: int(evaluator.maxTranscriptChars, DEFAULTS.maxTranscriptChars, 4_000),
       maxOutputTokens: int(evaluator.maxOutputTokens, DEFAULTS.maxOutputTokens, 256),
       timeoutMs: int(evaluator.timeoutMs, DEFAULTS.timeoutMs, 5_000),
@@ -230,6 +272,10 @@ export function resolveConfig(
     learning: {
       enabled: learningEnabled,
       path: learningPath,
+    },
+    update: {
+      channel: choice(update.channel, ["main", "dev"], DEFAULTS.updateChannel),
+      mode: choice(update.mode, ["auto", "off"], DEFAULTS.updateMode),
     },
     commit: {
       enabled: bool(options.requireCommit, envBool(env.OPENCODE_GOAL_REQUIRE_COMMIT, true)),

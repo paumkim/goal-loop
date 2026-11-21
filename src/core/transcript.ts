@@ -14,16 +14,44 @@ interface DigestOptions {
 
 const str = (value: unknown) => (typeof value === "string" ? value : "")
 
+const isHigh = (code: number) => code >= 0xd800 && code <= 0xdbff
+const isLow = (code: number) => code >= 0xdc00 && code <= 0xdfff
+
+/**
+ * Largest code-unit index <= `n` that ends on a clean UTF-16 boundary. If a cut at `n` would end on a high surrogate
+ * (its low partner sits just beyond the cut), back off one unit so the astral pair is excluded whole instead of
+ * leaking a lone surrogate into the evaluator's evidence corpus.
+ */
+function safeFrontCut(text: string, n: number): number {
+  let end = Math.max(0, Math.min(text.length, Math.floor(n)))
+  if (isHigh(text.charCodeAt(end - 1))) end -= 1
+  return end
+}
+
+/**
+ * Smallest code-unit index >= `n` that starts on a clean UTF-16 boundary. If the cut would start on a low surrogate
+ * (its high partner sits just before the cut), advance one unit so the orphan half is dropped, not emitted alone.
+ */
+function safeBackStart(text: string, n: number): number {
+  let start = Math.max(0, Math.min(text.length, Math.floor(n)))
+  if (isLow(text.charCodeAt(start))) start += 1
+  return start
+}
+
 function head(text: string, max: number) {
-  return text.length <= max ? text : `${text.slice(0, max)}\u2026 [${text.length - max} chars cut]`
+  if (text.length <= max) return text
+  const end = safeFrontCut(text, max)
+  return `${text.slice(0, end)}\u2026 [${text.length - end} chars cut]`
 }
 
 function headTail(text: string, max: number) {
   if (text.length <= max) return text
   const cap = Math.max(1, Math.floor(max)) // a zero budget returns the cut marker plus a proven tail, never the whole input
-  const front = Math.floor(cap * 0.25)
-  const back = cap - front
-  return `${text.slice(0, front)}\n\u2026 [${text.length - cap} chars cut] \u2026\n${text.slice(-back)}`
+  const front = safeFrontCut(text, Math.floor(cap * 0.25))
+  const back = cap - Math.floor(cap * 0.25)
+  const tailStart = safeBackStart(text, text.length - back)
+  const tail = tailStart >= text.length ? "" : text.slice(tailStart) // slice(-0) would return the whole input
+  return `${text.slice(0, front)}\n\u2026 [${text.length - cap} chars cut] \u2026\n${tail}`
 }
 
 function toolText(content: unknown): string {
@@ -46,7 +74,11 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
   const blocks: string[] = []
   const content = Array.isArray(message.content) ? (message.content as Unknown[]) : []
   for (const part of content) {
-    if (part.type === "text" && str(part.text).trim()) blocks.push(str(part.text).trim())
+    if (part.type === "text") {
+      // Trim once: the digest is rebuilt on every evaluator turn and this is its largest input.
+      const text = str(part.text).trim()
+      if (text) blocks.push(text)
+    }
     if (part.type !== "tool") continue
     const state = (part.state ?? {}) as Unknown
     const input = head(compactJson(state.input), options.maxInputChars)
@@ -68,10 +100,14 @@ function renderMessage(message: unknown, options: Required<DigestOptions>): stri
   if (typeof message !== "object" || message === null) return ""
   const m = message as Unknown
   switch (m.type) {
-    case "user":
-      return str(m.text).trim() ? `USER:\n${head(str(m.text).trim(), options.maxToolChars)}` : ""
-    case "synthetic":
-      return str(m.text).trim() ? `NOTE:\n${head(str(m.text).trim(), options.maxToolChars)}` : ""
+    case "user": {
+      const text = str(m.text).trim()
+      return text ? `USER:\n${head(text, options.maxToolChars)}` : ""
+    }
+    case "synthetic": {
+      const text = str(m.text).trim()
+      return text ? `NOTE:\n${head(text, options.maxToolChars)}` : ""
+    }
     case "assistant":
       return renderAssistant(m, options)
     case "shell": {

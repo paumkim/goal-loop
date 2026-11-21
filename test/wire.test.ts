@@ -77,8 +77,8 @@ describe("parseGoalSnapshot", () => {
     expect(parseGoalSnapshot(snapshot())?.failureLabel).toBeUndefined()
   })
 
-  test("accepts a persisted pauseCause (cap / stall / user) and tolerates its absence", () => {
-    for (const cause of ["cap", "stall", "user"] as const) {
+  test("accepts a persisted pauseCause (cap / stall / user / repeated_failure / usage_limit) and tolerates its absence", () => {
+    for (const cause of ["cap", "stall", "user", "repeated_failure", "usage_limit"] as const) {
       expect(parseGoalSnapshot({ ...snapshot(), status: "paused", pauseCause: cause })?.pauseCause).toBe(cause)
     }
     expect(parseGoalSnapshot(snapshot())?.pauseCause).toBeUndefined()

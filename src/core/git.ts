@@ -32,6 +32,20 @@ export function findRepository(start: string): Repository | undefined {
   }
 }
 
+/**
+ * Resolve the directory that owns repo-scoped artifacts (`.term/...`) for a working directory.
+ *
+ * When `directory` is a subfolder of a git repository, this returns the repository root — never the
+ * subfolder. Outside a repository it returns the resolved directory itself. Keeping this in one place
+ * is what makes the plugin distinguish "launched from the repo root" from "launched from a subfolder":
+ * every `.term` writer (bootstrap scaffold, learning log, failure diagnostics) anchors here, so a
+ * first run started under `docs/` still creates `.term` at the project root and never scatters copies
+ * into nested folders.
+ */
+export function resolveProjectRoot(directory: string): string {
+  return findRepository(directory)?.root ?? resolve(directory)
+}
+
 function repositoryAt(dir: string): Repository | undefined {
   const marker = join(dir, ".git")
   if (!existsSync(marker)) return undefined

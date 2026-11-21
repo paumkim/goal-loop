@@ -11,40 +11,40 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-21 06:23 UTC</code></td><td>fix(evaluator): pause the goal on free-usage limits instead of retrying forever (CXXVI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 06:03 UTC</code></td><td>fix(prompts): bound evaluator deliberation without weakening the evidence contract (CXXV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 05:53 UTC</code></td><td>fix(audit): follow-up audit of recent commits</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 05:43 UTC</code></td><td>fix(bootstrap): anchor all repo-scoped .term artifacts at the git root</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 05:32 UTC</code></td><td>fix(evaluator): pause on free-usage limits instead of failing the goal</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 04:28 UTC</code></td><td>fix(evaluator): inherit the parent session fingerprint on judge generations</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 04:06 UTC</code></td><td>feat(runtime): goal follows the session that armed it across directory moves</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 03:37 UTC</code></td><td>fix(audit): correct verdict inversion, stuck pill, evaluator timeout, prompter caps</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 03:15 UTC</code></td><td>feat(evaluator): inherit the parent session's model instead of pinning one</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 02:50 UTC</code></td><td>docs(coordinator): audit field gotchas, fix --help and drift recovery</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 02:39 UTC</code></td><td>fix(evaluator): strip tools from judge generations, log unreadable replies</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 02:25 UTC</code></td><td>fix(review): repair prompter retry/whitelist/shutdown paths and tighten verdict forward-pointer + lenient parser</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 02:22 UTC</code></td><td>fix(runtime): flip the waiting pill to active on session heartbeats, instantly</td><td>commit</td></tr>
+<tr><td><code>2026-11-21 01:46 UTC</code></td><td>feat(prompter): bundle autonomous work loop; dedupe improvement prompts and coordinator steps</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 19:38 UTC</code></td><td>fix(core): accept malformed-but-readable evaluator verdicts (workstream CXVII)</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 19:17 UTC</code></td><td>fix(tui): keep the now-row verdict suffix after the wrapped status phrase</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 18:50 UTC</code></td><td>fix(runtime): resume an interrupted evaluation after restart (workstream CXVI)</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 18:29 UTC</code></td><td>fix(core,runtime): evaluator use-and-forget context — strip self-echo, compact digest to 20K (workstream CXV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 17:39 UTC</code></td><td>refactor(core): unify dossier stamps, trim dead exports, tighten digest hot path (workstream CXIV)</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 16:33 UTC</code></td><td>fix(coordinator): close the last open TODO with semantic/drift guards</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 16:15 UTC</code></td><td>fix(context): keep the evaluator context lean across goal versions</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 15:32 UTC</code></td><td>fix(transcript): never split a UTF-16 surrogate pair when truncating</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 15:24 UTC</code></td><td>fix(changed-paths): parse renames at first arrow and decode quoted paths</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 15:13 UTC</code></td><td>fix(evaluator): exempt already-satisfied forward-pointer landings from zero-tool downgrade</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 14:51 UTC</code></td><td>feat(coordinator): compact status --json to active leases + counts summary</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 14:43 UTC</code></td><td>feat(update): land self-update system with main/dev channels</td><td>commit</td></tr>
+<tr><td><code>2026-11-20 14:30 UTC</code></td><td>feat(learning): aggregate outcome telemetry from the learning journal</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 13:16 UTC</code></td><td>docs: streamline README with visual HUD assets and quickstart</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 12:08 UTC</code></td><td>fix(runtime): enforce maxRetries cap on evaluator and execution retries; cap busy-check retries</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 11:53 UTC</code></td><td>feat(bootstrap): provision startup workflow scaffold on first run</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 11:10 UTC</code></td><td>refactor(core): unify Windows drive-path-on-POSIX guard</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 10:53 UTC</code></td><td>perf(core): cache ensured directory for goal-mirror writes</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 10:26 UTC</code></td><td>perf(core): cache ensured directory for failure diagnostic writes</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 10:16 UTC</code></td><td>perf(core): cache ensured directory for learning-log appends</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 10:05 UTC</code></td><td>refactor(core): unexport internal-only symbols</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 09:52 UTC</code></td><td>refactor(core): remove unused VerifyCheckDefinition type</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 09:37 UTC</code></td><td>fix(core,runtime): unify learning path default and guard C: fixture pollution</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 09:14 UTC</code></td><td>refactor(core): remove unused internal exports</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 08:44 UTC</code></td><td>refactor(core): extract shared git changed-path collector</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 08:33 UTC</code></td><td>fix(tui): keep loop-position indicator and bounded pips visible at every cap</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 08:25 UTC</code></td><td>feat(goal-loop): classify change risk and surface strict-gate notice for high-risk tiers</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 07:59 UTC</code></td><td>fix(tui): the goal card breathes at its top and bottom edges</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 07:57 UTC</code></td><td>goal-loop: evaluator rubric requires verifier-command corroboration for broad conditions (workstream XCIV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 07:48 UTC</code></td><td>goal-loop: reuse completedLedgerHit, one learning write path, one scope policy per gate (workflow audit II)</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 07:33 UTC</code></td><td>goal-loop: consolidate terminal settle, HEAD read, and spend diff (workflow audit)</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 07:04 UTC</code></td><td>goal-loop: add invariant-sweep gate for core/runtime behavior changes</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 06:44 UTC</code></td><td>goal-loop: strengthen evaluator rubric evidence types and falsify-met self-check</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 06:42 UTC</code></td><td>docs: improve readability and step-by-step guidance</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 06:32 UTC</code></td><td>goal-loop: persist diagnostic artifacts on repeated-failure escalation</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 06:27 UTC</code></td><td>docs: deploy static site to GitHub Pages</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 06:13 UTC</code></td><td>fix(controller): a terminal verdict ends the run; an achieved goal no longer re-arms</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:58 UTC</code></td><td>goal-loop: escalate repeated failure signatures instead of re-arming</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:42 UTC</code></td><td>fix(tui): align the ambient pill's leading icon with the left accent rail</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:31 UTC</code></td><td>docs(coordinator): clarify merge-next ownership and readiness</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:23 UTC</code></td><td>feat(learning): capture session outcomes and feed learnings into planning</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:15 UTC</code></td><td>feat(learning): log turns/sessions and feed lessons into next steps</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 05:00 UTC</code></td><td>feat(learning): add durable outcome journal for goals and loop iterations</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-20 13:16 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-21 06:23 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->
@@ -58,5 +58,22 @@
 <!-- behavior-change: CII cache ensured directory for failure-diagnostic writes -->
 <!-- behavior-change: CIII cache ensured directory for goal-mirror writes -->
 <!-- behavior-change: CIV unify Windows drive-path-on-POSIX guard helper -->
+<!-- behavior-change: CV structured outcome telemetry over the learning journal; refresh stale improvement-backlog statuses -->
 <!-- behavior-change: CV startup scaffold provisions coordinator/workplace layout, runtime dirs, workflow docs/templates, and append-only gitignore on bootstrap -->
 <!-- behavior-change: remove dead transcriptNotes config option (parsed but never gated anything) -->
+<!-- behavior-change: CV self-update system — bare /goal-loop triggers a GitHub check; main/dev channels and auto/off modes live in plugins[].options.update (no sidecar); new goal-loop update/channel/updates CLI commands -->
+<!-- behavior-change: CVII coordinator status --json defaults to active leases + counts summary; --all retains the full historic dump -->
+<!-- behavior-change: CIX zero-tool evaluator guard exempts already-satisfied met verdicts that carry a next: forward pointer, so armed loops can advance past a landed condition -->
+<!-- behavior-change: CX pathsOf splits -> only on rename/copy lines at the first occurrence and decodes C-style quoted paths, so arrows/special chars in filenames no longer corrupt change-risk and invariant-sweep scope -->
+<!-- behavior-change: CXI transcript digest head/headTail cuts never split a UTF-16 surrogate pair — astral evidence stays whole and no lone surrogate leaks into the evaluator corpus -->
+<!-- behavior-change: CXII evaluator context stays lean across goal versions — learning journal tail-read, one bounded ~900-char learnings block per steer, and 400-char cap on injected evaluator reasons -->
+<!-- behavior-change: CXIII coordinator semantic/drift guards — merge preflight warns on shared-module leases, a post-submit worktree HEAD mismatch fails the merge, and a post-merge health line reports the landed tree; last backlog item closed -->
+<!-- behavior-change: the waiting pill flips back to active instantly on session heartbeats (execution/tool events) while the background deferral still holds evaluation; deduped changed-event push via syncWaitingPaint -->
+<!-- behavior-change: review sweep — prompter retry recovery, allowedRepos flag bypass, shutdown-log race, clean-install RPC import, verdict forward-pointer "next: none" and lenient verdict-in-reason false positive -->
+<!-- behavior-change: a goal follows the session that armed it across directory moves — session.moved (and any location-bearing session event) updates the persisted record's directory; verification cwd, HEAD evidence, gates, artifacts, learning logs, arming and commit-rule prompts all use the session's current directory; per-session read surfaces and restore follow the move -->
+<!-- behavior-change: CXXI evaluator inherits the parent session's fingerprint — inherit-mode judge generations (verdict, loop summary, next-goal, consensus second opinion) route through ctx.session.generate so they carry the session's x-opencode-session affinity and free-usage bucket instead of a fresh stateless session per call; pinned independent and session modes unchanged -->
+<!-- behavior-change: CXXII evaluator free-usage limits pause instead of failing the goal — a 429/QuotaExceeded "Free usage limit reached" from the judge now pauses the goal for 15m and retries forever (the execution path's existing self-clearing usage-limit semantics) instead of burning maxRetries on 10s/30s/90s backoff and failing; transient and fatal evaluator errors unchanged -->
+<!-- behavior-change: CXXIII repo-scoped .term artifacts (startup scaffold, learning journal, failure diagnostics) anchor at the git repository root via resolveProjectRoot; launching OpenCode from a subfolder no longer creates a .term copy in that subfolder; outside a repo the directory itself is used -->
+<!-- behavior-change: CXXIV audit follow-up — after a session.moved the /goal-loop directive and system reminder use the moved checkout's commit rule (no stale setup branch); a move during evaluation aborts the in-flight judge and flips the checking pill off; session.moved prefers the destination in data.location over a possibly pre-move top-level envelope location -->
+<!-- behavior-change: CXXV bound evaluator deliberation — both judge prompts gain a short decisiveness/verbosity instruction (decide from shown evidence, name the single most critical gap, keep the reason short, no exhaustive edge-case enumeration for vague conditions); the exhaustive evidence matrix, adversarial self-check, verifier corroboration and next-action contract stay byte-identical; the opencode-cli guide now frames layer reporting as brief and limited to claims actually made -->
+<!-- behavior-change: CXXVI evaluator free-usage limits PAUSE the goal instead of retrying every 15m forever — a judge-side 429/FreeUsageLimitError now pauses with pauseCause "usage_limit", arms no retry timer, and waits for a user message to resume (or a separate evaluator.model / the quota window to reset); the HUD names that remedy; transient and fatal evaluator errors and the execution path are unchanged -->

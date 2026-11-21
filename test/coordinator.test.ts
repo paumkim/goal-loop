@@ -377,3 +377,13 @@ describe("coordinator release", () => {
     expect(doc.stdout).not.toContain("done lease idle-3")
   })
 })
+
+describe("coordinator help discoverability", () => {
+  test("top-level help advertises merge-next --target", () => {
+    setup("true")
+    const help = run(dir, ["--help"])
+    expect(help.status).toBe(0)
+    expect(help.stdout).toContain("merge-next [<slug>|--target <slug>] [--review]")
+    expect(help.stdout).toContain("--target names a lease from the main repo")
+  })
+})

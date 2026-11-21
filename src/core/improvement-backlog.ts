@@ -9,9 +9,9 @@
  * Pure data helpers only: no I/O, no side effects.
  */
 
-export type ImprovementImpact = "low" | "medium" | "high"
-export type ImprovementRisk = "low" | "medium" | "high"
-export type ImprovementStatus = "open" | "in_progress" | "blocked" | "deferred" | "done"
+type ImprovementImpact = "low" | "medium" | "high"
+type ImprovementRisk = "low" | "medium" | "high"
+type ImprovementStatus = "open" | "in_progress" | "blocked" | "deferred" | "done"
 
 export interface ImprovementBacklogItem {
   readonly id: string
@@ -38,17 +38,17 @@ export interface ImprovementBacklog {
   readonly items: readonly ImprovementBacklogItem[]
 }
 
-export interface BacklogValidationIssue {
+interface BacklogValidationIssue {
   readonly path: string
   readonly message: string
 }
 
-export interface BacklogValidationResult {
+interface BacklogValidationResult {
   readonly ok: boolean
   readonly issues: readonly BacklogValidationIssue[]
 }
 
-export interface DedupeMatch {
+interface DedupeMatch {
   readonly left: string
   readonly right: string
   readonly reason: "id" | "dedupeKey"

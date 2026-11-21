@@ -409,6 +409,14 @@ describe("remediationFor paused", () => {
     expect(fix?.text).toBe("interrupted · send a message to resume")
   })
 
+  test("a usage-limit pause names the separate-model escape hatch and the resume remedy", () => {
+    const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "usage_limit" }))
+    expect(fix?.tone).toBe("warning")
+    expect(fix?.text).toContain("free usage limit")
+    expect(fix?.text).toContain("evaluator.model")
+    expect(fix?.text).toContain("send a message to resume")
+  })
+
   test("a paused record persisted before pauseCause falls back to the generic remedy", () => {
     const fix = remediationFor(loopedGoal({ status: "paused" }))
     expect(fix?.text).toBe("paused · send a message to resume, or /goal clear")

@@ -12,9 +12,9 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { findRepository, resolveCommitPolicy } from "./core/git.ts"
+import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -27,11 +27,12 @@ import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
 import { withFileSink } from "./core/file-log.ts"
+import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
 
 const DESCRIPTION = "keep working until a condition is met"
-const LOOP_DESCRIPTION = "keep working toward an objective; each achieved goal arms an improved one, until cleared or capped"
+const LOOP_DESCRIPTION = "keep working toward an objective; bare /goal-loop checks for plugin updates; each achieved goal arms an improved one"
 
 function createLogger(): Logger {
   const tag = `[${PLUGIN_ID}]`
@@ -174,7 +175,10 @@ export default Plugin.define({
     try {
       const pluginRoot = pluginRootFromMeta(import.meta.dir)
       const repository = findRepository(ctx.location.directory)
-      const projectRoot = repository?.root ?? ctx.location.directory
+      // Anchor the scaffold at the git root: launching from a subfolder (e.g. docs/) must not create
+      // .term in that subfolder. resolveProjectRoot returns the repo root for a subfolder and the
+      // directory itself outside a repo, so the runtime-only path still applies there.
+      const projectRoot = resolveProjectRoot(ctx.location.directory)
       const startup = ensureStartupScaffold({ projectRoot, pluginRoot, learningPath: config.learning.path })
       if (startup.created.length > 0 || startup.notes.length > 0) {
         log.info("startup scaffold", { created: startup.created, existing: startup.existing, notes: startup.notes })
@@ -211,7 +215,24 @@ export default Plugin.define({
       {
         sessionGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
         modelGenerate: async (model: ModelRef, prompt, signal) => (await ctx.generate.text({ prompt, model }, { signal })).text,
-        context: (sessionID, signal) => ctx.session.context({ sessionID }, { signal }),
+        // Use-and-forget: the evaluator's own <goal-evaluation> prompts are its self-talk, not evidence.
+        // The independent digest is paired with a freshly built rubric prompt, so no evaluation prompt
+        // from the transcript may ride into it — strip all of them at the source.
+        context: async (sessionID, signal) => stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal })),
+        // Inherit mode: read the parent session's current active model from the host. Resolution is per
+        // generation (see Evaluator.resolveModel), so a /model switch is followed on the next verdict. The
+        // host's ModelRef is { providerID, id, variant? } — the same shape as the plugin's ModelRef.
+        sessionModel: async (sessionID, signal) => {
+          const current = (await ctx.session.get({ sessionID }, { signal })).model
+          if (!current) return undefined
+          return { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) }
+        },
+        // Inherit mode judges on the session's own model, so the generation must be seen as that same session:
+        // stateless ctx.generate.text mints a fresh x-opencode-session per call (OpenCode generate.ts) and the
+        // gateway bills each one as a new free-tier session — "Free usage limit reached" while the parent still
+        // works. ctx.session.generate carries the session's affinity headers (single model step, no history
+        // mutation), so the evaluator inherits the session fingerprint and its free usage bucket.
+        sessionModelGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
       },
       config.evaluator,
       commit,
@@ -240,6 +261,9 @@ export default Plugin.define({
       config,
       directory: ctx.location.directory,
       commit,
+      // A goal follows its session across directories; re-resolve the commit rule for the new checkout so the
+      // agent's directives name the right branch and coordinator policy after a move.
+      commitFor: (directory) => resolveCommitPolicy(config.commit, directory, coordinatorBin),
       session,
       evaluator,
       background,
@@ -287,6 +311,58 @@ export default Plugin.define({
       notice: (notice) => void rpc.events.emit("notice", { ...notice }).catch(quiet),
     }
 
+    // ---- bare /goal-loop = update check
+    // `plugins[].options.update` is the one source of truth, already parsed into `config.update` alongside
+    // every other option. The check never blocks prompt admission: it is deferred to the next macrotask,
+    // so a fast plugin disposal aborts it before any network request leaves the machine. An immediate
+    // toast tells the user the check started; a second toast carries the result. `mode: off` (and probe
+    // mode) keep the old status-only behavior.
+    const updateTimers = new Set<ReturnType<typeof setTimeout>>()
+    const scheduleUpdateCheck = (sessionID: string) => {
+      if (probe || config.update.mode !== "auto") return
+      emit.notice({
+        sessionID,
+        kind: "set",
+        level: "info",
+        title: "goal-loop update",
+        message: `Checking GitHub for the ${config.update.channel} channel…`,
+      })
+      const timer = setTimeout(() => {
+        updateTimers.delete(timer)
+        if (lifetime.signal.aborted) return
+        void (async () => {
+          try {
+            const result = await cliUpdate([], { env: process.env, cwd: ctx.location.directory })
+            const text = (result.stdout || result.stderr).trim() || "Update check produced no output."
+            if (!lifetime.signal.aborted) emit.notice({
+              sessionID,
+              kind: "set",
+              level: result.code === 0 ? "info" : "warning",
+              title: "goal-loop update",
+              message: text,
+            })
+          } catch (error) {
+            if (!lifetime.signal.aborted) emit.notice({
+              sessionID,
+              kind: "set",
+              level: "warning",
+              title: "goal-loop update",
+              message: `Update check failed: ${error instanceof Error ? error.message : String(error)}`,
+            })
+          }
+        })()
+      }, 0)
+      updateTimers.add(timer)
+    }
+    const handleBareLoop = async (sessionID: string): Promise<"update" | "status"> => {
+      if (probe || config.update.mode !== "auto") {
+        await controller.status(sessionID)
+        return "status"
+      }
+      scheduleUpdateCheck(sessionID)
+      return "update"
+    }
+
     // ---- the /goal and /goal-loop commands
     await ctx.command.transform((editor) => {
       const addCommand = (name: string, description: string, loop: boolean) =>
@@ -294,6 +370,10 @@ export default Plugin.define({
           name,
           description,
           execute: async ({ sessionID, prompt, delivery }) => {
+            if (loop && (prompt.text ?? "").trim() === "") {
+              await handleBareLoop(sessionID)
+              return
+            }
             await controller.command({
               sessionID,
               text: prompt.text ?? "",
@@ -333,18 +413,20 @@ export default Plugin.define({
           return
         }
         if (objective === "") {
-          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): same as bare /goal-loop — show status.
+          // Bare directive (/goal-loop, /goal-loop-<N> with no objective): update check (or status when off).
           if (goalLoop.invalidCount !== undefined) controller.noteInvalidLoopCount(event.sessionID, goalLoop.invalidCount)
-          await controller.status(event.sessionID)
+          const action = await handleBareLoop(event.sessionID)
           controller.onUserPrompt(event.sessionID)
-          event.prompt.text = "Show the current goal loop status."
+          event.prompt.text = action === "update"
+            ? "A goal-loop update check was requested; acknowledge briefly and do not set a goal."
+            : "Show the current goal loop status."
           return
         }
         const maxLoops = goalLoop.maxLoops ?? config.maxLoops
         // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
         // command path would have delivered, with the directive token and the count removed from the objective.
         const originalPrompt = event.prompt.text
-        event.prompt.text = directivePrompt(objective, commit, { iteration: 1, maxLoops, objective, history: [] })
+        event.prompt.text = directivePrompt(objective, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective, history: [] })
         const armed = await controller.armFromPrompt({
           sessionID: event.sessionID,
           condition: objective,
@@ -358,9 +440,18 @@ export default Plugin.define({
       }
       controller.onUserPrompt(event.sessionID)
     })
-    // Bound the evaluator's transient request without touching tools or system, which would break the cached prefix.
+    // Evaluator-only shaping of transient `session.generate` requests. `session.generate` is a single model step
+    // (no tool-execution loop): its `.text` is assembled from text events only, so a tool call yields `""`. The
+    // session's full tool set is sent on that step, and a small judge routinely answers the rubric with a tool
+    // call instead of text — all three repair attempts then come back empty and the goal stalls on
+    // `unreadable verdict after 3 attempts: ""`. STRICT_REPAIR's "do not call tools" is only prose; the tools
+    // must actually be removed for the request. Deleting in place (the documented SDK mutation pattern) is safe:
+    // the host keys the prompt cache on session affinity, not on the tool list, and the surrounding context hook
+    // already edits system/messages for these requests. Non-evaluator generations keep their tools untouched.
     await ctx.session.hook("generate", (event) => {
-      if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
+      if (!evaluator.isEvaluating(event.sessionID)) return
+      event.options.maxTokens = config.evaluator.maxOutputTokens
+      for (const name of Object.keys(event.tools)) delete event.tools[name]
     })
     // One context hook, up to three injections: the standing system reminder (config-gated), the
     // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
@@ -373,7 +464,7 @@ export default Plugin.define({
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
-        if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
+        if (condition) event.system.push({ type: "text", text: systemReminder(condition, controller.commitForSession(event.sessionID)) })
       }
       const anchor = controller.consumeAnchor(event.sessionID)
       if (anchor) event.system.push({ type: "text", text: anchor })
@@ -384,7 +475,11 @@ export default Plugin.define({
       // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
         const original = event.messages
-        const kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        let kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        // The evaluator's own voice is not evidence and must not accumulate in model-bound context.
+        // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
+        // only the most recent one — the live rubric the model must answer — and drop older echoes.
+        kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be
@@ -392,8 +487,11 @@ export default Plugin.define({
           // removed that trailing turn, keep it: a stale goal line is harmless history, while an invalid
           // request aborts the turn. Splice in place — the host holds the caller's array reference.
           const trailing = original[original.length - 1]
+          // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
+          // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
+          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) ? trailing : undefined
           const last = kept[kept.length - 1]
-          const repaired = last?.role === "user" || trailing === undefined || last === trailing ? kept : [...kept, trailing]
+          const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
           original.splice(0, original.length, ...repaired)
         }
       }
@@ -425,11 +523,16 @@ export default Plugin.define({
       }
     })()
 
-    void controller.restore().catch((error) => log.error("goal restore failed", { error: String(error) }))
-    log.info("ready", { evaluator: config.evaluator.mode, model: config.evaluator.model ?? "session" })
+    void controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
+    log.info("ready", {
+      evaluator: config.evaluator.mode,
+      model: config.evaluator.model ?? (config.evaluator.inheritModel ? "session (inherited)" : "session"),
+    })
 
     return async () => {
       lifetime.abort()
+      for (const timer of updateTimers) clearTimeout(timer)
+      updateTimers.clear()
       await controller.dispose()
     }
   },

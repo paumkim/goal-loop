@@ -18,7 +18,7 @@ import { join } from "node:path"
 import { parseGoalSnapshot, sameDirectory } from "./wire.ts"
 import type { GoalSnapshot } from "./types.ts"
 
-export interface GoalMirror {
+interface GoalMirror {
   /** Best-effort atomic write; never throws. */
   readonly write: (snapshot: GoalSnapshot) => void
   /** Best-effort unlink (goal cleared); never throws. */

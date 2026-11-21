@@ -23,7 +23,7 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 | ❌ Stops prematurely when it "thinks" it is done | ✅ Loops autonomously until the finish line is proven |
 | ❌ Hallucinates that tests pass without running them | ✅ Evaluator requires fresh command output at current git HEAD |
 | ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or isolated worktrees before `met` |
-| ❌ Fails on network drops or rate limits | ✅ Retries forever with exponential backoff; never loses state |
+| ❌ Fails on network drops or rate limits | ✅ Retries transients forever; pauses on free-usage limits until you resume — never loses state |
 | ❌ Context fills up and model quality degrades | ✅ Auto-compacts context at each loop iteration boundary |
 
 ---
@@ -48,6 +48,22 @@ Want the agent to keep improving after reaching the goal?
 /goal-loop audit the codebase, fix type errors, and make bun run check pass
 ```
 When an iteration succeeds, `goal-loop` summarizes achievements, auto-compacts session context, and arms the next harder milestone automatically.
+
+### Want to stop typing prompts entirely?
+
+The same package also ships **`prompter`** — a bundled autonomous work loop that picks the next task from a plain `AUTONOMY.md` backlog, runs each one through headless `/goal` in an isolated git worktree, verifies it, commits on a task branch, and then **stops for your review**. It never merges or pushes. The prompt library that feeds it lives in this repo at `prompts/` — there is no second project to install or maintain.
+
+```sh
+prompter init                 # in any target repo: create AUTONOMY.md + config
+# edit AUTONOMY.md with verifiable task lines
+prompter tick                 # one unit, then it stops for review
+prompter review               # see the branch + commit
+# merge the branch into your base branch
+prompter approve <id>         # proves the commit landed, then marks done
+prompter stop                 # global kill switch
+```
+
+Safety: one task in review at a time, dollar/token/wall-clock caps, dirty-tree gate, and kill switches. Details: `src/prompter/` and `SPEC.md`.
 
 ---
 
@@ -79,9 +95,31 @@ Type `/goal` or `/goal-loop` anytime to open the full status modal:
 | `/goal` | Shows detailed status dialog: condition, time, turns, spend, last reason |
 | `/goal clear` | Stops and clears the goal (`stop`, `off`, `reset`, `none`, `cancel` work too) |
 | `/goal-loop <objective>` | Runs continuous loop: each `met` goal summarizes and arms the next |
-| `/goal-loop` | Shows loop dialog: objective, iteration, per-iteration history |
+| `/goal-loop` | Checks GitHub for a plugin update and applies it (result appears as a toast); with `update.mode: off` it shows loop status instead |
 | `/goal-loop clear` | Ends the loop (same aliases as `/goal clear`) |
 | `/goal-loop-<N> <objective>` | Caps this loop run at `N` iterations (integer 1–1000; e.g. `/goal-loop-10`, `/goal-loop=3`) |
+
+### 🔄 Updates & channels
+
+Typing bare `/goal-loop` (no objective) is also the update trigger — no extra slash command is added. It checks the
+GitHub repository for the current ref and reports the result as a toast; it never blocks the prompt. To apply an update
+from the terminal instead:
+
+```sh
+goal-loop update          # check GitHub and, if newer, repin the plugin in your OpenCode config
+goal-loop update --check  # report only; do not change the config
+goal-loop channel main    # stable: newest semver tag from GitHub (default)
+goal-loop channel dev     # fast: latest dev commit — may break working setups
+goal-loop updates off     # never check; bare /goal-loop shows loop status instead
+goal-loop updates auto    # re-enable checks
+goal-loop status          # scope, config path, installed ref, channel, updates
+```
+
+Preferences are ordinary plugin options — `plugins[].options.update = { "channel": "main", "mode": "auto" }` in the
+same OpenCode config that holds the pin. No sidecar file. `main` is the safe default: it follows the newest stable tag.
+`dev` pins the current dev-branch commit and is intentionally fast-moving and unstable. `mode: off` disables all network
+checks and makes bare `/goal-loop` show loop status again. A plugin pin only takes effect after you restart OpenCode.
+Every config rewrite is backed up and atomic; use `/goal` for status while checks are on.
 
 ---
 
@@ -133,9 +171,9 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `model` | — | Fallback model for `evaluator.model` |
-| `evaluator.model` | session model | Independent model that evaluates goal completion |
+| `evaluator.model` | session model | Independent model that evaluates goal completion; set to `inherit` (aliases `session`/`parent`/`current`/`active`) to judge on the parent session's current model instead of a pinned one |
 | `evaluator.mode` | `auto` | Evaluator mode: `session`, `independent`, or `auto` |
-| `evaluator.maxTranscriptChars` | `60000` | Max transcript digest characters for evaluation |
+| `evaluator.maxTranscriptChars` | `20000` | Max transcript digest characters for evaluation |
 | `evaluator.maxOutputTokens` | `4096` | Max token budget for evaluator verdict |
 | `evaluator.timeoutMs` | `120000` | Evaluation call timeout in milliseconds |
 | `evaluator.verifyCommand` | `""` | Command that must exit 0 before `met` is accepted (e.g. `bun run check`) |
@@ -153,6 +191,8 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | `systemReminder` | `false` | Put the goal condition in the system prompt |
 | `compactAtTokens` | `0` | Auto-compact session when context reaches token threshold (`0` = off) |
 | `compactOnLoopIteration` | `true` | Request host compaction at each loop iteration boundary |
+| `update.channel` | `main` | Plugin update channel: `main` (newest stable tag) or `dev` (latest dev commit, may break) |
+| `update.mode` | `auto` | `auto` checks for updates on bare `/goal-loop`; `off` disables checks entirely |
 | `maxLoops` | `5` | Iteration cap for `/goal-loop` |
 | `maxLoopSummaryTokens` | `400` | Token budget for per-iteration loop summary |
 | `learning.enabled` | `true` | Durable outcome journal logging enabled |

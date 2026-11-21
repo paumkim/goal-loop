@@ -59,6 +59,10 @@ describe("opencodeCliGuide", () => {
     expect(guide).toContain("~/.config/opencode/opencode.jsonc")
     // Report the layer each claim was verified at; string extraction remains the binary-truth route.
     expect(guide).toContain("binary / source / test-render / live TUI")
+    // CXXV: reporting is brief and limited to claims actually made — not an exhaustive audit of every possibility.
+    expect(guide).toContain("report briefly which layer")
+    expect(guide).toContain("each claim you make was verified at")
+    expect(guide).toContain("no need to audit every possibility")
     expect(guide).toContain("string extraction from the binary is often the only source of truth")
     expect(guide).toContain("never commit to the host repo")
   })

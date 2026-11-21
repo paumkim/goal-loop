@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
+import { isUsageLimitError } from "../src/core/errors.ts"
 import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
@@ -439,6 +440,52 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
+  test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // turn ends with the subagent still busy: deferral set, pill waiting
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+
+    // A new user turn / synthetic continuation starts: the main session is working again. The indicator
+    // flips to active ON THIS EVENT — no clock advance, no evaluation, no background drain.
+    const before = h.changes.length
+    h.controller.onExecutionStarted(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+    expect(h.changes.at(-1)?.waiting).toBeFalse()
+    // The deferral is untouched: evaluation is still held back and the persisted twin is still there.
+    expect(h.requests).toHaveLength(0)
+    expect(typeof h.controller.get(SID)?.waitingSince).toBe("number")
+
+    // Many tool calls are many heartbeats but only one paint flip — no changed-event spam per call.
+    h.controller.onToolCalled(SID)
+    h.controller.onToolCalled(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+
+    // The turn ends with the subagent still busy: the pill flips straight back to waiting on this event.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+    expect(h.requests).toHaveLength(0)
+  })
+
+  test("a tool call alone flips a deferred pill to active even when the execution-start event was missed", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    const before = h.changes.length
+    // No execution-started event — simulate a restart/reconnect that swallowed it. The tool event is still
+    // a heartbeat proving the main session is active, so the pill must not stay stuck on `waiting`.
+    h.controller.onToolCalled(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.at(-1)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+  })
+
   test("retries evaluation when the busy check errors instead of skipping permanently", async () => {
     await h.set()
     h.setBusyError(new Error("busy check failed"))
@@ -589,6 +636,47 @@ describe("GoalController", () => {
     await h.clock.advance(10_000)
     expect(h.controller.get(SID)?.retries).toBe(2)
     expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
+  })
+
+  test("an evaluator free-usage limit pauses the goal and waits for a message instead of retrying forever", async () => {
+    h = harness({ maxRetries: 1 })
+    await h.set()
+    h.verdicts.push(new Error("Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going"))
+    await h.turn()
+    // Even with maxRetries=1, a self-clearing usage limit must never exhaust the cap or fail the goal.
+    // It pauses outright — like the upstream plugin — rather than spinning on a 15m retry timer forever.
+    const paused = h.controller.get(SID)
+    expect(paused?.status).toBe("paused")
+    expect(paused?.pauseCause).toBe("usage_limit")
+    expect(paused?.retries).toBe(1)
+    const notice = h.notices.at(-1)
+    expect(notice?.title).toBe("Goal paused")
+    expect(notice?.kind).toBe("paused")
+    expect(notice?.message).toContain("Free usage limit reached")
+    expect(notice?.message).toContain("evaluator.model")
+    expect(notice?.message).toContain("send a message to resume")
+    // No retry timer is armed: advancing the clock never re-evaluates on its own.
+    const requestsBefore = h.requests.length
+    await h.clock.advance(2 * 60 * 60_000)
+    expect(h.requests.length).toBe(requestsBefore)
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    // A user message resumes; once the quota window clears the next verdict lands.
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.pauseCause).toBeUndefined()
+    h.verdicts.push(met("recovered after the quota window reset"))
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
+  test("isUsageLimitError is narrowly scoped to usage/rate limits", () => {
+    expect(isUsageLimitError(new Error("Free usage limit reached"))).toBe(true)
+    expect(isUsageLimitError(new Error("rate limit exceeded"))).toBe(true)
+    expect(isUsageLimitError({ status: 429, message: "too many requests" })).toBe(true)
+    expect(isUsageLimitError("usage limit reached")).toBe(true)
+    expect(isUsageLimitError(new Error("boom"))).toBe(false)
+    expect(isUsageLimitError(new Error("insufficient credit balance"))).toBe(false)
+    expect(isUsageLimitError(new Error("evaluator timed out after 120s"))).toBe(false)
   })
 
   test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {
@@ -1046,6 +1134,26 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
   })
 
+  test("a restored wait flips to active on the first post-reload heartbeat, pushed as an immediate changed event", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore me")
+    first.setWork({ subagents: 1, shells: 0 })
+    await first.turn()
+    await first.store.flush()
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+    const before = second.changes.length
+    // The mirror still paints `waiting` from before the reload; the first heartbeat must push the flip
+    // as a changed event instead of leaving the TUI to discover it on its 15s tick.
+    second.controller.onExecutionStarted(SID)
+    expect(second.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(second.changes.length).toBe(before + 1)
+    expect(second.changes.at(-1)?.waiting).toBeFalse()
+  })
+
   test("the background-drain path clears a restored wait and drops the persisted twin", async () => {
     const storage = new MemoryStorage()
     const first = harness({}, storage)
@@ -1098,6 +1206,182 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     await h.clock.advance(15_000)
     expect(h.requests).toHaveLength(1)
     expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+})
+
+describe("an interrupted evaluation resumes after restart (CXVI)", () => {
+  const KEY = (sessionID: string) => `goal/v1/${sessionID}`
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+
+  test("shutdown mid-evaluation persists an evaluate marker that store.flush() lands", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    h.verdicts.push(() => gate.promise)
+    const turning = h.turn()
+    await flush()
+    expect(h.controller.snapshot(SID)?.evaluating).toBeTrue()
+    await h.controller.dispose()
+    await h.store.flush()
+    const stored = storage.data.get(KEY(SID)) as GoalRecord
+    expect(stored.pendingEvaluation).toMatchObject({ turn: 1, tools: 1, condition: "restore the check", phase: "evaluate" })
+    gate.resolve(notMet("late verdict"))
+    await turning
+  })
+
+  test("restore re-enters evaluate with the interrupted turn and tools, then clears the marker", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    first.verdicts.push(() => gate.promise)
+    const turning = first.turn()
+    await flush()
+    await first.controller.dispose()
+    await first.store.flush()
+    gate.resolve(notMet("late verdict"))
+    await turning
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("resumed gap"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(1)
+    expect(second.requests[0]!.turn).toBe(1)
+    expect(second.controller.get(SID)?.turns).toBe(1)
+    expect(second.calls.synthetic).toHaveLength(1)
+    expect(second.calls.synthetic[0].text).toContain("resumed gap")
+    expect(second.notices.some((n) => n.kind === "resumed" && n.title.includes("restart"))).toBeTrue()
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a marker for a verdict that already landed is cleared, never re-evaluated", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const stale = storage.data.get(KEY(SID)) as GoalRecord
+    stale.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    stale.turns = 1 // verdict committed before the crash
+    storage.data.set(KEY(SID), stale)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a marker whose condition changed by a loop re-arm is cleared", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("old condition")
+    await first.store.flush()
+    const stale = storage.data.get(KEY(SID)) as GoalRecord
+    stale.pendingEvaluation = { turn: 1, tools: 1, condition: "old condition", phase: "evaluate", at: 1 }
+    stale.condition = "new condition"
+    storage.data.set(KEY(SID), stale)
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("should not be used"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+  })
+
+  test("a continue-phase marker re-sends the continuation steer without a second evaluation", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const owed = storage.data.get(KEY(SID)) as GoalRecord
+    owed.turns = 1
+    owed.verdict = "not_met"
+    owed.reason = "the previously judged gap"
+    owed.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "continue", at: 1 }
+    storage.data.set(KEY(SID), owed)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(1)
+    expect(second.calls.synthetic[0].text).toContain("the previously judged gap")
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a paused record's marker is cleared, never resumed", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const paused = storage.data.get(KEY(SID)) as GoalRecord
+    paused.status = "paused"
+    paused.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    storage.data.set(KEY(SID), paused)
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("should not be used"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(0)
+  })
+
+  test("restore({ resume: false }) adopts the record but dispatches nothing (probe isolation)", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const stuck = storage.data.get(KEY(SID)) as GoalRecord
+    stuck.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    storage.data.set(KEY(SID), stuck)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore({ resume: false })).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(0)
+    // The marker is untouched: a later writable restore can still resume it.
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeDefined()
+  })
+
+  test("a host 'shutdown' interrupt keeps the marker and a user interrupt clears it", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    h.verdicts.push(() => gate.promise)
+    const turning = h.turn()
+    await flush()
+    h.controller.onExecutionInterrupted(SID, "shutdown")
+    await h.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation?.phase).toBe("evaluate")
+    gate.resolve(notMet("late"))
+    await turning
+    await h.controller.dispose()
+
+    const other = harness({}, storage)
+    await other.set("user prompt wins")
+    const gate2 = deferred<EvaluationResult>()
+    other.verdicts.push(() => gate2.promise)
+    const turning2 = other.turn()
+    await flush()
+    other.controller.onExecutionInterrupted(SID, "user")
+    await other.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+    gate2.resolve(notMet("late"))
+    await turning2
+    await other.controller.dispose()
   })
 })
 
@@ -1602,6 +1886,31 @@ describe("terminal record pruning after finish (opportunistic)", () => {
       expect(h.requests).toHaveLength(1)
       expect(h.controller.get(SID)?.turns).toBe(1)
       expect(h.controller.snapshot(SID)?.queued).toBeTrue() // continuation after not_met queued
+    })
+
+    test("a straggler succeeded while awaiting a continuation still clears the heartbeat paint", async () => {
+      const h = harness()
+      await h.set()
+      h.setWork({ subagents: 1, shells: 0 })
+      await h.turn()
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      // An idle check-in dispatches a continuation while the background deferral is still pending.
+      await h.clock.advance(30 * 60_000)
+      expect(h.calls.synthetic).toHaveLength(1)
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      // The continuation's execution-started is swallowed (restart/reconnect). A tool call and the
+      // succeeded still arrive: the succeeded is dropped as a straggler, but the execution ended, so the
+      // pill must flip straight back to waiting instead of sticking on active forever.
+      h.controller.onToolCalled(SID)
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+      const before = h.changes.length
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+      expect(h.changes.at(-1)?.waiting).toBeTrue()
+      expect(h.changes.length).toBe(before + 1)
     })
 
     test("evaluator timeout/failure retries with bounded backoff and keeps snapshots non-stuck", async () => {

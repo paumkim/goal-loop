@@ -21,6 +21,8 @@ interface FakeDeps {
   sessionGenerate: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
   modelGenerate: (model: unknown, prompt: string, signal: AbortSignal) => Promise<string>
   context: (sessionID: string, signal: AbortSignal) => Promise<readonly unknown[]>
+  sessionModel?: (sessionID: string, signal: AbortSignal) => Promise<{ providerID: string; id: string; variant?: string } | undefined>
+  sessionModelGenerate?: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
 }
 
 function deps(overrides: Partial<FakeDeps> = {}) {
@@ -136,6 +138,23 @@ describe("Evaluator.evaluate", () => {
     expect(prompts).toHaveLength(2)
   })
 
+  test("a malformed verdict object is accepted on the first attempt instead of failing all three", async () => {
+    let calls = 0
+    const { fake } = deps({
+      sessionGenerate: async () => {
+        calls++
+        return `{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence refs
+status=satisfied, source/turn=turn 1
+next: none"}`
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toContain("Clause-by-clause judgment")
+    expect(calls).toBe(1)
+  })
+
   test("two unreadable verdicts raise EvaluationError", async () => {
     const { fake } = deps({ sessionGenerate: async () => "total garbage" })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
@@ -172,6 +191,25 @@ describe("Evaluator.evaluate", () => {
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     await expect(evaluator.evaluate(request())).rejects.toThrow(/unreadable verdict after 3 attempts/)
     expect(calls).toBe(3)
+  })
+
+  test("unreadable replies are logged with their raw text (no silent failure) and the error names the cause", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake } = deps({ sessionGenerate: async () => "tool-call-only reply" })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, log)
+    const error = await evaluator.evaluate(request()).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    )
+    expect(error?.message).toMatch(/unreadable verdict after 3 attempts/)
+    expect(error?.message).toContain("no text event")
+    // Every failed attempt is recorded, with the raw reply visible to the operator.
+    expect(warnings).toHaveLength(3)
+    expect(warnings.map((w) => w.attempt)).toEqual([1, 2, 3])
+    expect(warnings[0]?.message).toContain("unreadable")
+    expect(warnings[0]?.preview).toBe("tool-call-only reply")
+    expect(warnings[0]?.chars).toBe("tool-call-only reply".length)
   })
 
   test("an already-aborted signal cuts the evaluation off and unwinds isEvaluating", async () => {
@@ -495,6 +533,229 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
       expect(prompt).toContain("strategy escalation")
       expect(prompt).toContain("next: none")
       expect(prompt).toContain("duplicate-without-forward-pointer")
+      // CXXV: deliberation is bounded at the prompt level in both judge paths.
+      expect(prompt).toContain("Decide from the evidence actually shown, not from exhaustive hypotheticals")
+      expect(prompt).toContain("keep the reason short (a few lines)")
+      expect(prompt).toContain("do not enumerate every edge case")
     }
+  })
+})
+
+describe("Evaluator — inherit the parent session's model", () => {
+  const inheritConfig = (overrides: Record<string, unknown> = {}) =>
+    resolveConfig({ evaluator: { model: "inherit", ...overrides } }, {}).evaluator
+
+  test("uses the current session model for the independent judge, not a pinned model", async () => {
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "mimo-v2.6-flash-free" }),
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met", "inherited judge says done")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(models).toEqual([{ providerID: "oc", id: "mimo-v2.6-flash-free" }])
+    expect(calls.context).toBe(1)
+    expect(calls.session).toHaveLength(0)
+  })
+
+  test("resolves per generation — a mid-goal /model switch is followed on the next verdict", async () => {
+    const models: unknown[] = []
+    let active: { providerID: string; id: string; variant?: string } = { providerID: "oc", id: "first-model" }
+    const { fake } = deps({
+      sessionModel: async () => active,
+      modelGenerate: async (model) => {
+        models.push(model)
+        return verdictJson("not_met", "keep working")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request({ turn: 1 }))
+    active = { providerID: "oc", id: "second-model", variant: "high" }
+    await evaluator.evaluate(request({ turn: 2 }))
+    expect(models).toEqual([
+      { providerID: "oc", id: "first-model" },
+      { providerID: "oc", id: "second-model", variant: "high" },
+    ])
+  })
+
+  test("a missing session model falls back to the session evaluator with a warning", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({ sessionModel: async () => undefined })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+    expect(calls.context).toBe(0)
+    expect(warnings.some((w) => String(w.message).includes("no active model"))).toBe(true)
+  })
+
+  test("a failing host port falls back to the session evaluator with a warning", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({
+      sessionModel: async () => {
+        throw new Error("host unavailable")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+    expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
+  })
+
+  test("loop summary and next-goal generation inherit the same model", async () => {
+    const models: unknown[] = []
+    const { fake } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      modelGenerate: async (model) => {
+        models.push(model)
+        return "a short inherited reply"
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect(await evaluator.summarize(summaryRequest(400))).toBe("a short inherited reply")
+    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("a short inherited reply")
+    expect(models).toEqual([
+      { providerID: "oc", id: "session-active" },
+      { providerID: "oc", id: "session-active" },
+    ])
+  })
+
+  test("a hung session-model lookup is bounded by the evaluator timeout", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({
+      // Ignore the signal and never settle: a pathological host session lookup must not hang the goal.
+      sessionModel: () => new Promise(() => {}),
+    })
+    const evaluator = new Evaluator(fake, { ...inheritConfig(), timeoutMs: 50 }, COMMIT, log)
+    const started = Date.now()
+    const outcome = await Promise.race([
+      evaluator.evaluate(request()).then(
+        (result) => result as { verdict: string },
+        (error: unknown) => ({ verdict: `error: ${String(error)}` }),
+      ),
+      new Promise<{ verdict: string }>((resolve) => setTimeout(() => resolve({ verdict: "HUNG" }), 1_000)),
+    ])
+    expect(outcome.verdict).not.toBe("HUNG")
+    expect(Date.now() - started).toBeLessThan(1_000)
+    // Bounded resolution degrades to the session evaluator instead of hard-failing the evaluation.
+    expect(calls.session).toHaveLength(1)
+    expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
+  })
+
+  test("pinned and session modes never consult the session-model port", async () => {
+    let portCalls = 0
+    const { fake } = deps({
+      sessionModel: async () => {
+        portCalls++
+        return { providerID: "oc", id: "should-not-be-used" }
+      },
+    })
+    const pinned = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    await pinned.evaluate(request())
+    const session = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await session.evaluate(request())
+    const inheritSession = new Evaluator(fake, inheritConfig({ mode: "session" }), COMMIT, silentLog)
+    await inheritSession.evaluate(request())
+    expect(portCalls).toBe(0)
+  })
+
+  test("inherit mode rides the parent session fingerprint, not a fresh stateless session", async () => {
+    const bound: Array<{ sessionID: string; prompt: string }> = []
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "hy4-flash-free" }),
+      sessionModelGenerate: async (sessionID, prompt) => {
+        bound.push({ sessionID, prompt })
+        return verdictJson("met", "same-session judge")
+      },
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met", "stateless judge")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(bound).toHaveLength(1)
+    expect(bound[0]?.sessionID).toBe(SID)
+    expect(bound[0]?.prompt).toContain("all tests pass")
+    expect(calls.model).toHaveLength(0)
+    expect(calls.session).toHaveLength(0)
+    expect(models).toHaveLength(0)
+  })
+
+  test("loop summary and next-goal ride the session fingerprint too", async () => {
+    const bound: string[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      sessionModelGenerate: async (_sessionID, prompt) => {
+        bound.push(prompt)
+        return "session-bound reply"
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect(await evaluator.summarize(summaryRequest(400))).toBe("session-bound reply")
+    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("session-bound reply")
+    expect(bound).toHaveLength(2)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("a pinned independent judge stays stateless even with the session port present", async () => {
+    const bound: string[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      sessionModelGenerate: async (_sessionID, prompt) => {
+        bound.push(prompt)
+        return verdictJson("met", "should not be used")
+      },
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request())
+    expect(bound).toHaveLength(0)
+    expect(calls.model).toHaveLength(1)
+  })
+
+  test("the session-bound judge is marked in-flight so the host strips tools for it", async () => {
+    let release!: (text: string) => void
+    const pending = new Promise<string>((resolve) => (release = resolve))
+    let sawInflight = false
+    let probe!: Evaluator
+    const { fake } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "m" }),
+      sessionModelGenerate: async () => {
+        sawInflight = probe.isEvaluating(SID)
+        return pending
+      },
+    })
+    probe = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const inflight = probe.evaluate(request())
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(sawInflight).toBe(true)
+    release(verdictJson("met"))
+    await inflight
+    expect(probe.isEvaluating(SID)).toBe(false)
+  })
+
+  test("without the session-bound port, inherit degrades to the stateless model port", async () => {
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "legacy-model" }),
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect((await evaluator.evaluate(request())).verdict).toBe("met")
+    expect(models).toEqual([{ providerID: "oc", id: "legacy-model" }])
+    expect(calls.session).toHaveLength(0)
   })
 })

@@ -14,6 +14,17 @@ function repository(): string {
   writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
   return dir
 }
+/** A throwaway git repository whose only branch is `branch` (HEAD points there). */
+function repositoryWithBranch(branch: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "goal-plugin-moved-"))
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }))
+  const git = join(dir, ".git")
+  mkdirSync(join(git, "refs", "heads"), { recursive: true })
+  writeFileSync(join(git, "refs", "heads", branch), "0".repeat(40))
+  writeFileSync(join(git, "HEAD"), `ref: refs/heads/${branch}\n`)
+  return dir
+}
+
 /** A throwaway git repository that ships the coordinator package, i.e. a coordinator repository. */
 function coordinatorRepository(): string {
   const dir = repository()
@@ -64,6 +75,45 @@ function context(directory: string, options: Record<string, unknown> = {}) {
   }
   return { ctx, calls, hooks, storage }
 }
+
+describe("commit rules follow a session move", () => {
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
+  }
+
+  test("the prompt directive and the system reminder use the moved checkout's rule, not the setup one", async () => {
+    const setupDir = repository() // only `dev` exists here
+    const movedDir = repositoryWithBranch("release") // config still says `dev`, so the rule falls back to `release`
+    const { ctx, hooks } = context(setupDir, { systemReminder: true })
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        yield { id: "move-1", type: "session.moved", data: { sessionID: "ses_1", location: { directory: movedDir } } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      await flush() // let the event pump route the move before the hooks render anything
+      const promptEvent = {
+        sessionID: "ses_1",
+        messageID: "msg_1",
+        prompt: { text: "/goal-loop 3 audit the parser" },
+        metadata: {},
+        delivery: "steer",
+      }
+      await hooks.prompt!(promptEvent)
+      expect(promptEvent.prompt.text).toContain("`release`")
+      expect(promptEvent.prompt.text).not.toContain("`dev`")
+
+      const contextEvent = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [], tools: {}, options: {} }
+      hooks.context!(contextEvent)
+      const reminder = contextEvent.system.map((entry: any) => entry.text).join("\n")
+      expect(reminder).toContain("`release`")
+      expect(reminder).not.toContain("`dev`")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
 
 describe("the /goal-loop-<N> directive in a plain prompt", () => {
   const promptEvent = (text: string) => ({
@@ -245,23 +295,23 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
     }
   })
 
-  test("a bare /goal-loop-12 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+  test("a bare /goal-loop-12 arms nothing, triggers an update check, and rewrites the admitted prompt", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = promptEvent("/goal-loop-12")
       await hooks.prompt!(event)
-      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
-      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
-      expect(event.prompt.text).toBe("Show the current goal loop status.")
+            expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.title === "goal-loop update")).toBe(true)
+      expect(event.prompt.text).toBe("A goal-loop update check was requested; acknowledge briefly and do not set a goal.")
       expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
     }
   })
 
-  test("a bare /goal-loop arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+  test("a bare /goal-loop arms nothing, triggers an update check, and rewrites the admitted prompt", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
@@ -269,31 +319,47 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
       const event = promptEvent("/goal-loop")
       await hooks.prompt!(event)
       expect(storage.get("goal/v1/ses_1")).toBeUndefined()
-      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
-      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(calls.notices.some((n: any) => n.title === "goal-loop update")).toBe(true)
+      expect(event.prompt.text).toBe("A goal-loop update check was requested; acknowledge briefly and do not set a goal.")
       expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
     }
   })
 
-  test("a bare /goal-loop-3 arms nothing, shows status, and rewrites the admitted prompt to a neutral status request", async () => {
+  test("a bare /goal-loop-3 arms nothing, triggers an update check, and rewrites the admitted prompt", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
       const event = promptEvent("/goal-loop-3")
       await hooks.prompt!(event)
-      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
-      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
-      expect(event.prompt.text).toBe("Show the current goal loop status.")
+            expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.title === "goal-loop update")).toBe(true)
+      expect(event.prompt.text).toBe("A goal-loop update check was requested; acknowledge briefly and do not set a goal.")
       expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
     }
   })
 
-  test("a bare /goal-loop with an invalid count reports the count, shows status, and rewrites the admitted prompt", async () => {
+  test("update.mode off restores the status-only bare directive", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory, { update: { channel: "dev", mode: "off" } })
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = promptEvent("/goal-loop")
+      await hooks.prompt!(event)
+      expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
+      expect(calls.notices.some((n: any) => n.title === "goal-loop update")).toBe(false)
+      expect(event.prompt.text).toBe("Show the current goal loop status.")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a bare /goal-loop with an invalid count reports the count, triggers an update check, and rewrites the admitted prompt", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
@@ -302,8 +368,8 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
       await hooks.prompt!(event)
       expect(storage.get("goal/v1/ses_1")).toBeUndefined()
       expect(calls.notices.some((n: any) => /Loop count ignored/.test(n.title))).toBe(true)
-      expect(calls.notices.some((n: any) => n.kind === "status")).toBe(true)
-      expect(event.prompt.text).toBe("Show the current goal loop status.")
+      expect(calls.notices.some((n: any) => n.title === "goal-loop update")).toBe(true)
+      expect(event.prompt.text).toBe("A goal-loop update check was requested; acknowledge briefly and do not set a goal.")
       expect(event.prompt.text).not.toContain("/goal-loop")
     } finally {
       await dispose?.()
@@ -352,6 +418,31 @@ describe("plugin setup", () => {
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
       expect(directive.text).toContain("Coordinator repo")
+    } finally {
+      await dispose?.()
+    }
+  })
+  test("bootstrap from a subfolder creates .term only at the repository root", async () => {
+    const root = repository()
+    const docs = join(root, "docs")
+    mkdirSync(docs, { recursive: true })
+    // OpenCode was launched from docs/, so the host reports the subfolder as the location.
+    const { ctx, calls } = context(docs)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      // Repo root gets the full scaffold.
+      expect(existsSync(join(root, ".term/coordinator/config.json"))).toBe(true)
+      expect(existsSync(join(root, ".term/coordinator/state.json"))).toBe(true)
+      expect(existsSync(join(root, ".term/goal-loop"))).toBe(true)
+      expect(existsSync(join(root, "worktrees"))).toBe(true)
+      // The launch subfolder must never receive its own .term or worktrees.
+      expect(existsSync(join(docs, ".term"))).toBe(false)
+      expect(existsSync(join(docs, "worktrees"))).toBe(false)
+      expect(existsSync(join(docs, "SPEC.md"))).toBe(false)
+      // The commit rule still resolves the coordinator at the repo root, not the subfolder.
+      const goal = calls.commands.find((command) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
+      expect(calls.prompts.at(-1).text).toContain("Coordinator repo")
     } finally {
       await dispose?.()
     }
@@ -440,6 +531,107 @@ describe("the context hook strips end-of-record notes", () => {
       expect(event.messages).toHaveLength(2)
       expect((event.messages.at(-1) as any).role).toBe("user")
       expect(event.messages.at(-1)).toBe(continuation)
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("the context hook drops the evaluator's own self-echo (CXV use-and-forget)", () => {
+  const message = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+  const evalPrompt = (turn: number) => `<goal-evaluation>\nStep out of the agent role. Turn ${turn}.\nDo not call tools.\n</goal-evaluation>`
+
+  test("a working turn keeps real evidence but not prior <goal-evaluation> prompts", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const steer = message("the user's own line")
+      const evidence = message("fresh evidence: bun run check green")
+      const event = {
+        sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
+        messages: [message(evalPrompt(1)), evidence, message(evalPrompt(2)), steer], tools: {}, options: {},
+      }
+      hooks.context!(event)
+      expect(event.messages).toEqual([evidence, steer])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the trailing-user repair never re-adds a stripped evaluation prompt", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const assistant = { role: "assistant", content: [{ type: "text", text: "working" }] }
+      const steer = message("continue with the fix")
+      const event = {
+        sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
+        messages: [assistant, message(evalPrompt(1)), steer], tools: {}, options: {},
+      }
+      hooks.context!(event)
+      expect(event.messages).toEqual([assistant, steer])
+      expect((event.messages.at(-1) as any).role).toBe("user")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a compaction checkpoint quoting an evaluation prompt survives as history", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const checkpoint = message(
+        ["<conversation-checkpoint>", "<summary>worked</summary>", "<recent-context>", `[User]: ${evalPrompt(1)}`, "</recent-context>", "</conversation-checkpoint>"].join("\n"),
+      )
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [checkpoint], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([checkpoint])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the independent digest feed carries evidence, never the evaluator's own prompts", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model", evaluator: { mode: "independent" } })
+    // host-shaped context as renderTranscript sees it: two self-talk prompts around real evidence.
+    const feed = [
+      { type: "user", text: evalPrompt(1) },
+      { type: "user", text: "fresh evidence: bun run check green at current HEAD" },
+      { type: "user", text: evalPrompt(2) },
+    ]
+    ;(ctx.session as any).context = async () => feed
+    const prompts: string[] = []
+    ;(ctx.generate as any).text = async ({ prompt }: any) => {
+      prompts.push(prompt)
+      return { text: '{"verdict":"met","reason":"done"}' }
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      const digestPrompt = prompts.find((p) => p.includes("<transcript>"))
+      expect(digestPrompt).toBeDefined()
+      expect(digestPrompt).toContain("fresh evidence: bun run check green at current HEAD")
+      expect(digestPrompt).not.toContain("<goal-evaluation>")
+      expect(digestPrompt).not.toContain("Step out of the agent role")
     } finally {
       await dispose?.()
     }
@@ -588,6 +780,66 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
       hooks.context!(event)
       expect(event.messages).toEqual([keep])
       expect(event.system).toHaveLength(0)
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("the generate hook makes evaluator replies text-only (empty-verdict root cause)", () => {
+  test("tools are removed and output bounded only while a session evaluation is in flight", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks, storage } = context(directory)
+    let release!: (text: string) => void
+    let onGenerate!: () => void
+    const called = new Promise<void>((resolve) => (onGenerate = resolve))
+    // A pending judge reply: the evaluation stays in flight so the hook can be inspected mid-request.
+    // The real port reads `.text` off the host result, so return that shape.
+    ;(ctx.session as any).generate = async () => {
+      onGenerate()
+      const text = await new Promise<string>((resolve) => (release = resolve))
+      return { text }
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await called // the evaluator's session.generate is pending; isEvaluating(SID) is true
+
+      const buildEvent = () => ({
+        sessionID: "ses_1",
+        agent: "build",
+        model: {},
+        system: [] as any[],
+        messages: [] as any[],
+        tools: { read: { description: "read", input: {} }, write: { description: "write", input: {} } } as any,
+        options: {} as any,
+      })
+      const during = buildEvent()
+      hooks.generate!(during)
+      expect(Object.keys(during.tools)).toEqual([]) // no tool call can produce an empty text verdict
+      expect(during.options.maxTokens).toBeGreaterThan(0)
+
+      release('{"verdict":"met","reason":"done"}')
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+
+      const after = buildEvent()
+      hooks.generate!(after)
+      expect(Object.keys(after.tools)).toEqual(["read", "write"]) // ordinary turns keep their tools
+      expect(after.options.maxTokens).toBeUndefined()
     } finally {
       await dispose?.()
     }

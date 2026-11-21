@@ -1,4 +1,4 @@
-import { formatDuration, formatSpend, truncate } from "./format.ts"
+import { elideAtWordBoundary, formatDuration, formatSpend, truncate } from "./format.ts"
 import { stripReasoningControl } from "./sanitize.ts"
 import { isOpencodeCliCondition, opencodeCliGuide } from "./opencode-cli.ts"
 import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
@@ -7,6 +7,16 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 export const MARKER = "goal"
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
+
+/**
+ * Bound an evaluator reason before it rides a session steer. A verbose verdict repeated verbatim every turn is pure
+ * context bloat; short reasons are returned byte-identical and the fallback keeps its original meaning.
+ */
+const MAX_STEER_REASON_CHARS = 400
+const steerReason = (reason: string, fallback: string) => {
+  const value = typeof reason === "string" ? reason.trim() : ""
+  return escape(value ? elideAtWordBoundary(value, MAX_STEER_REASON_CHARS) : fallback)
+}
 
 /**
  * The commit rule, as the agent reads it.
@@ -207,7 +217,7 @@ export function loopContinuation(
   const learnings = input.learnings?.trim()
   return [
     `<goal-loop iteration="${input.iteration}" max="${input.maxLoops}">`,
-    `The previous iteration was achieved (${escape(input.reason || "met")}). The loop armed this condition:`,
+    `The previous iteration was achieved (${steerReason(input.reason, "met")}). The loop armed this condition:`,
     escape(input.condition),
     ``,
     `Summary of iteration ${input.iteration - 1} (what is already done; do not redo). Treat it as stale until you re-read the tree:`,
@@ -257,7 +267,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `The goal is not met yet. Keep working toward it.`,
     ``,
     `Goal: ${escape(input.condition)}`,
-    `Evaluator: ${escape(input.reason || "No reason given.")}`,
+    `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     ...(learnings ? [``, escape(learnings)] : []),
     ``,
     `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
@@ -364,6 +374,52 @@ export const isGoalNoteMessage = (message: unknown): boolean => {
  */
 export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isGoalNoteMessage(m))
 
+/**
+ * The evaluator's own voice echoed back into the transcript. `session.generate` appends the `<goal-evaluation>`
+ * rubric prompt to the live session on every evaluation turn, and nothing removes it: it then rides model-bound
+ * context on every later turn and floods the independent evaluator's transcript digest (~5 KB of self-talk per
+ * turn, ~27% of a saturated digest). The rubric explicitly discounts prior verdicts, so this text is not evidence —
+ * it is the evaluator talking to itself. Use-and-forget: drop it from model-bound context once it has been answered.
+ * Compaction checkpoints are history, never a live evaluation prompt, so they are never mistaken for one.
+ */
+const GOAL_EVALUATION_TAG = "<goal-evaluation"
+
+const isGoalEvaluationPart = (part: unknown): boolean => {
+  if (typeof part !== "object" || part === null) return false
+  const { type, text } = part as { type?: unknown; text?: unknown }
+  return type === "text" && typeof text === "string" && text.includes(GOAL_EVALUATION_TAG)
+}
+
+/**
+ * True when a message carries the evaluator's own `<goal-evaluation>` prompt. Two host shapes reach this
+ * predicate: `ctx.session.context()` messages carry a flat `text` (the digest source), while the `context`
+ * hook's model-bound messages carry `content` text parts. Both are matched; unknown shapes never match,
+ * and a compaction checkpoint is history in either shape.
+ */
+export const isGoalEvaluationMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const m = message as NoteMessageLike & { text?: unknown }
+  if (typeof m.text === "string") {
+    if (m.text.includes(CHECKPOINT_TAG)) return false
+    return m.text.includes(GOAL_EVALUATION_TAG)
+  }
+  const content = m.content
+  if (!Array.isArray(content)) return false
+  if (isCompactionCheckpoint(content)) return false
+  return content.some(isGoalEvaluationPart)
+}
+
+/**
+ * Drop the evaluator's own `<goal-evaluation>` prompts from a model-bound message list. With `keepLast`, only the
+ * most recent evaluation prompt survives — that is the live rubric an in-flight evaluator must answer — while older
+ * echoes are dropped. Returns a fresh array and never touches its input (same splice-back contract as
+ * {@link stripGoalNotes}).
+ */
+export const stripGoalEvaluations = <T>(messages: ReadonlyArray<T>, options: { readonly keepLast?: boolean } = {}): T[] => {
+  const last = options.keepLast ? messages.reduce((found, m, i) => (isGoalEvaluationMessage(m) ? i : found), -1) : -1
+  return messages.filter((m, i) => i === last || !isGoalEvaluationMessage(m))
+}
+
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
     `An active /goal is set for this session: ${escape(condition)}`,
@@ -382,6 +438,14 @@ interface EvaluationFacts {
   readonly elapsedMs: number
   readonly spend?: UsageSnapshot
 }
+
+/**
+ * Bound the judge's effort at the prompt level. The downstream caps (400-char steer reason, 4000-char clamp) already
+ * assume a short verdict; without saying so up front, the rubric asks for a large structured answer that is then
+ * truncated — the "unbounded deliberation" failure mode, worst for a vague condition. Purely additive: the exhaustive
+ * evidence contract below stays byte-identical. See SPEC.md Workstream CXXV.
+ */
+const BOUNDED_EFFORT = `Decide from the evidence actually shown, not from exhaustive hypotheticals: judge only the clauses that bear on the verdict, name the single most critical gap when not met, and keep the reason short (a few lines). For a vague condition in particular, do not enumerate every edge case or re-audit claims irrelevant to the outcome.`
 
 const VERDICTS = [
   `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
@@ -418,7 +482,7 @@ const RULES = [
  * there), so it is `not_met` unless the transcript shows the `coordinator` agent itself did it.
  */
 function rubric(policy: CommitPolicy) {
-  const lines = [...VERDICTS]
+  const lines = [BOUNDED_EFFORT, ...VERDICTS]
   if (policy.required) {
     if (policy.mode === "coordinator") {
       lines.push(
@@ -535,7 +599,7 @@ export interface BacklogSuggestion {
   readonly evidence: ReadonlyArray<string>
 }
 
-export interface NextGoalInput {
+interface NextGoalInput {
   readonly objective: string
   /** Completed iterations, oldest first (including the one that just ended). */
   readonly history: ReadonlyArray<LoopEntry>

@@ -23,7 +23,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha, stampOf } from "./dossier.ts"
+import { buildLoopDossier, shortSha, stampOf, fileStampOf } from "./dossier.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -84,21 +84,14 @@ interface ReviewedRecord {
   readonly unknown: number
 }
 
-const pad = (n: number): string => String(n).padStart(2, "0")
-
 /**
  * `goal-dossier-review-20261116-172233.md` from a clock; attempt > 0 appends `-attempt` (`-2`, `-3`, ...).
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
 export const reviewName = (nowMs: number, attempt = 0): string => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0)
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
-  const stamp =
-    `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` +
-    `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`
   const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-review-${stamp}${suffix}.md`
+  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`
 }
 
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")

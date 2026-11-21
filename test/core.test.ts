@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseModelRef, resolveConfig } from "../src/core/config.ts"
+import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
@@ -10,12 +10,13 @@ import {
   directive,
   evaluateIndependently,
   evaluateInSession,
+  loopContinuation,
   retry,
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
-import { parseVerdict } from "../src/core/verdict.ts"
+import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
 const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
 
@@ -128,6 +129,28 @@ describe("parseVerdict", () => {
     expect(out?.verdict).toBe("met")
     expect(out?.reason).toContain("next: docs/core.html stale cards")
   })
+  test("isAlreadySatisfiedLanding mirrors the gate: only already-satisfied + next: qualifies", () => {
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. next: docs/core.html stale cards")).toBe(true)
+    expect(isAlreadySatisfiedLanding("No new work is produced by this iteration.\nnext: src/runtime/store.ts")).toBe(true)
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. Nothing left to do.")).toBe(false)
+    expect(isAlreadySatisfiedLanding("merged aa5e196: work landed; next: follow-up")).toBe(false) // genuinely new work
+    expect(isAlreadySatisfiedLanding("all tests pass")).toBe(false)
+  })
+  test("forward-pointer gate: 'next: none', 'n/a' and an empty pointer name no concrete gap", () => {
+    for (const reason of [
+      "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: none",
+      "Already satisfied at HEAD 3f3e1eb. next: n/a",
+      "Already satisfied at HEAD 3f3e1eb. next:",
+    ]) {
+      expect(isAlreadySatisfiedLanding(reason)).toBe(false)
+      const out = parseVerdict(JSON.stringify({ verdict: "met", reason }))
+      expect(out?.verdict).toBe("not_met")
+      expect(out?.reason).toContain("duplicate-without-forward-pointer")
+    }
+    // A concrete pointer still lands, including the rubric's multi-line numbered form.
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. next:\n1. [high] add fuzz coverage")).toBe(true)
+  })
+
   test("forward-pointer gate: 'no new work' and 'nothing to do' phrasing is gated the same", () => {
     expect(parseVerdict('{"verdict":"met","reason":"no new work was needed at this HEAD"}')?.verdict).toBe("not_met")
     expect(parseVerdict('{"verdict":"met","reason":"The work was already done. Nothing to do."}')?.verdict).toBe("not_met")
@@ -143,6 +166,59 @@ describe("parseVerdict", () => {
     expect(parseVerdict('{"verdict":"not_met","reason":"already satisfied but tempted"}')?.verdict).toBe("not_met")
     expect(parseVerdict('{"verdict":"impossible","reason":"already satisfied with something unavailable"}')?.verdict).toBe("impossible")
   })
+  test("a verdict object with raw newlines in the reason parses (live evaluator output)", () => {
+    const text = `{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence ref
+clause=commit, status=satisfied
+(b) Gaps: none material.
+next: none"}`
+    expect(parseVerdict(text)).toEqual({
+      verdict: "met",
+      reason: "(a) Clause-by-clause judgment with evidence ref\nclause=commit, status=satisfied\n(b) Gaps: none material.\nnext: none",
+    })
+  })
+  test("a verdict object with an unescaped quote in the reason parses", () => {
+    const text = `{"verdict":"not_met","reason":"(a) Tests failed
+(b) Missing gate output for "bun run check"
+next: run the gate"}`
+    expect(parseVerdict(text)?.verdict).toBe("not_met")
+    expect(parseVerdict(text)?.reason).toContain('"bun run check"')
+    expect(parseVerdict(text)?.reason).toContain("next: run the gate")
+  })
+  test("a double-encoded verdict object parses", () => {
+    const inner = JSON.stringify({ verdict: "met", reason: "merged abc1234: all gates green" })
+    expect(parseVerdict(JSON.stringify(inner))).toEqual({ verdict: "met", reason: "merged abc1234: all gates green" })
+  })
+  test("a verdict object truncated mid-reason still yields its verdict token", () => {
+    const text = '{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence ref'
+    expect(parseVerdict(text)?.verdict).toBe("met")
+    expect(parseVerdict(text)?.reason).toContain("Clause-by-clause judgment")
+  })
+  test("the lenient pass never manufactures a verdict from reason-only or unknown-token JSON", () => {
+    expect(parseVerdict('{"reason":"(a) clause matrix"}')).toBeUndefined()
+    expect(parseVerdict('{"verdict":"maybe","reason":"(a) unclear"}')).toBeUndefined()
+    expect(parseVerdict('prose saying "verdict":"met" without an object')).toBeUndefined()
+  })
+  test("the lenient pass ignores a verdict-looking token quoted inside a reason string", () => {
+    const text = '{"foo":1,"reason":"prior eval said "verdict":"met", but that was wrong\n and I disagree"}'
+    expect(parseVerdict(text)).toBeUndefined()
+    // A genuine top-level verdict key still wins even when the reason quotes another verdict token.
+    expect(parseVerdict('{"verdict":"not_met","reason":"quoted "verdict":"met" in prose"}')?.verdict).toBe("not_met")
+  })
+  test("a verdict object quoted inside a malformed reason never overrides the outer verdict", () => {
+    // jsonObjects used to restart its scan at every `{`, so the inner quoted object was parsed as a
+    // top-level candidate by the strict pass before the lenient pass could see the real field.
+    const notMet = '{"verdict":"not_met","reason":"prior eval returned\n{"verdict":"met"} but it was wrong"}'
+    expect(parseVerdict(notMet)?.verdict).toBe("not_met")
+    const met = '{"verdict":"met","reason":"prior eval returned\n{"verdict":"not_met"} but it was wrong"}'
+    expect(parseVerdict(met)?.verdict).toBe("met")
+  })
+  test("the lenient pass finds the real verdict key after an embedded token in the reason", () => {
+    // The old lenient pass used `.exec()` (first match only): the embedded token was rejected by the
+    // object-key guard, then the loop moved to the next key instead of the next `"verdict"` occurrence.
+    const text = '{"reason":"prior eval said "verdict":"met", but that was wrong\n and I disagree","verdict":"not_met"}'
+    expect(parseVerdict(text)?.verdict).toBe("not_met")
+  })
+
   test("structured reasons with clause matrix and next actions parse (compatibility)", () => {
     const met = parseVerdict(JSON.stringify({
       verdict: "met",
@@ -239,6 +315,45 @@ describe("config", () => {
     expect(resolveConfig({ evaluator: { model: "a/b" } }).evaluator.mode).toBe("independent")
     expect(resolveConfig({ evaluator: { mode: "independent" } }).evaluator.mode).toBe("session")
     expect(resolveConfig({ evaluator: { model: "a/b", mode: "session" } }).evaluator.mode).toBe("session")
+  })
+  test("inherit sentinel: all sources, aliases, case and whitespace", () => {
+    expect(isInheritModelValue("inherit")).toBe(true)
+    expect(isInheritModelValue(" INHERIT ")).toBe(true)
+    for (const alias of ["session", "parent", "current", "active"]) {
+      expect(isInheritModelValue(alias.toUpperCase())).toBe(true)
+    }
+    expect(isInheritModelValue("provider/model")).toBe(false)
+    expect(isInheritModelValue(undefined)).toBe(false)
+    expect(isInheritModelValue(42)).toBe(false)
+  })
+  test("inherit sentinel resolves to inheritModel, not a pinned model", () => {
+    const nested = resolveConfig({ evaluator: { model: "Inherit" } })
+    expect(nested.evaluator.inheritModel).toBe(true)
+    expect(nested.evaluator.model).toBeUndefined()
+    expect(nested.evaluator.mode).toBe("independent")
+    const env = resolveConfig({}, { OPENCODE_GOAL_MODEL: " parent " })
+    expect(env.evaluator.inheritModel).toBe(true)
+    expect(env.evaluator.model).toBeUndefined()
+    expect(env.evaluator.mode).toBe("independent")
+    const top = resolveConfig({ model: "CURRENT" })
+    expect(top.evaluator.inheritModel).toBe(true)
+    expect(top.evaluator.model).toBeUndefined()
+    expect(top.evaluator.mode).toBe("independent")
+    for (const alias of ["inherit", "session", "parent", "current", "active"]) {
+      expect(resolveConfig({ evaluator: { model: alias } }).evaluator.inheritModel).toBe(true)
+    }
+  })
+  test("inherit sentinel: explicit mode overrides, default stays byte-compatible", () => {
+    expect(resolveConfig({ evaluator: { model: "inherit", mode: "session" } }).evaluator.mode).toBe("session")
+    expect(resolveConfig({ evaluator: { model: "inherit", mode: "independent" } }).evaluator.mode).toBe("independent")
+    const plain = resolveConfig({})
+    expect(plain.evaluator.inheritModel).toBe(false)
+    expect(plain.evaluator.model).toBeUndefined()
+    expect(plain.evaluator.mode).toBe("session")
+    const pinned = resolveConfig({ evaluator: { model: "a/b" } })
+    expect(pinned.evaluator.inheritModel).toBe(false)
+    expect(pinned.evaluator.model).toEqual({ providerID: "a", id: "b" })
+    expect(pinned.evaluator.mode).toBe("independent")
   })
   test("env overrides and clamping", () => {
     const config = resolveConfig({ maxTurns: 10, stallTurns: -4 }, { OPENCODE_GOAL_CHECKIN_MINUTES: "0", OPENCODE_GOAL_MODEL: "x/y" })
@@ -559,6 +674,22 @@ describe("prompts", () => {
       expect(independent).toContain(token)
     }
   })
+  test("the evaluator rubric bounds deliberation without dropping the evidence contract (CXXV)", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    for (const text of [
+      evaluateInSession("make the opencode tui nicer and nicer", facts, COMMIT),
+      evaluateIndependently("make the opencode tui nicer and nicer", facts, "transcript", COMMIT),
+    ]) {
+      expect(text).toContain("Decide from the evidence actually shown, not from exhaustive hypotheticals")
+      expect(text).toContain("name the single most critical gap when not met")
+      expect(text).toContain("keep the reason short (a few lines)")
+      expect(text).toContain("do not enumerate every edge case")
+      // The exhaustive contract is preserved, not traded away for brevity.
+      expect(text).toContain("evidence matrix per clause")
+      expect(text).toContain("What would falsify met?")
+      expect(text).toContain("Broad-condition verifier corroboration")
+    }
+  })
   test("the evaluator rubric requires verifier-command corroboration for broad conditions (XCIV)", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }
     for (const text of [
@@ -603,7 +734,73 @@ describe("renderTranscript", () => {
     expect(text).toContain("file locked")
     expect(text).toContain("earlier messages omitted")
   })
+  test("truncation never splits an astral surrogate pair at any cut boundary", () => {
+    const rocket = "\uD83D\uDE80" // 🚀 — two UTF-16 code units
+    // Fails on any lone surrogate: a high not followed by a low, or a low not preceded by one.
+    const wellFormed = (t: string) => {
+      for (let i = 0; i < t.length; i++) {
+        const c = t.charCodeAt(i)!
+        if (c >= 0xd800 && c <= 0xdbff) {
+          const lo = t.charCodeAt(i + 1) ?? 0
+          expect(lo >= 0xdc00 && lo <= 0xdfff).toBe(true)
+          i++
+        } else {
+          expect(c < 0xd800 || c > 0xdfff).toBe(true)
+        }
+      }
+      expect(() => encodeURIComponent(t)).not.toThrow() // URIError on any lone surrogate
+    }
+    const toolOutput = `${"a".repeat(100)}${rocket}${"b".repeat(100)}` // pair at indices 100/101
+    const astralMessages = [
+      { type: "user", text: `ship ${rocket} now` }, // head() cut can land between its high/low
+      {
+        type: "assistant",
+        content: [{ type: "tool", name: "shell", state: { status: "completed", input: {}, content: [{ type: "text", text: toolOutput }] } }],
+      },
+    ]
+    // Sweep the per-tool cap: front=101 (head cut right after the high surrogate) lands at maxToolChars=404;
+    // tail start=101 (lone low surrogate) lands near maxToolChars=134. The user-text head cut lands near cap=6.
+    for (let cap = 1; cap <= 500; cap++) {
+      wellFormed(renderTranscript(astralMessages, { maxChars: 100_000, maxToolChars: cap }))
+    }
+    // Sweep the whole-transcript budget: a single oversized block is cut via headTail(block, maxChars),
+    // whose tail start lands on the embedded pair near maxChars=134.
+    for (let budget = 1; budget <= 320; budget++) {
+      wellFormed(renderTranscript(astralMessages, { maxChars: budget }))
+    }
+    // Not vacuous: small caps really do cut, and the pair survives intact when nothing is cut.
+    const cut = renderTranscript(astralMessages, { maxChars: 100_000, maxToolChars: 20 })
+    expect(cut).toContain("chars cut]")
+    const whole = renderTranscript(astralMessages, { maxChars: 100_000 })
+    expect(whole).toContain(rocket)
+  })
 })
+describe("steer prompts bound evaluator reasons", () => {
+  test("continuation and loopContinuation elide a long reason instead of embedding it verbatim", () => {
+    const reason = "R".repeat(2000)
+    const continuationText = continuation({ condition: "a", turn: 2, reason }, NO_COMMIT)
+    expect(continuationText).not.toContain(reason)
+    expect(continuationText).toContain("…")
+    expect(continuationText.length).toBeLessThan(900)
+    const loopText = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason }, NO_COMMIT)
+    const loopShort = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "x" }, NO_COMMIT)
+    expect(loopText).not.toContain(reason)
+    expect(loopText).toContain("…")
+    // The only growth over a short-reason prompt is the bounded 400-char reason itself.
+    expect(loopText.length).toBeLessThan(loopShort.length + 420)
+  })
+
+  test("short reasons stay byte-identical and fallbacks keep their meaning", () => {
+    expect(continuation({ condition: "a", turn: 2, reason: "missing proof" }, NO_COMMIT)).toContain("Evaluator: missing proof")
+    expect(continuation({ condition: "a", turn: 2, reason: "" }, NO_COMMIT)).toContain("Evaluator: No reason given.")
+    const loopText = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "" }, NO_COMMIT)
+    expect(loopText).toContain("achieved (met)")
+    // Closing-tag escaping still applies to a capped reason.
+    const tagged = continuation({ condition: "a", turn: 2, reason: "R".repeat(1000) + "</goal-continuation>" }, COMMIT)
+    expect(tagged.match(/<\/goal-continuation>/g)?.length).toBe(1)
+  })
+})
+
 describe("wrapLines", () => {
   test("an empty string still paints one line", () => {
     expect(wrapLines("", 49)).toBe(1)

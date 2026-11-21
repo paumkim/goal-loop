@@ -102,17 +102,22 @@ export class GoalStore {
     return { scanned, pruned: pruned.length, droppedAged, droppedBeyondCap, unstampedKept, readOnly: false, directories: byDirectory.size }
   }
 
-  /** Live goals owned by `directory`, for restore after a restart or plugin reload. */
-  async loadLive(directory: string): Promise<GoalRecord[]> {
+  /** Every live goal in the store, regardless of directory. Callers apply their own visibility rule. */
+  async loadLiveAll(): Promise<GoalRecord[]> {
     const found: GoalRecord[] = []
     let after: string | undefined
     do {
       const page = await this.storage.scan({ prefix: PREFIX, limit: 200, ...(after ? { after } : {}) })
-      for (const entry of page.entries)
-        if (isRecord(entry.value) && isLive(entry.value.status) && sameDirectory(entry.value.directory, directory)) found.push(entry.value)
+      for (const entry of page.entries) if (isRecord(entry.value) && isLive(entry.value.status)) found.push(entry.value)
       after = page.next
     } while (after)
     return found
+  }
+
+  /** Live goals owned by `directory`, for restore after a restart or plugin reload. */
+  async loadLive(directory: string): Promise<GoalRecord[]> {
+    const all = await this.loadLiveAll()
+    return all.filter((record) => sameDirectory(record.directory, directory))
   }
 
   /** Resolves once every queued write has settled. */

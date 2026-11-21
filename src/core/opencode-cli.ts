@@ -40,7 +40,7 @@ export function opencodeCliGuide(): string {
     `4. Build/mount normally: server entry src/index.ts (Plugin.define from @opencode/plugin), TUI entry precompiled dist/tui.js (@opencode/plugin/tui); iterate with bun install and bun run check. Mount in ~/.config/opencode/opencode.jsonc (TUI plugins in ~/.config/opencode/tui.jsonc); restart to see changes.`,
     `5. Smoke-test the real binary with the opencode-headless plugin (github.com/paumkim/opencode-headless; opencode plugin add 'git+https://github.com/paumkim/opencode-headless.git'): headless_start (mode api/cli/pty) drives a child in scratch state; headless_prompt/headless_run to drive, headless_wait/headless_events to watch, headless_capture to read, headless_send to type, headless_permission to clear a permission block, headless_stop to end it. Prefer headless renders for layout assertions; tmux capture-pane -p is the zero-install fallback.`,
     `6. On mismatch, the binary is usually newer — string-extract the binary around the feature and diff against the clone. The opencode-headless plugin drives the v2 TUI headlessly (pty mode plus headless_capture/headless_send) for keystroke-level truth; string extraction from the binary is often the only source of truth for what the host does internally.`,
-    `Rules: minimal slot-level changes; never commit to the host repo; keep plugin tests headless; report which layer (binary / source / test-render / live TUI) each claim was verified at.`,
+    `Rules: minimal slot-level changes; never commit to the host repo; keep plugin tests headless; report briefly which layer (binary / source / test-render / live TUI) each claim you make was verified at — no need to audit every possibility.`,
     `</opencode-cli>`,
   ].join("\n")
 }

@@ -1,6 +1,6 @@
 import type { Verdict } from "./types.ts"
 
-export interface ParsedVerdict {
+interface ParsedVerdict {
   readonly verdict: Verdict
   readonly reason: string
 }
@@ -16,8 +16,19 @@ const MAX_REASON = 4000
  * Never upgrades a verdict, never touches not_met or impossible, never fires on a met that names its gap.
  */
 const ALREADY_SATISFIED = /(already[-\s]satisfied|no new work|nothing[_\s-](new[_\s-])?to do|no work needed)/i
-const NEXT_POINTER = /next\s*:/i
+// A forward pointer must name a concrete gap. `next: none` (the rubric's own no-gap output) and an empty
+// pointer are not advancement: accepting them would let a zero-work "already satisfied" claim advance the loop.
+const NEXT_POINTER = /next\s*:\s*(?!none\b|n\s*\/\s*a\b|$)\S/i
 const DUPLICATE_REASON = "duplicate-without-forward-pointer"
+
+/**
+ * True for an "already satisfied at HEAD" met landing that names a concrete next gap. The zero-tool guard in
+ * controller.ts must not downgrade such a verdict — it is the sanctioned forward-pointer path, not state
+ * inspection posing as work. Uses the same regexes as applyForwardPointerGate so the two cannot drift.
+ */
+export function isAlreadySatisfiedLanding(reason: string): boolean {
+  return ALREADY_SATISFIED.test(reason) && NEXT_POINTER.test(reason)
+}
 
 export function applyForwardPointerGate(parsed: ParsedVerdict): ParsedVerdict {
   if (parsed.verdict !== "met") return parsed
@@ -49,13 +60,27 @@ function normalizeVerdict(value: unknown): Verdict | undefined {
   return undefined
 }
 
+/** A model sometimes emits `JSON.stringify({verdict,reason})` instead of the object; peel at most this many layers. */
+const MAX_JSON_UNWRAP = 3
+
+const VERDICT_KEYS = ["verdict", "status", "result", "met"] as const
+const REASON_KEYS = ["reason", "explanation", "rationale"] as const
+
 /**
  * Extracts the evaluator's verdict from free-form model output. Accepts strict JSON, JSON in a code fence
  * or surrounded by prose, and a `VERDICT: x` fallback. Returns undefined when nothing trustworthy is found.
+ *
+ * If strict JSON fails, a narrow lenient pass reads the same fields out of a JSON-ish object. Live evaluators
+ * have emitted an otherwise well-formed verdict whose reason contained raw newlines or an unescaped quote;
+ * `JSON.parse` rejects the whole object, and the old parser burned all three repair attempts on a verdict
+ * it already had in hand. The lenient pass only accepts a recognized verdict token behind an object brace —
+ * garbage, unknown tokens and the `VERDICT:`-less prose case still yield undefined. Strict parsing always wins.
  */
 export function parseVerdict(text: string): ParsedVerdict | undefined {
   const cleaned = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "").trim()
-  for (const candidate of jsonObjects(cleaned)) {
+  const candidates = verdictCandidates(cleaned)
+
+  for (const candidate of candidates) {
     const parsed = safeJson(candidate)
     if (typeof parsed !== "object" || parsed === null) continue
     const record = parsed as Record<string, unknown>
@@ -63,11 +88,86 @@ export function parseVerdict(text: string): ParsedVerdict | undefined {
     if (!verdict) continue
     return applyForwardPointerGate({ verdict, reason: clampReason(record.reason ?? record.explanation ?? record.rationale) })
   }
+
+  for (const candidate of candidates) {
+    const lenient = lenientFields(candidate)
+    if (!lenient) continue
+    return applyForwardPointerGate({ verdict: lenient.verdict, reason: clampReason(lenient.reason) })
+  }
+
   const line = /verdict\s*[:=]\s*["']?([a-z_\s-]+?)["']?\s*(?:[\n.;,]|$)/i.exec(cleaned)
   const verdict = line ? normalizeVerdict(line[1]) : undefined
   if (!verdict) return undefined
   const reason = /reason\s*[:=]\s*(.+)/i.exec(cleaned)?.[1]
   return applyForwardPointerGate({ verdict, reason: clampReason(reason) })
+}
+
+/** JSON-string layers (a verdict double-encoded by the model) plus balanced object spans and the raw layer. */
+function verdictCandidates(cleaned: string): string[] {
+  const candidates: string[] = []
+  let layer = cleaned
+  for (let depth = 0; depth < MAX_JSON_UNWRAP; depth++) {
+    candidates.push(...jsonObjects(layer), layer)
+    const unwrapped = safeJson(layer)
+    if (typeof unwrapped !== "string") break
+    layer = unwrapped.trim()
+  }
+  return candidates
+}
+
+/**
+ * True when `index` (the start of a quoted key) sits outside any string value in the first object span of
+ * `text` — i.e. it is a real object key, not text a model quoted inside a reason. Escaped quotes do not toggle
+ * string state. A missing or later brace means there is no enclosing object at that position.
+ */
+function isObjectKeyPosition(text: string, index: number): boolean {
+  const brace = text.indexOf("{")
+  if (brace === -1 || brace > index) return false
+  let inString = false
+  let escaped = false
+  for (let i = brace; i < index; i++) {
+    const char = text[i]
+    if (escaped) escaped = false
+    else if (char === "\\") escaped = true
+    else if (char === '"') inString = !inString
+  }
+  return !inString
+}
+
+/**
+ * Reads `verdict`/`reason` fields from a JSON-ish object that strict JSON rejected. The verdict regex is
+ * anchored to a quoted key after an object brace; the reason regex spans raw newlines and stops at the next
+ * field (or end of text, which covers an object truncated mid-reason). No verdict token means no verdict.
+ */
+function lenientFields(text: string): { verdict: Verdict; reason: string } | undefined {
+  for (const key of VERDICT_KEYS) {
+    // Scan *every* occurrence, not just the first: a malformed reason can quote `"verdict":"met"` before
+    // the real field. The first occurrence fails the object-key guard below; the real one must still be seen.
+    const fieldPattern = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "gi")
+    for (let field = fieldPattern.exec(text); field; field = fieldPattern.exec(text)) {
+      // The quoted key must sit at an object key position, not inside a string value. A model can quote
+      // `"verdict":"met"` in its reason (discussing another evaluation); without this guard the lenient pass
+      // manufactures a met out of a reason with no verdict field at all.
+      if (!isObjectKeyPosition(text, field.index)) continue
+      const verdict = normalizeVerdict(field[1])
+      if (!verdict) return undefined
+      let reason = ""
+      for (const reasonKey of REASON_KEYS) {
+        const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)
+        if (match?.[1] !== undefined) {
+          reason = unescapeJsonText(match[1])
+          break
+        }
+      }
+      return { verdict, reason }
+    }
+  }
+  return undefined
+}
+
+/** Decode the escapes a model did use, leaving raw newlines and stray quotes as they appeared. */
+function unescapeJsonText(value: string): string {
+  return value.replace(/\\(n|r|t|"|\\)/g, (_match, code: string) => ({ n: "\n", r: "\r", t: "\t", '"': '"', "\\": "\\" })[code] ?? code)
 }
 
 function clampReason(value: unknown) {
@@ -90,25 +190,33 @@ function safeJson(text: string): unknown {
   }
 }
 
-/** Yields balanced top-level `{...}` spans, string-aware, in order of appearance. */
+/**
+ * Yields balanced top-level `{...}` spans, string-aware, in order of appearance. One left-to-right pass:
+ * a `{` inside a string value is not a candidate object. Restarting the scan at every `{` used to promote
+ * a quoted `{"verdict":"met"}` inside a malformed reason into a strict candidate, overriding the real verdict.
+ */
 function* jsonObjects(text: string): Generator<string> {
-  for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
-    let depth = 0
-    let inString = false
-    let escaped = false
-    for (let i = start; i < text.length; i++) {
-      const char = text[i]
-      if (inString) {
-        if (escaped) escaped = false
-        else if (char === "\\") escaped = true
-        else if (char === '"') inString = false
-        continue
-      }
-      if (char === '"') inString = true
-      else if (char === "{") depth++
-      else if (char === "}" && --depth === 0) {
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === "\\") escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === "{") {
+      if (depth === 0) start = i
+      depth++
+    } else if (char === "}" && depth > 0) {
+      depth--
+      if (depth === 0 && start !== -1) {
         yield text.slice(start, i + 1)
-        break
+        start = -1
       }
     }
   }

@@ -211,6 +211,19 @@ export const LoopSection = (props: {
     const s = verdictStreak(props.goal.history ?? [])
     return s.count >= 2 && s.verdict ? ` · ${s.count}x ${s.verdict.replace("_", " ")} in a row` : ""
   }
+  // The current iteration's verdict rides INSIDE the word-wrapped status run, separated by a wider
+  // gap instead of a "·" (a separator at a wrap boundary would dangle at the end of a line). As a
+  // separate flex sibling it kept its own line while the status wrapped, so the trailing
+  // "last ✗ N turns since" painted between the two halves of a phrase
+  // ("2x not met [last …] in a row"). One wrapping text node preserves reading order at every
+  // width; the glyph still carries the verdict in ASCII and reduced-color modes, where the old
+  // per-segment hues were already dropped.
+  const lastVerdictSuffix = () => {
+    const entry = iterVerdict()
+    if (!entry) return ""
+    const since = turnsSince()
+    return `   last ${verdictEntryGlyph(entry, ascii())} ${since === 0 ? "this turn" : `${since} turn${since === 1 ? "" : "s"} since`}`
+  }
   const isTerminal = () => props.goal.status === "achieved" || props.goal.status === "impossible" || props.goal.status === "cleared" || props.goal.status === "failed"
   const capReached = () => {
     const limit = max()
@@ -361,23 +374,8 @@ export const LoopSection = (props: {
           {goalGlyph(ascii())}
         </text>
         <text wrapMode="word" fg={theme().text.base} flexGrow={1}>
-          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}`}
+          {`v${current()} · ${stateWord()} · ${props.goal.turns} turn${props.goal.turns === 1 ? "" : "s"}${paused() ? ` · ${pauseDiagnostics(props.goal.stall, props.goal.retries)}` : ""} · ${formatDurationCoarse(props.elapsedMs())} elapsed${streakSuffix()}${lastVerdictSuffix()}`}
         </text>
-        <Show when={iterVerdict()}>
-          {(entry) => (
-            <box flexDirection="row" gap={1} flexShrink={0}>
-              <text wrapMode="none" fg={theme().text.muted}>
-                · last
-              </text>
-              <text wrapMode="none" fg={colorFor(theme(), entry(), mono())} attributes={TextAttributes.BOLD}>
-                {verdictEntryGlyph(entry(), ascii())}
-              </text>
-              <text wrapMode="none" fg={theme().text.faint}>
-                {turnsSince() === 0 ? "this turn" : `${turnsSince()} turn${turnsSince() === 1 ? "" : "s"} since`}
-              </text>
-            </box>
-          )}
-        </Show>
       </box>
       </Show>
       {/* final tally: only once the loop is over — one click quotes the line whole; the paint and the copy are the same string (finalTallyLine) */}

@@ -405,6 +405,40 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
     expect(parsed.leases["visible"].mergeInProgress).toBe(false)
   })
 
+  test("status --json defaults to active leases + counts summary; --all includes done leases", () => {
+    setup("true")
+    claimCommitSubmit("historic", { h: "1\n" }, "2026-11-02T09:00:00+00:00", "h")
+    expect(run(join(dir, "worktrees", "wt-historic"), ["merge-next"]).status).toBe(0)
+    expect(lease("historic").status).toBe("done")
+
+    const wt = claimCommitSubmit("active-lease", { a: "2\n" }, "2026-11-02T10:00:00+00:00", "a")
+    writeFileSync(join(wt, "loose.txt"), "loose\n")
+
+    const json = run(dir, ["status", "--json"])
+    expect(json.status).toBe(0)
+    const parsed = JSON.parse(json.stdout)
+    expect(parsed.summary).toEqual({ submitted: 1, done: 1, active: 1, total: 2 })
+    expect(Object.keys(parsed.leases)).toEqual(["active-lease"])
+    expect(parsed.leases["active-lease"].worktreePath).toBe(wt)
+    expect(parsed.leases["active-lease"].uncommitted).toBe(1)
+    expect(parsed.leases["active-lease"].mergeInProgress).toBe(false)
+    expect(json.stdout).not.toContain("historic")
+
+    const all = run(dir, ["status", "--json", "--all"])
+    expect(all.status).toBe(0)
+    const full = JSON.parse(all.stdout)
+    expect(Object.keys(full.leases).sort()).toEqual(["active-lease", "historic"])
+    expect(full.summary).toEqual(parsed.summary)
+    expect(full.leases["historic"].status).toBe("done")
+  })
+
+  test("status --json rejects unknown flags", () => {
+    setup("true")
+    const bad = run(dir, ["status", "--json", "--bogus"])
+    expect(bad.status).toBe(1)
+    expect(bad.stderr).toContain("unknown status option: --bogus")
+  })
+
   test("queue is FIFO with position and ETA", () => {
     setup("true")
     claimCommitSubmit("queue-a", { a: "1\n" }, "2026-11-02T10:00:00+00:00", "a")
@@ -538,5 +572,55 @@ describe("two agents, overlapping scopes, conflicting edits (requirement 8)", ()
     expect(merge2.status).toBe(0)
     expect(lease("red-agent").status).toBe("done")
     expect(git(dir, ["show", "dev:src/red.txt"])).toContain("fixed")
+  })
+})
+
+describe("semantic and drift guards (Workstream CXIII)", () => {
+  test("preflight surfaces shared-module risk for a non-overlapping active lease", () => {
+    setup("true")
+    // The submitting lease's record is stashed for the trial merge, so seed the other active lease into the
+    // COMMITTED state (that is exactly where a real parallel agent's lease lives during preflight).
+    const statePath = join(dir, ".term/coordinator/state.json")
+    const seeded = JSON.parse(readFileSync(statePath, "utf8"))
+    seeded.leases["sem-b"] = { status: "submitted", agent: "t", paths: "src/core/b.ts", branch: "wt/sem-b" }
+    writeFileSync(statePath, JSON.stringify(seeded) + "\n")
+    git(dir, ["add", "-A"])
+    git(dir, ["commit", "-q", "--amend", "--no-edit"], "2026-11-01T10:00:00+00:00")
+    claimCommitSubmit("sem-a", { "src/core/a.ts": "a\n" }, "2026-11-02T10:00:00+00:00", "src/core/a.ts")
+    const result = run(join(dir, "worktrees", "wt-sem-a"), ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stderr).toContain("SEMANTIC-RISK")
+    expect(result.stderr).toContain("sem-b")
+    expect(result.stderr).toContain("src/core")
+    // A literal path overlap does NOT exist between the two scopes (that line goes to stdout).
+    expect(result.stdout).toContain("no non-done lease overlaps this merge")
+  })
+
+  test("merge-next refuses a worktree that drifted past the submitted branch", () => {
+    setup("true")
+    const wt = claimCommitSubmit("drifted", { "drift.ts": "v1\n" }, "2026-11-02T10:00:00+00:00")
+    const devBefore = git(dir, ["rev-parse", "dev"]).trim()
+    // Detach first: committing on the checked-out branch would advance the branch tip too, so no drift would exist.
+    git(wt, ["checkout", "--detach", "-q"])
+    writeFileSync(join(wt, "drift.ts"), "v2\n")
+    git(wt, ["add", "-A"])
+    git(wt, ["commit", "-q", "-m", "post-submit work"], "2026-11-02T11:00:00+00:00")
+    const result = run(dir, ["merge-next", "--target", "drifted"])
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain("worktree drift")
+    // Regression: a submitted lease cannot be re-submitted (submit requires status "claimed").
+    expect(result.stderr).toContain("cannot be re-submitted")
+    expect(result.stderr).toContain("release + re-claim")
+    expect(result.stderr).not.toContain("or re-submit them")
+    expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
+    expect(lease("drifted").status).toBe("submitted")
+  })
+
+  test("merge-next prints a post-merge health line on the landed tree", () => {
+    setup("true")
+    const wt = claimCommitSubmit("healthy", { "ok.ts": "ok\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wt, ["merge-next"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("post-merge: health ok")
   })
 })

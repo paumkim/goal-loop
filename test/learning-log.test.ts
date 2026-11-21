@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { mkdirSync, writeFileSync } from "node:fs"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
-import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, formatRecentLearnings, readRecentLearnings, serializeLearningEntry } from "../src/core/learning-log.ts"
+import { appendLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, formatRecentLearnings, readLearningEntriesTail, readRecentLearnings, serializeLearningEntry } from "../src/core/learning-log.ts"
 import type { GoalRecord, LoopEntry, UsageSnapshot } from "../src/core/types.ts"
 import { GoalController } from "../src/runtime/controller.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, StoragePort } from "../src/runtime/ports.ts"
@@ -246,6 +247,54 @@ describe("learning-log core", () => {
     expect(formatRecentLearnings([])).toBe("")
     expect(readRecentLearnings(undefined, 5)).toEqual([])
   })
+
+  test("readLearningEntriesTail reads only complete tail lines and falls back for small files", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-learning-tail-"))
+    dirs.push(dir)
+    const file = join(dir, "learnings.jsonl")
+    const { writeFile } = await import("node:fs/promises")
+    const line = (i: number) => `${JSON.stringify({ version: 1, kind: "turn_verdict", ts: `2026-01-01T00:00:${String(i % 60).padStart(2, "0")}.000Z`, sessionID: "s", goalID: "g", condition: "c", lesson: `lesson-${i}` })}\n`
+    let text = ""
+    for (let i = 0; i < 100; i++) text += line(i)
+    await writeFile(file, text)
+    // File smaller than the window → full read, all entries.
+    expect(readLearningEntriesTail(file).length).toBe(100)
+    expect(readLearningEntriesTail(file)[0]).toMatchObject({ lesson: "lesson-0" })
+    // Tiny window → only complete lines inside it; the partial first line is dropped, the last line survives.
+    const tail = readLearningEntriesTail(file, 400)
+    expect(tail.length).toBeGreaterThan(0)
+    expect(tail.length).toBeLessThan(100)
+    expect(tail.at(-1)).toMatchObject({ lesson: "lesson-99" })
+    for (const entry of tail) expect((entry as { lesson?: string }).lesson).toMatch(/^lesson-\d+$/)
+    // A partial trailing line from a concurrent append is ignored.
+    await writeFile(file, text + '{"version":1,"kind":"turn_verdict"')
+    const tail2 = readLearningEntriesTail(file, 400)
+    for (const entry of tail2) expect((entry as { lesson?: string }).lesson).toMatch(/^lesson-\d+$/)
+    // Bad paths fail closed.
+    expect(readLearningEntriesTail(undefined)).toEqual([])
+    expect(readLearningEntriesTail(join(dir, "missing.jsonl"))).toEqual([])
+  })
+
+  test("formatRecentLearnings never splits a surrogate pair at the character budget", () => {
+    const { formatRecentLearnings: fmt } = require("../src/core/learning-log.ts") as typeof import("../src/core/learning-log.ts")
+    const lesson = `x${"\u{1F389}".repeat(400)}y`
+    const out = fmt([{ kind: "goal_armed", ts: "2026-01-01T00:00:00Z", lesson }], 120)
+    expect(out.length).toBeLessThan(lesson.length)
+    const body = out.split("\n").at(-1) ?? ""
+    expect(body.endsWith("…")).toBe(true)
+    let loneSurrogate = false
+    for (let i = 0; i < body.length; i++) {
+      const c = body.charCodeAt(i) ?? 0
+      if (c >= 0xd800 && c <= 0xdbff) {
+        const next = body.charCodeAt(i + 1) ?? 0
+        if (next < 0xdc00 || next > 0xdfff) loneSurrogate = true
+      } else if (c >= 0xdc00 && c <= 0xdfff) {
+        const prev = body.charCodeAt(i - 1) ?? 0
+        if (prev < 0xd800 || prev > 0xdbff) loneSurrogate = true
+      }
+    }
+    expect(loneSurrogate).toBe(false)
+  })
 })
 
 function harness(dir: string, options: Record<string, unknown> = {}) {
@@ -352,6 +401,28 @@ describe("learning-log runtime emission", () => {
     expect(iterRows[0]?.summary || iterRows[0]?.lesson).toBeTruthy()
     // loop ended clean (no planner) -> also terminal achieved
     expect(goalRows.some((r) => r.status === "achieved")).toBe(true)
+  })
+
+  test("anchors the journal at the repo root when armed from a subfolder", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goal-learning-subdir-"))
+    dirs.push(root)
+    // A minimal git repo (the same markers findRepository reads) with a docs/ subfolder.
+    const git = join(root, ".git")
+    mkdirSync(join(git, "refs", "heads"), { recursive: true })
+    writeFileSync(join(git, "refs", "heads", "dev"), "0".repeat(40))
+    writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
+    const docs = join(root, "docs")
+    mkdirSync(docs, { recursive: true })
+
+    // The session's directory is the subfolder where OpenCode was launched.
+    const h = harness(docs)
+    await h.controller.command({ sessionID: "ses_test", text: "make tests pass", delivery: "steer" })
+    h.verdicts.push({ verdict: "met", reason: "all checks green" })
+    await h.turn()
+
+    // The journal lands at the repository root, never in the launch subfolder.
+    expect((await readFile(join(root, ".term/goal-loop/learnings.jsonl"), "utf8")).trim().length).toBeGreaterThan(0)
+    await expect(readFile(join(docs, ".term/goal-loop/learnings.jsonl"), "utf8")).rejects.toThrow()
   })
 
   test("does not write when learning log is disabled", async () => {
