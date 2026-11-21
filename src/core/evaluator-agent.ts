@@ -94,6 +94,20 @@ export function echoedCondition(body: string): string | undefined {
   return match?.[1] ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : undefined
 }
 
+/**
+ * Keys from an unrelated evaluation contract (a site i18n / pricing / presale review rubric) that a free-tier
+ * judge can return verbatim when the gateway replays a cached completion from another session. A goal-loop
+ * verdict never carries these keys; their presence means the report is not this turn's verdict at all.
+ */
+const FOREIGN_VERDICT_KEYS = ["rests_on", "target_files", "observed_evidence", "verified_this_turn"] as const
+
+/** Only an authoritative `verdict` / `met` field may decide a goal. `status` / `result` belong to foreign rubrics. */
+const AUTHORITATIVE_VERDICT_KEY = /(?:"verdict"|"met")\s*:/i
+
+function isForeignVerdict(body: string): boolean {
+  return FOREIGN_VERDICT_KEYS.some((key) => new RegExp(`"${key}"\\s*:`, "i").test(body))
+}
+
 /** Normalize text for echo comparison: case/punctuation/whitespace-insensitive, unicode letters and digits kept. */
 function normalizeEcho(text: string): string {
   return text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
@@ -129,6 +143,15 @@ export function conditionEchoMatches(body: string, expected: string): boolean {
  */
 export function verdictFromNativeReport(candidate: NativeReportCandidate, expectedCondition?: string) {
   if (candidate.state === "error") throw new Error(`evaluator subagent failed: ${candidate.body.slice(0, 500)}`)
+  // A gateway cache replay can deliver a complete verdict for a *different* goal. It carries a foreign rubric's
+  // keys (rests_on/target_files/...) and uses `status` instead of `verdict`. Without these guards parseVerdict
+  // would happily read its `status: "met"` as a real met and advance the wrong condition. Fail closed instead.
+  if (isForeignVerdict(candidate.body)) {
+    throw new Error(`evaluator subagent returned a verdict from a different evaluation contract: ${candidate.body.slice(0, 500)}`)
+  }
+  if (!AUTHORITATIVE_VERDICT_KEY.test(candidate.body)) {
+    throw new Error(`unreadable verdict: evaluator subagent returned no authoritative verdict/met field (status/result are not verdicts): ${candidate.body.slice(0, 500)}`)
+  }
   if (expectedCondition !== undefined && echoedCondition(candidate.body) !== undefined && !conditionEchoMatches(candidate.body, expectedCondition)) {
     throw new Error(
       `evaluator subagent judged a stale condition: expected ${JSON.stringify(expectedCondition.slice(0, 160))}, ` +

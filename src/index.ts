@@ -414,6 +414,9 @@ export default Plugin.define({
     // concise condition. The worker and the evaluator both read the stored result, so they cannot drift. Failure,
     // quota or timeout falls back to the raw text with a minimal directive — never the old heuristic essays.
     const plannerChildren = new Set<string>()
+    // The arm-time planner's scope rides into the first checking prompt (no new persisted field): a fresh arm
+    // overwrites it, so the judge always sees the scope of the condition it is actually scoring.
+    const armedScopes = new Map<string, "trivial" | "code">()
     const PLAN_TIMEOUT_MS = 30_000
     const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
       // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
@@ -632,6 +635,7 @@ export default Plugin.define({
             // Status / clear / invalid are commands, not goals — never send them to the planner.
             const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
             const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
+            if (planned) armedScopes.set(sessionID, planned.scope)
             await controller.command({
               sessionID,
               text: planned?.condition ?? raw,
@@ -684,6 +688,8 @@ export default Plugin.define({
             const block = nativeEvaluationRequest({
               condition,
               summary,
+              ...(armedScopes.has(child.parentID) ? { armScope: armedScopes.get(child.parentID)! } : {}),
+              nonce: Math.random().toString(36).slice(2, 10),
               ...(parent?.loopEnabled
                 ? {
                     loop: {
@@ -732,6 +738,7 @@ export default Plugin.define({
         // command path would have delivered, with the directive token and the count removed from the objective.
         const originalPrompt = event.prompt.text
         const planned = await planGoal(event.sessionID, objective)
+        if (planned) armedScopes.set(event.sessionID, planned.scope)
         const condition = planned?.condition ?? objective
         event.prompt.text = directivePrompt(condition, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective: condition, history: [] }, true)
         const armed = await controller.armFromPrompt({
