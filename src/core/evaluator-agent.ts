@@ -30,15 +30,15 @@ export interface NativeReportCandidate {
 
 /**
  * Pick the newest unconsumed native evaluator report for a turn. Two guards keep a verdict tied to the turn that
- * produced it: plugin-judge reports (delivered by the fallback `spawnJudge`) are excluded by their childID so a
+ * produced it: plugin evaluator reports (delivered by the fallback `spawnEvaluator`) are excluded by their childID so a
  * previous turn's verdict is never replayed, and reports still `running` (the child has background work) are left
- * alone until the host delivers its final one. `consumed`/`pluginJudgeIDs` are owned by the caller so a duplicate
+ * alone until the host delivers its final one. `consumed`/`pluginEvaluatorIDs` are owned by the caller so a duplicate
  * turn-end cannot re-arm from the same report.
  */
 export function findNativeReport(
   messages: readonly unknown[],
   consumed: ReadonlySet<string>,
-  pluginJudgeIDs: ReadonlySet<string>,
+  pluginEvaluatorIDs: ReadonlySet<string>,
   seenTurns: Map<string, number>,
   turn: number,
 ): NativeReportCandidate | undefined {
@@ -60,7 +60,7 @@ export function findNativeReport(
     const m = message as Record<string, unknown>
     if (m.type !== "synthetic" || !isEvaluatorReport(m.metadata)) continue
     const metadata = m.metadata as Record<string, unknown>
-    if (typeof metadata.childID === "string" && pluginJudgeIDs.has(metadata.childID)) continue
+    if (typeof metadata.childID === "string" && pluginEvaluatorIDs.has(metadata.childID)) continue
     const key = String(m.id ?? (m.time as Record<string, unknown> | undefined)?.created ?? m.text)
     // A report consumed in a different turn (e.g. after a goal switch) is stale even without a marker. Pin the
     // turn only when a report is actually returned: a child first seen `running` must not be pinned, or a late

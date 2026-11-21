@@ -564,7 +564,7 @@ export function nativeEvaluationRequest(input: {
   readonly condition: string
   readonly summary: string
   /** The arm-time planner's scope, replayed on the check so a trivial reply is judged as a reply. */
-  readonly armScope?: "trivial" | "code"
+  readonly armPlanScope?: "trivial" | "code"
   /** Per-verdict unique token: keeps a free-tier gateway from replaying a cached completion for another prompt. */
   readonly nonce?: string
   readonly loop?: {
@@ -588,7 +588,7 @@ export function nativeEvaluationRequest(input: {
     // The arm-time plan is the distilled condition itself (the worker already works from it); replay its scope
     // here so a conversational goal is scored as a conversation. Without this a small judge demands command
     // output for "reply: hi", rules not_met, and wakes the parent through another needless turn.
-    ...(input.armScope === "trivial"
+    ...(input.armPlanScope === "trivial"
       ? [`Arm plan: this is a trivial reply goal — a direct answer in <parent-summary> is sufficient evidence. Do not require command output or file changes.`, ``]
       : []),
     // A short unique id near the top changes the prompt prefix on every verdict, so a gateway that keys its
