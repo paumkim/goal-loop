@@ -211,10 +211,56 @@ export default Plugin.define({
       },
     }
 
+    // A judge is a native child session: its primary turn passes the free-tier gate that rejects auxiliary
+    // generate calls. A fresh session per verdict (own affinity, no parentID) cannot wake the parent.
+    const judgeChildren = new Set<string>()
+
+    const spawnJudge = async (model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
+      const { id } = await ctx.session.create({ location: ctx.location, agent: "general", model: model as any, title: "evaluator" } as any)
+      judgeChildren.add(id)
+      const abort = new AbortController()
+      let answer = ""
+      let finish!: (value: string) => void
+      const done = new Promise<string>((resolve) => { finish = resolve })
+      const onAbort = () => { abort.abort(); finish(answer) }
+      try {
+        if (signal.aborted) onAbort()
+        else signal.addEventListener("abort", onAbort, { once: true })
+        void (async () => {
+          try {
+            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
+              const data = (evt as any).data ?? {}
+              if (data.sessionID !== id) continue
+              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
+              if (evt.type === "session.execution.succeeded") { abort.abort(); finish(answer); return }
+              if (evt.type === "session.execution.failed") { abort.abort(); finish(""); return }
+            }
+          } catch {
+            // The subscription was aborted (verdict already delivered) or the event stream closed.
+          }
+          // A stream that ends without a terminal event must still release the judge, not hang until timeout.
+          finish(answer)
+        })()
+        // The signal must reach the host prompt: an auxiliary/child turn that ignores an external abort used to
+        // keep `spawnJudge` parked on the awaited prompt after `done` had already resolved, deferring cleanup and
+        // defeating the evaluator's named timeout. Race so any abort converges immediately, even if the host
+        // prompt never settles; the text still comes from `done` (the child's text deltas).
+        await Promise.race([
+          ctx.session.prompt({ sessionID: id, text: prompt } as any, { signal }).catch(() => {}),
+          done.then(() => undefined),
+        ])
+        return await done
+      } finally {
+        signal.removeEventListener("abort", onAbort)
+        judgeChildren.delete(id)
+        try { await ctx.session.remove({ sessionID: id } as any) } catch {}
+      }
+    }
+
     const evaluator = new Evaluator(
       {
         sessionGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
-        modelGenerate: async (model: ModelRef, prompt, signal) => (await ctx.generate.text({ prompt, model }, { signal })).text,
+        modelGenerate: spawnJudge,
         // Use-and-forget: the evaluator's own <goal-evaluation> prompts are its self-talk, not evidence.
         // The independent digest is paired with a freshly built rubric prompt, so no evaluation prompt
         // from the transcript may ride into it — strip all of them at the source.
@@ -227,12 +273,6 @@ export default Plugin.define({
           if (!current) return undefined
           return { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) }
         },
-        // Inherit mode judges on the session's own model, so the generation must be seen as that same session:
-        // stateless ctx.generate.text mints a fresh x-opencode-session per call (OpenCode generate.ts) and the
-        // gateway bills each one as a new free-tier session — "Free usage limit reached" while the parent still
-        // works. ctx.session.generate carries the session's affinity headers (single model step, no history
-        // mutation), so the evaluator inherits the session fingerprint and its free usage bucket.
-        sessionModelGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
       },
       config.evaluator,
       commit,
@@ -449,7 +489,7 @@ export default Plugin.define({
     // the host keys the prompt cache on session affinity, not on the tool list, and the surrounding context hook
     // already edits system/messages for these requests. Non-evaluator generations keep their tools untouched.
     await ctx.session.hook("generate", (event) => {
-      if (!evaluator.isEvaluating(event.sessionID)) return
+      if (!evaluator.isEvaluating(event.sessionID) && !judgeChildren.has(event.sessionID)) return
       event.options.maxTokens = config.evaluator.maxOutputTokens
       for (const name of Object.keys(event.tools)) delete event.tools[name]
     })
