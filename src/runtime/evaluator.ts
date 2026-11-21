@@ -19,12 +19,12 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 interface EvaluatorDeps {
   /**
    * The verdict delivered by a worker-delegated `evaluator` subagent, if one arrived for this turn. Native
-   * delegation is the preferred (visible) judge path; when no report exists the generation paths below run.
+   * delegation is the preferred (visible) evaluator path; when no report exists the generation paths below run.
    */
   nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
-  /** Generation on a specific model. The host runs one judge generation in a fresh child of `sessionID`. */
+  /** Generation on a specific model. The host runs one evaluator generation in a fresh child of `sessionID`. */
   modelGenerate(sessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
@@ -43,7 +43,7 @@ interface EvaluationFacts {
   readonly spend?: UsageSnapshot
 }
 
-/** A resolved judge model. Both pinned and inherited judges generate the same way in the host (child session). */
+/** A resolved evaluator model. Both pinned and inherited models generate the same way in the host (child session). */
 interface ModelChoice {
   readonly model: ModelRef
 }
@@ -62,10 +62,10 @@ export class EvaluationTimeoutError extends EvaluationError {
 }
 
 /**
- * Judges a goal condition after each turn.
+ * Evaluates a goal condition after each turn.
  *
  * Both modes produce the verdict in a real child turn of the plugin's `evaluator` agent (native delegation shape).
- * `session` mode embeds a newest-first digest of the live parent transcript in the child prompt, so the judge sees
+ * `session` mode embeds a newest-first digest of the live parent transcript in the child prompt, so the evaluator sees
  * full-fidelity evidence. `independent` mode builds the digest here and sends it to a pinned/inherited model, so
  * completion can be judged by a model other than the one doing the work. Independent failures fall back to session
  * mode once.
@@ -88,11 +88,11 @@ export class Evaluator implements EvaluatorPort {
   /**
    * Judge a turn from the worker's native delegated report only — no generation fallback (that auxiliary call
    * hit the free-tier gate). In opt-in `consensus: 2` mode a native `met` is not accepted until a second vote from
-   * the independent model also rules `met`; any disagreement or dead second judge fails closed to `not_met`.
+   * the independent model also rules `met`; any disagreement or dead second vote fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
     const signal = request.signal
-    // Native delegation is the only per-turn judge. The plugin's own generation child was an auxiliary
+    // Native delegation is the only per-turn evaluator. The plugin's own generation child was an auxiliary
     // generate call that hit the account-level free-tier gate (429), so it is no longer a verdict path.
     // A missing or failed report is fail-closed `not_met` with a directive to delegate; a quota error is
     // rethrown so the controller can pause instead of retrying it.
@@ -110,7 +110,7 @@ export class Evaluator implements EvaluatorPort {
       return { verdict: "not_met", reason: "no evaluator subagent report for this turn; delegate the verdict to the 'evaluator' subagent" }
     }
     if (this.config.consensus !== 2 || result.verdict !== "met") return result
-    // Opt-in second vote only — the default verdict path never generates. A separate judge model is required;
+    // Opt-in second vote only — the default verdict path never generates. A separate evaluator model is required;
     // with the inherit sentinel both votes share the parent model (see docs/config.html).
     try {
       const choice = await this.resolveModel(request.sessionID, signal)
@@ -154,11 +154,11 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Generation closure for a resolved judge. Both pinned and inherited judges go through the single
+   * Generation closure for a resolved evaluator model. Both pinned and inherited models go through the single
    * `modelGenerate` port; the host spawns a fresh child session per call (a primary turn that passes the
    * free-tier gate) and strips tools on that child. There is no affinity-bearing generation path anymore.
    */
-  private judgeGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
+  private evaluatorGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
     return (prompt, signal) => this.deps.modelGenerate(sessionID, choice.model, prompt, signal)
   }
 
@@ -166,7 +166,7 @@ export class Evaluator implements EvaluatorPort {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, request.commit ?? this.commit)
-    return this.ask(this.judgeGenerate(choice, request.sessionID), prompt, signal)
+    return this.ask(this.evaluatorGenerate(choice, request.sessionID), prompt, signal)
   }
 
   /** Track a session's in-flight generative work so maxTokens throttling can see contention. */
@@ -189,7 +189,7 @@ export class Evaluator implements EvaluatorPort {
       try {
         const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const generate = this.judgeGenerate(choice, request.sessionID)
+        const generate = this.evaluatorGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(summarizeIndependently(request, transcript), s), signal, "summary")
         return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
@@ -209,7 +209,7 @@ export class Evaluator implements EvaluatorPort {
     const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (choice) {
       try {
-        const generate = this.judgeGenerate(choice, request.sessionID)
+        const generate = this.evaluatorGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(nextGoalIndependently(request), s), signal, "next-condition")
         return text.trim().slice(0, 4_000)
       } catch (error) {
@@ -279,7 +279,7 @@ export class Evaluator implements EvaluatorPort {
       const parsed = parseVerdict(text)
       if (parsed) return parsed
       // Never fail silently: every unreadable reply (especially an empty one) is recorded with its raw text so the
-      // operator can see whether the judge emitted a tool call / reasoning with no text, garbage, or a truncated
+      // operator can see whether the evaluator emitted a tool call / reasoning with no text, garbage, or a truncated
       // verdict. The host strips tools from evaluator generations (see src/index.ts · generate hook); a bare "" here
       // means the provider still produced no text and is a provider/quirk to investigate, not a retry to hide.
       this.log.warn("evaluator reply unreadable; escalating", {
@@ -291,7 +291,7 @@ export class Evaluator implements EvaluatorPort {
       // An empty (or unreadable) reply escalates; only a genuine timeout/abort leaves this loop early.
     }
     throw new EvaluationError(
-      `unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))} (no text event in the judge reply — usually a tool call or reasoning-only response; evaluator requests are sent toolless)`,
+      `unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))} (no text event in the evaluator reply — usually a tool call or reasoning-only response; evaluator requests are sent toolless)`,
     )
   }
 }

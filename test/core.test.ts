@@ -836,7 +836,7 @@ describe("nativeEvaluationRequest: original goal + parent summary only", () => {
 
   test("a trivial arm plan tells the judge a direct reply is enough, and the nonce changes the prefix", () => {
     const plain = nativeEvaluationRequest({ condition: "reply: hi", summary: "hi" })
-    const armed = nativeEvaluationRequest({ condition: "reply: hi", summary: "hi", armScope: "trivial", nonce: "abc123" })
+    const armed = nativeEvaluationRequest({ condition: "reply: hi", summary: "hi", armPlanScope: "trivial", nonce: "abc123" })
     expect(plain).not.toContain("trivial reply goal")
     expect(armed).toContain("Arm plan: this is a trivial reply goal")
     expect(armed).toContain("Do not require command output or file changes")
@@ -846,7 +846,7 @@ describe("nativeEvaluationRequest: original goal + parent summary only", () => {
   })
 
   test("a code arm plan does not add the trivial-reply shortcut", () => {
-    const req = nativeEvaluationRequest({ condition: "fix the tests", summary: "12 pass 0 fail", armScope: "code" })
+    const req = nativeEvaluationRequest({ condition: "fix the tests", summary: "12 pass 0 fail", armPlanScope: "code" })
     expect(req).not.toContain("trivial reply goal")
   })
 })
@@ -1118,8 +1118,8 @@ describe("native evaluator delegation", () => {
     metadata: { source: "subagent", childID, agent: "Evaluator", state },
   })
   const marker = (turn: number) => ({ id: `kickoff_${turn}`, type: "synthetic", metadata: { source: "goal", goal: "g1", turn } })
-  const pick = (messages: unknown[], turn = 1, consumed = new Set<string>(), pluginJudgeIDs = new Set<string>(), seenTurns = new Map<string, number>()) =>
-    findNativeReport(messages, consumed, pluginJudgeIDs, seenTurns, turn)
+  const pick = (messages: unknown[], turn = 1, consumed = new Set<string>(), pluginEvaluatorIDs = new Set<string>(), seenTurns = new Map<string, number>()) =>
+    findNativeReport(messages, consumed, pluginEvaluatorIDs, seenTurns, turn)
 
   test("the newest report is picked once; a consumed report is never replayed", () => {
     const messages = [report("a", "not_met"), report("b", "met")]

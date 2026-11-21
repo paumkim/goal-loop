@@ -17,6 +17,16 @@ text is kept verbatim and read through this map: `bin/opencode-goal.mjs` → `bi
 `github:paumkim/opencode-goalv2#v…` specifier (`install` migrates the entry, `uninstall` removes it, `status`
 reports it), and the `OPENCODE_GOAL_*` environment prefix (the documented configuration surface).
 `test/name-fields.test.ts` pins this declaration, the fields, and the code that carries them.
+**Evaluator vocabulary (internal names).** The agent and the per-turn scorer are the `evaluator` (agent id
+`evaluator`, display name `Evaluator`, class `Evaluator`). `judge` appears only as a prose verb — never as a noun
+or identifier. `checking` is the literal TUI label only; the state flag is `evaluating` and the process is
+`evaluation`, whose result is a `verdict` (`met` / `not_met` / `impossible`). Internal identifiers follow the
+agent: `evaluatorChildren`, `pluginEvaluatorIDs`, `spawnEvaluator`, `evaluatorGenerate`, `asEvaluatorError`; the
+arm-time planner's replayed scope field is `armPlanScope`. A worker-delegated report is a "native evaluator
+report" and a plugin-spawned child is an "evaluator child"; the opt-in `consensus: 2` second vote is the
+"second evaluator child". `subagent` is the delegation mechanism, `delegate` the verb, `task` only the host
+tool name. `turn` is one worker attempt; `iteration` / persisted `loopIteration` is one loop cycle; `resume`
+is post-restart recovery only. `checkin*` (code) / "check-in" (prose) is the idle nudge, unrelated to evaluation.
 <!-- naming:end -->
 
 Status: current as of v1.2.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
@@ -496,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2210 -->
+<!-- spec-check files=143 tests=2211 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

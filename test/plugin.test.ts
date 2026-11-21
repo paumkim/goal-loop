@@ -993,7 +993,7 @@ describe("the judge child converges when the host prompt ignores its abort signa
     try {
       const goal = calls.commands.find((command: any) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
-      // A closed judge event stream releases `done` with no text; spawnJudge must converge promptly even though
+      // A closed judge event stream releases `done` with no text; spawnEvaluator must converge promptly even though
       // the host prompt never settles. Previously it stayed parked on the awaited prompt.
       for (let i = 0; i < 200 && reports.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
       expect(promptSignal).toBeInstanceOf(AbortSignal)
