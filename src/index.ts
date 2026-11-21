@@ -494,7 +494,7 @@ export default Plugin.define({
       }
     })()
 
-    void controller.restore().catch((error) => log.error("goal restore failed", { error: String(error) }))
+    void controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
     log.info("ready", { evaluator: config.evaluator.mode, model: config.evaluator.model ?? "session" })
 
     return async () => {

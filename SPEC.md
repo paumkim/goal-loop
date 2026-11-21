@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2059 -->
+<!-- spec-check files=74 tests=2067 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8526,4 +8526,51 @@ Two independent leaks, neither a sensing capability:
 - The 20,000 default is a behavior change for repos that did not set `maxTranscriptChars`; explicit settings still win,
   and the ≥4,000 floor is unchanged. It is deliberate, documented, and test-pinned, not a silent default swap.
 
-<!-- spec-check files=74 tests=2059 -->
+<!-- spec-check files=74 tests=2067 -->
+
+## Workstream CXVI — resume an interrupted evaluation after restart (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "there is a bug. if i restart while the evaluator is checking. it completely cancled it out. it need that gracefull continue just like how the opencode itself is working." Coordinator repo: claimed `wt/eval-restart-resume`, worked only in `worktrees/wt-eval-restart-resume`, committed on `wt/eval-restart-resume`, submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+`GoalController.evaluate()` sets `runtime.evaluating = true` and holds an in-memory `AbortController`. `dispose()` on shutdown calls `invalidate()` for every runtime, which aborts that controller; the evaluation's `catch` sees `abort.signal.aborted` and returns silently. Nothing is written to the `GoalRecord`, so after a restart `restore()` adopts an `active` goal whose interrupted turn is simply gone: no new `session.execution.succeeded` event arrives, no evaluation is re-dispatched, and the goal sits active forever. This is the same class of bug already fixed for background waits in Workstream XXVII (`waitingSince` is the persisted twin of `deferredSince`): a runtime-only flag is silently dropped on reload. Workstream XXV explicitly recorded "the record was adopted but never resumed — resuming an interrupted turn is the user's call" as an honest limit; this workstream lifts that limit for the evaluation phase only, at the user's request.
+
+### Acceptance criteria
+
+1. `GoalRecord` gains one additive field `pendingEvaluation?: { turn: number; tools: number; condition: string; phase: "evaluate" | "continue"; at: number }`: the in-flight turn's identity and the step still owed, persisted before the evaluator request leaves the machine. `version` stays 1; legacy records are unaffected. `phase: "evaluate"` means the verdict has not landed; `phase: "continue"` means it has and the post-turn steer is still owed.
+2. `evaluate()` stamps `pendingEvaluation` on the record before calling the evaluator (fire-and-forget `commit`, flushed by `dispose()`), and `commit()` clears it on the first write at or past that turn — so a verdict that lands is never re-evaluated, while an aborted/shutdown evaluation leaves the marker intact.
+3. `restore()` revives the marker: after adoption, live `active` records with a matching `condition` re-dispatch exactly the owed step — `phase: "evaluate"` re-enters `evaluate()` with the persisted tool count and turn number (turn continuity preserved by exempting a marked record from the adoption-time `turns: 0` reset); `phase: "continue"` re-dispatches the continuation steer from the persisted `reason` without a second evaluation. A stale marker (verdict already recorded for an `evaluate` marker, condition changed by a loop re-arm, non-active status, or a live execution already in flight) is cleared, never replayed. The marker is deleted before re-dispatch so a second restore cannot double-fire.
+4. The resume is announced (one info log + one `changed` emission via the normal evaluation start) so the UI leaves "checking" only when the new evaluation is actually running; no new config option, timer, or TUI code.
+5. Regression tests pin: marker persistence across a simulated restart, resume re-enters evaluation with the original turn/tools, no resume when the verdict already landed or the condition changed, no resume for paused/terminal records, and no double-evaluation while a turn is live. No existing test weakened or skipped.
+6. `SPEC.md` gains this section with the marker re-stamped in the same commit for the changed test count; `docs/changelog.html` gains the companion row via the two-commit docs-watch convention.
+7. `bun run check` exit 0 in the worktree; commit on `wt/<slug>`, submit, merge-next via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- **Before (reproduced by the new test's setup).** A turn starts, the evaluator is in flight, `dispose()` aborts it;
+  the stored record has no in-flight breadcrumb, so a fresh controller's `restore()` adopts an `active` goal with
+  zero evaluation requests and zero continuation steers — the goal parks until a new host turn ends.
+- **After.** `evaluate()` stamps `pendingEvaluation` before its first await; `dispose()`/`shutdown` interrupts keep
+  it and `store.flush()` lands it. On restore, `resumePendingEvaluations()` deletes the marker first (single-dispatch
+  guard), then re-enters `evaluate()` with the persisted turn and tool count (phase `evaluate`) or re-sends the
+  continuation from the persisted `reason` (phase `continue`). Targeted tests pin: marker flush across dispose,
+  resume with original turn/tools, stale-marker clear, condition-changed clear, paused clear, continue-phase steer
+  without a second evaluation, probe `resume:false`, and shutdown-vs-user interrupt semantics —
+  **8 new tests in `test/controller.test.ts`**.
+- **Invariant preserved.** One resumed step per marker, guarded by `status === "active"`, `!running.has(sessionID)`,
+  condition equality, turn ordering, and a fresh epoch. A newer execution or a changed goal clears the marker
+  instead of replaying it; user interrupts and supersedes clear it immediately (the new turn owns the step).
+- **Tests.** Full `cd test && bun test` → **2067 pass / 0 fail** across 85 files (29 snapshots, 198,822 expect()
+  calls), up from **2059 pass / 0 fail** (+8; no existing test weakened or skipped). `bunx tsc --noEmit` clean.
+- **Gates.** `npm pack --dry-run --json` still 74 files; SPEC marker re-stamped to `files=74 tests=2067`; changelog
+  companion row regenerated via the two-commit docs-watch convention. No config option, rubric, verifier gate or
+  TUI change; `dist/tui.js` byte-unchanged.
+
+### Honest limits / non-goals
+
+- The two persisted phases cover the whole post-turn window, but a crash *inside* the steer admission (`continueWith`'s `session.synthetic`) can still leave a `phase: "continue"` marker that re-dispatches a steer which may already be queued; the existing straggler guards make that duplicate harmless, and it is reported honestly rather than claimed away.
+- A user interrupt (`onUserPrompt` → `invalidate`) leaves the marker until the next execution's evaluation overwrites it; if no next turn arrives before a restart, the interrupted turn is re-evaluated from fresh evidence — the evaluator re-judges the visible transcript, so this is safe but may repeat a verdict.
+- No change to the evaluator's rubric, consensus, retry ladder, verifier gate, or the use-and-forget context strip from Workstream CXV.
+
+<!-- spec-check files=74 tests=2067 -->

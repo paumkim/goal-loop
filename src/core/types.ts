@@ -453,6 +453,21 @@ export interface GoalRecord {
    * reload while the background subagent kept running).
    */
   waitingSince?: number
+  /**
+   * Persisted twin of a turn's in-flight post-turn step, so a restart/plugin reload mid-evaluation resumes
+   * the owed step instead of silently dropping it (the goal would otherwise sit active forever: no new
+   * `session.execution.succeeded` event arrives after a restart to re-trigger evaluation). Additive; absent
+   * on legacy records and whenever no post-turn step is owed. `turn` is the evaluated turn's identity,
+   * `tools` the tool count that the volatile runtime would lose, `condition` guards against a loop re-arm
+   * that changed the goal, and `phase` names the step: "evaluate" before the verdict, "continue" after it.
+   */
+  pendingEvaluation?: {
+    readonly turn: number
+    readonly tools: number
+    readonly condition: string
+    readonly phase: "evaluate" | "continue"
+    readonly at: number
+  }
 }
 
 /** Read model shared with clients over RPC. */
