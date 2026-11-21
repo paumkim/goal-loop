@@ -2,7 +2,7 @@ import { BOUNDARY_DROP_FACTOR, BOUNDARY_MIN_TOKENS, COMPACT_COOLDOWN_MS } from "
 import type { GoalConfig } from "../core/config.ts"
 import { MAX_BUSY_RETRIES } from "../core/config.ts"
 import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
-import { classifyFailure, errorMessage, isNotFoundError } from "../core/errors.ts"
+import { classifyFailure, errorMessage, isNotFoundError, isUsageLimitError } from "../core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import { isAlreadySatisfiedLanding } from "../core/verdict.ts"
@@ -2414,16 +2414,24 @@ export class GoalController {
   private evaluationFailed(record: GoalRecord, runtime: Runtime, tools: number, error: unknown) {
     const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    const usageLimit = isUsageLimitError(error)
     record.retries++
-    if (this.deps.config.maxRetries > 0 && record.retries >= this.deps.config.maxRetries) {
+    // A free-tier usage/rate limit clears on its own. The execution path already pauses for 15m and retries
+    // forever on this class of error (classifyFailure -> "pause"); the evaluator path must do the same or a
+    // transient quota window burns the retry cap and fails an otherwise healthy goal. The evaluator judges
+    // on the session's own model and fingerprint, so it shares that session's free-usage bucket — the
+    // "same model works for the session but the evaluator hits the limit" symptom is exactly a temporary
+    // bucket exhaustion, not a misconfigured model.
+    if (!usageLimit && this.deps.config.maxRetries > 0 && record.retries >= this.deps.config.maxRetries) {
       const reason = `Goal failed after ${record.retries} consecutive evaluator failures (last: ${truncate(errorMessage(error), 120)}). Lower evaluator.timeoutMs, check provider connectivity, or raise maxRetries.`
       record.failureLabel = "evaluator retries exhausted"
       void this.settleTerminal(record, "failed", { kind: "failed", level: "error", title: "Goal failed", reason })
       return
     }
-    const delay = backoffMs(REEVALUATE_BASE_MS, 3, record.retries - 1)
+    const delay = usageLimit ? PAUSE_RETRY_MS : backoffMs(REEVALUATE_BASE_MS, 3, record.retries - 1)
     this.commit(record)
-    this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator failed (${truncate(errorMessage(error), 120)}); retrying in ${formatDuration(delay)}.`)
+    const label = usageLimit ? "free usage limit — judge shares this session's model/quota" : truncate(errorMessage(error), 120)
+    this.notify(record.sessionID, "retry", "warning", "Goal still active", `Evaluator ${usageLimit ? "paused" : "failed"} (${label}); retrying in ${formatDuration(delay)}.`)
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
       void this.evaluate(record, runtime, ++runtime.epoch, tools).catch((e) => log.error("re-evaluation failed", { error: errorMessage(e) }))

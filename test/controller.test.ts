@@ -3,6 +3,7 @@ import { mkdtemp, readdir, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { resolveConfig } from "../src/core/config.ts"
+import { isUsageLimitError } from "../src/core/errors.ts"
 import type { CommitPolicy, GoalSnapshot, Notice, UsageSnapshot } from "../src/core/types.ts"
 import { BackgroundTracker } from "../src/runtime/background.ts"
 import { GoalController } from "../src/runtime/controller.ts"
@@ -635,6 +636,41 @@ describe("GoalController", () => {
     await h.clock.advance(10_000)
     expect(h.controller.get(SID)?.retries).toBe(2)
     expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
+  })
+
+  test("an evaluator free-usage limit pauses with a long backoff instead of failing the goal", async () => {
+    h = harness({ maxRetries: 1 })
+    await h.set()
+    h.verdicts.push(new Error("Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going"))
+    await h.turn()
+    // Even with maxRetries=1, a self-clearing usage limit must never exhaust the cap or fail the goal.
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.retries).toBe(1)
+    const notice = h.notices.at(-1)
+    expect(notice?.title).toBe("Goal still active")
+    expect(notice?.message).toContain("Evaluator paused")
+    expect(notice?.message).toContain("free usage limit")
+    expect(notice?.message).toContain("retrying in 15m")
+    // Repeated limit hits keep pausing — never a terminal failure.
+    h.verdicts.push(new Error("429 rate limit reached"))
+    await h.clock.advance(15 * 60_000)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.get(SID)?.retries).toBe(2)
+    expect(h.notices.at(-1)?.message).toContain("retrying in 15m")
+    // When the window clears, the same session/model evaluation succeeds.
+    h.verdicts.push(met("recovered after the quota window reset"))
+    await h.clock.advance(15 * 60_000)
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
+  test("isUsageLimitError is narrowly scoped to usage/rate limits", () => {
+    expect(isUsageLimitError(new Error("Free usage limit reached"))).toBe(true)
+    expect(isUsageLimitError(new Error("rate limit exceeded"))).toBe(true)
+    expect(isUsageLimitError({ status: 429, message: "too many requests" })).toBe(true)
+    expect(isUsageLimitError("usage limit reached")).toBe(true)
+    expect(isUsageLimitError(new Error("boom"))).toBe(false)
+    expect(isUsageLimitError(new Error("insufficient credit balance"))).toBe(false)
+    expect(isUsageLimitError(new Error("evaluator timed out after 120s"))).toBe(false)
   })
 
   test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {
