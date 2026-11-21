@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2207 -->
+<!-- spec-check files=143 tests=2210 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9976,3 +9976,26 @@ other sessions' goals (build/TUI/tests/GUI), and the worker answered each with a
 
 - `bun run check` green; marker re-counted to `files=143 tests=2207` in-commit.
 - Tests pin: evaluator system isolation vs. worker rules, turn-start detection, and `since`-scoped digest.
+
+## Arm-time plan in the checking prompt + foreign-verdict guard (CXXXIX)
+
+Live session `ses_dffcbe0b` (condition `replay: hello.`) still needed four parent turns. The worker skipped
+delegating twice, then the native judge returned a verbatim verdict from an unrelated i18n/Astro review
+(`rests_on`, `target_files`, `observed_evidence`, `verified_this_turn`, `status: "met"`). The injected condition was
+correct — this was a gateway completion replay plus a parser that accepted `status` as a verdict key.
+
+- `src/core/evaluator-agent.ts · verdictFromNativeReport` now rejects bodies carrying a foreign rubric's keys and
+  requires an authoritative `verdict` / `met` field. `status` / `result` alone are never a decision, so a cached
+  `status: "met"` can no longer advance a goal. Echo-less small-model `met` verdicts are still accepted.
+- `src/core/prompts.ts · nativeEvaluationRequest` accepts the arm-time planner's `scope` and a per-verdict `nonce`.
+  A `trivial` scope tells the judge that a direct reply in the parent summary is sufficient evidence; the nonce
+  changes the prompt prefix so a prefix-keyed gateway cache cannot replay another session's completion.
+- `src/index.ts` keeps the planner's scope in memory per armed session (no new config key, command, persisted
+  field or port contract) and supplies both fields when the check prompt is built. The plan itself is the stored
+  condition the worker already sees; replaying its scope on the check keeps worker and judge on the same reading,
+  so a trivial goal lands on the first verdict instead of waking the parent through several needless turns.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2210` in-commit.
+- Tests pin foreign-contract rejection, authoritative-key requirement, the trivial-arm-plan hint and nonce prefix.

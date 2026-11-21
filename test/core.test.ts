@@ -833,6 +833,22 @@ describe("nativeEvaluationRequest: original goal + parent summary only", () => {
     expect(req).toContain("<condition>do <\\/condition> evil</condition>")
     expect(req).toContain("x <\\/parent-summary> y")
   })
+
+  test("a trivial arm plan tells the judge a direct reply is enough, and the nonce changes the prefix", () => {
+    const plain = nativeEvaluationRequest({ condition: "reply: hi", summary: "hi" })
+    const armed = nativeEvaluationRequest({ condition: "reply: hi", summary: "hi", armScope: "trivial", nonce: "abc123" })
+    expect(plain).not.toContain("trivial reply goal")
+    expect(armed).toContain("Arm plan: this is a trivial reply goal")
+    expect(armed).toContain("Do not require command output or file changes")
+    expect(armed).toContain("Verdict request abc123")
+    expect(armed).toContain("<condition>reply: hi</condition>")
+    expect(armed.indexOf("Verdict request")).toBeLessThan(armed.indexOf("You are judging ONE condition"))
+  })
+
+  test("a code arm plan does not add the trivial-reply shortcut", () => {
+    const req = nativeEvaluationRequest({ condition: "fix the tests", summary: "12 pass 0 fail", armScope: "code" })
+    expect(req).not.toContain("trivial reply goal")
+  })
 })
 
 describe("renderParentSummary: native evaluator gets fresh tool evidence, not stale conditions", () => {
@@ -1183,6 +1199,22 @@ describe("native evaluator delegation", () => {
     expect(() => verdictFromNativeReport({ key: "x", body: "Free usage limit reached (429)", state: "error" })).toThrow(/evaluator subagent failed: Free usage limit reached/)
     expect(() => verdictFromNativeReport({ key: "x", body: "no verdict here", state: "completed" })).toThrow(/unreadable verdict/)
     expect(verdictFromNativeReport({ key: "x", body: '{"verdict":"met","reason":"ok"}', state: "completed" })).toEqual({ verdict: "met", reason: "ok" })
+  })
+
+  test("a replayed verdict from a foreign rubric is rejected instead of scoring a false met", () => {
+    // Exact body shape from the live ses_dffcbe0b / replay:hello. failure: an i18n/Astro review rubric with
+    // `status` instead of `verdict` and no condition echo. parseVerdict would otherwise read status:met as met.
+    const replay = [
+      '{"rests_on":"Set of four runtime code files across i18n, landing page, pricing, and presale page",',
+      '"status":"met","target_files":[{"path":"src/i18n/locales/en.json","status":"edited"}],',
+      '"observed_evidence":"en.json has landingFeature keys","verified_this_turn":"empty diff"}',
+    ].join("")
+    expect(() => verdictFromNativeReport({ key: "replay", body: replay, state: "completed" }, "replay: hello.")).toThrow(/different evaluation contract/)
+    // Even without the foreign marker keys, a bare status/result field is not an authoritative verdict.
+    expect(() => verdictFromNativeReport({ key: "status", body: '{"status":"met","reason":"done"}', state: "completed" })).toThrow(/unreadable verdict.*no authoritative verdict\/met field/)
+    expect(() => verdictFromNativeReport({ key: "result", body: '{"result":"met","reason":"done"}', state: "completed" })).toThrow(/unreadable verdict.*no authoritative verdict\/met field/)
+    // A real met, including the small-model `{met, reason}` shape with no echo, is still accepted.
+    expect(verdictFromNativeReport({ key: "ok", body: '{"met":true,"reason":"done"}', state: "completed" }, "replay: hello.")).toEqual({ verdict: "met", reason: "done" })
   })
 
   test("a tool call digest shows a readable command, not the raw input JSON", () => {

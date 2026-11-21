@@ -89,3 +89,5 @@
 <!-- behavior-change: CXXXVII the native evaluator no longer judges its own delegation — the parent-evidence digest drops the judge-spawning task call, keeps a pure-text reply as evidence, and re-reads a mid-turn parent after a bounded settle; the worker states its answer before delegating and the request explicitly forbids conditions imported from AGENTS.md/SPEC.md/other sessions; no config/command/persisted-field/port change -->
 
 <!-- behavior-change: CXXXVIII native judge children get a clean system prefix (no AGENTS.md/SPEC.md conditions), the parent-evidence digest starts at the current turn instead of session start, and the worker delegates once per turn instead of re-delegating on every report; no config/command/persisted-field/port change -->
+
+<!-- behavior-change: CXXXIX native verdicts from a foreign evaluator contract (rests_on/target_files/status/...) are rejected instead of scoring a false met, only verdict/met keys count as authoritative, and the arm-time planner's scope plus a per-verdict nonce ride into the checking prompt so a trivial reply lands in one turn without repeated parent wake-ups -->
