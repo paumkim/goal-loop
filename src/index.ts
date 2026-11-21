@@ -252,6 +252,9 @@ export default Plugin.define({
       config,
       directory: ctx.location.directory,
       commit,
+      // A goal follows its session across directories; re-resolve the commit rule for the new checkout so the
+      // agent's directives name the right branch and coordinator policy after a move.
+      commitFor: (directory) => resolveCommitPolicy(config.commit, directory, coordinatorBin),
       session,
       evaluator,
       background,

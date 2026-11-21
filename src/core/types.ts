@@ -354,7 +354,8 @@ export interface GoalRecord {
   readonly version: 1
   readonly id: string
   readonly sessionID: string
-  readonly directory: string
+  /** Mutable: a session that moves directories updates its goal's location (see `noteSessionDirectory`). */
+  directory: string
   /** Mutable: `/goal-loop` re-arms the same record with the next iteration's condition. */
   condition: string
   status: GoalStatus

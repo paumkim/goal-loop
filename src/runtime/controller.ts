@@ -64,6 +64,12 @@ interface ControllerDeps {
   readonly directory: string
   /** The commit rule that applies to this session's directory. */
   readonly commit: CommitPolicy
+  /**
+   * Recomputes the commit rule for a directory a session has moved into. Optional so existing callers (tests,
+   * probes) keep the fixed `commit`; the host wires it from `resolveCommitPolicy` so a session that leaves one
+   * repository for another gets the new repository's rule in its prompts.
+   */
+  readonly commitFor?: (directory: string) => CommitPolicy
   readonly session: SessionPort
   readonly evaluator: EvaluatorPort
   readonly background: BackgroundPort
@@ -301,6 +307,16 @@ export class GoalController {
   private readonly goals = new Map<string, GoalRecord>()
   private readonly runtimes = new Map<string, Runtime>()
   private readonly running = new Set<string>()
+  /**
+   * sessionID -> the directory the host last reported for that session. A goal follows its session, so this
+   * per-session view (not the fixed `deps.directory`) is the directory every session-scoped operation uses.
+   */
+  private readonly directories = new Map<string, string>()
+  private readonly commitPolicies = new Map<string, CommitPolicy>()
+  /** Last applied host sequence per session; a late event carrying an older directory cannot undo a move. */
+  private readonly directorySeq = new Map<string, number>()
+  /** Sessions that reported an explicit `session.moved`; a seq-less generic event cannot override that move. */
+  private readonly explicitMoves = new Set<string>()
   private readonly newId: () => string
   /** sessionID -> serialized record as of the last store write; lets commit() skip no-op saves and emissions. */
   private readonly lastCommit = new Map<string, string>()
@@ -309,6 +325,73 @@ export class GoalController {
 
   constructor(private readonly deps: ControllerDeps) {
     this.newId = deps.newId ?? (() => crypto.randomUUID())
+  }
+
+  // ---------------------------------------------------------------- session location
+
+  /** The directory the host last reported for `sessionID`, falling back to the goal record then the setup directory. */
+  private directoryFor(sessionID: string): string {
+    return this.directories.get(sessionID) ?? this.goals.get(sessionID)?.directory ?? this.deps.directory
+  }
+
+  private commitForSession(sessionID: string): CommitPolicy {
+    return this.commitPolicies.get(sessionID) ?? this.deps.commit
+  }
+
+  /**
+   * Reconcile a session's directory from a host event. Idempotent: an event reporting the directory we already
+   * have changes nothing — no write, no snapshot, no log. On a real change the goal (live or terminal) travels
+   * with the session: the persisted record's `directory` is updated, the verify cache is dropped (a new
+   * checkout has a new HEAD), and one `changed` snapshot carries the new location.
+   */
+  noteSessionDirectory(sessionID: string, directory: string, reason: "event" | "move" = "event", seq?: number): void {
+    if (!directory) return
+    const lastSeq = this.directorySeq.get(sessionID)
+    // Stale by host ordering: a replay or a late event must not drag the goal back to the old checkout.
+    if (seq !== undefined && lastSeq !== undefined && seq <= lastSeq) return
+    // Without a sequence to compare, an explicit move is authoritative over later generic reports.
+    if (seq === undefined && reason === "event" && this.explicitMoves.has(sessionID)) return
+    const from = this.directoryFor(sessionID)
+    if (sameDirectory(from, directory)) {
+      if (seq !== undefined) this.directorySeq.set(sessionID, seq)
+      if (reason === "move") this.explicitMoves.add(sessionID)
+      return
+    }
+    if (seq !== undefined) this.directorySeq.set(sessionID, seq)
+    if (reason === "move") this.explicitMoves.add(sessionID)
+    this.directories.set(sessionID, directory)
+    if (this.deps.commitFor) this.commitPolicies.set(sessionID, this.deps.commitFor(directory))
+    const runtime = this.runtimes.get(sessionID)
+    if (runtime) {
+      // Drop cached verification results and invalidate any evaluation in flight: its HEAD/commit-rule evidence
+      // belongs to the old checkout and must not land after the move.
+      runtime.verifyCache = undefined
+      runtime.epoch++
+    }
+    const record = this.goals.get(sessionID)
+    if (record) {
+      record.directory = directory
+      void this.commit(record).catch((error) => this.deps.log.warn("goal move record write failed", { sessionID, error: errorMessage(error) }))
+    }
+    this.deps.log.info(
+      reason === "move" ? "goal followed session to a new directory" : "goal directory reconciled from session event",
+      { sessionID, from, to: directory, ...(seq !== undefined ? { seq } : {}), ...(record ? { status: record.status } : {}) },
+    )
+  }
+
+  /** The explicit `session.moved` path; the generic event reconciliation covers hosts that report moves otherwise. */
+  onSessionMoved(sessionID: string, directory: string, seq?: number): void {
+    this.noteSessionDirectory(sessionID, directory, "move", seq)
+  }
+
+  /** Live records this instance owns: its setup directory plus sessions the host has since moved. */
+  private async liveRecordsVisibleHere(): Promise<GoalRecord[]> {
+    const all = await this.deps.store.loadLiveAll().catch(() => [])
+    return all.filter((record) => {
+      if (sameDirectory(record.directory, this.deps.directory)) return true
+      const current = this.directories.get(record.sessionID)
+      return current !== undefined && sameDirectory(record.directory, current)
+    })
   }
 
   // ---------------------------------------------------------------- queries
@@ -388,7 +471,7 @@ export class GoalController {
     if (inMemory) return this.snapshotRecord(inMemory, this.runtimes.get(sessionID), spend, contextSize)
     const stored = await this.deps.store.load(sessionID).catch(() => undefined)
     if (!stored) return null
-    if (!sameDirectory(stored.directory, this.deps.directory)) return null
+    if (!sameDirectory(stored.directory, this.directoryFor(sessionID))) return null
     return this.snapshotRecord(stored, undefined, spend, contextSize)
   }
 
@@ -397,7 +480,7 @@ export class GoalController {
    * sessionID — this instance's copy is newer than the stored one). Never adopts, never writes.
    */
   async peekList(): Promise<GoalSnapshot[]> {
-    const stored = await this.deps.store.loadLive(this.deps.directory).catch(() => [])
+    const stored = await this.liveRecordsVisibleHere()
     const merged = new Map<string, GoalRecord>()
     for (const record of stored) merged.set(record.sessionID, this.goals.get(record.sessionID) ?? record)
     for (const record of this.goals.values()) if (isLive(record.status) && !merged.has(record.sessionID)) merged.set(record.sessionID, record)
@@ -625,7 +708,7 @@ export class GoalController {
           version: 1,
           id: this.newId(),
           sessionID,
-          directory: this.deps.directory,
+          directory: this.directoryFor(sessionID),
           condition,
           status: "achieved",
           setAt: now,
@@ -660,7 +743,7 @@ export class GoalController {
       version: 1,
       id: this.newId(),
       sessionID,
-      directory: this.deps.directory,
+      directory: this.directoryFor(sessionID),
       condition,
       status: "active",
       setAt: now,
@@ -685,7 +768,7 @@ export class GoalController {
     // Await the initial write: a crash between arm() returning and the record landing would silently un-set the goal.
     await this.commit(record)
     if (record.status === "active") this.writeLearningGoalArmed(record)
-    this.surfaceChangeRiskStrictGate(sessionID, record.directory || this.deps.directory)
+    this.surfaceChangeRiskStrictGate(sessionID, this.directoryFor(sessionID))
     const loopLabel = loop ? "Loop" : "Goal"
     const detail = loop ? `iteration="1" max="${maxLoops}" · ${condition}` : condition
     this.notify(sessionID, "set", "info", previous ? `${loopLabel} replaced` : `${loopLabel} set`, detail)
@@ -704,7 +787,7 @@ export class GoalController {
         sessionID,
         text: Prompt.directive(
           condition,
-          this.deps.commit,
+          this.commitForSession(sessionID),
           loop ? { iteration: 1, maxLoops, objective: condition, history: [] } : undefined,
         ),
         delivery: input.delivery,
@@ -1087,6 +1170,11 @@ export class GoalController {
     this.lastCommit.delete(sessionID)
     this.lastReanchorAt.delete(sessionID)
     this.pendingAnchors.delete(sessionID)
+    // A deleted session's location must not outlive it (a reused ID would otherwise inherit a stale directory).
+    this.directories.delete(sessionID)
+    this.commitPolicies.delete(sessionID)
+    this.directorySeq.delete(sessionID)
+    this.explicitMoves.delete(sessionID)
     if (this.goals.delete(sessionID)) this.deps.emitter.changed(sessionID, null)
   }
 
@@ -1173,7 +1261,7 @@ export class GoalController {
         ...(prune.readOnly ? { readOnly: true } : {}),
         directories: prune.directories,
       })
-    const records = await this.deps.store.loadLive(this.deps.directory)
+    const records = await this.liveRecordsVisibleHere()
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
     // Probe servers adopt live records read-only; they must never start real evaluations from a marker.
@@ -1209,7 +1297,7 @@ export class GoalController {
       if (pending.phase === "continue") {
         const turn = record.turns + 1
         void this.continueWith(record, {
-          text: Prompt.continuation({ condition: record.condition, turn, reason: record.reason ?? "evaluation was interrupted by a restart", learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+          text: Prompt.continuation({ condition: record.condition, turn, reason: record.reason ?? "evaluation was interrupted by a restart", learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(sessionID)),
           description: `goal · turn ${turn} · ${truncate(record.reason || "resumed after restart", 90)}`,
           turn,
         }).catch((error) => this.deps.log.error("resumed continuation failed", { sessionID, error: errorMessage(error) }))
@@ -1270,6 +1358,7 @@ export class GoalController {
         turn,
         elapsedMs: clock.now() - record.startedAt,
         ...(spendSinceBaseline !== undefined ? { spend: spendSinceBaseline } : {}),
+        commit: this.commitForSession(sessionID),
         signal: abort.signal,
       })
     } catch (error) {
@@ -1329,7 +1418,7 @@ export class GoalController {
     record.reason = result.reason || undefined
     // iterationToolCalls is maintained eagerly in onToolCalled; this evaluation only reads it (loop arming).
     // The why ledger stamps the same HEAD sha the loop rail stamps at advance — the verdict lands on a commit the reader can inspect. Guarded like headAtAdvance: outside a repository or when HEAD cannot be read, the sha is absent, never guessed.
-    const shaAtEvaluation = currentHead(this.deps.directory)
+    const shaAtEvaluation = currentHead(this.directoryFor(sessionID))
     // Legacy single-check evidence remains for compatibility; matrix evidence records every required check.
     const verifyEvidence = verificationMatrix && record.lastVerify
       ? { command: record.lastVerify.command, code: record.lastVerify.code, ...(record.lastVerify.timedOut ? { timedOut: true } : {}), ...(record.lastVerify.tail ? { tail: record.lastVerify.tail } : {}) }
@@ -1390,7 +1479,7 @@ export class GoalController {
       if (detected) {
         const escalation = failureEscalationReason(detected)
         const diagnostic = persistFailureDiagnosticArtifact({
-          directory: record.directory || this.deps.directory,
+          directory: this.directoryFor(sessionID),
           detected,
           escalationReason: escalation,
           info: { ...verdictEntry, verdict: "not_met" as const },
@@ -1413,7 +1502,7 @@ export class GoalController {
     if (this.running.has(sessionID)) return
     if (record.status !== "active") return
     await this.continueWith(record, {
-      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+      text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(sessionID)),
       description: `goal \u00B7 turn ${turn + 1} \u00B7 ${truncate(result.reason || "not met yet", 90)}`,
       turn: turn + 1,
     })
@@ -1441,7 +1530,7 @@ export class GoalController {
       return { result }
     }
 
-    const head = currentHead(this.deps.directory)
+    const head = currentHead(this.directoryFor(sessionID))
     const turn = record.turns
     if (!runtime.verifyCache || runtime.verifyCache.turn !== turn || runtime.verifyCache.head !== head) {
       runtime.verifyCache = { head, turn, results: new Map() }
@@ -1735,7 +1824,7 @@ export class GoalController {
           let ev: VerifyCheckEvidence
           try {
             const signal = AbortSignal.any([AbortSignal.timeout(timeoutMs), verification.signal])
-            const run = await verifier!.verify({ command: def.command, cwd: this.deps.directory, timeoutMs, signal })
+            const run = await verifier!.verify({ command: def.command, cwd: this.directoryFor(sessionID), timeoutMs, signal })
             const cleaned = run.output ? stripControls(run.output).trim() : ""
             const tail = cleaned ? cleaned.split("\n").slice(-12).join("\n").slice(-1200) : undefined
             const pass = run.code === 0 && !run.timedOut
@@ -2070,7 +2159,7 @@ export class GoalController {
     }
     const generate = new AbortController()
     runtime.abort = generate
-    const backlogSuggestion = selectBacklogSuggestion(record.directory ?? this.deps.directory, record, history)
+    const backlogSuggestion = selectBacklogSuggestion(this.directoryFor(sessionID), record, history)
     if (backlogSuggestion) {
       log.info("loop planner backlog suggestion", {
         sessionID,
@@ -2196,7 +2285,7 @@ export class GoalController {
       }
       this.deps.log.info("recovering loop arm continuation after post-commit stale race", { sessionID, iteration: nextIteration })
       void this.continueWith(record, {
-        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+        text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(sessionID)),
         description: `goal-loop · arming v${nextIteration}`,
         turn: 1,
       }).catch((error) => this.deps.log.error("loop arm continuation recovery failed", { sessionID, error: errorMessage(error) }))
@@ -2316,7 +2405,7 @@ export class GoalController {
       // and a busy deferral never forces an unsafe compact.
     }
     await this.continueWith(record, {
-      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+      text: Prompt.loopContinuation({ iteration: nextIteration, maxLoops, condition, previousSummary: entry.summary, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(sessionID)),
       description: `goal-loop · arming v${nextIteration}`,
       turn: 1,
     })
@@ -2363,7 +2452,7 @@ export class GoalController {
     this.schedule(runtime, delay, () => {
       if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
       void this.continueWith(record, {
-        text: Prompt.retry({ condition: record.condition, label: failure.label, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+        text: Prompt.retry({ condition: record.condition, label: failure.label, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(record.sessionID)),
         description: `goal \u00B7 retry ${record.retries}`,
         turn: record.turns + 1,
       }).catch((e) => this.deps.log.error("retry continuation failed", { error: errorMessage(e) }))
@@ -2408,7 +2497,7 @@ export class GoalController {
       `Background work has kept the goal waiting ${formatDuration(waitedMs)}.${last ? " Idle check-ins are paused until you send another prompt." : ""}`,
     )
     await this.continueWith(record, {
-      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work, learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+      text: Prompt.checkin({ condition: record.condition, waitedMs, ...work, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(record.sessionID)),
       description: `goal \u00B7 check-in ${record.checkins}`,
       turn: record.turns + 1,
     })
@@ -2675,7 +2764,7 @@ export class GoalController {
    */
   private appendLearning(record: GoalRecord, label: string, context: { iteration?: number; turn?: number }, build: (now: number) => LearningEntry[]): void {
     try {
-      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      const file = this.learningLogFile(this.directoryFor(record.sessionID))
       if (!file) return
       const now = this.deps.clock.now()
       for (const entry of build(now)) appendLearningEntry(file, entry)
@@ -2701,7 +2790,7 @@ export class GoalController {
 
   private recentLearningsForPrompt(record: GoalRecord): string | undefined {
     try {
-      const file = this.learningLogFile(record.directory ?? this.deps.directory)
+      const file = this.learningLogFile(this.directoryFor(record.sessionID))
       if (!file) return undefined
       // One bounded tail read feeds one bounded, focused block. Both the I/O window and the injected string are
       // capped so a long session with many goal versions cannot bloat the evaluator's context turn after turn.

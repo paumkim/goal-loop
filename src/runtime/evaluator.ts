@@ -149,7 +149,7 @@ export class Evaluator implements EvaluatorPort {
   private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal, model: ModelRef): Promise<EvaluationResult> {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-    const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
+    const prompt = evaluateIndependently(request.condition, facts, transcript, request.commit ?? this.commit)
     return this.ask((text, s) => this.deps.modelGenerate(model, text, s), prompt, signal)
   }
 
@@ -166,7 +166,7 @@ export class Evaluator implements EvaluatorPort {
   }
 
   private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
-    const prompt = evaluateInSession(request.condition, facts, this.commit)
+    const prompt = evaluateInSession(request.condition, facts, request.commit ?? this.commit)
     return this.trackInflight(request.sessionID, () => this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal))
   }
 

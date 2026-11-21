@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2126 -->
+<!-- spec-check files=141 tests=2138 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1240,7 +1240,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
   Proposed fix: rewrite the comment.
   Resolution: Workstream AN — comment rewritten to match the never-pause policy.
-- **A-14 (low) — `src/runtime/events.ts:17` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
+- **A-14 (low) — `src/runtime/events.ts:16` — `type Data = Record<string, any>`.** An `any` leak across the event boundary; malformed
   payloads are only destructured defensively at read sites. Proposed fix: `Record<string, unknown>` + a tiny guard helper (or keep `any`
   contained to this file and document).
   Resolution: Workstream AO — `Record<string, unknown>` + `asRecord` guard; closure-narrowing gap fixed.
@@ -9067,4 +9067,65 @@ behavioral gain.
   at the unit layer with the fake clock; no live terminal was driven this pass. (d) No config option, record
   schema, TUI bundle or prompt changed; no test was weakened or deleted.
 
-<!-- spec-check files=141 tests=2126 -->
+## Workstream — the goal follows the session that armed it across directory moves (2026-11-21)
+
+### Interpretation
+
+`/goal` and `/goal-loop` are session-scoped today (one record per `sessionID`), but every directory-sensitive
+operation reads a single directory captured once at plugin setup (`ctx.location.directory` →
+`ControllerDeps.directory`). When the host moves the *session* to another directory — OpenCode emits
+`session.moved` with the new directory — the goal keeps pointing at the old checkout: verification commands
+run there, HEAD evidence is read there, and a plugin that reloads in the new directory cannot restore the
+record. The goal belongs to the session, so it must travel with it. "It follows whichever session activated
+it" means the association is by `sessionID` and the directory is a property of that session's current
+location, not a fixed property of the plugin instance.
+
+### Acceptance criteria
+
+1. A goal is owned by the `sessionID` that armed it. Arming in session `S` changes only `S`'s record; a goal
+   in session `T` is never moved or cleared by `S`'s activity.
+2. The host's `session.moved` event moves `S`'s goal: the persisted `GoalRecord.directory` becomes the new
+   directory, the write is durable, one `changed` snapshot carrying the new directory is emitted, and a log
+   line records the transition. The new directory is read from `event.location.directory`, falling back to
+   `data.location.directory` (both shapes occur in the host's generated event contract).
+3. From the move onward, every directory-sensitive operation for `S` uses `S`'s current directory instead of
+   the plugin's setup directory: verification command `cwd`, HEAD stamping for verdict evidence, the verify
+   cache key, the change-risk gate, repeated-failure diagnostic artifacts, backlog suggestions, learning-log
+   writes, loop-advance HEAD, the commit rule injected into agent directives and the evaluator rubric, and a
+   replacement goal armed later in the same moved session.
+4. Any event that carries both a `sessionID` and a location directory reconciles that session's goal
+   directory (robust when `session.moved` is missed, replayed, or delivered as a differently named event).
+   A later event with an older `durable.seq` is ignored, and a sequence-less generic report cannot undo an
+   explicit `session.moved`. A real move bumps the session epoch, invalidating any evaluation in flight so its
+   HEAD and commit-rule evidence cannot land against the old checkout. An event whose directory equals the
+   goal's current directory is a true no-op: no store write, no `changed` event, no log line.
+5. Read surfaces follow the session: `peekSnapshot(S)` serves the moved record (no false "foreign directory"
+   rejection), `peekList()` includes it, and after a reload with the new setup directory
+   `store.loadLive(newDirectory)` restores it. The `changed` snapshot also rewrites the TUI's global mirror, so
+   the new directory's card paints the goal immediately. A record from a session that never moved is still
+   rejected for an unrelated directory — directory isolation is not weakened.
+6. Backward compatibility: no location-bearing event and no move → byte-identical behavior. `GoalRecord`
+   stays `version: 1` with no new required field; no config key or environment variable is added; the
+   commit policy and all prompts keep working when the directory is unchanged.
+7. No visual surface changes: the TUI pill/card/dialog grammar is untouched, so no screenshot or render is
+   required for this workstream. Verification is behavioral (transcript-visible logs and automated tests).
+
+### Verification
+
+- Router tests: `session.moved` with the directory at `event.location.directory` and at
+  `data.location.directory` calls the controller; a move with no `sessionID` or no directory is ignored;
+  replayed event IDs are still deduped; a late event with an older `durable.seq` and a sequence-less generic
+  report after an explicit move both leave the goal in the new directory.
+- Controller tests: after a move the live record, the persisted record, and the emitted snapshot all carry
+  the new directory; a second identical move is a no-op (write count unchanged); another session's goal is
+  untouched; arming a replacement goal in the moved session records the new directory; a verify-gated `met`
+  runs its command with `cwd` set to the new directory; `peekSnapshot`/`peekList` and a fresh
+  `loadLive(newDirectory)` find the goal while `loadLive(oldDirectory)` no longer does.
+- Full suite `bun run check` run against this tree: `tsc --noEmit` clean; `cd test && bun test` → **2138 pass /
+  0 fail** (92 files, 29 snapshots, 199,158 expect() calls), up from 2126 on the rebased dev tip (+12 regressions
+  in `test/session-directory.test.ts`); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok;
+  `docs:check` passed; `check:invariant` ok with the matching `docs/changelog.html` behavior-change note;
+  `check:spec` ok (141 files, 2127 tests match SPEC.md; the marker was re-counted in-commit).
+- Line-shift bookkeeping: the `location` field and its comment on `ServerEvent` move `type Data` in
+  `src/runtime/events.ts` down two lines, so the historical A-14 SPEC reference was re-pointed from line 17
+  to line 16 (where `type Data` now lives). The referenced code text is unchanged and `docs-line-refs` is green.
