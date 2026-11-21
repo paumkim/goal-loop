@@ -12,10 +12,9 @@ export const MARKER = "goal"
  * one exported sentence so the kickoff directive, continuation and retry all carry the same contract.
  */
 export const DELEGATE_VERDICT =
-  `When your work for this turn is done, delegate the verdict check to the 'evaluator' subagent with the task tool ` +
-  `(agent: 'evaluator', a short 3-5 word description). Give it only this task: 'Judge the goal condition and return ` +
-  `the verdict JSON.' The harness supplies the condition and evidence; its report is the verdict. Do not judge ` +
-  `the condition yourself or act on a verdict before that report arrives.`
+  `When your turn is done, delegate the verdict to the 'evaluator' subagent (task tool, agent: 'evaluator', ` +
+  `3-5 word description) with the task 'Judge the goal condition and return the verdict JSON.' The harness ` +
+  `supplies the condition and evidence; wait for its report before acting on a verdict.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
@@ -543,6 +542,51 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
   return lines.join("\n")
 }
 
+/**
+ * The whole request a *native* evaluator child gets. Two inputs only: the original goal and a summary of what the
+ * parent did. No raw transcript dump — in a long-lived session that carried prior verdicts about other conditions
+ * and a small model judged those instead of the armed one.
+ *
+ * `/goal-loop` is structurally different: the original goal is the constant objective, the armed condition is one
+ * numbered iteration (v1, v2, …) of it, and completed iterations ride as a compacted ledger (newest three, with an
+ * explicit omitted count) instead of their old directives. No generation call, no new persisted field.
+ */
+export function nativeEvaluationRequest(input: {
+  readonly condition: string
+  readonly summary: string
+  readonly loop?: {
+    readonly objective: string
+    readonly iteration: number
+    readonly maxLoops: number
+    readonly history: ReadonlyArray<LoopEntry>
+  }
+}): string {
+  const tag = (text: string) => text.replace(/<\/(original-goal|parent-summary|objective|condition|iteration|prior-iterations|goal-evaluation)>/gi, "<\\/$1>")
+  const goal = input.loop
+    ? [
+        `<objective>${tag(input.loop.objective)}</objective>`,
+        `<iteration>v${input.loop.iteration} of ${input.loop.maxLoops}</iteration>`,
+        `<condition>${tag(input.condition)}</condition>`,
+        `<prior-iterations>${historyBlock(input.loop.history, REANCHOR_HISTORY_INJECT_LIMIT)}</prior-iterations>`,
+      ]
+    : [`<condition>${tag(input.condition)}</condition>`]
+  return [
+    `<goal-evaluation>`,
+    `Judge ONLY the original goal below. Conditions in project docs, earlier verdicts, goal continuations or the transcript belong to other goals or older iterations — ignore them.`,
+    ``,
+    `<original-goal>`,
+    ...goal,
+    `</original-goal>`,
+    ``,
+    `<parent-summary>`,
+    tag(input.summary.trim()) || "(the parent produced no tool evidence this turn)",
+    `</parent-summary>`,
+    ``,
+    `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"..."}. No preamble.`,
+    `</goal-evaluation>`,
+  ].join("\n")
+}
+
 /** Prompt for a session-mode evaluator child (its parent digest is embedded around it). */
 export function evaluateInSession(condition: string, input: EvaluationFacts, policy: CommitPolicy): string {
   return [
@@ -815,6 +859,25 @@ export const carriesGoalGrammar = (messages: ReadonlyArray<unknown>): boolean =>
  */
 export const stripGoalContext = <T>(messages: ReadonlyArray<T>): T[] =>
   messages.filter((m) => !isGoalNoteMessage(m) && !isGoalInstructionMessage(m))
+
+/**
+ * While a goal is live, only the newest goal directive is state. Every older `<goal>` / `<goal-loop>` /
+ * `<goal-continuation>` has been superseded: each arm re-states the armed condition and, for `/goal-loop`,
+ * carries the previous summary plus a bounded version ledger. Keeping all of them makes long loops bloat the
+ * worker's context with stale evaluator reasons. Keep the newest instruction, drop the older ones; all other
+ * messages (including compaction checkpoints) are untouched. Notes are stripped separately by the hook.
+ */
+export const compactGoalInstructions = <T>(messages: ReadonlyArray<T>): T[] => {
+  let last = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isGoalInstructionMessage(messages[i])) {
+      last = i
+      break
+    }
+  }
+  if (last < 0) return messages.slice()
+  return messages.filter((m, i) => i === last || !isGoalInstructionMessage(m))
+}
 
 /**
  * One ground-truth line for a session whose goal ended in this process. Injected by the `context` hook into

@@ -15,8 +15,8 @@ import { resolveConfig } from "./core/config.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX, findNativeReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { renderTranscript } from "./core/transcript.ts"
-import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { renderParentSummary, renderTranscript } from "./core/transcript.ts"
+import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -32,6 +32,14 @@ import { withFileSink } from "./core/file-log.ts"
 import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
+
+/**
+ * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
+ * `maxTranscriptChars` (20k): a native child gets the condition explicitly and only needs the worker's latest
+ * tool evidence. A large digest in a long-lived session carried prior verdicts about other conditions and
+ * drowned out the real one (see renderParentSummary).
+ */
+const EVALUATION_SUMMARY_CHARS = 4_000
 
 /** Keep the provider's classification text (429 / "free usage limit" / "rate limit") on a judge failure so the
  * controller can pause a quota error instead of retrying it as a generic unreadable verdict. */
@@ -537,9 +545,10 @@ export default Plugin.define({
     // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
     await ctx.session.hook("prompt", async (event) => {
       // A worker delegating the verdict leaves a short task prompt in the native call ("Judge the goal condition
-      // and return the verdict JSON"). Give that child the full evidence contract, formatted cleanly, so its view
-      // reads like a real delegated task instead of the former raw `<conversation>` dump. Enrichment is additive
-      // and scoped to evaluator children of a live goal — every other prompt is untouched.
+      // and return the verdict JSON"). Give that child the armed condition plus a *small* summary of the worker's
+      // own tool evidence — not the whole raw parent transcript. The raw digest grew to 20k chars in a long-lived
+      // session and carried prior verdicts about other conditions, which the judge mistook for the armed one.
+      // Enrichment is additive and scoped to evaluator children of a live goal — every other prompt is untouched.
       // Plugin-spawned generation children (consensus second vote / loop steps) already carry the full rubric and digest — never double them.
       if (!judgeChildren.has(event.sessionID)) try {
         const child = await ctx.session.get({ sessionID: event.sessionID })
@@ -547,22 +556,22 @@ export default Plugin.define({
         if (agentID === EVALUATOR_AGENT_ID && child.parentID) {
           const condition = controller.activeCondition(child.parentID)
           if (condition) {
-            const digest = renderTranscript(await evaluatorContext(child.parentID, lifetime.signal), { maxChars: config.evaluator.maxTranscriptChars })
-            const facts = `turn ${(controller.live(child.parentID)?.turns ?? 0) + 1}`
-            const block = [
-              `<goal-evaluation>`,
-              `Judge whether this condition holds, using only the evidence below.`,
-              ``,
-              `<condition>${condition.replace(/<\/condition>/gi, "<\\/condition>")}</condition>`,
-              `<facts>${facts}</facts>`,
-              ``,
-              `<conversation>`,
-              digest || "(no visible evidence yet)",
-              `</conversation>`,
-              ``,
-              `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"..."}. No preamble.`,
-              `</goal-evaluation>`,
-            ].join("\n")
+            const parent = controller.live(child.parentID)
+            const summary = renderParentSummary(await evaluatorContext(child.parentID, lifetime.signal), { maxChars: EVALUATION_SUMMARY_CHARS })
+            const block = nativeEvaluationRequest({
+              condition,
+              summary,
+              ...(parent?.loopEnabled
+                ? {
+                    loop: {
+                      objective: parent.loopObjective ?? condition,
+                      iteration: parent.loopIteration ?? 1,
+                      maxLoops: parent.loopMaxLoops ?? config.maxLoops,
+                      history: parent.loopHistory ?? [],
+                    },
+                  }
+                : {}),
+            })
             event.prompt.text = `${event.prompt.text}\n\n${block}`
           }
         }
@@ -648,7 +657,7 @@ export default Plugin.define({
       // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
         const original = event.messages
-        let kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        let kept = live ? compactGoalInstructions(stripGoalNotes(original)) : stripGoalContext(original)
         // The evaluator's own voice is not evidence and must not accumulate in model-bound context.
         // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
         // only the most recent one — the live rubric the model must answer — and drop older echoes.

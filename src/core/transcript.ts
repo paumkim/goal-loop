@@ -184,3 +184,64 @@ export function renderTranscript(messages: readonly unknown[], options: DigestOp
   if (omitted > 0) picked.unshift(`[${omitted} earlier messages omitted]`)
   return picked.join("\n\n")
 }
+
+/**
+ * A tight "what the parent actually did" digest for a *native* evaluator child.
+ *
+ * {@link renderTranscript} packs the whole raw context for the generation judge, which has no other source of
+ * truth. A native child is different: the enrichment hook already gives it the original goal in its own prompt.
+ * Everything else in a long-lived session is noise — earlier goal directives, prior `<subagent>`
+ * verdicts about *other* conditions, goal continuations quoting stale evaluator reasons, and the worker's own
+ * narration of all of it. A small model will happily mistake one of those stale conditions for the armed one (that
+ * is exactly what happened in ses_e0098ece6ffeTolK2m5fCkkGiE: four children judged four different old conditions).
+ *
+ * So keep only tool calls and their results from the worker's own messages, newest first, under a small budget.
+ * Narration is not evidence and is deliberately dropped. Returns "" when the worker produced no tool evidence.
+ */
+export function renderParentSummary(messages: readonly unknown[], options: DigestOptions): string {
+  const resolved: Required<DigestOptions> = {
+    maxChars: options.maxChars,
+    maxToolChars: options.maxToolChars ?? Math.max(800, Math.floor(options.maxChars / 6)),
+    maxInputChars: options.maxInputChars ?? 200,
+  }
+  const picked: string[] = []
+  let used = 0
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (!message || typeof message !== "object") continue
+    const m = message as Unknown
+    const content = Array.isArray(m.content) ? (m.content as Unknown[]) : []
+    const blocks: string[] = []
+    for (const part of content) {
+      if (!part || part.type !== "tool") continue
+      const state = (part.state ?? {}) as Unknown
+      const name = str(part.name)
+      const args = toolArgs(name, state.input, resolved.maxInputChars)
+      const suffix = args ? ` ${args}` : ""
+      if (state.status === "completed") {
+        const output = headTail(toolText(state.content), resolved.maxToolChars)
+        blocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
+      } else if (state.status === "error") {
+        const error = (state.error ?? {}) as Unknown
+        const detail = headTail(str(error.message) || toolText(state.content), resolved.maxToolChars)
+        blocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
+      } else {
+        blocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
+      }
+    }
+    if (!blocks.length) continue
+    const block = blocks.join("\n\n")
+    if (used + block.length + 2 > resolved.maxChars) {
+      if (picked.length === 0) {
+        picked.push(headTail(block, resolved.maxChars))
+        used = resolved.maxChars
+        continue
+      }
+      break
+    }
+    picked.push(block)
+    used += block.length + 2
+  }
+  picked.reverse()
+  return picked.join("\n\n")
+}
