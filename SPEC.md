@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=142 tests=2178 -->
+<!-- spec-check files=142 tests=2186 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9823,3 +9823,48 @@ usage limit (429) — the goal looked broken even though the native path worked.
 - `bun run check` green; marker re-counted in-commit; packed files unchanged at 142.
 - Native report selection/exclusion, fail-closed missing/failed reports, quota rethrow, and the retained
   consensus/loop generation paths are pinned by unit tests.
+
+## Workstream CXXXIV — native evaluator reads the parent's tool summary, not the raw transcript (2026-11-21)
+
+### Why
+
+A real session (`ses_e0098ece6ffeTolK2m5fCkkGiE`) was inspected in the OpenCode SQLite store (`session_v2`,
+`session_message`). Its four delegated `evaluator` children each received the correct `<condition>` from the
+enrichment hook, yet returned four different verdicts about four *other* conditions ("coordinator rules exist in
+the tree", "goal-loop was created, planned, or installed", "fix the failing tests", "fix the arithmetic error").
+The hook was firing; the problem was the evidence it appended. `renderTranscript` packed the whole raw parent
+context under `maxTranscriptChars` (20k). In a long-lived session that digest grew to ~22k chars and carried prior
+`<subagent>` verdicts, goal continuations quoting stale evaluator reasons, the original directive and the worker's
+narration of all of it. A small/free model latched onto a stale condition instead of the explicit one. The same
+bloat made "just do a simple instruction while a goal is active" unreliable for the worker.
+
+### What changed
+
+1. `src/core/transcript.ts` gains `renderParentSummary`: a tight, deterministic digest of the worker's **own tool
+   calls and their results**, newest first, under a small budget. User directives, synthetic prior verdicts, goal
+   continuations, compaction summaries and assistant narration are all dropped — narration is not evidence.
+2. `src/core/prompts.ts · nativeEvaluationRequest` builds the *whole* native request from two inputs only:
+   `<original-goal>` and `<parent-summary>`. There is no `<conversation>` dump, no `<facts>` and no rubric echo —
+   a bloated or vague goal cannot be implemented against stale material the evaluator never sees. Closing tags in
+   either input are escaped so the structure cannot be broken.
+3. `/goal-loop` is structurally different: `<original-goal>` holds the constant `<objective>`, the numbered
+   `<iteration>vN of M</iteration>`, this iteration's `<condition>`, and a compacted `<prior-iterations>` ledger
+   (newest three entries plus an explicit omitted count, drawn from the record's `loopHistory`). Old v1/v2/v3
+   directives are summarized, never replayed verbatim. `src/index.ts` supplies this from the live loop record.
+4. `src/index.ts` caps the parent summary at 4k chars (well below the 20k generation-judge budget;
+   `maxTranscriptChars` is untouched for the judge paths). `EVALUATOR_SYSTEM_PROMPT` repeats the scope guard in the
+   agent identity, so it survives even if a worker's own delegation text is noisy. `DELEGATE_VERDICT` is shortened
+   to remove redundant constraints.
+5. The same compaction applies to the **worker's** context: `compactGoalInstructions` keeps only the newest
+   `<goal>` / `<goal-loop>` / `<goal-continuation>` message while a goal is live and drops the older ones (each arm
+   already re-states the condition and carries the bounded ledger). This stops stale evaluator reasons from past
+   turns piling up and crowding out simple instructions.
+6. No new config key, command, persisted field or port contract. `/goal-loop` summarize/next-condition and opt-in
+   `consensus: 2` still use the full generation-judge transcript.
+
+### Verification
+
+- `bun run check` green; marker re-counted in-commit; packed files unchanged at 142.
+- Unit tests pin that stale conditions/prior verdicts/narration never reach the child while fresh tool evidence
+  does, that tool-free turns yield an empty summary, that a small budget keeps the newest evidence, and that the
+  structured plain/loop requests carry exactly their intended sections (with older loop versions compacted).

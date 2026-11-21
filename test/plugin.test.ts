@@ -1163,7 +1163,13 @@ describe("the prompt hook gives delegated evaluator children a clean evidence co
     const directory = repository()
     const { ctx, calls, hooks } = context(directory)
     ;(ctx.session as any).context = async () => [
-      { type: "user", text: "the parser is correct" },
+      { type: "user", text: "fix the failing tests" },
+      {
+        type: "synthetic",
+        text: '<subagent sessionID="ses_old" state="completed" description="Judge goal condition">{"verdict":"not_met","reason":"fix the failing tests"}</subagent>',
+        metadata: { source: "subagent", agent: "evaluator" },
+      },
+      { type: "synthetic", text: '<goal-continuation turn="1">Evaluator: goal-loop was created, planned, or installed</goal-continuation>' },
       {
         type: "assistant",
         content: [{ type: "tool", name: "bash", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: "12 pass 0 fail" }] } }],
@@ -1181,10 +1187,20 @@ describe("the prompt hook gives delegated evaluator children a clean evidence co
       await hooks.prompt!(childEvent)
       expect(childEvent.prompt.text).toContain("Judge the goal condition and return the verdict JSON.")
       expect(childEvent.prompt.text).toContain("<goal-evaluation>")
+      expect(childEvent.prompt.text).toContain("<original-goal>")
       expect(childEvent.prompt.text).toContain("<condition>the parser is correct</condition>")
+      expect(childEvent.prompt.text).toContain("<parent-summary>")
       expect(childEvent.prompt.text).toContain("command: bun test")
       expect(childEvent.prompt.text).not.toContain('{"command"')
       expect(childEvent.prompt.text).toContain("</goal-evaluation>")
+      // The old raw-transcript digest carried prior verdicts about other conditions; a small model judged those
+      // instead of the armed one. Only the worker's fresh tool evidence may reach the child.
+      expect(childEvent.prompt.text).not.toContain("fix the failing tests")
+      expect(childEvent.prompt.text).not.toContain("goal-loop was created, planned, or installed")
+      expect(childEvent.prompt.text).not.toContain("<subagent")
+      // The scope guard makes the single original goal unambiguous.
+      expect(childEvent.prompt.text).toContain("Judge ONLY the original goal below")
+      expect(childEvent.prompt.text).not.toContain("<conversation>")
 
       const workingEvent: any = { sessionID: "ses_1", prompt: { text: "keep going" } }
       await hooks.prompt!(workingEvent)

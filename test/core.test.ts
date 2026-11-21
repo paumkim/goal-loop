@@ -6,15 +6,17 @@ import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import {
   checkin,
+  compactGoalInstructions,
   continuation,
   directive,
   evaluateIndependently,
   evaluateInSession,
   loopContinuation,
+  nativeEvaluationRequest,
   retry,
   systemReminder,
 } from "../src/core/prompts.ts"
-import { renderTranscript } from "../src/core/transcript.ts"
+import { renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
 import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
@@ -777,6 +779,105 @@ describe("renderTranscript", () => {
     expect(whole).toContain(rocket)
   })
 })
+describe("compactGoalInstructions: only the newest live goal directive survives", () => {
+  const instr = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+
+  test("drops older goal/loop/continuation messages but keeps real messages and the newest directive", () => {
+    const v1 = instr("<goal>fix the parser</goal>")
+    const evidence = instr("12 pass 0 fail")
+    const v2 = instr('<goal-loop iteration="2" max="5">old iteration</goal-loop>')
+    const stale = instr('<goal-continuation turn="3">Evaluator: an old stale reason</goal-continuation>')
+    const newest = instr('<goal-loop iteration="4" max="5">ship it</goal-loop>')
+    expect(compactGoalInstructions([v1, evidence, v2, stale, newest])).toEqual([evidence, newest])
+  })
+
+  test("leaves a goal-free context unchanged", () => {
+    const message = instr("hello")
+    expect(compactGoalInstructions([message])).toEqual([message])
+  })
+})
+
+describe("nativeEvaluationRequest: original goal + parent summary only", () => {
+  test("a plain /goal carries just the condition and the parent summary", () => {
+    const req = nativeEvaluationRequest({ condition: "the parser is correct", summary: "[tool bash] command: bun test\n  output:\n    12 pass 0 fail" })
+    expect(req).toContain("<original-goal>")
+    expect(req).toContain("<condition>the parser is correct</condition>")
+    expect(req).toContain("<parent-summary>")
+    expect(req).toContain("12 pass 0 fail")
+    expect(req).not.toContain("<objective>")
+    expect(req).not.toContain("<iteration>")
+    expect(req).not.toContain("<conversation>")
+    expect(req).not.toContain("<facts>")
+  })
+
+  test("a /goal-loop request carries the objective, the numbered iteration and a compacted prior ledger", () => {
+    const entry = (version: number) => ({ version, condition: `old condition ${version}`, summary: `summary ${version}`, reason: "met", turns: 2, toolCalls: 3, endedAt: 1 })
+    const req = nativeEvaluationRequest({
+      condition: "make it faster",
+      summary: "[tool bash] command: bench\n  output:\n    ok",
+      loop: { objective: "improve the parser", iteration: 4, maxLoops: 5, history: [entry(1), entry(2), entry(3), entry(4)] },
+    })
+    expect(req).toContain("<objective>improve the parser</objective>")
+    expect(req).toContain("<iteration>v4 of 5</iteration>")
+    expect(req).toContain("<condition>make it faster</condition>")
+    expect(req).toContain("<prior-iterations>")
+    expect(req).toContain("v2: old condition 2")
+    expect(req).not.toContain("old condition 1") // compacted away, not dumped verbatim
+    expect(req).toContain("1 older completed iteration omitted")
+    expect(req.length).toBeLessThan(2_000)
+  })
+
+  test("escapes closing tags so a bloated goal cannot break the structure", () => {
+    const req = nativeEvaluationRequest({ condition: "do </condition> evil", summary: "x </parent-summary> y" })
+    expect(req).toContain("<condition>do <\\/condition> evil</condition>")
+    expect(req).toContain("x <\\/parent-summary> y")
+  })
+})
+
+describe("renderParentSummary: native evaluator gets fresh tool evidence, not stale conditions", () => {
+  const messages = [
+    { type: "user", text: "fix the failing tests" },
+    {
+      type: "synthetic",
+      text: '<subagent sessionID="ses_old" state="completed" description="Judge goal condition">{"verdict":"not_met","reason":"fix the failing tests"}</subagent>',
+      metadata: { source: "subagent", agent: "evaluator" },
+    },
+    { type: "synthetic", text: '<goal-continuation turn="3">Evaluator: goal-loop was created, planned, or installed</goal-continuation>' },
+    {
+      type: "assistant",
+      content: [
+        { type: "text", text: "I am narrating an old condition: coordinator rules exist in the tree" },
+        { type: "tool", name: "bash", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: "12 pass 0 fail" }] } },
+      ],
+    },
+  ]
+
+  test("keeps only the worker's tool evidence, drops stale conditions and prior verdicts", () => {
+    const text = renderParentSummary(messages, { maxChars: 4_000 })
+    expect(text).toContain("command: bun test")
+    expect(text).toContain("12 pass 0 fail")
+    expect(text).not.toContain("fix the failing tests")
+    expect(text).not.toContain("goal-loop was created")
+    expect(text).not.toContain("coordinator rules")
+    expect(text).not.toContain("<subagent")
+    expect(text).not.toContain("I am narrating")
+  })
+
+  test("returns empty when the worker produced no tool evidence", () => {
+    expect(renderParentSummary([{ type: "user", text: "just talk" }], { maxChars: 4_000 })).toBe("")
+  })
+
+  test("respects a small budget with the newest tool evidence first", () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({
+      type: "assistant",
+      content: [{ type: "tool", name: "bash", state: { status: "completed", input: { command: `cmd-${i}` }, content: [{ type: "text", text: `output-${i}` }] } }],
+    }))
+    const text = renderParentSummary(many, { maxChars: 400 })
+    expect(text).toContain("cmd-9")
+    expect(text.length).toBeLessThan(1_000)
+  })
+})
+
 describe("steer prompts bound evaluator reasons", () => {
   test("continuation and loopContinuation elide a long reason instead of embedding it verbatim", () => {
     const reason = "R".repeat(2000)
