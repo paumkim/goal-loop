@@ -19,18 +19,8 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
-  /** Sessionless generation on a specific model. */
+  /** Generation on a specific model. The host runs one judge generation in a fresh child session. */
   modelGenerate(model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
-  /**
-   * Session-bound single-step generation on the parent session's own model. The host implements this with
-   * `ctx.session.generate`, which puts the session's `x-opencode-session` affinity on the request. Stateless
-   * `ctx.generate.text` instead mints a *fresh* session id per call (`SessionID.create()` in OpenCode's
-   * `generate.ts`), so the gateway bills each judge call as a brand-new free-tier session and rejects it with
-   * "Free usage limit reached" even while the working session still has quota. Inherit mode (judge == session
-   * model) rides this port so the evaluator is seen as the same session. Optional so legacy callers/tests
-   * without it keep the stateless path (they still get the inherited model via `modelGenerate`).
-   */
-  sessionModelGenerate?(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
   /**
@@ -48,10 +38,9 @@ interface EvaluationFacts {
   readonly spend?: UsageSnapshot
 }
 
-/** A resolved judge model plus whether it is the parent session's own model (and must ride its fingerprint). */
+/** A resolved judge model. Both pinned and inherited judges generate the same way in the host (child session). */
 interface ModelChoice {
   readonly model: ModelRef
-  readonly bindToSession: boolean
 }
 
 export class EvaluationError extends Error {
@@ -125,15 +114,15 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Model for a judge generation, plus whether it must ride the parent session's fingerprint: the pinned
-   * `model` when configured (stateless), otherwise — when the `inherit` sentinel is set — the parent session's
-   * current model, which is the session's own model and therefore session-affine. Called per generation so a
-   * mid-goal `/model` switch is followed on the very next verdict. A missing or failing host port degrades to
-   * `undefined`, which routes the caller to the session evaluator; the inherit path itself never hard-fails.
+   * Model for a judge generation: the pinned `model` when configured, otherwise — when the `inherit` sentinel is
+   * set — the parent session's current model. Called per generation so a mid-goal `/model` switch is followed on the
+   * very next verdict. A missing or failing host port degrades to `undefined`, which routes the caller to the session
+   * evaluator; the inherit path itself never hard-fails. The model is resolved exactly once here — the host does not
+   * look it up again when it spawns the judge child.
    */
   private async resolveModel(sessionID: string, signal: AbortSignal): Promise<ModelChoice | undefined> {
     const pinned = this.config.model
-    if (pinned) return { model: pinned, bindToSession: false }
+    if (pinned) return { model: pinned }
     const port = this.deps.sessionModel
     if (!this.config.inheritModel || !port) return undefined
     try {
@@ -141,7 +130,7 @@ export class Evaluator implements EvaluatorPort {
       // must never hang the evaluation with no timeout and no diagnostic (the catch below degrades instead).
       const current = await this.underBudget((s) => port(sessionID, s), signal, "model resolution")
       if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session evaluator")
-      return current ? { model: current, bindToSession: true } : undefined
+      return current ? { model: current } : undefined
     } catch (error) {
       if (signal.aborted) throw error
       this.log.warn("inherited evaluator model unavailable; using session evaluator", { error: String(error) })
@@ -164,17 +153,11 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Generation closure for a resolved judge. Inherit mode (judge == session model) uses the session-bound port
-   * so the gateway attributes the call to the parent session's fingerprint and free-usage bucket; a genuinely
-   * independent pinned judge keeps the stateless `generate.text` path. The session-bound step is tracked as
-   * in-flight evaluation so the host's `generate` hook strips tools for it too — `session.generate` carries the
-   * session's tool set, and a small judge answering with a tool call would otherwise yield empty text.
+   * Generation closure for a resolved judge. Both pinned and inherited judges go through the single
+   * `modelGenerate` port; the host spawns a fresh child session per call (a primary turn that passes the
+   * free-tier gate) and strips tools on that child. There is no affinity-bearing generation path anymore.
    */
-  private judgeGenerate(sessionID: string, choice: ModelChoice): (prompt: string, signal: AbortSignal) => Promise<string> {
-    if (choice.bindToSession && this.deps.sessionModelGenerate) {
-      const bound = this.deps.sessionModelGenerate
-      return (prompt, signal) => this.trackInflight(sessionID, () => bound(sessionID, prompt, signal))
-    }
+  private judgeGenerate(choice: ModelChoice): (prompt: string, signal: AbortSignal) => Promise<string> {
     return (prompt, signal) => this.deps.modelGenerate(choice.model, prompt, signal)
   }
 
@@ -182,7 +165,7 @@ export class Evaluator implements EvaluatorPort {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, request.commit ?? this.commit)
-    return this.ask(this.judgeGenerate(request.sessionID, choice), prompt, signal)
+    return this.ask(this.judgeGenerate(choice), prompt, signal)
   }
 
   /** Track a session's in-flight generative work so maxTokens throttling can see contention. */
@@ -210,7 +193,7 @@ export class Evaluator implements EvaluatorPort {
       try {
         const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const generate = this.judgeGenerate(request.sessionID, choice)
+        const generate = this.judgeGenerate(choice)
         const text = await this.underBudget((s) => generate(summarizeIndependently(request, transcript), s), signal, "summary")
         return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
@@ -230,7 +213,7 @@ export class Evaluator implements EvaluatorPort {
     const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (choice) {
       try {
-        const generate = this.judgeGenerate(request.sessionID, choice)
+        const generate = this.judgeGenerate(choice)
         const text = await this.underBudget((s) => generate(nextGoalIndependently(request), s), signal, "next-condition")
         return text.trim().slice(0, 4_000)
       } catch (error) {

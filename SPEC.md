@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2155 -->
+<!-- spec-check files=141 tests=2157 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9170,6 +9170,9 @@ provider and session — it should inherit the same session fingerprint" symptom
    and without the port inherit degrades to the stateless model port. Full `bun run check` green; marker
    re-counted in-commit.
 
+> Superseded by Workstream CXXVII: the model inheritance stays, but the judge now runs as a real child session —
+> `ctx.session.generate` is no longer the generation route.
+
 ## Workstream CXXII — evaluator free-usage limits pause instead of failing the goal (2026-11-21)
 
 Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evaluator failed (Free usage limit reached …); retrying in 30s" while the session kept running on the same `opencode/hy4-flash-free` model/provider. Re-reading the tree before touching anything: CXXI already routes inherit-mode judge generations through `ctx.session.generate`, and plain `session` mode (the default, and the mode of every failing session in `.term/goal-loop/learnings.jsonl`) has always used it. Verified against the installed v2.3.2 binary (`strings` around `x-opencode-session`): stateless `generate.ts` sets a fresh `SessionID.create()` per call, while `session.generate` → `model-request.ts` binds `x-opencode-session` to `SessionAffinity.get(session)`. Host log (`~/.local/share/opencode/log/opencode.log`) shows the error is a gateway `429`/`QuotaExceeded` with `FreeUsageLimitError` in the body — a self-clearing rate limit ("Rate limit exceeded. Please try again later"), not a misconfigured model. The model/fingerprint inheritance is correct; the remaining bug is **failure classification**.
@@ -9178,6 +9181,11 @@ Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evalua
 2. Fix. `core/errors.ts` adds `isUsageLimitError(error)` — a deliberately narrow detector (429 status, "rate limit", "too many requests", "usage limit", "free usage"/"FreeUsageLimitError") so a generic error or a credit/auth failure is never mistaken for a self-clearing limit. `src/runtime/controller.ts · evaluationFailed` uses it: usage-limit errors skip the `maxRetries` exhaustion check, back off a fixed `PAUSE_RETRY_MS` (15m), notify `Evaluator paused (free usage limit — judge shares this session's model/quota); retrying in 15m`, and retry forever until the verdict lands. Transient evaluator errors (timeouts, connections, unreadable verdicts) and fatal ones keep their existing fast-backoff/`maxRetries` behavior byte-for-byte.
 3. Verified at the source/test layer: binary header extraction (above) confirms the evaluator already rides the session model/fingerprint; host log confirms the error class. Live gateway replay was not re-run (free quota is an account-level resource); the pause/resume cycle is exercised deterministically in `test/controller.test.ts` with a fake clock, including recovery to `achieved` after the window clears.
 4. Tests (`test/controller.test.ts`, +2): a `Free usage limit reached` evaluator error with `maxRetries: 1` stays `active`, pauses at 15m, never exhausts the cap across repeated hits, and succeeds after the window clears; `isUsageLimitError` is scoped narrowly (429 / rate/usage/free-usage true; generic error, credit balance, timeout false). Full `bun run check` green; marker re-counted in-commit.
+
+> Superseded in premise by Workstream CXXVII: the judge no longer shares the parent's free-usage bucket, so the
+> shared-bucket 429 is addressed at the source. The `usage_limit` pause path itself remains in the tree as a
+> defensive backstop.
+
 ## Workstream CXXIII — repo-scoped .term artifacts always anchor at the git root (2026-11-21)
 
 Armed by the user's report: launching OpenCode from a subfolder (`Projects/goal-loop/docs/`) left a `.term/`
@@ -9391,3 +9399,142 @@ goal stuck with no exit and no clear instruction.
    with `pauseCause: "usage_limit"`, arms no timer (advancing the clock does not re-evaluate), resumes on a user
    message, and lands `achieved` once the quota clears; the wire validator accepts the new cause; the HUD names the
    escape hatch. Full `bun run check` green; marker re-counted in-commit.
+
+## Workstream CXXVII — judge with a real child session, not an auxiliary generate (2026-11-21)
+
+Armed by a live `/goal` on `opencode/hy4-flash-free` (the same model for worker and judge) that kept pausing with
+`Evaluator failed (Free usage limit reached …)` — HTTP 429, body `FreeUsageLimitError`. Earlier attempts read the
+symptom as affinity (CXXI: bind the judge to `x-opencode-session`) or classification (CXXII: 15m retry, CXXVI:
+pause on usage limit). Both left the judge on an **auxiliary generate path** — stateless `ctx.generate.text` for
+pinned/independent mode, `ctx.session.generate` for inherit/session mode. Flipping `event.kind` in a hook did not
+change the gateway request shape: those paths are not `kind: "primary"` turns, so the free-tier gate still
+rejected them. The working session's own primary turn on the same model always succeeded.
+
+### Root cause
+
+`ctx.generate.text` mints a fresh `SessionID.create()` per call (OpenCode `generate.ts`); `ctx.session.generate`
+is a single `llm.generate` step with session affinity but is still an auxiliary request. The gateway meters free
+usage on a `kind: "primary"` turn in a real session — only `ctx.session.prompt` runs one. A child session created
+for each verdict passes that gate, and its text is observable on `ctx.event.subscribe`. It must be a fresh,
+standalone session (no `parentID`): a child bound to the parent caused a synthetic-message wake loop on the parent
+and shared the quota bucket.
+
+### Decision
+
+Choice: redefine ONLY the two generation ports in `src/index.ts` to spawn a fresh child session per verdict; leave
+`src/runtime/evaluator.ts`, the controller, prompts, verdict parser, config and record shape byte-unchanged — no
+new port, no capability guard, no fallback. Reason: the defect is in how the host issues the generation, not in
+verdict logic, and every judge call site (verdict, loop summary, next-goal, consensus second opinion) already
+funnels through those two ports. Reverse it if the host exposes a stateless primary-kind generation that passes
+the free-tier gate without a child session.
+
+### Change
+
+1. `src/index.ts` · `spawnJudge(model, prompt, signal)`: `ctx.session.create({ location: ctx.location,
+   agent: "general", model, title: "evaluator" })` with no `parentID`; subscribes to `ctx.event`, accumulates
+   `session.text.delta` for that child, resolves on `session.execution.succeeded` (empty string on `failed` or
+   abort), drives the turn with `ctx.session.prompt`, and removes the child in `finally`.
+2. Generation ports: `modelGenerate` = `spawnJudge` directly; `sessionModelGenerate` resolves the current model
+   via `ctx.session.get({ sessionID }).model` (variant preserved) then calls `spawnJudge`. Pinned independent mode
+   passes `config.evaluator.model`; inherit mode resolves per generation, so a mid-goal model switch is followed.
+   The old stateless/`session.generate` paths are removed outright — no fallback.
+3. `judgeChildren` Set: the existing `generate` hook strips tools and caps output tokens while a child judge is in
+   flight (`if (!evaluator.isEvaluating(event.sessionID) && !judgeChildren.has(event.sessionID)) return`). Small
+   judges answer the rubric with a tool call, which yields empty text and burns the three repair attempts. The
+   child id is added on create and removed in `finally`.
+4. Untouched: evaluator retry/stall/turn-end detection, the `next:`/novelty rubric, the `verifyCommand` gate, the
+   `isUsageLimitError` pause safety net (CXXVI), persisted record shape, TUI, config and CLI.
+
+### Verification
+
+- Live end-to-end on `opencode/hy4-flash-free` for both worker and judge: `goal achieved`, `turns: 1`, `retries: 0`.
+  The 429 count was unchanged (940 → 940) — no new free-usage rejections.
+- `tsc --noEmit` clean; full `bun test` → **2155 pass / 0 fail**.
+- The pre-fix setup was reproduced live (same-model judge → `goal paused` / `Free usage limit reached`); the
+  child-session version clears it without a separate judge model or waiting for the quota window.
+
+### Honest limits
+
+- Each verdict creates and removes a child session (one `session.create` + `session.remove` per judge call). That
+  is host plumbing, not model tokens — the judge's tokens are still not metered into the goal record.
+- Verified on the installed v2.3.2 binary with `opencode/hy4-flash-free`; other providers/gateways are covered only
+  by the pinned-model unit path.
+- CXXI's inheritance of the *model* is retained (resolved via `ctx.session.get`); what is superseded is its
+  *generation* route. CXXII/CXXVI's shared-bucket premise is removed, but their `usage_limit` pause net stays as a
+  defensive backstop for genuine quota exhaustion.
+
+> Supersession: CXXI's `ctx.session.generate` route and the shared-bucket premise behind CXXII/CXXVI are replaced
+> by this workstream; their text is kept verbatim as history.
+
+<!-- spec-check files=141 tests=2155 -->
+
+## Workstream CXXVIII — audit recent changes: remove the redundant judge port, fix judge abort handling (2026-11-21)
+
+Status: specified first (fuzzy request), then implemented and verified against this section.
+
+### Interpretation
+
+"Review recent changes" = re-read the tree as truth (`git log`, `git status`, `git diff`) and audit the work landed
+in the last several commits plus the in-flight CXXVII child-session-judge change. "Update the legacy codes / remove
+them" = delete code, ports, comments and tests left behind by the CXXI→CXXVII evaluator-generation refactor that no
+longer describe or serve the current architecture. "Fix what needs fixing" = correct the genuine correctness defects
+that review exposes, with tests and a green canonical check.
+
+### Evidence reviewed (fresh re-read, not narration)
+
+- `git log --oneline -15`: CXXV prompt bound (`4ce22bd`), CXXVI usage-limit pause (`5802ce8`), TUI rebuild
+  (`d507305`), two dead prompter exports removed (`ef805cf`, lease `eod-cleanup-1`), audit follow-up (`d956b7a`),
+  plus the uncommitted CXXVII child-session judge (SPEC section, changelog, `src/index.ts`, `test/plugin.test.ts`).
+- `src/index.ts` / `src/runtime/evaluator.ts`: three generation ports exist. `modelGenerate` and
+  `sessionModelGenerate` are BOTH `spawnJudge` after CXXVII — identical child-session generations. `sessionModel`
+  resolves the parent model for inherit mode at `resolveModel`; `sessionModelGenerate` resolves it a SECOND time.
+- `src/runtime/evaluator.ts` doc comments and `test/evaluator.test.ts` "session fingerprint" tests still describe
+  the removed `ctx.session.generate` / stateless `ctx.generate.text` architecture.
+
+### Findings
+
+1. **Legacy port (redundant code + double host call).** `EvaluatorDeps.sessionModelGenerate` and `ModelChoice.bindToSession`
+   existed only to distinguish affinity-bearing `ctx.session.generate` from stateless `ctx.generate.text`. CXXVII made
+   both generation ports spawn the same kind of fresh child session, so the distinction is gone: inherit mode now pays
+   two `ctx.session.get` lookups per verdict (one in `resolveModel`, one in `sessionModelGenerate`) and carries a port
+   whose only remaining behavior is a duplicate model resolution plus a hard throw on a missing model (whereas the
+   documented fallback is graceful). Remove the port, the flag, and the duplicate lookup; route every resolved judge
+   through the one `modelGenerate` port.
+2. **Bug (judge can outlive its budget).** CXXVII `spawnJudge` installs an `onAbort` that resolves its `done` promise,
+   but calls `ctx.session.prompt(...)` WITHOUT the abort signal and then `await`s it. When the evaluator aborts
+   (`underBudget` timeout / user interrupt / session change), `done` resolves but the awaited prompt can stay pending,
+   so `spawnJudge` does not return and the `finally` child cleanup is deferred — defeating the named timeout.
+   Pass the signal to the host prompt and race it against `done` so abort always converges promptly.
+3. **Legacy docs/tests.** Comments in `evaluator.ts` and the "rides the parent session fingerprint" tests in
+   `test/evaluator.test.ts` assert the removed affinity semantics; update them to the child-session reality.
+
+### Acceptance criteria (the condition this workstream must satisfy)
+
+1. Recent changes are reviewed with git evidence and findings are recorded above.
+2. `sessionModelGenerate` and `bindToSession` are gone from `src/runtime/evaluator.ts` and `src/index.ts`; inherit mode
+   resolves the model once (via `sessionModel`) and generates through `modelGenerate`.
+3. `spawnJudge` propagates its abort signal to `ctx.session.prompt` and converges on abort; a regression test proves a
+   never-resolving prompt cannot hang the judge past the signal.
+4. Stale comments and tests are rewritten; no test depends on the removed port.
+5. `bun run check` is green (tsc, full suite, dist, TUI, docs, invariant, spec) and the enforced SPEC marker is
+   re-counted in-commit.
+6. Work is committed on `wt/<slug>` and submitted via the coordinator; no direct dev/main commit.
+
+### Verification
+
+- Targeted: `bun test test/evaluator.test.ts test/plugin.test.ts` in the worktree. Two regression pins cover the
+  changed behavior: a judge child converges (and is removed) even when the host prompt never settles but the signal
+  is propagated; and an inherited-model judge child is toolless via `judgeChildren` while the parent session is no
+  longer marked in-flight.
+- Canonical: `bun run check` (full output kept in the commit evidence).
+- Coordinator: `coordinator status --json` shows the lease submitted; `submit` gates on claimed paths.
+
+### Honest limits / follow-up
+
+- The default `session` evaluator mode still uses `ctx.session.generate` (the `sessionGenerate` port); CXXVII did not
+  route it through a child session. Its in-session prompts rely on the parent transcript, so converting it requires
+  standalone transcript-digest prompt variants and a live free-tier replay. Recorded as a follow-up, not claimed fixed
+  here; CXXVII's verified independent/inherit child-session path is unchanged.
+- No live gateway replay: free-tier quota is an account resource. Abort convergence is proven deterministically with a
+  fake host prompt that never resolves on its own.
+

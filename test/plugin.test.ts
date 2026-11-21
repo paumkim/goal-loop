@@ -54,7 +54,6 @@ function context(directory: string, options: Record<string, unknown> = {}) {
       context: async () => [],
       hook: async (name: string, callback: (event: any) => any) => void (hooks[name] = callback),
     },
-    generate: { text: async () => ({ text: "{}" }) },
     rpc: {
       register: async () => ({ events: { emit: async (name: string, payload: any) => void calls.notices.push({ name, ...payload }) } }),
     },
@@ -605,9 +604,11 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
     ]
     ;(ctx.session as any).context = async () => feed
     const prompts: string[] = []
-    ;(ctx.generate as any).text = async ({ prompt }: any) => {
-      prompts.push(prompt)
-      return { text: '{"verdict":"met","reason":"done"}' }
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => {}
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID === "ses_judge") prompts.push(input.text)
+      else void calls.prompts.push(input)
     }
     ;(ctx as any).event = {
       subscribe: async function* () {
@@ -617,6 +618,9 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
         yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
         await new Promise((r) => setImmediate(r))
         yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: '{"verdict":"met","reason":"done"}' } }
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
       },
     }
     const dispose = await (plugin as any).setup(ctx)
@@ -840,6 +844,116 @@ describe("the generate hook makes evaluator replies text-only (empty-verdict roo
       hooks.generate!(after)
       expect(Object.keys(after.tools)).toEqual(["read", "write"]) // ordinary turns keep their tools
       expect(after.options.maxTokens).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("the judge child converges when the host prompt ignores its abort signal (CXXVIII)", () => {
+  test("the signal reaches the host prompt and the child is cleaned up without waiting for a never-settling turn", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, {
+      model: "provider/model",
+      evaluator: { mode: "independent", timeoutMs: 80 },
+    })
+    let promptSignal: AbortSignal | undefined
+    let removed = false
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => { removed = true }
+    ;(ctx.session as any).prompt = async (input: any, opts?: any) => {
+      if (input.sessionID === "ses_judge") {
+        promptSignal = opts?.signal
+        return new Promise(() => {}) // deliberately never settles — only convergence via `done` may release the judge
+      }
+      void calls.prompts.push(input)
+    }
+    let subscriptions = 0
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        subscriptions++
+        if (subscriptions > 1) return // a judge child whose event stream closes with no verdict
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      // A closed judge event stream releases `done` with no text; spawnJudge must converge and remove the child
+      // promptly even though the host prompt never settles. Previously it stayed parked on the awaited prompt.
+      for (let i = 0; i < 200 && !removed; i++) await new Promise((r) => setTimeout(r, 10))
+      expect(removed).toBe(true)
+      expect(promptSignal).toBeInstanceOf(AbortSignal)
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("the generate hook strips tools on an inherited-model judge child (CXXVIII pin)", () => {
+  test("the child is toolless even though the parent session is no longer marked in-flight", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks, storage } = context(directory, { evaluator: { model: "inherit" } })
+    let judgeStarted!: () => void
+    const started = new Promise<void>((resolve) => (judgeStarted = resolve))
+    let deliverVerdict!: (text: string) => void
+    const verdict = new Promise<string>((resolve) => (deliverVerdict = resolve))
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", parentID: undefined, tokens: {}, model: { providerID: "oc", id: "m" } })
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => {}
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID === "ses_judge") judgeStarted()
+      else void calls.prompts.push(input)
+    }
+    let subscriptions = 0
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        subscriptions++
+        if (subscriptions > 1) {
+          const text = await verdict
+          yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: text } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
+          return
+        }
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await started
+      const eventFor = (sessionID: string) => ({
+        sessionID,
+        agent: "general",
+        model: {},
+        system: [] as any[],
+        messages: [] as any[],
+        tools: { read: { description: "read", input: {} }, write: { description: "write", input: {} } } as any,
+        options: {} as any,
+      })
+      const child = eventFor("ses_judge")
+      hooks.generate!(child)
+      expect(Object.keys(child.tools)).toEqual([])
+      const parent = eventFor("ses_1")
+      hooks.generate!(parent)
+      expect(Object.keys(parent.tools)).toEqual(["read", "write"])
+      deliverVerdict('{"verdict":"met","reason":"done"}')
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
     } finally {
       await dispose?.()
     }
