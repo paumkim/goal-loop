@@ -28,11 +28,6 @@ export const trackedDirty = (cwd: string): string => {
 
 export const branchExists = (cwd: string, branch: string): boolean => git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).ok
 
-export const headCommit = (cwd: string): string | undefined => {
-  const r = git(cwd, ["rev-parse", "HEAD"])
-  return r.ok && r.stdout ? r.stdout : undefined
-}
-
 export const commitExists = (cwd: string, sha: string): boolean => git(cwd, ["cat-file", "-e", `${sha}^{commit}`]).ok
 
 export const isAncestor = (cwd: string, sha: string, ref: string): boolean =>
