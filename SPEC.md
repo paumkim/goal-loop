@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=142 tests=2176 -->
+<!-- spec-check files=142 tests=2178 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9750,10 +9750,11 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
    the same report). The native child is a session-mode judge, so its result becomes the `primary` and still passes
    through the `consensus: 2` gate — delegation never buys a one-vote `met`. Plugin fallback-judge reports are
    excluded by childID (`findNativeReport`) so a prior turn's verdict is never replayed as a fresh one, and reports
-   still `running` are left for the host's final delivery. A missing or unreadable report falls through to the
-   existing generation judge, so a worker that does not delegate is still judged — the visual path never weakens
-   the verdict. No config key, command, persisted field or port contract changed; the optional report reader is a
-   constructor dependency, not a new port method.
+   still `running` are left for the host's final delivery. A missing or unreadable report is fail-closed `not_met`
+   with a directive to delegate — the generation child was removed from the per-turn verdict path because it hit
+   the free-tier gate. It survives only for the opt-in `consensus: 2` second vote and `/goal-loop` summarize/next-
+   condition steps. No config key, command, persisted field or port contract changed; the optional report reader is
+   a constructor dependency, not a new port method.
 4. `core/transcript.ts` now summarises tool arguments by identifying field (a bash command verbatim, other tools by
    at most two scalar fields) and indents output under `output:` / `error:` headers instead of dumping raw JSON.
    Tool-name/state markers, newest-first packing, budgets and surrogate-safe truncation are unchanged.
@@ -9762,7 +9763,7 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
 
 1. A delivered evaluator report is consumed as the verdict with no generation call; absent report uses the fallback.
 2. The digest shows `command: <text>` and structured output, never `{"command":…}`.
-3. `bun run check` green; marker re-counted in-commit (`tests=2176`); packed files unchanged at 142.
+3. `bun run check` green; marker re-counted in-commit (`tests=2178`); packed files unchanged at 142.
 
 ### Review fixes (same workstream)
 
@@ -9781,8 +9782,8 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
 
 - A failed or unreadable native report used to be returned as a legitimate `not_met`, starving both the generation
   fallback and the quota pause (`evaluationFailed` never saw a 429). `verdictFromNativeReport` now **throws** on
-  `state: "error"` and unreadable bodies; `Evaluator.evaluate` degrades to the generation judge, which surfaces the
-  classified provider error.
+  `state: "error"` and unreadable bodies; `Evaluator.evaluate` rethrows quota errors so the controller pauses and
+  fails other failures closed to `not_met`. No generation child runs for a verdict.
 - Native reports had no turn association, so a report left unconsumed by a failed/superseded read could be replayed
   as a later turn's verdict. `findNativeReport` now takes the current `turn`, ignores any report delivered before
   that turn's `<marker>` steer (`metadata.source: "goal"`, `metadata.turn`), and rejects reports first observed in a
@@ -9790,9 +9791,35 @@ The child's first message also dumped a raw `JSON.stringify` of tool arguments a
 
 ### Honest limits
 
-- The chip appears only when the worker actually delegates; the directive is an instruction, not a guarantee. The
-  generation fallback keeps verdicts correct if it does not, at the cost of the live chip for that turn.
+- The chip appears only when the worker actually delegates; the directive is an instruction, not a guarantee.
+  Without a report the verdict is fail-closed `not_met` and the worker is re-steered to delegate; there is no
+  generation fallback (it hit the free-tier gate).
 - No live E2E replay: account-level free quota (429, reset ≈ 2026-11-22 00:02 UTC) still blocks a real `/goal` run.
   The native report path is pinned by deterministic unit tests against host-shaped `<subagent>` messages.
 - Full TUI activity-chip parity for plugin-spawned children remains impossible: the plugin context has no Job domain
   and no tool-progress callback; the chip now comes from the host's own tool call, not from plugin emission.
+
+## Workstream CXXXIII — native-only verdicts, no generation judge (2026-11-21)
+
+### Why
+
+Even after CXXXII preferred the native delegated report, a missing or failed report still fell through to the
+plugin's own generation child. That child is an auxiliary generate call and kept hitting the account-level free
+usage limit (429) — the goal looked broken even though the native path worked.
+
+### What changed
+
+1. `Evaluator.evaluate` no longer has a generation verdict path. The per-turn verdict comes only from the
+   worker's native `evaluator` subagent report. A missing report or a failed read is fail-closed `not_met` with a
+   reason telling the worker to delegate; a quota error is rethrown so the controller pauses with `usage_limit`.
+2. The generation child (`src/index.ts · spawnJudge`) is retained only for the opt-in `consensus: 2` second vote
+   and `/goal-loop` summarize/next-condition steps — removing those would break the loop feature and an existing
+   config option. Default (`consensus: 1`) never generates during a verdict.
+3. Stale documentation corrected: `docs/config.html`, `src/core/config.ts` and code comments now describe the
+   native-only default. No config key, command, persisted field or port contract changed.
+
+### Verification
+
+- `bun run check` green; marker re-counted in-commit; packed files unchanged at 142.
+- Native report selection/exclusion, fail-closed missing/failed reports, quota rethrow, and the retained
+  consensus/loop generation paths are pinned by unit tests.

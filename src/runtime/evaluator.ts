@@ -1,7 +1,6 @@
 import type { GoalConfig } from "../core/config.ts"
 import {
   evaluateIndependently,
-  evaluateInSession,
   nextGoalIndependently,
   nextGoalInSession,
   REPAIR,
@@ -12,6 +11,7 @@ import {
 import { renderTranscript } from "../core/transcript.ts"
 import type { CommitPolicy, ModelRef, UsageSnapshot } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
+import { isUsageLimitError, errorMessage } from "../core/errors.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
 import { truncate } from "../core/format.ts"
 import { stripReasoningControl } from "../core/sanitize.ts"
@@ -86,59 +86,54 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Judge a turn. In `consensus: 2` mode a `met` from the primary judge is not accepted until the *other* judge
-   * (session evaluator <-> independent model) also rules `met`. Any disagreement — or a dead second judge — fails
-   * closed to `not_met` with the disagreement named in the reason string. Opt-in per repo/loop; never a default.
+   * Judge a turn from the worker's native delegated report only — no generation fallback (that auxiliary call
+   * hit the free-tier gate). In opt-in `consensus: 2` mode a native `met` is not accepted until a second vote from
+   * the independent model also rules `met`; any disagreement or dead second judge fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
-    // Each generation runs under its own per-attempt budget (see `underBudget`): one shared
-    // `AbortSignal.timeout` across the escalating attempts starved the later ones on a slow link,
-    // and a bare timeout with no app-level race hung forever when the SDK ignored the signal.
     const signal = request.signal
-    const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
-    // Preferred path: the worker itself delegated the verdict to the `evaluator` subagent via the native task
-    // tool. Its report is already in the parent transcript and produced the live chip in the terminal. The native
-    // child is a session-mode judge, so its result becomes the `primary` and still passes through the consensus
-    // gate below — a repo requiring two judges is not weakened by delegation. A missing/failed native report
-    // falls through to the generation judge, so a worker that did not delegate is still judged.
-    let primary: { result: EvaluationResult; via: "session" | "independent" } | undefined
-    if (this.deps.nativeVerdict) {
-      try {
-        const native = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
-        if (native) primary = { result: native, via: "session" }
-      } catch (error) {
-        if (signal.aborted) throw error
-        this.log.warn("native evaluator report unavailable; using the generation judge", { error: String(error) })
-      }
+    // Native delegation is the only per-turn judge. The plugin's own generation child was an auxiliary
+    // generate call that hit the account-level free-tier gate (429), so it is no longer a verdict path.
+    // A missing or failed report is fail-closed `not_met` with a directive to delegate; a quota error is
+    // rethrown so the controller can pause instead of retrying it.
+    if (!this.deps.nativeVerdict) {
+      return { verdict: "not_met", reason: "no native evaluator subagent available; delegate the verdict to the 'evaluator' subagent" }
     }
-    if (!primary) primary = await this.primary(request, facts, signal)
-    if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
-    const secondPath = primary.via === "session" ? "independent" : "session"
+    let result: EvaluationResult | undefined
     try {
-      const second = secondPath === "session"
-        ? await this.sessionVerdict(request, facts, signal)
-        : await (async () => {
-          const choice = await this.resolveModel(request.sessionID, signal)
-          if (!choice) throw new EvaluationError("independent model not available for consensus; pin evaluator.model or use the inherit sentinel")
-          return this.independentVerdict(request, facts, signal, choice)
-        })()
-      if (second.verdict === "met") return primary.result
+      result = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
+    } catch (error) {
+      if (signal.aborted || isUsageLimitError(error)) throw error
+      return { verdict: "not_met", reason: `no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}; delegate the verdict to the 'evaluator' subagent` }
+    }
+    if (!result) {
+      return { verdict: "not_met", reason: "no evaluator subagent report for this turn; delegate the verdict to the 'evaluator' subagent" }
+    }
+    if (this.config.consensus !== 2 || result.verdict !== "met") return result
+    // Opt-in second vote only — the default verdict path never generates. A separate judge model is required;
+    // with the inherit sentinel both votes share the parent model (see docs/config.html).
+    try {
+      const choice = await this.resolveModel(request.sessionID, signal)
+      if (!choice) throw new EvaluationError("independent model not available for consensus; pin evaluator.model or use the inherit sentinel")
+      const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
+      const second = await this.independentVerdict(request, facts, signal, choice)
+      if (second.verdict === "met") return result
       return {
         verdict: "not_met",
-        reason: `consensus disagreement: ${primary.via} evaluator ruled met; ${secondPath} evaluator ruled ${second.verdict}${second.reason ? ` (${second.reason})` : ""}; fail closed — met rejected`,
+        reason: `consensus disagreement: native evaluator ruled met; independent evaluator ruled ${second.verdict}${second.reason ? ` (${second.reason})` : ""}; fail closed — met rejected`,
       }
     } catch (error) {
-      if (signal.aborted) throw error
-      return { verdict: "not_met", reason: `consensus: ${secondPath} evaluator failed (${truncate(String(error instanceof Error ? error.message : error), 120)}); fail closed — met rejected` }
+      if (signal.aborted || isUsageLimitError(error)) throw error
+      return { verdict: "not_met", reason: `consensus: independent evaluator failed (${truncate(errorMessage(error), 120)}); fail closed — met rejected` }
     }
   }
 
   /**
    * Model for a judge generation: the pinned `model` when configured, otherwise — when the `inherit` sentinel is
    * set — the parent session's current model. Called per generation so a mid-goal `/model` switch is followed on the
-   * very next verdict. A missing or failing host port degrades to `undefined`, which routes the caller to the session
-   * evaluator; the inherit path itself never hard-fails. The model is resolved exactly once here — the host does not
-   * look it up again when it spawns the judge child.
+   * very next generation. A missing or failing host port degrades to `undefined`, which fails a consensus second
+   * vote closed and routes loop steps to the session summarizer; the inherit path itself never hard-fails. The model
+   * is resolved exactly once here — the host does not look it up again when it spawns the child.
    */
   private async resolveModel(sessionID: string, signal: AbortSignal): Promise<ModelChoice | undefined> {
     const pinned = this.config.model
@@ -149,27 +144,13 @@ export class Evaluator implements EvaluatorPort {
       // The host lookup is bounded by the same budget as the generation it precedes: an inherited model
       // must never hang the evaluation with no timeout and no diagnostic (the catch below degrades instead).
       const current = await this.underBudget((s) => port(sessionID, s), signal, "model resolution")
-      if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session evaluator")
+      if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session path")
       return current ? { model: current } : undefined
     } catch (error) {
       if (signal.aborted) throw error
-      this.log.warn("inherited evaluator model unavailable; using session evaluator", { error: String(error) })
+      this.log.warn("inherited evaluator model unavailable; using session path", { error: String(error) })
       return undefined
     }
-  }
-
-  /** The configured primary path: independent-with-session-fallback, or plain session. Reports which path actually judged. */
-  private async primary(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<{ result: EvaluationResult; via: "session" | "independent" }> {
-    const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
-    if (choice) {
-      try {
-        return { result: await this.independentVerdict(request, facts, signal, choice), via: "independent" }
-      } catch (error) {
-        if (signal.aborted) throw error
-        this.log.warn("independent evaluator failed; falling back to session evaluator", { error: String(error) })
-      }
-    }
-    return { result: await this.sessionVerdict(request, facts, signal), via: "session" }
   }
 
   /**
@@ -198,11 +179,6 @@ export class Evaluator implements EvaluatorPort {
       if (left > 0) this.inflight.set(sessionID, left)
       else this.inflight.delete(sessionID)
     }
-  }
-
-  private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
-    const prompt = evaluateInSession(request.condition, facts, request.commit ?? this.commit)
-    return this.trackInflight(request.sessionID, () => this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal))
   }
 
   /** Loop step: compact one achieved iteration into a machine-consumable block. */

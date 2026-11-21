@@ -38,7 +38,7 @@ export interface GoalConfig {
     readonly verifyProfile: string
     /** Max concurrent verification-command executions per matrix run (independent checks). Capped 1..8. */
     readonly verifyConcurrency: number
-    /** Second-opinion gate: `2` requires two independent verdicts (session evaluator + independent model) both rule `met`; any disagreement or second-opinion failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; doubles evaluator cost when enabled. */
+    /** Second-opinion gate: `2` requires the native delegated verdict + an independent-model second vote both rule `met`; any disagreement or second-vote failure fails closed to `not_met` with the disagreement named in the reason. `1` (default) disables. Opt-in per repo/loop; the second vote uses a generation child and can hit the free-tier gate. */
     readonly consensus: 1 | 2
   }
   /** Hard turn cap; 0 disables the cap — the default; set explicitly as a hard safety limit. Conditions can still carry their own natural-language limit. */
