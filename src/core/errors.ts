@@ -26,6 +26,23 @@ const FATAL: ReadonlyArray<readonly [RegExp, string]> = [
   [/model.{0,40}(not[\s_-]*found|not[\s_-]*available|unavailable|does not exist|not supported|unsupported|deprecated)|unknown[\s_-]*model|no such model/i, "model not available"],
 ]
 
+const USAGE_LIMIT = /rate[\s_-]*limit|too many requests|usage[\s_-]*limit|free[\s_-]*usage|freeusagelimit/i
+
+/**
+ * True only for self-clearing provider usage/rate limits (HTTP 429, "Free usage limit reached",
+ * "too many requests", "rate limit", "usage limit"). These clear on their own, so a goal must PAUSE and
+ * retry after a long window rather than burn its retry cap on a transient quota condition. The
+ * execution path gets this through `classifyFailure` → `"pause"`; the evaluator path calls this
+ * directly. Deliberately narrow: a generic error must not pause a goal forever.
+ */
+export function isUsageLimitError(error: unknown): boolean {
+  if (typeof error === "string") return USAGE_LIMIT.test(error)
+  if (typeof error !== "object" || error === null) return false
+  const record = error as { status?: unknown; type?: unknown; message?: unknown; name?: unknown }
+  if (record.status === 429) return true
+  return USAGE_LIMIT.test(`${record.type ?? ""} ${record.message ?? ""} ${record.name ?? ""}`)
+}
+
 const PAUSE: ReadonlyArray<readonly [RegExp, string]> = [
   [/rate[\s_-]*limit|too many requests|usage[\s_-]*limit|quota/i, "rate or usage limit"],
   [/hook/i, "a hook ended the turn"],
