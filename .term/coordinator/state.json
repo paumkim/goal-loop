@@ -4656,6 +4656,17 @@
       ],
       "mergedAt": "2026-11-21T00:33:28Z",
       "mergedInto": "dev"
+    },
+    "eval-restart-resume": {
+      "agent": "opencode",
+      "paths": "src/runtime/controller.ts,src/runtime/store.ts,src/core/types.ts,src/index.ts,src/core/config.ts,src/core/prompts.ts,test/controller.test.ts,test/plugin.test.ts,test/store.test.ts,SPEC.md,README.md,docs/runtime.html,docs/config.html,docs/changelog.html,dist",
+      "branch": "wt/eval-restart-resume",
+      "worktree": "worktrees/wt-eval-restart-resume",
+      "status": "done",
+      "createdAt": "2026-11-21T00:40:48Z",
+      "submittedAt": "2026-11-21T00:52:13Z",
+      "mergedAt": "2026-11-21T00:54:12Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
