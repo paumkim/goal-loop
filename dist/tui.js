@@ -1,14 +1,6 @@
 // @bun
 // src/tui.tsx
-import { use as _$use2 } from "@opentui/solid";
-import { createTextNode as _$createTextNode4 } from "@opentui/solid";
-import { insertNode as _$insertNode4 } from "@opentui/solid";
-import { memo as _$memo5 } from "@opentui/solid";
-import { createComponent as _$createComponent4 } from "@opentui/solid";
-import { effect as _$effect5 } from "@opentui/solid";
-import { insert as _$insert5 } from "@opentui/solid";
-import { setProp as _$setProp5 } from "@opentui/solid";
-import { createElement as _$createElement5 } from "@opentui/solid";
+import { createElement as _$createElement5, setProp as _$setProp5, insert as _$insert5, effect as _$effect5, createComponent as _$createComponent4, memo as _$memo5, insertNode as _$insertNode4, createTextNode as _$createTextNode4, use as _$use2 } from "@opentui/solid";
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes5 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
@@ -1955,15 +1947,7 @@ import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } 
 import { join as join7 } from "path";
 
 // src/status-dialog.tsx
-import { use as _$use } from "@opentui/solid";
-import { createComponent as _$createComponent2 } from "@opentui/solid";
-import { memo as _$memo3 } from "@opentui/solid";
-import { effect as _$effect3 } from "@opentui/solid";
-import { insert as _$insert3 } from "@opentui/solid";
-import { createTextNode as _$createTextNode2 } from "@opentui/solid";
-import { insertNode as _$insertNode2 } from "@opentui/solid";
-import { setProp as _$setProp3 } from "@opentui/solid";
-import { createElement as _$createElement3 } from "@opentui/solid";
+import { createElement as _$createElement3, setProp as _$setProp3, insertNode as _$insertNode2, createTextNode as _$createTextNode2, insert as _$insert3, effect as _$effect3, memo as _$memo3, createComponent as _$createComponent2, use as _$use } from "@opentui/solid";
 import { For as For2, Show as Show2, createEffect, createMemo as createMemo2, createSignal as createSignal2, onCleanup as onCleanup2 } from "solid-js";
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 
@@ -2440,14 +2424,7 @@ var dossierOutline = (markdown) => {
 };
 
 // src/tui-history.tsx
-import { createTextNode as _$createTextNode } from "@opentui/solid";
-import { createComponent as _$createComponent } from "@opentui/solid";
-import { insertNode as _$insertNode } from "@opentui/solid";
-import { memo as _$memo2 } from "@opentui/solid";
-import { effect as _$effect2 } from "@opentui/solid";
-import { insert as _$insert2 } from "@opentui/solid";
-import { setProp as _$setProp2 } from "@opentui/solid";
-import { createElement as _$createElement2 } from "@opentui/solid";
+import { createElement as _$createElement2, setProp as _$setProp2, insert as _$insert2, effect as _$effect2, memo as _$memo2, insertNode as _$insertNode, createComponent as _$createComponent, createTextNode as _$createTextNode } from "@opentui/solid";
 import { TextAttributes as TextAttributes2 } from "@opentui/core";
 import { For, Show, createMemo, createSignal, onCleanup } from "solid-js";
 
@@ -2487,11 +2464,7 @@ function finalTallyLine(status, totals) {
 }
 
 // src/affordance.tsx
-import { effect as _$effect } from "@opentui/solid";
-import { insert as _$insert } from "@opentui/solid";
-import { memo as _$memo } from "@opentui/solid";
-import { setProp as _$setProp } from "@opentui/solid";
-import { createElement as _$createElement } from "@opentui/solid";
+import { createElement as _$createElement, setProp as _$setProp, memo as _$memo, insert as _$insert, effect as _$effect } from "@opentui/solid";
 import { TextAttributes } from "@opentui/core";
 var Affordance = (props) => {
   const ack = () => props.ack ?? null;
@@ -4815,14 +4788,7 @@ var StatusDialogBody = (props) => {
 };
 
 // src/hud-card.tsx
-import { createTextNode as _$createTextNode3 } from "@opentui/solid";
-import { effect as _$effect4 } from "@opentui/solid";
-import { insertNode as _$insertNode3 } from "@opentui/solid";
-import { createComponent as _$createComponent3 } from "@opentui/solid";
-import { insert as _$insert4 } from "@opentui/solid";
-import { memo as _$memo4 } from "@opentui/solid";
-import { setProp as _$setProp4 } from "@opentui/solid";
-import { createElement as _$createElement4 } from "@opentui/solid";
+import { createElement as _$createElement4, setProp as _$setProp4, memo as _$memo4, insert as _$insert4, createComponent as _$createComponent3, insertNode as _$insertNode3, effect as _$effect4, createTextNode as _$createTextNode3 } from "@opentui/solid";
 import { TextAttributes as TextAttributes4 } from "@opentui/core";
 import { createSignal as createSignal3, Show as Show3 } from "solid-js";
 import { useTerminalDimensions } from "@opentui/solid";
