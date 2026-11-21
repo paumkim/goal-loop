@@ -29,6 +29,7 @@ import {
   type VerifyCheckEvidence,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
+import { EvaluatorVerdictError } from "./evaluator.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
@@ -814,6 +815,37 @@ export class GoalController {
       if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${errorMessage(error)}`)
       throw error
     }
+  }
+
+  /**
+   * Paint a transient goal bar while the arm-time planner distils the raw `/goal` body. The controller has no
+   * record yet (arming happens after planning), so this snapshot is emitted straight to the ports and never
+   * stored: the real `arm()` commit immediately replaces it with the authoritative condition. `queued` is the
+   * existing "work in flight" face, so no new status, field or TUI change is needed for the first arm to be visible.
+   */
+  showPlanning(sessionID: string, condition: string): void {
+    const now = this.deps.clock.now()
+    const snapshot: GoalSnapshot = {
+      version: 1,
+      id: `planning-${sessionID}`,
+      sessionID,
+      directory: this.directoryFor(sessionID),
+      condition,
+      status: "active",
+      setAt: now,
+      startedAt: now,
+      turns: 0,
+      stall: 0,
+      retries: 0,
+      checkins: 0,
+      baseline: EMPTY_USAGE,
+      history: [],
+      elapsedMs: 0,
+      evaluating: false,
+      waiting: false,
+      queued: true,
+    }
+    this.deps.emitter.changed(sessionID, snapshot)
   }
 
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
@@ -2430,6 +2462,13 @@ export class GoalController {
   private evaluationFailed(record: GoalRecord, runtime: Runtime, tools: number, error: unknown) {
     const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    // An unreadable/foreign/failed native verdict is not a `not_met` to continue from — the worker cannot repair
+    // the judge's output by taking another turn, and the old fail-closed path bounced wake→delegate→garbage forever.
+    // Pause with the diagnostic; a user message resumes, and /goal clear or a fresh /goal starts over.
+    if (error instanceof EvaluatorVerdictError) {
+      void this.pause(record, error.message, "repeated_failure")
+      return
+    }
     const usageLimit = isUsageLimitError(error)
     record.retries++
     // A free-tier usage/rate limit is provider/account state, not a fault another retry from this session can

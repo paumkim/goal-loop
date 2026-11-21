@@ -10,7 +10,7 @@ import { GoalController } from "../src/runtime/controller.ts"
 import { createRouter } from "../src/runtime/events.ts"
 import { AutoCompactor } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
-import { EvaluationTimeoutError } from "../src/runtime/evaluator.ts"
+import { EvaluationTimeoutError, EvaluatorVerdictError } from "../src/runtime/evaluator.ts"
 import { GoalStore } from "../src/runtime/store.ts"
 import { MAX_IN_MEMORY_TERMINAL_GOAL_ENTRIES, MAX_TERMINAL_RECORD_ENTRIES, type GoalRecord, type GoalStatus } from "../src/core/types.ts"
 
@@ -158,6 +158,19 @@ describe("GoalController", () => {
   let h: ReturnType<typeof harness>
   beforeEach(() => {
     h = harness()
+  })
+
+  test("showPlanning paints a transient queued bar before the record exists", () => {
+    h.controller.showPlanning(SID, "  replay: hi.  ")
+    const snapshot = h.changes.at(-1)
+    expect(snapshot?.condition).toBe("  replay: hi.  ")
+    expect(snapshot?.status).toBe("active")
+    expect(snapshot?.queued).toBe(true)
+    expect(snapshot?.evaluating).toBe(false)
+    expect(snapshot?.turns).toBe(0)
+    // Transient: no live record is created, so a later arm is the authoritative snapshot.
+    expect(h.controller.get(SID)).toBeUndefined()
+    expect(h.calls.prompts).toHaveLength(0)
   })
 
   test("setting a goal starts a turn with the condition as the directive", async () => {
@@ -636,6 +649,29 @@ describe("GoalController", () => {
     await h.clock.advance(10_000)
     expect(h.controller.get(SID)?.retries).toBe(2)
     expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
+  })
+
+  test("an unreadable native verdict pauses the goal instead of re-arming the worker into a loop", async () => {
+    h = harness({ maxRetries: 3 })
+    await h.set()
+    h.verdicts.push(new EvaluatorVerdictError("no usable evaluator subagent verdict: unreadable verdict: evaluator subagent returned no authoritative verdict/met field"))
+    await h.turn()
+    const paused = h.controller.get(SID)
+    expect(paused?.status).toBe("paused")
+    expect(paused?.pauseCause).toBe("repeated_failure")
+    expect(paused?.reason).toContain("no usable evaluator subagent verdict")
+    const notice = h.notices.at(-1)
+    expect(notice?.title).toBe("Goal paused")
+    expect(notice?.kind).toBe("paused")
+    // No continuation steer on this turn, and no retry timer: the wake→delegate→garbage loop is broken.
+    expect(h.requests.length).toBe(1)
+    expect(h.clock.pending).toBe(0)
+    // A user message resumes; a real verdict then completes the goal.
+    h.controller.onUserPrompt(SID)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    h.verdicts.push(met("recovered on a fresh verdict"))
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
   })
 
   test("an evaluator free-usage limit pauses the goal and waits for a message instead of retrying forever", async () => {

@@ -421,6 +421,9 @@ export default Plugin.define({
     const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
       // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
       if (probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
+      // Show the goal bar during the planning window: the record is armed only after planning completes, so
+      // without this transient snapshot the first arm offered nothing but the background toast (screenshot 165841).
+      controller.showPlanning(sessionID, raw.trim())
       const budget = AbortSignal.any([lifetime.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)])
       const model = await sessionModel(sessionID, budget).catch(() => undefined)
       if (!model) return undefined

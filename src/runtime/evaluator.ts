@@ -62,6 +62,16 @@ export class EvaluationTimeoutError extends EvaluationError {
 }
 
 /**
+ * The worker's native `evaluator` report could not be read as this turn's verdict (failed read, foreign
+ * contract, or unreadable body). Deliberately distinct from a real `not_met`: re-activating the worker cannot repair
+ * a bad report, and fail-closing into the normal continuation path spun the goal in a wake→delegate→garbage loop.
+ * The controller pauses on this error so the run stops with a diagnostic and a message can resume it.
+ */
+export class EvaluatorVerdictError extends EvaluationError {
+  override readonly name = "EvaluatorVerdictError"
+}
+
+/**
  * Evaluates a goal condition after each turn.
  *
  * Both modes produce the verdict in a real child turn of the plugin's `evaluator` agent (native delegation shape).
@@ -87,15 +97,20 @@ export class Evaluator implements EvaluatorPort {
 
   /**
    * Judge a turn from the worker's native delegated report only — no generation fallback (that auxiliary call
-   * hit the free-tier gate). In opt-in `consensus: 2` mode a native `met` is not accepted until a second vote from
-   * the independent model also rules `met`; any disagreement or dead second vote fails closed to `not_met`.
+   * hit the free-tier gate). An unreadable/foreign/failed report throws `EvaluatorVerdictError` so the controller
+   * pauses instead of re-arming the worker into a loop it cannot break; a turn with no delegated report at all
+   * still fails closed to `not_met`, giving the worker one more chance to delegate. In opt-in `consensus: 2` mode a native `met`
+   * is not accepted until a second vote from the independent model also rules `met`; any disagreement or dead
+   * second vote fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
     const signal = request.signal
     // Native delegation is the only per-turn evaluator. The plugin's own generation child was an auxiliary
     // generate call that hit the account-level free-tier gate (429), so it is no longer a verdict path.
-    // A missing or failed report is fail-closed `not_met` with a directive to delegate; a quota error is
-    // rethrown so the controller can pause instead of retrying it.
+    // An unreadable/foreign/failed report throws so the controller pauses the goal (no usable verdict to act on);
+    // a quota error is rethrown so the controller pauses on the same recoverable basis. Neither returns a
+    // `not_met` that would dispatch another worker turn against a judge it cannot repair — that was the loop.
+    // No report at all (worker forgot to delegate) still fails closed so the next turn can supply one.
     if (!this.deps.nativeVerdict) {
       return { verdict: "not_met", reason: "no native evaluator subagent available; delegate the verdict to the 'evaluator' subagent" }
     }
@@ -104,7 +119,7 @@ export class Evaluator implements EvaluatorPort {
       result = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
     } catch (error) {
       if (signal.aborted || isUsageLimitError(error)) throw error
-      return { verdict: "not_met", reason: `no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}; delegate the verdict to the 'evaluator' subagent` }
+      throw new EvaluatorVerdictError(`no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}`)
     }
     if (!result) {
       return { verdict: "not_met", reason: "no evaluator subagent report for this turn; delegate the verdict to the 'evaluator' subagent" }
