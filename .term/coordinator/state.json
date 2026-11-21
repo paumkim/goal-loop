@@ -4910,6 +4910,17 @@
       "submittedAt": "2026-11-21T18:09:46Z",
       "mergedAt": "2026-11-21T18:11:52Z",
       "mergedInto": "dev"
+    },
+    "cxxxiii-native-only-verdict": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,docs/config.html,src/core/config.ts,src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts",
+      "branch": "wt/cxxxiii-native-only-verdict",
+      "worktree": "worktrees/wt-cxxxiii-native-only-verdict",
+      "status": "done",
+      "createdAt": "2026-11-21T18:32:58Z",
+      "submittedAt": "2026-11-21T18:34:22Z",
+      "mergedAt": "2026-11-21T18:36:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
