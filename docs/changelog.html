@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-21 17:30 UTC</code></td><td>fix(goal): show bar during first-arm planning; pause on unusable verdict instead of re-arm loop</td><td>commit</td></tr>
 <tr><td><code>2026-11-21 16:54 UTC</code></td><td>refactor: consistent evaluator naming across the repo</td><td>commit</td></tr>
 <tr><td><code>2026-11-21 16:38 UTC</code></td><td>fix(evaluator): arm plan in checking prompt, reject foreign verdict replays</td><td>commit</td></tr>
 <tr><td><code>2026-11-21 16:00 UTC</code></td><td>fix(evaluator): isolate judge context and scope digest to the current turn</td><td>commit</td></tr>
@@ -41,11 +42,10 @@
 <tr><td><code>2026-11-20 19:17 UTC</code></td><td>fix(tui): keep the now-row verdict suffix after the wrapped status phrase</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 18:50 UTC</code></td><td>fix(runtime): resume an interrupted evaluation after restart (workstream CXVI)</td><td>commit</td></tr>
 <tr><td><code>2026-11-20 18:29 UTC</code></td><td>fix(core,runtime): evaluator use-and-forget context — strip self-echo, compact digest to 20K (workstream CXV)</td><td>commit</td></tr>
-<tr><td><code>2026-11-20 17:39 UTC</code></td><td>refactor(core): unify dossier stamps, trim dead exports, tighten digest hot path (workstream CXIV)</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-21 16:54 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-21 17:30 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->
