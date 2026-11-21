@@ -224,6 +224,12 @@ export default Plugin.define({
           if (!current) return undefined
           return { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) }
         },
+        // Inherit mode judges on the session's own model, so the generation must be seen as that same session:
+        // stateless ctx.generate.text mints a fresh x-opencode-session per call (OpenCode generate.ts) and the
+        // gateway bills each one as a new free-tier session — "Free usage limit reached" while the parent still
+        // works. ctx.session.generate carries the session's affinity headers (single model step, no history
+        // mutation), so the evaluator inherits the session fingerprint and its free usage bucket.
+        sessionModelGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
       },
       config.evaluator,
       commit,

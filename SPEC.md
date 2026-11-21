@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2138 -->
+<!-- spec-check files=141 tests=2143 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9129,3 +9129,43 @@ location, not a fixed property of the plugin instance.
 - Line-shift bookkeeping: the `location` field and its comment on `ServerEvent` move `type Data` in
   `src/runtime/events.ts` down two lines, so the historical A-14 SPEC reference was re-pointed from line 17
   to line 16 (where `type Data` now lives). The referenced code text is unchanged and `docs-line-refs` is green.
+
+## Workstream CXXI — the evaluator inherits the parent session's fingerprint (2026-11-21)
+
+Armed by the user's screenshot of a live `/goal`: the card read "Evaluator failed (Free usage limit reached …);
+retrying in 10s" while the working session kept running on the same `opencode/hy4-flash-free` model/provider.
+Reading the current tree before touching anything: `evaluator.mode: independent` with `evaluator.model: inherit`
+resolves the parent session's model correctly (`e17020b`) but then judges through the host's **stateless**
+`ctx.generate.text`. OpenCode v2's own `packages/core/src/generate.ts` sets
+`headers: { "x-opencode-session": SessionID.create() }` on that path — a brand-new session identity per call —
+whereas session requests set `x-opencode-session` from `SessionAffinity.get(session)`
+(`session.parentID ?? fork ?? session.id`, `packages/core/src/session/model-request.ts`). The gateway enforces
+free-model usage per session fingerprint, so every evaluator call arrived as a fresh session and was rejected
+with `Free usage limit reached` even though the parent session still had quota. This is the "same model and
+provider and session — it should inherit the same session fingerprint" symptom.
+
+1. Fix. `src/runtime/evaluator.ts` — `resolveModel` now returns `ModelChoice { model, bindToSession }`; a
+   pinned model keeps `bindToSession: false`, an inherited (session-own) model sets it `true`. A new optional
+   `sessionModelGenerate(sessionID, prompt, signal)` port is used by `judgeGenerate` when `bindToSession` is
+   true, falling back to the existing stateless `modelGenerate` when the port is absent (legacy callers/tests).
+   All three judge call sites (verdict, loop summary, next-goal) plus consensus's second opinion share the
+   closure, so every inherit-mode generation — not just the first verdict — rides the session. The
+   session-bound step is wrapped in `trackInflight` so the host's existing `generate` hook still strips tools
+   and caps output tokens for it (`session.generate` carries the session's tool set; a small judge answering
+   with a tool call would otherwise return empty text and exhaust the three repair attempts).
+2. Host wiring. `src/index.ts` implements the new port with
+   `ctx.session.generate({ sessionID, prompt }, { signal }).text`: a single model step that carries the
+   session's `x-opencode-session` affinity headers and does not mutate session history (OpenCode's
+   `SessionGenerate.generate` documents both). No config key, env var, prompt, verdict rule, or persisted
+   record shape changed; pinned independent and plain session modes are byte-compatible.
+3. Verified at the host-source layer against `Projects/opencode` v2.3.0 checkout and the installed v2.3.2
+   binary: `generate.ts` mints a fresh `SessionID.create()` per stateless call; `model-request.ts` binds session
+   requests to `SessionAffinity.get(session)`; `session/generate.ts` is history-free. Live gateway replay was
+   not run this pass (the free quota is an account-level resource); the wiring is exercised by unit tests and
+   the read-only source evidence above. Honest limit: an account whose free quota is genuinely exhausted for
+   the session itself still fails — this fix removes the *extra* fingerprint mismatch, not the provider's quota.
+4. Tests (`test/evaluator.test.ts`, +5): inherit mode calls `sessionModelGenerate` with the parent sessionID
+   and not `modelGenerate`; loop summary and next-goal ride the same session-bound port; a pinned independent
+   judge stays stateless even when the port is present; the session-bound call is marked in-flight while it runs;
+   and without the port inherit degrades to the stateless model port. Full `bun run check` green; marker
+   re-counted in-commit.
