@@ -4710,6 +4710,25 @@
       "submittedAt": "2026-11-21T07:48:51Z",
       "mergedAt": "2026-11-21T07:50:52Z",
       "mergedInto": "dev"
+    },
+    "review-recent-changes-fixes": {
+      "agent": "build-agent",
+      "paths": "src/**,bin/**,test/**,prompts/**,package.json,SPEC.md,AGENTS.md,README.md,docs/**",
+      "branch": "wt/review-recent-changes-fixes",
+      "worktree": "worktrees/wt-review-recent-changes-fixes",
+      "status": "claimed",
+      "createdAt": "2026-11-21T08:07:30Z"
+    },
+    "tui-active-flip-heartbeat": {
+      "agent": "build-primary",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs,AGENTS.md",
+      "branch": "wt/tui-active-flip-heartbeat",
+      "worktree": "worktrees/wt-tui-active-flip-heartbeat",
+      "status": "done",
+      "createdAt": "2026-11-21T08:14:35Z",
+      "submittedAt": "2026-11-21T08:22:12Z",
+      "mergedAt": "2026-11-21T08:24:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
