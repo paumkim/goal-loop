@@ -4694,9 +4694,11 @@
       "paths": "src/core/verdict.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md",
       "branch": "wt/eval-malformed-verdict",
       "worktree": "worktrees/wt-eval-malformed-verdict",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-21T01:28:22Z",
-      "submittedAt": "2026-11-21T01:35:24Z"
+      "submittedAt": "2026-11-21T01:35:24Z",
+      "mergedAt": "2026-11-21T01:44:29Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
