@@ -4877,6 +4877,17 @@
       "submittedAt": "2026-11-21T15:34:49Z",
       "mergedAt": "2026-11-21T15:37:01Z",
       "mergedInto": "dev"
+    },
+    "review-recent-changes-cxxx-judge-failure-paths": {
+      "agent": "goal-loop",
+      "paths": "src/core/evaluator-agent.ts,src/core/prompts.ts,src/index.ts,src/runtime/controller.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/package-integrity.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/review-recent-changes-cxxx-judge-failure-paths",
+      "worktree": "worktrees/wt-review-recent-changes-cxxx-judge-failure-paths",
+      "status": "done",
+      "createdAt": "2026-11-21T16:46:24Z",
+      "submittedAt": "2026-11-21T16:53:16Z",
+      "mergedAt": "2026-11-21T16:55:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
