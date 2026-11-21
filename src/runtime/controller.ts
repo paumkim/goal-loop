@@ -335,7 +335,10 @@ export class GoalController {
     return this.directories.get(sessionID) ?? this.goals.get(sessionID)?.directory ?? this.deps.directory
   }
 
-  private commitForSession(sessionID: string): CommitPolicy {
+  /** The commit rule currently in force for a session — re-resolved when the session moves checkout. Public so
+   *  the host-side prompt/context hooks can render the same rule the controller uses instead of the setup-time
+   *  one, which goes stale the moment a session is moved. */
+  commitForSession(sessionID: string): CommitPolicy {
     return this.commitPolicies.get(sessionID) ?? this.deps.commit
   }
 
@@ -365,8 +368,18 @@ export class GoalController {
     const runtime = this.runtimes.get(sessionID)
     if (runtime) {
       // Drop cached verification results and invalidate any evaluation in flight: its HEAD/commit-rule evidence
-      // belongs to the old checkout and must not land after the move.
+      // belongs to the old checkout and must not land after the move. A bare epoch bump is not enough — the
+      // judge keeps running (up to its full timeout) in stale context and its `finally` clears `evaluating`
+      // without an emit, leaving the TUI painting "checking" for a verdict that can never land. Abort it and
+      // publish the off state now; the persisted pendingEvaluation stays for restart recovery.
       runtime.verifyCache = undefined
+      if (runtime.evaluating) {
+        runtime.abort?.abort()
+        runtime.abort = undefined
+        runtime.evaluating = false
+        const live = this.goals.get(sessionID)
+        if (live) this.emit(live)
+      }
       runtime.epoch++
     }
     const record = this.goals.get(sessionID)

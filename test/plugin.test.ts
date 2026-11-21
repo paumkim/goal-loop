@@ -14,6 +14,17 @@ function repository(): string {
   writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
   return dir
 }
+/** A throwaway git repository whose only branch is `branch` (HEAD points there). */
+function repositoryWithBranch(branch: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "goal-plugin-moved-"))
+  process.on("exit", () => rmSync(dir, { recursive: true, force: true }))
+  const git = join(dir, ".git")
+  mkdirSync(join(git, "refs", "heads"), { recursive: true })
+  writeFileSync(join(git, "refs", "heads", branch), "0".repeat(40))
+  writeFileSync(join(git, "HEAD"), `ref: refs/heads/${branch}\n`)
+  return dir
+}
+
 /** A throwaway git repository that ships the coordinator package, i.e. a coordinator repository. */
 function coordinatorRepository(): string {
   const dir = repository()
@@ -64,6 +75,45 @@ function context(directory: string, options: Record<string, unknown> = {}) {
   }
   return { ctx, calls, hooks, storage }
 }
+
+describe("commit rules follow a session move", () => {
+  const flush = async () => {
+    for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
+  }
+
+  test("the prompt directive and the system reminder use the moved checkout's rule, not the setup one", async () => {
+    const setupDir = repository() // only `dev` exists here
+    const movedDir = repositoryWithBranch("release") // config still says `dev`, so the rule falls back to `release`
+    const { ctx, hooks } = context(setupDir, { systemReminder: true })
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        yield { id: "move-1", type: "session.moved", data: { sessionID: "ses_1", location: { directory: movedDir } } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      await flush() // let the event pump route the move before the hooks render anything
+      const promptEvent = {
+        sessionID: "ses_1",
+        messageID: "msg_1",
+        prompt: { text: "/goal-loop 3 audit the parser" },
+        metadata: {},
+        delivery: "steer",
+      }
+      await hooks.prompt!(promptEvent)
+      expect(promptEvent.prompt.text).toContain("`release`")
+      expect(promptEvent.prompt.text).not.toContain("`dev`")
+
+      const contextEvent = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [], tools: {}, options: {} }
+      hooks.context!(contextEvent)
+      const reminder = contextEvent.system.map((entry: any) => entry.text).join("\n")
+      expect(reminder).toContain("`release`")
+      expect(reminder).not.toContain("`dev`")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
 
 describe("the /goal-loop-<N> directive in a plain prompt", () => {
   const promptEvent = (text: string) => ({

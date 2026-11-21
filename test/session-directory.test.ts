@@ -53,6 +53,7 @@ function harness(
 ) {
   const clock = new FakeClock()
   const changes: Array<{ sessionID: string; directory?: string }> = []
+  const evaluations: boolean[] = []
   const logs: Array<{ level: string; message: string; extra?: Record<string, unknown> }> = []
   const verdicts: EvaluationResult[] = []
   const evaluationRequests: EvaluationRequest[] = []
@@ -89,7 +90,10 @@ function harness(
     },
     background: { busy: async (): Promise<BackgroundWork> => ({ subagents: 0, shells: 0 }) },
     emitter: {
-      changed: (sessionID, goal) => void changes.push({ sessionID, directory: goal?.directory }),
+      changed: (sessionID, goal) => {
+        changes.push({ sessionID, directory: goal?.directory })
+        evaluations.push(goal?.evaluating ?? false)
+      },
       notice: (_n: Notice) => {},
     },
     ...(withVerifier
@@ -124,10 +128,23 @@ function harness(
   }
   const set = async (sessionID = SID, condition = "tests pass") =>
     controller.command({ sessionID, text: condition, delivery: "steer" })
-  return { controller, route, storage, store, changes, logs, verdicts, evaluationRequests, verifyCalls, prompts, clock, turn, set, log }
+  return { controller, route, storage, store, changes, evaluations, logs, verdicts, evaluationRequests, verifyCalls, prompts, clock, turn, set, log }
 }
 
 describe("a goal follows the session that armed it across directory moves", () => {
+  test("session.moved prefers the destination in data.location over a stale top-level location", async () => {
+    const h = harness()
+    await h.set()
+    h.route({
+      id: "move-precedence",
+      type: "session.moved",
+      location: { directory: OLD_DIR }, // host envelope stamped before the move
+      data: { sessionID: SID, location: { directory: NEW_DIR } }, // the actual destination
+    })
+    await flush()
+    expect(h.controller.get(SID)!.directory).toBe(NEW_DIR)
+  })
+
   test("session.moved moves the persisted record, emits one changed snapshot, and logs", async () => {
     const h = harness()
     await h.set()
@@ -144,6 +161,30 @@ describe("a goal follows the session that armed it across directory moves", () =
     expect(h.changes.at(-1)).toEqual({ sessionID: SID, directory: NEW_DIR })
     expect(h.changes.length).toBe(changesBefore + 1)
     expect(h.logs.some((l) => l.message === "goal followed session to a new directory" && l.extra?.sessionID === SID)).toBe(true)
+  })
+
+  test("a move during an in-flight evaluation aborts it and paints the pill off", async () => {
+    const h = harness()
+    await h.set()
+    let release!: (result: EvaluationResult) => void
+    const pending = new Promise<EvaluationResult>((resolve) => { release = resolve })
+    h.verdicts.push(pending as unknown as EvaluationResult)
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    void h.controller.onExecutionSucceeded(SID) // deliberately not awaited: the verdict is pending
+    await flush()
+    expect(h.evaluations.at(-1)).toBe(true)
+
+    h.route({ id: "move-mid", type: "session.moved", data: { sessionID: SID, location: { directory: NEW_DIR } } })
+    await flush()
+
+    // The stale verdict can no longer land, and the "checking" pill is flipped off in the same move.
+    expect(h.evaluations.at(-1)).toBe(false)
+    expect(h.controller.get(SID)!.directory).toBe(NEW_DIR)
+    release(met())
+    await flush()
+    expect(h.evaluations.at(-1)).toBe(false)
+    expect(h.controller.get(SID)!.verdict).toBeUndefined()
   })
 
   test("the new directory is also read from the event's top-level location", async () => {

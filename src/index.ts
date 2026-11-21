@@ -426,7 +426,7 @@ export default Plugin.define({
         // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
         // command path would have delivered, with the directive token and the count removed from the objective.
         const originalPrompt = event.prompt.text
-        event.prompt.text = directivePrompt(objective, commit, { iteration: 1, maxLoops, objective, history: [] })
+        event.prompt.text = directivePrompt(objective, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective, history: [] })
         const armed = await controller.armFromPrompt({
           sessionID: event.sessionID,
           condition: objective,
@@ -464,7 +464,7 @@ export default Plugin.define({
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
-        if (condition) event.system.push({ type: "text", text: systemReminder(condition, commit) })
+        if (condition) event.system.push({ type: "text", text: systemReminder(condition, controller.commitForSession(event.sessionID)) })
       }
       const anchor = controller.consumeAnchor(event.sessionID)
       if (anchor) event.system.push({ type: "text", text: anchor })
