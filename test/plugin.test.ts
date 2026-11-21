@@ -85,6 +85,30 @@ function context(directory: string, options: Record<string, unknown> = {}) {
   return { ctx, calls, hooks, storage }
 }
 
+/**
+ * A synthetic NATIVE evaluator completion — the artifact a real worker leaves in its parent transcript when it
+ * delegates the verdict to the `evaluator` subagent. `findNativeReport` consumes the newest unconsumed one whose
+ * `childID` is not one of the plugin's own generation children, so placing this in `ctx.session.context()` (as
+ * the newest message) lets a mocked turn reach a terminal verdict without the plugin's now non-verdict judge.
+ */
+function nativeEvaluatorReport(options: {
+  verdict?: "met" | "not_met"
+  reason?: string
+  state?: "completed" | "error"
+  body?: string
+  childID?: string
+} = {}) {
+  const state = options.state ?? "completed"
+  const childID = options.childID ?? "ses_native"
+  const body = options.body ?? JSON.stringify({ verdict: options.verdict ?? "met", reason: options.reason ?? "done" })
+  return {
+    id: "native_report",
+    type: "synthetic",
+    metadata: { source: "subagent", childID, agent: "Evaluator", state },
+    text: `<subagent sessionID="${childID}" state="${state}" description="evaluator">\n${body}\n</subagent>`,
+  }
+}
+
 describe("commit rules follow a session move", () => {
   const flush = async () => {
     for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
@@ -605,12 +629,16 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
 
   test("the independent digest feed carries evidence, never the evaluator's own prompts", async () => {
     const directory = repository()
-    const { ctx, calls, storage } = context(directory, { model: "provider/model", evaluator: { mode: "independent" } })
-    // host-shaped context as renderTranscript sees it: two self-talk prompts around real evidence.
+    // The primary verdict is the worker's native report; `consensus: 2` still spawns the generation child for
+    // the second vote, and it is that child's prompt which carries the digest asserted below.
+    const { ctx, calls, storage } = context(directory, { model: "provider/model", evaluator: { mode: "independent", consensus: 2 } })
+    // host-shaped context as renderTranscript sees it: two self-talk prompts around real evidence, plus the
+    // worker's native `<subagent>` verdict (newest) that supplies the primary verdict.
     const feed = [
       { type: "user", text: evalPrompt(1) },
       { type: "user", text: "fresh evidence: bun run check green at current HEAD" },
       { type: "user", text: evalPrompt(2) },
+      nativeEvaluatorReport(),
     ]
     ;(ctx.session as any).context = async () => feed
     const prompts: string[] = []
@@ -718,7 +746,8 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
     const directory = repository()
     const { ctx, calls, hooks, storage } = context(directory)
     // Deliver one full turn (started -> tool -> succeeded) through the event pump once the arm lands;
-    // the mocked evaluator rules the goal met, so the record finishes in memory during this test.
+    // the worker's native evaluator report rules the goal met, so the record finishes in memory here.
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport()]
     ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
     ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
     ;(ctx.session as any).remove = async () => {}
@@ -810,12 +839,15 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
 describe("the generate hook makes evaluator replies text-only (empty-verdict root cause)", () => {
   test("tools are removed and output bounded only on the judge child, never on the working session", async () => {
     const directory = repository()
-    const { ctx, calls, hooks, storage } = context(directory)
+    // The primary verdict is native; `consensus: 2` + a pinned model is what still spawns the generation child
+    // whose generate hook is asserted here (the second vote).
+    const { ctx, calls, hooks, storage } = context(directory, { model: "provider/model", evaluator: { consensus: 2 } })
     let release!: (text: string) => void
     let onGenerate!: () => void
     const called = new Promise<void>((resolve) => (onGenerate = resolve))
     const verdict = new Promise<string>((resolve) => (release = resolve))
-    // A pending judge child: the evaluation stays in flight so the hook can be inspected mid-request.
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport()]
+    // A pending consensus judge child: the evaluation stays in flight so the hook can be inspected mid-request.
     ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
     ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
     ;(ctx.session as any).remove = async () => {}
@@ -882,11 +914,13 @@ describe("the judge child converges when the host prompt ignores its abort signa
     const directory = repository()
     const { ctx, calls, storage } = context(directory, {
       model: "provider/model",
-      evaluator: { mode: "independent", timeoutMs: 80 },
+      // Native verdict is the primary; the consensus second vote is the generation child under test here.
+      evaluator: { mode: "independent", timeoutMs: 80, consensus: 2 },
     })
     let promptSignal: AbortSignal | undefined
     let removed = false
     const reports: any[] = []
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport()]
     ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
     ;(ctx.session as any).remove = async () => { removed = true }
     ;(ctx.session as any).synthetic = async (input: any) => void reports.push(input)
@@ -919,6 +953,16 @@ describe("the judge child converges when the host prompt ignores its abort signa
       for (let i = 0; i < 200 && reports.length === 0; i++) await new Promise((r) => setTimeout(r, 10))
       expect(promptSignal).toBeInstanceOf(AbortSignal)
       expect(reports.length).toBeGreaterThan(0)
+      // The generation child still reports a native-looking, queued, non-waking `<subagent>` completion —
+      // the same report shape the retired generation-judge verdict path used to deliver.
+      expect(reports[0]).toMatchObject({
+        sessionID: "ses_1",
+        description: EVALUATOR_AGENT_TITLE,
+        delivery: "queue",
+        resume: false,
+        metadata: { source: "subagent", childID: "ses_judge", agent: EVALUATOR_AGENT_ID, state: "completed" },
+      })
+      expect(reports[0].text).toContain('<subagent sessionID="ses_judge"')
       // Native subagents persist and stay navigable — no `session.remove` on verdict.
       expect(removed).toBe(false)
     } finally {
@@ -930,11 +974,12 @@ describe("the judge child converges when the host prompt ignores its abort signa
 describe("the generate hook strips tools on an inherited-model judge child (CXXVIII pin)", () => {
   test("the child is toolless even though the parent session is no longer marked in-flight", async () => {
     const directory = repository()
-    const { ctx, calls, hooks, storage } = context(directory, { evaluator: { model: "inherit" } })
+    const { ctx, calls, hooks, storage } = context(directory, { evaluator: { model: "inherit", consensus: 2 } })
     let judgeStarted!: () => void
     const started = new Promise<void>((resolve) => (judgeStarted = resolve))
     let deliverVerdict!: (text: string) => void
     const verdict = new Promise<string>((resolve) => (deliverVerdict = resolve))
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport()]
     ;(ctx.session as any).get = async () => ({ id: "ses_1", parentID: undefined, tokens: {}, model: { providerID: "oc", id: "m" } })
     ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
     ;(ctx.session as any).remove = async () => {}
@@ -1012,16 +1057,16 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("the default mode spawns a parented evaluator child, prompts it natively and reports a non-waking result", async () => {
+  test("in the default mode the worker's native evaluator report is the verdict (no plugin judge child)", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory) // no options: evaluator mode defaults to session
     const created: any[] = []
     const reports: any[] = []
-    const prompts: any[] = []
     let judgePrompt = ""
     ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
     ;(ctx.session as any).context = async () => [
       { type: "user", text: "fresh evidence: DONE.txt contains exactly ok at current HEAD" },
+      nativeEvaluatorReport({ reason: "native delegated verdict" }),
     ]
     ;(ctx.session as any).create = async (input: any) => {
       created.push(input)
@@ -1029,10 +1074,8 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
     ;(ctx.session as any).synthetic = async (input: any) => void reports.push(input)
     ;(ctx.session as any).prompt = async (input: any) => {
-      if (input.sessionID === "ses_judge") {
-        judgePrompt = input.text
-        prompts.push(input)
-      } else void calls.prompts.push(input)
+      if (input.sessionID === "ses_judge") judgePrompt = input.text
+      else void calls.prompts.push(input)
     }
     ;(ctx as any).event = {
       subscribe: async function* () {
@@ -1042,8 +1085,6 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
         yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
         await new Promise((r) => setImmediate(r))
         yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
-        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: '{"verdict":"met","reason":"done"}' } }
-        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
       },
     }
     const dispose = await (plugin as any).setup(ctx)
@@ -1053,72 +1094,47 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
         await new Promise((r) => setImmediate(r))
       }
-      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      const record = storage.get("goal/v1/ses_1") as any
+      expect(record.status).toBe("achieved")
+      // The verdict text comes straight from the native `<subagent>` report in the parent transcript.
+      expect(record.reason).toContain("native delegated verdict")
 
-      // Native delegation shape: a parented child of the evaluator agent with the task title.
-      expect(created).toHaveLength(1)
-      expect(created[0]).toMatchObject({
-        parentID: "ses_1",
-        title: EVALUATOR_AGENT_TITLE,
-        agent: EVALUATOR_AGENT_ID,
-        model: { providerID: "provider", id: "model" },
-        location: { directory },
-      })
-      // Host prefix + rubric + parent digest, admitted with `resume: false`.
-      expect(prompts[0].text.startsWith(SUBAGENT_PROMPT_PREFIX)).toBe(true)
-      expect(judgePrompt).toContain("<goal-evaluation>")
-      expect(judgePrompt).toContain("fresh evidence: DONE.txt contains exactly ok at current HEAD")
-      expect(prompts[0].resume).toBe(false)
-
-      // One queued, non-waking `<subagent>` report with native metadata — it never starts a parent turn.
-      expect(reports).toHaveLength(1)
-      expect(reports[0]).toMatchObject({
-        sessionID: "ses_1",
-        description: EVALUATOR_AGENT_TITLE,
-        delivery: "queue",
-        resume: false,
-        metadata: { source: "subagent", childID: "ses_judge", agent: EVALUATOR_AGENT_ID, state: "completed" },
-      })
-      expect(reports[0].text).toContain('<subagent sessionID="ses_judge"')
-      expect(reports[0].text).toContain('{"verdict":"met","reason":"done"}')
+      // The per-turn verdict no longer spawns a plugin generation child or sends a judge prompt: it consumes
+      // the worker's own delegated evaluator report. The old assertions about a parented child, judge prompt and
+      // queued synthetic <subagent> report described the retired generation-judge verdict path and are dropped;
+      // agent registration is still covered above, and the generation child's generate hook is still covered by
+      // the consensus tests elsewhere in this file.
+      expect(created).toHaveLength(0)
+      expect(judgePrompt).toBe("")
+      expect(reports).toHaveLength(0)
     } finally {
       await dispose?.()
     }
   })
 })
 
-describe("a failed evaluator child keeps its provider classification (CXXXI)", () => {
-  test("a judge-side free-usage error pauses the goal instead of retrying as an unreadable verdict", async () => {
+describe("a failed evaluator subagent keeps its provider classification (CXXXI)", () => {
+  test("a native report carrying a free-usage error pauses the goal instead of retrying as an unreadable verdict", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory, {
       evaluator: { mode: "independent", model: "provider/model" },
       maxRetries: 1,
     })
-    const reports: any[] = []
+    // The worker's delegated evaluator child failed on the provider's free-usage gate, so its native report
+    // carries the error state and the 429 message instead of a verdict JSON.
     ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
-    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
-    ;(ctx.session as any).synthetic = async (input: any) => void reports.push(input)
-    ;(ctx.session as any).prompt = async (input: any) => {
-      if (input.sessionID === "ses_judge") return new Promise(() => {}) // failure arrives on the event stream
-      void calls.prompts.push(input)
-    }
-    let subscriptions = 0
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport({
+      state: "error",
+      body: "Free usage limit reached. Subscribe to OpenCode Go to keep going. (HTTP 429)",
+    })]
     ;(ctx as any).event = {
       subscribe: async function* () {
-        subscriptions++
-        if (subscriptions === 1) {
-          for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
-          yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
-          await new Promise((r) => setImmediate(r))
-          yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
-          await new Promise((r) => setImmediate(r))
-          yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
-          return
-        }
-        yield {
-          type: "session.execution.failed",
-          data: { sessionID: "ses_judge", error: "Free usage limit reached. Subscribe to OpenCode Go to keep going." },
-        }
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
       },
     }
     const dispose = await (plugin as any).setup(ctx)
@@ -1131,8 +1147,11 @@ describe("a failed evaluator child keeps its provider classification (CXXXI)", (
       const record = storage.get("goal/v1/ses_1") as any
       expect(record.status).toBe("paused")
       expect(record.pauseCause).toBe("usage_limit")
-      // The failure is still reported to the user as the visible native artifact.
-      expect(reports.some((report) => report.metadata?.state === "error")).toBe(true)
+      // The error report is classified as a provider usage limit, so the goal pauses with resume guidance
+      // instead of burning its retry cap. The old assertion about a plugin-spawned judge's synthetic error
+      // report is obsolete: the verdict path no longer spawns that child at all.
+      expect(record.reason).toContain("usage limit")
+      expect(record.reason).toContain("resume")
     } finally {
       await dispose?.()
     }

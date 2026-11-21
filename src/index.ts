@@ -242,13 +242,13 @@ export default Plugin.define({
       },
     }
 
-    // The judge is a native-looking delegation: a `parentID` child of the plugin-owned `evaluator` agent, so it
-    // appears in the terminal's subagents view while it runs. Its primary turn still passes the free-tier gate
-    // that rejects auxiliary generate calls. A fresh child per verdict keeps judges isolated from their earlier
-    // conclusions; the completion is reported back as a queued, non-waking `<subagent>` message.
+    // Generation child, used ONLY for the opt-in consensus:2 second vote and /goal-loop's summarize/next-condition
+    // steps. The per-turn verdict itself is always the worker's native `evaluator` subagent delegation — this child
+    // is an auxiliary generate call and would hit the free-tier gate if it were the primary judge. Its completion
+    // is reported back as a queued, non-waking `<subagent>` message.
     const judgeChildren = new Set<string>()
-    // Persistent: the fallback judge's synthetic report must never be mistaken for a native delegated verdict on a
-    // later turn. Native children get their own IDs, so this set never overlaps a real delegation.
+    // Persistent: these plugin-spawned children deliver synthetic reports with the same metadata as a native
+    // delegation. Their IDs are excluded so they can never be mistaken for a verdict on a later turn.
     const pluginJudgeIDs = new Set<string>()
 
     const spawnJudge = async (parentSessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
@@ -540,7 +540,7 @@ export default Plugin.define({
       // and return the verdict JSON"). Give that child the full evidence contract, formatted cleanly, so its view
       // reads like a real delegated task instead of the former raw `<conversation>` dump. Enrichment is additive
       // and scoped to evaluator children of a live goal — every other prompt is untouched.
-      // Plugin-spawned fallback judges already carry the full rubric and digest — never double them.
+      // Plugin-spawned generation children (consensus second vote / loop steps) already carry the full rubric and digest — never double them.
       if (!judgeChildren.has(event.sessionID)) try {
         const child = await ctx.session.get({ sessionID: event.sessionID })
         const agentID = typeof child.agent === "string" ? child.agent : (child.agent as any)?.id
