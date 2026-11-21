@@ -65,7 +65,7 @@ export const stripUndefined = (value: unknown): unknown => {
 }
 
 const GOAL_STATUSES: ReadonlySet<string> = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"])
-const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user", "repeated_failure"])
+const PAUSE_CAUSES: ReadonlySet<string> = new Set(["cap", "stall", "user", "repeated_failure", "usage_limit"])
 const isPauseCause = (value: unknown): value is PauseCause => isString(value) && PAUSE_CAUSES.has(value)
 const isGoalStatus = (value: unknown): value is GoalStatus => isString(value) && GOAL_STATUSES.has(value)
 

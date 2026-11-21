@@ -556,6 +556,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
     if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal - a message will not extend it` }
     if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns · send a message to resume, or /goal clear` }
     if (cause === "repeated_failure") return { tone: "warning", text: `repeated not_met failure signature · rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` }
+    if (cause === "usage_limit") return { tone: "warning", text: `free usage limit on the judge · set a separate evaluator.model or wait for the quota window, then send a message to resume (or /goal clear)` }
     if (cause === "user") return { tone: "warning", text: `interrupted · send a message to resume` }
     return { tone: "warning", text: `paused · send a message to resume, or /goal clear` }
   }

@@ -638,28 +638,34 @@ describe("GoalController", () => {
     expect(h.notices.at(-1)?.message).toContain("retrying in 30s")
   })
 
-  test("an evaluator free-usage limit pauses with a long backoff instead of failing the goal", async () => {
+  test("an evaluator free-usage limit pauses the goal and waits for a message instead of retrying forever", async () => {
     h = harness({ maxRetries: 1 })
     await h.set()
     h.verdicts.push(new Error("Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going"))
     await h.turn()
     // Even with maxRetries=1, a self-clearing usage limit must never exhaust the cap or fail the goal.
-    expect(h.controller.get(SID)?.status).toBe("active")
-    expect(h.controller.get(SID)?.retries).toBe(1)
+    // It pauses outright — like the upstream plugin — rather than spinning on a 15m retry timer forever.
+    const paused = h.controller.get(SID)
+    expect(paused?.status).toBe("paused")
+    expect(paused?.pauseCause).toBe("usage_limit")
+    expect(paused?.retries).toBe(1)
     const notice = h.notices.at(-1)
-    expect(notice?.title).toBe("Goal still active")
-    expect(notice?.message).toContain("Evaluator paused")
-    expect(notice?.message).toContain("free usage limit")
-    expect(notice?.message).toContain("retrying in 15m")
-    // Repeated limit hits keep pausing — never a terminal failure.
-    h.verdicts.push(new Error("429 rate limit reached"))
-    await h.clock.advance(15 * 60_000)
+    expect(notice?.title).toBe("Goal paused")
+    expect(notice?.kind).toBe("paused")
+    expect(notice?.message).toContain("Free usage limit reached")
+    expect(notice?.message).toContain("evaluator.model")
+    expect(notice?.message).toContain("send a message to resume")
+    // No retry timer is armed: advancing the clock never re-evaluates on its own.
+    const requestsBefore = h.requests.length
+    await h.clock.advance(2 * 60 * 60_000)
+    expect(h.requests.length).toBe(requestsBefore)
+    expect(h.controller.get(SID)?.status).toBe("paused")
+    // A user message resumes; once the quota window clears the next verdict lands.
+    h.controller.onUserPrompt(SID)
     expect(h.controller.get(SID)?.status).toBe("active")
-    expect(h.controller.get(SID)?.retries).toBe(2)
-    expect(h.notices.at(-1)?.message).toContain("retrying in 15m")
-    // When the window clears, the same session/model evaluation succeeds.
+    expect(h.controller.get(SID)?.pauseCause).toBeUndefined()
     h.verdicts.push(met("recovered after the quota window reset"))
-    await h.clock.advance(15 * 60_000)
+    await h.turn()
     expect(h.controller.get(SID)?.status).toBe("achieved")
   })
 

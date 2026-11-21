@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2154 -->
+<!-- spec-check files=141 tests=2155 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9361,3 +9361,33 @@ to be the cause (or a pin requiring its removal), the correct outcome would have
 - Discrimination: the new pins fail against the pre-change prompt text (bounded-effort/brief-reporting phrases
   absent) and pass with the change.
 - Changes committed on `wt/rubric-thinking-loop` and submitted via coordinator.
+
+## Workstream CXXVI — evaluator free-usage limits pause the goal and wait for the user (2026-11-21)
+
+Armed by the user's report of a live card stuck on "◎ Goal still active / Evaluator paused (free usage limit — judge
+shares this session's model/quota); retrying in 15m 00s", pointing at the upstream plugin
+(`EL4CTEO/opencode-goal`) for the intended handling. Re-reading the tree before touching anything: CXXII classified
+a judge-side `429`/`FreeUsageLimitError` as a self-clearing limit and made `GoalController.evaluationFailed` back off
+a fixed 15 minutes and retry **forever**, leaving the record `active`. The upstream plugin's documented safety rail
+is different: on rate limits it **pauses** the goal and waits for a user message to resume. An account-level free
+quota is not something another judge call from the same session can clear, so an unbounded 15m timer leaves the
+goal stuck with no exit and no clear instruction.
+
+1. Root cause. `evaluationFailed` conflated two different meanings of "pause": the execution path's
+   `classifyFailure -> "pause"` already pausing via `handleFailure` in some paths, and the evaluator path's
+   "pause" meaning "sleep 15m, try again, status stays active". With the judge riding the session's own
+   model/fingerprint (CXXI) and therefore its free-usage bucket, a genuine gateway 429 parked the goal on a retry
+   treadmill instead of handing control back to the user.
+2. Fix. `src/runtime/controller.ts · evaluationFailed` now routes `isUsageLimitError` failures to
+   `this.pause(record, reason, "usage_limit")`: status `paused`, a persisted `pauseCause`, a durable commit, and a
+   "Goal paused" notice naming both exits — set a separate `evaluator.model` (which has its own quota), or wait for
+   the window to reset and send a message to resume. No retry timer is armed; `onUserPrompt` resumes as it does for
+   every other pause cause. Transient and fatal evaluator errors keep their fast-backoff/`maxRetries` behavior
+   byte-for-byte; the execution path is untouched.
+3. Surface. `PauseCause` gains `usage_limit` (`src/core/types.ts`, `src/core/wire.ts` validation), and
+   `src/core/hud.ts · remediationFor` renders an exact remedy (separate judge model or quota window, then resume) so
+   the card and dialog never fall back to the generic line.
+4. Tests (`test/controller.test.ts`, `test/wire.test.ts`, `test/tui-hud.test.tsx`): the usage-limit case now pauses
+   with `pauseCause: "usage_limit"`, arms no timer (advancing the clock does not re-evaluate), resumes on a user
+   message, and lands `achieved` once the quota clears; the wire validator accepts the new cause; the HUD names the
+   escape hatch. Full `bun run check` green; marker re-counted in-commit.

@@ -2254,6 +2254,8 @@ var remediationFor = (goal) => {
       return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
     if (cause === "repeated_failure")
       return { tone: "warning", text: `repeated not_met failure signature \xB7 rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` };
+    if (cause === "usage_limit")
+      return { tone: "warning", text: `free usage limit on the judge \xB7 set a separate evaluator.model or wait for the quota window, then send a message to resume (or /goal clear)` };
     if (cause === "user")
       return { tone: "warning", text: `interrupted \xB7 send a message to resume` };
     return { tone: "warning", text: `paused \xB7 send a message to resume, or /goal clear` };
@@ -5877,7 +5879,7 @@ var isString = (value) => typeof value === "string";
 var isBoolean = (value) => typeof value === "boolean";
 var isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value);
 var GOAL_STATUSES = new Set(["active", "paused", "achieved", "impossible", "cleared", "failed"]);
-var PAUSE_CAUSES = new Set(["cap", "stall", "user", "repeated_failure"]);
+var PAUSE_CAUSES = new Set(["cap", "stall", "user", "repeated_failure", "usage_limit"]);
 var isPauseCause = (value) => isString(value) && PAUSE_CAUSES.has(value);
 var isGoalStatus = (value) => isString(value) && GOAL_STATUSES.has(value);
 var VERDICTS = new Set(["met", "not_met", "impossible"]);

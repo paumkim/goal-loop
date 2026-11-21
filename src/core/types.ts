@@ -348,7 +348,7 @@ export interface LoopCompactState {
 }
 
 /** Why the goal paused. Machine-readable so the HUD can render the exact remedy instead of a generic hint; absent on records persisted before this field existed (restore falls back to the generic line). */
-export type PauseCause = "cap" | "stall" | "user" | "repeated_failure"
+export type PauseCause = "cap" | "stall" | "user" | "repeated_failure" | "usage_limit"
 
 export interface GoalRecord {
   readonly version: 1

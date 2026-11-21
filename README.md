@@ -23,7 +23,7 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 | ❌ Stops prematurely when it "thinks" it is done | ✅ Loops autonomously until the finish line is proven |
 | ❌ Hallucinates that tests pass without running them | ✅ Evaluator requires fresh command output at current git HEAD |
 | ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or isolated worktrees before `met` |
-| ❌ Fails on network drops or rate limits | ✅ Retries forever with exponential backoff; never loses state |
+| ❌ Fails on network drops or rate limits | ✅ Retries transients forever; pauses on free-usage limits until you resume — never loses state |
 | ❌ Context fills up and model quality degrades | ✅ Auto-compacts context at each loop iteration boundary |
 
 ---
