@@ -577,6 +577,44 @@ describe("the context hook strips end-of-record notes", () => {
   })
 })
 
+describe("the judge child gets a clean system prefix (CXXXVIII)", () => {
+  const systemParts = () => [
+    { type: "text", text: "Project rules from AGENTS.md: dogfood, dev branch, merge to main." },
+    { type: "text", text: EVALUATOR_SYSTEM_PROMPT },
+    { type: "text", text: "SPEC.md: another goal about a TUI footer fix." },
+  ]
+
+  test("evaluator children keep only their identity part, not project docs", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.system).toHaveLength(1)
+      expect((event.system[0] as any).text).toContain("You are the Evaluator")
+      expect(JSON.stringify(event.system)).not.toContain("dogfood")
+      expect(JSON.stringify(event.system)).not.toContain("TUI footer")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("worker sessions keep their project rules untouched", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = { sessionID: "ses_worker", agent: "build", model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.system).toHaveLength(3)
+      expect(JSON.stringify(event.system)).toContain("dogfood")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
 describe("the context hook drops the evaluator's own self-echo (CXV use-and-forget)", () => {
   const message = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
   const evalPrompt = (turn: number) => `<goal-evaluation>\nStep out of the agent role. Turn ${turn}.\nDo not call tools.\n</goal-evaluation>`

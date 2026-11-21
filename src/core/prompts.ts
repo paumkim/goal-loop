@@ -12,11 +12,12 @@ export const MARKER = "goal"
  * one exported sentence so the kickoff directive, continuation and retry all carry the same contract.
  */
 export const DELEGATE_VERDICT =
-  `State your final answer or work result in your reply first, then delegate the verdict to the 'evaluator' ` +
+  `State your final answer in your reply first, then delegate the verdict to the 'evaluator' ` +
   `subagent (task tool, agent: 'evaluator', 3-5 word description) in the same turn — the evaluator judges your ` +
   `reply and tool output, not the delegation itself. Use the task 'Judge the goal condition and return the verdict ` +
-  `JSON.' The harness supplies the condition, evidence and the single authoritative JSON contract — do not write ` +
-  `your own verdict format in the task; wait for the report before acting on a verdict.`
+  `JSON.' The harness supplies the condition and JSON contract — do not write your own verdict format in the task. ` +
+  `Delegate exactly once per turn; after the report arrives, do not delegate again — report your answer and wait for ` +
+  `the harness.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 

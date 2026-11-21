@@ -12,6 +12,25 @@ interface DigestOptions {
   readonly maxInputChars?: number
 }
 
+/**
+ * Index of the first message in the worker's current turn — immediately after the newest goal steer or kickoff.
+ *
+ * A native judge gets a digest of what the parent did *this turn*. Including older messages reintroduces prior
+ * turn replies and pre-goal chatter; a small free-tier judge then treats those as the current answer and exports a
+ * stale condition from them. The controller writes a synthetic `metadata.source: "goal"` steer after every verdict,
+ * and the initial `<goal>` kickoff is a user message; whichever is newest starts the live turn.
+ */
+export function currentTurnStart(messages: readonly unknown[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as Unknown | undefined
+    if (!m || typeof m !== "object") continue
+    const md = m.metadata as Unknown | undefined
+    if (m.type === "synthetic" && md?.source === "goal") return i + 1
+    if (m.type === "user" && typeof m.text === "string" && /<(goal|goal-continuation|goal-retry|goal-checkin)\b/.test(m.text)) return i + 1
+  }
+  return 0
+}
+
 const str = (value: unknown) => (typeof value === "string" ? value : "")
 
 const isHigh = (code: number) => code >= 0xd800 && code <= 0xdbff
@@ -215,15 +234,19 @@ function isEvaluatorDelegation(name: string, input: unknown): boolean {
  *    with tool work is still dropped — in that case the tool output is the evidence.
  * Returns "" when the worker produced no usable evidence.
  */
-export function renderParentSummary(messages: readonly unknown[], options: DigestOptions): string {
+export function renderParentSummary(
+  messages: readonly unknown[],
+  options: DigestOptions & { readonly since?: number },
+): string {
   const resolved: Required<DigestOptions> = {
     maxChars: options.maxChars,
     maxToolChars: options.maxToolChars ?? Math.max(800, Math.floor(options.maxChars / 6)),
     maxInputChars: options.maxInputChars ?? 200,
   }
+  const since = options.since ?? 0
   const picked: string[] = []
   let used = 0
-  for (let i = messages.length - 1; i >= 0; i--) {
+  for (let i = messages.length - 1; i >= since; i--) {
     const message = messages[i]
     if (!message || typeof message !== "object") continue
     const m = message as Unknown
