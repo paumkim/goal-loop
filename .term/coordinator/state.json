@@ -4716,8 +4716,11 @@
       "paths": "src/**,bin/**,test/**,prompts/**,package.json,SPEC.md,AGENTS.md,README.md,docs/**",
       "branch": "wt/review-recent-changes-fixes",
       "worktree": "worktrees/wt-review-recent-changes-fixes",
-      "status": "claimed",
-      "createdAt": "2026-11-21T08:07:30Z"
+      "status": "done",
+      "createdAt": "2026-11-21T08:27:59Z",
+      "submittedAt": "2026-11-21T08:27:59Z",
+      "mergedAt": "2026-11-21T08:29:58Z",
+      "mergedInto": "dev"
     },
     "tui-active-flip-heartbeat": {
       "agent": "build-primary",
@@ -4729,6 +4732,14 @@
       "submittedAt": "2026-11-21T08:22:12Z",
       "mergedAt": "2026-11-21T08:24:24Z",
       "mergedInto": "dev"
+    },
+    "evaluator-unreadable-verdict-root-cause": {
+      "agent": "build-agent",
+      "paths": "src/runtime/**,src/core/verdict.ts,src/core/parse.ts,src/core/errors.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md,AGENTS.md",
+      "branch": "wt/evaluator-unreadable-verdict-root-cause",
+      "worktree": "worktrees/wt-evaluator-unreadable-verdict-root-cause",
+      "status": "claimed",
+      "createdAt": "2026-11-21T08:28:10Z"
     }
   },
   "mergeLock": null,
