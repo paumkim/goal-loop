@@ -2,7 +2,7 @@ import { OpenCode } from "@opencode/client"
 import { spawn } from "node:child_process"
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { logPath } from "./util.ts"
+import { logPath, money } from "./util.ts"
 import { SUCCESS_STATUS, TERMINAL_STATUSES } from "./defaults.ts"
 import { GoalRpc } from "./goal-rpc.ts"
 import type { Config, TaskResult } from "./types.ts"
@@ -32,6 +32,28 @@ export const extractResult = (record: unknown): TaskResult => {
     tokens: num(spend.input) + num(spend.output),
   }
 }
+
+/**
+ * Live dollar/token breach from the goal record itself. The CLI's `budget` is only noted after runTask
+ * returns, so `shouldStop()` alone can never halt overspend mid-task; the poll loop checks this each tick.
+ */
+export const liveBudgetStop = (config: Config, record: unknown): string | undefined => {
+  const { costUsd, tokens } = extractResult(record)
+  if (config.maxSpendUsd > 0 && costUsd >= config.maxSpendUsd) {
+    return `budget: spent ${money(costUsd)} of ${money(config.maxSpendUsd)} (live goal spend)`
+  }
+  if (config.maxTokens > 0 && tokens >= config.maxTokens) {
+    return `budget: ${tokens}/${config.maxTokens} tokens (live goal usage)`
+  }
+  return undefined
+}
+
+/** A budget breach is fail-closed: it must never be presented as an achieved task awaiting review. */
+export const budgetStoppedResult = (result: TaskResult, reason: string): TaskResult => ({
+  ...result,
+  status: "failed",
+  reason: result.reason ? `${result.reason} | ${reason}` : reason,
+})
 
 export interface RunTaskInput {
   readonly repo: string
@@ -103,6 +125,7 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
   let last: unknown
   let reason = ""
+  let budgetBreach = ""
 
   try {
     const client = OpenCode.make({ baseUrl, headers })
@@ -166,6 +189,8 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
         return undefined
       })
       last = (response as { goal?: unknown } | undefined)?.goal
+      const activeStop = liveBudgetStop(config, last)
+      if (activeStop) { budgetBreach = activeStop; reason = activeStop; break }
       const status = (last as { status?: string } | null)?.status
       if (isTerminal(status)) break
     }
@@ -182,6 +207,7 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   }
 
   const result = extractResult(last)
+  if (budgetBreach) return budgetStoppedResult(result, budgetBreach)
   if (!isTerminal(result.status)) {
     return { ...result, status: "failed", reason: result.reason || reason || "goal did not reach a terminal status" }
   }

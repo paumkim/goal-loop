@@ -204,6 +204,20 @@ next: run the gate"}`
     // A genuine top-level verdict key still wins even when the reason quotes another verdict token.
     expect(parseVerdict('{"verdict":"not_met","reason":"quoted "verdict":"met" in prose"}')?.verdict).toBe("not_met")
   })
+  test("a verdict object quoted inside a malformed reason never overrides the outer verdict", () => {
+    // jsonObjects used to restart its scan at every `{`, so the inner quoted object was parsed as a
+    // top-level candidate by the strict pass before the lenient pass could see the real field.
+    const notMet = '{"verdict":"not_met","reason":"prior eval returned\n{"verdict":"met"} but it was wrong"}'
+    expect(parseVerdict(notMet)?.verdict).toBe("not_met")
+    const met = '{"verdict":"met","reason":"prior eval returned\n{"verdict":"not_met"} but it was wrong"}'
+    expect(parseVerdict(met)?.verdict).toBe("met")
+  })
+  test("the lenient pass finds the real verdict key after an embedded token in the reason", () => {
+    // The old lenient pass used `.exec()` (first match only): the embedded token was rejected by the
+    // object-key guard, then the loop moved to the next key instead of the next `"verdict"` occurrence.
+    const text = '{"reason":"prior eval said "verdict":"met", but that was wrong\n and I disagree","verdict":"not_met"}'
+    expect(parseVerdict(text)?.verdict).toBe("not_met")
+  })
 
   test("structured reasons with clause matrix and next actions parse (compatibility)", () => {
     const met = parseVerdict(JSON.stringify({

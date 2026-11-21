@@ -141,23 +141,26 @@ function isObjectKeyPosition(text: string, index: number): boolean {
  */
 function lenientFields(text: string): { verdict: Verdict; reason: string } | undefined {
   for (const key of VERDICT_KEYS) {
-    const field = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "i").exec(text)
-    if (!field) continue
-    // The quoted key must sit at an object key position, not inside a string value. A model can quote
-    // `"verdict":"met"` in its reason (discussing another evaluation); without this guard the lenient pass
-    // manufactures a met out of a reason with no verdict field at all.
-    if (!isObjectKeyPosition(text, field.index)) continue
-    const verdict = normalizeVerdict(field[1])
-    if (!verdict) return undefined
-    let reason = ""
-    for (const reasonKey of REASON_KEYS) {
-      const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)
-      if (match?.[1] !== undefined) {
-        reason = unescapeJsonText(match[1])
-        break
+    // Scan *every* occurrence, not just the first: a malformed reason can quote `"verdict":"met"` before
+    // the real field. The first occurrence fails the object-key guard below; the real one must still be seen.
+    const fieldPattern = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "gi")
+    for (let field = fieldPattern.exec(text); field; field = fieldPattern.exec(text)) {
+      // The quoted key must sit at an object key position, not inside a string value. A model can quote
+      // `"verdict":"met"` in its reason (discussing another evaluation); without this guard the lenient pass
+      // manufactures a met out of a reason with no verdict field at all.
+      if (!isObjectKeyPosition(text, field.index)) continue
+      const verdict = normalizeVerdict(field[1])
+      if (!verdict) return undefined
+      let reason = ""
+      for (const reasonKey of REASON_KEYS) {
+        const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)
+        if (match?.[1] !== undefined) {
+          reason = unescapeJsonText(match[1])
+          break
+        }
       }
+      return { verdict, reason }
     }
-    return { verdict, reason }
   }
   return undefined
 }
@@ -187,25 +190,33 @@ function safeJson(text: string): unknown {
   }
 }
 
-/** Yields balanced top-level `{...}` spans, string-aware, in order of appearance. */
+/**
+ * Yields balanced top-level `{...}` spans, string-aware, in order of appearance. One left-to-right pass:
+ * a `{` inside a string value is not a candidate object. Restarting the scan at every `{` used to promote
+ * a quoted `{"verdict":"met"}` inside a malformed reason into a strict candidate, overriding the real verdict.
+ */
 function* jsonObjects(text: string): Generator<string> {
-  for (let start = text.indexOf("{"); start !== -1; start = text.indexOf("{", start + 1)) {
-    let depth = 0
-    let inString = false
-    let escaped = false
-    for (let i = start; i < text.length; i++) {
-      const char = text[i]
-      if (inString) {
-        if (escaped) escaped = false
-        else if (char === "\\") escaped = true
-        else if (char === '"') inString = false
-        continue
-      }
-      if (char === '"') inString = true
-      else if (char === "{") depth++
-      else if (char === "}" && --depth === 0) {
+  let depth = 0
+  let start = -1
+  let inString = false
+  let escaped = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === "\\") escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === "{") {
+      if (depth === 0) start = i
+      depth++
+    } else if (char === "}" && depth > 0) {
+      depth--
+      if (depth === 0 && start !== -1) {
         yield text.slice(start, i + 1)
-        break
+        start = -1
       }
     }
   }

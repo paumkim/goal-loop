@@ -117,9 +117,12 @@ export class Evaluator implements EvaluatorPort {
   private async resolveModel(sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined> {
     const pinned = this.config.model
     if (pinned) return pinned
-    if (!this.config.inheritModel || !this.deps.sessionModel) return undefined
+    const port = this.deps.sessionModel
+    if (!this.config.inheritModel || !port) return undefined
     try {
-      const current = await this.deps.sessionModel(sessionID, signal)
+      // The host lookup is bounded by the same budget as the generation it precedes: an inherited model
+      // must never hang the evaluation with no timeout and no diagnostic (the catch below degrades instead).
+      const current = await this.underBudget((s) => port(sessionID, s), signal, "model resolution")
       if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session evaluator")
       return current
     } catch (error) {

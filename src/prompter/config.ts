@@ -78,12 +78,18 @@ export const normalize = (config: Config, repo: string): Config => {
     : path.isAbsolute(config.plugin) || config.plugin.startsWith(".")
       ? path.resolve(repo, config.plugin)
       : config.plugin
+  const resolvedStateFile = !config.stateFile
+    ? config.stateFile
+    : path.isAbsolute(config.stateFile)
+      ? config.stateFile
+      : path.resolve(repo, config.stateFile)
   return {
     ...config,
     promptLibrary: resolvedLibrary,
     plugin: resolvedPlugin,
     stopFiles: resolvedStops,
     allowedRepos: resolvedRepos,
+    stateFile: resolvedStateFile,
   }
 }
 

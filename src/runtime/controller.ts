@@ -867,15 +867,17 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
+    // The main session went quiet: if a background deferral is still pending, the pill flips straight back
+    // to `waiting` on this event — it no longer rides a check-in or the 15s mirror tick. A succeeded means
+    // the execution ended even when it is a straggler that must not be evaluated, so clear the heartbeat
+    // before the drop guard: a missed execution-start would otherwise strand the pill on `active` forever.
+    runtime.heartbeating = false
+    this.syncWaitingPaint(sessionID)
     if (runtime.awaitingExecution || runtime.dropStragglerSucceeded) {
       // Straggler duplicate of the previous turn or of a turn whose retry steer has not started yet.
       this.deps.log.info("goal evaluation straggler dropped", { sessionID, awaitingExecution: runtime.awaitingExecution, dropStragglerSucceeded: runtime.dropStragglerSucceeded })
       return
     }
-    // The main session went quiet: if a background deferral is still pending, the pill flips straight back
-    // to `waiting` on this event — it no longer rides a check-in or the 15s mirror tick.
-    runtime.heartbeating = false
-    this.syncWaitingPaint(sessionID)
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0

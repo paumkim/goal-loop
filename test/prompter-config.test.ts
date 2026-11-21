@@ -48,12 +48,16 @@ describe("config", () => {
       plugin: "./plugin",
       stopFiles: ["STOP"],
       allowedRepos: ["."],
+      stateFile: "journal.jsonl",
       model: "opencode/deepseek-v4.1-flash-free",
     }), "/repo")
     expect(config.promptLibrary).toBe("/repo/prompts")
     expect(config.plugin).toBe("/repo/plugin")
     expect(config.stopFiles).toEqual(["/repo/STOP"])
     expect(config.allowedRepos).toEqual(["/repo"])
+    // Every path field resolves against the repo — a relative journal must not land in the CLI's CWD.
+    expect(config.stateFile).toBe("/repo/journal.jsonl")
+    expect(normalize(mergeConfig(DEFAULT_CONFIG, { stateFile: "/abs/journal.jsonl" }), "/repo").stateFile).toBe("/abs/journal.jsonl")
     expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow(/provider\/model/)
   })
 
