@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2153 -->
+<!-- spec-check files=141 tests=2154 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9300,3 +9300,64 @@ move with top-level `OLD_DIR` and `data.location = NEW_DIR` and asserts the goal
 - Full: `bun run check` — tsc clean, all suites green, dist/tui/docs freshness ok, invariant sweep ok, `check:spec`
   ok; evidence in the transcript.
 - SPEC honesty gate: enforced marker re-counted in-commit; `docs/changelog.html` records each user-visible fix.
+
+## Workstream CXXV — bound evaluator deliberation without weakening the evidence contract (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): "auto this it it
+could cause that classic thinking loop. improve what needs improving if not leave it as it is." plus the quoted
+critique #3: prompt/rubric instructions that demand exhaustive analysis ("be thorough, consider every edge case,
+verify every claim independently, don't miss anything") push a model toward unbounded deliberation; in goal-loop the
+evaluator rubric ("fresh evidence only, report layer per claim, verify via headless render") is exactly the kind of
+instruction that can produce a massive thought if the goal is vague. Coordinator repo: claimed
+`wt/rubric-thinking-loop`, worked only in `worktrees/wt-rubric-thinking-loop`, committed on `wt/rubric-thinking-loop`,
+submitted via coordinator; no direct commits to `dev`/`main`.
+
+### Interpretation
+
+The critique names a real failure mode, but it does not by itself prove this codebase has the bug. Investigation
+found that goal-loop already bounds the *downstream* size of evaluator output in several places:
+`MAX_STEER_REASON_CHARS = 400` (`src/core/prompts.ts`) elides a verdict reason before it rides a steer;
+`clampReason` / `MAX_REASON = 4000` (`src/core/verdict.ts`) clamps the parsed reason; Workstream CXV strips the
+evaluator's `<goal-evaluation>` self-echo from model-bound context and caps the digest at 20,000 chars; and
+`STRICT_REPAIR` already says "do not reason out loud — output only the JSON object" on the final retry.
+
+The gap is at the *prompt* level: both evaluation prompts (`evaluateInSession`, `evaluateIndependently`) carry the
+full exhaustive rubric (evidence matrix per clause, adversarial self-check, defensive audit, repeated-failure scan,
+structured reason with clause-by-clause judgment) but contain **no instruction to be decisive or to bound the reason**.
+The judge is therefore asked to produce a large structured answer whose useful part is later truncated to 400 chars
+on a steer — wasted deliberation, and exactly the shape the critique flags as risky for a vague condition. The
+`<opencode-cli>` work guide has the matching reporting phrasing: "report which layer ... each claim was verified at",
+with no hint that reporting is deliberately brief and need not be an exhaustive audit of every possibility.
+
+Decision: improve, additively. Keep every pinned sensing capability and gate byte-identical (evidence matrix,
+adversarial self-check, verifier corroboration, forward-pointer, commit rule, next actions). Add one short
+decisiveness/verbosity bound to the shared rubric and a brief-reporting nudge to the opencode-cli guide. No capability
+is removed, no gate is relaxed, no default is changed. If the investigation had shown the exhaustive contract itself
+to be the cause (or a pin requiring its removal), the correct outcome would have been to leave it as-is; it did not.
+
+### Acceptance criteria
+
+1. `src/core/prompts.ts` injects a bounded-effort instruction into the shared rubric used by both `evaluateInSession`
+   and `evaluateIndependently`. It (a) directs the judge to decide from the evidence actually shown rather than
+   exhaustive hypotheticals, (b) to judge only clauses bearing on the verdict and name the single most critical gap
+   when not met, and (c) to keep the reason short (a few lines), explicitly not enumerating every edge case or
+   re-auditing irrelevant claims for a vague condition. The exhaustive contract (VERDICTS/RULES/OUTPUT) is unchanged.
+2. `src/core/opencode-cli.ts` keeps the `binary / source / test-render / live TUI` layer vocabulary byte-identical
+   but frames the report as brief and limited to claims actually made, with no obligation to audit every possibility.
+3. Regression tests pin the new bound in both evaluation prompts and the brief-reporting nudge in the guide; no
+   existing assertion is weakened, skipped, or deleted.
+4. `SPEC.md` gains this section and the enforced `spec-check` marker is re-stamped in the same commit for the changed
+   test count. No shipped file is added or removed by this change.
+5. `bun run check` exits 0 in the worktree.
+
+### Verification
+
+- Textual change only — no visual surface, so no screenshot/render is applicable; verification is by prompt-text
+  assertions and the repo's gates.
+- Focused: `bun test test/core.test.ts test/evaluator.test.ts test/opencode-cli.test.ts` passes, including the new
+  pins.
+- Full: `cd <worktree> && bun run check` exits 0 (tsc, all suites, dist/compile/tui/docs/invariant/spec gates);
+  tail recorded in the transcript.
+- Discrimination: the new pins fail against the pre-change prompt text (bounded-effort/brief-reporting phrases
+  absent) and pass with the change.
+- Changes committed on `wt/rubric-thinking-loop` and submitted via coordinator.
