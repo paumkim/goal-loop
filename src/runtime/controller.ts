@@ -657,7 +657,7 @@ export class GoalController {
   // ---------------------------------------------------------------- commands
 
   /** Entry point for `/goal <args>` and `/goal-loop <args>`. */
-  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
+  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean; planned?: boolean } & PromptAttachments): Promise<void> {
     const parsed = parseGoalCommand(input.text, this.deps.config.maxConditionChars)
     switch (parsed.type) {
       case "status":
@@ -669,7 +669,7 @@ export class GoalController {
         this.notify(input.sessionID, "error", "error", `${input.loop ? "Loop" : "Goal"} not set`, parsed.message)
         return
       case "set":
-        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}) })
+        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}), ...(input.planned ? { planned: true } : {}) })
     }
   }
 
@@ -789,7 +789,7 @@ export class GoalController {
     return record
   }
 
-  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean; maxLoops?: number } & PromptAttachments): Promise<void> {
+  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean; maxLoops?: number; planned?: boolean } & PromptAttachments): Promise<void> {
     const { sessionID, condition } = input
     const loop = input.loop === true
     const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
@@ -803,6 +803,7 @@ export class GoalController {
           condition,
           this.commitForSession(sessionID),
           loop ? { iteration: 1, maxLoops, objective: condition, history: [] } : undefined,
+          input.planned === true,
         ),
         delivery: input.delivery,
         ...(input.files?.length ? { files: input.files } : {}),

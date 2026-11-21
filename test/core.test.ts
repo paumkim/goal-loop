@@ -4,6 +4,7 @@ import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core
 import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
+import { PLANNED_CONDITION_MAX_CHARS, parsePlan, planGoalRequest } from "../src/core/planner.ts"
 import {
   checkin,
   compactGoalInstructions,
@@ -17,7 +18,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
-import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport } from "../src/core/evaluator-agent.ts"
+import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport, echoedCondition, conditionEchoMatches } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
@@ -876,6 +877,40 @@ describe("renderParentSummary: native evaluator gets fresh tool evidence, not st
     expect(text).toContain("cmd-9")
     expect(text.length).toBeLessThan(1_000)
   })
+
+  test("drops the evaluator's own delegation task call — the judge must not score its own armed prompt", () => {
+    const messages = [
+      {
+        type: "assistant",
+        content: [
+          { type: "tool", name: "task", state: { status: "running", input: { agent: "evaluator", description: "Judge goal condition", prompt: "Judge the goal condition and return the verdict JSON." } } },
+        ],
+      },
+    ]
+    expect(renderParentSummary(messages, { maxChars: 4_000 })).toBe("")
+  })
+
+  test("keeps a pure-text reply as evidence for a communication goal", () => {
+    const messages = [
+      { type: "assistant", content: [{ type: "reasoning", text: "the goal says reply hi" }, { type: "text", text: "hi" }] },
+    ]
+    expect(renderParentSummary(messages, { maxChars: 4_000 })).toContain("hi")
+  })
+
+  test("still drops narration that is interleaved with real tool work", () => {
+    const messages = [
+      {
+        type: "assistant",
+        content: [
+          { type: "text", text: "I am narrating an old condition: dogfood merge to main" },
+          { type: "tool", name: "bash", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: "12 pass 0 fail" }] } },
+        ],
+      },
+    ]
+    const text = renderParentSummary(messages, { maxChars: 4_000 })
+    expect(text).toContain("12 pass 0 fail")
+    expect(text).not.toContain("dogfood merge")
+  })
 })
 
 describe("steer prompts bound evaluator reasons", () => {
@@ -1075,6 +1110,48 @@ describe("native evaluator delegation", () => {
     expect(pick([stale], 2, new Set(), new Set(), new Map())?.key).toBe("old")
   })
 
+  test("a still-running report is not pinned to a turn until it completes", () => {
+    const running = report("late", "met", "ses_late", "running")
+    const seen = new Map<string, number>()
+    // First look while the child is still running: eligible, but nothing returned and nothing pinned.
+    expect(pick([running], 2, new Set(), new Set(), seen)).toBeUndefined()
+    expect(seen.size).toBe(0)
+    // The same report, now completed, can be consumed for this turn (and only now is it pinned).
+    const done = report("late", "met", "ses_late", "completed")
+    expect(pick([done], 2, new Set(), new Set(), seen)?.key).toBe("late")
+    expect(seen.get("late")).toBe(2)
+  })
+
+  test("echoedCondition tolerates aliases and a strict-parse-failed body", () => {
+    expect(echoedCondition('{"verdict":"met","condition":"Reply with DONE"}')).toBe("Reply with DONE")
+    expect(echoedCondition('{"verdict":"met","echo":"Reply with DONE"}')).toBe("Reply with DONE")
+    expect(echoedCondition('{"verdict":"met","reason":"bad \" quote","condition":"Reply with DONE"}')).toBe("Reply with DONE")
+    expect(echoedCondition('{"verdict":"met","reason":"no echo"}')).toBeUndefined()
+  })
+
+  test("conditionEchoMatches accepts exact, punctuated and paraphrased echoes but rejects a different goal", () => {
+    const expected = "Reply with the single word DONE."
+    expect(conditionEchoMatches('{"condition":"Reply with the single word DONE."}', expected)).toBe(true)
+    expect(conditionEchoMatches('{"condition":"reply with the single word done"}', expected)).toBe(true)
+    expect(conditionEchoMatches('{"condition":"Reply with the single word DONE. Extra."}', expected)).toBe(true)
+    expect(conditionEchoMatches('{"condition":"Fix the roadmap-renderer.html layout"}', expected)).toBe(false)
+    expect(conditionEchoMatches('{"condition":"Verify the anti-dup marker in the plugin"}', expected)).toBe(false)
+    expect(conditionEchoMatches('{"verdict":"met","reason":"stale"}', expected)).toBe(false)
+  })
+
+  test("verdictFromNativeReport rejects a verdict that echoes a stale condition", () => {
+    const stale = { key: "x", state: "completed", body: '{"verdict":"met","reason":"the 4-part prompt was implemented","condition":"Verify the anti-dup marker"}' }
+    expect(() => verdictFromNativeReport(stale, "Reply with the single word DONE.")).toThrow(/judged a stale condition/)
+    const matching = { key: "y", state: "completed", body: '{"verdict":"met","reason":"ok","condition":"Reply with the single word DONE."}' }
+    expect(verdictFromNativeReport(matching, "Reply with the single word DONE.")).toEqual({ verdict: "met", reason: "ok" })
+    // No expected condition pins the legacy call sites: behavior is unchanged without one.
+    expect(verdictFromNativeReport(stale)).toEqual({ verdict: "met", reason: "the 4-part prompt was implemented" })
+    // A judge that omits the echo (small models follow the worker's shorter contract) is still accepted — rejecting
+    // every echo-less verdict stalled the loop on not_met for every turn.
+    const noEcho = { key: "z", state: "completed", body: '{"verdict":"met","reason":"the reply was DONE"}' }
+    expect(verdictFromNativeReport(noEcho, "Reply with the single word DONE.")).toEqual({ verdict: "met", reason: "the reply was DONE" })
+  })
+
   test("a failed or unreadable native report throws so the generation judge can take over", () => {
     expect(() => verdictFromNativeReport({ key: "x", body: "Free usage limit reached (429)", state: "error" })).toThrow(/evaluator subagent failed: Free usage limit reached/)
     expect(() => verdictFromNativeReport({ key: "x", body: "no verdict here", state: "completed" })).toThrow(/unreadable verdict/)
@@ -1096,5 +1173,54 @@ describe("native evaluator delegation", () => {
     expect(text).not.toContain('{"command"')
     expect(text).toContain("output:")
     expect(text).toContain("12 pass 0 fail")
+  })
+})
+
+describe("arm-time planner", () => {
+  const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktrees" }
+
+  test("the request carries only the raw body and the output contract", () => {
+    const raw = "simple reply back."
+    const text = planGoalRequest(raw)
+    expect(text).toContain(raw)
+    expect(text).toContain("<raw>")
+    expect(text.length).toBeLessThan(500)
+  })
+
+  test("parsePlan reads a plain object and defaults an absent scope to trivial", () => {
+    expect(parsePlan('{"condition":"Give a short reply.","scope":"trivial"}')).toEqual({ condition: "Give a short reply.", scope: "trivial" })
+    expect(parsePlan('{"condition":"Fix the tests.","scope":"code"}')).toEqual({ condition: "Fix the tests.", scope: "code" })
+    expect(parsePlan('{"condition":"Give a short reply."}')).toEqual({ condition: "Give a short reply.", scope: "trivial" })
+  })
+
+  test("parsePlan tolerates a fence or prose and rejects garbage or an empty condition", () => {
+    expect(parsePlan('intro\n```json\n{"condition":"Reply briefly.","scope":"trivial"}\n```')?.condition).toBe("Reply briefly.")
+    expect(parsePlan("no json here")).toBeUndefined()
+    expect(parsePlan('{"condition":"   ","scope":"code"}')).toBeUndefined()
+    expect(parsePlan('{"scope":"code"}')).toBeUndefined()
+  })
+
+  test("parsePlan bounds a runaway condition", () => {
+    const huge = "x".repeat(5_000)
+    expect(parsePlan(JSON.stringify({ condition: huge, scope: "code" }))?.condition.length).toBe(PLANNED_CONDITION_MAX_CHARS)
+  })
+
+  test("a planned directive drops the fuzzy SPEC and coordinator essays", () => {
+    const text = directive("simple reply back.", coord, undefined, true)
+    expect(text).toContain("<goal>")
+    expect(text).toContain("simple reply back.")
+    expect(text).toContain(DELEGATE_VERDICT)
+    expect(text).not.toContain("Fuzzy request")
+    expect(text).not.toContain("SPEC.md")
+    expect(text).not.toContain("Coordinator repo. Before editing")
+    expect(text).not.toContain("wt/<slug>")
+    expect(text).not.toContain("`dev` branch")
+    expect(text.length).toBeLessThan(1_000)
+  })
+
+  test("an unplanned directive keeps the old heuristics", () => {
+    const text = directive("simple reply back.", coord)
+    expect(text).toContain("Fuzzy request")
+    expect(text).toContain("Coordinator repo. Before editing")
   })
 })

@@ -96,11 +96,18 @@ function nativeEvaluatorReport(options: {
   reason?: string
   state?: "completed" | "error"
   body?: string
+  echo?: string
   childID?: string
 } = {}) {
   const state = options.state ?? "completed"
   const childID = options.childID ?? "ses_native"
-  const body = options.body ?? JSON.stringify({ verdict: options.verdict ?? "met", reason: options.reason ?? "done" })
+  // The host now requires the verdict to echo the armed condition (stale-verdict guard). Every current caller
+  // arms "the parser is correct"; tests that need a different echo pass `body` explicitly.
+  const body = options.body ?? JSON.stringify({
+    verdict: options.verdict ?? "met",
+    reason: options.reason ?? "done",
+    condition: options.echo ?? "the parser is correct",
+  })
   return {
     id: "native_report",
     type: "synthetic",
@@ -114,7 +121,7 @@ describe("commit rules follow a session move", () => {
     for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve))
   }
 
-  test("the prompt directive and the system reminder use the moved checkout's rule, not the setup one", async () => {
+  test("the system reminder uses the moved checkout's rule while the planned directive stays minimal", async () => {
     const setupDir = repository() // only `dev` exists here
     const movedDir = repositoryWithBranch("release") // config still says `dev`, so the rule falls back to `release`
     const { ctx, hooks } = context(setupDir, { systemReminder: true })
@@ -134,8 +141,9 @@ describe("commit rules follow a session move", () => {
         delivery: "steer",
       }
       await hooks.prompt!(promptEvent)
-      expect(promptEvent.prompt.text).toContain("`release`")
+      expect(promptEvent.prompt.text).toContain("audit the parser")
       expect(promptEvent.prompt.text).not.toContain("`dev`")
+      expect(promptEvent.prompt.text).not.toContain("`release`")
 
       const contextEvent = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [], tools: {}, options: {} }
       hooks.context!(contextEvent)
@@ -424,10 +432,8 @@ describe("plugin setup", () => {
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
-      expect(directive.text).toContain("Coordinator repo")
-      expect(directive.text).toContain("wt/<slug>")
-      expect(directive.text).toContain("submit")
-      expect(directive.text).toContain("dev")
+      expect(directive.text).not.toContain("Coordinator repo")
+      expect(directive.text).not.toContain("wt/<slug>")
     } finally {
       await dispose?.()
     }
@@ -450,7 +456,7 @@ describe("plugin setup", () => {
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
       const directive = calls.prompts.at(-1)
       expect(directive.text).toContain("all tests pass")
-      expect(directive.text).toContain("Coordinator repo")
+      expect(directive.text).not.toContain("Coordinator repo")
     } finally {
       await dispose?.()
     }
@@ -475,7 +481,8 @@ describe("plugin setup", () => {
       // The commit rule still resolves the coordinator at the repo root, not the subfolder.
       const goal = calls.commands.find((command) => command.name === "goal")
       await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
-      expect(calls.prompts.at(-1).text).toContain("Coordinator repo")
+      expect(calls.prompts.at(-1).text).toContain("all tests pass")
+      expect(calls.prompts.at(-1).text).not.toContain("Coordinator repo")
     } finally {
       await dispose?.()
     }
@@ -1057,6 +1064,122 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
+  test("a native report echoing a stale condition fails closed instead of ruling the goal met", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory)
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport({
+      reason: "an unrelated goal was completed in another session",
+      echo: "Verify the anti-dup marker in the installed plugin",
+    })]
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => {}
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID !== "ses_judge") void (calls.prompts as any[]).push(input)
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const until = Date.now() + 6000
+      while (Date.now() < until && !(storage.get("goal/v1/ses_1") as any)?.reason?.includes("stale condition")) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      const record = storage.get("goal/v1/ses_1") as any
+      expect(record.status).not.toBe("achieved")
+      expect(record.reason).toContain("stale condition")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a report that lands after the first context read is consumed in the same turn (report race)", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory)
+    let reads = 0
+    // The worker's native child finishes shortly after the parent goes idle: the first two context reads see no
+    // report, the third does. The grace loop in nativeVerdict must consume it instead of failing closed to not_met.
+    ;(ctx.session as any).context = async () => {
+      reads++
+      return reads < 3 ? [] : [nativeEvaluatorReport()]
+    }
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => {}
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID !== "ses_judge") void (calls.prompts as any[]).push(input)
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const until = Date.now() + 6000
+      while (Date.now() < until && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved") {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      expect(reads).toBeGreaterThanOrEqual(3)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a native report without a condition echo is still accepted (free-tier models omit it)", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory)
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).context = async () => [nativeEvaluatorReport({
+      body: '{"verdict":"met","reason":"the reply was DONE"}',
+    })]
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx.session as any).remove = async () => {}
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID !== "ses_judge") void (calls.prompts as any[]).push(input)
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      const until = Date.now() + 6000
+      while (Date.now() < until && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved") {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("in the default mode the worker's native evaluator report is the verdict (no plugin judge child)", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory) // no options: evaluator mode defaults to session
@@ -1199,7 +1322,7 @@ describe("the prompt hook gives delegated evaluator children a clean evidence co
       expect(childEvent.prompt.text).not.toContain("goal-loop was created, planned, or installed")
       expect(childEvent.prompt.text).not.toContain("<subagent")
       // The scope guard makes the single original goal unambiguous.
-      expect(childEvent.prompt.text).toContain("Judge ONLY the original goal below")
+      expect(childEvent.prompt.text).toContain("The only condition that exists for this verdict is the text inside <condition>")
       expect(childEvent.prompt.text).not.toContain("<conversation>")
 
       const workingEvent: any = { sessionID: "ses_1", prompt: { text: "keep going" } }

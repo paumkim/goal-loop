@@ -186,6 +186,19 @@ export function renderTranscript(messages: readonly unknown[], options: DigestOp
 }
 
 /**
+ * True for the `task`/`subagent` tool call that delegates the verdict to the `evaluator` agent. That call is the
+ * judge's *own* spawn — it is not evidence the parent produced for the goal. Leaving it in the digest makes the
+ * judge read its own armed prompt (the delegation task plus the "working in background" output) as if it were the
+ * parent's work, which is exactly the "evaluator judging its own prompt" failure reported in ses_e003809c3ffe.
+ */
+function isEvaluatorDelegation(name: string, input: unknown): boolean {
+  if (!/^(task|subagent|delegate)$/i.test(name)) return false
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false
+  const agent = (input as Unknown).agent
+  return typeof agent === "string" && agent.toLowerCase() === "evaluator"
+}
+
+/**
  * A tight "what the parent actually did" digest for a *native* evaluator child.
  *
  * {@link renderTranscript} packs the whole raw context for the generation judge, which has no other source of
@@ -195,8 +208,12 @@ export function renderTranscript(messages: readonly unknown[], options: DigestOp
  * narration of all of it. A small model will happily mistake one of those stale conditions for the armed one (that
  * is exactly what happened in ses_e0098ece6ffeTolK2m5fCkkGiE: four children judged four different old conditions).
  *
- * So keep only tool calls and their results from the worker's own messages, newest first, under a small budget.
- * Narration is not evidence and is deliberately dropped. Returns "" when the worker produced no tool evidence.
+ * Keep tool calls and their results, newest first, under a small budget. Two special cases matter for a judge of a
+ * *communication* goal (e.g. "reply hi"):
+ *  - the evaluator's own delegation `task` call is dropped — it is the judge's armed prompt, not parent evidence;
+ *  - a message that is only text (no tool work) is the parent's actual reply, so keep it. Narration interleaved
+ *    with tool work is still dropped — in that case the tool output is the evidence.
+ * Returns "" when the worker produced no usable evidence.
  */
 export function renderParentSummary(messages: readonly unknown[], options: DigestOptions): string {
   const resolved: Required<DigestOptions> = {
@@ -211,24 +228,36 @@ export function renderParentSummary(messages: readonly unknown[], options: Diges
     if (!message || typeof message !== "object") continue
     const m = message as Unknown
     const content = Array.isArray(m.content) ? (m.content as Unknown[]) : []
-    const blocks: string[] = []
+    const toolBlocks: string[] = []
+    const textBlocks: string[] = []
     for (const part of content) {
-      if (!part || part.type !== "tool") continue
+      if (!part || typeof part !== "object") continue
+      if (part.type === "text") {
+        const text = str(part.text).trim()
+        if (text) textBlocks.push(headTail(text, Math.min(resolved.maxToolChars, 800)))
+        continue
+      }
+      if (part.type !== "tool") continue
       const state = (part.state ?? {}) as Unknown
       const name = str(part.name)
+      // The judge's own spawn is not the parent's work. Drop it so the evaluator never judges its armed prompt.
+      if (isEvaluatorDelegation(name, state.input)) continue
       const args = toolArgs(name, state.input, resolved.maxInputChars)
       const suffix = args ? ` ${args}` : ""
       if (state.status === "completed") {
         const output = headTail(toolText(state.content), resolved.maxToolChars)
-        blocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
+        toolBlocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
       } else if (state.status === "error") {
         const error = (state.error ?? {}) as Unknown
         const detail = headTail(str(error.message) || toolText(state.content), resolved.maxToolChars)
-        blocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
+        toolBlocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
       } else {
-        blocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
+        toolBlocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
       }
     }
+    // A pure reply (text only, no tool work left after filtering self-spawns) is the work product for a
+    // communication goal; narration alongside real tool work stays dropped because the tool output is the proof.
+    const blocks = toolBlocks.length ? toolBlocks : textBlocks
     if (!blocks.length) continue
     const block = blocks.join("\n\n")
     if (used + block.length + 2 > resolved.maxChars) {
