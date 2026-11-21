@@ -191,6 +191,25 @@ next: none"}`
     expect(calls).toBe(3)
   })
 
+  test("unreadable replies are logged with their raw text (no silent failure) and the error names the cause", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake } = deps({ sessionGenerate: async () => "tool-call-only reply" })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, log)
+    const error = await evaluator.evaluate(request()).then(
+      () => undefined,
+      (e: unknown) => e as Error,
+    )
+    expect(error?.message).toMatch(/unreadable verdict after 3 attempts/)
+    expect(error?.message).toContain("no text event")
+    // Every failed attempt is recorded, with the raw reply visible to the operator.
+    expect(warnings).toHaveLength(3)
+    expect(warnings.map((w) => w.attempt)).toEqual([1, 2, 3])
+    expect(warnings[0]?.message).toContain("unreadable")
+    expect(warnings[0]?.preview).toBe("tool-call-only reply")
+    expect(warnings[0]?.chars).toBe("tool-call-only reply".length)
+  })
+
   test("an already-aborted signal cuts the evaluation off and unwinds isEvaluating", async () => {
     const { fake } = deps({
       sessionGenerate: (_sid, _prompt, signal) =>
