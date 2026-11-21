@@ -4793,6 +4793,17 @@
       "submittedAt": "2026-11-21T10:00:40Z",
       "mergedAt": "2026-11-21T10:09:05Z",
       "mergedInto": "dev"
+    },
+    "evaluator-session-fingerprint": {
+      "agent": "primary",
+      "paths": "src/runtime/evaluator.ts,src/runtime/ports.ts,src/index.ts,test/evaluator.test.ts,SPEC.md,docs/changelog.html,docs/config.html,README.md",
+      "branch": "wt/evaluator-session-fingerprint",
+      "worktree": "worktrees/wt-evaluator-session-fingerprint",
+      "status": "done",
+      "createdAt": "2026-11-21T10:20:15Z",
+      "submittedAt": "2026-11-21T10:28:21Z",
+      "mergedAt": "2026-11-21T10:30:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
