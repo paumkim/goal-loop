@@ -49,6 +49,22 @@ Want the agent to keep improving after reaching the goal?
 ```
 When an iteration succeeds, `goal-loop` summarizes achievements, auto-compacts session context, and arms the next harder milestone automatically.
 
+### Want to stop typing prompts entirely?
+
+The same package also ships **`prompter`** — a bundled autonomous work loop that picks the next task from a plain `AUTONOMY.md` backlog, runs each one through headless `/goal` in an isolated git worktree, verifies it, commits on a task branch, and then **stops for your review**. It never merges or pushes. The prompt library that feeds it lives in this repo at `prompts/` — there is no second project to install or maintain.
+
+```sh
+prompter init                 # in any target repo: create AUTONOMY.md + config
+# edit AUTONOMY.md with verifiable task lines
+prompter tick                 # one unit, then it stops for review
+prompter review               # see the branch + commit
+# merge the branch into your base branch
+prompter approve <id>         # proves the commit landed, then marks done
+prompter stop                 # global kill switch
+```
+
+Safety: one task in review at a time, dollar/token/wall-clock caps, dirty-tree gate, and kill switches. Details: `src/prompter/` and `SPEC.md`.
+
 ---
 
 ## 🖥️ Live HUD & Status

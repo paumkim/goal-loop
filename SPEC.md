@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2074 -->
+<!-- spec-check files=141 tests=2098 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8629,3 +8629,17 @@ token and reason were present in the reply; the parser, not the judgment, was th
   rather than penalizing the whole evaluation. No config option, prompt, verifier, TUI or persisted record changed.
 
 <!-- spec-check files=74 tests=2074 -->
+
+## Workstream: single-package autonomous loop (prompter + prompt library)
+
+**Goal.** The user asked to stop prompting entirely and to stop maintaining two projects. The prompt library (`/home/pauk/Documents/userfullPrompt/prompts`) and the autonomous orchestrator (`/home/pauk/Projects/prompter`) are now both bundled into this one plugin package: `prompts/` holds the 52 imported Markdown prompts, `src/prompter/*` holds the orchestrator, and `bin/prompter.mjs` is a second binary of the same npm package. Installing goal-loop installs the whole loop; there is no separate project to install, version, or maintain.
+
+**Wiring.** `package.json` `files` adds `prompts` and `bin/prompter.mjs`; `bin` adds `prompter`; `@opencode/client@2.3.2` moved from devDependencies to dependencies because the headless driver imports it at runtime. The default `promptLibrary` resolves from `src/prompter/defaults.ts · DEFAULT_PROMPT_LIBRARY` to `<package-root>/prompts` instead of a machine-specific absolute path, so it works from any install location. `PROMPTER_*` env vars and `<repo>/.prompter/config.json` still override per repo.
+
+**Safety preserved (review-before-merge).** One `in_review` task at a time; a tick refuses new work while one awaits a decision. Tasks run in `~/.prompter/worktrees/<repo>/<id>` on `autonomy/<id>` branched from the base branch; the main checkout is never switched or committed to. Dirty-tree gate, task/dollar/token/wall-clock caps, kill switches (`PROMPTER_STOP`, global/per-repo STOP files, SIGINT/SIGTERM), and a verifier gate forwarded to goal-loop. `prompter approve` refuses until `git merge-base --is-ancestor <commit> <baseBranch>` succeeds and prints the exact merge command otherwise — no auto-merge path exists in the shipped code.
+
+**Gates.** `bun install` clean (one lockfile). `bun run typecheck` clean. `cd test && bun test` → **2098 pass / 0 fail** across 91 files (29 snapshots), up from 2074 (+24 `prompter-*.test.ts` cases). `npm pack --dry-run --json` → **141 files** (74 previous + 52 prompts + 14 `src/prompter` modules + 1 bin); `test/package-integrity.test.ts` re-pinned 74 → 141. SPEC marker re-stamped in this change to `files=141 tests=2098`. A stale `.term/` runtime file from the imported library was removed from `prompts/` before packing.
+
+**Honest limits.** A live headless `/goal` run was not executed here (no model credits spent); the driver is adapted from goal-loop's proven `scripts/e2e.ts` pattern and is type-checked against `@opencode/client@2.3.2`. The original library directory is left untouched and can be archived once this copy is confirmed. No `/prompter` slash command is registered — this integration ships the CLI and bundled prompts; a session-side command can be added later if wanted.
+
+<!-- spec-check files=141 tests=2098 -->

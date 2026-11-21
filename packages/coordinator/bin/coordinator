@@ -998,7 +998,6 @@ do_merge_next() {
       safe_remove_worktree "$merge_wt" "${scratch}" "failed merge" >/dev/null 2>&1 || true
     fi
     git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
-    restore_state_stash
     release_merge_lock
     exit 1
   }
@@ -1141,8 +1140,6 @@ do_merge_next() {
       fail "spec-check --write failed in the merged tree (red suite or probe failure); dev untouched" \
         "fix the branch so 'bun test' is green in the merged tree, then re-run coordinator merge-next"
     fi
-  else
-    printf '%s\n' "$spec_note"
   fi
   printf '%s\n' "$spec_note"
 
@@ -1231,7 +1228,6 @@ do_merge_next() {
     printf 'discard: coordinator merge-abort %s\n' "$slug"
     # keep the lease submitted and the scratch branch; the caller finishes with merge-done
     safe_remove_worktree "$merge_wt" "${scratch}" "review" || true
-    restore_state_stash
     release_merge_lock
     return 0
   fi
@@ -1241,7 +1237,6 @@ do_merge_next() {
     printf 'merged result kept on branch %s for manual recovery\n' "$scratch" >&2
     printf 'recovery: git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$scratch" >&2
     safe_remove_worktree "$merge_wt" "${scratch}" "fast-forward blocked"
-    restore_state_stash
     release_merge_lock
     exit 1
   fi
@@ -1250,7 +1245,6 @@ do_merge_next() {
     printf 'error: cannot fast-forward %s onto the verified merge (COORDINATOR_TEST_FF_FAIL); merged result kept on %s\n' "$DEV_BRANCH" "$scratch" >&2
     printf 'recovery: git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$scratch" >&2
     safe_remove_worktree "$merge_wt" "${scratch}" "fast-forward blocked"
-    restore_state_stash
     release_merge_lock
     exit 1
   fi
@@ -1258,7 +1252,6 @@ do_merge_next() {
     printf 'error: cannot fast-forward %s onto the verified merge; merged result kept on %s\n' "$DEV_BRANCH" "$scratch" >&2
     printf 'recovery: git -C %s merge --ff-only %s\n' "$MAIN_ROOT" "$scratch" >&2
     safe_remove_worktree "$merge_wt" "${scratch}" "fast-forward blocked"
-    restore_state_stash
     release_merge_lock
     exit 1
   fi
