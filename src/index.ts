@@ -12,7 +12,7 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { findRepository, resolveCommitPolicy } from "./core/git.ts"
+import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
 import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
@@ -175,7 +175,10 @@ export default Plugin.define({
     try {
       const pluginRoot = pluginRootFromMeta(import.meta.dir)
       const repository = findRepository(ctx.location.directory)
-      const projectRoot = repository?.root ?? ctx.location.directory
+      // Anchor the scaffold at the git root: launching from a subfolder (e.g. docs/) must not create
+      // .term in that subfolder. resolveProjectRoot returns the repo root for a subfolder and the
+      // directory itself outside a repo, so the runtime-only path still applies there.
+      const projectRoot = resolveProjectRoot(ctx.location.directory)
       const startup = ensureStartupScaffold({ projectRoot, pluginRoot, learningPath: config.learning.path })
       if (startup.created.length > 0 || startup.notes.length > 0) {
         log.info("startup scaffold", { created: startup.created, existing: startup.existing, notes: startup.notes })

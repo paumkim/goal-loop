@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { mkdirSync, writeFileSync } from "node:fs"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -400,6 +401,28 @@ describe("learning-log runtime emission", () => {
     expect(iterRows[0]?.summary || iterRows[0]?.lesson).toBeTruthy()
     // loop ended clean (no planner) -> also terminal achieved
     expect(goalRows.some((r) => r.status === "achieved")).toBe(true)
+  })
+
+  test("anchors the journal at the repo root when armed from a subfolder", async () => {
+    const root = await mkdtemp(join(tmpdir(), "goal-learning-subdir-"))
+    dirs.push(root)
+    // A minimal git repo (the same markers findRepository reads) with a docs/ subfolder.
+    const git = join(root, ".git")
+    mkdirSync(join(git, "refs", "heads"), { recursive: true })
+    writeFileSync(join(git, "refs", "heads", "dev"), "0".repeat(40))
+    writeFileSync(join(git, "HEAD"), "ref: refs/heads/dev\n")
+    const docs = join(root, "docs")
+    mkdirSync(docs, { recursive: true })
+
+    // The session's directory is the subfolder where OpenCode was launched.
+    const h = harness(docs)
+    await h.controller.command({ sessionID: "ses_test", text: "make tests pass", delivery: "steer" })
+    h.verdicts.push({ verdict: "met", reason: "all checks green" })
+    await h.turn()
+
+    // The journal lands at the repository root, never in the launch subfolder.
+    expect((await readFile(join(root, ".term/goal-loop/learnings.jsonl"), "utf8")).trim().length).toBeGreaterThan(0)
+    await expect(readFile(join(docs, ".term/goal-loop/learnings.jsonl"), "utf8")).rejects.toThrow()
   })
 
   test("does not write when learning log is disabled", async () => {

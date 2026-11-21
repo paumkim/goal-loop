@@ -372,6 +372,31 @@ describe("plugin setup", () => {
       await dispose?.()
     }
   })
+  test("bootstrap from a subfolder creates .term only at the repository root", async () => {
+    const root = repository()
+    const docs = join(root, "docs")
+    mkdirSync(docs, { recursive: true })
+    // OpenCode was launched from docs/, so the host reports the subfolder as the location.
+    const { ctx, calls } = context(docs)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      // Repo root gets the full scaffold.
+      expect(existsSync(join(root, ".term/coordinator/config.json"))).toBe(true)
+      expect(existsSync(join(root, ".term/coordinator/state.json"))).toBe(true)
+      expect(existsSync(join(root, ".term/goal-loop"))).toBe(true)
+      expect(existsSync(join(root, "worktrees"))).toBe(true)
+      // The launch subfolder must never receive its own .term or worktrees.
+      expect(existsSync(join(docs, ".term"))).toBe(false)
+      expect(existsSync(join(docs, "worktrees"))).toBe(false)
+      expect(existsSync(join(docs, "SPEC.md"))).toBe(false)
+      // The commit rule still resolves the coordinator at the repo root, not the subfolder.
+      const goal = calls.commands.find((command) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "all tests pass" }, delivery: "steer" })
+      expect(calls.prompts.at(-1).text).toContain("Coordinator repo")
+    } finally {
+      await dispose?.()
+    }
+  })
   test("no commit rule outside a git repository", async () => {
     const directory = mkdtempSync(join(tmpdir(), "goal-plain-"))
     process.on("exit", () => rmSync(directory, { recursive: true, force: true }))
