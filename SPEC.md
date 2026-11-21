@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=142 tests=2160 -->
+<!-- spec-check files=142 tests=2173 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9727,3 +9727,61 @@ regression it introduced; do not repeat CXXVIII or re-litigate CXXX's design.
 - No live gateway replay (account-level free quota). Propagation is proven deterministically from a host-shaped
   `session.execution.failed` payload. If a host emits neither that event nor a prompt rejection, the evaluator's own
   budget still bounds the judge and aborts as before.
+
+## Workstream CXXXII — native delegated verdicts and a clean evidence digest (2026-11-21)
+
+### Why
+
+CXXX's judge was a plugin-created child with a synthetic completion: the `↳ Evaluator finished` notice rendered, but
+the live `Evaluator Subagent — …` chip was missing because that chip only exists for a real `subagent` tool part.
+The child's first message also dumped a raw `JSON.stringify` of tool arguments and full file bodies into a
+`<conversation>` block, which buried the evidence the rubric asks the judge to weigh.
+
+### What changed
+
+1. The kickoff directive (`core/prompts.ts · DELEGATE_VERDICT`) tells the worker to obtain each verdict by calling the
+   native task tool with `agent: "evaluator"`. That produces the real chip while the judge runs and a native
+   `<subagent>` completion when it finishes. Continuations carry the shorter reminder.
+2. A prompt hook scoped to `evaluator` children of a live goal appends a structured `<goal-evaluation>` block with
+   the condition, a turn fact line and a clean transcript digest. Other prompts are untouched; enrichment is
+   best-effort and never blocks admission.
+3. `Evaluator.evaluate` prefers a delivered native report: `src/index.ts · nativeVerdict` reads the newest unused
+   `<subagent>` completion from the evaluator agent and consumes it once (a duplicate turn-end cannot re-arm from
+   the same report). The native child is a session-mode judge, so its result becomes the `primary` and still passes
+   through the `consensus: 2` gate — delegation never buys a one-vote `met`. Plugin fallback-judge reports are
+   excluded by childID (`findNativeReport`) so a prior turn's verdict is never replayed as a fresh one, and reports
+   still `running` are left for the host's final delivery. A missing or unreadable report falls through to the
+   existing generation judge, so a worker that does not delegate is still judged — the visual path never weakens
+   the verdict. No config key, command, persisted field or port contract changed; the optional report reader is a
+   constructor dependency, not a new port method.
+4. `core/transcript.ts` now summarises tool arguments by identifying field (a bash command verbatim, other tools by
+   at most two scalar fields) and indents output under `output:` / `error:` headers instead of dumping raw JSON.
+   Tool-name/state markers, newest-first packing, budgets and surrogate-safe truncation are unchanged.
+
+### Acceptance criteria
+
+1. A delivered evaluator report is consumed as the verdict with no generation call; absent report uses the fallback.
+2. The digest shows `command: <text>` and structured output, never `{"command":…}`.
+3. `bun run check` green; marker re-counted in-commit (`tests=2173`); packed files unchanged at 142.
+
+### Review fixes (same workstream)
+
+- The first cut's native report reader could replay the *previous* turn's fallback-judge verdict: the plugin's
+  `spawnJudge` synthetic carries the same `source: "subagent"` / `agent: "evaluator"` metadata as a native report.
+  `findNativeReport` now excludes reports whose `childID` belongs to a plugin judge (tracked in `pluginJudgeIDs`),
+  and skips `state: "running"` reports, so every consumed verdict belongs to the turn that produced it.
+- `Evaluator.evaluate` returned a native verdict before the `consensus: 2` gate, letting one delegated child rule
+  `met` where two judges are required. The result is now the `primary` with `via: "session"` and runs the existing
+  consensus path.
+- `EvaluatorPort.nativeVerdict` was declared but never implemented or called (the constructor dep is the real
+  wiring); removed so the port contract is genuinely unchanged. `<condition>` in the enrichment block is escaped
+  like `directive()` does, and tool-argument summaries now share one budget instead of capping each field.
+
+### Honest limits
+
+- The chip appears only when the worker actually delegates; the directive is an instruction, not a guarantee. The
+  generation fallback keeps verdicts correct if it does not, at the cost of the live chip for that turn.
+- No live E2E replay: account-level free quota (429, reset ≈ 2026-11-22 00:02 UTC) still blocks a real `/goal` run.
+  The native report path is pinned by deterministic unit tests against host-shaped `<subagent>` messages.
+- Full TUI activity-chip parity for plugin-spawned children remains impossible: the plugin context has no Job domain
+  and no tool-progress callback; the chip now comes from the host's own tool call, not from plugin emission.

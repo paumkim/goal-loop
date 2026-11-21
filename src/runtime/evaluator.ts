@@ -17,6 +17,11 @@ import { truncate } from "../core/format.ts"
 import { stripReasoningControl } from "../core/sanitize.ts"
 
 interface EvaluatorDeps {
+  /**
+   * The verdict delivered by a worker-delegated `evaluator` subagent, if one arrived for this turn. Native
+   * delegation is the preferred (visible) judge path; when no report exists the generation paths below run.
+   */
+  nativeVerdict?(sessionID: string, signal: AbortSignal): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
   /** Generation on a specific model. The host runs one judge generation in a fresh child of `sessionID`. */
@@ -91,7 +96,22 @@ export class Evaluator implements EvaluatorPort {
     // and a bare timeout with no app-level race hung forever when the SDK ignored the signal.
     const signal = request.signal
     const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
-    const primary = await this.primary(request, facts, signal)
+    // Preferred path: the worker itself delegated the verdict to the `evaluator` subagent via the native task
+    // tool. Its report is already in the parent transcript and produced the live chip in the terminal. The native
+    // child is a session-mode judge, so its result becomes the `primary` and still passes through the consensus
+    // gate below — a repo requiring two judges is not weakened by delegation. A missing/failed native report
+    // falls through to the generation judge, so a worker that did not delegate is still judged.
+    let primary: { result: EvaluationResult; via: "session" | "independent" } | undefined
+    if (this.deps.nativeVerdict) {
+      try {
+        const native = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s), signal, "native verdict")
+        if (native) primary = { result: native, via: "session" }
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.log.warn("native evaluator report unavailable; using the generation judge", { error: String(error) })
+      }
+    }
+    if (!primary) primary = await this.primary(request, facts, signal)
     if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
     const secondPath = primary.via === "session" ? "independent" : "session"
     try {

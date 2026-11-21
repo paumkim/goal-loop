@@ -6,6 +6,17 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
 export const MARKER = "goal"
 
+/**
+ * Instruct the worker to obtain its verdict by delegating to the `evaluator` subagent — the native task tool
+ * renders the live chip in the terminal and the child's `<subagent>` report is consumed as the verdict. Kept as
+ * one exported sentence so the kickoff directive, continuation and retry all carry the same contract.
+ */
+export const DELEGATE_VERDICT =
+  `When your work for this turn is done, delegate the verdict check to the 'evaluator' subagent with the task tool ` +
+  `(agent: 'evaluator', a short 3-5 word description). Give it only this task: 'Judge the goal condition and return ` +
+  `the verdict JSON.' The harness supplies the condition and evidence; its report is the verdict. Do not judge ` +
+  `the condition yourself or act on a verdict before that report arrives.`
+
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
 /**
@@ -194,6 +205,8 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
     `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation.`,
     ``,
+    DELEGATE_VERDICT,
+    ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
   if (isFuzzyCondition(condition)) {
@@ -270,7 +283,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     ...(learnings ? [``, escape(learnings)] : []),
     ``,
-    `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
+    `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it. Delegate the verdict to the evaluator subagent when the work is done.`,
     policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-continuation>`,
   ].join("\n")

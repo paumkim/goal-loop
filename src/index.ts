@@ -12,9 +12,10 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX } from "./core/evaluator-agent.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX, findNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
+import { parseVerdict } from "./core/verdict.ts"
 import { renderTranscript } from "./core/transcript.ts"
 import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
@@ -247,6 +248,9 @@ export default Plugin.define({
     // that rejects auxiliary generate calls. A fresh child per verdict keeps judges isolated from their earlier
     // conclusions; the completion is reported back as a queued, non-waking `<subagent>` message.
     const judgeChildren = new Set<string>()
+    // Persistent: the fallback judge's synthetic report must never be mistaken for a native delegated verdict on a
+    // later turn. Native children get their own IDs, so this set never overlaps a real delegation.
+    const pluginJudgeIDs = new Set<string>()
 
     const spawnJudge = async (parentSessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
       const { id } = await ctx.session.create({
@@ -257,6 +261,7 @@ export default Plugin.define({
         model: model as any,
       } as any)
       judgeChildren.add(id)
+      pluginJudgeIDs.add(id)
       const abort = new AbortController()
       let answer = ""
       let state: "completed" | "error" = "completed"
@@ -334,6 +339,23 @@ export default Plugin.define({
     // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt from the transcript digest.
     const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
       stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal }))
+
+    // A worker that delegates the verdict to the native `evaluator` subagent leaves a `<subagent>` completion in
+    // this transcript. Consume the newest unused one so a verdict is read exactly once (a duplicate turn-end must
+    // not re-arm from the same report). `findNativeReport` excludes this plugin's own fallback-judge reports so a
+    // prior turn's verdict is never replayed as a fresh one.
+    const consumedReports = new Set<string>()
+    const nativeVerdict = async (sessionID: string, signal: AbortSignal) => {
+      const messages = await evaluatorContext(sessionID, signal)
+      const candidate = findNativeReport(messages, consumedReports, pluginJudgeIDs)
+      if (!candidate) return undefined
+      consumedReports.add(candidate.key)
+      if (candidate.state === "error") return { verdict: "not_met" as const, reason: `evaluator subagent failed: ${candidate.body.slice(0, 200)}` }
+      const parsed = parseVerdict(candidate.body)
+      if (parsed) return parsed
+      return { verdict: "not_met" as const, reason: `evaluator subagent returned an unreadable verdict: ${candidate.body.slice(0, 200)}` }
+    }
+
     // Resolve per generation so a /model switch mid-goal is followed on the next verdict.
     const sessionModel = async (sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined> => {
       const current = (await ctx.session.get({ sessionID }, { signal })).model
@@ -342,6 +364,7 @@ export default Plugin.define({
 
     const evaluator = new Evaluator(
       {
+        nativeVerdict,
         // Session mode is still a real child turn: the child has no parent conversation, so embed the parent
         // digest in the prompt (the rubric says "conversation above"). Every judge path now clears the gate.
         sessionGenerate: async (sessionID, prompt, signal) => {
@@ -516,6 +539,39 @@ export default Plugin.define({
     // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
     // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
     await ctx.session.hook("prompt", async (event) => {
+      // A worker delegating the verdict leaves a short task prompt in the native call ("Judge the goal condition
+      // and return the verdict JSON"). Give that child the full evidence contract, formatted cleanly, so its view
+      // reads like a real delegated task instead of the former raw `<conversation>` dump. Enrichment is additive
+      // and scoped to evaluator children of a live goal — every other prompt is untouched.
+      // Plugin-spawned fallback judges already carry the full rubric and digest — never double them.
+      if (!judgeChildren.has(event.sessionID)) try {
+        const child = await ctx.session.get({ sessionID: event.sessionID })
+        const agentID = typeof child.agent === "string" ? child.agent : (child.agent as any)?.id
+        if (agentID === EVALUATOR_AGENT_ID && child.parentID) {
+          const condition = controller.activeCondition(child.parentID)
+          if (condition) {
+            const digest = renderTranscript(await evaluatorContext(child.parentID, lifetime.signal), { maxChars: config.evaluator.maxTranscriptChars })
+            const facts = `turn ${(controller.live(child.parentID)?.turns ?? 0) + 1}`
+            const block = [
+              `<goal-evaluation>`,
+              `Judge whether this condition holds, using only the evidence below.`,
+              ``,
+              `<condition>${condition.replace(/<\/condition>/gi, "<\\/condition>")}</condition>`,
+              `<facts>${facts}</facts>`,
+              ``,
+              `<conversation>`,
+              digest || "(no visible evidence yet)",
+              `</conversation>`,
+              ``,
+              `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"..."}. No preamble.`,
+              `</goal-evaluation>`,
+            ].join("\n")
+            event.prompt.text = `${event.prompt.text}\n\n${block}`
+          }
+        }
+      } catch {
+        // Enrichment is best-effort; a failed lookup must never block the child's prompt.
+      }
       const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
