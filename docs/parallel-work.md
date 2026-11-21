@@ -92,6 +92,33 @@ If a merge died mid-flight, `coordinator doctor` tells you: main-checkout state,
 worktrees, dangling `node_modules` symlinks, SPEC marker vs reality, merge-lock health.
 Exit code 1 means at least one check failed; the output says what and how to fix it.
 
+## Field gotchas (audited against the binary, 2026-11-21)
+
+A note circulated with eight "gotchas". The table keeps what the code actually enforces and corrects
+what did not hold; every verdict was checked against `packages/coordinator/bin/coordinator` (and
+`scripts/spec-check.ts` for the marker claim).
+
+| Field note | Verdict | Working rule |
+|---|---|---|
+| Overlapping live lease rejects `claim` without `--force` | Accurate | Claim a broad scope up front. Caveat: `claim --force` only prints `warning: path overlap with <slug> (forced)` to stderr — it is **not** persisted to the lease (unlike `submit --force`, which records `forcedScope*`). Overlaps with `done` leases never block. |
+| Scope is checked at `submit`, not `claim`; `--force` overrides | Accurate | Submit from the worktree; expect listed violations and a logged override. Shared paths (`state.json`, `docs/changelog.html`, config `sharedPaths`) never fail the check. |
+| `submit` takes no slug argument | Accurate | It derives the slug from the current `wt/<slug>` branch; any positional arg is `unexpected argument`. |
+| `merge-next` needs an explicit target from the main repo | Accurate, now discoverable | From the main repo, pass `--target <slug>` (or the bare slug); from a `wt/<slug>` worktree it defaults to your own lease. Top-level `--help` now lists `[<slug>|--target <slug>]`. |
+| `dev` can move while you work | Accurate | The stale-base guard fails with `merge-base(...) is not dev tip` and leaves `dev` untouched. Check `status --json`/`queue --json` first and expect to `git rebase dev` in the worktree, resolve, re-run `bun run check`. |
+| Rebase conflicts cluster in `SPEC.md` / `docs/changelog.html` | Accurate; advice was outdated | Both are shared/contested. Keep both sections and drop stale markers, but you do **not** have to ship a docs commit to land: `merge-next` re-counts the SPEC marker and regenerates changelog/stamps on the merged tree. Local regeneration is only for making your own `bun run check` green. |
+| The SPEC gate reads the first `spec-check` marker, not the last | Accurate | Only the first occurrence is parsed/rewritten (`scripts/spec-check.ts`); trailing per-workstream markers are historical. |
+| A submitted lease cannot be re-submitted | Accurate; conclusion was too hedged | **Do not re-submit.** After `git rebase dev` the `wt/<slug>` branch itself is rewritten, so its tip is the rebased commit and `merge-next` tracks it — no re-submit, no release/re-claim. `submit` refuses a `submitted` lease (`expected claimed`); release + re-claim only if you are abandoning that work. |
+
+Two omissions worth remembering:
+
+- **Drift is not "committed after submit".** A commit on the checked-out branch advances the branch tip
+  too, so there is no drift. Drift requires a detached HEAD or a branch reset; `merge-next` refuses it
+  (`dev` untouched) with `git reset --hard <branch>` as the discard path. The recovery no longer advises
+  the impossible "re-submit".
+- **The main checkout must be clean** apart from exempt `.term/coordinator/state.json` dirt before
+  `merge-next`; the preflight also names overlapping in-flight leases and `SEMANTIC-RISK` module
+  neighbours so you can re-run their checks after your merge lands.
+
 ## Never
 
 - Commit `dev` or `main` directly. The only commits on `dev` are merges by the pipeline

@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2109 -->
+<!-- spec-check files=141 tests=2110 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8782,3 +8782,108 @@ but the empty string: a silent failure.
 - No change to the verdict parser, retry ladder, config, rubric, verifier gate, persisted record shape or TUI.
 
 <!-- spec-check files=141 tests=2109 -->
+
+## Workstream — Audit of "Coordinator workflow gotchas": verify each claim, fix the discoverability gaps (2026-11-21)
+
+Status: specified here first, then implemented and verified against this section. Trigger: a field note
+with eight numbered gotchas about the coordinator flow was handed over with "go over this and see if
+there are any improvements can be done. auditing." This section is the interpretation, the acceptance
+criteria and the verification record — the tree is truth, so every verdict below cites the code that
+settles it.
+
+### Interpretation
+
+The note is a practitioner's map of coordinator surprises, not a spec. "Improvements" means two things,
+both in scope here: (1) separate the claims that the binary actually enforces from the ones that are
+outdated or imprecise, so a reader stops guessing; (2) fix the small tooling gaps that *caused* the
+surprises, where the fix is a low-risk help/message change with a regression test. The workflow itself
+(claim → work in worktree → submit → merge-next) is not redesigned; `docs/parallel-work.md` stays the
+canonical how-to and gains a concise, corrected field-gotcha reference.
+
+### Acceptance criteria
+
+- AC1 — Verdict table: all eight pasted claims are classified (accurate / partially accurate / outdated)
+  against `packages/coordinator/bin/coordinator`, each with a line-level citation. No claim is accepted
+  on the note's word alone.
+- AC2 — Discoverability fix: the top-level `coordinator --help` advertises
+  `merge-next [<slug>|--target <slug>] [--review]`. The detailed `merge-next --help` already documents
+  `--target`; the summary that agents actually read first does not, which is the root cause of gotcha 4.
+- AC3 — Message fix: the worktree-drift recovery in `merge-next` stops advising "re-submit them".
+  `submit` refuses a lease whose status is `submitted` ("expected claimed"), so that advice is impossible
+  as written; the corrected message points to discard or release + re-claim. A regression test pins both
+  message fixes.
+- AC4 — Corrected field reference: `docs/parallel-work.md` carries a gotcha table that records the
+  accurate claims, marks the two corrections (claim `--force` is a transient warning, not a persisted
+  lease field; after a rebase, do **not** re-submit — `merge-next` tracks the branch tip), and adds the
+  omitted edge cases (drift from post-submit detached commits, shared-path exemptions, auto re-count of
+  SPEC/changelog on the merged tree).
+- AC5 — Green gate: `bun run check` exit 0 (tsc, full `bun test`, dist, compile, TUI load, docs freshness,
+  invariant sweep, SPEC honesty). The enforced (first-occurrence) marker and this section's trailing
+  marker are re-counted in-commit. No secrets, no deletions, no relaxed tests.
+- AC6 — Clean hand-off: all edits committed on `wt/<slug>` only; `submit` succeeds; `dev`/`main` untouched
+  by direct commit.
+
+### Findings (AC1) — verdicts against source
+
+1. **Claim path overlap — accurate.** `do_claim` calls `check_overlap` and exits 1 unless `--force`
+   (coordinator:438-442); overlap is checked only against non-`done` leases (301-304). **Correction:** the
+   note says the override "is logged"; it is not — claim `--force` emits a transient stderr warning
+   `path overlap with <slug> (forced)` (316-318) and writes no `forced*` field. Only `submit --force` is
+   persisted (`forcedScope`, `forcedScopeAt`, `forcedScopeFiles`:608-610).
+2. **Scope enforced at submit — accurate.** Violations are the three-dot diff `base...HEAD` against the
+   claimed paths, minus `SHARED_PATHS` (561-572); `--force` logs the override (608-610). **Addition:**
+   shared paths (`.term/coordinator/state.json`, `docs/changelog.html`, config `sharedPaths`) never fail
+   the check, so a wide claim is rarely needed just for bookkeeping files.
+3. **submit takes no slug — accurate.** Any positional argument hits `unexpected argument` (504-505);
+   the slug is derived from the current `wt/<slug>` branch (508-519).
+4. **merge-next needs an explicit target — accurate, but self-inflicted.** From the main repo there is no
+   `caller_slug`, so with no target it errors `must target a lease explicitly; run from your wt/<slug>
+   worktree or pass --target <slug>` (857-871). `--target`/`--target=`/bare positional slug all work
+   (823-843). **Root cause fixed by AC2:** the top-level usage string lists only `merge-next [--review]`
+   (1648), hiding `--target`.
+5. **dev can move while you work — accurate.** The stale-base guard fails when `merge-base(dev,branch)
+   != dev` tip, leaves dev untouched, and prints the exact `rebase dev` recovery (1051-1060). Checking
+   `status --json`/`queue --json` before merging is already the documented habit.
+6. **Rebase conflicts in SPEC.md / docs/changelog.html — accurate as observation, outdated as advice.**
+   Both are shared/contested. But `merge-next` re-counts the SPEC marker on the merged tree and commits
+   it (1124-1144) and regenerates changelog/stamps there (1146-1168), so the agent does not have to ship
+   those fixes to land a merge; local regeneration is only needed to make the agent's own `bun run check`
+   green. Keeping both workstream sections and dropping stale markers remains sound (only the first
+   marker is enforced — see 7).
+7. **First marker is the enforced one — accurate.** `parseMarker` and `writeMarker` use a non-global
+   regex, so only the first `<!-- spec-check files=N tests=N -->` is read or rewritten
+   (scripts/spec-check.ts:76-80, 114-120). Trailing per-workstream markers are historical annotations.
+8. **A submitted lease cannot be re-submitted — accurate, but the conclusion is too hedged.** `submit`
+   requires status `claimed` (542-546), so a submitted lease is refused. The definitive answer is
+   "don't re-submit": after `git rebase dev`, `wt/<slug>` itself is rewritten, so the branch tip *is* the
+   rebased commit, the worktree HEAD matches it, the stale-base check passes and the drift guard passes —
+   `merge-next` tracks the branch tip. Release + re-claim is unnecessary and loses queue position.
+   **Correction made by AC3:** the drift-guard error currently says "or re-submit them" (1073-1074),
+   which is impossible; it now points to discard or release + re-claim.
+
+### Omitted gotchas added to the field reference (AC4)
+
+- Worktree drift is not "committed after submit" on the checked-out branch (that advances the branch tip
+  too); it needs a detached HEAD or a branch reset, and merge-next refuses it with dev untouched
+  (1062-1075). Recovery: `git reset --hard <branch>` to discard.
+- `merge-next` also requires the main checkout clean apart from exempt `state.json` dirt (1041-1045);
+  the preflight names overlapping in-flight leases and `SEMANTIC-RISK` module neighbours (1170-1220).
+- `claim --force` on an existing lease keeps the existing branch/worktree (idempotent creation,
+  444-476) and only rewrites the lease record — useful to know before "fixing" a stale claim.
+
+### Verification
+
+Recorded after implementation:
+- `bun test coordinator.test.ts coordinator-merge-safety.test.ts` → **52 pass / 0 fail** (329 expect calls),
+  including the new top-level-help test and the drift-message regression assertions.
+- `packages/coordinator/bin/coordinator --help` now prints
+  `merge-next [<slug>|--target <slug>] [--review]`; `spec-check --write` re-counted the enforced marker
+  `141/2109 → 141/2110` (the one added test). No packed-file change: all edits are in already-shipped
+  `packages/coordinator/bin/coordinator`, docs, SPEC and tests.
+- Full `bun run check` exit 0 at this HEAD: `tsc --noEmit` clean; `cd test && bun test` → **2110 pass /
+  0 fail** across 91 files (29 snapshots, 199,057 expect() calls); `check:dist` ok; `compile` rebuilt
+  `dist/tui.js`; `check:tui` ok; `docs:check` passed; `invariant-sweep` ok; `check:spec` ok
+  (141 files, 2110 tests match SPEC.md). The shipped-file count is unchanged, so only the test count
+  moved (2109 → 2110) and the enforced marker was re-counted in-commit.
+
+<!-- spec-check files=141 tests=2110 -->

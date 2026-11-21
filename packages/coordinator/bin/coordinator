@@ -1071,7 +1071,7 @@ do_merge_next() {
     br_head=$(git -C "$MAIN_ROOT" rev-parse "$branch" 2>/dev/null || printf '')
     if [ -n "$wt_head" ] && [ -n "$br_head" ] && [ "$wt_head" != "$br_head" ]; then
       fail "worktree drift for lease $slug: worktree HEAD $wt_head differs from submitted branch $branch tip $br_head; dev untouched" \
-        "discard the post-submit commits (git -C $wt_abs reset --hard $branch) or re-submit them, then re-run coordinator merge-next"
+        "discard the post-submit commits (git -C $wt_abs reset --hard $branch) then re-run coordinator merge-next; a submitted lease cannot be re-submitted — to land different work, release + re-claim a fresh lease"
     fi
     loose=$(git -C "$wt_abs" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -c . || true)
     if [ "${loose:-0}" != "0" ]; then
@@ -1645,7 +1645,7 @@ show_help() {
   printf '  heartbeat                                           liveness check\n'
   printf '  submit [--force]                                    submit the current wt/<slug> claimed lease; commits are checked against the claimed paths (--force overrides, logged to the lease)\n'
   printf '  release <slug> [--force]                            release a claimed lease that will never be submitted (idle or abandoned): done, worktree removed, dirty bytes saved to a ref, a branch with commits kept\n'
-  printf '  merge-next [--review]                               merge the oldest submitted lease into $DEV_BRANCH via a dedicated merge worktree; --review stops before the fast-forward\n'
+  printf '  merge-next [<slug>|--target <slug>] [--review]       merge a submitted lease into $DEV_BRANCH via a dedicated merge worktree; --target names a lease from the main repo, --review stops before the fast-forward\n'
   printf '  merge-done <slug>                                   finish a --review merge after dev was fast-forwarded by hand\n'
   printf '  merge-abort <slug>                                  discard a --review merge (scratch branch deleted, lease stays submitted)\n'
   printf '  status [--json] [--all]                             submitted/done counts, or per-lease JSON for active leases (--all includes done) with summary/counts/dirty state\n'
