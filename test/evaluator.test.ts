@@ -622,6 +622,29 @@ describe("Evaluator — inherit the parent session's model", () => {
     ])
   })
 
+  test("a hung session-model lookup is bounded by the evaluator timeout", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({
+      // Ignore the signal and never settle: a pathological host session lookup must not hang the goal.
+      sessionModel: () => new Promise(() => {}),
+    })
+    const evaluator = new Evaluator(fake, { ...inheritConfig(), timeoutMs: 50 }, COMMIT, log)
+    const started = Date.now()
+    const outcome = await Promise.race([
+      evaluator.evaluate(request()).then(
+        (result) => result as { verdict: string },
+        (error: unknown) => ({ verdict: `error: ${String(error)}` }),
+      ),
+      new Promise<{ verdict: string }>((resolve) => setTimeout(() => resolve({ verdict: "HUNG" }), 1_000)),
+    ])
+    expect(outcome.verdict).not.toBe("HUNG")
+    expect(Date.now() - started).toBeLessThan(1_000)
+    // Bounded resolution degrades to the session evaluator instead of hard-failing the evaluation.
+    expect(calls.session).toHaveLength(1)
+    expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
+  })
+
   test("pinned and session modes never consult the session-model port", async () => {
     let portCalls = 0
     const { fake } = deps({

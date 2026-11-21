@@ -1,9 +1,35 @@
 import { describe, expect, test } from "bun:test"
 import { readFileSync } from "node:fs"
-import { extractResult, isTerminal, writeLogLine } from "../src/prompter/driver.ts"
+import { budgetStoppedResult, extractResult, isTerminal, liveBudgetStop, writeLogLine } from "../src/prompter/driver.ts"
+import { DEFAULT_CONFIG } from "../src/prompter/defaults.ts"
 import { GoalRpc } from "../src/prompter/goal-rpc.ts"
 import { reviewLines } from "../src/prompter/review.ts"
 import type { TaskState } from "../src/prompter/types.ts"
+
+describe("driver live budget enforcement", () => {
+  const config = { ...DEFAULT_CONFIG, maxSpendUsd: 0.5, maxTokens: 1_000 }
+  const overBudget = { status: "achieved", reason: "done", spend: { cost: 0.75, input: 600, output: 500 } }
+
+  test("the spend and token caps are read from the live goal record during the task", () => {
+    // The CLI budget is only noted after runTask returns, so polling it alone can never stop overspend.
+    expect(liveBudgetStop(config, overBudget)).toMatch(/spent/)
+    expect(liveBudgetStop({ ...config, maxSpendUsd: 0 }, overBudget)).toMatch(/tokens/)
+  })
+
+  test("zero caps mean unlimited and under-cap records do not stop", () => {
+    expect(liveBudgetStop(config, { status: "active", spend: { cost: 0.1, input: 10, output: 10 } })).toBeUndefined()
+    expect(liveBudgetStop({ ...config, maxSpendUsd: 0, maxTokens: 0 }, overBudget)).toBeUndefined()
+    expect(liveBudgetStop(config, null)).toBeUndefined()
+  })
+
+  test("a breach forces a failed result even when the goal reached a terminal achieved", () => {
+    const result = extractResult(overBudget)
+    expect(result.status).toBe("achieved")
+    const forced = budgetStoppedResult(result, "budget: spent $0.75 of $0.50")
+    expect(forced.status).toBe("failed")
+    expect(forced.reason).toContain("budget: spent")
+  })
+})
 
 describe("driver result extraction", () => {
   test("reads status, turns, cost, and tokens from a goal record", () => {

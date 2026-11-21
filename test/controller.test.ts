@@ -1846,6 +1846,31 @@ describe("terminal record pruning after finish (opportunistic)", () => {
       expect(h.controller.snapshot(SID)?.queued).toBeTrue() // continuation after not_met queued
     })
 
+    test("a straggler succeeded while awaiting a continuation still clears the heartbeat paint", async () => {
+      const h = harness()
+      await h.set()
+      h.setWork({ subagents: 1, shells: 0 })
+      await h.turn()
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      // An idle check-in dispatches a continuation while the background deferral is still pending.
+      await h.clock.advance(30 * 60_000)
+      expect(h.calls.synthetic).toHaveLength(1)
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+
+      // The continuation's execution-started is swallowed (restart/reconnect). A tool call and the
+      // succeeded still arrive: the succeeded is dropped as a straggler, but the execution ended, so the
+      // pill must flip straight back to waiting instead of sticking on active forever.
+      h.controller.onToolCalled(SID)
+      expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+      const before = h.changes.length
+      await h.controller.onExecutionSucceeded(SID)
+      await flush()
+      expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+      expect(h.changes.at(-1)?.waiting).toBeTrue()
+      expect(h.changes.length).toBe(before + 1)
+    })
+
     test("evaluator timeout/failure retries with bounded backoff and keeps snapshots non-stuck", async () => {
       const h = harness()
       await h.set("the sky is blue")

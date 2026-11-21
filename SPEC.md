@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2119 -->
+<!-- spec-check files=141 tests=2126 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8946,3 +8946,102 @@ models (a `/model` change, an agent default change, a fallback provider).
 - Line-shift bookkeeping: the new config helper shifts the historical docs reference into `src/core/config.ts`
   from old line 162 to line 176 (from an earlier workstream); the referenced code text is unchanged, and
   `docs-line-refs` is re-run.
+
+## Workstream — audit recent changes for bugs (2026-11-21)
+
+Status: specified first (fuzzy request), then audited and verified against this section.
+
+### Interpretation
+
+The user asked to "audit recent changes for bugs". *Recent changes* = the code-behavior commits landed on `dev`
+in the window `aa4da0c^..HEAD` (2026-11-20/21), i.e. the malformed-but-readable verdict parser (`aa4da0c`),
+the single-package prompter bundle + dedupe (`0dccc1b`), the instant waiting-pill heartbeat flip (`55c6134`),
+the review fixes for prompter retry/whitelist/shutdown + verdict forward-pointer/lenient parser (`690ba9d`),
+the evaluator tool-strip + unreadable-reply logging (`70d2ed6`), the coordinator gotcha/help fixes (`32e1bba`),
+and the evaluator parent-model inheritance (`e17020b`), plus their supporting chore/doc commits. Each of these
+already carries its own SPEC workstream; this pass is a fresh, independent bug hunt over the combined tree,
+not a re-narration of those sections. *Audit* = read-only review of the code against its tests and documented
+contract, classify each finding as a real bug vs. pinned-by-design behavior, reproduce every claimed bug,
+then fix confirmed defects with regression tests, run the full routine, and hand off through the coordinator.
+
+### Acceptance criteria
+
+1. Every recent code-behavior change is reviewed against its own tests and the documented contract; findings
+   are classified as real bugs vs. pinned-by-design behavior, each with a line-level citation.
+2. Each real defect is reproduced with fresh evidence before changing code, then fixed with a regression test
+   that fails on the pre-fix code and passes after (fix-then-pin discipline), without weakening existing tests.
+3. `bun run check` passes in the worktree with fresh output recorded below.
+4. No unreviewed open defect from this audit remains; items kept by design are explicitly recorded as such.
+5. Changes are committed on `wt/<slug>` and submitted via the coordinator; no direct commit to `dev`/`main`.
+6. This SPEC section records the interpretation, the acceptance criteria, the findings and the fresh evidence.
+
+### Findings
+
+Four independent read-only reviews covered the evaluator/config/plugin changes, the runtime controller, the
+bundled prompter loop, and the verdict parser/coordinator. Six real defects were reproduced with fresh evidence
+before any code changed, then fixed with regression tests that fail on the pre-fix code. Fix-then-pin
+discrimination is recorded per finding below.
+
+**Verdict parser (`src/core/verdict.ts`) — two parser-inversion bugs.**
+
+1. **HIGH — a verdict object quoted inside a malformed reason overrode the real verdict.** `jsonObjects()`
+   restarted its balanced-object scan at *every* `{`, including braces inside a string value, so the inner
+   `{"verdict":"met"}` was emitted as a strict candidate and parsed before the real outer field. The
+   `isObjectKeyPosition` guard protected only the lenient path. Live reproduction:
+   `{"verdict":"not_met","reason":"prior eval returned\n{"verdict":"met"} but it was wrong"}` parsed as `met`
+   (and the mirror parsed a `met` outer as `not_met`); a false `met` can end/advance a goal on failed work.
+   Fix: one left-to-right string-aware pass yields only top-level object spans. Regression test in
+   `test/core.test.ts` failed pre-fix (`Expected "not_met", Received "met"`).
+2. **MEDIUM — the lenient pass hid a real verdict behind an embedded token.** `lenientFields()` used
+   `.exec()` (first match only); an embedded `"verdict":"met"` inside the reason failed the object-key guard
+   and the loop moved to the next *key* instead of the next *occurrence*, so a genuine
+   `"verdict":"not_met"` after it was never seen. Live reproduction returned `undefined`, burning all three
+   repair attempts exactly like the stall CXVII removed. Fix: global regex, scan all occurrences, accept the
+   first at an object-key position. Regression test in `test/core.test.ts` failed pre-fix (`undefined`).
+
+**Runtime (`src/runtime/controller.ts`) — one stuck-pill bug.**
+
+3. **MEDIUM — a straggler `succeeded` left the pill stuck on `active`.** `onExecutionSucceeded` returned at
+   the straggler guard (`awaitingExecution || dropStragglerSucceeded`) *before* clearing `heartbeating`. When a
+   continuation's `execution.started` was swallowed (restart/reconnect) but tool events and the succeeded
+   arrived, the drop left `heartbeating === true` forever; `snapshotRecord` derives `waiting` from that flag,
+   so a deferred session painted `active` permanently — and the 15s mirror re-read the same stuck flag. Fix:
+   clear the heartbeat and `syncWaitingPaint` before the drop guard (an execution ended regardless of whether
+   it is evaluated). Regression test in `test/controller.test.ts` drove an idle check-in continuation with a
+   missed start and failed pre-fix (`waiting === false`, no flip event).
+
+**Evaluator (`src/runtime/evaluator.ts`) — one unbounded-await bug.**
+
+4. **LOW (conditional) — inherited-model resolution had no timeout.** `resolveModel()` awaited the
+   `sessionModel` host port outside `underBudget`, so a hung `ctx.session.get` stalled `evaluate()`/`summarize()`/
+   `nextGoal()` indefinitely with no `EvaluationTimeoutError`, retry or diagnostic — the failure mode
+   `underBudget` exists to prevent. Fix: wrap the port call in `underBudget(..., "model resolution")`; the
+   existing catch degrades to the session evaluator, so inherit still never hard-fails. Regression test in
+   `test/evaluator.test.ts` used a never-settling, signal-ignoring port and hung pre-fix (race returned `HUNG`).
+
+**Prompter (`src/prompter/*`) — one safety-cap bug and one path bug.**
+
+5. **MEDIUM — dollar/token caps were never enforced.** `budgetStop` checks `budget.costUsd`/`tokens`, but
+   `tick` only calls `noteUsage` *after* `awaitRunTask` returns and always breaks after one task; the driver's
+   `shouldStop` polled the same still-zero budget, so spend/token breaches could never fire (the wall-clock
+   cap did, because it reads `Date.now()`). An over-budget task was still parked `in_review`. Fix: new pure
+   `liveBudgetStop(config, record)` reads cost/tokens from the live goal record each poll and halts mid-task;
+   `budgetStoppedResult` forces `failed` so a breach is never presented as achieved. Regression tests in
+   `test/prompter-driver.test.ts` failed pre-fix (module error — the helpers did not exist).
+6. **LOW — a relative `stateFile` was not resolved against the repo.** `normalize` resolved every other path
+   field but used `stateFile` verbatim, so a configured relative journal landed in the CLI's CWD when invoked
+   from elsewhere — misplacing state and potentially bypassing the one-`in_review` guard. Fix: resolve it like
+   `promptLibrary` (absolute as-is, else relative to `repo`). Regression assertion in
+   `test/prompter-config.test.ts` failed pre-fix (`"journal.jsonl"` vs `"/repo/journal.jsonl"`).
+
+**Reviewed, not changed (by design / pinned).** Coordinator help/drift messages and dedupe logic match their
+tests and source; tool-stripping, config-sentinel resolution and the ready-log match their contracts; the MPC
+consensus paths and verdict forward-pointer/zero-tool interaction are pinned. One latent note was deliberately
+left alone: the downgrade reason in `applyForwardPointerGate` contains a literal `next:` token, so
+`isAlreadySatisfiedLanding(gateOutput.reason)` is true — harmless today because the only caller requires
+`verdict === "met"` and the gate emits `not_met`; changing it would rewrite a pinned reason string for no
+behavioral gain.
+
+### Verification
+
+(recorded after the audit — see below)
