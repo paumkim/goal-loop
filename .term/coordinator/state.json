@@ -4771,6 +4771,25 @@
       "submittedAt": "2026-11-21T09:12:45Z",
       "mergedAt": "2026-11-21T09:21:46Z",
       "mergedInto": "dev"
+    },
+    "audit-recent-changes-bugs": {
+      "agent": "build-primary",
+      "paths": "SPEC.md,src,packages/coordinator/bin,test",
+      "branch": "wt/audit-recent-changes-bugs",
+      "worktree": "worktrees/wt-audit-recent-changes-bugs",
+      "status": "done",
+      "createdAt": "2026-11-21T09:23:52Z",
+      "submittedAt": "2026-11-21T09:41:24Z",
+      "mergedAt": "2026-11-21T09:43:41Z",
+      "mergedInto": "dev"
+    },
+    "goal-follows-session-move": {
+      "agent": "build-primary",
+      "paths": "SPEC.md,src,test,docs,README.md",
+      "branch": "wt/goal-follows-session-move",
+      "worktree": "worktrees/wt-goal-follows-session-move",
+      "status": "claimed",
+      "createdAt": "2026-11-21T09:27:16Z"
     }
   },
   "mergeLock": null,
