@@ -533,6 +533,10 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
       expect(prompt).toContain("strategy escalation")
       expect(prompt).toContain("next: none")
       expect(prompt).toContain("duplicate-without-forward-pointer")
+      // CXXV: deliberation is bounded at the prompt level in both judge paths.
+      expect(prompt).toContain("Decide from the evidence actually shown, not from exhaustive hypotheticals")
+      expect(prompt).toContain("keep the reason short (a few lines)")
+      expect(prompt).toContain("do not enumerate every edge case")
     }
   })
 })

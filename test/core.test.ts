@@ -674,6 +674,22 @@ describe("prompts", () => {
       expect(independent).toContain(token)
     }
   })
+  test("the evaluator rubric bounds deliberation without dropping the evidence contract (CXXV)", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    for (const text of [
+      evaluateInSession("make the opencode tui nicer and nicer", facts, COMMIT),
+      evaluateIndependently("make the opencode tui nicer and nicer", facts, "transcript", COMMIT),
+    ]) {
+      expect(text).toContain("Decide from the evidence actually shown, not from exhaustive hypotheticals")
+      expect(text).toContain("name the single most critical gap when not met")
+      expect(text).toContain("keep the reason short (a few lines)")
+      expect(text).toContain("do not enumerate every edge case")
+      // The exhaustive contract is preserved, not traded away for brevity.
+      expect(text).toContain("evidence matrix per clause")
+      expect(text).toContain("What would falsify met?")
+      expect(text).toContain("Broad-condition verifier corroboration")
+    }
+  })
   test("the evaluator rubric requires verifier-command corroboration for broad conditions (XCIV)", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }
     for (const text of [

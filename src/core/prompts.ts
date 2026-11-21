@@ -439,6 +439,14 @@ interface EvaluationFacts {
   readonly spend?: UsageSnapshot
 }
 
+/**
+ * Bound the judge's effort at the prompt level. The downstream caps (400-char steer reason, 4000-char clamp) already
+ * assume a short verdict; without saying so up front, the rubric asks for a large structured answer that is then
+ * truncated — the "unbounded deliberation" failure mode, worst for a vague condition. Purely additive: the exhaustive
+ * evidence contract below stays byte-identical. See SPEC.md Workstream CXXV.
+ */
+const BOUNDED_EFFORT = `Decide from the evidence actually shown, not from exhaustive hypotheticals: judge only the clauses that bear on the verdict, name the single most critical gap when not met, and keep the reason short (a few lines). For a vague condition in particular, do not enumerate every edge case or re-audit claims irrelevant to the outcome.`
+
 const VERDICTS = [
   `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
   `1. Parse the armed condition into explicit, verifiable clauses.`,
@@ -474,7 +482,7 @@ const RULES = [
  * there), so it is `not_met` unless the transcript shows the `coordinator` agent itself did it.
  */
 function rubric(policy: CommitPolicy) {
-  const lines = [...VERDICTS]
+  const lines = [BOUNDED_EFFORT, ...VERDICTS]
   if (policy.required) {
     if (policy.mode === "coordinator") {
       lines.push(
