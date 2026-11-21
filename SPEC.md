@@ -345,7 +345,7 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
     `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:312`, `facts` `:337`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1134`, `prompts.ts:208`). References were
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1167`, `prompts.ts:208`). References were
     re-synced against HEAD twice on 2026-11-16 (`docs/config.html`, `docs/architecture.html`,
     `docs/index.html`, `docs/core.html`, `docs/runtime.html`, `docs/install.html`): first for the
     line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2211 -->
+<!-- spec-check files=143 tests=2214 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7195,7 +7195,7 @@ Fix (`src/runtime/controller.ts`, `src/index.ts`, `src/core/prompts.ts`):
 
 Failing-then-passing. The two pre-existing assertions that pinned the retired dispatch were replaced with absence pins (`loop.test.ts`, `controller.test.ts`); seven new cases were added (`plugin.test.ts` ×3: end-to-end arm→turn→met→achieved through the event pump drives the hook to push `TERMINAL_REMINDER` and splice the kickoff; live goal keeps its kickoff and gets no terminal line; goal-free session drops grammar messages with zero injection; `notes.test.ts` ×3: instruction-tag predicate, stripGoalContext semantics, reminder text; `controller.test.ts` ×1: `hasTerminalRecord` for false→achieved→true→re-arm→false, cleared→true).
 
-Honest limits. (a) The durable, already-parked outcome line in an existing session's inbox is host-owned history; the plugin cannot retroactively consume it — it flushes naturally at the next execution, or never, and the new code adds no more of them. A fresh session is clean by construction. (b) `TERMINAL_REMINDER` is gated on a terminal record in **this** process's memory; a plugin reload adopts no terminal records (by design, Workstream XLIII/XLIV), so the reminder is absent until the next terminal transition in this process — the instruction-message strip still applies everywhere, and the re-anchor/system-reminder paths are already active-only. (c) The host's compaction summary can still quote the expired kickoff text verbatim; the reminder line exists to counter it — it is one line, not a guarantee of model compliance. (d) `stripGoalContext` matches on text parts containing the tags anywhere, so a user who literally typed `<goal-loop` into their own message loses that part after their goal ended — same accepted grammar-collision posture as `<goal-note` since EM. (e) The `/goal` detail dialog, verdict trail, HIST ledger and log remain the durable audit surface; the inbox scrollback no longer carries the outcome line by design. (f) Test count moved **1747 → 1754** (+7; nothing weakened — three synthetic-dispatch assertions replaced by absence pins as above); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1754` here. The shared Appendix-A steer ref re-pointed to `controller.ts:1134` after the controller edits shifted it. `dist/tui.js` byte-unchanged (no TUI source touched).
+Honest limits. (a) The durable, already-parked outcome line in an existing session's inbox is host-owned history; the plugin cannot retroactively consume it — it flushes naturally at the next execution, or never, and the new code adds no more of them. A fresh session is clean by construction. (b) `TERMINAL_REMINDER` is gated on a terminal record in **this** process's memory; a plugin reload adopts no terminal records (by design, Workstream XLIII/XLIV), so the reminder is absent until the next terminal transition in this process — the instruction-message strip still applies everywhere, and the re-anchor/system-reminder paths are already active-only. (c) The host's compaction summary can still quote the expired kickoff text verbatim; the reminder line exists to counter it — it is one line, not a guarantee of model compliance. (d) `stripGoalContext` matches on text parts containing the tags anywhere, so a user who literally typed `<goal-loop` into their own message loses that part after their goal ended — same accepted grammar-collision posture as `<goal-note` since EM. (e) The `/goal` detail dialog, verdict trail, HIST ledger and log remain the durable audit surface; the inbox scrollback no longer carries the outcome line by design. (f) Test count moved **1747 → 1754** (+7; nothing weakened — three synthetic-dispatch assertions replaced by absence pins as above); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1754` here. The shared Appendix-A steer ref re-pointed to `controller.ts:1167` after the controller edits shifted it. `dist/tui.js` byte-unchanged (no TUI source touched).
 
 <!-- spec-check files=73 tests=1998 -->
 
@@ -10009,3 +10009,33 @@ correct — this was a gateway completion replay plus a parser that accepted `st
 
 - `bun run check` green; marker re-counted to `files=143 tests=2210` in-commit.
 - Tests pin foreign-contract rejection, authoritative-key requirement, the trivial-arm-plan hint and nonce prefix.
+
+## First-arm goal bar + no re-arm on an unusable verdict (CXL)
+
+Live sessions 20261121_165841/165928 (`replay: hi.`) exposed two flow defects at HEAD. The first `/goal` arm
+showed only the background "Distilling goal into a concise condition…" toast — no goal bar — because the
+record is armed only *after* the planner returns (`src/index.ts · planGoal` before `controller.command`), and a
+`notice` never becomes a `changed` snapshot. The other tab sat in a wake→delegate loop: the native judge replayed
+a verdict from another goal (`chain_verdict: continuation`), the CXXXIX guard rejected it, `Evaluator.evaluate`
+fail-closed to `not_met`, and the normal continuation steer re-armed the worker, which re-delegated to the same
+polluted judge — repeating indefinitely.
+
+- `src/runtime/controller.ts · showPlanning` emits a transient, non-persisted `GoalSnapshot` (`queued: true`,
+  raw condition) straight to the ports before planning; the real `arm()` commit replaces it. No new status,
+  persisted field, command, config or port contract — the existing queued pill face renders it.
+- `src/runtime/evaluator.ts · EvaluatorVerdictError` is thrown for an unreadable, foreign or failed native report
+  instead of returning a fail-closed `not_met`. A turn with no delegated report at all still fails closed to
+  `not_met` so the worker can delegate next turn; a quota error propagates unchanged; a caller with no native port
+  keeps the legacy directive.
+- `src/runtime/controller.ts · evaluationFailed` pauses on that typed error with `pauseCause: "repeated_failure"`
+  and the verdict diagnostic — no continuation steer, no retry timer. A user message resumes; `/goal clear` or a
+  fresh `/goal` starts over. A genuine `not_met` still continues the loop unchanged, so `/goal-loop`
+  summarize/next-condition and opt-in `consensus: 2` are untouched.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2214` in-commit.
+- Tests pin the transient planning snapshot (no stored record, no directive), the typed error on unreadable native
+  reports (no-report still fails closed), and the pause-with-resume path replacing the re-arm loop.
+- Appendix-A single-line steer ref re-pointed to `controller.ts:1167` after the controller insertions; each
+  SPEC ref still lands on a non-blank line.

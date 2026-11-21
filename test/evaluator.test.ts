@@ -3,7 +3,7 @@ import { resolveConfig } from "../src/core/config.ts"
 import { verdictFromNativeReport } from "../src/core/evaluator-agent.ts"
 import type { CommitPolicy } from "../src/core/types.ts"
 import type { EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest } from "../src/runtime/ports.ts"
-import { EvaluationError, Evaluator } from "../src/runtime/evaluator.ts"
+import { EvaluationError, Evaluator, EvaluatorVerdictError } from "../src/runtime/evaluator.ts"
 import { REPAIR, STRICT_REPAIR } from "../src/core/prompts.ts"
 
 const SID = "ses_test"
@@ -262,7 +262,7 @@ describe("Evaluator.evaluate — native delegated subagent report", () => {
     expect(calls.model).toHaveLength(0)
   })
 
-  test("no native report for this turn fails closed with no generation calls", async () => {
+  test("a missing native report still fails closed so the worker can delegate next turn", async () => {
     const { fake, calls } = deps({ nativeVerdict: async () => undefined })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
@@ -273,16 +273,18 @@ describe("Evaluator.evaluate — native delegated subagent report", () => {
     expect(calls.model).toHaveLength(0)
   })
 
-  test("a failing native report fails closed, not a failed goal and no generation fallback", async () => {
+  test("an unreadable native report throws a verdict error with no generation fallback", async () => {
     const { fake, calls } = deps({ nativeVerdict: async () => { throw new Error("report read failed") } })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
-    const result = await evaluator.evaluate(request())
-    expect(result.verdict).toBe("not_met")
-    expect(result.reason).toContain("no usable evaluator subagent verdict")
-    expect(result.reason).toContain("report read failed")
-    expect(result.reason).toContain("delegate the verdict")
+    await expect(evaluator.evaluate(request())).rejects.toThrow(/no usable evaluator subagent verdict: report read failed/)
     expect(calls.session).toHaveLength(0)
     expect(calls.model).toHaveLength(0)
+  })
+
+  test("an unreadable report error is the typed verdict error the controller pauses on", async () => {
+    const { fake } = deps({ nativeVerdict: async () => { throw new Error("report read failed") } })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await expect(evaluator.evaluate(request())).rejects.toBeInstanceOf(EvaluatorVerdictError)
   })
 
   test("a quota error from the native report is rethrown so the controller pauses", async () => {
