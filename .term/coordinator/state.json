@@ -4738,8 +4738,17 @@
       "paths": "src/runtime/**,src/core/verdict.ts,src/core/parse.ts,src/core/errors.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md,AGENTS.md",
       "branch": "wt/evaluator-unreadable-verdict-root-cause",
       "worktree": "worktrees/wt-evaluator-unreadable-verdict-root-cause",
-      "status": "claimed",
-      "createdAt": "2026-11-21T08:28:10Z"
+      "status": "done",
+      "createdAt": "2026-11-21T08:28:10Z",
+      "submittedAt": "2026-11-21T08:38:09Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-21T08:38:09Z",
+      "forcedScopeFiles": [
+        "src/index.ts",
+        "test/plugin.test.ts"
+      ],
+      "mergedAt": "2026-11-21T08:43:38Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
