@@ -216,6 +216,14 @@ export default Plugin.define({
         // The independent digest is paired with a freshly built rubric prompt, so no evaluation prompt
         // from the transcript may ride into it — strip all of them at the source.
         context: async (sessionID, signal) => stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal })),
+        // Inherit mode: read the parent session's current active model from the host. Resolution is per
+        // generation (see Evaluator.resolveModel), so a /model switch is followed on the next verdict. The
+        // host's ModelRef is { providerID, id, variant? } — the same shape as the plugin's ModelRef.
+        sessionModel: async (sessionID, signal) => {
+          const current = (await ctx.session.get({ sessionID }, { signal })).model
+          if (!current) return undefined
+          return { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) }
+        },
       },
       config.evaluator,
       commit,
@@ -504,7 +512,10 @@ export default Plugin.define({
     })()
 
     void controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
-    log.info("ready", { evaluator: config.evaluator.mode, model: config.evaluator.model ?? "session" })
+    log.info("ready", {
+      evaluator: config.evaluator.mode,
+      model: config.evaluator.model ?? (config.evaluator.inheritModel ? "session (inherited)" : "session"),
+    })
 
     return async () => {
       lifetime.abort()

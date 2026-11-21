@@ -21,6 +21,7 @@ interface FakeDeps {
   sessionGenerate: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
   modelGenerate: (model: unknown, prompt: string, signal: AbortSignal) => Promise<string>
   context: (sessionID: string, signal: AbortSignal) => Promise<readonly unknown[]>
+  sessionModel?: (sessionID: string, signal: AbortSignal) => Promise<{ providerID: string; id: string; variant?: string } | undefined>
 }
 
 function deps(overrides: Partial<FakeDeps> = {}) {
@@ -532,5 +533,109 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
       expect(prompt).toContain("next: none")
       expect(prompt).toContain("duplicate-without-forward-pointer")
     }
+  })
+})
+
+describe("Evaluator — inherit the parent session's model", () => {
+  const inheritConfig = (overrides: Record<string, unknown> = {}) =>
+    resolveConfig({ evaluator: { model: "inherit", ...overrides } }, {}).evaluator
+
+  test("uses the current session model for the independent judge, not a pinned model", async () => {
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "mimo-v2.6-flash-free" }),
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met", "inherited judge says done")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(models).toEqual([{ providerID: "oc", id: "mimo-v2.6-flash-free" }])
+    expect(calls.context).toBe(1)
+    expect(calls.session).toHaveLength(0)
+  })
+
+  test("resolves per generation — a mid-goal /model switch is followed on the next verdict", async () => {
+    const models: unknown[] = []
+    let active: { providerID: string; id: string; variant?: string } = { providerID: "oc", id: "first-model" }
+    const { fake } = deps({
+      sessionModel: async () => active,
+      modelGenerate: async (model) => {
+        models.push(model)
+        return verdictJson("not_met", "keep working")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request({ turn: 1 }))
+    active = { providerID: "oc", id: "second-model", variant: "high" }
+    await evaluator.evaluate(request({ turn: 2 }))
+    expect(models).toEqual([
+      { providerID: "oc", id: "first-model" },
+      { providerID: "oc", id: "second-model", variant: "high" },
+    ])
+  })
+
+  test("a missing session model falls back to the session evaluator with a warning", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({ sessionModel: async () => undefined })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+    expect(calls.context).toBe(0)
+    expect(warnings.some((w) => String(w.message).includes("no active model"))).toBe(true)
+  })
+
+  test("a failing host port falls back to the session evaluator with a warning", async () => {
+    const warnings: Array<Record<string, unknown>> = []
+    const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
+    const { fake, calls } = deps({
+      sessionModel: async () => {
+        throw new Error("host unavailable")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+    expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
+  })
+
+  test("loop summary and next-goal generation inherit the same model", async () => {
+    const models: unknown[] = []
+    const { fake } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      modelGenerate: async (model) => {
+        models.push(model)
+        return "a short inherited reply"
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect(await evaluator.summarize(summaryRequest(400))).toBe("a short inherited reply")
+    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("a short inherited reply")
+    expect(models).toEqual([
+      { providerID: "oc", id: "session-active" },
+      { providerID: "oc", id: "session-active" },
+    ])
+  })
+
+  test("pinned and session modes never consult the session-model port", async () => {
+    let portCalls = 0
+    const { fake } = deps({
+      sessionModel: async () => {
+        portCalls++
+        return { providerID: "oc", id: "should-not-be-used" }
+      },
+    })
+    const pinned = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    await pinned.evaluate(request())
+    const session = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await session.evaluate(request())
+    const inheritSession = new Evaluator(fake, inheritConfig({ mode: "session" }), COMMIT, silentLog)
+    await inheritSession.evaluate(request())
+    expect(portCalls).toBe(0)
   })
 })

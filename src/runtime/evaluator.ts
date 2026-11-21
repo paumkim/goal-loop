@@ -23,6 +23,12 @@ interface EvaluatorDeps {
   modelGenerate(model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
+  /**
+   * Resolve the parent session's current active model from the host (`ctx.session.get(...).model`). Optional
+   * so legacy callers/tests — which only use pinned or session mode — need not supply it. Used only when
+   * `config.inheritModel` is true; resolution is per generation so a mid-goal model switch is followed.
+   */
+  sessionModel?(sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined>
 }
 
 /** Harness-measured facts handed to the evaluator prompts; mirrors the (unexported) shape in core/prompts.ts. */
@@ -84,7 +90,13 @@ export class Evaluator implements EvaluatorPort {
     if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
     const secondPath = primary.via === "session" ? "independent" : "session"
     try {
-      const second = secondPath === "session" ? await this.sessionVerdict(request, facts, signal) : await this.independentVerdict(request, facts, signal)
+      const second = secondPath === "session"
+        ? await this.sessionVerdict(request, facts, signal)
+        : await (async () => {
+          const model = await this.resolveModel(request.sessionID, signal)
+          if (!model) throw new EvaluationError("independent model not available for consensus; pin evaluator.model or use the inherit sentinel")
+          return this.independentVerdict(request, facts, signal, model)
+        })()
       if (second.verdict === "met") return primary.result
       return {
         verdict: "not_met",
@@ -96,12 +108,33 @@ export class Evaluator implements EvaluatorPort {
     }
   }
 
+  /**
+   * Model for a stateless judge generation: the pinned `model` when configured, otherwise — when the `inherit`
+   * sentinel is set — the parent session's current model. Called per generation so a mid-goal `/model` switch
+   * is followed on the very next verdict. A missing or failing host port degrades to `undefined`, which routes
+   * the caller to the session evaluator; the inherit path itself never hard-fails the evaluation.
+   */
+  private async resolveModel(sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined> {
+    const pinned = this.config.model
+    if (pinned) return pinned
+    if (!this.config.inheritModel || !this.deps.sessionModel) return undefined
+    try {
+      const current = await this.deps.sessionModel(sessionID, signal)
+      if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session evaluator")
+      return current
+    } catch (error) {
+      if (signal.aborted) throw error
+      this.log.warn("inherited evaluator model unavailable; using session evaluator", { error: String(error) })
+      return undefined
+    }
+  }
+
   /** The configured primary path: independent-with-session-fallback, or plain session. Reports which path actually judged. */
   private async primary(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<{ result: EvaluationResult; via: "session" | "independent" }> {
-    const model = this.config.model
+    const model = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (this.config.mode === "independent" && model) {
       try {
-        return { result: await this.independentVerdict(request, facts, signal), via: "independent" }
+        return { result: await this.independentVerdict(request, facts, signal, model), via: "independent" }
       } catch (error) {
         if (signal.aborted) throw error
         this.log.warn("independent evaluator failed; falling back to session evaluator", { error: String(error) })
@@ -110,9 +143,7 @@ export class Evaluator implements EvaluatorPort {
     return { result: await this.sessionVerdict(request, facts, signal), via: "session" }
   }
 
-  private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
-    const model = this.config.model
-    if (!model) throw new EvaluationError("independent model not configured; set evaluator.model")
+  private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal, model: ModelRef): Promise<EvaluationResult> {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, this.commit)
@@ -139,7 +170,7 @@ export class Evaluator implements EvaluatorPort {
   /** Loop step: compact one achieved iteration into a machine-consumable block. */
   async summarize(request: LoopSummaryRequest): Promise<string> {
     const signal = request.signal
-    const model = this.config.model
+    const model = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (this.config.mode === "independent" && model) {
       try {
         const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
@@ -160,7 +191,7 @@ export class Evaluator implements EvaluatorPort {
   /** Loop step: generate the next condition (or LOOP_COMPLETE). Returns the raw reply, trimmed. */
   async nextGoal(request: NextGoalRequest): Promise<string> {
     const signal = request.signal
-    const model = this.config.model
+    const model = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (this.config.mode === "independent" && model) {
       try {
         const text = await this.underBudget((s) => this.deps.modelGenerate(model, nextGoalIndependently(request), s), signal, "next-condition")

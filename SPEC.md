@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2110 -->
+<!-- spec-check files=141 tests=2119 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -6135,7 +6135,7 @@ Interpretation of the armed condition: three read-only reviews (core, runtime, T
 639. src/core/config.ts — an empty or whitespace-only `OPENCODE_GOAL_MODEL` (or `evaluator.model`/`model: ""`) reads as unset and falls back down the chain, the same posture `str`/`int` already take — a stray empty env var no longer silently downgrades the evaluator from independent to session mode. A non-empty invalid value still yields no model (unchanged).
 640. src/core/dossier-attest.ts — `attestSealedDossier` deduplicates appendix rows by sha (first spelling kept) before counting and reporting: a hand-assembled or tampered file repeating a sha no longer double-counts it in `unique`, `sealedClean`, `held`, `regressed`, `unknown` and `wasNotClean`. The exporters never produce such a file; the parser is the boundary, so the count is honest at the boundary.
 641. Refutation by verification, not by argument: the reviewer's "chatty stderr wedges the verification gate for 10 minutes" was NOT reproducible on this host — Bun's spawn pipes buffer eagerly and the pre-fix ordering completes against 8 MB of unread stderr — the fix lands as a hardening of the already-shipped concurrent-drain guidance, not as a demonstrated local deadlock. The reviewer's `attestation`/`unique` reading (rows counted per mention) was correct and is fixed per the interface's own "unique shas" contract; the reviewer's `headTail` mis-read of `slice(-0)` was correct and is confirmed by the pinned test.
-642. Docs untouched — `docs/`, `README.md` and `RELEASE-CHECKLIST.md` remain under the stale `github-single-channel` lease. The two source hunks the docs line references point into (`src/core/transcript.ts:91`, `src/core/config.ts:162`) are net-zero line edits, so `docs/core.html` and `docs/config.html` stay accurate; the docs-line-refs suite passes unchanged.
+642. Docs untouched — `docs/`, `README.md` and `RELEASE-CHECKLIST.md` remain under the stale `github-single-channel` lease. The two source hunks the docs line references point into (`src/core/transcript.ts:91`, `src/core/config.ts:176`) are net-zero line edits, so `docs/core.html` and `docs/config.html` stay accurate; the docs-line-refs suite passes unchanged.
 643. Counts: no file created or removed (60 shipped files unchanged); 19 regression tests added across twelve suites (store, history, compactor, git, goal-limits, controller, loop, core, dossier, dossier.test, dossier-attest, controller/event-router); suite 1354 → 1373 pass, 0 fail (56 files). `bun x tsc --noEmit` clean. Marker re-counted below and at the first marker.
 644. Honest limits: three reviewers worked read-only (no shell); every finding was re-derived at the seam before editing, but none of the fixes is exercised against a live OpenCode host or a real SHA-256 repository — the SHA-256 case is pinned by a synthetic `packed-refs` fixture, the restore/compaction races by unit-level interleaving, the malformed-record cases by hand-assembled storage entries. The verifier concurrent-drain fix is verified against Bun's documented contract and a live probe of both orderings, not against a host that backpressures pipes. The status-less `shell.updated` handling is defensive only — no evidence the host emits one. The `copied` acknowledgment fix and the `ensure()` marker release are headless-unverifiable against a real TUI. The final-spend-at-shutdown fix is pinned with a parked-usage interleaving; a host that resolves usage synchronously at shutdown never needed it.
 
@@ -8887,3 +8887,62 @@ Recorded after implementation:
   moved (2109 → 2110) and the enforced marker was re-counted in-commit.
 
 <!-- spec-check files=141 tests=2110 -->
+
+## Workstream — inherit the parent session's model for the evaluator (2026-11-21)
+
+Status: specified first (fuzzy request), then implemented and verified against this section.
+
+### Interpretation
+
+The evaluator's judging model was configured **statically**: `evaluator.model` (or `OPENCODE_GOAL_MODEL`,
+or the top-level `model` fallback) pinned a specific `providerID/model` for the independent judge. When that
+pinned model is unavailable or unsuitable, evaluation fails and the goal stalls. The user's diagnosis: "it is
+pinned to the specific model … make it inherit current active model/provider of parent's model … whatever model
+is being used to run the session it has to be inherited easily."
+
+"Parent" here means the session the goal is armed in. The host already tracks the active generation model on
+that session (`SessionInfo.model = { providerID, id, variant? }`, exposed as `ctx.session.get({ sessionID })`).
+"Easily" means a single config token, with no copied model string that can go stale when the session switches
+models (a `/model` change, an agent default change, a fallback provider).
+
+### Acceptance criteria
+
+1. A new sentinel value **`inherit`** (case-insensitive, trimmed; aliases `session`, `parent`, `current`, `active`)
+   is accepted wherever a model is configured: `evaluator.model`, `OPENCODE_GOAL_MODEL`, and top-level `model`.
+2. `resolveConfig` resolves the sentinel to `evaluator.inheritModel === true` with `evaluator.model === undefined`;
+   it never manufactures a fake pinned `ModelRef`. Auto mode with the sentinel selects the `independent` pipeline
+   (transcript digest judged separately) so the judge remains isolated from the working turn, but runs on the
+   inherited model instead of a pinned one.
+3. At evaluation time the evaluator resolves the **current** session model via a new optional
+   `EvaluatorDeps.sessionModel(sessionID)` port wired to `ctx.session.get({ sessionID }).model`, and uses it for
+   `modelGenerate`. Resolution happens per generation, so a model switch mid-goal is followed on the next verdict.
+   No configured model means no host call — behavior for pinned/session modes is byte-compatible.
+4. If the host cannot resolve a session model (missing/errored), the evaluator falls back to the session evaluator
+   (which already uses the session's own model) and logs a warning — never a hard failure from the inherit path.
+5. Backward compatibility: no config change → `inheritModel === false`, `model === undefined`, mode `session`
+   (unchanged); a pinned `ModelRef` still selects `independent` and is used verbatim; explicit `mode: "session"`
+   still means session mode.
+6. Documentation: README and `docs/config.html` document the sentinel on the existing `evaluator.model` row
+   (no new option key, so the defaults-sync test stays green); SPEC describes behavior and verification.
+
+### Verification (run against this tree; actual output recorded after implementation)
+
+- Config-sentinel unit tests: `test/core.test.ts` — sentinel and aliases across all three config sources,
+  `inheritModel`/`model`/`mode` assertions, case/whitespace handling, explicit-mode overrides, pinned-model
+  regression.
+- Evaluator wiring tests: `test/evaluator.test.ts` — with `inheritModel` the model port is called and its
+  `ModelRef` is passed to `modelGenerate`; a mid-goal model change is picked up; a failing/absent port falls back
+  to session mode with a warning; summaries and next-goal generation inherit too; pinned/session modes are
+  unchanged.
+- Full suite `bun run check`: `tsc --noEmit` clean; `cd test && bun test` → **2119 pass / 0 fail** (91 files,
+  29 snapshots, 199,104 expect() calls), up from 2110 on rebased dev (+9 regressions: 3 config-sentinel,
+  6 evaluator);
+  `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed. `check:invariant` requires
+  `docs/changelog.html` in the same change set for a `src/core|src/runtime` behavior change — regenerated with
+  `bun scripts/docs-watch.ts once` after the content commit and committed as the docs refresh. `check:spec` ok
+  (141 files, 2118 tests match SPEC.md); the marker was re-counted in-commit via `spec-check --write`.
+- Ready-log surface: with `inheritModel` set, `src/index.ts` logs `model: session (inherited)` instead of a pinned
+  `provider/model`; no model string has to be copied into config and kept in sync with a `/model` switch.
+- Line-shift bookkeeping: the new config helper shifts the historical docs reference into `src/core/config.ts`
+  from old line 162 to line 176 (from an earlier workstream); the referenced code text is unchanged, and
+  `docs-line-refs` is re-run.
