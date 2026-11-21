@@ -231,8 +231,20 @@ export class Evaluator implements EvaluatorPort {
       text = await this.underBudget((signal) => generate(next, signal), caller, `attempt ${index + 1}/${attempts.length}`)
       const parsed = parseVerdict(text)
       if (parsed) return parsed
+      // Never fail silently: every unreadable reply (especially an empty one) is recorded with its raw text so the
+      // operator can see whether the judge emitted a tool call / reasoning with no text, garbage, or a truncated
+      // verdict. The host strips tools from evaluator generations (see src/index.ts · generate hook); a bare "" here
+      // means the provider still produced no text and is a provider/quirk to investigate, not a retry to hide.
+      this.log.warn("evaluator reply unreadable; escalating", {
+        attempt: index + 1,
+        of: attempts.length,
+        chars: text.length,
+        preview: truncate(text, 200),
+      })
       // An empty (or unreadable) reply escalates; only a genuine timeout/abort leaves this loop early.
     }
-    throw new EvaluationError(`unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))}`)
+    throw new EvaluationError(
+      `unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))} (no text event in the judge reply — usually a tool call or reasoning-only response; evaluator requests are sent toolless)`,
+    )
   }
 }

@@ -710,3 +710,63 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
     }
   })
 })
+
+describe("the generate hook makes evaluator replies text-only (empty-verdict root cause)", () => {
+  test("tools are removed and output bounded only while a session evaluation is in flight", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks, storage } = context(directory)
+    let release!: (text: string) => void
+    let onGenerate!: () => void
+    const called = new Promise<void>((resolve) => (onGenerate = resolve))
+    // A pending judge reply: the evaluation stays in flight so the hook can be inspected mid-request.
+    // The real port reads `.text` off the host result, so return that shape.
+    ;(ctx.session as any).generate = async () => {
+      onGenerate()
+      const text = await new Promise<string>((resolve) => (release = resolve))
+      return { text }
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await called // the evaluator's session.generate is pending; isEvaluating(SID) is true
+
+      const buildEvent = () => ({
+        sessionID: "ses_1",
+        agent: "build",
+        model: {},
+        system: [] as any[],
+        messages: [] as any[],
+        tools: { read: { description: "read", input: {} }, write: { description: "write", input: {} } } as any,
+        options: {} as any,
+      })
+      const during = buildEvent()
+      hooks.generate!(during)
+      expect(Object.keys(during.tools)).toEqual([]) // no tool call can produce an empty text verdict
+      expect(during.options.maxTokens).toBeGreaterThan(0)
+
+      release('{"verdict":"met","reason":"done"}')
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+
+      const after = buildEvent()
+      hooks.generate!(after)
+      expect(Object.keys(after.tools)).toEqual(["read", "write"]) // ordinary turns keep their tools
+      expect(after.options.maxTokens).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+})

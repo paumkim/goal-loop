@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2107 -->
+<!-- spec-check files=141 tests=2109 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8697,7 +8697,6 @@ instant flip is proven at the contract boundary the HUD paints from, not by a pi
 means "nothing is happening in the session but background work", not "a judge is pending". (d) No config,
 prompt, HUD renderer, persisted record shape or TUI bundle changed.
 
-<!-- spec-check files=141 tests=2101 -->
 ## Workstream: review recent changes, fix bugs, run the normal routines
 
 **Goal / interpretation.** The user asked to "review recent changes for bugs, fix what needs fixing, and do the normal routines until there are nothing else todo." *Recent changes* = the code commits landed on `dev` since the last review sweep: the single-package prompter bundle (`0dccc1b`) and the malformed-but-readable verdict parser fix (`aa4da0c`), plus their supporting chore/doc commits. *Normal routines* = `bun run check` (tsc → tests → check:dist → compile → check:tui → docs:check → invariant-sweep → spec-check). *Nothing else to do* = no open defects from the review, no stale open items in `CURRENT_TASK.md` / `pending_fixes.md`, a green suite, and the work submitted through the coordinator.
@@ -8732,3 +8731,54 @@ Two independent read-only reviews covered (a) the bundled prompter loop (`src/pr
 - `bun run check` exit 0: `tsc --noEmit` clean; `cd test && bun test` → **2104 pass / 0 fail** across 91 files (29 snapshots, 199,018 expect() calls), up from 2098 (+6 regression tests: 4 prompter, 2 verdict); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed; `invariant-sweep` ok (SPEC.md + docs/changelog.html both updated for the `src/core` behavior change); `check:spec` ok (141 files, 2104 tests match SPEC.md). The canonical marker at line 499 was re-counted in-commit via `spec-check --write`.
 - Fix-then-pin discrimination (source fix stashed, tests kept): prompter suite 3 fails + 2 errors; `test/core.test.ts` 2 fails. With fixes restored all targeted suites pass.
 - Live reproductions before fixing: `next: none` / `next:` / `n/a` on the already-satisfied path parsed as `met` and `isAlreadySatisfiedLanding === true`; a verdict token embedded in a reason parsed as `met`. After fixing all of these fail closed.
+
+## Workstream — empty-verdict evaluator: strip tools from judge generations, fail loudly (2026-11-21)
+
+Status: implemented and verified against this section. Trigger: the recurring live notice
+`Evaluator failed (unreadable verdict after 3 attempts: ""); retrying in 10s.` — a judge reply with no text,
+burning all three repair attempts and stalling the goal.
+
+### Root cause (widen the search beyond `Evaluator.ask`)
+
+Earlier workstreams hardened the retry ladder (per-attempt abort budget, repair prompts, lenient verdict parsing)
+but treated the empty reply as a parse/timing symptom. Reading the host implementation
+(`opencode/packages/core/src/session/generate.ts` + `packages/ai/src/loop.ts`) shows the actual cause:
+`session.generate` is a **single model step** — `llm.generate` folds one stream with no tool-execution loop.
+Its `.text` is assembled from text events only (`LLMResponse.text`), so a tool call or a reasoning-only reply
+yields `""`. That request is sent with the session's **full tool set** (`tools: selection.tools`), and small judges
+routinely answer the rubric with a tool call instead of text. `STRICT_REPAIR`'s "do not call tools" is only prose —
+the tools stayed available, so all three escalating attempts repeated the same tool-bearing request and returned
+`""` three times. On top of that, `ask()` discarded the raw reply on every failure, so the notice carried nothing
+but the empty string: a silent failure.
+
+### Change
+
+1. `src/index.ts` · `generate` hook: while `evaluator.isEvaluating(sessionID)`, delete every key of `event.tools`
+   in place (the SDK's documented mutation pattern) in addition to bounding `maxTokens`. Ordinary turns keep their
+   tools. The host keys the prompt cache on session affinity, not on the tool list, and the `context` hook already
+   edits system/messages for these requests, so this does not break the cached prefix. With no tools on the request
+   the judge must answer in text, which is what `response.text` can carry back to `parseVerdict`.
+2. `src/runtime/evaluator.ts` · `ask()`: every unreadable reply is now logged at `warn` with its attempt number, raw
+   character count and a preview of the exact text; the terminal `EvaluationError` names the likely cause ("no text
+   event in the judge reply — usually a tool call or reasoning-only response"). The failure is no longer silent.
+
+### Verification
+
+- New `test/plugin.test.ts` regression drives a real turn with a pending judge reply, invokes the captured `generate`
+  hook mid-evaluation, and asserts tools are removed and output bounded while in flight, then restored after the
+  verdict lands. Reverting the hook change fails this test.
+- New `test/evaluator.test.ts` regression asserts three unreadable attempts produce three raw-text warnings and an
+  error naming the cause.
+- Full `cd test && bun test`: 2109 pass / 0 fail (91 files) on the rebased tree (dev advanced under this lease; the review lease's 2107 count plus these 2 regressions). `tsc --noEmit` clean. Marker re-counted 2107 → 2109.
+
+### Honest limits
+
+- The empty reply's internal provider detail (finish reason, tool-call names) is not exposed by `session.generate`,
+  which returns only `{ text, tokens, cost }`; the warning logs the raw text we actually receive, not the provider's
+  part list. If a provider emits no text even with tools removed, that is now a visible, diagnosed failure rather
+  than a silent `""`.
+- Tool stripping applies to all session-mode evaluator generations (verdict, loop summary, next condition) — all of
+  them want text, none of them need tools. Independent mode uses stateless `generate.text` and is unaffected.
+- No change to the verdict parser, retry ladder, config, rubric, verifier gate, persisted record shape or TUI.
+
+<!-- spec-check files=141 tests=2109 -->

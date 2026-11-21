@@ -420,9 +420,18 @@ export default Plugin.define({
       }
       controller.onUserPrompt(event.sessionID)
     })
-    // Bound the evaluator's transient request without touching tools or system, which would break the cached prefix.
+    // Evaluator-only shaping of transient `session.generate` requests. `session.generate` is a single model step
+    // (no tool-execution loop): its `.text` is assembled from text events only, so a tool call yields `""`. The
+    // session's full tool set is sent on that step, and a small judge routinely answers the rubric with a tool
+    // call instead of text — all three repair attempts then come back empty and the goal stalls on
+    // `unreadable verdict after 3 attempts: ""`. STRICT_REPAIR's "do not call tools" is only prose; the tools
+    // must actually be removed for the request. Deleting in place (the documented SDK mutation pattern) is safe:
+    // the host keys the prompt cache on session affinity, not on the tool list, and the surrounding context hook
+    // already edits system/messages for these requests. Non-evaluator generations keep their tools untouched.
     await ctx.session.hook("generate", (event) => {
-      if (evaluator.isEvaluating(event.sessionID)) event.options.maxTokens = config.evaluator.maxOutputTokens
+      if (!evaluator.isEvaluating(event.sessionID)) return
+      event.options.maxTokens = config.evaluator.maxOutputTokens
+      for (const name of Object.keys(event.tools)) delete event.tools[name]
     })
     // One context hook, up to three injections: the standing system reminder (config-gated), the
     // one-shot post-compaction re-anchor (never gated — the ground truth must reach the model even
