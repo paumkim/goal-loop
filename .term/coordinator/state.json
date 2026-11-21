@@ -4804,6 +4804,35 @@
       "submittedAt": "2026-11-21T10:28:21Z",
       "mergedAt": "2026-11-21T10:30:34Z",
       "mergedInto": "dev"
+    },
+    "audit-recent-changes-bugs-followup": {
+      "agent": "claude",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/audit-recent-changes-bugs-followup",
+      "worktree": "worktrees/wt-audit-recent-changes-bugs-followup",
+      "status": "submitted",
+      "createdAt": "2026-11-21T11:02:47Z",
+      "submittedAt": "2026-11-21T11:17:28Z"
+    },
+    "evaluator-usage-limit-pause": {
+      "agent": "build",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/evaluator-usage-limit-pause",
+      "worktree": "worktrees/wt-evaluator-usage-limit-pause",
+      "status": "done",
+      "createdAt": "2026-11-21T11:27:59Z",
+      "submittedAt": "2026-11-21T11:32:17Z",
+      "mergedAt": "2026-11-21T11:41:27Z",
+      "mergedInto": "dev"
+    },
+    "repo-root-term-anchor": {
+      "agent": "build",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/repo-root-term-anchor",
+      "worktree": "worktrees/wt-repo-root-term-anchor",
+      "status": "submitted",
+      "createdAt": "2026-11-21T11:35:38Z",
+      "submittedAt": "2026-11-21T11:37:16Z"
     }
   },
   "mergeLock": null,
