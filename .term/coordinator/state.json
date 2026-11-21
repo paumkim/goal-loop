@@ -4830,9 +4830,11 @@
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/repo-root-term-anchor",
       "worktree": "worktrees/wt-repo-root-term-anchor",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-21T11:35:38Z",
-      "submittedAt": "2026-11-21T11:37:16Z"
+      "submittedAt": "2026-11-21T11:37:16Z",
+      "mergedAt": "2026-11-21T11:45:58Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
