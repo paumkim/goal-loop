@@ -4970,6 +4970,17 @@
       "submittedAt": "2026-11-21T22:38:10Z",
       "mergedAt": "2026-11-21T22:40:13Z",
       "mergedInto": "dev"
+    },
+    "evaluator-naming-consistency": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/evaluator-naming-consistency",
+      "worktree": "worktrees/wt-evaluator-naming-consistency",
+      "status": "done",
+      "createdAt": "2026-11-21T22:52:43Z",
+      "submittedAt": "2026-11-21T22:54:08Z",
+      "mergedAt": "2026-11-21T22:56:12Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
