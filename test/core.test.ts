@@ -151,6 +151,38 @@ describe("parseVerdict", () => {
     expect(parseVerdict('{"verdict":"not_met","reason":"already satisfied but tempted"}')?.verdict).toBe("not_met")
     expect(parseVerdict('{"verdict":"impossible","reason":"already satisfied with something unavailable"}')?.verdict).toBe("impossible")
   })
+  test("a verdict object with raw newlines in the reason parses (live evaluator output)", () => {
+    const text = `{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence ref
+clause=commit, status=satisfied
+(b) Gaps: none material.
+next: none"}`
+    expect(parseVerdict(text)).toEqual({
+      verdict: "met",
+      reason: "(a) Clause-by-clause judgment with evidence ref\nclause=commit, status=satisfied\n(b) Gaps: none material.\nnext: none",
+    })
+  })
+  test("a verdict object with an unescaped quote in the reason parses", () => {
+    const text = `{"verdict":"not_met","reason":"(a) Tests failed
+(b) Missing gate output for "bun run check"
+next: run the gate"}`
+    expect(parseVerdict(text)?.verdict).toBe("not_met")
+    expect(parseVerdict(text)?.reason).toContain('"bun run check"')
+    expect(parseVerdict(text)?.reason).toContain("next: run the gate")
+  })
+  test("a double-encoded verdict object parses", () => {
+    const inner = JSON.stringify({ verdict: "met", reason: "merged abc1234: all gates green" })
+    expect(parseVerdict(JSON.stringify(inner))).toEqual({ verdict: "met", reason: "merged abc1234: all gates green" })
+  })
+  test("a verdict object truncated mid-reason still yields its verdict token", () => {
+    const text = '{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence ref'
+    expect(parseVerdict(text)?.verdict).toBe("met")
+    expect(parseVerdict(text)?.reason).toContain("Clause-by-clause judgment")
+  })
+  test("the lenient pass never manufactures a verdict from reason-only or unknown-token JSON", () => {
+    expect(parseVerdict('{"reason":"(a) clause matrix"}')).toBeUndefined()
+    expect(parseVerdict('{"verdict":"maybe","reason":"(a) unclear"}')).toBeUndefined()
+    expect(parseVerdict('prose saying "verdict":"met" without an object')).toBeUndefined()
+  })
   test("structured reasons with clause matrix and next actions parse (compatibility)", () => {
     const met = parseVerdict(JSON.stringify({
       verdict: "met",

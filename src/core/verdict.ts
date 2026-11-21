@@ -58,13 +58,27 @@ function normalizeVerdict(value: unknown): Verdict | undefined {
   return undefined
 }
 
+/** A model sometimes emits `JSON.stringify({verdict,reason})` instead of the object; peel at most this many layers. */
+const MAX_JSON_UNWRAP = 3
+
+const VERDICT_KEYS = ["verdict", "status", "result", "met"] as const
+const REASON_KEYS = ["reason", "explanation", "rationale"] as const
+
 /**
  * Extracts the evaluator's verdict from free-form model output. Accepts strict JSON, JSON in a code fence
  * or surrounded by prose, and a `VERDICT: x` fallback. Returns undefined when nothing trustworthy is found.
+ *
+ * If strict JSON fails, a narrow lenient pass reads the same fields out of a JSON-ish object. Live evaluators
+ * have emitted an otherwise well-formed verdict whose reason contained raw newlines or an unescaped quote;
+ * `JSON.parse` rejects the whole object, and the old parser burned all three repair attempts on a verdict
+ * it already had in hand. The lenient pass only accepts a recognized verdict token behind an object brace —
+ * garbage, unknown tokens and the `VERDICT:`-less prose case still yield undefined. Strict parsing always wins.
  */
 export function parseVerdict(text: string): ParsedVerdict | undefined {
   const cleaned = text.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, "").trim()
-  for (const candidate of jsonObjects(cleaned)) {
+  const candidates = verdictCandidates(cleaned)
+
+  for (const candidate of candidates) {
     const parsed = safeJson(candidate)
     if (typeof parsed !== "object" || parsed === null) continue
     const record = parsed as Record<string, unknown>
@@ -72,11 +86,62 @@ export function parseVerdict(text: string): ParsedVerdict | undefined {
     if (!verdict) continue
     return applyForwardPointerGate({ verdict, reason: clampReason(record.reason ?? record.explanation ?? record.rationale) })
   }
+
+  for (const candidate of candidates) {
+    const lenient = lenientFields(candidate)
+    if (!lenient) continue
+    return applyForwardPointerGate({ verdict: lenient.verdict, reason: clampReason(lenient.reason) })
+  }
+
   const line = /verdict\s*[:=]\s*["']?([a-z_\s-]+?)["']?\s*(?:[\n.;,]|$)/i.exec(cleaned)
   const verdict = line ? normalizeVerdict(line[1]) : undefined
   if (!verdict) return undefined
   const reason = /reason\s*[:=]\s*(.+)/i.exec(cleaned)?.[1]
   return applyForwardPointerGate({ verdict, reason: clampReason(reason) })
+}
+
+/** JSON-string layers (a verdict double-encoded by the model) plus balanced object spans and the raw layer. */
+function verdictCandidates(cleaned: string): string[] {
+  const candidates: string[] = []
+  let layer = cleaned
+  for (let depth = 0; depth < MAX_JSON_UNWRAP; depth++) {
+    candidates.push(...jsonObjects(layer), layer)
+    const unwrapped = safeJson(layer)
+    if (typeof unwrapped !== "string") break
+    layer = unwrapped.trim()
+  }
+  return candidates
+}
+
+/**
+ * Reads `verdict`/`reason` fields from a JSON-ish object that strict JSON rejected. The verdict regex is
+ * anchored to a quoted key after an object brace; the reason regex spans raw newlines and stops at the next
+ * field (or end of text, which covers an object truncated mid-reason). No verdict token means no verdict.
+ */
+function lenientFields(text: string): { verdict: Verdict; reason: string } | undefined {
+  for (const key of VERDICT_KEYS) {
+    const field = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "i").exec(text)
+    if (!field) continue
+    const verdict = normalizeVerdict(field[1])
+    if (!verdict) return undefined
+    const brace = text.indexOf("{")
+    if (brace === -1 || brace > field.index) return undefined
+    let reason = ""
+    for (const reasonKey of REASON_KEYS) {
+      const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)
+      if (match?.[1] !== undefined) {
+        reason = unescapeJsonText(match[1])
+        break
+      }
+    }
+    return { verdict, reason }
+  }
+  return undefined
+}
+
+/** Decode the escapes a model did use, leaving raw newlines and stray quotes as they appeared. */
+function unescapeJsonText(value: string): string {
+  return value.replace(/\\(n|r|t|"|\\)/g, (_match, code: string) => ({ n: "\n", r: "\r", t: "\t", '"': '"', "\\": "\\" })[code] ?? code)
 }
 
 function clampReason(value: unknown) {

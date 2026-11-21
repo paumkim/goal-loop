@@ -136,6 +136,23 @@ describe("Evaluator.evaluate", () => {
     expect(prompts).toHaveLength(2)
   })
 
+  test("a malformed verdict object is accepted on the first attempt instead of failing all three", async () => {
+    let calls = 0
+    const { fake } = deps({
+      sessionGenerate: async () => {
+        calls++
+        return `{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence refs
+status=satisfied, source/turn=turn 1
+next: none"}`
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(result.reason).toContain("Clause-by-clause judgment")
+    expect(calls).toBe(1)
+  })
+
   test("two unreadable verdicts raise EvaluationError", async () => {
     const { fake } = deps({ sessionGenerate: async () => "total garbage" })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)

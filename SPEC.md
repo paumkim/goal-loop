@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2068 -->
+<!-- spec-check files=74 tests=2074 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8526,7 +8526,7 @@ Two independent leaks, neither a sensing capability:
 - The 20,000 default is a behavior change for repos that did not set `maxTranscriptChars`; explicit settings still win,
   and the ≥4,000 floor is unchanged. It is deliberate, documented, and test-pinned, not a silent default swap.
 
-<!-- spec-check files=74 tests=2068 -->
+<!-- spec-check files=74 tests=2074 -->
 
 ## Workstream CXVI — resume an interrupted evaluation after restart (2026-11-21)
 
@@ -8573,4 +8573,59 @@ Status: specified first, then implemented and verified against this section. Obj
 - A user interrupt (`onUserPrompt` → `invalidate`) leaves the marker until the next execution's evaluation overwrites it; if no next turn arrives before a restart, the interrupted turn is re-evaluated from fresh evidence — the evaluator re-judges the visible transcript, so this is safe but may repeat a verdict.
 - No change to the evaluator's rubric, consensus, retry ladder, verifier gate, or the use-and-forget context strip from Workstream CXV.
 
-<!-- spec-check files=74 tests=2068 -->
+<!-- spec-check files=74 tests=2074 -->
+
+## Workstream CXVII — accept malformed-but-readable evaluator verdicts (2026-11-21)
+
+Status: implemented and verified against this section. Trigger: a live TUI notice —
+`Goal still active · Evaluator failed (unreadable verdict after 3 attempts: "{\"verdict\":\"met\",\"reason\":\"(a) Clause-by-clause judgment with evidence ref…"); retrying in 10s.` —
+showed the evaluator's own `met` verdict text being rejected by the parser and burning all three repair attempts.
+
+### Interpretation
+
+`parseVerdict` (`src/core/verdict.ts`) tried only strict `JSON.parse` on balanced `{…}` spans. The rubric
+(`src/core/prompts.ts` `OUTPUT`) asks for a structured reason with `\n` line breaks, but live models emit raw
+newlines and occasional unescaped quotes inside the reason string; that makes the whole object invalid JSON, so
+the retry ladder in `src/runtime/evaluator.ts` re-asked three times and then threw `EvaluationError`, which the
+controller counted as an evaluator failure. A second observed shape is a verdict double-encoded with
+`JSON.stringify({verdict,reason})` — quoted braces defeat `jsonObjects` outright. In both cases the verdict
+token and reason were present in the reply; the parser, not the judgment, was the failure.
+
+### Change
+
+1. `verdictCandidates` peels up to three JSON-string layers (a double-encoded verdict) and feeds each layer's
+   balanced object spans and raw text to the parser. Strict JSON remains the first and authoritative path — a
+   well-formed verdict is handled byte-for-byte as before.
+2. A narrow lenient pass runs only after strict parsing fails on every candidate. It reads the same field
+   aliases (`verdict`/`status`/`result`/`met`, `reason`/`explanation`/`rationale`) from a JSON-ish object,
+   requires an object brace before the verdict key, accepts only a recognized verdict token, decodes the escapes
+   the model did use (`\n`, `\r`, `\t`, `\"`, `\\`), and stops the reason at the next field or end of text
+   (so an object truncated mid-reason still yields its verdict). The result goes through the existing
+   `clampReason` and forward-pointer gate — no new verdict vocabulary, no gate bypass.
+3. Garbage, reason-only JSON, unknown verdict tokens, and a quoted `"verdict":"met"` in prose still return
+   `undefined`, so the repair ladder and fail-closed behavior are unchanged for genuinely unreadable replies.
+
+### Verification (fresh at this HEAD)
+
+- **Discrimination.** With `src/core/verdict.ts` restored to the pre-fix HEAD, the six new tests fail:
+  `147 pass / 5 fail` for `test/core.test.ts` + `test/evaluator.test.ts`; the evaluator test reproduces the exact
+  toast error with raw newlines in the reason. With the fix: **152 pass / 0 fail** for those two files.
+- **Tests.** Full `cd test && bun test` → **2074 pass / 0 fail** across 85 files (29 snapshots, 198,837 expect()
+  calls), up from **2068** (+5 parser cases in `test/core.test.ts`, +1 end-to-end case in `test/evaluator.test.ts`;
+  no existing test weakened or skipped). `bunx tsc --noEmit` clean.
+- **Gates.** `bun run check` exit 0 (tsc, tests, `check:dist`, `compile`, `check:tui`, `docs:check`,
+  `check:invariant`, `check:spec`); `npm pack --dry-run --json` still 74 files (`src/core/verdict.ts` already ships).
+  SPEC marker re-stamped in this commit to `files=74 tests=2074`.
+
+### Honest limits / non-goals
+
+- The lenient pass is a reader, not a judge: it does not infer a verdict from prose or from a reason's content,
+  and it never upgrades `not_met`/`impossible`. If the model truly never emitted a recognized verdict token,
+  all three attempts still fail as before.
+- An object truncated mid-reason yields the token with a partial reason; downstream gates (verifier command,
+  zero-tool guard, forward-pointer gate) are untouched and still apply. No attempt is made to salvage a verdict
+  from text before the first `{` or from plain prose.
+- The rubric's `use \n for line breaks` instruction is unchanged; the parser now tolerates models that ignore it,
+  rather than penalizing the whole evaluation. No config option, prompt, verifier, TUI or persisted record changed.
+
+<!-- spec-check files=74 tests=2074 -->
