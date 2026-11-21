@@ -4899,6 +4899,17 @@
       "submittedAt": "2026-11-21T17:47:18Z",
       "mergedAt": "2026-11-21T17:49:24Z",
       "mergedInto": "dev"
+    },
+    "cxxxii-audit-failure-path-fixes": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/runtime/evaluator.ts,src/index.ts,test/core.test.ts,test/evaluator.test.ts",
+      "branch": "wt/cxxxii-audit-failure-path-fixes",
+      "worktree": "worktrees/wt-cxxxii-audit-failure-path-fixes",
+      "status": "done",
+      "createdAt": "2026-11-21T18:08:20Z",
+      "submittedAt": "2026-11-21T18:09:46Z",
+      "mergedAt": "2026-11-21T18:11:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
