@@ -38,7 +38,7 @@ Write one unchecked item per unit of work. Add details that make "done" verifiab
 - [ ] Example: add a regression test for the parser and prove it with \`bun test\`
 
 ## Notes
-- Re-run a failed task: delete its \`<!-- prompter: ... -->\` marker and leave the box unchecked.
+- Re-run a failed/rejected task: run \`prompter cleanup <repo>\` (removes its stale branch/worktree), delete its \`<!-- prompter: ... -->\` marker, and leave the box unchecked.
 - A task marked \`in_review\` is left alone until you run \`prompter review\` and approve or reject it.
 - \`prompter stop\` writes the global kill switch; \`prompter resume\` removes it.
 `

@@ -136,6 +136,21 @@ describe("parseVerdict", () => {
     expect(isAlreadySatisfiedLanding("merged aa5e196: work landed; next: follow-up")).toBe(false) // genuinely new work
     expect(isAlreadySatisfiedLanding("all tests pass")).toBe(false)
   })
+  test("forward-pointer gate: 'next: none', 'n/a' and an empty pointer name no concrete gap", () => {
+    for (const reason of [
+      "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: none",
+      "Already satisfied at HEAD 3f3e1eb. next: n/a",
+      "Already satisfied at HEAD 3f3e1eb. next:",
+    ]) {
+      expect(isAlreadySatisfiedLanding(reason)).toBe(false)
+      const out = parseVerdict(JSON.stringify({ verdict: "met", reason }))
+      expect(out?.verdict).toBe("not_met")
+      expect(out?.reason).toContain("duplicate-without-forward-pointer")
+    }
+    // A concrete pointer still lands, including the rubric's multi-line numbered form.
+    expect(isAlreadySatisfiedLanding("Already satisfied at HEAD 3f3e1eb. next:\n1. [high] add fuzz coverage")).toBe(true)
+  })
+
   test("forward-pointer gate: 'no new work' and 'nothing to do' phrasing is gated the same", () => {
     expect(parseVerdict('{"verdict":"met","reason":"no new work was needed at this HEAD"}')?.verdict).toBe("not_met")
     expect(parseVerdict('{"verdict":"met","reason":"The work was already done. Nothing to do."}')?.verdict).toBe("not_met")
@@ -183,6 +198,13 @@ next: run the gate"}`
     expect(parseVerdict('{"verdict":"maybe","reason":"(a) unclear"}')).toBeUndefined()
     expect(parseVerdict('prose saying "verdict":"met" without an object')).toBeUndefined()
   })
+  test("the lenient pass ignores a verdict-looking token quoted inside a reason string", () => {
+    const text = '{"foo":1,"reason":"prior eval said "verdict":"met", but that was wrong\n and I disagree"}'
+    expect(parseVerdict(text)).toBeUndefined()
+    // A genuine top-level verdict key still wins even when the reason quotes another verdict token.
+    expect(parseVerdict('{"verdict":"not_met","reason":"quoted "verdict":"met" in prose"}')?.verdict).toBe("not_met")
+  })
+
   test("structured reasons with clause matrix and next actions parse (compatibility)", () => {
     const met = parseVerdict(JSON.stringify({
       verdict: "met",

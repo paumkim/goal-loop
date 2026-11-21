@@ -85,7 +85,7 @@ export const reject = (
     worktree: state.worktree, reason: reason || "rejected by reviewer",
   })
   cleanupWorktree(repo, state)
-  return { ok: true, message: `rejected ${state.id}; remove its marker in ${config.backlog} to retry` }
+  return { ok: true, message: `rejected ${state.id}; run 'prompter cleanup ${repo}', then remove its marker in ${config.backlog} to retry` }
 }
 
 /** Remove a task's worktree and branch. Best effort: git diagnostics are returned for reporting. */

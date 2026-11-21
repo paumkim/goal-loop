@@ -16,7 +16,9 @@ const MAX_REASON = 4000
  * Never upgrades a verdict, never touches not_met or impossible, never fires on a met that names its gap.
  */
 const ALREADY_SATISFIED = /(already[-\s]satisfied|no new work|nothing[_\s-](new[_\s-])?to do|no work needed)/i
-const NEXT_POINTER = /next\s*:/i
+// A forward pointer must name a concrete gap. `next: none` (the rubric's own no-gap output) and an empty
+// pointer are not advancement: accepting them would let a zero-work "already satisfied" claim advance the loop.
+const NEXT_POINTER = /next\s*:\s*(?!none\b|n\s*\/\s*a\b|$)\S/i
 const DUPLICATE_REASON = "duplicate-without-forward-pointer"
 
 /**
@@ -114,6 +116,25 @@ function verdictCandidates(cleaned: string): string[] {
 }
 
 /**
+ * True when `index` (the start of a quoted key) sits outside any string value in the first object span of
+ * `text` — i.e. it is a real object key, not text a model quoted inside a reason. Escaped quotes do not toggle
+ * string state. A missing or later brace means there is no enclosing object at that position.
+ */
+function isObjectKeyPosition(text: string, index: number): boolean {
+  const brace = text.indexOf("{")
+  if (brace === -1 || brace > index) return false
+  let inString = false
+  let escaped = false
+  for (let i = brace; i < index; i++) {
+    const char = text[i]
+    if (escaped) escaped = false
+    else if (char === "\\") escaped = true
+    else if (char === '"') inString = !inString
+  }
+  return !inString
+}
+
+/**
  * Reads `verdict`/`reason` fields from a JSON-ish object that strict JSON rejected. The verdict regex is
  * anchored to a quoted key after an object brace; the reason regex spans raw newlines and stops at the next
  * field (or end of text, which covers an object truncated mid-reason). No verdict token means no verdict.
@@ -122,10 +143,12 @@ function lenientFields(text: string): { verdict: Verdict; reason: string } | und
   for (const key of VERDICT_KEYS) {
     const field = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "i").exec(text)
     if (!field) continue
+    // The quoted key must sit at an object key position, not inside a string value. A model can quote
+    // `"verdict":"met"` in its reason (discussing another evaluation); without this guard the lenient pass
+    // manufactures a met out of a reason with no verdict field at all.
+    if (!isObjectKeyPosition(text, field.index)) continue
     const verdict = normalizeVerdict(field[1])
     if (!verdict) return undefined
-    const brace = text.indexOf("{")
-    if (brace === -1 || brace > field.index) return undefined
     let reason = ""
     for (const reasonKey of REASON_KEYS) {
       const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)

@@ -38,10 +38,22 @@ describe("backlog", () => {
     expect(selectNextTask(lines, states)?.objective).toBe("available")
   })
 
-  test("skips lines that have a state record even without a marker", () => {
+  test("a terminal state record does not block retry once its marker is removed", () => {
     const lines = parseBacklog(BASE)
-    const states = new Map<string, TaskState>([[lines[0]!.id, { id: lines[0]!.id } as TaskState]])
-    expect(selectNextTask(lines, states)?.objective).toBe("second task")
+    const id = lines[0]!.id
+    for (const status of ["failed", "rejected", "interrupted", "merged"]) {
+      const states = new Map<string, TaskState>([[id, { id, status } as TaskState]])
+      expect(selectNextTask(lines, states)?.objective).toBe("first task with a clear condition")
+    }
+  })
+
+  test("live state records still block a line with no marker", () => {
+    const lines = parseBacklog(BASE)
+    const id = lines[0]!.id
+    for (const status of ["running", "in_review"]) {
+      const states = new Map<string, TaskState>([[id, { id, status } as TaskState]])
+      expect(selectNextTask(lines, states)?.objective).toBe("second task")
+    }
   })
 
   test("writeLineStatus updates the marker and checkbox in place", () => {

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { DEFAULT_CONFIG } from "../src/prompter/defaults.ts"
-import { envOverrides, loadConfig, mergeConfig, normalize } from "../src/prompter/config.ts"
+import { envOverrides, isRepoAllowed, loadConfig, mergeConfig, normalize } from "../src/prompter/config.ts"
 
 describe("config", () => {
   test("defaults are the review-gated, capped baseline", () => {
@@ -55,6 +55,14 @@ describe("config", () => {
     expect(config.stopFiles).toEqual(["/repo/STOP"])
     expect(config.allowedRepos).toEqual(["/repo"])
     expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow(/provider\/model/)
+  })
+
+  test("isRepoAllowed enforces the configured whitelist without a CLI override", () => {
+    const config = normalize(mergeConfig(DEFAULT_CONFIG, { allowedRepos: ["/repos/safe"] }), "/repos/safe")
+    expect(isRepoAllowed(config, "/repos/safe")).toBe(true)
+    expect(isRepoAllowed(config, "/repos/other")).toBe(false)
+    // An empty whitelist is unrestricted — the default for local, single-repo use.
+    expect(isRepoAllowed({ ...config, allowedRepos: [] }, "/repos/other")).toBe(true)
   })
 
   test("loadConfig reads config file then env, with env winning", () => {

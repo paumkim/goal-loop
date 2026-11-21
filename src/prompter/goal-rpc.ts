@@ -1,5 +1,9 @@
-import { Rpc } from "@opencode/plugin/rpc"
-
+/**
+ * Mirrors goal-loop's shared RPC contract so prompter needs no source import from that repo — and, crucially,
+ * no *runtime* import of `@opencode/plugin`, which is an optional peer that a clean install does not provide.
+ * `Rpc.define` is a validation-only identity function; this literal has the same shape and is accepted by
+ * `client.rpc()` structurally (Rpc.PortableDefinition).
+ */
 const sessionInput = {
   type: "object",
   properties: { sessionID: { type: "string" } },
@@ -10,7 +14,7 @@ const sessionInput = {
 const goal = { anyOf: [{ type: "object" }, { type: "null" }] } as const
 
 /** Mirrors goal-loop's shared RPC contract so prompter needs no source import from that repo. */
-export const GoalRpc = Rpc.define({
+export const GoalRpc = {
   id: "goal",
   methods: {
     get: {
@@ -40,4 +44,4 @@ export const GoalRpc = Rpc.define({
       },
     },
   },
-})
+} as const
