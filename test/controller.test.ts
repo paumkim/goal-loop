@@ -1101,6 +1101,182 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
   })
 })
 
+describe("an interrupted evaluation resumes after restart (CXVI)", () => {
+  const KEY = (sessionID: string) => `goal/v1/${sessionID}`
+  const deferred = <T>() => {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+
+  test("shutdown mid-evaluation persists an evaluate marker that store.flush() lands", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    h.verdicts.push(() => gate.promise)
+    const turning = h.turn()
+    await flush()
+    expect(h.controller.snapshot(SID)?.evaluating).toBeTrue()
+    await h.controller.dispose()
+    await h.store.flush()
+    const stored = storage.data.get(KEY(SID)) as GoalRecord
+    expect(stored.pendingEvaluation).toMatchObject({ turn: 1, tools: 1, condition: "restore the check", phase: "evaluate" })
+    gate.resolve(notMet("late verdict"))
+    await turning
+  })
+
+  test("restore re-enters evaluate with the interrupted turn and tools, then clears the marker", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    first.verdicts.push(() => gate.promise)
+    const turning = first.turn()
+    await flush()
+    await first.controller.dispose()
+    await first.store.flush()
+    gate.resolve(notMet("late verdict"))
+    await turning
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("resumed gap"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(1)
+    expect(second.requests[0]!.turn).toBe(1)
+    expect(second.controller.get(SID)?.turns).toBe(1)
+    expect(second.calls.synthetic).toHaveLength(1)
+    expect(second.calls.synthetic[0].text).toContain("resumed gap")
+    expect(second.notices.some((n) => n.kind === "resumed" && n.title.includes("restart"))).toBeTrue()
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a marker for a verdict that already landed is cleared, never re-evaluated", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const stale = storage.data.get(KEY(SID)) as GoalRecord
+    stale.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    stale.turns = 1 // verdict committed before the crash
+    storage.data.set(KEY(SID), stale)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a marker whose condition changed by a loop re-arm is cleared", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("old condition")
+    await first.store.flush()
+    const stale = storage.data.get(KEY(SID)) as GoalRecord
+    stale.pendingEvaluation = { turn: 1, tools: 1, condition: "old condition", phase: "evaluate", at: 1 }
+    stale.condition = "new condition"
+    storage.data.set(KEY(SID), stale)
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("should not be used"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+  })
+
+  test("a continue-phase marker re-sends the continuation steer without a second evaluation", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const owed = storage.data.get(KEY(SID)) as GoalRecord
+    owed.turns = 1
+    owed.verdict = "not_met"
+    owed.reason = "the previously judged gap"
+    owed.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "continue", at: 1 }
+    storage.data.set(KEY(SID), owed)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(1)
+    expect(second.calls.synthetic[0].text).toContain("the previously judged gap")
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+  })
+
+  test("a paused record's marker is cleared, never resumed", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const paused = storage.data.get(KEY(SID)) as GoalRecord
+    paused.status = "paused"
+    paused.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    storage.data.set(KEY(SID), paused)
+
+    const second = harness({}, storage)
+    second.verdicts.push(notMet("should not be used"))
+    expect(await second.controller.restore()).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(0)
+  })
+
+  test("restore({ resume: false }) adopts the record but dispatches nothing (probe isolation)", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore the check")
+    await first.store.flush()
+    const stuck = storage.data.get(KEY(SID)) as GoalRecord
+    stuck.pendingEvaluation = { turn: 1, tools: 1, condition: "restore the check", phase: "evaluate", at: 1 }
+    storage.data.set(KEY(SID), stuck)
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore({ resume: false })).toBe(1)
+    await flush()
+    expect(second.requests).toHaveLength(0)
+    expect(second.calls.synthetic).toHaveLength(0)
+    // The marker is untouched: a later writable restore can still resume it.
+    await second.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeDefined()
+  })
+
+  test("a host 'shutdown' interrupt keeps the marker and a user interrupt clears it", async () => {
+    const storage = new MemoryStorage()
+    const h = harness({}, storage)
+    await h.set("restore the check")
+    const gate = deferred<EvaluationResult>()
+    h.verdicts.push(() => gate.promise)
+    const turning = h.turn()
+    await flush()
+    h.controller.onExecutionInterrupted(SID, "shutdown")
+    await h.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation?.phase).toBe("evaluate")
+    gate.resolve(notMet("late"))
+    await turning
+    await h.controller.dispose()
+
+    const other = harness({}, storage)
+    await other.set("user prompt wins")
+    const gate2 = deferred<EvaluationResult>()
+    other.verdicts.push(() => gate2.promise)
+    const turning2 = other.turn()
+    await flush()
+    other.controller.onExecutionInterrupted(SID, "user")
+    await other.store.flush()
+    expect((storage.data.get(KEY(SID)) as GoalRecord).pendingEvaluation).toBeUndefined()
+    gate2.resolve(notMet("late"))
+    await turning2
+    await other.controller.dispose()
+  })
+})
+
 describe("RPC payload strict-JSON hygiene (host JSONValue gate)", () => {
   // The host rejects an explicit-undefined key ANYWHERE in an RPC payload with
   // `SchemaError(Expected JSON value at …)`; on the wire that surfaced as HTTP 500 on goal/get and as

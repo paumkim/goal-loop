@@ -1041,7 +1041,8 @@ export class GoalController {
     const record = this.goals.get(sessionID)
     if (!record || record.status !== "active") return
     const runtime = this.runtime(sessionID)
-    this.invalidate(runtime)
+    // A host 'shutdown' interrupt is the graceful-cancel twin of dispose(): keep the resume breadcrumb.
+    this.invalidate(runtime, reason === "shutdown")
     this.clearDeferred(runtime, record)
     if (reason === "user") return this.pause(record, "Interrupted.", "user")
     if (reason === "inactivity") {
@@ -1095,7 +1096,14 @@ export class GoalController {
     // evaluate() — after the bookkeeping mutations but before the commit, so the goal wedged
     // silently, forever. Normalize on adoption instead.
     if (!Array.isArray(record.history)) record.history = []
-    Object.assign(record, { turns: 0, stall: 0, retries: 0, checkins: 0, baseline: usage ?? record.baseline ?? EMPTY_USAGE })
+    // A pending evaluation owns turn N-1's identity: resetting turns to 0 would make the resumed evaluate()
+    // recompute turn 1 (wrong verdict numbering, and it would trip the turn-1 zero-tool downgrade). Other
+    // restored goals keep the Claude-Code-parity counter reset.
+    const resuming = record.status === "active" && record.pendingEvaluation !== undefined
+    Object.assign(record, {
+      ...(resuming ? {} : { turns: 0, stall: 0, retries: 0, checkins: 0 }),
+      baseline: usage ?? record.baseline ?? EMPTY_USAGE,
+    })
     this.goals.set(record.sessionID, record)
     // Create the runtime up front so tool events that arrive before the first execution-end are counted.
     const runtime = this.runtime(record.sessionID)
@@ -1117,7 +1125,7 @@ export class GoalController {
    * `/goal-loop` arm boundary asks for one (arm-time path). A plugin (re)load must not compact every live
    * goal session at once, and a restore cannot know which session needs a fresh context next.
    */
-  async restore(): Promise<number> {
+  async restore(options: { readonly resume?: boolean } = {}): Promise<number> {
     // Restore-time hygiene: prune terminal records past the explicit age/count cap before adopting live ones.
     // Covers every directory at plugin storage (per-directory caps), not just this controller's own — a restart
     // anywhere cleans up after every project. Best-effort — a prune failure must never block a restore. The
@@ -1140,12 +1148,54 @@ export class GoalController {
     const records = await this.deps.store.loadLive(this.deps.directory)
     await Promise.all(records.map((record) => this.adoptRestored(record)))
     if (this.goals.size) this.deps.log.info("restored goals", { count: this.goals.size })
+    // Probe servers adopt live records read-only; they must never start real evaluations from a marker.
+    if (options.resume !== false) this.resumePendingEvaluations()
     return this.goals.size
+  }
+
+  /**
+   * Re-dispatch the exactly one post-turn step a restored marker owes. The marker is deleted before any
+   * dispatch so a second restore (or a concurrent adopt) cannot double-fire; every guard is read-only and
+   * fails closed to "clear and do nothing" when a newer execution or a changed goal owns the turn now.
+   */
+  private resumePendingEvaluations(): void {
+    for (const record of this.goals.values()) {
+      const pending = record.pendingEvaluation
+      if (!pending) continue
+      delete record.pendingEvaluation // single-dispatch guard
+      const sessionID = record.sessionID
+      const stale =
+        record.status !== "active" ||
+        this.running.has(sessionID) ||
+        record.condition !== pending.condition ||
+        (pending.phase === "evaluate" && record.turns >= pending.turn)
+      if (stale) {
+        void this.commit(record)
+        continue
+      }
+      void this.commit(record)
+      const runtime = this.runtime(sessionID)
+      if (runtime.evaluating) continue
+      this.deps.log.info("resuming interrupted goal step after restart", { sessionID, phase: pending.phase, turn: pending.turn })
+      this.notify(sessionID, "resumed", "info", "Goal resumed after restart", pending.phase === "evaluate" ? "Re-checking the interrupted turn from fresh evidence." : "Re-sending the continuation for the judged turn.")
+      if (pending.phase === "continue") {
+        const turn = record.turns + 1
+        void this.continueWith(record, {
+          text: Prompt.continuation({ condition: record.condition, turn, reason: record.reason ?? "evaluation was interrupted by a restart", learnings: this.recentLearningsForPrompt(record) }, this.deps.commit),
+          description: `goal · turn ${turn} · ${truncate(record.reason || "resumed after restart", 90)}`,
+          turn,
+        }).catch((error) => this.deps.log.error("resumed continuation failed", { sessionID, error: errorMessage(error) }))
+      } else {
+        const epoch = ++runtime.epoch
+        void this.evaluate(record, runtime, epoch, pending.tools).catch((error) => this.deps.log.error("resumed evaluation failed", { sessionID, error: errorMessage(error) }))
+      }
+    }
   }
 
   async dispose(): Promise<void> {
     this.disposed = true
-    for (const runtime of this.runtimes.values()) this.invalidate(runtime)
+    // Keep each pending marker: it is the only breadcrumb a restart has for an interrupted evaluation.
+    for (const runtime of this.runtimes.values()) this.invalidate(runtime, true)
     // Let final-usage snapshots land first; their commits enqueue store writes that flush() must see.
     await Promise.allSettled([...this.pendingUsage, ...this.pendingPrunes])
     await this.deps.store.flush()
@@ -1158,6 +1208,10 @@ export class GoalController {
     const sessionID = record.sessionID
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
+    // Persist the owed step BEFORE any await or generation: a shutdown mid-evaluation aborts the in-memory
+    // controller and leaves no runtime state to resume. This additive marker survives store.flush() on dispose.
+    record.pendingEvaluation = { turn, tools, condition: record.condition, phase: "evaluate", at: clock.now() }
+    void this.commit(record)
     const [usage, contextSize] = await Promise.all([
       session.usage(sessionID).catch(() => undefined),
       this.contextSize(sessionID),
@@ -1166,6 +1220,8 @@ export class GoalController {
     const turnSpend = usage && runtime.turnUsage ? diffUsage(usage, runtime.turnUsage) : undefined
     if (usage) runtime.turnUsage = usage
     if (this.stale(record, runtime, epoch)) {
+      delete record.pendingEvaluation
+      void this.commit(record)
       this.logStaleDrop(record, runtime, epoch, "before evaluation")
       return
     }
@@ -1190,7 +1246,13 @@ export class GoalController {
       })
     } catch (error) {
       if (abort.signal.aborted || this.stale(record, runtime, epoch)) {
-        if (!abort.signal.aborted) this.logStaleDrop(record, runtime, epoch, "evaluator failed but stale")
+        if (!abort.signal.aborted) {
+          // Superseded by a newer execution: that turn's own evaluate() will stamp a fresh marker.
+          delete record.pendingEvaluation
+          void this.commit(record)
+          this.logStaleDrop(record, runtime, epoch, "evaluator failed but stale")
+        }
+        // Aborted (shutdown / interrupt): keep the marker. dispose() flushes it and restore() resumes it.
         return
       }
       runtime.evaluating = false
@@ -1314,6 +1376,10 @@ export class GoalController {
         return
       }
     }
+    // The verdict is durable; the post-turn steer is still owed. Flip the resume marker to "continue" in
+    // the same commit so a restart between here and the synthetic dispatch re-sends the steer, not a
+    // second evaluation. Terminal/paused/loop paths above clear the marker through invalidate()/the guard.
+    record.pendingEvaluation = { turn, tools, condition: record.condition, phase: "continue", at: clock.now() }
     this.commit(record)
     // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
     if (this.running.has(sessionID)) return
@@ -2382,6 +2448,11 @@ export class GoalController {
         // and the armed loop could park with the pill reading "active" — indistinguishable from stuck.
         resume: true,
       })
+      // The owed steer is admitted; no restart recovery is needed for this turn any more.
+      if (record.pendingEvaluation?.phase === "continue") {
+        delete record.pendingEvaluation
+        void this.commit(record)
+      }
     } catch (error) {
       // A synthetic steer that fails to land must not stop the goal: drop the queued/dispatched flag and retry the dispatch.
       // onUserPrompt/clear/isDisposed all call invalidate(runtime), which clears runtime.timer, so a user prompt
@@ -2660,12 +2731,21 @@ export class GoalController {
     if (ours) void this.commit(record)
   }
 
-  private invalidate(runtime: Runtime) {
+  private invalidate(runtime: Runtime, keepPending = false) {
     runtime.epoch++
     runtime.abort?.abort()
     runtime.abort = undefined
     const wasEvaluating = runtime.evaluating
     runtime.evaluating = false
+    if (!keepPending) {
+      // A user prompt or a newer execution owns this turn: its own evaluate() will stamp a fresh marker.
+      // Shutdown/interrupt keep the breadcrumb so restore() can resume the interrupted step.
+      const record = this.goals.get(runtime.sessionID)
+      if (record?.pendingEvaluation) {
+        delete record.pendingEvaluation
+        void this.commit(record)
+      }
+    }
     if (runtime.timer !== undefined) this.deps.clock.clearTimeout(runtime.timer)
     runtime.timer = undefined
     if (wasEvaluating) {
