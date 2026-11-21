@@ -4788,8 +4788,11 @@
       "paths": "SPEC.md,src,test,docs,README.md",
       "branch": "wt/goal-follows-session-move",
       "worktree": "worktrees/wt-goal-follows-session-move",
-      "status": "claimed",
-      "createdAt": "2026-11-21T09:27:16Z"
+      "status": "done",
+      "createdAt": "2026-11-21T09:27:16Z",
+      "submittedAt": "2026-11-21T10:00:40Z",
+      "mergedAt": "2026-11-21T10:09:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
