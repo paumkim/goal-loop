@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2101 -->
+<!-- spec-check files=141 tests=2107 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8698,3 +8698,37 @@ means "nothing is happening in the session but background work", not "a judge is
 prompt, HUD renderer, persisted record shape or TUI bundle changed.
 
 <!-- spec-check files=141 tests=2101 -->
+## Workstream: review recent changes, fix bugs, run the normal routines
+
+**Goal / interpretation.** The user asked to "review recent changes for bugs, fix what needs fixing, and do the normal routines until there are nothing else todo." *Recent changes* = the code commits landed on `dev` since the last review sweep: the single-package prompter bundle (`0dccc1b`) and the malformed-but-readable verdict parser fix (`aa4da0c`), plus their supporting chore/doc commits. *Normal routines* = `bun run check` (tsc → tests → check:dist → compile → check:tui → docs:check → invariant-sweep → spec-check). *Nothing else to do* = no open defects from the review, no stale open items in `CURRENT_TASK.md` / `pending_fixes.md`, a green suite, and the work submitted through the coordinator.
+
+**Acceptance criteria.**
+1. Every recent code change is reviewed against its own tests and the documented contract; findings are classified as real bugs vs. pinned-by-design behavior.
+2. Each real defect found is fixed with a regression test that fails on the pre-fix code and passes after (fix-then-pin discipline), without weakening existing tests.
+3. `bun run check` passes in the worktree with fresh output recorded below.
+4. No unreviewed open items remain in `CURRENT_TASK.md` or `pending_fixes.md`; items kept by design are explicitly recorded as such.
+5. Changes are committed on `wt/<slug>` and submitted via the coordinator; no direct commit to `dev`/`main`.
+6. This SPEC section records the interpretation, the acceptance criteria, and the fresh verification evidence.
+
+### Findings verified and fixed (fresh at this HEAD)
+
+Two independent read-only reviews covered (a) the bundled prompter loop (`src/prompter/*`, `bin/prompter.mjs`) and (b) the malformed-verdict fix plus its neighboring core/runtime changes. Each reported defect was reproduced live before changing code, then fixed with a regression test; with only the source fix stashed, the new tests fail (prompter: 3 fails + 2 module errors; verdict: 2 fails), and with the fix present they pass.
+
+**Prompter.**
+1. `src/prompter/backlog.ts` — `selectNextTask` excluded any id present in the append-only journal, so the documented "remove the marker to retry" flow could never retry a failed, rejected or interrupted task. It now excludes only *live* states (`running`, `in_review`); terminal records no longer disqualify an unmarked line. Regression tests in `test/prompter-backlog.test.ts` cover all four terminal statuses and both live statuses.
+2. `src/prompter/goal-rpc.ts` — the CLI imported `Rpc` from `@opencode/plugin/rpc` at runtime although `@opencode/plugin` is an *optional* peer that a clean install does not provide; every `prompter` subcommand (including the kill switches) would fail to load. The contract is now a local `as const` literal accepted structurally by `client.rpc()`; no runtime peer import. `test/prompter-driver.test.ts` guards the source against reintroducing it.
+3. `src/prompter/cli.ts` + `src/prompter/config.ts` — `tick` injected `PROMPTER_ALLOWED_REPOS` from `--repo` into `loadConfig`, so the flag rewrote the whitelist it was supposed to be checked against. The override is removed and `isRepoAllowed` is the single check; regression test in `test/prompter-config.test.ts`.
+4. `src/prompter/driver.ts` — a SIGTERM called `fileLog.end()` while the spawned server's stdout/stderr handlers kept writing, causing `ERR_STREAM_WRITE_AFTER_END` and a crash mid-shutdown. Writes are now guarded by `writable`, an `error` listener is attached, and the stream is closed once in `finally`; `writeLogLine` is pinned in `test/prompter-driver.test.ts`.
+5. `src/prompter/cli.ts` — `cleanup` skipped a finished task whose worktree was gone but whose branch remained; `cleanupWorktree` already checks both independently, so the caller now reaches it unconditionally. The retry instructions in `src/prompter/defaults.ts` and `src/prompter/review.ts` now mention `prompter cleanup`.
+
+**Verdict parser (`src/core/verdict.ts`).**
+6. `NEXT_POINTER` matched any `next:` substring, so an "already satisfied" met ending in `next: none` (the rubric's own no-gap output), `next: n/a`, or a bare `next:` was treated as a concrete forward pointer — defeating the duplicate gate and the zero-tool advancement guard. It now requires a non-empty, non-`none`/`n/a` payload while staying newline-tolerant for the rubric's numbered form. Both `applyForwardPointerGate` and `isAlreadySatisfiedLanding` share the constant, so the gate and the guard tighten together. Regression test in `test/core.test.ts`.
+7. The lenient pass matched `"verdict":"met"` inside a *reason string*, manufacturing a met from an object with no verdict field. It now requires the quoted key to sit at an object-key position (even/odd unescaped-quote scan from the object brace), so a token a model quoted while discussing another evaluation is ignored. Regression test in `test/core.test.ts`.
+
+**Reviewed, not changed (by design / pinned).** `maxTasksPerTick > 1` still processes at most one task per tick — the documented one-unit-at-a-time review gate wins; `reject` resolves the repo via `--repo` (as its usage states) rather than a trailing positional, unlike `approve`. The remaining hardening observation (verification-reuse cache keyed on turn+HEAD across loop iterations when no commit landed) is consistent with "fresh evidence at current HEAD" and was left untouched.
+
+### Verification (fresh output at this HEAD)
+
+- `bun run check` exit 0: `tsc --noEmit` clean; `cd test && bun test` → **2104 pass / 0 fail** across 91 files (29 snapshots, 199,018 expect() calls), up from 2098 (+6 regression tests: 4 prompter, 2 verdict); `check:dist` ok; `compile` rebuilt `dist/tui.js`; `check:tui` ok; `docs:check` passed; `invariant-sweep` ok (SPEC.md + docs/changelog.html both updated for the `src/core` behavior change); `check:spec` ok (141 files, 2104 tests match SPEC.md). The canonical marker at line 499 was re-counted in-commit via `spec-check --write`.
+- Fix-then-pin discrimination (source fix stashed, tests kept): prompter suite 3 fails + 2 errors; `test/core.test.ts` 2 fails. With fixes restored all targeted suites pass.
+- Live reproductions before fixing: `next: none` / `next:` / `n/a` on the already-satisfied path parsed as `met` and `isAlreadySatisfiedLanding === true`; a verdict token embedded in a reason parsed as `met`. After fixing all of these fail closed.

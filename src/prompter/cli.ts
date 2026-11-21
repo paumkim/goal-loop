@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import path from "node:path"
 import { markBacklog, recordOutcome } from "./apply.ts"
 import { parseBacklog, selectNextTask, summarizeBacklog, writeLineStatus } from "./backlog.ts"
-import { loadConfig } from "./config.ts"
+import { isRepoAllowed, loadConfig } from "./config.ts"
 import { BACKLOG_TEMPLATE, CONFIG_TEMPLATE, SUCCESS_STATUS } from "./defaults.ts"
 import { runTask } from "./driver.ts"
 import { addWorktree, aheadCount, branchExists, isRepo, tipAheadOf, trackedDirty } from "./git.ts"
@@ -83,10 +83,10 @@ const writeMarker = (text: string, line: BacklogLine, status: string, id: string
 const tick = async (parsed: Parsed): Promise<void> => {
   const repo = resolveRepo(parsed)
   ensureHome()
-  const config = loadConfig(repo, { ...process.env, ...(parsed.repoFlag ? { PROMPTER_ALLOWED_REPOS: parsed.repoFlag } : {}) })
+  const config = loadConfig(repo)
   const stateFile = config.stateFile ?? statePath(repo)
 
-  if (config.allowedRepos.length > 0 && !config.allowedRepos.includes(path.resolve(repo))) {
+  if (!isRepoAllowed(config, repo)) {
     die(`repo ${repo} is not in allowedRepos: ${config.allowedRepos.join(", ")}`)
   }
   const stoppedNow = killSwitch(config, repo, { exists: existsSync, env: process.env })
@@ -311,7 +311,9 @@ const main = async (): Promise<void> => {
       const states = loadState(config.stateFile ?? statePath(repo))
       let removed = 0
       for (const state of states.values()) {
-        if (["merged", "rejected", "failed", "interrupted"].includes(state.status) && existsSync(state.worktree)) {
+        if (["merged", "rejected", "failed", "interrupted"].includes(state.status)) {
+          // cleanupWorktree checks the worktree and branch independently — reach it even when only a stale
+          // branch remains (e.g. the worktree was removed by hand or by the OS).
           const notes = cleanupWorktree(repo, state)
           say(`cleaned ${state.id}${notes.length ? ` (${notes.join("; ")})` : ""}`)
           removed++

@@ -87,6 +87,14 @@ export const normalize = (config: Config, repo: string): Config => {
   }
 }
 
+/**
+ * True when a repo may be operated on. An empty whitelist is unrestricted; otherwise the resolved repo path
+ * must be one of the configured entries. A CLI `--repo` flag must never rewrite this list — that would let the
+ * flag silently defeat the guard it is supposed to be checked against.
+ */
+export const isRepoAllowed = (config: Config, repo: string): boolean =>
+  config.allowedRepos.length === 0 || config.allowedRepos.includes(path.resolve(repo))
+
 /** Read <repo>/.prompter/config.json (if any), then apply env overrides. */
 export const loadConfig = (repo: string, env: NodeJS.ProcessEnv = process.env): Config => {
   const root = path.resolve(repo)

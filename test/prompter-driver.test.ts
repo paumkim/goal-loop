@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { extractResult, isTerminal } from "../src/prompter/driver.ts"
+import { readFileSync } from "node:fs"
+import { extractResult, isTerminal, writeLogLine } from "../src/prompter/driver.ts"
+import { GoalRpc } from "../src/prompter/goal-rpc.ts"
 import { reviewLines } from "../src/prompter/review.ts"
 import type { TaskState } from "../src/prompter/types.ts"
 
@@ -18,6 +20,25 @@ describe("driver result extraction", () => {
   test("fails closed on missing or malformed records", () => {
     expect(extractResult(null).status).toBe("failed")
     expect(extractResult({ status: 5, spend: "bad" }).costUsd).toBe(0)
+  })
+
+  test("writeLogLine drops writes after the stream ends and never throws", () => {
+    const writes: string[] = []
+    let writable = true
+    const stream = { get writable() { return writable }, write: (line: string) => { writes.push(line) } }
+    expect(() => {
+      writeLogLine(stream, "one\n")
+      writable = false // stream.end() was called by a SIGTERM while the child still had output to flush
+      writeLogLine(stream, "two\n")
+    }).not.toThrow()
+    expect(writes).toEqual(["one\n"])
+  })
+
+  test("the RPC contract has no runtime dependency on the optional @opencode/plugin peer", () => {
+    const source = readFileSync(new URL("../src/prompter/goal-rpc.ts", import.meta.url), "utf8")
+    expect(source).not.toMatch(/import\s*\{[^}]*\}\s*from\s*["']@opencode\/plugin/)
+    expect(GoalRpc.id).toBe("goal")
+    expect(Object.keys(GoalRpc.methods)).toContain("get")
   })
 
   test("terminal statuses match goal-loop vocabulary", () => {

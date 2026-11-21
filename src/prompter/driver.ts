@@ -9,6 +9,15 @@ import type { Config, TaskResult } from "./types.ts"
 
 export const isTerminal = (status: string | undefined): boolean => !!status && TERMINAL_STATUSES.has(status)
 
+/**
+ * Best-effort write to the append-only log. A SIGTERM can close the stream while the spawned server still has
+ * buffered stdout/stderr to flush; writing after `end()` throws ERR_STREAM_WRITE_AFTER_END and would crash the
+ * shutdown path before the task state is finalized.
+ */
+export const writeLogLine = (stream: { writable: boolean; write(chunk: string): unknown }, line: string): void => {
+  if (stream.writable) stream.write(line)
+}
+
 const num = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0)
 
 /** Extract the outcome from a goal-loop record. Pure; unit-tested without a server. */
@@ -66,8 +75,9 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   const outFile = logPath(repo)
   mkdirSync(path.dirname(outFile), { recursive: true })
   const fileLog = createWriteStream(outFile, { flags: "a" })
+  fileLog.on("error", (error) => log(`log write failed: ${error.message}`))
   const logBoth = (line: string): void => {
-    fileLog.write(`${new Date().toISOString()} ${line}\n`)
+    writeLogLine(fileLog, `${new Date().toISOString()} ${line}\n`)
     log(line)
   }
 
@@ -84,7 +94,9 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   server.stderr?.on("data", (chunk: Buffer) => logBoth(`[serve:err] ${chunk.toString()}`))
 
   const killServer = (): void => { if (!server.killed) server.kill() }
-  const stopSignal = (): void => { killServer(); fileLog.end() }
+  // Signal handling only kills the child; the stream is closed once in `finally`, after its data handlers have
+  // stopped. Closing here races with late output and caused write-after-end crashes.
+  const stopSignal = (): void => { killServer() }
   process.once("SIGTERM", stopSignal)
   process.once("SIGINT", stopSignal)
 
@@ -165,6 +177,7 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
     process.removeListener("SIGTERM", stopSignal)
     process.removeListener("SIGINT", stopSignal)
     killServer()
+    if (fileLog.writable) fileLog.end()
     await Promise.race([onceClose(fileLog), sleep(2_000)]).catch(() => {})
   }
 
