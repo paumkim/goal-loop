@@ -157,7 +157,7 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | `model` | — | Fallback model for `evaluator.model` |
 | `evaluator.model` | session model | Independent model that evaluates goal completion |
 | `evaluator.mode` | `auto` | Evaluator mode: `session`, `independent`, or `auto` |
-| `evaluator.maxTranscriptChars` | `60000` | Max transcript digest characters for evaluation |
+| `evaluator.maxTranscriptChars` | `20000` | Max transcript digest characters for evaluation |
 | `evaluator.maxOutputTokens` | `4096` | Max token budget for evaluator verdict |
 | `evaluator.timeoutMs` | `120000` | Evaluation call timeout in milliseconds |
 | `evaluator.verifyCommand` | `""` | Command that must exit 0 before `met` is accepted (e.g. `bun run check`) |

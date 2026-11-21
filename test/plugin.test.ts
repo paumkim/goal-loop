@@ -462,6 +462,107 @@ describe("the context hook strips end-of-record notes", () => {
   })
 })
 
+describe("the context hook drops the evaluator's own self-echo (CXV use-and-forget)", () => {
+  const message = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+  const evalPrompt = (turn: number) => `<goal-evaluation>\nStep out of the agent role. Turn ${turn}.\nDo not call tools.\n</goal-evaluation>`
+
+  test("a working turn keeps real evidence but not prior <goal-evaluation> prompts", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const steer = message("the user's own line")
+      const evidence = message("fresh evidence: bun run check green")
+      const event = {
+        sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
+        messages: [message(evalPrompt(1)), evidence, message(evalPrompt(2)), steer], tools: {}, options: {},
+      }
+      hooks.context!(event)
+      expect(event.messages).toEqual([evidence, steer])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the trailing-user repair never re-adds a stripped evaluation prompt", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const assistant = { role: "assistant", content: [{ type: "text", text: "working" }] }
+      const steer = message("continue with the fix")
+      const event = {
+        sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
+        messages: [assistant, message(evalPrompt(1)), steer], tools: {}, options: {},
+      }
+      hooks.context!(event)
+      expect(event.messages).toEqual([assistant, steer])
+      expect((event.messages.at(-1) as any).role).toBe("user")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a compaction checkpoint quoting an evaluation prompt survives as history", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const checkpoint = message(
+        ["<conversation-checkpoint>", "<summary>worked</summary>", "<recent-context>", `[User]: ${evalPrompt(1)}`, "</recent-context>", "</conversation-checkpoint>"].join("\n"),
+      )
+      const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [checkpoint], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.messages).toEqual([checkpoint])
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the independent digest feed carries evidence, never the evaluator's own prompts", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model", evaluator: { mode: "independent" } })
+    // host-shaped context as renderTranscript sees it: two self-talk prompts around real evidence.
+    const feed = [
+      { type: "user", text: evalPrompt(1) },
+      { type: "user", text: "fresh evidence: bun run check green at current HEAD" },
+      { type: "user", text: evalPrompt(2) },
+    ]
+    ;(ctx.session as any).context = async () => feed
+    const prompts: string[] = []
+    ;(ctx.generate as any).text = async ({ prompt }: any) => {
+      prompts.push(prompt)
+      return { text: '{"verdict":"met","reason":"done"}' }
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      for (let i = 0; i < 500 && (storage.get("goal/v1/ses_1") as any)?.status !== "achieved"; i++) {
+        await new Promise((r) => setImmediate(r))
+      }
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      const digestPrompt = prompts.find((p) => p.includes("<transcript>"))
+      expect(digestPrompt).toBeDefined()
+      expect(digestPrompt).toContain("fresh evidence: bun run check green at current HEAD")
+      expect(digestPrompt).not.toContain("<goal-evaluation>")
+      expect(digestPrompt).not.toContain("Step out of the agent role")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
 describe("prompt-hook arming refusal restores the user's own line (XLV, XLVI pin)", () => {
   const promptEvent = (text: string) => ({
     sessionID: "ses_1",

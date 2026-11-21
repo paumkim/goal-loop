@@ -374,6 +374,52 @@ export const isGoalNoteMessage = (message: unknown): boolean => {
  */
 export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isGoalNoteMessage(m))
 
+/**
+ * The evaluator's own voice echoed back into the transcript. `session.generate` appends the `<goal-evaluation>`
+ * rubric prompt to the live session on every evaluation turn, and nothing removes it: it then rides model-bound
+ * context on every later turn and floods the independent evaluator's transcript digest (~5 KB of self-talk per
+ * turn, ~27% of a saturated digest). The rubric explicitly discounts prior verdicts, so this text is not evidence —
+ * it is the evaluator talking to itself. Use-and-forget: drop it from model-bound context once it has been answered.
+ * Compaction checkpoints are history, never a live evaluation prompt, so they are never mistaken for one.
+ */
+const GOAL_EVALUATION_TAG = "<goal-evaluation"
+
+const isGoalEvaluationPart = (part: unknown): boolean => {
+  if (typeof part !== "object" || part === null) return false
+  const { type, text } = part as { type?: unknown; text?: unknown }
+  return type === "text" && typeof text === "string" && text.includes(GOAL_EVALUATION_TAG)
+}
+
+/**
+ * True when a message carries the evaluator's own `<goal-evaluation>` prompt. Two host shapes reach this
+ * predicate: `ctx.session.context()` messages carry a flat `text` (the digest source), while the `context`
+ * hook's model-bound messages carry `content` text parts. Both are matched; unknown shapes never match,
+ * and a compaction checkpoint is history in either shape.
+ */
+export const isGoalEvaluationMessage = (message: unknown): boolean => {
+  if (typeof message !== "object" || message === null) return false
+  const m = message as NoteMessageLike & { text?: unknown }
+  if (typeof m.text === "string") {
+    if (m.text.includes(CHECKPOINT_TAG)) return false
+    return m.text.includes(GOAL_EVALUATION_TAG)
+  }
+  const content = m.content
+  if (!Array.isArray(content)) return false
+  if (isCompactionCheckpoint(content)) return false
+  return content.some(isGoalEvaluationPart)
+}
+
+/**
+ * Drop the evaluator's own `<goal-evaluation>` prompts from a model-bound message list. With `keepLast`, only the
+ * most recent evaluation prompt survives — that is the live rubric an in-flight evaluator must answer — while older
+ * echoes are dropped. Returns a fresh array and never touches its input (same splice-back contract as
+ * {@link stripGoalNotes}).
+ */
+export const stripGoalEvaluations = <T>(messages: ReadonlyArray<T>, options: { readonly keepLast?: boolean } = {}): T[] => {
+  const last = options.keepLast ? messages.reduce((found, m, i) => (isGoalEvaluationMessage(m) ? i : found), -1) : -1
+  return messages.filter((m, i) => i === last || !isGoalEvaluationMessage(m))
+}
+
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
     `An active /goal is set for this session: ${escape(condition)}`,
