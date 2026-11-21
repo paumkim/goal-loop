@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=74 tests=2048 -->
+<!-- spec-check files=74 tests=2059 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -8434,3 +8434,96 @@ rubric, commit/verify gate, config parsing or TUI behavior changes.
   evaluator rubric, commit/verify gate, config parsing or TUI behavior changed. Public package exports (`.`, `./tui`,
   `./rpc`) are unchanged.
 - No new config option, new shipped file or removed shipped file, so the SPEC `files` count is unchanged.
+
+## Workstream CXV — evaluator use-and-forget context: strip self-echo and compact the digest budget (2026-11-21)
+
+Status: specified first, then implemented and verified against this section. Objective (verbatim): implement
+(1) "Use-and-forget for the evaluator's own output (primary fix). Strip `<goal-evaluation>` messages from both the
+model-bound context hook and the `context()` feed that builds the independent digest. That removes the ~5.2 KB/turn
+self-echo that grows to ~15 KB (27% of the digest) at steady state — without touching the rubric, consensus,
+verifier-matrix, learnings, or any other sensing." and (2) "Compact evidence instead of raw dumps. The evaluator
+cannot call tools, so it doesn't need 60 KB of tool output. Keep the newest-first head+tail packing, but tighten the
+per-tool cap so a few verbose command outputs can't each eat 5 KB." Recommended budget: `maxTranscriptChars = 20,000`
+(per-tool cap `max(1500, budget/12)` = 1,666). Coordinator repo: claimed `wt/evaluator-context-forget`, worked only in
+`worktrees/wt-evaluator-context-forget`, committed on `wt/evaluator-context-forget`, submitted via coordinator; no
+direct commits to `dev`/`main`.
+
+### Interpretation
+
+The evaluator never calls a tool. Its `<goal-evaluation>` prompt (6,174 B, 96.7% constant rubric) is appended to the
+live session transcript by `session.generate` on every evaluation turn and never removed. It therefore rides model-bound
+context on every later turn and, in `independent` mode, floods the digest built from `ctx.session.context()`. Measured
+baseline (synthetic working turn = 1 continuation steer + 4 tool calls of 2/8/15/0.6 KB; `renderTranscript` newest-first,
+per-tool cap `max(1500, 60000/12)` = 5,000):
+
+- Per evaluation turn **+~7.0 KB** is added to the live transcript (6,174 B prompt + ~256 B verdict + ~600 B continuation):
+  ~69 KiB at 10 turns, ~137 KiB at 20, ~343 KiB at 50.
+- The 60K digest **saturates in ~3 turns** with self-talk (evidence-only saturates in ~4). By turn 10, **27 older messages
+  are omitted** and ~15 KB (**27%**) of the digest is the evaluator's own `<goal-evaluation>` prompts, displacing real
+  evidence. Cumulative self-echo reaches **15.6 KB by turn 3** if the budget were unbounded.
+- 4 tool calls × 5,000-char cap = up to **~20 KB/turn** of raw tool text alone — the dominant driver of saturation.
+
+Two independent leaks, neither a sensing capability:
+
+1. **Use-and-forget.** Drop the evaluator's own `<goal-evaluation>` prompts from (a) the model-bound context hook on
+   working turns (guarded by `evaluator.isEvaluating` so an in-flight evaluation keeps its current rubric prompt — only
+   older echoes are dropped) and (b) the `context()` feed that builds the independent digest (unconditional: the digest
+   is paired with a freshly constructed `evaluateIndependently` prompt, so no rubric lives in the feed). The rubric,
+   verdict grammar, consensus, retry ladder, verifier-matrix/scope-policy, learnings, history and re-anchor blocks are
+   untouched.
+2. **Compact budget.** `evaluator.maxTranscriptChars` default 60,000 → 20,000. The existing `max(1500, maxChars/12)`
+   formula yields a 1,666-char per-tool cap; head+tail packing is unchanged, so failures reported last stay visible.
+   A ~4–6 KB working turn then lets 20K hold the current plus 2–3 prior turns of real evidence.
+
+### Acceptance criteria
+
+1. `src/core/prompts.ts` exports `isGoalEvaluationMessage` and `stripGoalEvaluations(messages, { keepLast })`, matching
+   the `<goal-evaluation` opening tag on text content parts, never matching a compaction checkpoint, and returning a
+   fresh array with the same splice-back contract as `stripGoalNotes`. `keepLast` retains only the most recent
+   evaluation prompt (the live rubric an in-flight evaluator must answer).
+2. `src/index.ts` context hook strips evaluation prompts from working turns and, while `evaluator.isEvaluating`, keeps
+   only the most recent one; the strict-provider trailing-user repair and the terminal-line gate are unchanged.
+3. The evaluator's `context()` feed in `src/index.ts` strips all evaluation prompts before they reach
+   `renderTranscript`; independent-mode verdicts and loop summaries therefore digest evidence only.
+4. `src/core/config.ts` `DEFAULTS.maxTranscriptChars` is 20,000; `README.md`, `docs/config.html` and the
+   `config-defaults`/`docs-coverage` gates are updated deliberately (no weakened/skipped assertions); the ≥4,000 min
+   is unchanged.
+5. New regression tests pin the helper (recognition, unknown shapes, checkpoint immunity, keep-last), the context hook
+   (working-turn strip, trailing-user repair) and the digest feed (no `<goal-evaluation>` in the independent prompt).
+6. `SPEC.md` gains this section, `docs/changelog.html` gains a companion row, and the enforced marker is re-stamped in
+   the same commit for the changed test count. No shipped file is added or removed (`files` stays 74).
+7. `bun run check` exit 0 in the worktree; commit on `wt/<slug>`, submit, merge-next via coordinator.
+
+### Verification (fresh at this HEAD)
+
+- **Injected-text sizes (unchanged sensing).** `evaluateInSession` is **6,174 B** before and after — the rubric,
+  verdict grammar, OUTPUT list, commit rule and `<opencode-cli>` path are byte-identical. `systemReminder`,
+  `continuation`, `loopContinuation`, `loopReanchor` and loop `directive` are untouched.
+- **Digest A/B** (synthetic turn = 1 continuation + 4 tool calls of 2/8/15/0.6 KB; newest-first packing): before
+  (60K budget, 5,000-char per-tool cap, no strip) the digest is 18.5 KB at turn 1, saturates at **turn 3** (55.6 KB),
+  and at turn 10 holds **3 `<goal-evaluation>` blocks (~15 KB / 27%)** with **27 older messages omitted**. After
+  (20K budget, 1,666-char per-tool cap, strip at the feed) the digest is 6.6 KB at turn 1, is 19.9 KB at turn 3, and
+  holds **0 `<goal-evaluation>` blocks** at every turn with 21 older messages omitted at turn 10 — **~2.8× less
+  injected text** and **100% of the budget spent on real evidence**.
+- **Model-bound accumulation A/B** (N completed evaluations + a working-turn steer): before, self-talk bytes left in
+  context are 6,174 (N=1) → **308,782 (N=50)**; after, **0 at every N** (only the tiny prior verdict lines remain,
+  ~39 B/eval, which are working evidence for repeated-failure detection, not the evaluator's rubric prompt). The
+  persisted transcript still records the prompts; no model request carries them.
+- **Tests.** Targeted `bun test test/notes.test.ts test/plugin.test.ts test/config-defaults.test.ts
+  test/evaluator.test.ts` → **93 pass / 0 fail** before the last digest-feed test was added, then **53 pass / 0 fail**
+  for `notes`+`plugin` after; full `cd test && bun test` → **2059 pass / 0 fail** across 85 files (29 snapshots,
+  198,789 expect() calls), up from **2048 pass / 0 fail** (+11 new regression tests; no existing test weakened or
+  skipped). `bunx tsc --noEmit` clean. `npm pack --dry-run --json` → **74** shipped files (unchanged).
+- **Gates.** `bun run check` exit 0: tsc, all tests, `check:dist`, `compile`, `check:tui`, `docs:check`,
+  `check:invariant`, `check:spec` (`files=74 tests=2059`). SPEC marker re-stamped in this commit; changelog companion
+  row regenerated via `bun scripts/docs-watch.ts once` after commit.
+
+### Honest limits / non-goals
+
+- This is context *accumulation* hygiene, not capability removal: every sensing block and gate stays byte-identical.
+- The persisted session transcript still records the evaluation prompts (the context hook filters the model-bound copy
+  only); "forget" is from the model's context and the digest, not from durable storage.
+- The 20,000 default is a behavior change for repos that did not set `maxTranscriptChars`; explicit settings still win,
+  and the ≥4,000 floor is unchanged. It is deliberate, documented, and test-pinned, not a silent default swap.
+
+<!-- spec-check files=74 tests=2059 -->

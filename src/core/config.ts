@@ -75,7 +75,7 @@ export interface GoalConfig {
 }
 
 export const DEFAULTS = {
-  maxTranscriptChars: 60_000,
+  maxTranscriptChars: 20_000,
   maxOutputTokens: 4_096,
   timeoutMs: 120_000,
   verifyTimeoutMs: 600_000,

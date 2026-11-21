@@ -14,7 +14,7 @@ import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin
 import { resolveConfig } from "./core/config.ts"
 import { findRepository, resolveCommitPolicy } from "./core/git.ts"
 import { parseGoalLoopDirective } from "./core/parse.ts"
-import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -212,7 +212,10 @@ export default Plugin.define({
       {
         sessionGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
         modelGenerate: async (model: ModelRef, prompt, signal) => (await ctx.generate.text({ prompt, model }, { signal })).text,
-        context: (sessionID, signal) => ctx.session.context({ sessionID }, { signal }),
+        // Use-and-forget: the evaluator's own <goal-evaluation> prompts are its self-talk, not evidence.
+        // The independent digest is paired with a freshly built rubric prompt, so no evaluation prompt
+        // from the transcript may ride into it — strip all of them at the source.
+        context: async (sessionID, signal) => stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal })),
       },
       config.evaluator,
       commit,
@@ -443,7 +446,11 @@ export default Plugin.define({
       // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
         const original = event.messages
-        const kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        let kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        // The evaluator's own voice is not evidence and must not accumulate in model-bound context.
+        // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
+        // only the most recent one — the live rubric the model must answer — and drop older echoes.
+        kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be
@@ -451,8 +458,11 @@ export default Plugin.define({
           // removed that trailing turn, keep it: a stale goal line is harmless history, while an invalid
           // request aborts the turn. Splice in place — the host holds the caller's array reference.
           const trailing = original[original.length - 1]
+          // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
+          // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
+          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) ? trailing : undefined
           const last = kept[kept.length - 1]
-          const repaired = last?.role === "user" || trailing === undefined || last === trailing ? kept : [...kept, trailing]
+          const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
           original.splice(0, original.length, ...repaired)
         }
       }
