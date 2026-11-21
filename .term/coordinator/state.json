@@ -4888,6 +4888,17 @@
       "submittedAt": "2026-11-21T16:53:16Z",
       "mergedAt": "2026-11-21T16:55:10Z",
       "mergedInto": "dev"
+    },
+    "cxxxii-native-verdict-review-fixes": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/core/prompts.ts,src/core/transcript.ts,src/index.ts,src/runtime/evaluator.ts,test/core.test.ts,test/evaluator.test.ts,test/plugin.test.ts",
+      "branch": "wt/cxxxii-native-verdict-review-fixes",
+      "worktree": "worktrees/wt-cxxxii-native-verdict-review-fixes",
+      "status": "done",
+      "createdAt": "2026-11-21T17:45:34Z",
+      "submittedAt": "2026-11-21T17:47:18Z",
+      "mergedAt": "2026-11-21T17:49:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
