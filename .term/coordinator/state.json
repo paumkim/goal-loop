@@ -4640,6 +4640,22 @@
       ],
       "mergedAt": "2026-11-20T23:43:44Z",
       "mergedInto": "dev"
+    },
+    "evaluator-context-forget": {
+      "agent": "opencode",
+      "paths": "src/core/prompts.ts,src/index.ts,src/core/config.ts,src/core/transcript.ts,test/notes.test.ts,test/plugin.test.ts,test/config-defaults.test.ts,SPEC.md,README.md,dist",
+      "branch": "wt/evaluator-context-forget",
+      "worktree": "worktrees/wt-evaluator-context-forget",
+      "status": "done",
+      "createdAt": "2026-11-21T00:20:26Z",
+      "submittedAt": "2026-11-21T00:31:11Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-21T00:31:11Z",
+      "forcedScopeFiles": [
+        "docs/config.html"
+      ],
+      "mergedAt": "2026-11-21T00:33:28Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
