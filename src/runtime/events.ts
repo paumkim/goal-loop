@@ -9,6 +9,10 @@ export interface ServerEvent {
   readonly id?: string
   readonly type: string
   readonly data?: unknown
+  /** The host stamps most events with the directory of the session that produced them (OpenCode `location`). */
+  readonly location?: { readonly directory?: string }
+  /** Monotonic host sequence; used to reject a late event that would move a goal back to an old checkout. */
+  readonly durable?: { readonly seq?: number }
 }
 
 type Data = Record<string, unknown>
@@ -54,7 +58,21 @@ export function createRouter(input: { controller: GoalController; background: Ba
     if (!recent.add(event.id)) return
     const data = (event.data ?? {}) as Data
     const sessionID = typeof data.sessionID === "string" ? data.sessionID : undefined
+    // A goal belongs to the session that armed it, so the directory that matters is the session's current
+    // one, not the directory captured when this plugin instance was set up. The host carries it on the event
+    // (top-level `location`) and, for `session.moved`, inside `data.location` too — accept both shapes.
+    const locationData = asRecord(data.location)
+    const locationDirectory =
+      (typeof event.location?.directory === "string" ? event.location.directory : undefined) ??
+      (typeof locationData.directory === "string" ? locationData.directory : undefined)
+    const seq = typeof event.durable?.seq === "number" ? event.durable.seq : undefined
+    if (event.type !== "session.moved" && sessionID && locationDirectory)
+      guard(() => controller.noteSessionDirectory(sessionID, locationDirectory, "event", seq))
     switch (event.type) {
+      case "session.moved":
+        // The goal follows the session: move its record to the new checkout before anything else runs.
+        if (sessionID && locationDirectory) guard(() => controller.onSessionMoved(sessionID, locationDirectory, seq))
+        return
       case "session.execution.started":
         if (!sessionID) return
         return guard(() => {

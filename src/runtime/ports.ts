@@ -34,6 +34,8 @@ export interface EvaluationRequest {
   readonly turn: number
   readonly elapsedMs: number
   readonly spend?: UsageSnapshot
+  /** The session's current commit rule; a session that moved directories may no longer match the setup rule. */
+  readonly commit?: import("../core/types.ts").CommitPolicy
   readonly signal: AbortSignal
 }
 
