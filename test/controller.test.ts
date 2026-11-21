@@ -439,6 +439,52 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
+  test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // turn ends with the subagent still busy: deferral set, pill waiting
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+
+    // A new user turn / synthetic continuation starts: the main session is working again. The indicator
+    // flips to active ON THIS EVENT — no clock advance, no evaluation, no background drain.
+    const before = h.changes.length
+    h.controller.onExecutionStarted(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+    expect(h.changes.at(-1)?.waiting).toBeFalse()
+    // The deferral is untouched: evaluation is still held back and the persisted twin is still there.
+    expect(h.requests).toHaveLength(0)
+    expect(typeof h.controller.get(SID)?.waitingSince).toBe("number")
+
+    // Many tool calls are many heartbeats but only one paint flip — no changed-event spam per call.
+    h.controller.onToolCalled(SID)
+    h.controller.onToolCalled(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+
+    // The turn ends with the subagent still busy: the pill flips straight back to waiting on this event.
+    await h.controller.onExecutionSucceeded(SID)
+    await flush()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.changes.at(-1)?.waiting).toBeTrue()
+    expect(h.requests).toHaveLength(0)
+  })
+
+  test("a tool call alone flips a deferred pill to active even when the execution-start event was missed", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn()
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    const before = h.changes.length
+    // No execution-started event — simulate a restart/reconnect that swallowed it. The tool event is still
+    // a heartbeat proving the main session is active, so the pill must not stay stuck on `waiting`.
+    h.controller.onToolCalled(SID)
+    expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(h.changes.at(-1)?.waiting).toBeFalse()
+    expect(h.changes.length).toBe(before + 1)
+  })
+
   test("retries evaluation when the busy check errors instead of skipping permanently", async () => {
     await h.set()
     h.setBusyError(new Error("busy check failed"))
@@ -1044,6 +1090,26 @@ describe("background wait persists across a restart (Workstream XXVII)", () => {
     const second = harness({}, storage)
     expect(await second.controller.restore()).toBe(1)
     expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+  })
+
+  test("a restored wait flips to active on the first post-reload heartbeat, pushed as an immediate changed event", async () => {
+    const storage = new MemoryStorage()
+    const first = harness({}, storage)
+    await first.set("restore me")
+    first.setWork({ subagents: 1, shells: 0 })
+    await first.turn()
+    await first.store.flush()
+
+    const second = harness({}, storage)
+    expect(await second.controller.restore()).toBe(1)
+    expect(second.controller.snapshot(SID)?.waiting).toBeTrue()
+    const before = second.changes.length
+    // The mirror still paints `waiting` from before the reload; the first heartbeat must push the flip
+    // as a changed event instead of leaving the TUI to discover it on its 15s tick.
+    second.controller.onExecutionStarted(SID)
+    expect(second.controller.snapshot(SID)?.waiting).toBeFalse()
+    expect(second.changes.length).toBe(before + 1)
+    expect(second.changes.at(-1)?.waiting).toBeFalse()
   })
 
   test("the background-drain path clears a restored wait and drops the persisted twin", async () => {
