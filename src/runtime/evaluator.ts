@@ -19,8 +19,8 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 interface EvaluatorDeps {
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
-  /** Generation on a specific model. The host runs one judge generation in a fresh child session. */
-  modelGenerate(model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
+  /** Generation on a specific model. The host runs one judge generation in a fresh child of `sessionID`. */
+  modelGenerate(sessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
   /**
@@ -59,10 +59,10 @@ export class EvaluationTimeoutError extends EvaluationError {
 /**
  * Judges a goal condition after each turn.
  *
- * `session` mode appends one question to the session's own transcript through `session.generate`: the provider
- * reuses the cached prefix, so evaluation costs roughly the question plus a short answer, with full-fidelity
- * evidence. `independent` mode sends a newest-first transcript digest to a separate (typically small, fast) model,
- * so completion is judged by a model other than the one doing the work. Independent failures fall back to session
+ * Both modes produce the verdict in a real child turn of the plugin's `evaluator` agent (native delegation shape).
+ * `session` mode embeds a newest-first digest of the live parent transcript in the child prompt, so the judge sees
+ * full-fidelity evidence. `independent` mode builds the digest here and sends it to a pinned/inherited model, so
+ * completion can be judged by a model other than the one doing the work. Independent failures fall back to session
  * mode once.
  */
 export class Evaluator implements EvaluatorPort {
@@ -75,7 +75,7 @@ export class Evaluator implements EvaluatorPort {
     private readonly log: Logger,
   ) {}
 
-  /** True while this plugin has a `session.generate` evaluation in flight for the session. */
+  /** True while this plugin has a session-mode evaluation in flight for the session (inflight contention tracking). */
   isEvaluating(sessionID: string) {
     return (this.inflight.get(sessionID) ?? 0) > 0
   }
@@ -157,15 +157,15 @@ export class Evaluator implements EvaluatorPort {
    * `modelGenerate` port; the host spawns a fresh child session per call (a primary turn that passes the
    * free-tier gate) and strips tools on that child. There is no affinity-bearing generation path anymore.
    */
-  private judgeGenerate(choice: ModelChoice): (prompt: string, signal: AbortSignal) => Promise<string> {
-    return (prompt, signal) => this.deps.modelGenerate(choice.model, prompt, signal)
+  private judgeGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
+    return (prompt, signal) => this.deps.modelGenerate(sessionID, choice.model, prompt, signal)
   }
 
   private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal, choice: ModelChoice): Promise<EvaluationResult> {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, request.commit ?? this.commit)
-    return this.ask(this.judgeGenerate(choice), prompt, signal)
+    return this.ask(this.judgeGenerate(choice, request.sessionID), prompt, signal)
   }
 
   /** Track a session's in-flight generative work so maxTokens throttling can see contention. */
@@ -193,7 +193,7 @@ export class Evaluator implements EvaluatorPort {
       try {
         const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const generate = this.judgeGenerate(choice)
+        const generate = this.judgeGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(summarizeIndependently(request, transcript), s), signal, "summary")
         return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
@@ -213,7 +213,7 @@ export class Evaluator implements EvaluatorPort {
     const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (choice) {
       try {
-        const generate = this.judgeGenerate(choice)
+        const generate = this.judgeGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(nextGoalIndependently(request), s), signal, "next-condition")
         return text.trim().slice(0, 4_000)
       } catch (error) {

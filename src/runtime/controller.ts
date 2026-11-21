@@ -2439,7 +2439,7 @@ export class GoalController {
     // for a user message to resume. A message re-arms evaluation; clearing or setting a separate judge model
     // are the other ways out.
     if (usageLimit) {
-      const reason = `Free usage limit reached — the judge shares this session's model/quota. Set a separate evaluator.model or wait for the quota window to reset, then send a message to resume.`
+      const reason = `Free usage limit reached — the judge child hit the provider's quota. Set a separate evaluator.model or wait for the quota window to reset, then send a message to resume.`
       void this.pause(record, reason, "usage_limit")
       return
     }
