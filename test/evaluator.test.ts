@@ -232,6 +232,66 @@ next: none"}`
   })
 })
 
+describe("Evaluator.evaluate — native delegated subagent report", () => {
+  test("a delivered evaluator report is consumed as the verdict with no generation judge", async () => {
+    const { fake, calls } = deps()
+    const nativeVerdict = async () => ({ verdict: "met" as const, reason: "fresh evidence in the child report" })
+    const evaluator = new Evaluator({ ...fake, nativeVerdict }, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result).toEqual({ verdict: "met", reason: "fresh evidence in the child report" })
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("no native report falls through to the generation judge (unchanged fallback)", async () => {
+    const { fake, calls } = deps()
+    const nativeVerdict = async () => undefined
+    const evaluator = new Evaluator({ ...fake, nativeVerdict }, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+  })
+
+  test("a failing native report degrades to the generation judge, not a failed goal", async () => {
+    const { fake, calls } = deps()
+    const nativeVerdict = async () => { throw new Error("report read failed") }
+    const evaluator = new Evaluator({ ...fake, nativeVerdict }, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(1)
+  })
+})
+
+describe("Evaluator.evaluate — a native report still passes through consensus: 2", () => {
+  const consensusSession = () => resolveConfig({ model: "provider/model", evaluator: { mode: "session", consensus: 2 } }, {}).evaluator
+
+  test("a native met needs the second judge before it can pass", async () => {
+    const { fake, calls } = deps({ modelGenerate: async () => verdictJson("met", "independent confirms") })
+    const evaluator = new Evaluator({ ...fake, nativeVerdict: async () => ({ verdict: "met", reason: "native says done" }) }, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(1)
+  })
+
+  test("a native met fails closed when the second judge disagrees", async () => {
+    const { fake, calls } = deps({ modelGenerate: async () => verdictJson("not_met", "independent disagrees") })
+    const evaluator = new Evaluator({ ...fake, nativeVerdict: async () => ({ verdict: "met", reason: "native says done" }) }, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus disagreement")
+    expect(calls.session).toHaveLength(0)
+  })
+
+  test("a native not_met is returned as-is without calling the second judge", async () => {
+    const { fake, calls } = deps({ modelGenerate: async () => verdictJson("met", "independent disagrees") })
+    const evaluator = new Evaluator({ ...fake, nativeVerdict: async () => ({ verdict: "not_met", reason: "native says no" }) }, consensusSession(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(calls.model).toHaveLength(0)
+  })
+})
+
 describe("Evaluator.evaluate — slow / hanging provider (per-attempt budget + app-level race)", () => {
   // Bypass the config floor so a test can use a sub-second budget; the evaluator only reads timeoutMs.
   const slowConfig = (timeoutMs: number) => ({ ...sessionConfig(), timeoutMs })

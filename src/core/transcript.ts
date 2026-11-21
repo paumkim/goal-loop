@@ -62,12 +62,40 @@ function toolText(content: unknown): string {
     .join("\n")
 }
 
-function compactJson(value: unknown) {
-  try {
-    return JSON.stringify(value) ?? ""
-  } catch {
-    return ""
+/**
+ * Human-readable one-line summary of a tool call's arguments. The old digest dumped `JSON.stringify(input)`,
+ * which filled the judge's prompt with escaped command strings and full file bodies — exactly the noise the
+ * evidence rubric asks it to look past. Keep the identifying field per tool, cap it, and never spill raw JSON.
+ */
+function toolArgs(name: string, input: unknown, limit: number): string {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return ""
+  const args = input as Unknown
+  // One shared budget across all fields: two capped values must not double the old single-JSON cap.
+  let remaining = Math.max(0, limit)
+  const take = (text: string) => {
+    const value = head(text, remaining)
+    remaining = Math.max(0, remaining - value.length)
+    return value
   }
+  // Bash-family tools carry the whole command; that is the evidence, so keep it verbatim (capped).
+  if (/^(bash|shell|terminal|execute)$/i.test(name)) {
+    const command = str(args.command ?? args.cmd ?? args.script)
+    return command ? `command: ${take(command.replace(/\s+/g, " ").trim())}` : ""
+  }
+  // Everything else is summarised by its most identifying scalar fields, in a stable order.
+  const preferred = ["path", "file", "filePath", "pattern", "query", "url", "command", "name", "id", "message"]
+  const parts: string[] = []
+  for (const key of preferred) {
+    const value = args[key]
+    if (typeof value === "string" && value.trim()) parts.push(`${key}: ${take(value.replace(/\s+/g, " ").trim())}`)
+    if (parts.length >= 2) break
+  }
+  return parts.join("  ·  ")
+}
+
+/** Indent a block under a tool header so output reads as evidence rather than a flat wall of text. */
+function indent(block: string, prefix = "    ") {
+  return block.split("\n").map((line) => (line ? `${prefix}${line}` : line)).join("\n")
 }
 
 function renderAssistant(message: Unknown, options: Required<DigestOptions>): string {
@@ -81,14 +109,18 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
     }
     if (part.type !== "tool") continue
     const state = (part.state ?? {}) as Unknown
-    const input = head(compactJson(state.input), options.maxInputChars)
+    const name = str(part.name)
+    const args = toolArgs(name, state.input, options.maxInputChars)
+    const suffix = args ? ` ${args}` : ""
     if (state.status === "completed") {
-      blocks.push(`[tool ${str(part.name)}] ${input}\n${headTail(toolText(state.content), options.maxToolChars)}`)
+      const output = headTail(toolText(state.content), options.maxToolChars)
+      blocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
     } else if (state.status === "error") {
       const error = (state.error ?? {}) as Unknown
-      blocks.push(`[tool ${str(part.name)} FAILED] ${input}\n${headTail(str(error.message) || toolText(state.content), options.maxToolChars)}`)
+      const detail = headTail(str(error.message) || toolText(state.content), options.maxToolChars)
+      blocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
     } else {
-      blocks.push(`[tool ${str(part.name)} ${str(state.status) || "pending"}] ${input}`)
+      blocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
     }
   }
   const error = message.error as Unknown | undefined

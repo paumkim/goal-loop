@@ -15,6 +15,8 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { renderTranscript } from "../src/core/transcript.ts"
+import { findNativeReport, isEvaluatorReport, parseSubagentReport } from "../src/core/evaluator-agent.ts"
+import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
@@ -907,5 +909,72 @@ describe("config regression: an empty env model", () => {
     expect(resolveConfig({ evaluator: { model: "" }, model: "a/b" }).evaluator.model).toEqual({ providerID: "a", id: "b" })
     // A non-empty invalid env value still yields no model (unchanged semantics).
     expect(resolveConfig({ evaluator: { model: "a/b" } }, { OPENCODE_GOAL_MODEL: "nope" }).evaluator.model).toBeUndefined()
+  })
+})
+
+describe("native evaluator delegation", () => {
+  test("the kickoff directive tells the worker to delegate the verdict via the task tool", () => {
+    expect(directive("all tests pass", COMMIT)).toContain(DELEGATE_VERDICT)
+    expect(continuation({ condition: "all tests pass", turn: 2, reason: "not yet" }, COMMIT)).toContain("Delegate the verdict to the evaluator subagent")
+  })
+
+  test("only subagent reports from the evaluator agent count as verdicts", () => {
+    expect(isEvaluatorReport({ source: "subagent", agent: "Evaluator", childID: "ses_1" })).toBe(true)
+    expect(isEvaluatorReport({ source: "subagent", agent: "evaluator" })).toBe(true)
+    expect(isEvaluatorReport({ source: "subagent", agent: "review" })).toBe(false)
+    expect(isEvaluatorReport({ source: "shell", agent: "evaluator" })).toBe(false)
+    expect(isEvaluatorReport(undefined)).toBe(false)
+  })
+
+  test("a native <subagent> report yields its body and state", () => {
+    const text = '<subagent sessionID="ses_child" state="completed" description="evaluator">\n{"verdict":"met","reason":"fresh"}\n</subagent>'
+    expect(parseSubagentReport(text)).toEqual({ body: '{"verdict":"met","reason":"fresh"}', state: "completed", childID: "ses_child" })
+    expect(parseSubagentReport("not a report")).toBeUndefined()
+  })
+
+  const report = (id: string, verdict: string, childID = `ses_${id}`, state = "completed") => ({
+    id,
+    type: "synthetic",
+    text: `<subagent sessionID="${childID}" state="${state}" description="evaluator">\n{"verdict":"${verdict}","reason":"r"}\n</subagent>`,
+    metadata: { source: "subagent", childID, agent: "Evaluator", state },
+  })
+
+  test("the newest report is picked once; a consumed report is never replayed", () => {
+    const messages = [report("a", "not_met"), report("b", "met")]
+    const consumed = new Set<string>()
+    const pluginJudgeIDs = new Set<string>()
+    expect(findNativeReport(messages, consumed, pluginJudgeIDs)?.body).toContain('"met"')
+    consumed.add("b")
+    expect(findNativeReport(messages, consumed, pluginJudgeIDs)?.body).toContain('"not_met"')
+  })
+
+  test("plugin fallback-judge reports and still-running reports are never read as verdicts", () => {
+    const native = report("c", "met")
+    const fallback = report("judge", "not_met", "plugin_judge_1")
+    const running = report("d", "met", "ses_d", "running")
+    const pluginJudgeIDs = new Set(["plugin_judge_1"])
+    expect(findNativeReport([fallback, running, native], new Set(), pluginJudgeIDs)).toEqual({
+      key: "c",
+      body: '{"verdict":"met","reason":"r"}',
+      state: "completed",
+    })
+    expect(findNativeReport([fallback], new Set(), pluginJudgeIDs)).toBeUndefined()
+  })
+
+  test("a tool call digest shows a readable command, not the raw input JSON", () => {
+    const text = renderTranscript([
+      {
+        type: "assistant",
+        content: [{
+          type: "tool",
+          name: "bash",
+          state: { status: "completed", input: { command: "bun test src/core/transcript.ts" }, content: [{ type: "text", text: "12 pass 0 fail" }] },
+        }],
+      },
+    ], { maxChars: 4_000 })
+    expect(text).toContain("command: bun test src/core/transcript.ts")
+    expect(text).not.toContain('{"command"')
+    expect(text).toContain("output:")
+    expect(text).toContain("12 pass 0 fail")
   })
 })

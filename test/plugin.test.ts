@@ -1138,3 +1138,40 @@ describe("a failed evaluator child keeps its provider classification (CXXXI)", (
     }
   })
 })
+
+describe("the prompt hook gives delegated evaluator children a clean evidence contract (CXXXII)", () => {
+  test("only evaluator children of a live goal get the structured <goal-evaluation> block", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks } = context(directory)
+    ;(ctx.session as any).context = async () => [
+      { type: "user", text: "the parser is correct" },
+      {
+        type: "assistant",
+        content: [{ type: "tool", name: "bash", state: { status: "completed", input: { command: "bun test" }, content: [{ type: "text", text: "12 pass 0 fail" }] } }],
+      },
+    ]
+    ;(ctx.session as any).get = async ({ sessionID }: any) => sessionID === "ses_child"
+      ? { id: "ses_child", parentID: "ses_1", agent: "evaluator", tokens: {} }
+      : { id: "ses_1", parentID: undefined, agent: "build", tokens: {} }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+
+      const childEvent: any = { sessionID: "ses_child", prompt: { text: "Judge the goal condition and return the verdict JSON." } }
+      await hooks.prompt!(childEvent)
+      expect(childEvent.prompt.text).toContain("Judge the goal condition and return the verdict JSON.")
+      expect(childEvent.prompt.text).toContain("<goal-evaluation>")
+      expect(childEvent.prompt.text).toContain("<condition>the parser is correct</condition>")
+      expect(childEvent.prompt.text).toContain("command: bun test")
+      expect(childEvent.prompt.text).not.toContain('{"command"')
+      expect(childEvent.prompt.text).toContain("</goal-evaluation>")
+
+      const workingEvent: any = { sessionID: "ses_1", prompt: { text: "keep going" } }
+      await hooks.prompt!(workingEvent)
+      expect(workingEvent.prompt.text).toBe("keep going")
+    } finally {
+      await dispose()
+    }
+  })
+})
