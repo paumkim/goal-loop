@@ -4937,6 +4937,17 @@
       ],
       "mergedAt": "2026-11-21T19:13:31Z",
       "mergedInto": "dev"
+    },
+    "evaluator-scores-parent-turn-not-own-delegation": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/evaluator-scores-parent-turn-not-own-delegation",
+      "worktree": "worktrees/wt-evaluator-scores-parent-turn-not-own-delegation",
+      "status": "done",
+      "createdAt": "2026-11-21T20:41:12Z",
+      "submittedAt": "2026-11-21T20:43:02Z",
+      "mergedAt": "2026-11-21T20:45:07Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
