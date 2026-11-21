@@ -4749,6 +4749,26 @@
       ],
       "mergedAt": "2026-11-21T08:43:38Z",
       "mergedInto": "dev"
+    },
+    "audit-coordinator-workflow-gotchas": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs,packages/coordinator,test,scripts,AGENTS.md,README.md",
+      "branch": "wt/audit-coordinator-workflow-gotchas",
+      "worktree": "worktrees/wt-audit-coordinator-workflow-gotchas",
+      "status": "done",
+      "createdAt": "2026-11-21T08:45:41Z",
+      "submittedAt": "2026-11-21T08:50:52Z",
+      "mergedAt": "2026-11-21T09:15:04Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-inherit-parent-model": {
+      "agent": "primary",
+      "paths": "src/core/config.ts,src/runtime/evaluator.ts,src/index.ts,test/evaluator.test.ts,test/core.test.ts,SPEC.md,README.md,docs/config.html,docs/changelog.html",
+      "branch": "wt/evaluator-inherit-parent-model",
+      "worktree": "worktrees/wt-evaluator-inherit-parent-model",
+      "status": "submitted",
+      "createdAt": "2026-11-21T08:57:14Z",
+      "submittedAt": "2026-11-21T09:12:45Z"
     }
   },
   "mergeLock": null,
