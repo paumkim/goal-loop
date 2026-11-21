@@ -496,7 +496,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=142 tests=2186 -->
+<!-- spec-check files=143 tests=2202 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -9868,3 +9868,90 @@ bloat made "just do a simple instruction while a goal is active" unreliable for 
 - Unit tests pin that stale conditions/prior verdicts/narration never reach the child while fresh tool evidence
   does, that tool-free turns yield an empty summary, that a small budget keeps the newest evidence, and that the
   structured plain/loop requests carry exactly their intended sections (with older loop versions compacted).
+
+
+## Arm-time planner (CXXXV)
+
+A raw `/goal` / `/goal-loop` body — often a pasted block from another model — is now distilled before the worker
+sees it. One short, toolless `planner` child reads only the raw text and returns
+`{"condition":"...","scope":"trivial|code"}`. That condition becomes the stored goal condition: the worker and the
+evaluator read the same text, so they cannot drift.
+
+- `src/core/planner.ts` owns the agent id, system prompt, bounded request and tolerant JSON parser. A missing,
+  unreadable, quota-blocked or timed-out plan falls back to the raw text — never to the old heuristic essays.
+- `src/index.ts` runs the planner on both arm paths (the `/goal` command and a leading `/goal-loop` in a plain
+  prompt), guards the child's own prompt from enrichment/re-arm, and strips its tools.
+- `directive(..., planned = true)` skips `isFuzzyCondition`'s SPEC.md paragraph, the opencode-cli guide and the
+  coordinator commit essay. A three-word conversational goal no longer spends a turn on SPEC.md and claim workflow.
+- No new config key, command, persisted field or port contract. `/goal-loop` summarize/next-condition and opt-in
+  `consensus: 2` are unchanged; per-turn verdicts remain native-only.
+
+### Verification
+
+- `bun run check` green in a clean environment; marker re-counted to `files=143 tests=2192` in-commit.
+- Tests pin the request shape, tolerant parsing (fence/prose/default scope/garbage/empty/bound), and that a planned
+  directive drops the fuzzy + coordinator essays while an unplanned one keeps them.
+
+## Native verdict report race + stale-condition guard (CXXXVI)
+
+Two long-horizon correctness bugs found while verifying CXXXV, both fixed without changing the evaluator port contract.
+
+**Report race.** A worker's native `evaluator` child commonly finishes a fraction of a second *after* the parent's
+execution goes idle. The first context read at turn end saw no `<subagent>` report, failed closed to `not_met`, and
+wrote the next turn's kickoff marker; the late report then landed before that marker and was orphaned — the source
+of repeated "no evaluator subagent report for this turn" continuations and wasted turns.
+
+- `src/index.ts · nativeVerdict` now re-reads the context on a bounded 3s / 200ms grace window when the first read
+  finds nothing. No next-turn marker exists while `evaluate()` is still awaiting the verdict, so a late report is
+  still attributed to the turn that produced it. The window respects the abort signal.
+- `src/core/evaluator-agent.ts · findNativeReport` pins a report's first-observed turn only when it is actually
+  returned. A child first seen `running` is no longer pinned, so a completion arriving after the next marker is
+  still consumable instead of being permanently excluded by the `seenTurns` guard.
+
+**Stale-condition guard.** The free-tier judge sometimes replays a verdict for an entirely different goal
+(observed: a "roadmap-renderer.html" and an "anti-dup marker" verdict while the armed condition was "Reply with
+the single word DONE."). A verdict for the wrong condition must never advance the goal.
+
+- `nativeEvaluationRequest` asks for an echoed `condition` field and declares itself the single authoritative
+  output contract (the worker's task text is no longer the only format the judge sees).
+- `verdictFromNativeReport(body, expectedCondition)` extracts the echo (`condition`/`condition_echo`/`echo`/`goal`,
+  strict or lenient JSON) and rejects a *mismatched* echo — case/punctuation-insensitive with containment and close
+  token overlap so a small model's paraphrase still passes. A *missing* echo is accepted: a live run showed the
+  free-tier judge following the worker's shorter contract and omitting the echo, which made strict rejection stall
+  the loop on `not_met` every turn. The rejection path is a fail-closed `not_met`.
+- `src/index.ts · nativeVerdict` supplies the armed condition from `controller.activeCondition(sessionID)`, so a
+  loop iteration cannot be advanced by a verdict echoing the previous iteration's condition.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2197` in-commit.
+- Tests pin: echo extraction/aliases, exact/paraphrased/stale echoes, `verdictFromNativeReport` rejection,
+  echo-less verdict acceptance (no regression), running-report non-pinning, and plugin-level stale-echo rejection,
+  echo-less acceptance, plus a report landing after the first context read being consumed in the same turn.
+
+## Evaluator scores the parent turn, not its own delegation (CXXXVII)
+
+Live session `ses_e003809c3ffe` (armed condition "simple reply back: hi") exposed three coupled failures: the
+worker re-delegated three times because the judge returned verdicts about conditions from `AGENTS.md`
+("dogfood / dev / merge to main", probe-test work). Root cause, all fixed without a config/command/persisted/port change:
+
+- `src/core/transcript.ts · renderParentSummary` previously kept only tool parts. The only tool call in a
+  text-only reply turn was the `task` call that spawned the judge itself, so the judge read its own armed prompt
+  ("working in background") as "parent evidence" and, with no real evidence, judged an ambient condition. The
+  digest now drops `task`/`subagent`/`delegate` calls whose `agent` is `evaluator`, and keeps a message's text when
+  it has no remaining tool work (a pure reply is the work product for a communication goal); narration interleaved
+  with real tool output is still dropped because the tool output is the proof.
+- `src/core/prompts.ts · DELEGATE_VERDICT` now tells the worker to state its answer in the reply *before* calling
+  `task` in the same turn. Previously "when your turn is done, delegate" led a small model to delegate first and
+  write `hi` 25 ms later — after the judge's prompt was already built.
+- `src/index.ts` enrichment hook re-reads the parent context after a bounded 250 ms settle when the first read
+  finds no evidence, so a mid-turn delegation still scores the turn's actual output. `nativeEvaluationRequest` and
+  `EVALUATOR_SYSTEM_PROMPT` now name `AGENTS.md`/`SPEC.md`/other sessions explicitly as forbidden conditions and
+  direct a not_met when the summary has no supporting evidence, instead of letting the judge substitute one it
+  remembers.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2202` in-commit.
+- Tests pin: the judge's own delegation call never reaching the digest, a pure-text reply being kept as evidence,
+  narration beside tool work still dropped, and the enriched child prompt naming `<condition>` as the sole goal.

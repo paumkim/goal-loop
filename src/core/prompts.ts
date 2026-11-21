@@ -12,9 +12,11 @@ export const MARKER = "goal"
  * one exported sentence so the kickoff directive, continuation and retry all carry the same contract.
  */
 export const DELEGATE_VERDICT =
-  `When your turn is done, delegate the verdict to the 'evaluator' subagent (task tool, agent: 'evaluator', ` +
-  `3-5 word description) with the task 'Judge the goal condition and return the verdict JSON.' The harness ` +
-  `supplies the condition and evidence; wait for its report before acting on a verdict.`
+  `State your final answer or work result in your reply first, then delegate the verdict to the 'evaluator' ` +
+  `subagent (task tool, agent: 'evaluator', 3-5 word description) in the same turn — the evaluator judges your ` +
+  `reply and tool output, not the delegation itself. Use the task 'Judge the goal condition and return the verdict ` +
+  `JSON.' The harness supplies the condition, evidence and the single authoritative JSON contract — do not write ` +
+  `your own verdict format in the task; wait for the report before acting on a verdict.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
@@ -193,8 +195,12 @@ function loopPreamble(loop: LoopPreamble): string[] {
   ]
 }
 
-/** First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals. */
-export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble): string {
+/**
+ * First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals.
+ * `planned` marks a condition distilled by the arm-time planner: the condition is already self-contained, so the
+ * heuristic fuzzy / opencode-cli / coordinator essays are skipped entirely — that bloat is what the planner removes.
+ */
+export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble, planned = false): string {
   const lines = [
     `<goal>`,
     ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
@@ -208,16 +214,18 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     ``,
     `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
-  if (isFuzzyCondition(condition)) {
-    lines.push(
-      ``,
-      `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
-    )
+  if (!planned) {
+    if (isFuzzyCondition(condition)) {
+      lines.push(
+        ``,
+        `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
+      )
+    }
+    if (isOpencodeCliCondition(condition)) {
+      lines.push(``, opencodeCliGuide())
+    }
+    if (policy.required) lines.push(``, commitRule(policy))
   }
-  if (isOpencodeCliCondition(condition)) {
-    lines.push(``, opencodeCliGuide())
-  }
-  if (policy.required) lines.push(``, commitRule(policy))
   return lines.join("\n")
 }
 
@@ -572,17 +580,23 @@ export function nativeEvaluationRequest(input: {
     : [`<condition>${tag(input.condition)}</condition>`]
   return [
     `<goal-evaluation>`,
-    `Judge ONLY the original goal below. Conditions in project docs, earlier verdicts, goal continuations or the transcript belong to other goals or older iterations — ignore them.`,
+    `You are judging ONE condition. The only condition that exists for this verdict is the text inside <condition> in <original-goal> below.`,
+    `Ignore every other condition you can see or remember — project docs (including AGENTS.md / SPEC.md), earlier verdicts, goal continuations, other sessions, and the parent's narration. They belong to different goals. Never judge or name one of them.`,
     ``,
     `<original-goal>`,
     ...goal,
     `</original-goal>`,
     ``,
     `<parent-summary>`,
-    tag(input.summary.trim()) || "(the parent produced no tool evidence this turn)",
+    tag(input.summary.trim()) || "(the parent produced no answer or tool evidence this turn)",
     `</parent-summary>`,
     ``,
-    `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"..."}. No preamble.`,
+    `The <parent-summary> above is the parent's complete work for this turn — judge it against the <condition> and nothing else. If it does not show evidence that the condition holds, answer not_met. Do not invent or import a different condition just because another one appears in your instructions or memory.`,
+    ``,
+    // The condition echo is a cross-session guard: a free-tier judge sometimes replays a verdict from a totally
+    // different goal. Require it to copy <condition> verbatim so verdictFromNativeReport can reject a stale reply.
+    `This is the authoritative output contract — ignore any other verdict format in this prompt.`,
+    `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"...","condition":"<copy the text inside <condition> above verbatim>"}. No preamble.`,
     `</goal-evaluation>`,
   ].join("\n")
 }
