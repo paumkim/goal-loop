@@ -22,6 +22,7 @@ interface FakeDeps {
   modelGenerate: (model: unknown, prompt: string, signal: AbortSignal) => Promise<string>
   context: (sessionID: string, signal: AbortSignal) => Promise<readonly unknown[]>
   sessionModel?: (sessionID: string, signal: AbortSignal) => Promise<{ providerID: string; id: string; variant?: string } | undefined>
+  sessionModelGenerate?: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
 }
 
 function deps(overrides: Partial<FakeDeps> = {}) {
@@ -660,5 +661,97 @@ describe("Evaluator — inherit the parent session's model", () => {
     const inheritSession = new Evaluator(fake, inheritConfig({ mode: "session" }), COMMIT, silentLog)
     await inheritSession.evaluate(request())
     expect(portCalls).toBe(0)
+  })
+
+  test("inherit mode rides the parent session fingerprint, not a fresh stateless session", async () => {
+    const bound: Array<{ sessionID: string; prompt: string }> = []
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "hy4-flash-free" }),
+      sessionModelGenerate: async (sessionID, prompt) => {
+        bound.push({ sessionID, prompt })
+        return verdictJson("met", "same-session judge")
+      },
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met", "stateless judge")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(bound).toHaveLength(1)
+    expect(bound[0]?.sessionID).toBe(SID)
+    expect(bound[0]?.prompt).toContain("all tests pass")
+    expect(calls.model).toHaveLength(0)
+    expect(calls.session).toHaveLength(0)
+    expect(models).toHaveLength(0)
+  })
+
+  test("loop summary and next-goal ride the session fingerprint too", async () => {
+    const bound: string[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      sessionModelGenerate: async (_sessionID, prompt) => {
+        bound.push(prompt)
+        return "session-bound reply"
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect(await evaluator.summarize(summaryRequest(400))).toBe("session-bound reply")
+    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("session-bound reply")
+    expect(bound).toHaveLength(2)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("a pinned independent judge stays stateless even with the session port present", async () => {
+    const bound: string[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
+      sessionModelGenerate: async (_sessionID, prompt) => {
+        bound.push(prompt)
+        return verdictJson("met", "should not be used")
+      },
+    })
+    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request())
+    expect(bound).toHaveLength(0)
+    expect(calls.model).toHaveLength(1)
+  })
+
+  test("the session-bound judge is marked in-flight so the host strips tools for it", async () => {
+    let release!: (text: string) => void
+    const pending = new Promise<string>((resolve) => (release = resolve))
+    let sawInflight = false
+    let probe!: Evaluator
+    const { fake } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "m" }),
+      sessionModelGenerate: async () => {
+        sawInflight = probe.isEvaluating(SID)
+        return pending
+      },
+    })
+    probe = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const inflight = probe.evaluate(request())
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(sawInflight).toBe(true)
+    release(verdictJson("met"))
+    await inflight
+    expect(probe.isEvaluating(SID)).toBe(false)
+  })
+
+  test("without the session-bound port, inherit degrades to the stateless model port", async () => {
+    const models: unknown[] = []
+    const { fake, calls } = deps({
+      sessionModel: async () => ({ providerID: "oc", id: "legacy-model" }),
+      modelGenerate: async (model, _prompt) => {
+        models.push(model)
+        return verdictJson("met")
+      },
+    })
+    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    expect((await evaluator.evaluate(request())).verdict).toBe("met")
+    expect(models).toEqual([{ providerID: "oc", id: "legacy-model" }])
+    expect(calls.session).toHaveLength(0)
   })
 })
