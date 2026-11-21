@@ -4948,6 +4948,17 @@
       "submittedAt": "2026-11-21T20:43:02Z",
       "mergedAt": "2026-11-21T20:45:07Z",
       "mergedInto": "dev"
+    },
+    "judge-context-isolation-and-single-turn-digest": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/judge-context-isolation-and-single-turn-digest",
+      "worktree": "worktrees/wt-judge-context-isolation-and-single-turn-digest",
+      "status": "done",
+      "createdAt": "2026-11-21T21:59:02Z",
+      "submittedAt": "2026-11-21T22:00:35Z",
+      "mergedAt": "2026-11-21T22:02:40Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
