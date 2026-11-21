@@ -32,6 +32,3 @@ export const appendState = (stateFile: string, record: TaskState): void => {
 
 export const byStatus = (states: ReadonlyMap<string, TaskState>, status: string): TaskState[] =>
   [...states.values()].filter((s) => s.status === status)
-
-export const findState = (states: ReadonlyMap<string, TaskState>, id: string): TaskState | undefined =>
-  states.get(id)
