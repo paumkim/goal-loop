@@ -20,10 +20,9 @@ import { testRender } from "@opentui/solid"
 import { HudCard, hudCardRows, type HudCardTheme } from "../src/hud-card.tsx"
 import { pillModel, type NeutralTheme } from "../src/core/hud.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
+import { widthFlag } from "./width-flag.ts"
 
-const widthFlag = process.argv.slice(2).find((a) => a.startsWith("--width="))
-const parsed = widthFlag ? Number(widthFlag.slice("--width=".length)) : Number.NaN
-const terminal = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 80
+const terminal = widthFlag(process.argv.slice(2), 80)
 
 const theme: HudCardTheme & NeutralTheme<RGBA> = {
   text: {

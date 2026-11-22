@@ -9,6 +9,7 @@
 import { describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 import { join } from "node:path"
+import { widthFlag } from "../scripts/width-flag.ts"
 
 const ROOT = join(import.meta.dir, "..")
 
@@ -254,4 +255,22 @@ describe("render script argument validation", () => {
     expect(result.status).toBe(2)
     expect(`${result.stderr}${result.stdout}`).toContain('(got "")')
   }, 30_000)
+})
+
+describe("widthFlag shared render-script flag reader", () => {
+  test("matches the original parse-and-clamp rule for every flag shape", () => {
+    // Missing / invalid / non-positive all fall back; a finite positive value is floored.
+    expect(widthFlag([], 80)).toBe(80)
+    expect(widthFlag(["--width="], 80)).toBe(80)
+    expect(widthFlag(["--width=abc"], 80)).toBe(80)
+    expect(widthFlag(["--width=0"], 80)).toBe(80)
+    expect(widthFlag(["--width=-3"], 80)).toBe(80)
+    expect(widthFlag(["--width=Infinity"], 80)).toBe(80)
+    expect(widthFlag(["--width=12.9"], 80)).toBe(12)
+    expect(widthFlag(["--width=80"], 150)).toBe(80)
+    // First flag wins, exactly as `Array.find` did in each script.
+    expect(widthFlag(["--width=40", "--width=90"], 80)).toBe(40)
+    // Unrelated arguments are ignored.
+    expect(widthFlag(["--mono", "--pinned"], 100)).toBe(100)
+  })
 })
