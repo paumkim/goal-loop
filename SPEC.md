@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2232 -->
+<!-- spec-check files=143 tests=2234 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10620,3 +10620,37 @@ Repo improvement pass, dead-code unit.
 Evidence: `grep -rn thought-log` → no hits outside the removed file; `grep -rn INHERIT_MODEL_TOKENS`
 → definition + one same-module use before and after; typecheck clean; `config-defaults` + `core`
 suites 178 pass / 0 fail. No test added or changed; marker stays `files=143 tests=2232`.
+
+## Workstream CLIV — one home for the objective and the no-judge rule in the kickoff (2026-11-22)
+
+The user's screenshot of a freshly armed `/goal-loop` kickoff showed the same two paragraphs printed
+twice: the full objective appeared once as `Objective (constant)` inside `<loop>` and again as the
+bare condition after `</loop>` (iteration 1 arms the objective itself, so the two strings are
+identical), and the "do the work / end your turn / separate evaluator" instruction appeared once as a
+loose paragraph after `</goal>` and again as the shared `DELEGATE_VERDICT` at the foot of the prompt —
+with a third evaluator mention in the loop preamble. An agent reading top to bottom met the same rule
+three times before reaching the one that mattered.
+
+Fix in `src/core/prompts.ts`, `directive()` and `loopPreamble()`:
+
+- `loopPreamble()` now carries only loop-specific context (iteration/max and the prior-iterations
+  block). The objective and the condition are emitted together by `directive()`.
+- Iteration 1 states the objective once and uses a short pointer line — `Condition for this
+  iteration: the objective above (no narrower step this iteration).` A later iteration keeps both
+  the constant objective and its narrower condition, each labelled once.
+- The loose "Do the work below, then end your turn. A separate evaluator decides…" paragraph and the
+  loop preamble's "an independent evaluator checks this iteration…" sentence are removed.
+  `DELEGATE_VERDICT` is the single home for the completion/no-judge contract and stays the last line
+  of every worker-facing prompt (the CXLII invariant is unchanged).
+- Two short headers make the rules unmissable: `WORKING RULES` for the working/fuzzy/opencode/commit
+  rules and `VERDICT HANDOFF` immediately above `DELEGATE_VERDICT`.
+
+`escape()` is applied once to each field before the equality check and before emission, so the
+wrapper-tag guard and the dedup decision cannot disagree.
+
+Tests. Two new cases in `test/core.test.ts`: the iteration-1 kickoff contains the objective exactly
+once, carries both headers, drops both superseded sentences and ends with a single `DELEGATE_VERDICT`;
+a later iteration keeps the objective and its narrower condition once each. The opencode-cli test
+that pinned the removed sentence now asserts the consolidated `DELEGATE_VERDICT` wording instead.
+Suite 2232 -> **2234 pass / 0 fail**; packed files stay **143**; SPEC marker advances to
+`files=143 tests=2234` in this same commit. `dist/tui.js` byte-unchanged (no TUI/JSX source touched).

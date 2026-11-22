@@ -1130,6 +1130,37 @@ describe("config regression: an empty env model", () => {
 })
 
 describe("native evaluator verdict", () => {
+  test("a loop kickoff states the objective and the no-judge contract exactly once", () => {
+    const objective = "Run an evidence-based repo improvement pass in small units via the repo's workflow: remove dead code and unify naming. Preserve behavior and run all checks."
+    // Iteration 1 arms the objective itself: condition === objective.
+    const kickoff = directive(objective, COMMIT, { iteration: 1, maxLoops: 5, objective, history: [] })
+    const count = (needle: string) => kickoff.split(needle).length - 1
+    expect(count(objective)).toBe(1) // no duplicated objective paragraph
+    expect(kickoff).toContain("Condition for this iteration: the objective above")
+    expect(kickoff).toContain("WORKING RULES")
+    expect(kickoff).toContain("VERDICT HANDOFF")
+    // one, and only one, "do the work / end your turn / evaluator" instruction block
+    expect(kickoff).not.toContain("Do the work below")
+    expect(kickoff).not.toContain("an independent evaluator checks this iteration and decides what comes next")
+    expect(count(DELEGATE_VERDICT)).toBe(1)
+    expect(kickoff.endsWith(DELEGATE_VERDICT)).toBe(true)
+  })
+
+  test("a later iteration keeps both the objective and its narrower condition", () => {
+    const objective = "the constant objective"
+    const condition = "this iteration's narrower condition"
+    const kickoff = directive(condition, COMMIT, {
+      iteration: 2,
+      maxLoops: 5,
+      objective,
+      history: [{ version: 1, condition: "c", summary: "s", reason: "r", turns: 2, toolCalls: 5, endedAt: 1 }],
+    })
+    expect(kickoff).toContain(`Objective (constant): ${objective}`)
+    expect(kickoff).toContain(`Condition for this iteration: ${condition}`)
+    expect(kickoff.split(objective).length - 1).toBe(1)
+    expect(kickoff.split(condition).length - 1).toBe(1)
+  })
+
   test("the kickoff directive tells the worker to report evidence and never judge the verdict", () => {
     const kickoff = directive("all tests pass", COMMIT)
     expect(kickoff).toContain(DELEGATE_VERDICT)
