@@ -19,8 +19,21 @@ interface FindSegment {
   readonly match: boolean
 }
 
-/** Case fold that also reports whether it preserved length. The length check is what certifies offsets. */
-const fold = (text: string): string => text.toLowerCase()
+/**
+ * Case fold. The live find spotlight recomputes `findMatches`, `countMatches` and `segmentLine`
+ * over the same dossier lines on every keystroke/frame, so each line used to be lowercased three
+ * times. `toLowerCase` is pure, so a bounded memo is output-identical; a miss recomputes, a hit is
+ * a lookup. Bounded so a long session cannot grow the map without limit.
+ */
+const FOLD_CACHE_LIMIT = 8192
+const foldCache = new Map<string, string>()
+const fold = (text: string): string => {
+  const hit = foldCache.get(text)
+  if (hit !== undefined) return hit
+  const folded = text.toLowerCase()
+  if (foldCache.size < FOLD_CACHE_LIMIT) foldCache.set(text, folded)
+  return folded
+}
 
 const contains = (foldText: string, foldQuery: string): boolean => foldText.includes(foldQuery)
 
