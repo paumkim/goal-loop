@@ -20,6 +20,7 @@ import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import { goalGlyph } from "../src/core/format.ts"
+import { formatValue } from "../src/core/errors.ts"
 import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
@@ -32,7 +33,7 @@ const positiveFiniteFlag = (name: string, dflt: number): number => {
   if (raw === undefined) return dflt
   const n = Number(raw)
   if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-dialog.tsx: --${name} must be a positive finite number (got "${raw}")`)
+    console.error(`render-dialog.tsx: --${name} must be a positive finite number (got ${formatValue(raw)})`)
     process.exit(2)
   }
   return n
