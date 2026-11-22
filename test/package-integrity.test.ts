@@ -152,6 +152,6 @@ describe("package integrity", () => {
     expect(existsSync(tuiEntry)).toBe(true)
     const load = spawnSync("bun", ["scripts/tui-load-check.ts", tuiEntry], { cwd: ROOT, encoding: "utf8", maxBuffer: MAX })
     expect(load.status).toBe(0)
-    expect(load.stdout).toContain("ok: loaded TUI plugin")
+    expect(load.stdout).toContain('ok: loaded TUI plugin "goal-loop.tui"')
   }, 180_000)
 })

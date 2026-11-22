@@ -234,21 +234,26 @@ describe("render script argument validation", () => {
     const result = run("scripts/render-history.tsx", ["abc"])
     expect(result.status).toBe(2)
     expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
+    // Log text renders the rejected value with the same formatValue convention as throw text (workstream CXLVIII).
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "abc")')
   }, 30_000)
 
   test("render-history.tsx rejects a zero width", () => {
     const result = run("scripts/render-history.tsx", ["0"])
     expect(result.status).toBe(2)
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "0")')
   }, 30_000)
 
   test("render-dialog.tsx rejects a non-numeric --width", () => {
     const result = run("scripts/render-dialog.tsx", ["--width=abc"])
     expect(result.status).toBe(2)
     expect(`${result.stderr}${result.stdout}`).toContain("--width must be a positive finite number")
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "abc")')
   }, 30_000)
 
   test("render-dialog.tsx rejects an empty --width value", () => {
     const result = run("scripts/render-dialog.tsx", ["--width="])
     expect(result.status).toBe(2)
+    expect(`${result.stderr}${result.stdout}`).toContain('(got "")')
   }, 30_000)
 })

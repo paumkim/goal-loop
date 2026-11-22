@@ -9,6 +9,7 @@ import { Plugin, PluginContextProvider, usePlugin } from "@opencode/plugin/tui"
 import { ensureRuntimePluginSupport } from "@opentui/solid/runtime-plugin-support/configure"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
+import { formatValue } from "../src/core/errors.ts"
 
 const target = process.argv[2]
 if (!target) throw new Error("usage: bun scripts/tui-load-check.ts <tui entry>")
@@ -20,7 +21,7 @@ try {
   const module = await import(pathToFileURL(path.resolve(target)).href)
   const plugin = module.default as { id?: unknown; setup?: unknown } | undefined
   if (typeof plugin?.id !== "string" || typeof plugin.setup !== "function") throw new Error("default export is not a TUI plugin")
-  console.log(`ok: loaded TUI plugin "${plugin.id}"`)
+  console.log(`ok: loaded TUI plugin ${formatValue(plugin.id)}`)
 } catch (error) {
   console.error(`FAIL: ${error instanceof Error ? error.message : String(error)}`)
   process.exit(1)

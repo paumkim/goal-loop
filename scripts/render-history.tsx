@@ -16,6 +16,7 @@ import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
+import { formatValue } from "../src/core/errors.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 /** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
@@ -26,7 +27,7 @@ const positiveFinite = (value: string | undefined, dflt: number, name: string): 
   if (value === undefined) return dflt
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-history.tsx: ${name} must be a positive finite number (got "${value}")`)
+    console.error(`render-history.tsx: ${name} must be a positive finite number (got ${formatValue(value)})`)
     process.exit(2)
   }
   return n

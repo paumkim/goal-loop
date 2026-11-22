@@ -10387,3 +10387,64 @@ and `expected '=' after "test"`.
   fresh-build match restored.
 - `bun run check` after the SPEC/changelog companion update: 2228 pass / 0 fail, all gates ok.
 - SPEC marker unchanged at `files=143 tests=2228`; packed file count unchanged (no new source file).
+
+
+## Workstream CXLVIII — one value-quoting format in log messages (2026-11-22)
+
+Armed condition: audit logging calls across `src/` and `scripts/` for inconsistent value quoting, route
+dynamic values through `formatValue` from `src/core/errors.ts` so log text matches error text, pin exact
+text in existing tests, keep the test count and API unchanged, and report before/after `bun run check`
+evidence.
+
+### Audit (fresh HEAD c81e0fa)
+
+Enumerated all 61 `console.*` / `note(` lines under `src/` and `scripts/`. Twenty-four embed a dynamic
+`${...}` token; only three manually double-quote that token — the same hand-rolled rendering that
+workstream CXLVII removed from `throw` sites:
+
+| Site | Call | Rendering before |
+| --- | --- | --- |
+| `scripts/render-dialog.tsx` `positiveFiniteFlag` | `console.error` | `(got "${raw}")` |
+| `scripts/render-history.tsx` `positiveFinite` | `console.error` | `(got "${value}")` |
+| `scripts/tui-load-check.ts` load success | `console.log` | `"${plugin.id}"` |
+
+Intentionally left unchanged, with reasons:
+
+- `src/runtime/controller.ts` `iteration="1" max="${maxLoops}"` is a loop annotation format that the
+  protocol parses and several tests pin verbatim; re-rendering it would change behavior.
+- `src/runtime/controller.ts` `noteInvalidLoopCount` quotes a `sanitizeCountEcho` string in a user
+  notice, not a console log; `formatValue` would JSON-escape embedded printable quotes and change that
+  notice's text for such inputs.
+- `src/core/format.ts` `iteration="${iteration}" max="${max}"` is the HUD's deliberate `key="value"`
+  display form, not a log call.
+- The remaining dynamic tokens (file counts, `cap`, `name` labels, `error.message`, `condition`, paths)
+  are bare identifiers, prose, or numbers; they carry no divergent value quoting. Wrapping them would
+  add quotes where none existed and change output.
+
+So the divergence is confined to the three console sites above. No new helper was added: `formatValue`
+from workstream CXLVII is reused unchanged, and the API is untouched.
+
+### Change
+
+1. `scripts/render-dialog.tsx`: import `formatValue` from `../src/core/errors.ts`; reject message now
+   renders the rejected flag value as `(got ${formatValue(raw)})`.
+2. `scripts/render-history.tsx`: same import; `(got ${formatValue(value)})`.
+3. `scripts/tui-load-check.ts`: same import; `ok: loaded TUI plugin ${formatValue(plugin.id)}`.
+
+For ordinary string inputs the rendered text is byte-identical to before (`got "abc"`, `got "0"`,
+`got ""`, `loaded TUI plugin "goal-loop.tui"`); only the quoting mechanism is unified.
+
+### Exact-text pins
+
+Added assertions inside existing tests — no new test cases, suite stays at 2228:
+`test/render-scripts.test.ts` pins `(got "abc")` for both non-numeric flags, `(got "0")` for zero width
+and `(got "")` for an empty `--width` value; `test/package-integrity.test.ts` pins the full
+`ok: loaded TUI plugin "goal-loop.tui"` load log.
+
+### Verification
+
+- Before: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok (baseline at HEAD c81e0fa).
+- `bunx tsc --noEmit`: clean.
+- Focused suites: 199 pass / 0 fail across 3 files.
+- After: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok.
+- SPEC marker unchanged at `files=143 tests=2228`; packed file count unchanged.
