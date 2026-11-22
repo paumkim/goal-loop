@@ -262,7 +262,7 @@ export function loopContinuation(
     ``,
     ...AUDIT_AND_STOP,
     ``,
-    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it, and the loop acts on that result.`,
+    `Work autonomously toward this condition under the same rules: a met result arms the next iteration; a not_met result keeps this one active.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
     DELEGATE_VERDICT,
@@ -462,7 +462,7 @@ export const stripGoalEvaluations = <T>(messages: ReadonlyArray<T>, options: { r
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
     `An active /goal is set for this session: ${escape(condition)}`,
-    `An independent evaluator checks it after every turn from visible evidence only. Do the work and surface proof (command output, test results) in the conversation.`,
+    `Only command output and test results visible in this conversation count as evidence.`,
   ]
   if (policy.required) {
     if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy))
