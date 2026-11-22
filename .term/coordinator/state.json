@@ -5377,8 +5377,11 @@
       "paths": "docs/READABILITY-SPEC.md",
       "branch": "wt/dead-readability-spec",
       "worktree": "worktrees/wt-dead-readability-spec",
-      "status": "claimed",
-      "createdAt": "2026-11-22T23:34:28Z"
+      "status": "done",
+      "createdAt": "2026-11-22T23:34:28Z",
+      "submittedAt": "2026-11-22T23:45:01Z",
+      "mergedAt": "2026-11-22T23:47:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
