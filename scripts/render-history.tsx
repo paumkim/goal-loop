@@ -16,22 +16,15 @@ import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
-import { formatValue } from "../src/core/errors.ts"
+import { positiveFinite as checkPositiveFinite } from "./positive-finite.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 /** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
 const rawArgv = process.argv.slice(2)
 const positional = rawArgv.filter(a => !a.startsWith("--"))
 const flagArgs = rawArgv.filter(a => a.startsWith("--"))
-const positiveFinite = (value: string | undefined, dflt: number, name: string): number => {
-  if (value === undefined) return dflt
-  const n = Number(value)
-  if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-history.tsx: ${name} must be a positive finite number (got ${formatValue(value)})`)
-    process.exit(2)
-  }
-  return n
-}
+const positiveFinite = (value: string | undefined, dflt: number, name: string): number =>
+  checkPositiveFinite(value, dflt, `render-history.tsx: ${name}`)
 const width = positiveFinite(positional[0], 112, "width")
 const height = positiveFinite(positional[1], 34, "height")
 const empty = flagArgs.includes("--empty")

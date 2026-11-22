@@ -20,7 +20,7 @@ import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import { goalGlyph } from "../src/core/format.ts"
-import { formatValue } from "../src/core/errors.ts"
+import { positiveFinite } from "./positive-finite.ts"
 import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
@@ -28,16 +28,8 @@ import type { GoalSnapshot } from "../src/core/types.ts"
 const buggy = process.argv.includes("--buggy")
 const pileup = process.argv.includes("--pileup")
 /** --width=/--height=: must parse to a positive finite number; a bare "--width=abc" used to paint a NaN-wide frame silently. */
-const positiveFiniteFlag = (name: string, dflt: number): number => {
-  const raw = process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3)
-  if (raw === undefined) return dflt
-  const n = Number(raw)
-  if (!Number.isFinite(n) || n <= 0) {
-    console.error(`render-dialog.tsx: --${name} must be a positive finite number (got ${formatValue(raw)})`)
-    process.exit(2)
-  }
-  return n
-}
+const positiveFiniteFlag = (name: string, dflt: number): number =>
+  positiveFinite(process.argv.slice(2).find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3), dflt, `render-dialog.tsx: --${name}`)
 const height = positiveFiniteFlag("height", pileup ? 80 : 46)
 const width = positiveFiniteFlag("width", pileup ? 100 : 150)
 const pinned = process.argv.includes("--pinned")
