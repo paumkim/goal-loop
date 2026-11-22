@@ -19,7 +19,7 @@
  *     directory that was probed, so a stale copy can never masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { shortSha, stampOf } from "./dossier.ts"
+import { GAP, shortSha, stampOf } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** The probe contract: true = the object exists, false = git answered and it does not, "unknown" = git could not answer. */
@@ -112,7 +112,6 @@ export function verifyRecord(goal: GoalSnapshot, probe: RecordProbe): RecordVeri
 
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
-const GAP = "—"
 
 const statusCell = (status: RecordCheckStatus): string =>
   status === "present" ? "yes" : status === "missing" ? "no" : "unknown"
