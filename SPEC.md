@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2239 -->
+<!-- spec-check files=143 tests=2240 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10670,7 +10670,7 @@ New `test/evaluator-agent-foreign.test.ts` pins all four foreign keys still fail
 verdict still parsing; focused suites 167 pass / 0 fail. Marker `tests=2234 → 2235` after rebase onto dev.
 
 
-## Workstream CLVIII — golden test for the deduplicated kickoff (2026-11-22)
+## Workstream CLXI — golden test for the deduplicated kickoff (2026-11-22)
 
 The dedup workstream (CLVI above) asserted counts: one objective, one `DELEGATE_VERDICT`, both
 headers, neither superseded sentence. Counts catch duplication but not a reordered or dropped
@@ -10734,3 +10734,17 @@ go through one `missingRequired(key)` constructor, so the key is quoted identica
 
 Evidence: `grep -n 'missingRequired'` shows both call sites (lines 92, 101) and the single constructor
 (line 79); typecheck clean; focused suite 8 pass / 0 fail (unchanged). Marker unchanged at `tests=2239` after rebase (the added case is an assertion inside an existing test, not a new test).
+## Workstream CLX — one failing-check predicate in failure signatures (2026-11-22)
+
+`verificationSignature` in `src/core/failure-signature.ts` repeated the four-condition "failing
+matrix check" test that `isFailingMatrixCheck` already defines for `failingChecksOf`. The two
+differed only by a redundant `!!` on the boolean `required` field, so the signature path and the
+diagnostic path could drift apart silently. `verificationSignature` now calls the shared
+predicate. The fallback filter and `summarizeFailureSignature` are deliberately untouched — the
+summary intentionally omits the `required && !scoped` clause.
+
+New case in `test/failure-signature.test.ts`: a passing-but-unscoped required check fails both
+paths — its id appears in the verification signature and `failingChecksOf` reports it with
+`unscoped: true`. Focused suite 20 pass / 0 fail (was 19); full suite **2240 pass / 0 fail**.
+Marker `files=143 tests=2240` in this commit. The golden-test note is also renumbered to CLXI
+after concurrent find-spotlight and verify-matrix notes took CLVIII and CLIX.

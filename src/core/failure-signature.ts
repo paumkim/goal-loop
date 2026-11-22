@@ -41,12 +41,7 @@ function clamp(text: string, max: number): string {
 }
 
 function verificationSignature(v: VerdictVerificationMatrix): string | undefined {
-  const failed = v.checks.filter((c) => {
-    if (!c.pass) return true
-    if (v.missing.includes(c.id)) return true
-    if (v.missing.includes(c.type)) return true
-    return c.required && !c.scoped
-  })
+  const failed = v.checks.filter((c) => isFailingMatrixCheck(c, v))
   const relevant = failed.length ? failed : (!v.pass || v.missing.length ? v.checks.filter((c) => c.required) : [])
   if (!relevant.length && v.pass && !v.missing.length && !(v.coverageReasons?.length)) return undefined
   const checks = relevant
