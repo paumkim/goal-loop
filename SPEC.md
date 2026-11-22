@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2235 -->
+<!-- spec-check files=143 tests=2236 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10668,3 +10668,19 @@ Suite 2232 -> **2234 pass / 0 fail**; packed files stay **143**; SPEC marker adv
 
 New `test/evaluator-agent-foreign.test.ts` pins all four foreign keys still failing closed and a clean
 verdict still parsing; focused suites 167 pass / 0 fail. Marker `tests=2234 → 2235` after rebase onto dev.
+
+
+## Workstream CLVI — golden test for the deduplicated kickoff (2026-11-22)
+
+The dedup workstream (CLIV above) asserted counts: one objective, one `DELEGATE_VERDICT`, both
+headers, neither superseded sentence. Counts catch duplication but not a reordered or dropped
+section, so this follow-up pins the entire rendered iteration-1 kickoff as one exact string in
+`test/core.test.ts` (the `planned` path keeps the output free of policy-dependent essays). The
+golden spans `<goal>`, the `<loop>` context block, the single `Objective (constant)` line, the
+pointer `Condition for this iteration`, `WORKING RULES`, `VERDICT HANDOFF` and the closing
+`DELEGATE_VERDICT`. Any future edit that reintroduces a second objective or no-judge block, or
+drops a header, now fails a focused test instead of relying on a count assertion.
+
+Suite 2235 -> **2236 pass / 0 fail**; packed files stay **143**; SPEC marker advances to
+`files=143 tests=2236` in this same commit. No production source or TUI/JSX touched, so
+`dist/tui.js` is byte-unchanged.
