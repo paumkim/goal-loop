@@ -24,7 +24,7 @@ import { exportSealedDossier, sealSummaryLine, type SealOutcome } from "./core/d
 import { exportReview, reviewSummaryLine } from "./core/dossier-review.ts"
 import { exportSpendLedger, spendSummaryLine } from "./core/spend-ledger.ts"
 import { exportDossierIndex, dossierIndexSummaryLine } from "./core/dossier-index.ts"
-import { attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
+import { sealedDossierCandidates,  attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
@@ -830,11 +830,11 @@ export default Plugin.define({
         const directory = process.cwd()
         let candidates: { name: string; mtimeMs: number }[]
         try {
-          candidates = readdirSync(directory).map((name) => {
+          candidates = sealedDossierCandidates(readdirSync(directory), (name) => {
             try {
-              return { name, mtimeMs: statSync(join(directory, name)).mtimeMs }
+              return statSync(join(directory, name)).mtimeMs
             } catch {
-              return { name, mtimeMs: 0 }
+              return 0
             }
           })
         } catch (error) {

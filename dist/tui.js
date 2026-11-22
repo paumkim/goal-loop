@@ -1935,6 +1935,15 @@ function attestationReportMarkdown(result, nowMs, directory, fileName) {
 `);
 }
 var SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/;
+function sealedDossierCandidates(names, statMtimeMs) {
+  const out = [];
+  for (const name of names) {
+    if (!SEALED_NAME_RE.test(name))
+      continue;
+    out.push({ name, mtimeMs: statMtimeMs(name) });
+  }
+  return out;
+}
 function selectNewestSealedDossier(entries) {
   let best;
   for (const entry of entries) {
@@ -7236,17 +7245,11 @@ var tui_default = Plugin.define({
         const directory = process.cwd();
         let candidates;
         try {
-          candidates = readdirSync2(directory).map((name) => {
+          candidates = sealedDossierCandidates(readdirSync2(directory), (name) => {
             try {
-              return {
-                name,
-                mtimeMs: statSync(join7(directory, name)).mtimeMs
-              };
+              return statSync(join7(directory, name)).mtimeMs;
             } catch {
-              return {
-                name,
-                mtimeMs: 0
-              };
+              return 0;
             }
           });
         } catch (error) {

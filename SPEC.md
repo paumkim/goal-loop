@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2228 -->
+<!-- spec-check files=143 tests=2229 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10517,3 +10517,39 @@ the pack count stays 143. No test case was added, so the count stays 2228.
 - Rejection still exits 2; valid/default invocations still exit 0.
 - Focused suites: 198 pass / 0 fail across 3 files (`render-scripts`, `package-integrity`, `core`).
 - After: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok.
+
+
+## Workstream CLII — stat only sealed-dossier names in the TUI re-probe scan (2026-11-22)
+
+Armed condition (repo improvement pass, hot-path unit): speed up a hot path with measured before/after
+evidence, preserve behavior and load-bearing guards, add a regression test for the risky change, and
+keep the tree clean.
+
+### Before
+
+`src/tui.tsx · attestSealedDossierAction` scanned the host cwd with
+`readdirSync(dir).map(name => ({ name, mtimeMs: statSync(join(dir, name)).mtimeMs }))`, calling
+`statSync` on **every** entry, then handed the list to `selectNewestSealedDossier`, which ignores every
+name not matching `goal-dossier-sealed-<stamp>[-n].md`. A repo root with `node_modules` and thousands
+of files paid one filesystem stat per unrelated entry on every palette action.
+
+### Change
+
+`src/core/dossier-attest.ts` now exports `sealedDossierCandidates(names, statMtimeMs)`, which applies
+`SEALED_NAME_RE` before invoking the caller-supplied stat callback. `src/tui.tsx` uses it; the existing
+per-name `statSync` try/catch and path join stay at the I/O edge. Selection output is unchanged:
+non-matching names were ignored by the selector before, and matching names keep the identical
+`mtimeMs`. No `selectNewestSealedDossier` behavior changed; the I/O reduction is local to one action.
+
+### Verification
+
+- New regression test `test/dossier-attest.test.ts · "stats only sealed-dossier names and keeps
+  selection identical"`: 5000 filler names + 3 sealed names; a counting stat callback proves only the
+  3 sealed names are statted, and the selected filename is byte-identical. Focused suite: 21 pass /
+  0 fail (was 20 pass / 0 fail before the added case). No test weakened or removed.
+- `bunx tsc --noEmit`: clean. `bun run compile` rebuilt `dist/tui.js` from `src/tui.tsx`; `check:dist`
+  verifies it matches a fresh build.
+- Benchmark (3002-entry dir, 40 iterations, median wall time, same harness before/after):
+  `before 2.228 ms`, `after 0.279 ms`, `8.0x` speedup; both return
+  `goal-dossier-sealed-20270116-080000.md`. Harness: /tmp/opencode/bench-sealed-scan.ts.
+- Test count 2228 -> 2229 (one added case); packed file count unchanged at 143. SPEC marker updated.

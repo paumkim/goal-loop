@@ -323,6 +323,25 @@ export function attestationReportMarkdown(
 const SEALED_NAME_RE = /^goal-dossier-sealed-(\d{8})-(\d{6})(?:-([1-9]\d*))?\.md$/
 
 /**
+ * Build the candidate list for `selectNewestSealedDossier` from directory entries, statting only
+ * names that can actually be a sealed dossier. `selectNewestSealedDossier` ignores every other
+ * name, so skipping their stat is output-identical while avoiding one filesystem call per
+ * unrelated entry — a repo root routinely holds thousands of them. `statMtimeMs` is supplied by
+ * the caller so the same best-effort `statSync` error handling and path join stay at the I/O edge.
+ */
+export function sealedDossierCandidates(
+  names: readonly string[],
+  statMtimeMs: (name: string) => number,
+): { name: string; mtimeMs: number }[] {
+  const out: { name: string; mtimeMs: number }[] = []
+  for (const name of names) {
+    if (!SEALED_NAME_RE.test(name)) continue
+    out.push({ name, mtimeMs: statMtimeMs(name) })
+  }
+  return out
+}
+
+/**
  * Picks the newest sealed-dossier filename from a candidate list (typically a directory's
  * entries). Deterministic: stamped by the embedded clock, then by the collision-attempt
  * suffix, then by mtime. Anything that is not a `goal-dossier-sealed-<stamp>[-n].md` name is
