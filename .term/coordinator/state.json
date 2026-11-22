@@ -5095,6 +5095,22 @@
       "submittedAt": "2026-11-22T21:05:46Z",
       "mergedAt": "2026-11-22T21:07:50Z",
       "mergedInto": "dev"
+    },
+    "sealed-dossier-stat-sweep": {
+      "agent": "build-agent",
+      "paths": "src/core/dossier-attest.ts,src/tui.tsx,test/dossier-attest.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/sealed-dossier-stat-sweep",
+      "worktree": "worktrees/wt-sealed-dossier-stat-sweep",
+      "status": "done",
+      "createdAt": "2026-11-22T21:41:00Z",
+      "submittedAt": "2026-11-22T21:43:34Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T21:43:34Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T21:45:34Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
