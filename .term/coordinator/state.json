@@ -5196,6 +5196,27 @@
       "submittedAt": "2026-11-22T22:19:55Z",
       "mergedAt": "2026-11-22T22:21:49Z",
       "mergedInto": "dev"
+    },
+    "strip-controls-fastpath": {
+      "agent": "build-agent",
+      "paths": "src/core/format.ts,test/format-controls.test.ts",
+      "branch": "wt/strip-controls-fastpath",
+      "worktree": "worktrees/wt-strip-controls-fastpath",
+      "status": "done",
+      "createdAt": "2026-11-22T22:25:02Z",
+      "releasedAt": "2026-11-22T22:26:00Z",
+      "releaseReason": "released"
+    },
+    "dead-script-exports": {
+      "agent": "build-agent",
+      "paths": "scripts/docs-watch.ts,scripts/spec-check.ts",
+      "branch": "wt/dead-script-exports",
+      "worktree": "worktrees/wt-dead-script-exports",
+      "status": "done",
+      "createdAt": "2026-11-22T22:27:09Z",
+      "submittedAt": "2026-11-22T22:29:09Z",
+      "mergedAt": "2026-11-22T22:31:03Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
