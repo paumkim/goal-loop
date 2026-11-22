@@ -5286,8 +5286,24 @@
       "paths": "src/core/evaluator-agent.ts,test/evaluator-agent-foreign.test.ts",
       "branch": "wt/foreign-verdict-precompile",
       "worktree": "worktrees/wt-foreign-verdict-precompile",
+      "status": "done",
+      "createdAt": "2026-11-22T22:59:10Z",
+      "submittedAt": "2026-11-22T23:01:16Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T23:01:16Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-22T23:06:24Z",
+      "mergedInto": "dev"
+    },
+    "prompt-kickoff-golden": {
+      "agent": "build",
+      "paths": "test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/prompt-kickoff-golden",
+      "worktree": "worktrees/wt-prompt-kickoff-golden",
       "status": "claimed",
-      "createdAt": "2026-11-22T22:59:10Z"
+      "createdAt": "2026-11-22T23:05:54Z"
     }
   },
   "mergeLock": null,
