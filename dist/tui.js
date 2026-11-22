@@ -4,6 +4,7 @@ import { createElement as _$createElement5, setProp as _$setProp5, insert as _$i
 import { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes as TextAttributes5 } from "@opentui/core";
 import { useTerminalDimensions as useTerminalDimensions2 } from "@opentui/solid";
+import { createMemo as createMemo3, createSignal as createSignal4, createEffect as createEffect2, onCleanup as onCleanup3, Show as Show4, ErrorBoundary } from "solid-js";
 
 // node_modules/ansi-regex/index.js
 function ansiRegex({ onlyFirst = false } = {}) {
@@ -159,9 +160,6 @@ function stringWidth(string, options = {}) {
   }
   return width;
 }
-
-// src/tui.tsx
-import { createMemo as createMemo3, createSignal as createSignal4, createEffect as createEffect2, onCleanup as onCleanup3, Show as Show4, ErrorBoundary } from "solid-js";
 
 // src/core/types.ts
 var LIVE_STATUSES = new Set(["active", "paused"]);
@@ -2068,7 +2066,7 @@ var compactMarkerFg = (theme, tone, mono) => {
 var hudArmEnabled = (hasGoal, statusDialogOpen) => hasGoal && !statusDialogOpen;
 var fitLadder = (rungs, budget, ellipsis = "\u2026") => {
   for (const rung of rungs) {
-    if (stringWidth(rung) <= budget)
+    if (cellWidth(rung) <= budget)
       return rung;
   }
   return truncate(rungs[rungs.length - 1], Math.max(0, Math.floor(budget)), ellipsis);
@@ -2151,7 +2149,7 @@ var terminalPill = (goal, elapsed, ascii = false, budget) => {
   })() : `${glyph} goal ${word} \xB7 ${span}`;
   if (budget !== undefined && Number.isFinite(budget)) {
     const cap = Math.max(1, Math.floor(budget));
-    if (stringWidth(text) > cap)
+    if (cellWidth(text) > cap)
       return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone };
   }
   return { text, tone };
@@ -4933,19 +4931,19 @@ var cardRowPlan = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY
   };
 };
 var hudCardRows = (goal, contextOpen = false, maxRows = Number.POSITIVE_INFINITY, width = 64) => cardRowPlan(goal, contextOpen, maxRows, width).rows;
-var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1;
+var pinBudget = (terminalWidth, pillText) => Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1;
 var DIALOG_FOOTER_FULL_HINT = "up/down scroll \xB7 pgup/pgdn \xB7 home/end \xB7 p pin \xB7 c copy \xB7 x older";
 var DIALOG_FOOTER_SHORT_HINT = "up/down scroll \xB7 p pin \xB7 c copy \xB7 x older";
 var footerCopyLabel = (copied, roomy, ascii = false) => copied ? ascii ? "+ copied" : "\u2713 copied" : roomy ? "copy condition" : "copy";
 var footerPinLabel = (pinned, roomy) => pinned ? roomy ? "unpin condition" : "unpin" : roomy ? "pin condition" : "pin";
-var footerButtonCells = (label) => stringWidth(label) + 4;
+var footerButtonCells = (label) => cellWidth(label) + 4;
 var footerClearLabel = (roomy) => roomy ? "clear goal" : "clear";
 var dialogFooterTier = (width, copied, pinned) => {
   const budget = Math.floor(width) - 2;
   const buttons = (roomy) => footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4;
   return {
-    wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
-    roomy: stringWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget
+    wide: cellWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
+    roomy: cellWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget
   };
 };
 var DialogFooter = (props) => {
@@ -7518,7 +7516,7 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2);
+            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2);
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
