@@ -409,8 +409,9 @@ const shaSuffix = (entry: { sha?: string }) => (entry.sha ? ` · ${entry.sha.sli
  * like a rail summary. The old inline layout pinned the reason to a far-right column sized to
  * the widest furniture cell, so a long reason wrapped in a narrow strip and left a blank slab
  * across the left half of the dialog. Click-to-copy when the caller wires onCopyReason; an
- * always-mounted affordance cell advertises the reason row (the grammar shared with the
- * condition/summary/reason rows). The copied acknowledgment rides that row for a beat.
+ * always-mounted affordance cell sits on the short furniture row so the reason owns every
+ * cell to the right edge (the grammar shared with the condition/summary/reason rows). The
+ * copied acknowledgment rides that furniture row for a beat.
  */
 const WhyLedger = (props: {
   theme: HistoryTheme
@@ -450,7 +451,7 @@ const WhyLedger = (props: {
           const interactive = props.onCopyReason !== undefined
           return (
             <box flexDirection="column" gap={0} onMouseUp={interactive ? (event) => { if (event.button !== 0) return; event.stopPropagation(); copy(entry) } : undefined} onMouseOver={interactive ? () => setHovered(entry.at) : undefined} onMouseOut={interactive ? () => setHovered(null) : undefined}>
-              {/* furniture stays on its own short row — the verdict word, turn and time are metadata, not a column that squeezes the reason. */}
+              {/* furniture stays on its own short row — the verdict word, turn and time are metadata, not a column that squeezes the reason. The copy affordance rides this row so the reason below owns every cell to the right edge. */}
               <box flexDirection="row" gap={2}>
                 {label(theme(), index() === 0 ? "why" : "")}
                 <text wrapMode="none" flexShrink={0} fg={colorFor(theme(), entry, mono())} attributes={TextAttributes.BOLD}>
@@ -459,14 +460,15 @@ const WhyLedger = (props: {
                 <text wrapMode="none" flexShrink={0} fg={theme().text.muted}>
                   {furniture(entry)}
                 </text>
+                <box flexGrow={1} />
+                {interactive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={hovered() === entry.at} ack={copied() === entry.at ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
               </box>
-              {/* the reason fills the width under a blank label gutter, like a rail summary: no far-right strip, no blank slab underneath. */}
+              {/* the reason fills the width under a blank label gutter, like a rail summary: no far-right strip, no blank slab underneath, no affordance reserve. */}
               <box flexDirection="row" gap={2}>
                 {label(theme(), "")}
                 <text wrapMode="word" flexGrow={1} fg={theme().text.base}>
                   {truncate(entry.reason, WHY_REASON_MAX, ascii() ? "..." : "\u2026")}
                 </text>
-                {interactive ? <Affordance theme={theme()} mono={mono} verb="copy" hovered={hovered() === entry.at} ack={copied() === entry.at ? (ascii() ? "+ copied" : "✓ copied") : null} /> : null}
               </box>
             </box>
           )
