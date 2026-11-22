@@ -1,7 +1,7 @@
 import type { BudgetState, Config } from "./types.ts"
 import { globalStopFile, localStopFile, money, short } from "./util.ts"
 
-export interface StopDeps {
+interface StopDeps {
   readonly exists: (p: string) => boolean
   readonly env: NodeJS.ProcessEnv
 }

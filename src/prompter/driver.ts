@@ -55,7 +55,7 @@ export const budgetStoppedResult = (result: TaskResult, reason: string): TaskRes
   reason: result.reason ? `${result.reason} | ${reason}` : reason,
 })
 
-export interface RunTaskInput {
+interface RunTaskInput {
   readonly repo: string
   readonly worktree: string
   readonly config: Config

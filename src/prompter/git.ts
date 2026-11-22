@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import path from "node:path"
 
-export interface GitResult {
+interface GitResult {
   readonly ok: boolean
   readonly stdout: string
   readonly stderr: string
