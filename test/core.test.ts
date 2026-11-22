@@ -1146,6 +1146,30 @@ describe("native evaluator verdict", () => {
     expect(kickoff.endsWith(DELEGATE_VERDICT)).toBe(true)
   })
 
+  test("the iteration-1 kickoff is a stable golden structure", () => {
+    // Pin the whole rendered prompt, not just counts: a future edit that re-introduces a second
+    // objective, a second no-judge block, or a dropped header changes this string and fails here.
+    const objective = "Run an evidence-based repo improvement pass in small units via the repos workflow: remove dead code and unify naming. Preserve behavior and run all checks."
+    const kickoff = directive(objective, NO_COMMIT, { iteration: 1, maxLoops: 5, objective, history: [] }, true)
+    const expected = [
+      `<goal>`,
+      `<loop iteration="1" max="5">`,
+      `Context: this is iteration 1 of at most 5 in a continuous improvement loop.`,
+      `Prior iterations:\n(none — this is the first iteration)`,
+      `</loop>`,
+      `Objective (constant): ${objective}`,
+      `Condition for this iteration: the objective above (no narrower step this iteration).`,
+      `</goal>`,
+      ``,
+      `WORKING RULES`,
+      `Show command output when it is part of the work. Do not stop to ask for confirmation unless you are truly blocked.`,
+      ``,
+      `VERDICT HANDOFF`,
+      DELEGATE_VERDICT,
+    ].join("\n")
+    expect(kickoff).toBe(expected)
+  })
+
   test("a later iteration keeps both the objective and its narrower condition", () => {
     const objective = "the constant objective"
     const condition = "this iteration's narrower condition"
