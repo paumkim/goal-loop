@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { isOpencodeCliCondition, opencodeCliGuide } from "../src/core/opencode-cli.ts"
-import { directive } from "../src/core/prompts.ts"
+import { DELEGATE_VERDICT, directive } from "../src/core/prompts.ts"
 import type { CommitPolicy } from "../src/core/types.ts"
 
 const direct: CommitPolicy = { required: true, branch: "dev", mode: "direct", reason: "test" }
@@ -87,7 +87,8 @@ describe("directive() with the opencode-cli guide", () => {
   test("lands before the commit rule and keeps the evaluator framing", () => {
     const out = directive("rework the opencode harness tests", direct)
     expect(out.indexOf("<opencode-cli>")).toBeLessThan(out.indexOf("Commit rule:"))
-    expect(out).toContain("an independent evaluator checks the condition")
+    expect(out).toContain("A separate evaluator decides whether the condition is met")
+    expect(out.endsWith(DELEGATE_VERDICT)).toBe(true)
   })
 
   test("injects even when the condition does not read as fuzzy", () => {

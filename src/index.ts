@@ -326,14 +326,17 @@ export default Plugin.define({
           finish(answer)
         })()
         // The signal must reach the host prompt: a child turn that ignores an external abort used to keep
-        // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. `resume: false`
-        // keeps this fresh child's prompt from waking anyone. Race so any abort converges immediately; the text
+        // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. No resume opt-out
+        // here: the host only wakes a session's execution when `resume !== false`, so that flag left this fresh
+        // child admitted to the inbox but never running (no text deltas, no terminal event, 120s timeout). The
+        // parent wake is suppressed structurally instead — the child has no `parentID` and is not a host subagent
+        // Job, so `subagent-report.ts` early-returns and never calls `deps.wake(parentID)`. The child MUST run as a
+        // `kind:"primary"` turn to pass the free-tier gate. Race so any abort converges immediately; the text
         // still comes from `done` (the child's text deltas), never from a reported synthetic message.
         await Promise.race([
           ctx.session.prompt({
             sessionID: id,
             text: prompt,
-            resume: false,
           } as any, { signal }).catch((error: unknown) => fail(error)),
           done.then(() => undefined),
         ])
@@ -452,7 +455,7 @@ export default Plugin.define({
           finish()
         })()
         await Promise.race([
-          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw), resume: false } as any, { signal: budget }).catch(() => undefined),
+          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw) } as any, { signal: budget }).catch(() => undefined),
           done.then(() => undefined),
         ])
         await done

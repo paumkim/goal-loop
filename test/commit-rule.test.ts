@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import {
   checkin,
   commitStatusSuffix,
+  DELEGATE_VERDICT,
   evaluateIndependently,
   evaluateInSession,
   retry,
@@ -31,6 +32,7 @@ describe("commit rule sentences (byte-identical)", () => {
       "Goal: c",
       "Commit the finished work to the `dev` branch before the goal counts as done.",
       "</goal-retry>",
+      DELEGATE_VERDICT,
     ].join("\n"))
     expect(retry({ condition: "c", label: "credit balance exhausted" }, coordinator)).toContain(
       "Commit on your wt/<slug> branch and submit before the goal counts as done.",
@@ -49,8 +51,9 @@ describe("commit rule sentences (byte-identical)", () => {
   test("systemReminder", () => {
     expect(systemReminder("c", direct)).toBe([
       "An active /goal is set for this session: c",
-      "An independent evaluator checks it after every turn from visible evidence only. Keep working until it holds and surface proof (command output, test results) in the conversation.",
+      "An independent evaluator checks it after every turn from visible evidence only. Do the work and surface proof (command output, test results) in the conversation.",
       "Finished work has to be committed to the `dev` branch before the goal counts as met.",
+      DELEGATE_VERDICT,
     ].join("\n"))
     expect(systemReminder("c", coordinator)).toContain(
       "Finished work has to be committed on your wt/<slug> branch and submitted before the goal counts as met.",

@@ -1387,3 +1387,95 @@ describe("the harness judge prompt carries a clean evidence contract (CXXXII)", 
     }
   })
 })
+
+describe("standalone child prompts must wake their own execution (CXLII P0)", () => {
+  test("the judge child is prompted with { sessionID, text } and no resume opt-out before its verdict lands", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model" })
+    ;(ctx.session as any).context = async () => [evidence("fresh evidence: bun run check green at current HEAD")]
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    const judgeCalls: any[] = []
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID === "ses_judge") judgeCalls.push(input)
+      else void calls.prompts.push(input)
+    }
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: judgeVerdict() } }
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "achieved")
+      expect((storage.get("goal/v1/ses_1") as any)?.status).toBe("achieved")
+      expect(judgeCalls.length).toBe(1)
+      expect(judgeCalls[0]).toMatchObject({ sessionID: "ses_judge" })
+      expect(typeof judgeCalls[0].text).toBe("string")
+      expect(judgeCalls[0].text).toContain("<goal-evaluation>")
+      // The host only wakes execution when resume !== false. A judge admitted with a resume opt-out never runs,
+      // so no terminal event arrives and the verdict only survives via the external timeout — this pin fails there.
+      expect("resume" in judgeCalls[0]).toBe(false)
+      expect(judgeCalls[0].resume).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the planner child is prompted with { sessionID, text } and no resume opt-out", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, { model: "provider/model" })
+    const previous = process.env.NODE_ENV
+    process.env.NODE_ENV = "production" // planGoal deliberately skips under bun test; this pin needs the real path.
+    try {
+      ;(ctx.session as any).context = async () => [evidence("fresh evidence: bun run check green at current HEAD")]
+      ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+      ;(ctx.session as any).create = async (input: any) => ({ id: input.parentID ? "ses_planner" : "ses_judge" })
+      const childCalls: any[] = []
+      ;(ctx.session as any).prompt = async (input: any) => {
+        if (input.sessionID === "ses_planner" || input.sessionID === "ses_judge") childCalls.push(input)
+        else void calls.prompts.push(input)
+      }
+      ;(ctx as any).event = {
+        subscribe: async function* () {
+          for (let i = 0; i < 1000 && !childCalls.some((c) => c.sessionID === "ses_planner"); i++) await new Promise((r) => setImmediate(r))
+          yield { type: "session.text.delta", data: { sessionID: "ses_planner", delta: JSON.stringify({ condition: "the parser is correct", scope: "code" }) } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_planner" } }
+          for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+          yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+          await new Promise((r) => setImmediate(r))
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+          yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: judgeVerdict() } }
+          yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
+        },
+      }
+      const dispose = await (plugin as any).setup(ctx)
+      try {
+        const goal = calls.commands.find((command: any) => command.name === "goal")
+        await goal.execute({ sessionID: "ses_1", prompt: { text: "raw goal body pasted by a user" }, delivery: "steer" })
+        await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "achieved")
+        const plannerCall = childCalls.find((c) => c.sessionID === "ses_planner")
+        expect(plannerCall).toBeDefined()
+        expect(typeof plannerCall.text).toBe("string")
+        expect(plannerCall.text).toContain("<raw>")
+        // Same P0 pin as the judge: no resume opt-out may suppress the planner child's execution.
+        expect("resume" in plannerCall).toBe(false)
+        expect(plannerCall.resume).toBeUndefined()
+        // The planned condition, not the raw body, reached the worker and the judge.
+        expect((storage.get("goal/v1/ses_1") as any)?.condition).toBe("the parser is correct")
+      } finally {
+        await dispose?.()
+      }
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = previous
+    }
+  })
+})

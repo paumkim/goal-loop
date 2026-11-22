@@ -13,6 +13,7 @@ import {
   evaluateIndependently,
   evaluateInSession,
   loopContinuation,
+  loopReanchor,
   nativeEvaluationRequest,
   retry,
   systemReminder,
@@ -962,7 +963,7 @@ describe("steer prompts bound evaluator reasons", () => {
     const continuationText = continuation({ condition: "a", turn: 2, reason }, NO_COMMIT)
     expect(continuationText).not.toContain(reason)
     expect(continuationText).toContain("…")
-    expect(continuationText.length).toBeLessThan(900)
+    expect(continuationText.length).toBeLessThan(1_000)
     const loopText = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason }, NO_COMMIT)
     const loopShort = loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "x" }, NO_COMMIT)
     expect(loopText).not.toContain(reason)
@@ -1092,16 +1093,33 @@ describe("config regression: an empty env model", () => {
 })
 
 describe("native evaluator verdict", () => {
-  test("the kickoff directive tells the worker to report evidence and never delegate the verdict", () => {
+  test("the kickoff directive tells the worker to report evidence and never judge the verdict", () => {
     const kickoff = directive("all tests pass", COMMIT)
     expect(kickoff).toContain(DELEGATE_VERDICT)
+    expect(kickoff.endsWith(DELEGATE_VERDICT)).toBe(true) // last line, after the commit rule
     expect(kickoff).not.toContain("delegate the verdict to")
     expect(kickoff).not.toContain("task tool")
+    expect(kickoff).not.toContain("Prove progress")
     expect(DELEGATE_VERDICT).toContain("do not delegate, judge, or narrate the verdict")
     expect(DELEGATE_VERDICT).toContain("separate evaluator judges the condition after your turn")
-    const steer = continuation({ condition: "all tests pass", turn: 2, reason: "not yet" }, COMMIT)
-    expect(steer).toContain("The harness judges the condition after your turn")
-    expect(steer).not.toContain("Delegate the verdict")
+    expect(DELEGATE_VERDICT).toContain("Never state, declare, or assess whether the condition is met")
+  })
+
+  test("every worker-facing prompt ends with the shared no-judge invariant (CXLII coverage hole)", () => {
+    const prompts = [
+      ["directive", directive("all tests pass", COMMIT)],
+      ["continuation", continuation({ condition: "a", turn: 2, reason: "not yet" }, COMMIT)],
+      ["retry", retry({ condition: "a", label: "timeout" }, COMMIT)],
+      ["checkin", checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, COMMIT)],
+      ["loopContinuation", loopContinuation({ iteration: 2, maxLoops: 5, condition: "a", previousSummary: "done", reason: "r" }, COMMIT)],
+      ["loopReanchor", loopReanchor({ iteration: 2, maxLoops: 5, objective: "o", condition: "a", history: [] })],
+      ["systemReminder", systemReminder("a", COMMIT)],
+    ] as const
+    for (const [name, text] of prompts) {
+      expect({ name, endsWithInvariant: text.endsWith(DELEGATE_VERDICT) }).toEqual({ name, endsWithInvariant: true })
+    }
+    // The one source of truth replaced continuation's old, weaker custom wording.
+    expect(continuation({ condition: "a", turn: 2, reason: "not yet" }, COMMIT)).not.toContain("The harness judges the condition after your turn")
   })
 
   test("only subagent reports from the evaluator agent count as verdicts", () => {

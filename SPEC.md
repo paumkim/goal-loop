@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2215 -->
+<!-- spec-check files=143 tests=2218 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10097,3 +10097,55 @@ only if the host exposes a way to deliver a child report without waking its pare
   persists and stays navigable (no `session.remove`).
 - `findNativeReport` / `parseSubagentReport` stay exported for transcript tooling and tests, but are no longer on
   the live verdict path.
+
+## Workstream CXLII — the judge must actually run; the worker never judges (2026-11-22)
+
+CXLI moved the verdict into a harness-owned standalone child, but live goals still paused after 120s with
+`no usable evaluator subagent verdict: evaluator timed out after 120s (native verdict)`. The child was created with
+no `parentID`, yet its prompt carried `resume: false`. The host wakes a session's execution only when
+`resume !== false` (`packages/core/src/session/session.ts`, `execution.wake`), so the prompt reached the inbox and
+nothing else happened: no text delta, no `session.execution.succeeded`, no verdict. CXXXVII used a plain
+`ctx.session.prompt({ sessionID, text })`; CXXX added the flag behind worker delegation, which hid the bug; 9667b4c
+restored standalone children without removing it. The same flag sat on `planGoal`, so the planner timed out at 30s
+and silently fell back to the raw goal body.
+
+### Root cause
+
+`resume: false` is an execution wake opt-out, not a "don't notify the parent" switch. Removing it does not restore
+the parent wake: the judge has no `parentID` and is not a host subagent Job, so `subagent-report.ts` early-returns
+with a no-op deliver (`!initial?.parentID && jobState.mode === "none"`) and never calls `deps.wake(parentID)`.
+Only a `not_met` continuation steer wakes the worker. The child also has to run as a `kind:"primary"` turn to pass
+the free-tier gate.
+
+### Decision
+
+Choice: drive both standalone children with the plain two-field prompt call — no resume opt-out — and keep parent
+wake suppression structural (no `parentID`, no subagent Job). Position-layer: append one exported
+`DELEGATE_VERDICT` constant as the final line of every worker-facing prompt, so the worker reports evidence and
+ends its turn while the harness alone judges. Reverse the resume part only if the host gains a wake-free prompt
+mode for children; reverse the position part only if a worker verdict can be trusted without waking the worker.
+
+### Change
+
+1. `src/index.ts · spawnEvaluator` / `planGoal`: remove the resume opt-out from both `ctx.session.prompt` calls;
+   rewrite the stale comment with the real reason (no-parentID + no subagent Job suppress the parent wake).
+   Event collection, abort/quota classification and controller logic are unchanged.
+2. `src/core/prompts.ts`: `DELEGATE_VERDICT` now forbids stating, declaring or assessing the verdict; it is the
+   last line of `directive()` and is appended to `continuation`, `retry`, `checkin`, `loopContinuation`,
+   `loopReanchor` and `systemReminder`. `continuation()` drops its weaker custom wording. Worker-facing lines
+   that invited self-judging ("Prove progress", "until the condition holds", "the evaluator will not mark the
+   goal met") and the exact "Already satisfied at HEAD" audit reply are gone; the evaluator rubric keeps its own
+   wording. Commit-rule text outside those clauses is byte-unchanged.
+3. Tests: byte pins updated; the universal invariant is asserted for all seven worker-facing builders; two new
+   plugin tests capture the actual judge and planner prompt calls and assert no resume property. Both fail against
+   the old bug (verified by temporary mutation), and the goal still reaches `achieved` from the judge's own text.
+
+### Verification
+
+- `bun run check` green: tsc, full suite, dist/tui/docs/invariant/spec gates; marker re-counted in-commit.
+
+### Honest limits
+
+- The no-judge contract is prose, not a host-enforced capability: the worker still has tools and could ignore it.
+  The harness ignores any self-declared verdict, so a lapse costs a turn, not the goal's correctness.
+- The planner still runs only outside tests and probe mode; the new pin lifts `NODE_ENV` locally for one test.
