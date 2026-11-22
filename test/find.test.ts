@@ -112,3 +112,42 @@ describe("matchLabel", () => {
     expect(matchLabel(42)).toBe("42 matches")
   })
 })
+
+
+describe("find fold cache preserves exact output", () => {
+  // Reference implementations with an uncached fold — the oracle. Folding change is the risk here:
+  // when lowercasing changes string length (ß -> ss, İ -> i̇) the segment fallback must still fire.
+  const refFold = (t: string) => t.toLowerCase()
+  const refMatches = (texts: readonly string[], q: string) =>
+    q.trim().length === 0 ? texts.map(() => false) : texts.map((t) => refFold(t).includes(refFold(q)))
+  const refCount = (texts: readonly string[], q: string) => {
+    if (q.trim().length === 0) return 0
+    const fq = refFold(q)
+    let total = 0
+    for (const t of texts) {
+      const line = refFold(t)
+      let i = line.indexOf(fq)
+      while (i !== -1) { total += 1; i = line.indexOf(fq, i + fq.length) }
+    }
+    return total
+  }
+  test("findMatches, countMatches and segmentLine match an uncached oracle on cold and warm calls", () => {
+    const lines = [
+      "ship the RELEASE notes", "ship the release notes", "nothing here",
+      "straße across the line", "İstanbul RELEASE", "🎉 release · 世 release",
+      "  padded   release  ", "",
+    ]
+    const queries = ["release", "RELEASE", "  ", "straße", "STRASSE", "İ", "世"]
+    for (const q of queries) {
+      // Run twice: the second pass hits the cache for every line and query.
+      for (let pass = 0; pass < 2; pass++) {
+        expect(findMatches(lines, q)).toEqual(refMatches(lines, q))
+        expect(countMatches(lines, q)).toBe(refCount(lines, q))
+        for (const line of lines) {
+          const segs = segmentLine(line, q)
+          expect(segs.map((s) => s.text).join("")).toBe(line)
+        }
+      }
+    }
+  })
+})

@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2236 -->
+<!-- spec-check files=143 tests=2237 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10684,3 +10684,20 @@ drops a header, now fails a focused test instead of relying on a count assertion
 Suite 2235 -> **2236 pass / 0 fail**; packed files stay **143**; SPEC marker advances to
 `files=143 tests=2236` in this same commit. No production source or TUI/JSX touched, so
 `dist/tui.js` is byte-unchanged.
+## Workstream CLVIII — memoize the dossier find-spotlight case fold (2026-11-22)
+
+Repo improvement pass, measured hot-path unit.
+
+`src/core/find.ts` lowercases (folds) each dossier line in three separate functions. The live
+find spotlight in `src/status-dialog.tsx` computes `findMatches` and `countMatches` in two memos over
+the same 400-line dossier on every keystroke, and `segmentLine` folds each visible line again — so
+each line was lowercased three times per redraw. Added a bounded 8192-entry memo around the pure
+`toLowerCase` fold; a miss recomputes, a hit is a lookup, so every output is unchanged.
+
+Measured with the same harness before/after (100 spotlight cycles over a 400-line dossier, 20 rounds,
+median wall time): `10.62 ms -> 1.90 ms`, `5.6x`. Harness: `/tmp/opencode/bench-find-fold.ts`.
+
+New regression case in `test/find.test.ts` compares `findMatches`, `countMatches` and `segmentLine`
+against an uncached oracle across ASCII, CJK, emoji, and length-changing folds (ß->ss, İ->i̇), on
+both cold and warm passes; it also pins segment tiling (concatenation equals the input). Focused
+suite 19 pass / 0 fail (was 18). Typecheck clean. Marker `tests=2236 -> 2237` after rebase onto dev.
