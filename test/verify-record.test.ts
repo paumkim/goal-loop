@@ -16,6 +16,7 @@ import {
   verifySummaryLine,
   type RecordProbe,
 } from "../src/core/verify-record.ts"
+import { conditionCellOf } from "../src/core/dossier.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
 const loopGoal = (loopHistory: GoalSnapshot["loopHistory"]): GoalSnapshot =>
@@ -206,5 +207,16 @@ describe("verifyAckSegment", () => {
   test("a record with no quoted shas says so, never paints a pass", () => {
     expect(ack(0, 0, 0, 0, false)).toBe(" (no shas to verify)")
     expect(ack(0, 0, 0, 0, true)).toBe(" (no shas)")
+  })
+})
+
+describe("conditionCellOf (shared record condition formatter)", () => {
+  test("flattens whitespace, falls back to GAP, and truncates at 200 chars", () => {
+    expect(conditionCellOf(undefined)).toBe("—")
+    expect(conditionCellOf("   ")).toBe("—")
+    expect(conditionCellOf("  ship\n the\t release   notes  ")).toBe("ship the release notes")
+    const atLimit = "x".repeat(200)
+    expect(conditionCellOf(atLimit)).toBe(atLimit)
+    expect(conditionCellOf(`${atLimit}y`)).toBe(`${atLimit}…`)
   })
 })

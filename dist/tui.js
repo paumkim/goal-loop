@@ -570,6 +570,10 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) 
 
 // src/core/dossier.ts
 var GAP = "\u2014";
+var conditionCellOf = (condition) => {
+  const flat = (condition ?? "").replace(/\s+/g, " ").trim();
+  return flat.length > 200 ? `${flat.slice(0, 200)}\u2026` : flat || GAP;
+};
 var isoOf = (ms) => {
   if (!Number.isFinite(ms))
     return GAP;
@@ -1041,8 +1045,7 @@ var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
 function verifyReportMarkdown(goal, verification, nowMs, directory) {
   const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP;
+  const conditionCell = conditionCellOf(goal.condition);
   const lines = [
     "# /goal-loop record verification",
     "",
@@ -1132,8 +1135,7 @@ var iterationList2 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
 function reachReportMarkdown(goal, reach, nowMs, directory) {
   const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP;
+  const conditionCell = conditionCellOf(goal.condition);
   const lines = [
     "# /goal-loop record ancestry",
     "",
@@ -1224,8 +1226,7 @@ var iterationList3 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
 function signReportMarkdown(goal, sign, nowMs, directory) {
   const stamp = stampOf(nowMs);
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim();
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}\u2026` : condition || GAP;
+  const conditionCell = conditionCellOf(goal.condition);
   const lines = [
     "# /goal-loop record signatures",
     "",
