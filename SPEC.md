@@ -10579,3 +10579,28 @@ published `files` list, so the pack count stays 143. The marker stays `files=143
 Before: four local `const GAP = "—"` definitions (dossier.ts + three reporters); `LOOP-COUNT.md`
 present. After: `grep -rn 'const GAP = "—"'` returns only dossier.ts; the three reporters import it;
 `LOOP-COUNT.md` is gone. SPEC and changelog accompany the `src/core` touches for invariant-sweep.
+
+
+## Workstream CLIV — one cached cell-width function across the render code (2026-11-22)
+
+Repo improvement pass, hot-path and consistency units landed as separate leases.
+
+### Hot path (lease `cell-width-cache`)
+
+`src/core/format.ts` called `stringWidth` six times per formatting path; that library strips ANSI and
+runs an `Intl.Segmenter` pass on every call, while the TUI asks for the same labels, prefixes and
+graphemes many times per frame. Added a bounded 4096-entry `cellWidth` memo and routed all six call
+sites through it. Output is unchanged (`string-width` is pure; a miss recomputes, a hit is a lookup).
+
+Measured before/after with the same harness: 100k repeated-label width calls `136.93 ms → 0.39 ms`
+(355x); a realistic 5000× `truncate(4000 chars, 80)` workload `1231.75 ms → 21.91 ms` (56x). A new
+`test/cell-width.test.ts` pins `cellWidth === stringWidth` for ASCII, CJK, emoji, combining marks,
+ANSI, empty and long inputs on both cold and warm calls. Marker `tests=2231 → 2232`.
+
+### Consistency (this lease)
+
+`src/core/hud.ts`, `src/hud-card.tsx` and `src/tui.tsx` still called `stringWidth` directly. They now
+import and use `cellWidth` from `format.ts`; the raw `string-width` import is gone from all production
+code outside the wrapper. No width value changes: 430 render/hud/alignment tests pass including all
+29 snapshots, and 4/4 standalone render outputs are byte-identical before/after. `dist/tui.js`
+regenerated from `src/tui.tsx` in both leases.
