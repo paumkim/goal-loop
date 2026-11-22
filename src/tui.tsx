@@ -11,10 +11,9 @@ import { Plugin } from "@opencode/plugin/tui"
 import type { ScrollBoxRenderable } from "@opentui/core"
 import { TextAttributes, type ColorInput } from "@opentui/core"
 import { useTerminalDimensions } from "@opentui/solid"
-import stringWidth from "string-width"
 import type { JSX } from "@opentui/solid"
 import { createMemo, createSignal, createEffect, onCleanup, Show, ErrorBoundary } from "solid-js"
-import { goalGlyph } from "./core/format.ts"
+import { cellWidth, goalGlyph } from "./core/format.ts"
 import { buildLoopDossier } from "./core/dossier.ts"
 import { exportLoopDossier } from "./core/dossier-export.ts"
 import { gitCatFileProbe, verifyRecord, verifyReportMarkdown, verifySummaryLine, type VerifyOutcome } from "./core/verify-record.ts"
@@ -1004,7 +1003,7 @@ export default Plugin.define({
           }
         }
         // Declared above pill(): the pill's budget subtracts the landing acknowledgment suffix measured
-        // in CELLS (stringWidth), never in code units, and pillText() rides the same suffix. Single source.
+        // in CELLS (cellWidth), never in code units, and pillText() rides the same suffix. Single source.
         const landingNow = () => props.sessionID !== undefined && landing().has(props.sessionID)
         const pill = () => {
           try {
@@ -1016,7 +1015,7 @@ export default Plugin.define({
           // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
           // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? stringWidth(landingSfx()) : 0) - 2) // -1: the 1-cell right margin; -2: the caret cell rides the same row
+          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2) // -1: the 1-cell right margin; -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.

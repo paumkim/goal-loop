@@ -21,11 +21,10 @@
  *   ▎
  */
 import { TextAttributes, type ColorInput } from "@opentui/core"
-import stringWidth from "string-width"
 import { createSignal, Show } from "solid-js"
 import { useTerminalDimensions } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
-import { formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
+import { cellWidth, formatDurationCoarse, formatSpend, formatTokens, goalGlyph, truncate, wrapLines } from "./core/format.ts"
 import { LABEL, lastVerdict, renderPips, turnsSinceVerdict, verdictEntryGlyph, contextMeter, CONTEXT_BAR_CELLS } from "./core/history.ts"
 import { isCompactHot, isRetryStuck, remediationFor, PIN_PREFIX, borderAccentColor, fixAccentColor, stateAccentColor, verdictEntryAccentColor, evaluatorHint, motionDisabled, compactMarker, compactMarkerFg, contextMenuRows, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type ContextMenuRow } from "./core/hud.ts"
 import { completedIterationCount, type GoalSnapshot, type Verdict } from "./core/types.ts"
@@ -173,9 +172,9 @@ export const cardRowPlan = (goal: GoalSnapshot, contextOpen = false, maxRows: nu
 /** Rows the card occupies (the 1-cell left accent consumes a column, not a row); the absolute mount above the jump row anchors with `top={-hudCardRows(goal, contextOpen, maxRows)}`. Pass `contextOpen` so the anchor grows with the menu, `maxRows` to cap at the viewport. */
 export const hudCardRows = (goal: GoalSnapshot, contextOpen = false, maxRows: number = Number.POSITIVE_INFINITY, width: number = 64): number => cardRowPlan(goal, contextOpen, maxRows, width).rows
 
-/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (stringWidth on both sides; the pill carries multibyte glyphs). */
+/** Width available to a pinned condition in the pill given the terminal width and the unpinned pill text — cells in, cells out (cellWidth on both sides; the pill carries multibyte glyphs). */
 export const pinBudget = (terminalWidth: number, pillText: string): number =>
-  Math.floor(terminalWidth) - stringWidth(pillText) - stringWidth(PIN_PREFIX) - 1
+  Math.floor(terminalWidth) - cellWidth(pillText) - cellWidth(PIN_PREFIX) - 1
 
 // Neither hint repeats the Esc chord — Esc stays in the host dialog chrome at every width tier; the hint spends its cells on scrolling and the three plugin chords.
 export const DIALOG_FOOTER_FULL_HINT = "up/down scroll · pgup/pgdn · home/end · p pin · c copy · x older"
@@ -190,7 +189,7 @@ export const footerPinLabel = (pinned: boolean, roomy: boolean): string =>
   pinned ? (roomy ? "unpin condition" : "unpin") : roomy ? "pin condition" : "pin"
 
 /** Cells a footer button paints: the label plus the brackets and one cell of horizontal padding each side (the HudButton chrome). */
-export const footerButtonCells = (label: string): number => stringWidth(label) + 4
+export const footerButtonCells = (label: string): number => cellWidth(label) + 4
 
 const footerClearLabel = (roomy: boolean): string => (roomy ? "clear goal" : "clear")
 
@@ -208,8 +207,8 @@ export const dialogFooterTier = (width: number, copied: boolean, pinned: boolean
   const buttons = (roomy: boolean): number =>
     footerButtonCells(footerCopyLabel(copied, roomy)) + footerButtonCells(footerPinLabel(pinned, roomy)) + footerButtonCells(footerClearLabel(roomy)) + 4
   return {
-    wide: stringWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
-    roomy: stringWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget,
+    wide: cellWidth(DIALOG_FOOTER_FULL_HINT) + buttons(true) <= budget,
+    roomy: cellWidth(DIALOG_FOOTER_SHORT_HINT) + buttons(true) <= budget,
   }
 }
 

@@ -4,9 +4,8 @@
  * No I/O, no JSX; everything here is unit-tested headlessly. Presentation lives in
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
-import stringWidth from "string-width"
 import { COMPACT_MISS_CAP, isLive, completedIterationCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
-import { formatDurationCoarse, truncate } from "./format.ts"
+import { cellWidth, formatDurationCoarse, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /**
@@ -91,12 +90,12 @@ export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): bool
 
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
- * width-aware via stringWidth. The final rung — the irreducible state core — is hard-truncated with the
+ * width-aware via cellWidth. The final rung — the irreducible state core — is hard-truncated with the
  * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells.
  */
 const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = "\u2026"): string => {
   for (const rung of rungs) {
-    if (stringWidth(rung) <= budget) return rung
+    if (cellWidth(rung) <= budget) return rung
   }
   return truncate(rungs[rungs.length - 1]!, Math.max(0, Math.floor(budget)), ellipsis)
 }
@@ -359,7 +358,7 @@ export const terminalPill = (goal: GoalSnapshot, elapsed: number, ascii: boolean
     : `${glyph} goal ${word} · ${span}`
   if (budget !== undefined && Number.isFinite(budget)) {
     const cap = Math.max(1, Math.floor(budget))
-    if (stringWidth(text) > cap) return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone }
+    if (cellWidth(text) > cap) return { text: truncate(text, cap, ascii ? "..." : "\u2026"), tone }
   }
   return { text, tone }
 }
