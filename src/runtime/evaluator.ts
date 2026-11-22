@@ -18,8 +18,8 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 
 interface EvaluatorDeps {
   /**
-   * The verdict delivered by a worker-delegated `evaluator` subagent, if one arrived for this turn. Native
-   * delegation is the preferred (visible) evaluator path; when no report exists the generation paths below run.
+   * The verdict from the harness's standalone `evaluator` child for this turn: it builds the rubric, runs the
+   * child and parses its text through the authoritative contract guard. No worker delegation, no parent wake.
    */
   nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
@@ -96,23 +96,23 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Judge a turn from the worker's native delegated report only — no generation fallback (that auxiliary call
-   * hit the free-tier gate). An unreadable/foreign/failed report throws `EvaluatorVerdictError` so the controller
-   * pauses instead of re-arming the worker into a loop it cannot break; a turn with no delegated report at all
-   * still fails closed to `not_met`, giving the worker one more chance to delegate. In opt-in `consensus: 2` mode a native `met`
-   * is not accepted until a second vote from the independent model also rules `met`; any disagreement or dead
-   * second vote fails closed to `not_met`.
+   * Judge a turn from the harness's standalone evaluator child only — no generation fallback (that auxiliary call
+   * hit the free-tier gate). An unreadable/foreign/failed verdict throws `EvaluatorVerdictError` so the controller
+   * pauses instead of re-arming the worker into a loop it cannot break; a turn with no verdict at all still fails
+   * closed to `not_met`, giving the worker one more chance. In opt-in `consensus: 2` mode a child `met` is not
+   * accepted until a second vote from the independent model also rules `met`; any disagreement or dead second vote
+   * fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
     const signal = request.signal
-    // Native delegation is the only per-turn evaluator. The plugin's own generation child was an auxiliary
-    // generate call that hit the account-level free-tier gate (429), so it is no longer a verdict path.
-    // An unreadable/foreign/failed report throws so the controller pauses the goal (no usable verdict to act on);
-    // a quota error is rethrown so the controller pauses on the same recoverable basis. Neither returns a
-    // `not_met` that would dispatch another worker turn against a judge it cannot repair — that was the loop.
-    // No report at all (worker forgot to delegate) still fails closed so the next turn can supply one.
+    // The harness's standalone judge child is the only per-turn evaluator. An auxiliary generate call hit the
+    // account-level free-tier gate (429), so it is no longer a verdict path. An unreadable/foreign/failed verdict
+    // throws so the controller pauses the goal (no usable verdict to act on); a quota error is rethrown so the
+    // controller pauses on the same recoverable basis. Neither returns a `not_met` that would dispatch another
+    // worker turn against a judge it cannot repair — that was the loop. No verdict at all still fails closed so
+    // the next turn can be judged.
     if (!this.deps.nativeVerdict) {
-      return { verdict: "not_met", reason: "no native evaluator subagent available; delegate the verdict to the 'evaluator' subagent" }
+      return { verdict: "not_met", reason: "no usable verdict from the evaluator child; continuing" }
     }
     let result: EvaluationResult | undefined
     try {
@@ -122,7 +122,7 @@ export class Evaluator implements EvaluatorPort {
       throw new EvaluatorVerdictError(`no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}`)
     }
     if (!result) {
-      return { verdict: "not_met", reason: "no evaluator subagent report for this turn; delegate the verdict to the 'evaluator' subagent" }
+      return { verdict: "not_met", reason: "no verdict for this turn; continuing" }
     }
     if (this.config.consensus !== 2 || result.verdict !== "met") return result
     // Opt-in second vote only — the default verdict path never generates. A separate evaluator model is required;

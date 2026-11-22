@@ -251,24 +251,24 @@ describe("Evaluator.evaluate — native delegated subagent report", () => {
     expect(calls.model).toHaveLength(0)
   })
 
-  test("no native verdict port fails closed with a delegate directive and no generation", async () => {
+  test("no native verdict port fails closed without telling the worker to delegate", async () => {
     const { fake, calls } = deps()
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
-    expect(result.reason).toContain("no native evaluator subagent available")
-    expect(result.reason).toContain("delegate the verdict")
+    expect(result.reason).toContain("no usable verdict from the evaluator child")
+    expect(result.reason).not.toContain("delegate")
     expect(calls.session).toHaveLength(0)
     expect(calls.model).toHaveLength(0)
   })
 
-  test("a missing native report still fails closed so the worker can delegate next turn", async () => {
+  test("a missing verdict still fails closed so the turn is judged again", async () => {
     const { fake, calls } = deps({ nativeVerdict: async () => undefined })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
-    expect(result.reason).toContain("no evaluator subagent report for this turn")
-    expect(result.reason).toContain("delegate the verdict")
+    expect(result.reason).toContain("no verdict for this turn; continuing")
+    expect(result.reason).not.toContain("delegate")
     expect(calls.session).toHaveLength(0)
     expect(calls.model).toHaveLength(0)
   })

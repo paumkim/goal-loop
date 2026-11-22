@@ -7,17 +7,13 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 export const MARKER = "goal"
 
 /**
- * Instruct the worker to obtain its verdict by delegating to the `evaluator` subagent — the native task tool
- * renders the live chip in the terminal and the child's `<subagent>` report is consumed as the verdict. Kept as
- * one exported sentence so the kickoff directive, continuation and retry all carry the same contract.
+ * The worker never judges or delegates the verdict: the harness runs a standalone evaluator child after the turn
+ * and only a `not_met` verdict wakes the worker with more work. Kept as one exported sentence so the kickoff
+ * directive, continuation and retry all carry the same contract.
  */
 export const DELEGATE_VERDICT =
-  `State your final answer in your reply first, then delegate the verdict to the 'evaluator' ` +
-  `subagent (task tool, agent: 'evaluator', 3-5 word description) in the same turn — the evaluator judges your ` +
-  `reply and tool output, not the delegation itself. Use the task 'Judge the goal condition and return the verdict ` +
-  `JSON.' The harness supplies the condition and JSON contract — do not write your own verdict format in the task. ` +
-  `Delegate exactly once per turn; after the report arrives, do not delegate again — report your answer and wait for ` +
-  `the harness.`
+  `Do the work and report the evidence in your reply, then end your turn. A separate evaluator judges the ` +
+  `condition after your turn; do not delegate, judge, or narrate the verdict.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
@@ -291,7 +287,7 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     ...(learnings ? [``, escape(learnings)] : []),
     ``,
-    `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it. Delegate the verdict to the evaluator subagent when the work is done.`,
+    `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it. The harness judges the condition after your turn; do not delegate or narrate the verdict.`,
     policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-continuation>`,
   ].join("\n")
@@ -552,9 +548,10 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
 }
 
 /**
- * The whole request a *native* evaluator child gets. Two inputs only: the original goal and a summary of what the
- * parent did. No raw transcript dump — in a long-lived session that carried prior verdicts about other conditions
- * and a small model judged those instead of the armed one.
+ * The whole request the harness's standalone evaluator child gets. The harness builds the summary from the
+ * parent's current turn and passes it here; the worker never supplies it. Two inputs only: the original goal and
+ * that summary. No raw transcript dump — in a long-lived session that carried prior verdicts about other
+ * conditions and a small model judged those instead of the armed one.
  *
  * `/goal-loop` is structurally different: the original goal is the constant objective, the armed condition is one
  * numbered iteration (v1, v2, …) of it, and completed iterations ride as a compacted ledger (newest three, with an

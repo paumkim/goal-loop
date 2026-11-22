@@ -118,8 +118,9 @@ describe("SPEC naming declaration", () => {
       expect(text, `${file}: armScope`).not.toMatch(/\barmScope\b/)
     }
     expect(read("src/index.ts")).toContain("evaluatorChildren")
-    expect(read("src/index.ts")).toContain("pluginEvaluatorIDs")
+    expect(read("src/index.ts")).toContain("nativeVerdict")
     expect(read("src/index.ts")).toContain("spawnEvaluator")
+    expect(read("src/index.ts")).not.toContain("pluginEvaluatorIDs")
     expect(read("src/runtime/evaluator.ts")).toContain("evaluatorGenerate")
     expect(read("src/core/prompts.ts")).toContain("armPlanScope")
   })

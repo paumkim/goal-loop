@@ -3,10 +3,11 @@ import { parseVerdict } from "./verdict.ts"
 /**
  * The evaluator as a first-class agent type shipped by the plugin.
  *
- * A verdict is produced by a real OpenCode child session of this agent, created with `parentID` so it shows up
- * in the terminal like any other delegated subagent. This module is the single source of truth for the agent's
- * id, its task label and its system prompt; the long evidence matrix / output contract stays in the per-verdict
- * rubric (core/prompts.ts), byte-identical.
+ * A verdict is produced by a real OpenCode child session of this agent, created by the harness with no `parentID`
+ * so its completion never wakes the working parent. This module is the single source of truth for the agent's id,
+ * its task label and its system prompt; the long evidence matrix / output contract stays in the per-verdict rubric
+ * (core/prompts.ts), byte-identical. The `findNativeReport` / `parseSubagentReport` helpers remain for transcript
+ * tooling and tests; the live verdict path passes the child's text straight to `verdictFromNativeReport`.
  */
 
 export const EVALUATOR_AGENT_ID = "evaluator"

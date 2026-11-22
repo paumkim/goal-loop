@@ -1091,10 +1091,17 @@ describe("config regression: an empty env model", () => {
   })
 })
 
-describe("native evaluator delegation", () => {
-  test("the kickoff directive tells the worker to delegate the verdict via the task tool", () => {
-    expect(directive("all tests pass", COMMIT)).toContain(DELEGATE_VERDICT)
-    expect(continuation({ condition: "all tests pass", turn: 2, reason: "not yet" }, COMMIT)).toContain("Delegate the verdict to the evaluator subagent")
+describe("native evaluator verdict", () => {
+  test("the kickoff directive tells the worker to report evidence and never delegate the verdict", () => {
+    const kickoff = directive("all tests pass", COMMIT)
+    expect(kickoff).toContain(DELEGATE_VERDICT)
+    expect(kickoff).not.toContain("delegate the verdict to")
+    expect(kickoff).not.toContain("task tool")
+    expect(DELEGATE_VERDICT).toContain("do not delegate, judge, or narrate the verdict")
+    expect(DELEGATE_VERDICT).toContain("separate evaluator judges the condition after your turn")
+    const steer = continuation({ condition: "all tests pass", turn: 2, reason: "not yet" }, COMMIT)
+    expect(steer).toContain("The harness judges the condition after your turn")
+    expect(steer).not.toContain("Delegate the verdict")
   })
 
   test("only subagent reports from the evaluator agent count as verdicts", () => {

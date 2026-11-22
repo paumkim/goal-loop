@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2214 -->
+<!-- spec-check files=143 tests=2215 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10039,3 +10039,61 @@ polluted judge — repeating indefinitely.
   reports (no-report still fails closed), and the pause-with-resume path replacing the re-arm loop.
 - Appendix-A single-line steer ref re-pointed to `controller.ts:1167` after the controller insertions; each
   SPEC ref still lands on a non-blank line.
+
+## Workstream CXLI — fix the position-layer inversion: the harness judges, the worker does not (2026-11-22)
+
+Live goal sessions kept showing the parent narrating or judging its own verdict after the `evaluator` child
+finished. Since CXXXII the worker delegated the verdict with the `task` tool and the harness polled the parent
+transcript for the resulting `<subagent>` report. The host's `subagent-report.ts` always calls `deps.wake(parentID)`
+when any child finishes, so the child's completion woke the working parent regardless of the verdict; the parent
+then became the evaluator. CXXXVII–CXL reduced the damage (clean digest, turn scoping, foreign-verdict guard,
+pause on unusable reports) but left the position inversion in place.
+
+### Root cause
+
+A child with `parentID` is a *subagent* to the host. `deliverReport` admits its `<subagent>` completion into the
+parent transcript and wakes the parent unconditionally. No amount of prompt wording can make a wake conditional on
+the verdict: the wake happens before the harness parses one. The verdict must never arrive as a child completion of
+the working parent.
+
+### Decision
+
+Choice: make the judge a HARNESS-OWNED STANDALONE child session — `ctx.session.create({ location, agent:
+"evaluator", model, title })` with NO `parentID`, driven by `ctx.session.prompt` with its text read from
+`ctx.event.subscribe` (the CXXVII primary-turn pattern, so the free-tier gate still passes). With no `parentID`,
+the host's `subagent-report.ts` early-returns (`!initial?.parentID && jobState.mode === "none"`): no report is
+admitted to the parent and `deps.wake(parentID)` is never called by the child. `nativeVerdict` builds the full
+`nativeEvaluationRequest` from this turn's evidence, runs the child, and passes its text through
+`verdictFromNativeReport`; `Evaluator.evaluate` then decides: `met`/`impossible` stays terminal with no steer,
+only `not_met` dispatches the synthetic continuation (the sole wake, and only when more work is needed). Reverse it
+only if the host exposes a way to deliver a child report without waking its parent.
+
+### Change
+
+1. `src/index.ts · spawnEvaluator`: drop `parentID`, the host `SUBAGENT_PROMPT_PREFIX`, and the synthetic
+   `<subagent>` report delivery; return the child's raw text. `evaluatorChildren` stays for generate/context
+   shaping only. `pluginEvaluatorIDs`, `consumedReports`, `seenNativeTurns`, the report grace/poll loop and the
+   prompt-hook enrichment block for worker-delegated children are removed.
+2. `src/index.ts · nativeVerdict`: build the rubric with `nativeEvaluationRequest` from the current turn's
+   `renderParentSummary` (with the bounded settle retry, arm-plan scope, nonce and loop fields), spawn the child
+   on the session's current model, and parse its text through `verdictFromNativeReport`. Foreign/echo/unreadable
+   text throws; quota/child failure propagates so the controller still pauses on usage limits.
+3. `src/core/prompts.ts`: `DELEGATE_VERDICT` now says to report evidence and end the turn — do not delegate,
+   judge, or narrate the verdict; `continuation()` says the harness judges after the turn. The evaluator-agent
+   registration, tool-stripping generate hook and project-doc-stripping context hook are unchanged.
+4. `src/runtime/evaluator.ts`: `nativeVerdict` doc and the two no-verdict `not_met` reasons no longer tell the
+   worker to delegate; the typed `EvaluatorVerdictError` / consensus behavior is unchanged.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2215` in-commit.
+- Tests pin: no delegation instruction in kickoff/continuation, the harness rubric built from fresh tool evidence,
+  the standalone child's text parsed through the authoritative guard, foreign/unreadable child text pausing the
+  goal, no synthetic report / wake on judge completion, and the existing transcript/guard/consensus coverage.
+
+### Honest limits
+
+- The judge no longer appears nested in the parent's subagents tab; it is a standalone session instead. It still
+  persists and stays navigable (no `session.remove`).
+- `findNativeReport` / `parseSubagentReport` stay exported for transcript tooling and tests, but are no longer on
+  the live verdict path.
