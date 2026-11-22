@@ -12,9 +12,12 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
-import { parseGoalLoopDirective } from "./core/parse.ts"
-import { carriesGoalGrammar, directive as directivePrompt, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
+import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
+import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
+import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -30,6 +33,40 @@ import { withFileSink } from "./core/file-log.ts"
 import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
+
+/**
+ * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
+ * `maxTranscriptChars` (20k): a native child gets the condition explicitly and only needs the worker's latest
+ * tool evidence. A large digest in a long-lived session carried prior verdicts about other conditions and
+ * drowned out the real one (see renderParentSummary).
+ */
+const EVALUATION_SUMMARY_CHARS = 4_000
+
+/**
+ * The worker's reply can still be landing when the turn ends and the harness builds the judge prompt (a small model
+ * once delegated first and wrote its "hi" answer 25 ms later). When the first parent-context read has no usable
+ * evidence, wait this bounded window and re-read so the judge scores the turn's real output, not an empty summary.
+ * Abortable so a killed goal never parks the verdict.
+ */
+const EVALUATION_SETTLE_MS = 250
+const settle = (ms: number, signal: AbortSignal) => new Promise<void>((resolve) => {
+  if (signal.aborted) return resolve()
+  const onAbort = () => { clearTimeout(timer); resolve() }
+  const timer = setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve() }, ms)
+  signal.addEventListener("abort", onAbort, { once: true })
+})
+
+/** Keep the provider's classification text (429 / "free usage limit" / "rate limit") on an evaluator failure so the
+ * controller can pause a quota error instead of retrying it as a generic unreadable verdict. */
+function asEvaluatorError(value: unknown): Error {
+  if (value instanceof Error) return value
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>
+    const status = typeof record.status === "number" ? `status ${record.status} ` : ""
+    return new Error(`evaluator child failed (${status}${String(record.message ?? record.type ?? record.error ?? JSON.stringify(record))})`)
+  }
+  return new Error(`evaluator child failed (${String(value)})`)
+}
 
 const DESCRIPTION = "keep working until a condition is met"
 const LOOP_DESCRIPTION = "keep working toward an objective; bare /goal-loop checks for plugin updates; each achieved goal arms an improved one"
@@ -168,6 +205,33 @@ export default Plugin.define({
     const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
 
+    // Ship the evaluator as a first-class agent type, not just a rubric sent to `general`. `AgentEditor.update`
+    // creates the agent when absent (host agent.ts contract), so registering here is idempotent across reloads.
+    // `mode: "subagent"` keeps it out of the primary picker; deny-all makes tools impossible even before the
+    // generate hook strips them. The visible title and system prompt are what make a verdict look like a real
+    // delegated task in the terminal.
+    await ctx.agent.transform((editor) => {
+      editor.update(EVALUATOR_AGENT_ID, (agent) => {
+        agent.name = "Evaluator" as unknown as typeof agent.name
+        agent.description = "Judges whether the armed /goal condition holds from visible evidence; replies with one verdict object."
+        agent.mode = "subagent"
+        agent.hidden = false
+        agent.color = "#A78BFA"
+        agent.system = EVALUATOR_SYSTEM_PROMPT
+        agent.permissions = [{ action: "*", resource: "*", effect: "deny" }] as typeof agent.permissions
+      })
+      // Arm-time planner: one short child that turns a raw pasted /goal body into a concise, self-contained
+      // condition. Deny-all and hidden — it never shows in the primary picker and needs no tools.
+      editor.update(PLANNER_AGENT_ID, (agent) => {
+        agent.name = PLANNER_AGENT_TITLE as unknown as typeof agent.name
+        agent.description = "Distills a raw /goal request into one concise condition before the goal is armed."
+        agent.mode = "subagent"
+        agent.hidden = true
+        agent.system = PLANNER_SYSTEM_PROMPT
+        agent.permissions = [{ action: "*", resource: "*", effect: "deny" }] as typeof agent.permissions
+      })
+    })
+
     // Startup scaffold: provision an idempotent, ready-to-use workflow on bootstrap (git repos get
     // coordinator/workplace layout, goal runtime dirs, workflow docs/templates, and gitignore rules;
     // non-git dirs get runtime-only setup). Never overwrites user content, never breaks goal arming.
@@ -211,28 +275,214 @@ export default Plugin.define({
       },
     }
 
+    // Judge child created by the harness for every verdict. It has NO `parentID`, so the host's
+    // `subagent-report.ts` early-returns (`!initial?.parentID && jobState.mode === "none"`): no `<subagent>`
+    // report is admitted to the working parent and `deps.wake(parentID)` is never called by the child. The harness
+    // reads the verdict text directly and `Evaluator.evaluate` decides: `met` ends the goal, `not_met` is the ONLY
+    // path that dispatches a continuation steer (and therefore the only wake). Tracked so the generate/context
+    // hooks can shape the judge child's generation without touching worker sessions.
+    const evaluatorChildren = new Set<string>()
+
+    const spawnEvaluator = async (model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
+      const { id } = await ctx.session.create({
+        location: ctx.location,
+        title: EVALUATOR_AGENT_TITLE,
+        agent: EVALUATOR_AGENT_ID,
+        model: model as any,
+      } as any)
+      evaluatorChildren.add(id)
+      const abort = new AbortController()
+      let answer = ""
+      let failure: unknown
+      let finish!: (value: string) => void
+      const done = new Promise<string>((resolve) => { finish = resolve })
+      const onAbort = () => { abort.abort(); finish(answer) }
+      // An external abort is the evaluator's own timeout/interrupt, not a provider failure.
+      const fail = (error: unknown) => {
+        if (signal.aborted) return
+        if (failure === undefined) failure = error
+        abort.abort()
+        finish("")
+      }
+      try {
+        if (signal.aborted) onAbort()
+        else signal.addEventListener("abort", onAbort, { once: true })
+        void (async () => {
+          try {
+            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
+              const data = (evt as any).data ?? {}
+              if (data.sessionID !== id) continue
+              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
+              if (evt.type === "session.execution.succeeded") { abort.abort(); finish(answer); return }
+              if (evt.type === "session.execution.failed") {
+                fail(data.error ?? data.reason ?? data.message ?? "judge execution failed")
+                return
+              }
+            }
+          } catch {
+            // The subscription was aborted (verdict already delivered) or the event stream closed.
+          }
+          // A stream that ends without a terminal event must still release the evaluator child, not hang until timeout.
+          finish(answer)
+        })()
+        // The signal must reach the host prompt: a child turn that ignores an external abort used to keep
+        // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. No resume opt-out
+        // here: the host only wakes a session's execution when `resume !== false`, so that flag left this fresh
+        // child admitted to the inbox but never running (no text deltas, no terminal event, 120s timeout). The
+        // parent wake is suppressed structurally instead — the child has no `parentID` and is not a host subagent
+        // Job, so `subagent-report.ts` early-returns and never calls `deps.wake(parentID)`. The child MUST run as a
+        // `kind:"primary"` turn to pass the free-tier gate. Race so any abort converges immediately; the text
+        // still comes from `done` (the child's text deltas), never from a reported synthetic message.
+        await Promise.race([
+          ctx.session.prompt({
+            sessionID: id,
+            text: prompt,
+          } as any, { signal }).catch((error: unknown) => fail(error)),
+          done.then(() => undefined),
+        ])
+        const verdict = await done
+        // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
+        if (failure !== undefined) throw asEvaluatorError(failure)
+        return verdict
+      } finally {
+        signal.removeEventListener("abort", onAbort)
+        evaluatorChildren.delete(id)
+        // Judge children persist and stay navigable: no `session.remove` here.
+      }
+    }
+
+    // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt from the transcript digest.
+    const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
+      stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal }))
+
+    // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in a
+    // standalone judge child on the session's current model, then pass the child's text through the same contract
+    // guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable text throws, so
+    // `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale verdict.
+    const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
+      const condition = controller.activeCondition(sessionID)
+      if (!condition) return undefined
+      const model = await sessionModel(sessionID, signal)
+      if (!model) throw new Error("judge child model unavailable: session has no active model")
+      const digest = (ctx: readonly unknown[]) =>
+        renderParentSummary(ctx, { maxChars: EVALUATION_SUMMARY_CHARS, since: currentTurnStart(ctx) })
+      let summary = digest(await evaluatorContext(sessionID, signal))
+      if (!summary.trim()) {
+        // The worker's reply can still be landing at turn end. Give it a bounded window and re-read so the judge
+        // scores the turn's real output instead of an empty summary.
+        await settle(EVALUATION_SETTLE_MS, signal)
+        summary = digest(await evaluatorContext(sessionID, signal))
+      }
+      const parent = controller.live(sessionID)
+      const prompt = nativeEvaluationRequest({
+        condition,
+        summary,
+        ...(armedPlanScopes.has(sessionID) ? { armPlanScope: armedPlanScopes.get(sessionID)! } : {}),
+        nonce: Math.random().toString(36).slice(2, 10),
+        ...(parent?.loopEnabled
+          ? {
+              loop: {
+                objective: parent.loopObjective ?? condition,
+                iteration: parent.loopIteration ?? 1,
+                maxLoops: parent.loopMaxLoops ?? config.maxLoops,
+                history: parent.loopHistory ?? [],
+              },
+            }
+          : {}),
+      })
+      const text = await spawnEvaluator(model, prompt, signal)
+      return verdictFromNativeReport({ key: sessionID, body: text, state: "completed" }, controller.activeCondition(sessionID))
+    }
+
+    // Resolve per generation so a /model switch mid-goal is followed on the next verdict.
+    const sessionModel = async (sessionID: string, signal: AbortSignal): Promise<ModelRef | undefined> => {
+      const current = (await ctx.session.get({ sessionID }, { signal })).model
+      return current ? { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) } : undefined
+    }
+
+    // Arm-time planner: one short, toolless child reads only the raw (often pasted) /goal body and returns a
+    // concise condition. The worker and the evaluator both read the stored result, so they cannot drift. Failure,
+    // quota or timeout falls back to the raw text with a minimal directive — never the old heuristic essays.
+    const plannerChildren = new Set<string>()
+    // The arm-time planner's scope rides into the first evaluation prompt (no new persisted field): a fresh arm
+    // overwrites it, so the evaluator always sees the scope of the condition it is actually scoring.
+    const armedPlanScopes = new Map<string, "trivial" | "code">()
+    const PLAN_TIMEOUT_MS = 30_000
+    const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
+      // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
+      if (probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
+      // Show the goal bar during the planning window: the record is armed only after planning completes, so
+      // without this transient snapshot the first arm offered nothing but the background toast (screenshot 165841).
+      controller.showPlanning(sessionID, raw.trim())
+      const budget = AbortSignal.any([lifetime.signal, AbortSignal.timeout(PLAN_TIMEOUT_MS)])
+      const model = await sessionModel(sessionID, budget).catch(() => undefined)
+      if (!model) return undefined
+      emit.notice({ sessionID, kind: "set", level: "info", title: "goal-loop", message: "Distilling goal into a concise condition…" })
+      let id: string
+      try {
+        id = (await ctx.session.create({
+          location: ctx.location,
+          parentID: sessionID,
+          title: PLANNER_AGENT_TITLE,
+          agent: PLANNER_AGENT_ID,
+          model: model as any,
+        } as any)).id
+      } catch (error) {
+        log.warn("goal planner child could not be created", { error: String(error) })
+        return undefined
+      }
+      plannerChildren.add(id)
+      const abort = new AbortController()
+      let answer = ""
+      let finish!: () => void
+      const done = new Promise<void>((resolve) => { finish = resolve })
+      const onAbort = () => { abort.abort(); finish() }
+      if (budget.aborted) onAbort()
+      else budget.addEventListener("abort", onAbort, { once: true })
+      try {
+        void (async () => {
+          try {
+            for await (const evt of ctx.event.subscribe({ signal: abort.signal })) {
+              const data = (evt as any).data ?? {}
+              if (data.sessionID !== id) continue
+              if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
+              if (evt.type === "session.execution.succeeded") { finish(); return }
+              if (evt.type === "session.execution.failed") { abort.abort(); finish(); return }
+            }
+          } catch {
+            // Subscription closed (completion or abort); the text collected so far is the answer.
+          }
+          finish()
+        })()
+        await Promise.race([
+          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw) } as any, { signal: budget }).catch(() => undefined),
+          done.then(() => undefined),
+        ])
+        await done
+        return parsePlan(answer)
+      } catch (error) {
+        log.warn("goal planner failed", { error: String(error) })
+        return undefined
+      } finally {
+        budget.removeEventListener("abort", onAbort)
+        plannerChildren.delete(id)
+      }
+    }
+
     const evaluator = new Evaluator(
       {
-        sessionGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
-        modelGenerate: async (model: ModelRef, prompt, signal) => (await ctx.generate.text({ prompt, model }, { signal })).text,
-        // Use-and-forget: the evaluator's own <goal-evaluation> prompts are its self-talk, not evidence.
-        // The independent digest is paired with a freshly built rubric prompt, so no evaluation prompt
-        // from the transcript may ride into it — strip all of them at the source.
-        context: async (sessionID, signal) => stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal })),
-        // Inherit mode: read the parent session's current active model from the host. Resolution is per
-        // generation (see Evaluator.resolveModel), so a /model switch is followed on the next verdict. The
-        // host's ModelRef is { providerID, id, variant? } — the same shape as the plugin's ModelRef.
-        sessionModel: async (sessionID, signal) => {
-          const current = (await ctx.session.get({ sessionID }, { signal })).model
-          if (!current) return undefined
-          return { providerID: current.providerID, id: current.id, ...(current.variant ? { variant: current.variant } : {}) }
+        nativeVerdict,
+        // Session mode is still a real child turn: the child has no parent conversation, so embed the parent
+        // digest in the prompt (the rubric says "conversation above"). Every judge path now clears the gate.
+        sessionGenerate: async (sessionID, prompt, signal) => {
+          const model = await sessionModel(sessionID, signal)
+          if (!model) throw new Error("inherited evaluator model unavailable: session has no active model")
+          const transcript = renderTranscript(await evaluatorContext(sessionID, signal), { maxChars: config.evaluator.maxTranscriptChars })
+          return spawnEvaluator(model, `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`, signal)
         },
-        // Inherit mode judges on the session's own model, so the generation must be seen as that same session:
-        // stateless ctx.generate.text mints a fresh x-opencode-session per call (OpenCode generate.ts) and the
-        // gateway bills each one as a new free-tier session — "Free usage limit reached" while the parent still
-        // works. ctx.session.generate carries the session's affinity headers (single model step, no history
-        // mutation), so the evaluator inherits the session fingerprint and its free usage bucket.
-        sessionModelGenerate: async (sessionID, prompt, signal) => (await ctx.session.generate({ sessionID, prompt }, { signal })).text,
+        modelGenerate: (_sessionID, model, prompt, signal) => spawnEvaluator(model, prompt, signal),
+        context: evaluatorContext,
+        sessionModel,
       },
       config.evaluator,
       commit,
@@ -257,7 +507,7 @@ export default Plugin.define({
     // and the compactor asks the controller (and the background tracker) whether the session has work in flight.
     // The compactor is assigned before anything can call it, so the deferred closure is safe.
     let compactor!: AutoCompactor
-    const controller = new GoalController({
+    const controller: GoalController = new GoalController({
       config,
       directory: ctx.location.directory,
       commit,
@@ -374,11 +624,17 @@ export default Plugin.define({
               await handleBareLoop(sessionID)
               return
             }
+            const raw = prompt.text ?? ""
+            // Status / clear / invalid are commands, not goals — never send them to the planner.
+            const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
+            const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
+            if (planned) armedPlanScopes.set(sessionID, planned.scope)
             await controller.command({
               sessionID,
-              text: prompt.text ?? "",
+              text: planned?.condition ?? raw,
               delivery,
               loop,
+              planned: true,
               ...(prompt.files ? { files: prompt.files } : {}),
               ...(prompt.agents ? { agents: prompt.agents } : {}),
               ...(prompt.skills ? { skills: prompt.skills } : {}),
@@ -396,6 +652,10 @@ export default Plugin.define({
     // prompt is admitted, and the mutated text (directive stripped, count applied to this run only) is what the
     // model sees. Unknown-count tokens (not 1..1000) are not guessed: a warning is shown and the default is used.
     await ctx.session.hook("prompt", async (event) => {
+      // The planner child's own prompt is already complete (raw body + output contract). Never re-arm it.
+      if (plannerChildren.has(event.sessionID)) return
+      // The judge is now a harness-owned standalone child: its full rubric is built in `nativeVerdict`, not here.
+      // No worker delegation prompt to enrich, so every other prompt is left untouched.
       const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
@@ -426,10 +686,13 @@ export default Plugin.define({
         // The admitted user message is the kickoff (no synthetic prompt is sent): the model sees exactly what the
         // command path would have delivered, with the directive token and the count removed from the objective.
         const originalPrompt = event.prompt.text
-        event.prompt.text = directivePrompt(objective, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective, history: [] })
+        const planned = await planGoal(event.sessionID, objective)
+        if (planned) armedPlanScopes.set(event.sessionID, planned.scope)
+        const condition = planned?.condition ?? objective
+        event.prompt.text = directivePrompt(condition, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective: condition, history: [] }, true)
         const armed = await controller.armFromPrompt({
           sessionID: event.sessionID,
-          condition: objective,
+          condition,
           maxLoops,
           ...(goalLoop.invalidCount !== undefined ? { invalidCount: goalLoop.invalidCount } : {}),
         })
@@ -440,16 +703,20 @@ export default Plugin.define({
       }
       controller.onUserPrompt(event.sessionID)
     })
-    // Evaluator-only shaping of transient `session.generate` requests. `session.generate` is a single model step
-    // (no tool-execution loop): its `.text` is assembled from text events only, so a tool call yields `""`. The
-    // session's full tool set is sent on that step, and a small judge routinely answers the rubric with a tool
-    // call instead of text — all three repair attempts then come back empty and the goal stalls on
-    // `unreadable verdict after 3 attempts: ""`. STRICT_REPAIR's "do not call tools" is only prose; the tools
-    // must actually be removed for the request. Deleting in place (the documented SDK mutation pattern) is safe:
-    // the host keys the prompt cache on session affinity, not on the tool list, and the surrounding context hook
+    // Evaluator-only shaping of judge-child generations. The child already runs on the plugin's deny-all
+    // `evaluator` agent, but belt-and-braces: a small judge that answers the rubric with a tool call yields no
+    // text, so all three repair attempts come back empty and the goal stalls on `unreadable verdict after 3
+    // attempts: ""`. STRICT_REPAIR's "do not call tools" is only prose; the tools must actually be removed for
+    // the request. Deleting in place (the documented SDK mutation pattern) is safe: the surrounding context hook
     // already edits system/messages for these requests. Non-evaluator generations keep their tools untouched.
     await ctx.session.hook("generate", (event) => {
-      if (!evaluator.isEvaluating(event.sessionID)) return
+      // Only judge children are toolless. A user prompt admitted while an evaluation is in flight must keep its
+      // own tools — the parent is no longer the generation surface, so its inflight flag is irrelevant here.
+      if (!evaluatorChildren.has(event.sessionID) && !plannerChildren.has(event.sessionID)) return
+      if (plannerChildren.has(event.sessionID)) {
+        for (const name of Object.keys(event.tools)) delete event.tools[name]
+        return
+      }
       event.options.maxTokens = config.evaluator.maxOutputTokens
       for (const name of Object.keys(event.tools)) delete event.tools[name]
     })
@@ -461,6 +728,20 @@ export default Plugin.define({
     // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
     // request still carrying goal text, so it never becomes a session-long stale system line.
     await ctx.session.hook("context", (event) => {
+      // A native judge child inherits the project's AGENTS.md/SPEC.md rules through the host system prefix. On a
+      // small free-tier model those thousands of cached tokens drown the ~100-token condition block, so the judge
+      // replays a verdict about a condition it saw in the project docs. Keep only the evaluator's own identity
+      // part — the per-turn <goal-evaluation> prompt already carries the complete role and output contract.
+      const agentID = typeof event.agent === "string" ? event.agent : ""
+      if (agentID === EVALUATOR_AGENT_ID && Array.isArray(event.system)) {
+        const sys = event.system
+        for (let i = sys.length - 1; i >= 0; i--) {
+          const text = (sys[i] as { text?: unknown } | undefined)?.text
+          if (typeof text !== "string" || !text.includes("You are the Evaluator, a subagent shipped by the goal-loop plugin")) {
+            sys.splice(i, 1)
+          }
+        }
+      }
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
         const condition = controller.activeCondition(event.sessionID)
@@ -475,11 +756,11 @@ export default Plugin.define({
       // Splice in place — the host holds the caller's array reference, so a rebound property could go unseen.
       if (Array.isArray(event.messages)) {
         const original = event.messages
-        let kept = live ? stripGoalNotes(original) : stripGoalContext(original)
+        let kept = live ? compactGoalInstructions(stripGoalNotes(original)) : stripGoalContext(original)
         // The evaluator's own voice is not evidence and must not accumulate in model-bound context.
         // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
         // only the most recent one — the live rubric the model must answer — and drop older echoes.
-        kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) })
+        kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) || evaluatorChildren.has(event.sessionID) })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be

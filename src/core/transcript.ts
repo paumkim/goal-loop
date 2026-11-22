@@ -12,6 +12,25 @@ interface DigestOptions {
   readonly maxInputChars?: number
 }
 
+/**
+ * Index of the first message in the worker's current turn — immediately after the newest goal steer or kickoff.
+ *
+ * A native judge gets a digest of what the parent did *this turn*. Including older messages reintroduces prior
+ * turn replies and pre-goal chatter; a small free-tier judge then treats those as the current answer and exports a
+ * stale condition from them. The controller writes a synthetic `metadata.source: "goal"` steer after every verdict,
+ * and the initial `<goal>` kickoff is a user message; whichever is newest starts the live turn.
+ */
+export function currentTurnStart(messages: readonly unknown[]): number {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as Unknown | undefined
+    if (!m || typeof m !== "object") continue
+    const md = m.metadata as Unknown | undefined
+    if (m.type === "synthetic" && md?.source === "goal") return i + 1
+    if (m.type === "user" && typeof m.text === "string" && /<(goal|goal-continuation|goal-retry|goal-checkin)\b/.test(m.text)) return i + 1
+  }
+  return 0
+}
+
 const str = (value: unknown) => (typeof value === "string" ? value : "")
 
 const isHigh = (code: number) => code >= 0xd800 && code <= 0xdbff
@@ -62,12 +81,40 @@ function toolText(content: unknown): string {
     .join("\n")
 }
 
-function compactJson(value: unknown) {
-  try {
-    return JSON.stringify(value) ?? ""
-  } catch {
-    return ""
+/**
+ * Human-readable one-line summary of a tool call's arguments. The old digest dumped `JSON.stringify(input)`,
+ * which filled the judge's prompt with escaped command strings and full file bodies — exactly the noise the
+ * evidence rubric asks it to look past. Keep the identifying field per tool, cap it, and never spill raw JSON.
+ */
+function toolArgs(name: string, input: unknown, limit: number): string {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return ""
+  const args = input as Unknown
+  // One shared budget across all fields: two capped values must not double the old single-JSON cap.
+  let remaining = Math.max(0, limit)
+  const take = (text: string) => {
+    const value = head(text, remaining)
+    remaining = Math.max(0, remaining - value.length)
+    return value
   }
+  // Bash-family tools carry the whole command; that is the evidence, so keep it verbatim (capped).
+  if (/^(bash|shell|terminal|execute)$/i.test(name)) {
+    const command = str(args.command ?? args.cmd ?? args.script)
+    return command ? `command: ${take(command.replace(/\s+/g, " ").trim())}` : ""
+  }
+  // Everything else is summarised by its most identifying scalar fields, in a stable order.
+  const preferred = ["path", "file", "filePath", "pattern", "query", "url", "command", "name", "id", "message"]
+  const parts: string[] = []
+  for (const key of preferred) {
+    const value = args[key]
+    if (typeof value === "string" && value.trim()) parts.push(`${key}: ${take(value.replace(/\s+/g, " ").trim())}`)
+    if (parts.length >= 2) break
+  }
+  return parts.join("  ·  ")
+}
+
+/** Indent a block under a tool header so output reads as evidence rather than a flat wall of text. */
+function indent(block: string, prefix = "    ") {
+  return block.split("\n").map((line) => (line ? `${prefix}${line}` : line)).join("\n")
 }
 
 function renderAssistant(message: Unknown, options: Required<DigestOptions>): string {
@@ -81,14 +128,18 @@ function renderAssistant(message: Unknown, options: Required<DigestOptions>): st
     }
     if (part.type !== "tool") continue
     const state = (part.state ?? {}) as Unknown
-    const input = head(compactJson(state.input), options.maxInputChars)
+    const name = str(part.name)
+    const args = toolArgs(name, state.input, options.maxInputChars)
+    const suffix = args ? ` ${args}` : ""
     if (state.status === "completed") {
-      blocks.push(`[tool ${str(part.name)}] ${input}\n${headTail(toolText(state.content), options.maxToolChars)}`)
+      const output = headTail(toolText(state.content), options.maxToolChars)
+      blocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
     } else if (state.status === "error") {
       const error = (state.error ?? {}) as Unknown
-      blocks.push(`[tool ${str(part.name)} FAILED] ${input}\n${headTail(str(error.message) || toolText(state.content), options.maxToolChars)}`)
+      const detail = headTail(str(error.message) || toolText(state.content), options.maxToolChars)
+      blocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
     } else {
-      blocks.push(`[tool ${str(part.name)} ${str(state.status) || "pending"}] ${input}`)
+      blocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
     }
   }
   const error = message.error as Unknown | undefined
@@ -150,5 +201,99 @@ export function renderTranscript(messages: readonly unknown[], options: DigestOp
   }
   picked.reverse()
   if (omitted > 0) picked.unshift(`[${omitted} earlier messages omitted]`)
+  return picked.join("\n\n")
+}
+
+/**
+ * True for the `task`/`subagent` tool call that delegates the verdict to the `evaluator` agent. That call is the
+ * judge's *own* spawn — it is not evidence the parent produced for the goal. Leaving it in the digest makes the
+ * judge read its own armed prompt (the delegation task plus the "working in background" output) as if it were the
+ * parent's work, which is exactly the "evaluator judging its own prompt" failure reported in ses_e003809c3ffe.
+ */
+function isEvaluatorDelegation(name: string, input: unknown): boolean {
+  if (!/^(task|subagent|delegate)$/i.test(name)) return false
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false
+  const agent = (input as Unknown).agent
+  return typeof agent === "string" && agent.toLowerCase() === "evaluator"
+}
+
+/**
+ * A tight "what the parent actually did" digest for a *native* evaluator child.
+ *
+ * {@link renderTranscript} packs the whole raw context for the generation judge, which has no other source of
+ * truth. A native child is different: the enrichment hook already gives it the original goal in its own prompt.
+ * Everything else in a long-lived session is noise — earlier goal directives, prior `<subagent>`
+ * verdicts about *other* conditions, goal continuations quoting stale evaluator reasons, and the worker's own
+ * narration of all of it. A small model will happily mistake one of those stale conditions for the armed one (that
+ * is exactly what happened in ses_e0098ece6ffeTolK2m5fCkkGiE: four children judged four different old conditions).
+ *
+ * Keep tool calls and their results, newest first, under a small budget. Two special cases matter for a judge of a
+ * *communication* goal (e.g. "reply hi"):
+ *  - the evaluator's own delegation `task` call is dropped — it is the judge's armed prompt, not parent evidence;
+ *  - a message that is only text (no tool work) is the parent's actual reply, so keep it. Narration interleaved
+ *    with tool work is still dropped — in that case the tool output is the evidence.
+ * Returns "" when the worker produced no usable evidence.
+ */
+export function renderParentSummary(
+  messages: readonly unknown[],
+  options: DigestOptions & { readonly since?: number },
+): string {
+  const resolved: Required<DigestOptions> = {
+    maxChars: options.maxChars,
+    maxToolChars: options.maxToolChars ?? Math.max(800, Math.floor(options.maxChars / 6)),
+    maxInputChars: options.maxInputChars ?? 200,
+  }
+  const since = options.since ?? 0
+  const picked: string[] = []
+  let used = 0
+  for (let i = messages.length - 1; i >= since; i--) {
+    const message = messages[i]
+    if (!message || typeof message !== "object") continue
+    const m = message as Unknown
+    const content = Array.isArray(m.content) ? (m.content as Unknown[]) : []
+    const toolBlocks: string[] = []
+    const textBlocks: string[] = []
+    for (const part of content) {
+      if (!part || typeof part !== "object") continue
+      if (part.type === "text") {
+        const text = str(part.text).trim()
+        if (text) textBlocks.push(headTail(text, Math.min(resolved.maxToolChars, 800)))
+        continue
+      }
+      if (part.type !== "tool") continue
+      const state = (part.state ?? {}) as Unknown
+      const name = str(part.name)
+      // The judge's own spawn is not the parent's work. Drop it so the evaluator never judges its armed prompt.
+      if (isEvaluatorDelegation(name, state.input)) continue
+      const args = toolArgs(name, state.input, resolved.maxInputChars)
+      const suffix = args ? ` ${args}` : ""
+      if (state.status === "completed") {
+        const output = headTail(toolText(state.content), resolved.maxToolChars)
+        toolBlocks.push(`[tool ${name}]${suffix}${output ? `\n  output:\n${indent(output)}` : ""}`)
+      } else if (state.status === "error") {
+        const error = (state.error ?? {}) as Unknown
+        const detail = headTail(str(error.message) || toolText(state.content), resolved.maxToolChars)
+        toolBlocks.push(`[tool ${name} FAILED]${suffix}${detail ? `\n  error:\n${indent(detail)}` : ""}`)
+      } else {
+        toolBlocks.push(`[tool ${name} ${str(state.status) || "pending"}]${suffix}`)
+      }
+    }
+    // A pure reply (text only, no tool work left after filtering self-spawns) is the work product for a
+    // communication goal; narration alongside real tool work stays dropped because the tool output is the proof.
+    const blocks = toolBlocks.length ? toolBlocks : textBlocks
+    if (!blocks.length) continue
+    const block = blocks.join("\n\n")
+    if (used + block.length + 2 > resolved.maxChars) {
+      if (picked.length === 0) {
+        picked.push(headTail(block, resolved.maxChars))
+        used = resolved.maxChars
+        continue
+      }
+      break
+    }
+    picked.push(block)
+    used += block.length + 2
+  }
+  picked.reverse()
   return picked.join("\n\n")
 }

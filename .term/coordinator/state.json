@@ -4855,6 +4855,143 @@
       ],
       "mergedAt": "2026-11-21T12:06:20Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-1": {
+      "agent": "cleanup-agent",
+      "paths": "src,test,docs,scripts,bin,package.json,SPEC.md,README.md,MAINTAINER.md,RELEASE-CHECKLIST.md",
+      "branch": "wt/eod-cleanup-1",
+      "worktree": "worktrees/wt-eod-cleanup-1",
+      "status": "done",
+      "createdAt": "2026-11-21T13:45:06Z",
+      "submittedAt": "2026-11-21T13:50:08Z",
+      "mergedAt": "2026-11-21T13:52:21Z",
+      "mergedInto": "dev"
+    },
+    "review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing": {
+      "agent": "goal-loop",
+      "paths": "src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
+      "worktree": "worktrees/wt-review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
+      "status": "done",
+      "createdAt": "2026-11-21T15:23:34Z",
+      "submittedAt": "2026-11-21T15:34:49Z",
+      "mergedAt": "2026-11-21T15:37:01Z",
+      "mergedInto": "dev"
+    },
+    "review-recent-changes-cxxx-judge-failure-paths": {
+      "agent": "goal-loop",
+      "paths": "src/core/evaluator-agent.ts,src/core/prompts.ts,src/index.ts,src/runtime/controller.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/package-integrity.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/review-recent-changes-cxxx-judge-failure-paths",
+      "worktree": "worktrees/wt-review-recent-changes-cxxx-judge-failure-paths",
+      "status": "done",
+      "createdAt": "2026-11-21T16:46:24Z",
+      "submittedAt": "2026-11-21T16:53:16Z",
+      "mergedAt": "2026-11-21T16:55:10Z",
+      "mergedInto": "dev"
+    },
+    "cxxxii-native-verdict-review-fixes": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/core/prompts.ts,src/core/transcript.ts,src/index.ts,src/runtime/evaluator.ts,test/core.test.ts,test/evaluator.test.ts,test/plugin.test.ts",
+      "branch": "wt/cxxxii-native-verdict-review-fixes",
+      "worktree": "worktrees/wt-cxxxii-native-verdict-review-fixes",
+      "status": "done",
+      "createdAt": "2026-11-21T17:45:34Z",
+      "submittedAt": "2026-11-21T17:47:18Z",
+      "mergedAt": "2026-11-21T17:49:24Z",
+      "mergedInto": "dev"
+    },
+    "cxxxii-audit-failure-path-fixes": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/runtime/evaluator.ts,src/index.ts,test/core.test.ts,test/evaluator.test.ts",
+      "branch": "wt/cxxxii-audit-failure-path-fixes",
+      "worktree": "worktrees/wt-cxxxii-audit-failure-path-fixes",
+      "status": "done",
+      "createdAt": "2026-11-21T18:08:20Z",
+      "submittedAt": "2026-11-21T18:09:46Z",
+      "mergedAt": "2026-11-21T18:11:52Z",
+      "mergedInto": "dev"
+    },
+    "cxxxiii-native-only-verdict": {
+      "agent": "primary",
+      "paths": "SPEC.md,docs/changelog.html,docs/config.html,src/core/config.ts,src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts",
+      "branch": "wt/cxxxiii-native-only-verdict",
+      "worktree": "worktrees/wt-cxxxiii-native-only-verdict",
+      "status": "done",
+      "createdAt": "2026-11-21T18:32:58Z",
+      "submittedAt": "2026-11-21T18:34:22Z",
+      "mergedAt": "2026-11-21T18:36:26Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-summary-digest-fix": {
+      "agent": "primary",
+      "paths": "src/core/transcript.ts,src/index.ts,src/core/evaluator-agent.ts,src/core/prompts.ts,test/plugin.test.ts,SPEC.md,docs/config.html",
+      "branch": "wt/evaluator-summary-digest-fix",
+      "worktree": "worktrees/wt-evaluator-summary-digest-fix",
+      "status": "done",
+      "createdAt": "2026-11-21T18:52:00Z",
+      "submittedAt": "2026-11-21T19:11:18Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-21T19:11:18Z",
+      "forcedScopeFiles": [
+        "test/core.test.ts"
+      ],
+      "mergedAt": "2026-11-21T19:13:31Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-scores-parent-turn-not-own-delegation": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/evaluator-scores-parent-turn-not-own-delegation",
+      "worktree": "worktrees/wt-evaluator-scores-parent-turn-not-own-delegation",
+      "status": "done",
+      "createdAt": "2026-11-21T20:41:12Z",
+      "submittedAt": "2026-11-21T20:43:02Z",
+      "mergedAt": "2026-11-21T20:45:07Z",
+      "mergedInto": "dev"
+    },
+    "judge-context-isolation-and-single-turn-digest": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/judge-context-isolation-and-single-turn-digest",
+      "worktree": "worktrees/wt-judge-context-isolation-and-single-turn-digest",
+      "status": "done",
+      "createdAt": "2026-11-21T21:59:02Z",
+      "submittedAt": "2026-11-21T22:00:35Z",
+      "mergedAt": "2026-11-21T22:02:40Z",
+      "mergedInto": "dev"
+    },
+    "arm-plan-checking-and-foreign-verdict-guard": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/arm-plan-checking-and-foreign-verdict-guard",
+      "worktree": "worktrees/wt-arm-plan-checking-and-foreign-verdict-guard",
+      "status": "done",
+      "createdAt": "2026-11-21T22:36:43Z",
+      "submittedAt": "2026-11-21T22:38:10Z",
+      "mergedAt": "2026-11-21T22:40:13Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-naming-consistency": {
+      "agent": "pauk",
+      "paths": "src,test,SPEC.md,docs",
+      "branch": "wt/evaluator-naming-consistency",
+      "worktree": "worktrees/wt-evaluator-naming-consistency",
+      "status": "done",
+      "createdAt": "2026-11-21T22:52:43Z",
+      "submittedAt": "2026-11-21T22:54:08Z",
+      "mergedAt": "2026-11-21T22:56:12Z",
+      "mergedInto": "dev"
+    },
+    "fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md",
+      "branch": "wt/fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
+      "worktree": "worktrees/wt-fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
+      "status": "done",
+      "createdAt": "2026-11-21T23:09:32Z",
+      "submittedAt": "2026-11-21T23:30:42Z",
+      "mergedAt": "2026-11-21T23:33:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,

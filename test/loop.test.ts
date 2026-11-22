@@ -1327,7 +1327,8 @@ describe("loop prompts", () => {
     // Audit-and-stop: after a compaction the model must re-read the tree, audit the armed condition against HEAD, and stop when it holds.
     expect(text).toContain("git log --oneline -5")
     expect(text).toContain("audit the armed condition against CURRENT HEAD")
-    expect(text).toContain("Already satisfied at HEAD <sha>")
+    expect(text).toContain("if the required work is already present at HEAD")
+    expect(text).toContain("do not state a verdict about the goal")
     expect(text).toContain("If something is missing, proceed and show evidence.")
     expect(text.indexOf("audit the armed condition")).toBeLessThan(text.indexOf("The compaction cut the thread"))
   })
@@ -1361,7 +1362,8 @@ describe("loop prompts", () => {
 
   test("loopContinuation requires the already-satisfied audit before working", () => {
     const text = Prompt.loopContinuation({ iteration: 3, maxLoops: 5, condition: "next thing", previousSummary: "prev summary", reason: "r" }, { required: false, branch: "dev", reason: "t" })
-    expect(text).toContain("Already satisfied at HEAD")
+    expect(text).toContain("if the required work is already present at HEAD")
+    expect(text).toContain("do not state a verdict about the goal")
   })
 
   test("the evaluator rubric states the already-satisfied-at-HEAD verdict wording", () => {

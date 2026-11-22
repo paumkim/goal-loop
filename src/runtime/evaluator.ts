@@ -1,7 +1,6 @@
 import type { GoalConfig } from "../core/config.ts"
 import {
   evaluateIndependently,
-  evaluateInSession,
   nextGoalIndependently,
   nextGoalInSession,
   REPAIR,
@@ -12,25 +11,21 @@ import {
 import { renderTranscript } from "../core/transcript.ts"
 import type { CommitPolicy, ModelRef, UsageSnapshot } from "../core/types.ts"
 import { parseVerdict } from "../core/verdict.ts"
+import { isUsageLimitError, errorMessage } from "../core/errors.ts"
 import type { EvaluationRequest, EvaluationResult, EvaluatorPort, Logger, LoopSummaryRequest, NextGoalRequest } from "./ports.ts"
 import { truncate } from "../core/format.ts"
 import { stripReasoningControl } from "../core/sanitize.ts"
 
 interface EvaluatorDeps {
+  /**
+   * The verdict from the harness's standalone `evaluator` child for this turn: it builds the rubric, runs the
+   * child and parses its text through the authoritative contract guard. No worker delegation, no parent wake.
+   */
+  nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
-  /** Sessionless generation on a specific model. */
-  modelGenerate(model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
-  /**
-   * Session-bound single-step generation on the parent session's own model. The host implements this with
-   * `ctx.session.generate`, which puts the session's `x-opencode-session` affinity on the request. Stateless
-   * `ctx.generate.text` instead mints a *fresh* session id per call (`SessionID.create()` in OpenCode's
-   * `generate.ts`), so the gateway bills each judge call as a brand-new free-tier session and rejects it with
-   * "Free usage limit reached" even while the working session still has quota. Inherit mode (judge == session
-   * model) rides this port so the evaluator is seen as the same session. Optional so legacy callers/tests
-   * without it keep the stateless path (they still get the inherited model via `modelGenerate`).
-   */
-  sessionModelGenerate?(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
+  /** Generation on a specific model. The host runs one evaluator generation in a fresh child of `sessionID`. */
+  modelGenerate(sessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
   /**
@@ -48,10 +43,9 @@ interface EvaluationFacts {
   readonly spend?: UsageSnapshot
 }
 
-/** A resolved judge model plus whether it is the parent session's own model (and must ride its fingerprint). */
+/** A resolved evaluator model. Both pinned and inherited models generate the same way in the host (child session). */
 interface ModelChoice {
   readonly model: ModelRef
-  readonly bindToSession: boolean
 }
 
 export class EvaluationError extends Error {
@@ -68,12 +62,22 @@ export class EvaluationTimeoutError extends EvaluationError {
 }
 
 /**
- * Judges a goal condition after each turn.
+ * The worker's native `evaluator` report could not be read as this turn's verdict (failed read, foreign
+ * contract, or unreadable body). Deliberately distinct from a real `not_met`: re-activating the worker cannot repair
+ * a bad report, and fail-closing into the normal continuation path spun the goal in a wake→delegate→garbage loop.
+ * The controller pauses on this error so the run stops with a diagnostic and a message can resume it.
+ */
+export class EvaluatorVerdictError extends EvaluationError {
+  override readonly name = "EvaluatorVerdictError"
+}
+
+/**
+ * Evaluates a goal condition after each turn.
  *
- * `session` mode appends one question to the session's own transcript through `session.generate`: the provider
- * reuses the cached prefix, so evaluation costs roughly the question plus a short answer, with full-fidelity
- * evidence. `independent` mode sends a newest-first transcript digest to a separate (typically small, fast) model,
- * so completion is judged by a model other than the one doing the work. Independent failures fall back to session
+ * Both modes produce the verdict in a real child turn of the plugin's `evaluator` agent (native delegation shape).
+ * `session` mode embeds a newest-first digest of the live parent transcript in the child prompt, so the evaluator sees
+ * full-fidelity evidence. `independent` mode builds the digest here and sends it to a pinned/inherited model, so
+ * completion can be judged by a model other than the one doing the work. Independent failures fall back to session
  * mode once.
  */
 export class Evaluator implements EvaluatorPort {
@@ -86,103 +90,98 @@ export class Evaluator implements EvaluatorPort {
     private readonly log: Logger,
   ) {}
 
-  /** True while this plugin has a `session.generate` evaluation in flight for the session. */
+  /** True while this plugin has a session-mode evaluation in flight for the session (inflight contention tracking). */
   isEvaluating(sessionID: string) {
     return (this.inflight.get(sessionID) ?? 0) > 0
   }
 
   /**
-   * Judge a turn. In `consensus: 2` mode a `met` from the primary judge is not accepted until the *other* judge
-   * (session evaluator <-> independent model) also rules `met`. Any disagreement — or a dead second judge — fails
-   * closed to `not_met` with the disagreement named in the reason string. Opt-in per repo/loop; never a default.
+   * Judge a turn from the harness's standalone evaluator child only — no generation fallback (that auxiliary call
+   * hit the free-tier gate). An unreadable/foreign/failed verdict throws `EvaluatorVerdictError` so the controller
+   * pauses instead of re-arming the worker into a loop it cannot break; a turn with no verdict at all still fails
+   * closed to `not_met`, giving the worker one more chance. In opt-in `consensus: 2` mode a child `met` is not
+   * accepted until a second vote from the independent model also rules `met`; any disagreement or dead second vote
+   * fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
-    // Each generation runs under its own per-attempt budget (see `underBudget`): one shared
-    // `AbortSignal.timeout` across the escalating attempts starved the later ones on a slow link,
-    // and a bare timeout with no app-level race hung forever when the SDK ignored the signal.
     const signal = request.signal
-    const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
-    const primary = await this.primary(request, facts, signal)
-    if (this.config.consensus !== 2 || primary.result.verdict !== "met") return primary.result
-    const secondPath = primary.via === "session" ? "independent" : "session"
+    // The harness's standalone judge child is the only per-turn evaluator. An auxiliary generate call hit the
+    // account-level free-tier gate (429), so it is no longer a verdict path. An unreadable/foreign/failed verdict
+    // throws so the controller pauses the goal (no usable verdict to act on); a quota error is rethrown so the
+    // controller pauses on the same recoverable basis. Neither returns a `not_met` that would dispatch another
+    // worker turn against a judge it cannot repair — that was the loop. No verdict at all still fails closed so
+    // the next turn can be judged.
+    if (!this.deps.nativeVerdict) {
+      return { verdict: "not_met", reason: "no usable verdict from the evaluator child; continuing" }
+    }
+    let result: EvaluationResult | undefined
     try {
-      const second = secondPath === "session"
-        ? await this.sessionVerdict(request, facts, signal)
-        : await (async () => {
-          const choice = await this.resolveModel(request.sessionID, signal)
-          if (!choice) throw new EvaluationError("independent model not available for consensus; pin evaluator.model or use the inherit sentinel")
-          return this.independentVerdict(request, facts, signal, choice)
-        })()
-      if (second.verdict === "met") return primary.result
+      result = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
+    } catch (error) {
+      if (signal.aborted || isUsageLimitError(error)) throw error
+      throw new EvaluatorVerdictError(`no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}`)
+    }
+    if (!result) {
+      return { verdict: "not_met", reason: "no verdict for this turn; continuing" }
+    }
+    if (this.config.consensus !== 2 || result.verdict !== "met") return result
+    // Opt-in second vote only — the default verdict path never generates. A separate evaluator model is required;
+    // with the inherit sentinel both votes share the parent model (see docs/config.html).
+    try {
+      const choice = await this.resolveModel(request.sessionID, signal)
+      if (!choice) throw new EvaluationError("independent model not available for consensus; pin evaluator.model or use the inherit sentinel")
+      const facts = { turn: request.turn, elapsedMs: request.elapsedMs, ...(request.spend ? { spend: request.spend } : {}) }
+      const second = await this.independentVerdict(request, facts, signal, choice)
+      if (second.verdict === "met") return result
       return {
         verdict: "not_met",
-        reason: `consensus disagreement: ${primary.via} evaluator ruled met; ${secondPath} evaluator ruled ${second.verdict}${second.reason ? ` (${second.reason})` : ""}; fail closed — met rejected`,
+        reason: `consensus disagreement: native evaluator ruled met; independent evaluator ruled ${second.verdict}${second.reason ? ` (${second.reason})` : ""}; fail closed — met rejected`,
       }
     } catch (error) {
-      if (signal.aborted) throw error
-      return { verdict: "not_met", reason: `consensus: ${secondPath} evaluator failed (${truncate(String(error instanceof Error ? error.message : error), 120)}); fail closed — met rejected` }
+      if (signal.aborted || isUsageLimitError(error)) throw error
+      return { verdict: "not_met", reason: `consensus: independent evaluator failed (${truncate(errorMessage(error), 120)}); fail closed — met rejected` }
     }
   }
 
   /**
-   * Model for a judge generation, plus whether it must ride the parent session's fingerprint: the pinned
-   * `model` when configured (stateless), otherwise — when the `inherit` sentinel is set — the parent session's
-   * current model, which is the session's own model and therefore session-affine. Called per generation so a
-   * mid-goal `/model` switch is followed on the very next verdict. A missing or failing host port degrades to
-   * `undefined`, which routes the caller to the session evaluator; the inherit path itself never hard-fails.
+   * Model for a judge generation: the pinned `model` when configured, otherwise — when the `inherit` sentinel is
+   * set — the parent session's current model. Called per generation so a mid-goal `/model` switch is followed on the
+   * very next generation. A missing or failing host port degrades to `undefined`, which fails a consensus second
+   * vote closed and routes loop steps to the session summarizer; the inherit path itself never hard-fails. The model
+   * is resolved exactly once here — the host does not look it up again when it spawns the child.
    */
   private async resolveModel(sessionID: string, signal: AbortSignal): Promise<ModelChoice | undefined> {
     const pinned = this.config.model
-    if (pinned) return { model: pinned, bindToSession: false }
+    if (pinned) return { model: pinned }
     const port = this.deps.sessionModel
     if (!this.config.inheritModel || !port) return undefined
     try {
       // The host lookup is bounded by the same budget as the generation it precedes: an inherited model
       // must never hang the evaluation with no timeout and no diagnostic (the catch below degrades instead).
       const current = await this.underBudget((s) => port(sessionID, s), signal, "model resolution")
-      if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session evaluator")
-      return current ? { model: current, bindToSession: true } : undefined
+      if (!current) this.log.warn("inherited evaluator model: parent session has no active model; using session path")
+      return current ? { model: current } : undefined
     } catch (error) {
       if (signal.aborted) throw error
-      this.log.warn("inherited evaluator model unavailable; using session evaluator", { error: String(error) })
+      this.log.warn("inherited evaluator model unavailable; using session path", { error: String(error) })
       return undefined
     }
   }
 
-  /** The configured primary path: independent-with-session-fallback, or plain session. Reports which path actually judged. */
-  private async primary(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<{ result: EvaluationResult; via: "session" | "independent" }> {
-    const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
-    if (choice) {
-      try {
-        return { result: await this.independentVerdict(request, facts, signal, choice), via: "independent" }
-      } catch (error) {
-        if (signal.aborted) throw error
-        this.log.warn("independent evaluator failed; falling back to session evaluator", { error: String(error) })
-      }
-    }
-    return { result: await this.sessionVerdict(request, facts, signal), via: "session" }
-  }
-
   /**
-   * Generation closure for a resolved judge. Inherit mode (judge == session model) uses the session-bound port
-   * so the gateway attributes the call to the parent session's fingerprint and free-usage bucket; a genuinely
-   * independent pinned judge keeps the stateless `generate.text` path. The session-bound step is tracked as
-   * in-flight evaluation so the host's `generate` hook strips tools for it too — `session.generate` carries the
-   * session's tool set, and a small judge answering with a tool call would otherwise yield empty text.
+   * Generation closure for a resolved evaluator model. Both pinned and inherited models go through the single
+   * `modelGenerate` port; the host spawns a fresh child session per call (a primary turn that passes the
+   * free-tier gate) and strips tools on that child. There is no affinity-bearing generation path anymore.
    */
-  private judgeGenerate(sessionID: string, choice: ModelChoice): (prompt: string, signal: AbortSignal) => Promise<string> {
-    if (choice.bindToSession && this.deps.sessionModelGenerate) {
-      const bound = this.deps.sessionModelGenerate
-      return (prompt, signal) => this.trackInflight(sessionID, () => bound(sessionID, prompt, signal))
-    }
-    return (prompt, signal) => this.deps.modelGenerate(choice.model, prompt, signal)
+  private evaluatorGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
+    return (prompt, signal) => this.deps.modelGenerate(sessionID, choice.model, prompt, signal)
   }
 
   private async independentVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal, choice: ModelChoice): Promise<EvaluationResult> {
     const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
     const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
     const prompt = evaluateIndependently(request.condition, facts, transcript, request.commit ?? this.commit)
-    return this.ask(this.judgeGenerate(request.sessionID, choice), prompt, signal)
+    return this.ask(this.evaluatorGenerate(choice, request.sessionID), prompt, signal)
   }
 
   /** Track a session's in-flight generative work so maxTokens throttling can see contention. */
@@ -197,11 +196,6 @@ export class Evaluator implements EvaluatorPort {
     }
   }
 
-  private async sessionVerdict(request: EvaluationRequest, facts: EvaluationFacts, signal: AbortSignal): Promise<EvaluationResult> {
-    const prompt = evaluateInSession(request.condition, facts, request.commit ?? this.commit)
-    return this.trackInflight(request.sessionID, () => this.ask((text, s) => this.deps.sessionGenerate(request.sessionID, text, s), prompt, signal))
-  }
-
   /** Loop step: compact one achieved iteration into a machine-consumable block. */
   async summarize(request: LoopSummaryRequest): Promise<string> {
     const signal = request.signal
@@ -210,7 +204,7 @@ export class Evaluator implements EvaluatorPort {
       try {
         const messages = await this.underBudget((s) => this.deps.context(request.sessionID, s), signal, "transcript read")
         const transcript = renderTranscript(messages, { maxChars: this.config.maxTranscriptChars })
-        const generate = this.judgeGenerate(request.sessionID, choice)
+        const generate = this.evaluatorGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(summarizeIndependently(request, transcript), s), signal, "summary")
         return this.cap(stripReasoningControl(text), request.maxSummaryTokens)
       } catch (error) {
@@ -230,7 +224,7 @@ export class Evaluator implements EvaluatorPort {
     const choice = this.config.mode === "independent" ? await this.resolveModel(request.sessionID, signal) : undefined
     if (choice) {
       try {
-        const generate = this.judgeGenerate(request.sessionID, choice)
+        const generate = this.evaluatorGenerate(choice, request.sessionID)
         const text = await this.underBudget((s) => generate(nextGoalIndependently(request), s), signal, "next-condition")
         return text.trim().slice(0, 4_000)
       } catch (error) {
@@ -300,7 +294,7 @@ export class Evaluator implements EvaluatorPort {
       const parsed = parseVerdict(text)
       if (parsed) return parsed
       // Never fail silently: every unreadable reply (especially an empty one) is recorded with its raw text so the
-      // operator can see whether the judge emitted a tool call / reasoning with no text, garbage, or a truncated
+      // operator can see whether the evaluator emitted a tool call / reasoning with no text, garbage, or a truncated
       // verdict. The host strips tools from evaluator generations (see src/index.ts · generate hook); a bare "" here
       // means the provider still produced no text and is a provider/quirk to investigate, not a retry to hide.
       this.log.warn("evaluator reply unreadable; escalating", {
@@ -312,7 +306,7 @@ export class Evaluator implements EvaluatorPort {
       // An empty (or unreadable) reply escalates; only a genuine timeout/abort leaves this loop early.
     }
     throw new EvaluationError(
-      `unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))} (no text event in the judge reply — usually a tool call or reasoning-only response; evaluator requests are sent toolless)`,
+      `unreadable verdict after ${attempts.length} attempts: ${JSON.stringify(text.slice(0, 200))} (no text event in the evaluator reply — usually a tool call or reasoning-only response; evaluator requests are sent toolless)`,
     )
   }
 }

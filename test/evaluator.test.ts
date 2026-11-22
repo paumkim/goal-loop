@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { resolveConfig } from "../src/core/config.ts"
+import { verdictFromNativeReport } from "../src/core/evaluator-agent.ts"
 import type { CommitPolicy } from "../src/core/types.ts"
-import type { EvaluationRequest, LoopSummaryRequest, NextGoalRequest } from "../src/runtime/ports.ts"
-import { EvaluationError, EvaluationTimeoutError, Evaluator } from "../src/runtime/evaluator.ts"
+import type { EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest } from "../src/runtime/ports.ts"
+import { EvaluationError, Evaluator, EvaluatorVerdictError } from "../src/runtime/evaluator.ts"
 import { REPAIR, STRICT_REPAIR } from "../src/core/prompts.ts"
 
 const SID = "ses_test"
@@ -17,31 +18,46 @@ const sessionConfig = (overrides: Record<string, unknown> = {}) =>
 const independentConfig = (overrides: Record<string, unknown> = {}) =>
   resolveConfig({ model: "provider/model", evaluator: { mode: "independent", ...overrides } }, {}).evaluator
 
+/** consensus: 2 with a pinned judge model — the native verdict is met, the model cast is the second vote. */
+const consensusPinned = (overrides: Record<string, unknown> = {}) =>
+  resolveConfig({ model: "provider/model", evaluator: { mode: "session", consensus: 2, ...overrides } }, {}).evaluator
+
+/** consensus: 2 with an inherited second-vote model (the `inherit` sentinel). */
+const consensusInherit = () =>
+  resolveConfig({ evaluator: { model: "inherit", consensus: 2 } }, {}).evaluator
+
+const nativeMet = (reason = "native says met") => async () => ({ verdict: "met" as const, reason })
+const nativeNotMet = (reason = "native says not_met") => async () => ({ verdict: "not_met" as const, reason })
+
 interface FakeDeps {
+  nativeVerdict?: (sessionID: string, signal: AbortSignal, turn: number) => Promise<EvaluationResult | undefined>
   sessionGenerate: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
   modelGenerate: (model: unknown, prompt: string, signal: AbortSignal) => Promise<string>
   context: (sessionID: string, signal: AbortSignal) => Promise<readonly unknown[]>
   sessionModel?: (sessionID: string, signal: AbortSignal) => Promise<{ providerID: string; id: string; variant?: string } | undefined>
-  sessionModelGenerate?: (sessionID: string, prompt: string, signal: AbortSignal) => Promise<string>
 }
 
 function deps(overrides: Partial<FakeDeps> = {}) {
   const calls = { session: [] as string[], model: [] as string[], context: 0 }
-  const fake: FakeDeps = {
-    sessionGenerate: async (_sid, prompt) => {
+  const modelOverride = overrides.modelGenerate
+  const base = {
+    sessionGenerate: overrides.sessionGenerate ?? (async (_sid: string, prompt: string) => {
       calls.session.push(prompt)
       return verdictJson("met")
-    },
-    modelGenerate: async (_model, prompt) => {
+    }),
+    modelGenerate: async (sessionID: string, model: unknown, prompt: string, signal: AbortSignal) => {
+      void sessionID
       calls.model.push(prompt)
-      return verdictJson("met")
+      return modelOverride ? modelOverride(model, prompt, signal) : verdictJson("met")
     },
-    context: async () => {
+    context: overrides.context ?? (async () => {
       calls.context++
       return [{ role: "user", content: "hello" }]
-    },
-    ...overrides,
+    }),
+    sessionModel: overrides.sessionModel,
   }
+  // Only supply the native port when a test opts in — absence is a real fail-closed case in evaluate().
+  const fake = "nativeVerdict" in overrides ? { ...base, nativeVerdict: overrides.nativeVerdict } : base
   return { fake, calls }
 }
 
@@ -76,32 +92,29 @@ const nextGoalRequest = (): NextGoalRequest => ({
 })
 
 describe("Evaluator.evaluate", () => {
-  test("session mode returns the parsed verdict and leaves isEvaluating false afterwards", async () => {
-    const { fake, calls } = deps()
+  test("a native met verdict is consumed with no generation and leaves isEvaluating false", async () => {
+    const { fake, calls } = deps({ nativeVerdict: nativeMet("fresh evidence") })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(calls.session).toHaveLength(1)
+    expect(result.reason).toBe("fresh evidence")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
     expect(evaluator.isEvaluating(SID)).toBe(false)
   })
 
-  test("isEvaluating is true while a session evaluation is in flight", async () => {
-    let release!: (text: string) => void
-    const pending = new Promise<string>((resolve) => (release = resolve))
-    const { fake } = deps({ sessionGenerate: async () => pending })
+  test("a native not_met verdict is returned verbatim with no generation", async () => {
+    const { fake, calls } = deps({ nativeVerdict: nativeNotMet("more work needed") })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
-    const inflight = evaluator.evaluate(request())
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(evaluator.isEvaluating(SID)).toBe(true)
-    release(verdictJson("not_met", "more work"))
-    const result = await inflight
-    expect(result.verdict).toBe("not_met")
-    expect(evaluator.isEvaluating(SID)).toBe(false)
+    const result = await evaluator.evaluate(request())
+    expect(result).toEqual({ verdict: "not_met", reason: "more work needed" })
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
   })
 
-  test("independent mode judges on the transcript digest without touching session.generate", async () => {
-    const { fake, calls } = deps()
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+  test("consensus second vote judges on the transcript digest without touching session.generate", async () => {
+    const { fake, calls } = deps({ nativeVerdict: nativeMet() })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
     expect(calls.context).toBe(1)
@@ -109,102 +122,108 @@ describe("Evaluator.evaluate", () => {
     expect(calls.session).toHaveLength(0)
   })
 
-  test("independent failure falls back to the session evaluator once", async () => {
+  test("a failing consensus transcript read fails closed to not_met", async () => {
     const { fake, calls } = deps({
+      nativeVerdict: nativeMet(),
       context: async () => {
         throw new Error("transcript unavailable")
       },
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
-    expect(result.verdict).toBe("met")
-    expect(calls.session).toHaveLength(1)
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(result.reason).toContain("transcript unavailable")
+    expect(result.reason).toContain("fail closed")
+    expect(calls.session).toHaveLength(0)
   })
 
-  test("unreadable verdict is retried once with the repair prompt, then parses", async () => {
-    let turn = 0
+  test("an unreadable second-vote reply is retried once with the repair prompt, then parses", async () => {
     const prompts: string[] = []
+    let n = 0
     const { fake } = deps({
-      sessionGenerate: async (_sid, prompt) => {
+      nativeVerdict: nativeMet(),
+      modelGenerate: async (_model, prompt) => {
         prompts.push(prompt)
-        turn++
-        return turn === 1 ? "garbage that is not a verdict" : verdictJson("met", "fixed on retry")
+        return ++n === 1 ? "garbage that is not a verdict" : verdictJson("met", "fixed on retry")
       },
     })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    // met proves the repaired reply parsed: an unreadable reply fails the second vote closed to not_met.
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(result.reason).toBe("fixed on retry")
     expect(prompts).toHaveLength(2)
+    expect(prompts[1]).toContain(REPAIR)
   })
 
-  test("a malformed verdict object is accepted on the first attempt instead of failing all three", async () => {
+  test("a malformed second-vote verdict object is accepted on the first attempt instead of failing all three", async () => {
     let calls = 0
     const { fake } = deps({
-      sessionGenerate: async () => {
+      nativeVerdict: nativeMet(),
+      modelGenerate: async () => {
         calls++
         return `{"verdict":"met","reason":"(a) Clause-by-clause judgment with evidence refs
 status=satisfied, source/turn=turn 1
 next: none"}`
       },
     })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(result.reason).toContain("Clause-by-clause judgment")
     expect(calls).toBe(1)
   })
 
-  test("two unreadable verdicts raise EvaluationError", async () => {
-    const { fake } = deps({ sessionGenerate: async () => "total garbage" })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
-    await expect(evaluator.evaluate(request())).rejects.toThrow(EvaluationError)
+  test("two unreadable second-vote replies fail the consensus closed, named", async () => {
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: async () => "total garbage" })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(result.reason).toContain("unreadable verdict after 3 attempts")
+    expect(result.reason).toContain("fail closed")
   })
 
-  test("empty replies escalate through REPAIR then STRICT_REPAIR and parse once text returns", async () => {
+  test("empty second-vote replies escalate through REPAIR then STRICT_REPAIR and parse once text returns", async () => {
     const prompts: string[] = []
-    let turn = 0
+    let n = 0
     const { fake } = deps({
-      sessionGenerate: async (_sid, prompt) => {
+      nativeVerdict: nativeMet(),
+      modelGenerate: async (_model, prompt) => {
         prompts.push(prompt)
-        turn++
-        return turn <= 2 ? "" : verdictJson("met", "recovered on the third attempt")
+        return ++n <= 2 ? "" : verdictJson("met", "recovered on the third attempt")
       },
     })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(result.reason).toBe("recovered on the third attempt")
     expect(prompts).toHaveLength(3)
     expect(prompts[1]).toContain(REPAIR)
     expect(prompts[2]).toContain(STRICT_REPAIR)
   })
 
-  test("persistently empty replies raise EvaluationError naming the escalation", async () => {
+  test("persistently empty second-vote replies fail closed naming the escalation", async () => {
     let calls = 0
     const { fake } = deps({
-      sessionGenerate: async () => {
+      nativeVerdict: nativeMet(),
+      modelGenerate: async () => {
         calls++
         return ""
       },
     })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
-    await expect(evaluator.evaluate(request())).rejects.toThrow(/unreadable verdict after 3 attempts/)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("unreadable verdict after 3 attempts")
     expect(calls).toBe(3)
   })
 
-  test("unreadable replies are logged with their raw text (no silent failure) and the error names the cause", async () => {
+  test("unreadable second-vote replies are logged with their raw text (no silent failure)", async () => {
     const warnings: Array<Record<string, unknown>> = []
     const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
-    const { fake } = deps({ sessionGenerate: async () => "tool-call-only reply" })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, log)
-    const error = await evaluator.evaluate(request()).then(
-      () => undefined,
-      (e: unknown) => e as Error,
-    )
-    expect(error?.message).toMatch(/unreadable verdict after 3 attempts/)
-    expect(error?.message).toContain("no text event")
-    // Every failed attempt is recorded, with the raw reply visible to the operator.
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: async () => "tool-call-only reply" })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, log)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
     expect(warnings).toHaveLength(3)
     expect(warnings.map((w) => w.attempt)).toEqual([1, 2, 3])
     expect(warnings[0]?.message).toContain("unreadable")
@@ -213,41 +232,135 @@ next: none"}`
   })
 
   test("an already-aborted signal cuts the evaluation off and unwinds isEvaluating", async () => {
-    const { fake } = deps({
-      sessionGenerate: (_sid, _prompt, signal) =>
-        new Promise<string>((_resolve, reject) => {
-          if (signal.aborted) return reject(new Error("aborted by timeout"))
-          signal.addEventListener("abort", () => reject(new Error("aborted by timeout")))
-        }),
-    })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const aborted = new AbortController()
     aborted.abort()
-    // Pre-aborted caller: cut off up front (no budget is even created) and unwind isEvaluating.
+    const { fake } = deps({ nativeVerdict: nativeMet() })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     await expect(evaluator.evaluate(request({ signal: aborted.signal }))).rejects.toThrow(/aborted/)
     expect(evaluator.isEvaluating(SID)).toBe(false)
   })
 })
 
+describe("Evaluator.evaluate — native delegated subagent report", () => {
+  test("a delivered evaluator report is consumed as the verdict with no generation judge", async () => {
+    const { fake, calls } = deps({ nativeVerdict: async () => ({ verdict: "met" as const, reason: "fresh evidence in the child report" }) })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result).toEqual({ verdict: "met", reason: "fresh evidence in the child report" })
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("no native verdict port fails closed without telling the worker to delegate", async () => {
+    const { fake, calls } = deps()
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("no usable verdict from the evaluator child")
+    expect(result.reason).not.toContain("delegate")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("a missing verdict still fails closed so the turn is judged again", async () => {
+    const { fake, calls } = deps({ nativeVerdict: async () => undefined })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("no verdict for this turn; continuing")
+    expect(result.reason).not.toContain("delegate")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("an unreadable native report throws a verdict error with no generation fallback", async () => {
+    const { fake, calls } = deps({ nativeVerdict: async () => { throw new Error("report read failed") } })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await expect(evaluator.evaluate(request())).rejects.toThrow(/no usable evaluator subagent verdict: report read failed/)
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+  })
+
+  test("an unreadable report error is the typed verdict error the controller pauses on", async () => {
+    const { fake } = deps({ nativeVerdict: async () => { throw new Error("report read failed") } })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await expect(evaluator.evaluate(request())).rejects.toBeInstanceOf(EvaluatorVerdictError)
+  })
+
+  test("a quota error from the native report is rethrown so the controller pauses", async () => {
+    const { fake } = deps({ nativeVerdict: async () => { throw new Error("Free usage limit reached (429)") } })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await expect(evaluator.evaluate(request())).rejects.toThrow(/usage limit/i)
+  })
+
+  test("the current turn is passed to the native report reader so stale reports can be rejected", async () => {
+    let seenTurn: number | undefined
+    const { fake } = deps({
+      nativeVerdict: async (_sessionID: string, _signal: AbortSignal, turn: number) => {
+        seenTurn = turn
+        return undefined
+      },
+    })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    await evaluator.evaluate(request({ turn: 7 }))
+    expect(seenTurn).toBe(7)
+  })
+})
+
+describe("Evaluator.evaluate — a native report still passes through consensus: 2", () => {
+  test("a native met needs the second judge before it can pass", async () => {
+    const { fake, calls } = deps({
+      nativeVerdict: nativeMet("native says done"),
+      modelGenerate: async () => verdictJson("met", "independent confirms"),
+    })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("met")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(1)
+  })
+
+  test("a native met fails closed when the second judge disagrees", async () => {
+    const { fake, calls } = deps({
+      nativeVerdict: nativeMet("native says done"),
+      modelGenerate: async () => verdictJson("not_met", "independent disagrees"),
+    })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus disagreement")
+    expect(calls.session).toHaveLength(0)
+  })
+
+  test("a native not_met is returned as-is without calling the second judge", async () => {
+    const { fake, calls } = deps({
+      nativeVerdict: nativeNotMet("native says no"),
+      modelGenerate: async () => verdictJson("met", "independent disagrees"),
+    })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(calls.model).toHaveLength(0)
+  })
+})
+
 describe("Evaluator.evaluate — slow / hanging provider (per-attempt budget + app-level race)", () => {
   // Bypass the config floor so a test can use a sub-second budget; the evaluator only reads timeoutMs.
-  const slowConfig = (timeoutMs: number) => ({ ...sessionConfig(), timeoutMs })
+  const slowConfig = (timeoutMs: number) => ({ ...consensusPinned(), timeoutMs })
   const delay = (ms: number, value: string) => new Promise<string>((resolve) => setTimeout(() => resolve(value), ms))
 
-  test("a verdict that arrives within its budget still parses (the budget does not over-trigger)", async () => {
-    const { fake } = deps({ sessionGenerate: () => delay(20, verdictJson("met", "in time")) })
+  test("a second-vote verdict that arrives within its budget still parses (the budget does not over-trigger)", async () => {
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: () => delay(20, verdictJson("met", "in time")) })
     const evaluator = new Evaluator(fake, slowConfig(500), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(result.reason).toBe("in time")
   })
 
-  test("each escalating attempt gets its own budget — a slow garbage first attempt does not starve the repair", async () => {
-    // Shared-budget starvation: with one 300ms budget for both attempts, attempt 1 (200ms) leaves only
-    // 100ms, so a signal-honouring attempt 2 (200ms) is cut off. Per-attempt budgets let attempt 2 finish.
+  test("each escalating second-vote attempt gets its own budget — a slow garbage first attempt does not starve the repair", async () => {
     let n = 0
     const { fake } = deps({
-      sessionGenerate: (_sid, _prompt, signal) => {
+      nativeVerdict: nativeMet(),
+      modelGenerate: (_model, _prompt, signal) => {
         n++
         const value = n === 1 ? "not a verdict" : verdictJson("met", "recovered on repair")
         return new Promise<string>((resolve, reject) => {
@@ -263,42 +376,34 @@ describe("Evaluator.evaluate — slow / hanging provider (per-attempt budget + a
     })
     const evaluator = new Evaluator(fake, slowConfig(300), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
+    // met proves the repair attempt finished: with a shared budget it would have been cut off.
     expect(result.verdict).toBe("met")
-    expect(result.reason).toBe("recovered on repair")
     expect(n).toBe(2)
   })
 
-  test("a generate that ignores the abort signal and never settles is cut off by the app-level race, named a timeout", async () => {
-    const { fake } = deps({ sessionGenerate: () => new Promise<string>(() => {}) })
+  test("a second vote that ignores the abort signal and never settles is cut off by the app-level race, named a timeout", async () => {
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: () => new Promise<string>(() => {}) })
     const evaluator = new Evaluator(fake, slowConfig(1000), COMMIT, silentLog)
     const started = Date.now()
-    const error = await evaluator.evaluate(request()).then(
-      () => undefined,
-      (e: unknown) => e as Error,
-    )
-    expect(error).toBeInstanceOf(EvaluationTimeoutError)
-    expect(error?.message).toBe("evaluator timed out after 1s (attempt 1/3)")
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("timed out after 1s (attempt 1/3)")
     expect(Date.now() - started).toBeLessThan(3000) // bounded — no indefinite hang
     expect(evaluator.isEvaluating(SID)).toBe(false)
   })
 
-  test("empty-on-slow: a reply that lands only after the budget fired is a timeout, never a bare unreadable verdict", async () => {
-    // The SDK ignores the signal and resolves "" late. Before the fix this was the reported
-    // `unreadable verdict: ""` retry loop; now the budget fires first and names the timeout.
-    const { fake } = deps({ sessionGenerate: () => delay(120, "") })
+  test("empty-on-slow: a second-vote reply that lands only after the budget fired is a timeout, never a bare unreadable verdict", async () => {
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: () => delay(120, "") })
     const evaluator = new Evaluator(fake, slowConfig(50), COMMIT, silentLog)
-    const error = await evaluator.evaluate(request()).then(
-      () => undefined,
-      (e: unknown) => e as Error,
-    )
-    expect(error).toBeInstanceOf(EvaluationTimeoutError)
-    expect(error?.message).toMatch(/timed out after/)
-    expect(error?.message).not.toMatch(/unreadable verdict/)
+    const result = await evaluator.evaluate(request())
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toMatch(/timed out after/)
+    expect(result.reason).not.toMatch(/unreadable verdict/)
   })
 
-  test("a caller abort during a slow generation aborts the evaluation, not a timeout", async () => {
+  test("a caller abort during a slow second vote aborts the evaluation, not a timeout", async () => {
     const aborter = new AbortController()
-    const { fake } = deps({ sessionGenerate: () => new Promise<string>(() => {}) })
+    const { fake } = deps({ nativeVerdict: nativeMet(), modelGenerate: () => new Promise<string>(() => {}) })
     const evaluator = new Evaluator(fake, slowConfig(30_000), COMMIT, silentLog)
     const inflight = evaluator.evaluate(request({ signal: aborter.signal }))
     await new Promise((resolve) => setImmediate(resolve))
@@ -314,6 +419,19 @@ describe("Evaluator.evaluate — slow / hanging provider (per-attempt budget + a
 })
 
 describe("Evaluator.summarize", () => {
+  test("isEvaluating is true while a session summarization (loop generation) is in flight", async () => {
+    let release!: (text: string) => void
+    const pending = new Promise<string>((resolve) => (release = resolve))
+    const { fake } = deps({ sessionGenerate: async () => pending })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const inflight = evaluator.summarize(summaryRequest(400))
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(evaluator.isEvaluating(SID)).toBe(true)
+    release("done")
+    await inflight
+    expect(evaluator.isEvaluating(SID)).toBe(false)
+  })
+
   test("caps the summary at max(200, tokens) * 4 characters with an ellipsis", async () => {
     const { fake } = deps({ sessionGenerate: async () => "word ".repeat(2_000) })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
@@ -343,21 +461,16 @@ describe("Evaluator.nextGoal", () => {
 })
 
 describe("Evaluator.evaluate — evaluator.consensus: 2", () => {
-  const consensusSession = (overrides: Record<string, unknown> = {}) =>
-    resolveConfig({ model: "provider/model", evaluator: { mode: "session", consensus: 2, ...overrides } }, {}).evaluator
-  const consensusIndependent = (overrides: Record<string, unknown> = {}) =>
-    resolveConfig({ model: "provider/model", evaluator: { mode: "independent", consensus: 2, ...overrides } }, {}).evaluator
-
   test("both judges met: verdict met", async () => {
     let modelCalls = 0
     const { fake } = deps({
-      sessionGenerate: async () => verdictJson("met", "session says done"),
+      nativeVerdict: nativeMet("native says done"),
       modelGenerate: async () => {
         modelCalls++
         return verdictJson("met", "independent says done")
       },
     })
-    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
     expect(modelCalls).toBe(1)
@@ -365,72 +478,56 @@ describe("Evaluator.evaluate — evaluator.consensus: 2", () => {
 
   test("disagreement fails closed to not_met, with the disagreement named in the reason", async () => {
     const { fake } = deps({
-      sessionGenerate: async () => verdictJson("met", "looks done to me"),
+      nativeVerdict: nativeMet("looks done to me"),
       modelGenerate: async () => verdictJson("not_met", "no test output anywhere"),
     })
-    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("consensus disagreement")
-    expect(result.reason).toContain("session evaluator ruled met")
+    expect(result.reason).toContain("native evaluator ruled met")
     expect(result.reason).toContain("independent evaluator ruled not_met")
     expect(result.reason).toContain("no test output anywhere")
   })
 
-  test("independent primary disagreeing with the session second opinion fails closed the same way", async () => {
-    const { fake } = deps({
-      modelGenerate: async () => verdictJson("met", "independent says done"),
-      sessionGenerate: async () => verdictJson("not_met", "transcript shows no green run"),
-    })
-    const evaluator = new Evaluator(fake, consensusIndependent(), COMMIT, silentLog)
-    const result = await evaluator.evaluate(request())
-    expect(result.verdict).toBe("not_met")
-    expect(result.reason).toContain("consensus disagreement")
-    expect(result.reason).toContain("independent evaluator ruled met")
-    expect(result.reason).toContain("session evaluator ruled not_met")
-  })
-
   test("a dead second judge fails closed to not_met, named — met never passes on one vote", async () => {
     const { fake } = deps({
-      sessionGenerate: async () => verdictJson("met", "session says done"),
+      nativeVerdict: nativeMet("native says done"),
       modelGenerate: async () => {
         throw new Error("model unreachable")
       },
     })
-    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("consensus")
     expect(result.reason).toContain("fail closed")
   })
 
-  test("session primary with no independent model configured fails closed, named", async () => {
-    const { fake, calls } = deps({
-      sessionGenerate: async () => verdictJson("met", "session says done"),
-    })
+  test("native met with no independent model configured fails closed, named", async () => {
+    const { fake, calls } = deps({ nativeVerdict: nativeMet("native says done") })
     const evaluator = new Evaluator(fake, resolveConfig({ evaluator: { mode: "session", consensus: 2 } }, {}).evaluator, COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("consensus")
     expect(result.reason).toContain("fail closed")
+    expect(result.reason).toContain("independent model not available")
     expect(calls.model).toHaveLength(0) // no model to ask; never a silent pass
   })
 
-  test("a not_met primary is returned as-is; the second judge is never called", async () => {
+  test("a native not_met is returned as-is; the second judge is never called", async () => {
     const { fake, calls } = deps({
-      sessionGenerate: async () => verdictJson("not_met", "still broken"),
+      nativeVerdict: nativeNotMet("still broken"),
       modelGenerate: async () => verdictJson("met", "independent disagrees"),
     })
-    const evaluator = new Evaluator(fake, consensusSession(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(calls.model).toHaveLength(0)
   })
 
-  test("consensus 1 (default) keeps the single-judge behavior", async () => {
-    const { fake, calls } = deps({
-      sessionGenerate: async () => verdictJson("met", "session says done"),
-    })
+  test("consensus 1 (default) keeps the single native verdict behavior", async () => {
+    const { fake, calls } = deps({ nativeVerdict: nativeMet("native says done") })
     const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
@@ -439,28 +536,31 @@ describe("Evaluator.evaluate — evaluator.consensus: 2", () => {
 })
 
 describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Workstream XLIV)", () => {
+  // Native report bodies are parsed by verdictFromNativeReport (which calls parseVerdict), so the
+  // duplicate-without-forward-pointer gate still fires on a met delivered by the evaluator subagent.
+  const nativeFromBody = (body: string) => async () =>
+    verdictFromNativeReport({ key: "native-report", body, state: "completed" })
   const transcriptWith = (messages: Array<[string, string]>) => [
     { role: "user", content: "/goal-loop iteration 1 armed" },
     ...messages.map(([role, content]) => ({ role, content })),
   ]
 
-  test("duplicate-with-pointer: met on the already-satisfied path with a next: gap is accepted (mock transcript)", async () => {
-    const { fake } = deps({
-      context: async () => transcriptWith([["assistant", "git log --oneline -5\n3f3e1eb chore(coordinator)"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
-      modelGenerate: async () => verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: arming-side near-duplicate gate in the loop's arm path"),
+  test("duplicate-with-pointer: met on the already-satisfied path with a next: gap is accepted (native report)", async () => {
+    const { fake, calls } = deps({
+      nativeVerdict: nativeFromBody(verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration. next: arming-side near-duplicate gate in the loop's arm path")),
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
     expect(result.reason).toContain("next:")
+    expect(calls.model).toHaveLength(0)
   })
 
   test("duplicate-without-pointer: bare already-satisfied met fails closed to not_met, quoted", async () => {
     const { fake } = deps({
-      context: async () => transcriptWith([["assistant", "git log --oneline -5\n3f3e1eb chore(coordinator)"]]),
-      modelGenerate: async () => verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration."),
+      nativeVerdict: nativeFromBody(verdictJson("met", "Already satisfied at HEAD 3f3e1eb. No new work is produced by this iteration.")),
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("duplicate-without-forward-pointer")
@@ -470,12 +570,11 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
   test("duplicate-without-pointer through the repair path fails closed the same way", async () => {
     let n = 0
     const { fake } = deps({
-      sessionGenerate: async () => {
-        n++
-        return n === 1 ? "not json at all" : verdictJson("met", "Already satisfied at HEAD 3f3e1eb.")
-      },
+      nativeVerdict: nativeMet(),
+      modelGenerate: async () =>
+        ++n === 1 ? "not json at all" : verdictJson("met", "Already satisfied at HEAD 3f3e1eb."),
     })
-    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("duplicate-without-forward-pointer")
@@ -484,13 +583,14 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
   test("fresh-but-irrelevant merged work: rubric clause visible to the judge; a not_met verdict passes through untouched", async () => {
     let seen = ""
     const { fake } = deps({
+      nativeVerdict: nativeMet(),
       context: async () => transcriptWith([["assistant", "merged aa5e196: unified the XL finish-time prune with the XLI restore prune"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
       modelGenerate: async (_model, prompt) => {
         seen = prompt
         return verdictJson("not_met", "merged aa5e196 unified the finish prune; the armed condition asked for the stale docs/core.html cards.\nnext:\n1. [high] Fix stale cards on docs/core.html — gap: condition requires docs/core.html update but only unrelated merge/check evidence shown — proof: diff/commit and rendered docs showing updated cards.")
       },
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request({ condition: "fix the stale cards on docs/core.html" }))
     expect(result.verdict).toBe("not_met")
     expect(result.reason).toContain("docs/core.html")
@@ -503,26 +603,26 @@ describe("Evaluator.evaluate — novelty / advancement, forward-pointer gate (Wo
 
   test("real merged gap: fresh in-turn evidence with a named gap verdicts met", async () => {
     const { fake } = deps({
+      nativeVerdict: nativeMet(),
       context: async () => transcriptWith([["assistant", "git log --oneline -2\naa5e196 merge wt/finish-prune-all-directories into dev"], ["assistant", "bun run check\n1693 pass\n0 fail"]]),
       modelGenerate: async () => verdictJson("met", "merged aa5e196 unifies the finish-time and restore-time prunes; bundle rebuilt; bun run check green at the post-merge HEAD. next: arming-side near-duplicate gate"),
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request({ condition: "unify the XL finish-time prune with the XLI all-directory restore prune" }))
     expect(result.verdict).toBe("met")
   })
 
-  test("the rubric both judges see carries the clause-matrix, adversarial, and structured-next contract (session and independent)", async () => {
-    const sessionPrompts: string[] = []
+  test("the independent judge's rubric carries the clause-matrix, adversarial, and structured-next contract", async () => {
     const modelPrompts: string[] = []
     const { fake } = deps({
-      sessionGenerate: async (_sid, prompt) => { sessionPrompts.push(prompt); return verdictJson("not_met", "x") },
+      nativeVerdict: nativeMet(),
       modelGenerate: async (_model, prompt) => { modelPrompts.push(prompt); return verdictJson("not_met", "x") },
     })
-    const session = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
-    await session.evaluate(request())
-    const independent = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
-    await independent.evaluate(request())
-    for (const prompt of [sessionPrompts[0]!, modelPrompts[0]!]) {
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    await evaluator.evaluate(request())
+    // The session-mode rubric is covered byte-for-byte in test/core.test.ts; here we check the
+    // independent (consensus second-vote) prompt that Evaluator actually builds.
+    for (const prompt of [modelPrompts[0]!]) {
       expect(prompt).toContain("evidence matrix")
       expect(prompt).toContain("satisfied|missing|contradicted|unscoped")
       expect(prompt).toContain("What would falsify met?")
@@ -545,16 +645,17 @@ describe("Evaluator — inherit the parent session's model", () => {
   const inheritConfig = (overrides: Record<string, unknown> = {}) =>
     resolveConfig({ evaluator: { model: "inherit", ...overrides } }, {}).evaluator
 
-  test("uses the current session model for the independent judge, not a pinned model", async () => {
+  test("uses the current session model for the independent second vote, not a pinned model", async () => {
     const models: unknown[] = []
     const { fake, calls } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => ({ providerID: "oc", id: "mimo-v2.6-flash-free" }),
       modelGenerate: async (model, _prompt) => {
         models.push(model)
         return verdictJson("met", "inherited judge says done")
       },
     })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
     expect(models).toEqual([{ providerID: "oc", id: "mimo-v2.6-flash-free" }])
@@ -566,13 +667,14 @@ describe("Evaluator — inherit the parent session's model", () => {
     const models: unknown[] = []
     let active: { providerID: string; id: string; variant?: string } = { providerID: "oc", id: "first-model" }
     const { fake } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => active,
       modelGenerate: async (model) => {
         models.push(model)
         return verdictJson("not_met", "keep working")
       },
     })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, silentLog)
     await evaluator.evaluate(request({ turn: 1 }))
     active = { providerID: "oc", id: "second-model", variant: "high" }
     await evaluator.evaluate(request({ turn: 2 }))
@@ -582,30 +684,34 @@ describe("Evaluator — inherit the parent session's model", () => {
     ])
   })
 
-  test("a missing session model falls back to the session evaluator with a warning", async () => {
+  test("a missing session model fails consensus closed with a warning", async () => {
     const warnings: Array<Record<string, unknown>> = []
     const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
-    const { fake, calls } = deps({ sessionModel: async () => undefined })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const { fake, calls } = deps({ nativeVerdict: nativeMet(), sessionModel: async () => undefined })
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, log)
     const result = await evaluator.evaluate(request())
-    expect(result.verdict).toBe("met")
-    expect(calls.session).toHaveLength(1)
-    expect(calls.context).toBe(0)
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(result.reason).toContain("fail closed")
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
     expect(warnings.some((w) => String(w.message).includes("no active model"))).toBe(true)
   })
 
-  test("a failing host port falls back to the session evaluator with a warning", async () => {
+  test("a failing host port fails consensus closed with a warning", async () => {
     const warnings: Array<Record<string, unknown>> = []
     const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
     const { fake, calls } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => {
         throw new Error("host unavailable")
       },
     })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, log)
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, log)
     const result = await evaluator.evaluate(request())
-    expect(result.verdict).toBe("met")
-    expect(calls.session).toHaveLength(1)
+    expect(result.verdict).toBe("not_met")
+    expect(result.reason).toContain("consensus")
+    expect(calls.session).toHaveLength(0)
     expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
   })
 
@@ -631,10 +737,11 @@ describe("Evaluator — inherit the parent session's model", () => {
     const warnings: Array<Record<string, unknown>> = []
     const log = { ...silentLog, warn: (message: string, fields?: Record<string, unknown>) => warnings.push({ message, ...fields }) }
     const { fake, calls } = deps({
+      nativeVerdict: nativeMet(),
       // Ignore the signal and never settle: a pathological host session lookup must not hang the goal.
       sessionModel: () => new Promise(() => {}),
     })
-    const evaluator = new Evaluator(fake, { ...inheritConfig(), timeoutMs: 50 }, COMMIT, log)
+    const evaluator = new Evaluator(fake, { ...consensusInherit(), timeoutMs: 50 }, COMMIT, log)
     const started = Date.now()
     const outcome = await Promise.race([
       evaluator.evaluate(request()).then(
@@ -645,14 +752,15 @@ describe("Evaluator — inherit the parent session's model", () => {
     ])
     expect(outcome.verdict).not.toBe("HUNG")
     expect(Date.now() - started).toBeLessThan(1_000)
-    // Bounded resolution degrades to the session evaluator instead of hard-failing the evaluation.
-    expect(calls.session).toHaveLength(1)
+    // Bounded resolution fails consensus closed instead of hard-failing or hanging the evaluation.
+    expect(calls.session).toHaveLength(0)
     expect(warnings.some((w) => String(w.message).includes("unavailable"))).toBe(true)
   })
 
   test("pinned and session modes never consult the session-model port", async () => {
     let portCalls = 0
     const { fake } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => {
         portCalls++
         return { providerID: "oc", id: "should-not-be-used" }
@@ -667,93 +775,104 @@ describe("Evaluator — inherit the parent session's model", () => {
     expect(portCalls).toBe(0)
   })
 
-  test("inherit mode rides the parent session fingerprint, not a fresh stateless session", async () => {
-    const bound: Array<{ sessionID: string; prompt: string }> = []
+  test("inherit mode resolves the model once and generates on it — no second host lookup", async () => {
+    let lookups = 0
     const models: unknown[] = []
-    const { fake, calls } = deps({
-      sessionModel: async () => ({ providerID: "oc", id: "hy4-flash-free" }),
-      sessionModelGenerate: async (sessionID, prompt) => {
-        bound.push({ sessionID, prompt })
-        return verdictJson("met", "same-session judge")
+    const prompts: string[] = []
+    const { fake } = deps({
+      nativeVerdict: nativeMet(),
+      sessionModel: async () => {
+        lookups++
+        return { providerID: "oc", id: "hy4-flash-free" }
       },
-      modelGenerate: async (model, _prompt) => {
+      modelGenerate: async (model, prompt) => {
         models.push(model)
-        return verdictJson("met", "stateless judge")
+        prompts.push(prompt)
+        return verdictJson("met", "child judge says done")
       },
     })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, silentLog)
     const result = await evaluator.evaluate(request())
     expect(result.verdict).toBe("met")
-    expect(bound).toHaveLength(1)
-    expect(bound[0]?.sessionID).toBe(SID)
-    expect(bound[0]?.prompt).toContain("all tests pass")
-    expect(calls.model).toHaveLength(0)
-    expect(calls.session).toHaveLength(0)
-    expect(models).toHaveLength(0)
+    expect(lookups).toBe(1)
+    expect(models).toEqual([{ providerID: "oc", id: "hy4-flash-free" }])
+    expect(prompts[0]).toContain("all tests pass")
   })
 
-  test("loop summary and next-goal ride the session fingerprint too", async () => {
-    const bound: string[] = []
-    const { fake, calls } = deps({
-      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
-      sessionModelGenerate: async (_sessionID, prompt) => {
-        bound.push(prompt)
-        return "session-bound reply"
+  test("loop summary and next-goal use one inherited model lookup per generation", async () => {
+    let lookups = 0
+    const models: unknown[] = []
+    const { fake } = deps({
+      sessionModel: async () => {
+        lookups++
+        return { providerID: "oc", id: "session-active" }
+      },
+      modelGenerate: async (model) => {
+        models.push(model)
+        return "child judge reply"
       },
     })
     const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
-    expect(await evaluator.summarize(summaryRequest(400))).toBe("session-bound reply")
-    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("session-bound reply")
-    expect(bound).toHaveLength(2)
-    expect(calls.model).toHaveLength(0)
+    expect(await evaluator.summarize(summaryRequest(400))).toBe("child judge reply")
+    expect(await evaluator.nextGoal(nextGoalRequest())).toBe("child judge reply")
+    expect(lookups).toBe(2)
+    expect(models).toEqual([
+      { providerID: "oc", id: "session-active" },
+      { providerID: "oc", id: "session-active" },
+    ])
   })
 
-  test("a pinned independent judge stays stateless even with the session port present", async () => {
-    const bound: string[] = []
-    const { fake, calls } = deps({
-      sessionModel: async () => ({ providerID: "oc", id: "session-active" }),
-      sessionModelGenerate: async (_sessionID, prompt) => {
-        bound.push(prompt)
-        return verdictJson("met", "should not be used")
+  test("a pinned independent second vote ignores the session-model port", async () => {
+    let lookups = 0
+    const { fake } = deps({
+      nativeVerdict: nativeMet(),
+      sessionModel: async () => {
+        lookups++
+        return { providerID: "oc", id: "session-active" }
+      },
+      modelGenerate: async (model) => {
+        expect(model).toEqual({ providerID: "provider", id: "model" })
+        return verdictJson("met", "pinned child judge")
       },
     })
-    const evaluator = new Evaluator(fake, independentConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, resolveConfig({ model: "provider/model", evaluator: { mode: "independent", consensus: 2 } }, {}).evaluator, COMMIT, silentLog)
     await evaluator.evaluate(request())
-    expect(bound).toHaveLength(0)
-    expect(calls.model).toHaveLength(1)
+    expect(lookups).toBe(0)
   })
 
-  test("the session-bound judge is marked in-flight so the host strips tools for it", async () => {
+  test("an inherited-model judge does not mark the parent session in-flight (the host tracks the child)", async () => {
     let release!: (text: string) => void
     const pending = new Promise<string>((resolve) => (release = resolve))
-    let sawInflight = false
+    let sawInflight: boolean | undefined
     let probe!: Evaluator
     const { fake } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => ({ providerID: "oc", id: "m" }),
-      sessionModelGenerate: async () => {
+      modelGenerate: async () => {
         sawInflight = probe.isEvaluating(SID)
         return pending
       },
     })
-    probe = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    probe = new Evaluator(fake, consensusInherit(), COMMIT, silentLog)
     const inflight = probe.evaluate(request())
     await new Promise((resolve) => setImmediate(resolve))
-    expect(sawInflight).toBe(true)
+    expect(sawInflight).toBe(false)
     release(verdictJson("met"))
     await inflight
     expect(probe.isEvaluating(SID)).toBe(false)
   })
 
-  test("without the session-bound port, inherit degrades to the stateless model port", async () => {
+  test("inherit always generates the second vote through the model port — no legacy session-bound fallback", async () => {
     const models: unknown[] = []
     const { fake, calls } = deps({
+      nativeVerdict: nativeMet(),
       sessionModel: async () => ({ providerID: "oc", id: "legacy-model" }),
-      modelGenerate: async (model, _prompt) => {
+      modelGenerate: async (model) => {
         models.push(model)
         return verdictJson("met")
       },
     })
-    const evaluator = new Evaluator(fake, inheritConfig(), COMMIT, silentLog)
+    const evaluator = new Evaluator(fake, consensusInherit(), COMMIT, silentLog)
     expect((await evaluator.evaluate(request())).verdict).toBe("met")
     expect(models).toEqual([{ providerID: "oc", id: "legacy-model" }])
     expect(calls.session).toHaveLength(0)

@@ -17,6 +17,16 @@ text is kept verbatim and read through this map: `bin/opencode-goal.mjs` → `bi
 `github:paumkim/opencode-goalv2#v…` specifier (`install` migrates the entry, `uninstall` removes it, `status`
 reports it), and the `OPENCODE_GOAL_*` environment prefix (the documented configuration surface).
 `test/name-fields.test.ts` pins this declaration, the fields, and the code that carries them.
+**Evaluator vocabulary (internal names).** The agent and the per-turn scorer are the `evaluator` (agent id
+`evaluator`, display name `Evaluator`, class `Evaluator`). `judge` appears only as a prose verb — never as a noun
+or identifier. `checking` is the literal TUI label only; the state flag is `evaluating` and the process is
+`evaluation`, whose result is a `verdict` (`met` / `not_met` / `impossible`). Internal identifiers follow the
+agent: `evaluatorChildren`, `pluginEvaluatorIDs`, `spawnEvaluator`, `evaluatorGenerate`, `asEvaluatorError`; the
+arm-time planner's replayed scope field is `armPlanScope`. A worker-delegated report is a "native evaluator
+report" and a plugin-spawned child is an "evaluator child"; the opt-in `consensus: 2` second vote is the
+"second evaluator child". `subagent` is the delegation mechanism, `delegate` the verb, `task` only the host
+tool name. `turn` is one worker attempt; `iteration` / persisted `loopIteration` is one loop cycle; `resume`
+is post-restart recovery only. `checkin*` (code) / "check-in" (prose) is the idle nudge, unrelated to evaluation.
 <!-- naming:end -->
 
 Status: current as of v1.2.0. The goal TUI renders natively in three zoom levels. (a) An ambient pill:
@@ -335,7 +345,7 @@ Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: load
     filtering, malformed records skipped, empty restore). 200 tests total, all green.
 28. Docs line references point at the real definitions at the time of writing (`docs/config.html`: `prompts.ts`
     `coordinatorFlow` `:65`, `commitStatusSuffix` `:83`, `rubric` `:312`, `facts` `:337`,
-    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1134`, `prompts.ts:208`). References were
+    `git.ts:146`; `docs/index.html`: steer refs `controller.ts:1167`, `prompts.ts:208`). References were
     re-synced against HEAD twice on 2026-11-16 (`docs/config.html`, `docs/architecture.html`,
     `docs/index.html`, `docs/core.html`, `docs/runtime.html`, `docs/install.html`): first for the
     line-ref sync pass, then after the loop re-arm guard landed `tokensOf`/`isNearDuplicate` near
@@ -496,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=141 tests=2155 -->
+<!-- spec-check files=143 tests=2218 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -7185,7 +7195,7 @@ Fix (`src/runtime/controller.ts`, `src/index.ts`, `src/core/prompts.ts`):
 
 Failing-then-passing. The two pre-existing assertions that pinned the retired dispatch were replaced with absence pins (`loop.test.ts`, `controller.test.ts`); seven new cases were added (`plugin.test.ts` ×3: end-to-end arm→turn→met→achieved through the event pump drives the hook to push `TERMINAL_REMINDER` and splice the kickoff; live goal keeps its kickoff and gets no terminal line; goal-free session drops grammar messages with zero injection; `notes.test.ts` ×3: instruction-tag predicate, stripGoalContext semantics, reminder text; `controller.test.ts` ×1: `hasTerminalRecord` for false→achieved→true→re-arm→false, cleared→true).
 
-Honest limits. (a) The durable, already-parked outcome line in an existing session's inbox is host-owned history; the plugin cannot retroactively consume it — it flushes naturally at the next execution, or never, and the new code adds no more of them. A fresh session is clean by construction. (b) `TERMINAL_REMINDER` is gated on a terminal record in **this** process's memory; a plugin reload adopts no terminal records (by design, Workstream XLIII/XLIV), so the reminder is absent until the next terminal transition in this process — the instruction-message strip still applies everywhere, and the re-anchor/system-reminder paths are already active-only. (c) The host's compaction summary can still quote the expired kickoff text verbatim; the reminder line exists to counter it — it is one line, not a guarantee of model compliance. (d) `stripGoalContext` matches on text parts containing the tags anywhere, so a user who literally typed `<goal-loop` into their own message loses that part after their goal ended — same accepted grammar-collision posture as `<goal-note` since EM. (e) The `/goal` detail dialog, verdict trail, HIST ledger and log remain the durable audit surface; the inbox scrollback no longer carries the outcome line by design. (f) Test count moved **1747 → 1754** (+7; nothing weakened — three synthetic-dispatch assertions replaced by absence pins as above); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1754` here. The shared Appendix-A steer ref re-pointed to `controller.ts:1134` after the controller edits shifted it. `dist/tui.js` byte-unchanged (no TUI source touched).
+Honest limits. (a) The durable, already-parked outcome line in an existing session's inbox is host-owned history; the plugin cannot retroactively consume it — it flushes naturally at the next execution, or never, and the new code adds no more of them. A fresh session is clean by construction. (b) `TERMINAL_REMINDER` is gated on a terminal record in **this** process's memory; a plugin reload adopts no terminal records (by design, Workstream XLIII/XLIV), so the reminder is absent until the next terminal transition in this process — the instruction-message strip still applies everywhere, and the re-anchor/system-reminder paths are already active-only. (c) The host's compaction summary can still quote the expired kickoff text verbatim; the reminder line exists to counter it — it is one line, not a guarantee of model compliance. (d) `stripGoalContext` matches on text parts containing the tags anywhere, so a user who literally typed `<goal-loop` into their own message loses that part after their goal ended — same accepted grammar-collision posture as `<goal-note` since EM. (e) The `/goal` detail dialog, verdict trail, HIST ledger and log remain the durable audit surface; the inbox scrollback no longer carries the outcome line by design. (f) Test count moved **1747 → 1754** (+7; nothing weakened — three synthetic-dispatch assertions replaced by absence pins as above); packed files stay **64**; the enforced (first-occurrence) SPEC marker advances to `files=64 tests=1754` here. The shared Appendix-A steer ref re-pointed to `controller.ts:1167` after the controller edits shifted it. `dist/tui.js` byte-unchanged (no TUI source touched).
 
 <!-- spec-check files=73 tests=1998 -->
 
@@ -9170,6 +9180,9 @@ provider and session — it should inherit the same session fingerprint" symptom
    and without the port inherit degrades to the stateless model port. Full `bun run check` green; marker
    re-counted in-commit.
 
+> Superseded by Workstream CXXVII: the model inheritance stays, but the judge now runs as a real child session —
+> `ctx.session.generate` is no longer the generation route.
+
 ## Workstream CXXII — evaluator free-usage limits pause instead of failing the goal (2026-11-21)
 
 Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evaluator failed (Free usage limit reached …); retrying in 30s" while the session kept running on the same `opencode/hy4-flash-free` model/provider. Re-reading the tree before touching anything: CXXI already routes inherit-mode judge generations through `ctx.session.generate`, and plain `session` mode (the default, and the mode of every failing session in `.term/goal-loop/learnings.jsonl`) has always used it. Verified against the installed v2.3.2 binary (`strings` around `x-opencode-session`): stateless `generate.ts` sets a fresh `SessionID.create()` per call, while `session.generate` → `model-request.ts` binds `x-opencode-session` to `SessionAffinity.get(session)`. Host log (`~/.local/share/opencode/log/opencode.log`) shows the error is a gateway `429`/`QuotaExceeded` with `FreeUsageLimitError` in the body — a self-clearing rate limit ("Rate limit exceeded. Please try again later"), not a misconfigured model. The model/fingerprint inheritance is correct; the remaining bug is **failure classification**.
@@ -9178,6 +9191,11 @@ Armed by the same recurring symptom as CXXI: a live `/goal` card reading "Evalua
 2. Fix. `core/errors.ts` adds `isUsageLimitError(error)` — a deliberately narrow detector (429 status, "rate limit", "too many requests", "usage limit", "free usage"/"FreeUsageLimitError") so a generic error or a credit/auth failure is never mistaken for a self-clearing limit. `src/runtime/controller.ts · evaluationFailed` uses it: usage-limit errors skip the `maxRetries` exhaustion check, back off a fixed `PAUSE_RETRY_MS` (15m), notify `Evaluator paused (free usage limit — judge shares this session's model/quota); retrying in 15m`, and retry forever until the verdict lands. Transient evaluator errors (timeouts, connections, unreadable verdicts) and fatal ones keep their existing fast-backoff/`maxRetries` behavior byte-for-byte.
 3. Verified at the source/test layer: binary header extraction (above) confirms the evaluator already rides the session model/fingerprint; host log confirms the error class. Live gateway replay was not re-run (free quota is an account-level resource); the pause/resume cycle is exercised deterministically in `test/controller.test.ts` with a fake clock, including recovery to `achieved` after the window clears.
 4. Tests (`test/controller.test.ts`, +2): a `Free usage limit reached` evaluator error with `maxRetries: 1` stays `active`, pauses at 15m, never exhausts the cap across repeated hits, and succeeds after the window clears; `isUsageLimitError` is scoped narrowly (429 / rate/usage/free-usage true; generic error, credit balance, timeout false). Full `bun run check` green; marker re-counted in-commit.
+
+> Superseded in premise by Workstream CXXVII: the judge no longer shares the parent's free-usage bucket, so the
+> shared-bucket 429 is addressed at the source. The `usage_limit` pause path itself remains in the tree as a
+> defensive backstop.
+
 ## Workstream CXXIII — repo-scoped .term artifacts always anchor at the git root (2026-11-21)
 
 Armed by the user's report: launching OpenCode from a subfolder (`Projects/goal-loop/docs/`) left a `.term/`
@@ -9391,3 +9409,743 @@ goal stuck with no exit and no clear instruction.
    with `pauseCause: "usage_limit"`, arms no timer (advancing the clock does not re-evaluate), resumes on a user
    message, and lands `achieved` once the quota clears; the wire validator accepts the new cause; the HUD names the
    escape hatch. Full `bun run check` green; marker re-counted in-commit.
+
+## Workstream CXXVII — judge with a real child session, not an auxiliary generate (2026-11-21)
+
+Armed by a live `/goal` on `opencode/hy4-flash-free` (the same model for worker and judge) that kept pausing with
+`Evaluator failed (Free usage limit reached …)` — HTTP 429, body `FreeUsageLimitError`. Earlier attempts read the
+symptom as affinity (CXXI: bind the judge to `x-opencode-session`) or classification (CXXII: 15m retry, CXXVI:
+pause on usage limit). Both left the judge on an **auxiliary generate path** — stateless `ctx.generate.text` for
+pinned/independent mode, `ctx.session.generate` for inherit/session mode. Flipping `event.kind` in a hook did not
+change the gateway request shape: those paths are not `kind: "primary"` turns, so the free-tier gate still
+rejected them. The working session's own primary turn on the same model always succeeded.
+
+### Root cause
+
+`ctx.generate.text` mints a fresh `SessionID.create()` per call (OpenCode `generate.ts`); `ctx.session.generate`
+is a single `llm.generate` step with session affinity but is still an auxiliary request. The gateway meters free
+usage on a `kind: "primary"` turn in a real session — only `ctx.session.prompt` runs one. A child session created
+for each verdict passes that gate, and its text is observable on `ctx.event.subscribe`. It must be a fresh,
+standalone session (no `parentID`): a child bound to the parent caused a synthetic-message wake loop on the parent
+and shared the quota bucket.
+
+### Decision
+
+Choice: redefine ONLY the two generation ports in `src/index.ts` to spawn a fresh child session per verdict; leave
+`src/runtime/evaluator.ts`, the controller, prompts, verdict parser, config and record shape byte-unchanged — no
+new port, no capability guard, no fallback. Reason: the defect is in how the host issues the generation, not in
+verdict logic, and every judge call site (verdict, loop summary, next-goal, consensus second opinion) already
+funnels through those two ports. Reverse it if the host exposes a stateless primary-kind generation that passes
+the free-tier gate without a child session.
+
+### Change
+
+1. `src/index.ts` · `spawnJudge(model, prompt, signal)`: `ctx.session.create({ location: ctx.location,
+   agent: "general", model, title: "evaluator" })` with no `parentID`; subscribes to `ctx.event`, accumulates
+   `session.text.delta` for that child, resolves on `session.execution.succeeded` (empty string on `failed` or
+   abort), drives the turn with `ctx.session.prompt`, and removes the child in `finally`.
+2. Generation ports: `modelGenerate` = `spawnJudge` directly; `sessionModelGenerate` resolves the current model
+   via `ctx.session.get({ sessionID }).model` (variant preserved) then calls `spawnJudge`. Pinned independent mode
+   passes `config.evaluator.model`; inherit mode resolves per generation, so a mid-goal model switch is followed.
+   The old stateless/`session.generate` paths are removed outright — no fallback.
+3. `judgeChildren` Set: the existing `generate` hook strips tools and caps output tokens while a child judge is in
+   flight (`if (!evaluator.isEvaluating(event.sessionID) && !judgeChildren.has(event.sessionID)) return`). Small
+   judges answer the rubric with a tool call, which yields empty text and burns the three repair attempts. The
+   child id is added on create and removed in `finally`.
+4. Untouched: evaluator retry/stall/turn-end detection, the `next:`/novelty rubric, the `verifyCommand` gate, the
+   `isUsageLimitError` pause safety net (CXXVI), persisted record shape, TUI, config and CLI.
+
+### Verification
+
+- Live end-to-end on `opencode/hy4-flash-free` for both worker and judge: `goal achieved`, `turns: 1`, `retries: 0`.
+  The 429 count was unchanged (940 → 940) — no new free-usage rejections.
+- `tsc --noEmit` clean; full `bun test` → **2155 pass / 0 fail**.
+- The pre-fix setup was reproduced live (same-model judge → `goal paused` / `Free usage limit reached`); the
+  child-session version clears it without a separate judge model or waiting for the quota window.
+
+### Honest limits
+
+- Each verdict creates and removes a child session (one `session.create` + `session.remove` per judge call). That
+  is host plumbing, not model tokens — the judge's tokens are still not metered into the goal record.
+- Verified on the installed v2.3.2 binary with `opencode/hy4-flash-free`; other providers/gateways are covered only
+  by the pinned-model unit path.
+- CXXI's inheritance of the *model* is retained (resolved via `ctx.session.get`); what is superseded is its
+  *generation* route. CXXII/CXXVI's shared-bucket premise is removed, but their `usage_limit` pause net stays as a
+  defensive backstop for genuine quota exhaustion.
+
+> Supersession: CXXI's `ctx.session.generate` route and the shared-bucket premise behind CXXII/CXXVI are replaced
+> by this workstream; their text is kept verbatim as history.
+
+<!-- spec-check files=141 tests=2155 -->
+
+## Workstream CXXVIII — audit recent changes: remove the redundant judge port, fix judge abort handling (2026-11-21)
+
+Status: specified first (fuzzy request), then implemented and verified against this section.
+
+### Interpretation
+
+"Review recent changes" = re-read the tree as truth (`git log`, `git status`, `git diff`) and audit the work landed
+in the last several commits plus the in-flight CXXVII child-session-judge change. "Update the legacy codes / remove
+them" = delete code, ports, comments and tests left behind by the CXXI→CXXVII evaluator-generation refactor that no
+longer describe or serve the current architecture. "Fix what needs fixing" = correct the genuine correctness defects
+that review exposes, with tests and a green canonical check.
+
+### Evidence reviewed (fresh re-read, not narration)
+
+- `git log --oneline -15`: CXXV prompt bound (`4ce22bd`), CXXVI usage-limit pause (`5802ce8`), TUI rebuild
+  (`d507305`), two dead prompter exports removed (`ef805cf`, lease `eod-cleanup-1`), audit follow-up (`d956b7a`),
+  plus the uncommitted CXXVII child-session judge (SPEC section, changelog, `src/index.ts`, `test/plugin.test.ts`).
+- `src/index.ts` / `src/runtime/evaluator.ts`: three generation ports exist. `modelGenerate` and
+  `sessionModelGenerate` are BOTH `spawnJudge` after CXXVII — identical child-session generations. `sessionModel`
+  resolves the parent model for inherit mode at `resolveModel`; `sessionModelGenerate` resolves it a SECOND time.
+- `src/runtime/evaluator.ts` doc comments and `test/evaluator.test.ts` "session fingerprint" tests still describe
+  the removed `ctx.session.generate` / stateless `ctx.generate.text` architecture.
+
+### Findings
+
+1. **Legacy port (redundant code + double host call).** `EvaluatorDeps.sessionModelGenerate` and `ModelChoice.bindToSession`
+   existed only to distinguish affinity-bearing `ctx.session.generate` from stateless `ctx.generate.text`. CXXVII made
+   both generation ports spawn the same kind of fresh child session, so the distinction is gone: inherit mode now pays
+   two `ctx.session.get` lookups per verdict (one in `resolveModel`, one in `sessionModelGenerate`) and carries a port
+   whose only remaining behavior is a duplicate model resolution plus a hard throw on a missing model (whereas the
+   documented fallback is graceful). Remove the port, the flag, and the duplicate lookup; route every resolved judge
+   through the one `modelGenerate` port.
+2. **Bug (judge can outlive its budget).** CXXVII `spawnJudge` installs an `onAbort` that resolves its `done` promise,
+   but calls `ctx.session.prompt(...)` WITHOUT the abort signal and then `await`s it. When the evaluator aborts
+   (`underBudget` timeout / user interrupt / session change), `done` resolves but the awaited prompt can stay pending,
+   so `spawnJudge` does not return and the `finally` child cleanup is deferred — defeating the named timeout.
+   Pass the signal to the host prompt and race it against `done` so abort always converges promptly.
+3. **Legacy docs/tests.** Comments in `evaluator.ts` and the "rides the parent session fingerprint" tests in
+   `test/evaluator.test.ts` assert the removed affinity semantics; update them to the child-session reality.
+
+### Acceptance criteria (the condition this workstream must satisfy)
+
+1. Recent changes are reviewed with git evidence and findings are recorded above.
+2. `sessionModelGenerate` and `bindToSession` are gone from `src/runtime/evaluator.ts` and `src/index.ts`; inherit mode
+   resolves the model once (via `sessionModel`) and generates through `modelGenerate`.
+3. `spawnJudge` propagates its abort signal to `ctx.session.prompt` and converges on abort; a regression test proves a
+   never-resolving prompt cannot hang the judge past the signal.
+4. Stale comments and tests are rewritten; no test depends on the removed port.
+5. `bun run check` is green (tsc, full suite, dist, TUI, docs, invariant, spec) and the enforced SPEC marker is
+   re-counted in-commit.
+6. Work is committed on `wt/<slug>` and submitted via the coordinator; no direct dev/main commit.
+
+### Verification
+
+- Targeted: `bun test test/evaluator.test.ts test/plugin.test.ts` in the worktree. Two regression pins cover the
+  changed behavior: a judge child converges (and is removed) even when the host prompt never settles but the signal
+  is propagated; and an inherited-model judge child is toolless via `judgeChildren` while the parent session is no
+  longer marked in-flight.
+- Canonical: `bun run check` (full output kept in the commit evidence).
+- Coordinator: `coordinator status --json` shows the lease submitted; `submit` gates on claimed paths.
+
+### Honest limits / follow-up
+
+- The default `session` evaluator mode still uses `ctx.session.generate` (the `sessionGenerate` port); CXXVII did not
+  route it through a child session. Its in-session prompts rely on the parent transcript, so converting it requires
+  standalone transcript-digest prompt variants and a live free-tier replay. Recorded as a follow-up, not claimed fixed
+  here; CXXVII's verified independent/inherit child-session path is unchanged.
+- No live gateway replay: free-tier quota is an account resource. Abort convergence is proven deterministically with a
+  fake host prompt that never resolves on its own.
+
+
+## Workstream CXXIX — route the default session-mode judge through the child session (2026-11-21)
+
+Trigger: after CXXVII/CXXVIII the user still saw `◎ Goal paused — Free usage limit reached …` and reported that
+"the evaluator is not triggering the subagent we just built". Re-reading the tree: those workstreams rewired only
+`modelGenerate` (pinned independent / inherit) and the now-removed `sessionModelGenerate` port. The default
+`evaluator.mode: "session"` calls a *different* port, `sessionGenerate`, which still ran
+`ctx.session.generate` — the auxiliary request the gateway rejects with `FreeUsageLimitError`. A goal armed with
+no evaluator config therefore never created an "evaluator" child at all.
+
+### Change
+
+1. `src/index.ts` · `sessionGenerate` now resolves the parent session's current model, renders the parent's
+   transcript digest (`ctx.session.context` → `stripGoalEvaluations` → `renderTranscript`, bounded by
+   `maxTranscriptChars`), embeds it as `<conversation>…</conversation>` before the rubric prompt, and calls the
+   same `spawnJudge` as independent mode. The embedding is required because session mode's rubric audits "the
+   conversation above" — a standalone child has none of its own.
+2. The `context` hook keeps the last `<goal-evaluation>` message for judge children as well as for the parent
+   (`judgeChildren.has(event.sessionID)`), so the child's own evaluation prompt is not stripped as self-talk.
+3. Shared `evaluatorContext` / `sessionModel` helpers replace the duplicated port bodies. `src/runtime/evaluator.ts`
+   is untouched — no retry, stall, turn-end, verdict, config or record-shape changes. The one `usage_limit` pause
+   reason in `controller.ts` is reworded: the judge child, not the parent session, is what hit the quota.
+
+### Verification
+
+- New `test/plugin.test.ts` regression drives a plain default-mode goal and asserts exactly one child is created
+  with `title: "evaluator"`, `agent: "general"`, the current `location` and no `parentID`; the goal reaches
+  `achieved` from that child's verdict. Two older plugin tests that mocked `ctx.session.generate` were moved to
+  the child-session lifecycle.
+- Full `bun test` → **2158 pass / 0 fail**. `tsc --noEmit` clean. Live E2E on `opencode/hy4-flash-free` in default
+  session mode is recorded in the commit that lands this change.
+
+### Honest limits
+
+- Session mode now judges from the same bounded digest as independent mode rather than the host's full injected
+  context; the digest cap is the existing `maxTranscriptChars`, unchanged here.
+- If the parent session has no active model the judge fails loudly rather than silently falling back to the old
+  auxiliary path — the path is removed, not guarded.
+
+<!-- spec-check files=141 tests=2158 -->
+
+## Workstream CXXX — ship a first-class evaluator agent and delegate verdicts to it (2026-11-21)
+
+Status: **implemented**. The judge is now an agent type the plugin owns, with its own system prompt, spawned as a
+native-looking child of the working session — it appears in the terminal's subagents view while it evaluates.
+This supersedes the hand-rolled child plumbing in CXXVII–CXXIX (which is removed, not left as a fallback).
+
+### Interpretation
+
+"Reuse OpenCode's child session and wire the evaluator into it" means two things now: (1) the plugin ships an
+`evaluator` **agent type** with a real system prompt, not just a rubric passed to `general`; (2) a verdict is
+produced by a native-looking delegation — a `parentID` child of that agent type — so it appears in the terminal's
+subagents view while it runs. The visible, appeal-to-the-user part is the point: an `evaluator` child shows up under
+the working session and the user can navigate to it and watch the judgment happen. The free-tier fix (a real
+`kind: "primary"` child turn) and the no-wake guarantee must survive the redesign.
+
+### Evidence from the host (v2.3.2 source, read before planning)
+
+- Plugins can register agents: the promise `Context` exposes `ctx.agent.transform` (`@opencode/plugin` `dist/promise/agent.d.ts`), and `AgentEditor.update(id, fn)` **creates** the agent when absent (`packages/core/src/agent.ts`: `const current = editor.agents.get(id) ?? Info.default(id)`). The host defines its own agents exactly this way in `packages/core/src/plugin/agent.ts`, setting `item.system`, `item.name`, `item.description`, `item.mode = "subagent"` and permissions.
+- `Agent.Info` carries `system`, `description`, `mode: "subagent" | "primary" | "all"`, `hidden`, `color` and `permissions` — everything a first-class agent type needs.
+- Native delegation shape (`packages/core/src/tool/plugin/subagent.ts`): `sessions.create({ parentID, title: description, agent, model })` → `sessions.prompt({ sessionID: child.id, text: "You are a subagent spawned by another session.\n" + prompt, resume: false })`.
+- Completion (`subagent-report.ts` → `subagent-completion.ts`) delivers the child's last assistant text to the parent as `<subagent sessionID=… state=… description=…>…</subagent>` with metadata `{ source: "subagent", childID, agent, state }`. The plugin can reproduce the report with `ctx.session.synthetic`, which accepts `delivery` and `resume: false`.
+- TUI (`packages/tui/src/routes/session/composer/subagents-tab.tsx`) lists every `sessionFamily` child of the current session — a `parentID` child is enough to appear; `session.agent` supplies the label and `title` the task name. No plugin-only flag is needed.
+- Plugin API gap: there is no Job domain on the plugin context, so the plugin cannot start a host `"subagent"` Job and cannot produce the TUI activity chip that a host-delegated task gets. The subagents-tab entry and the synthetic report are the achievable native surfaces; confirm visually before claiming more.
+
+### Design
+
+1. **Register the agent in `setup()`** — `ctx.agent.transform`: `editor.update("evaluator", …)` with `name: "Evaluator"`, `description: "Judges whether the armed /goal condition holds from visible evidence; replies with one verdict object."`, `mode: "subagent"`, `hidden: false`, a stable `color`, and permissions denying all tools. `mode: "subagent"` keeps it out of the primary-agent picker; deny-all makes tool calls impossible even before the generate hook.
+2. **Ship the system prompt** in a new module, e.g. `src/core/evaluator-agent.ts`, exporting `EVALUATOR_SYSTEM_PROMPT` as the single source of truth and pinned by a test. It must stay short and identity-focused; the long evidence matrix / output contract remain in the existing per-verdict rubric, byte-identical. Proposed text:
+
+   > You are the Evaluator, a subagent shipped by the goal-loop plugin. Your only job is to decide whether the armed completion condition holds.
+   >
+   > You receive one evaluation request with the condition, harness facts, a rubric and the evidence transcript. Judge solely from that evidence. You have no tools and cannot run commands or read files.
+   >
+   > - Credit only fresh evidence visible at the current HEAD. Narration, prior verdicts and absence of failure are not proof.
+   > - Apply the rubric clause by clause, name material gaps or contradictions, and never invent evidence.
+   > - Answer with exactly one JSON object in the form the rubric requires — no preamble, no prose, no questions.
+
+3. **Spawn as that agent** — one fresh child per verdict: `ctx.session.create({ parentID: sessionID, title: "evaluator", agent: "evaluator", model })`, with the model resolved from pinned config or the parent's current model as today. Prompt with the host's native prefix ("You are a subagent spawned by another session.") plus the existing rubric prompt, `resume: false`. Fresh per verdict keeps judges isolated from their own earlier conclusions.
+4. **Collect and report** — keep the existing `ctx.event.subscribe` collector (`session.text.delta` → verdict, `session.execution.succeeded`/`failed` → finish), the `judgeChildren` handling in the `generate` and `context` hooks (tools stripped, tokens capped, live evaluation prompt kept), and add the synthetic `<subagent>` report with `delivery: "queue", resume: false` so the completion is visible in the parent without starting a new turn.
+5. **Lifecycle** — do not remove the child on verdict; native subagents persist and stay navigable. Do not wake the parent from any judge event.
+6. **Untouched** — rubric text, verdict parsing, retry/stall/turn-end detection, controller, config, record shape and HUD. The system prompt is additive, not a rewrite of the rubric.
+
+### Acceptance criteria
+
+1. The `evaluator` agent is registered at setup with the shipped system prompt, `mode: "subagent"`, deny-all permissions and a visible name; a test pins the registration and the prompt text.
+2. A live `/goal` shows an `evaluator` child under the working session in the TUI while the verdict runs, navigable by the user; its completion appears as a `<subagent>` report in the parent transcript.
+3. No parent turn is started by the child or its report (`resume: false`, queued delivery), and no `FreeUsageLimitError` / 429 is introduced on `opencode/hy4-flash-free`.
+4. Tool stripping, token cap and evaluator self-talk hygiene still hold on the judge child.
+5. Verdicts still parse through the unchanged parser; full `bun run check` green.
+6. No new config key, plugin id, command, port or persisted field.
+
+### Verification plan
+
+- Unit: pin the agent registration payload and system prompt; assert a default-mode goal creates one child with `parentID: ses_1`, `title: "evaluator"`, `agent: "evaluator"`; assert the prompt carries the native prefix, rubric and digest; assert one synthetic report with native metadata, `delivery: "queue"`, `resume: false`, and that no parent turn is started.
+- Live: run the real e2e harness on `opencode/hy4-flash-free` with the server log symlinked outside the watched project dir (an in-tree log triggers a plugin-reload storm that aborts judges — observed this pass), and with an account whose free quota is open (the last run hit an account-level 429 with `retryAfterMs ≈ 29,461,000`, blocking all live verification). Observe the child in the TUI, the report in the parent, `goal achieved`, and an unchanged 429 count.
+- Gates: `bun run check` green; SPEC marker re-counted in the implementation commit.
+
+### Honest limits / open decisions
+
+- The plugin cannot create a `"subagent"` Job, so the host's activity chip may remain absent; the subagents-tab child plus the synthetic report are the achievable surfaces. If full chip parity is required, the host must expose Job creation to plugins.
+- One child per verdict grows the session family over a long loop. Accepted for visibility/isolation now; revisit only if measured as costly.
+- The synthetic report lands in the parent transcript and can become judge evidence on later turns. Decide whether the digest strips `<subagent>` judge reports: keep = the judge sees its own prior conclusion; strip = cleaner evidence but the report stays visible in the TUI.
+- CXXVII–CXXIX stay in the tree until this plan is approved and landed; their plumbing is the fallback state, not the target.
+
+> Decision (one line): register a first-class `evaluator` agent with its own system prompt and spawn verdicts as `parentID` children of that agent with a queued, non-waking synthetic report — because that is what makes the judge appear as a real delegated subagent in the terminal without waking the working session; reverse it if the host exposes Job creation to plugins or the report proves harmful as judge evidence.
+
+### CXXX implementation record (2026-11-21)
+
+Shipped:
+
+- `src/core/evaluator-agent.ts` — single source of truth for `EVALUATOR_AGENT_ID` (`evaluator`), `EVALUATOR_AGENT_TITLE`, `SUBAGENT_PROMPT_PREFIX` (the host's exact `"You are a subagent spawned by another session.\n"`) and `EVALUATOR_SYSTEM_PROMPT`. The rubric in `core/prompts.ts` stays byte-identical; the system prompt only supplies identity and boundaries.
+- `src/index.ts · setup()` — registers the agent through `ctx.agent.transform` → `editor.update("evaluator", …)` with `name: "Evaluator"`, `mode: "subagent"`, `hidden: false`, a stable color, the system prompt and a deny-all permission rule. `update` creates the agent when absent, so registration is idempotent across plugin reloads.
+- `spawnJudge(parentSessionID, model, prompt, signal)` — creates one fresh child per verdict with `parentID`, the task title and `agent: "evaluator"`; prompts it with the native prefix + rubric and `resume: false`; collects text from `session.text.delta`, finishes on `session.execution.succeeded`/`failed`; admits a queued, non-waking `<subagent …>` synthetic report with the host's metadata (`source/childID/agent/state`). The child is no longer removed — native subagents persist and stay navigable.
+- `src/runtime/evaluator.ts` — `modelGenerate` now carries the parent `sessionID` through `judgeGenerate(choice, sessionID)` to both verdict and loop-step children. Session mode embeds the parent digest as before; both modes now run in the same first-class agent child.
+- Legacy cleanup: no `session.remove` for judges, no `agent: "general"` judges, no auxiliary `session.generate`/`generate.text` fallbacks remain. Stale comments naming `session.generate` were rewritten to describe judge children. The `generate` hook now strips tools **only on judge children** — the old parent-side `isEvaluating` check could strip a user turn's tools if a message arrived mid-evaluation; the parent has not been a generation surface since CXXVII. Verdict parsing, retry/stall/turn-end detection, controller, config, record shape and HUD are untouched.
+- `<subagent>` judge reports are deliberately **kept** in the parent transcript: they are the visible native artifact, and the rubric already discounts prior verdicts as non-evidence. The digest strips `<goal-evaluation>` self-talk as before.
+
+Verification (fresh at this HEAD):
+
+- `bun run check` green — `tsc --noEmit` clean, `2159 pass / 0 fail` (29 snapshots), `check:dist`, `compile`, `check:tui`, `docs:check`, `check:invariant`, `check:spec`. Marker re-counted to `files=142 tests=2159` (new shipped module) and `package-integrity.test.ts` re-pinned to 142 packed paths.
+- Unit pins: agent registration payload and prompt text; one child per verdict with `parentID: ses_1`, `title/agent: evaluator`, native prompt prefix and `resume: false`; one queued `<subagent>` report with native metadata and `resume: false`; no child removal; generate-hook tool stripping on judge children.
+- Live host check (no provider tokens spent): a real standalone `opencode serve` with the plugin loaded returns `evaluator` from `GET /api/agent` with `mode: "subagent"`, `hidden: false`, the shipped system prompt, description and color — proving first-class registration end-to-end against the actual host.
+- Full live `/goal` E2E remains blocked by the account-level free quota: the worker turn itself fails with `provider.free-limit` 429 (`FreeUsageLimitError`, `retryAfterMs ≈ 29,461,000`, reset ≈ 2026-11-22 00:02 UTC). No child design can clear a genuine account-level exhaustion; the redesign only removes the *extra* auxiliary-call rejection that was the original bug. The e2e harness log is symlinked outside the watched directory (`/tmp/opencode/e2e-clean/server.log` → `/tmp/opencode/e2e-clean-logs/server.log`) to avoid the plugin-reload storm an in-tree log causes.
+
+Honest limits (confirmed this pass):
+
+- The plugin cannot create a host `"subagent"` Job, so the TUI activity chip of a host-delegated task is not reproduced. The subagents-tab child plus the `<subagent>` report are the achievable native surfaces; full chip parity needs host exposure.
+- Agent deny-all is attempted but the host merges its v1 default permission rules *after* agent transforms (`packages/core/src/v1/config/permission.ts`, last-match-wins), so a live `/api/agent` read shows those allows after the deny. The **generate-hook tool strip** is the actual toolless guarantee and is unit-pinned; the deny is best-effort defense in depth.
+- One child per verdict grows the session family over a long loop; accepted for visibility/isolation, revisit only if measured costly.
+
+> Decision (one line): register a first-class `evaluator` agent with its own system prompt and spawn verdicts as `parentID` children of that agent with a queued, non-waking synthetic report — it makes the judge appear as a real delegated subagent in the terminal without waking the working session; reverse only if the host exposes Job creation to plugins or the report proves harmful as judge evidence.
+
+## Workstream CXXXI — a failed judge child keeps its provider classification (2026-11-21)
+
+Status: specified first (fuzzy request), then implemented and verified against this section.
+
+### Interpretation
+
+"Resume the audit" means re-read the tree as truth (`git status`, `git log`, `git diff`) and review the in-flight CXXX
+work (first-class `evaluator` agent, parented child per verdict, synthetic `<subagent>` report). Fix the genuine
+regression it introduced; do not repeat CXXVIII or re-litigate CXXX's design.
+
+### Evidence reviewed and failing test first
+
+- `src/index.ts · spawnJudge` swallowed both judge failure paths: `ctx.session.prompt(...).catch(() => {})` discarded a
+  rejected prompt and `session.execution.failed` only set `state = "error"` then `finish("")`. The evaluator saw an
+  empty string and threw `EvaluationError("unreadable verdict after 3 attempts: \"\" …")`.
+- `isUsageLimitError` (`core/errors.ts`) keys on 429 / "rate limit" / "usage limit" / "quota", and
+  `controller.evaluationFailed` pauses only when that detector fires. The generic empty-verdict error never did, so
+  CXXVI's pause safety net was dead for CXXX judge children.
+- A test was written first (`test/plugin.test.ts`): a judge-child `session.execution.failed` carrying "Free usage limit
+  reached" with `maxRetries: 1` must leave the goal `paused` / `pauseCause: "usage_limit"`. On unmodified CXXX it
+  **failed**: status was `failed` with "unreadable verdict after 3 attempts: \"\"".
+
+### Finding and minimal fix
+
+1. **Bug — judge failure loses its cause (regression vs CXXVI).** In `src/index.ts` alone, `spawnJudge` now captures the
+   host error from `session.execution.failed` `data.error`/`reason`/`message` and from a rejected `session.prompt`,
+   then throws an `Error` whose message preserves that text (including a numeric `status`) after emitting the visible
+   `<subagent>` report. An external abort (the evaluator's own timeout/interrupt) is explicitly not reclassified as a
+   provider failure. Callers can now classify a quota error and pause. No evaluator/controller port, rubric, agent
+   registration or report shape changed.
+
+### Acceptance criteria
+
+1. A judge-side free-usage error pauses the goal with `pauseCause: "usage_limit"` even with `maxRetries: 1`, and the
+   synthetic report still shows `state: "error"` in the parent.
+2. A generic judge failure keeps the ordinary retry path (message carries the original text; no false pause).
+3. `bun run check` green (tsc, full suite, dist, TUI, docs, invariant, spec); marker re-counted in-commit.
+4. Work committed on `wt/<slug>` and submitted; no direct dev/main commit.
+
+### Verification
+
+- Failing test first on unmodified CXXX (`failed`), then passing after the one-file fix (`paused` / `usage_limit`).
+- Targeted `bun test test/plugin.test.ts`; canonical `bun run check` on the merged tree.
+
+### Follow-ups recorded, deliberately not changed here
+
+- `<subagent>` reports carry the judge's own prior verdict into the transcript digest; CXXX chose to keep them
+  visible, and stripping them from model-bound context is a separate hygiene change.
+- The `controller.evaluationFailed` comment still says the judge shares the session's fingerprint/quota bucket;
+  stale prose after CXXX, cosmetic only.
+
+### Honest limits
+
+- No live gateway replay (account-level free quota). Propagation is proven deterministically from a host-shaped
+  `session.execution.failed` payload. If a host emits neither that event nor a prompt rejection, the evaluator's own
+  budget still bounds the judge and aborts as before.
+
+## Workstream CXXXII — native delegated verdicts and a clean evidence digest (2026-11-21)
+
+### Why
+
+CXXX's judge was a plugin-created child with a synthetic completion: the `↳ Evaluator finished` notice rendered, but
+the live `Evaluator Subagent — …` chip was missing because that chip only exists for a real `subagent` tool part.
+The child's first message also dumped a raw `JSON.stringify` of tool arguments and full file bodies into a
+`<conversation>` block, which buried the evidence the rubric asks the judge to weigh.
+
+### What changed
+
+1. The kickoff directive (`core/prompts.ts · DELEGATE_VERDICT`) tells the worker to obtain each verdict by calling the
+   native task tool with `agent: "evaluator"`. That produces the real chip while the judge runs and a native
+   `<subagent>` completion when it finishes. Continuations carry the shorter reminder.
+2. A prompt hook scoped to `evaluator` children of a live goal appends a structured `<goal-evaluation>` block with
+   the condition, a turn fact line and a clean transcript digest. Other prompts are untouched; enrichment is
+   best-effort and never blocks admission.
+3. `Evaluator.evaluate` prefers a delivered native report: `src/index.ts · nativeVerdict` reads the newest unused
+   `<subagent>` completion from the evaluator agent and consumes it once (a duplicate turn-end cannot re-arm from
+   the same report). The native child is a session-mode judge, so its result becomes the `primary` and still passes
+   through the `consensus: 2` gate — delegation never buys a one-vote `met`. Plugin fallback-judge reports are
+   excluded by childID (`findNativeReport`) so a prior turn's verdict is never replayed as a fresh one, and reports
+   still `running` are left for the host's final delivery. A missing or unreadable report is fail-closed `not_met`
+   with a directive to delegate — the generation child was removed from the per-turn verdict path because it hit
+   the free-tier gate. It survives only for the opt-in `consensus: 2` second vote and `/goal-loop` summarize/next-
+   condition steps. No config key, command, persisted field or port contract changed; the optional report reader is
+   a constructor dependency, not a new port method.
+4. `core/transcript.ts` now summarises tool arguments by identifying field (a bash command verbatim, other tools by
+   at most two scalar fields) and indents output under `output:` / `error:` headers instead of dumping raw JSON.
+   Tool-name/state markers, newest-first packing, budgets and surrogate-safe truncation are unchanged.
+
+### Acceptance criteria
+
+1. A delivered evaluator report is consumed as the verdict with no generation call; absent report uses the fallback.
+2. The digest shows `command: <text>` and structured output, never `{"command":…}`.
+3. `bun run check` green; marker re-counted in-commit (`tests=2178`); packed files unchanged at 142.
+
+### Review fixes (same workstream)
+
+- The first cut's native report reader could replay the *previous* turn's fallback-judge verdict: the plugin's
+  `spawnJudge` synthetic carries the same `source: "subagent"` / `agent: "evaluator"` metadata as a native report.
+  `findNativeReport` now excludes reports whose `childID` belongs to a plugin judge (tracked in `pluginJudgeIDs`),
+  and skips `state: "running"` reports, so every consumed verdict belongs to the turn that produced it.
+- `Evaluator.evaluate` returned a native verdict before the `consensus: 2` gate, letting one delegated child rule
+  `met` where two judges are required. The result is now the `primary` with `via: "session"` and runs the existing
+  consensus path.
+- `EvaluatorPort.nativeVerdict` was declared but never implemented or called (the constructor dep is the real
+  wiring); removed so the port contract is genuinely unchanged. `<condition>` in the enrichment block is escaped
+  like `directive()` does, and tool-argument summaries now share one budget instead of capping each field.
+
+### Audit fixes (same workstream)
+
+- A failed or unreadable native report used to be returned as a legitimate `not_met`, starving both the generation
+  fallback and the quota pause (`evaluationFailed` never saw a 429). `verdictFromNativeReport` now **throws** on
+  `state: "error"` and unreadable bodies; `Evaluator.evaluate` rethrows quota errors so the controller pauses and
+  fails other failures closed to `not_met`. No generation child runs for a verdict.
+- Native reports had no turn association, so a report left unconsumed by a failed/superseded read could be replayed
+  as a later turn's verdict. `findNativeReport` now takes the current `turn`, ignores any report delivered before
+  that turn's `<marker>` steer (`metadata.source: "goal"`, `metadata.turn`), and rejects reports first observed in a
+  different turn via `seenNativeTurns` — a stale `met` can no longer advance the goal on outdated evidence.
+
+### Honest limits
+
+- The chip appears only when the worker actually delegates; the directive is an instruction, not a guarantee.
+  Without a report the verdict is fail-closed `not_met` and the worker is re-steered to delegate; there is no
+  generation fallback (it hit the free-tier gate).
+- No live E2E replay: account-level free quota (429, reset ≈ 2026-11-22 00:02 UTC) still blocks a real `/goal` run.
+  The native report path is pinned by deterministic unit tests against host-shaped `<subagent>` messages.
+- Full TUI activity-chip parity for plugin-spawned children remains impossible: the plugin context has no Job domain
+  and no tool-progress callback; the chip now comes from the host's own tool call, not from plugin emission.
+
+## Workstream CXXXIII — native-only verdicts, no generation judge (2026-11-21)
+
+### Why
+
+Even after CXXXII preferred the native delegated report, a missing or failed report still fell through to the
+plugin's own generation child. That child is an auxiliary generate call and kept hitting the account-level free
+usage limit (429) — the goal looked broken even though the native path worked.
+
+### What changed
+
+1. `Evaluator.evaluate` no longer has a generation verdict path. The per-turn verdict comes only from the
+   worker's native `evaluator` subagent report. A missing report or a failed read is fail-closed `not_met` with a
+   reason telling the worker to delegate; a quota error is rethrown so the controller pauses with `usage_limit`.
+2. The generation child (`src/index.ts · spawnJudge`) is retained only for the opt-in `consensus: 2` second vote
+   and `/goal-loop` summarize/next-condition steps — removing those would break the loop feature and an existing
+   config option. Default (`consensus: 1`) never generates during a verdict.
+3. Stale documentation corrected: `docs/config.html`, `src/core/config.ts` and code comments now describe the
+   native-only default. No config key, command, persisted field or port contract changed.
+
+### Verification
+
+- `bun run check` green; marker re-counted in-commit; packed files unchanged at 142.
+- Native report selection/exclusion, fail-closed missing/failed reports, quota rethrow, and the retained
+  consensus/loop generation paths are pinned by unit tests.
+
+## Workstream CXXXIV — native evaluator reads the parent's tool summary, not the raw transcript (2026-11-21)
+
+### Why
+
+A real session (`ses_e0098ece6ffeTolK2m5fCkkGiE`) was inspected in the OpenCode SQLite store (`session_v2`,
+`session_message`). Its four delegated `evaluator` children each received the correct `<condition>` from the
+enrichment hook, yet returned four different verdicts about four *other* conditions ("coordinator rules exist in
+the tree", "goal-loop was created, planned, or installed", "fix the failing tests", "fix the arithmetic error").
+The hook was firing; the problem was the evidence it appended. `renderTranscript` packed the whole raw parent
+context under `maxTranscriptChars` (20k). In a long-lived session that digest grew to ~22k chars and carried prior
+`<subagent>` verdicts, goal continuations quoting stale evaluator reasons, the original directive and the worker's
+narration of all of it. A small/free model latched onto a stale condition instead of the explicit one. The same
+bloat made "just do a simple instruction while a goal is active" unreliable for the worker.
+
+### What changed
+
+1. `src/core/transcript.ts` gains `renderParentSummary`: a tight, deterministic digest of the worker's **own tool
+   calls and their results**, newest first, under a small budget. User directives, synthetic prior verdicts, goal
+   continuations, compaction summaries and assistant narration are all dropped — narration is not evidence.
+2. `src/core/prompts.ts · nativeEvaluationRequest` builds the *whole* native request from two inputs only:
+   `<original-goal>` and `<parent-summary>`. There is no `<conversation>` dump, no `<facts>` and no rubric echo —
+   a bloated or vague goal cannot be implemented against stale material the evaluator never sees. Closing tags in
+   either input are escaped so the structure cannot be broken.
+3. `/goal-loop` is structurally different: `<original-goal>` holds the constant `<objective>`, the numbered
+   `<iteration>vN of M</iteration>`, this iteration's `<condition>`, and a compacted `<prior-iterations>` ledger
+   (newest three entries plus an explicit omitted count, drawn from the record's `loopHistory`). Old v1/v2/v3
+   directives are summarized, never replayed verbatim. `src/index.ts` supplies this from the live loop record.
+4. `src/index.ts` caps the parent summary at 4k chars (well below the 20k generation-judge budget;
+   `maxTranscriptChars` is untouched for the judge paths). `EVALUATOR_SYSTEM_PROMPT` repeats the scope guard in the
+   agent identity, so it survives even if a worker's own delegation text is noisy. `DELEGATE_VERDICT` is shortened
+   to remove redundant constraints.
+5. The same compaction applies to the **worker's** context: `compactGoalInstructions` keeps only the newest
+   `<goal>` / `<goal-loop>` / `<goal-continuation>` message while a goal is live and drops the older ones (each arm
+   already re-states the condition and carries the bounded ledger). This stops stale evaluator reasons from past
+   turns piling up and crowding out simple instructions.
+6. No new config key, command, persisted field or port contract. `/goal-loop` summarize/next-condition and opt-in
+   `consensus: 2` still use the full generation-judge transcript.
+
+### Verification
+
+- `bun run check` green; marker re-counted in-commit; packed files unchanged at 142.
+- Unit tests pin that stale conditions/prior verdicts/narration never reach the child while fresh tool evidence
+  does, that tool-free turns yield an empty summary, that a small budget keeps the newest evidence, and that the
+  structured plain/loop requests carry exactly their intended sections (with older loop versions compacted).
+
+
+## Arm-time planner (CXXXV)
+
+A raw `/goal` / `/goal-loop` body — often a pasted block from another model — is now distilled before the worker
+sees it. One short, toolless `planner` child reads only the raw text and returns
+`{"condition":"...","scope":"trivial|code"}`. That condition becomes the stored goal condition: the worker and the
+evaluator read the same text, so they cannot drift.
+
+- `src/core/planner.ts` owns the agent id, system prompt, bounded request and tolerant JSON parser. A missing,
+  unreadable, quota-blocked or timed-out plan falls back to the raw text — never to the old heuristic essays.
+- `src/index.ts` runs the planner on both arm paths (the `/goal` command and a leading `/goal-loop` in a plain
+  prompt), guards the child's own prompt from enrichment/re-arm, and strips its tools.
+- `directive(..., planned = true)` skips `isFuzzyCondition`'s SPEC.md paragraph, the opencode-cli guide and the
+  coordinator commit essay. A three-word conversational goal no longer spends a turn on SPEC.md and claim workflow.
+- No new config key, command, persisted field or port contract. `/goal-loop` summarize/next-condition and opt-in
+  `consensus: 2` are unchanged; per-turn verdicts remain native-only.
+
+### Verification
+
+- `bun run check` green in a clean environment; marker re-counted to `files=143 tests=2192` in-commit.
+- Tests pin the request shape, tolerant parsing (fence/prose/default scope/garbage/empty/bound), and that a planned
+  directive drops the fuzzy + coordinator essays while an unplanned one keeps them.
+
+## Native verdict report race + stale-condition guard (CXXXVI)
+
+Two long-horizon correctness bugs found while verifying CXXXV, both fixed without changing the evaluator port contract.
+
+**Report race.** A worker's native `evaluator` child commonly finishes a fraction of a second *after* the parent's
+execution goes idle. The first context read at turn end saw no `<subagent>` report, failed closed to `not_met`, and
+wrote the next turn's kickoff marker; the late report then landed before that marker and was orphaned — the source
+of repeated "no evaluator subagent report for this turn" continuations and wasted turns.
+
+- `src/index.ts · nativeVerdict` now re-reads the context on a bounded 3s / 200ms grace window when the first read
+  finds nothing. No next-turn marker exists while `evaluate()` is still awaiting the verdict, so a late report is
+  still attributed to the turn that produced it. The window respects the abort signal.
+- `src/core/evaluator-agent.ts · findNativeReport` pins a report's first-observed turn only when it is actually
+  returned. A child first seen `running` is no longer pinned, so a completion arriving after the next marker is
+  still consumable instead of being permanently excluded by the `seenTurns` guard.
+
+**Stale-condition guard.** The free-tier judge sometimes replays a verdict for an entirely different goal
+(observed: a "roadmap-renderer.html" and an "anti-dup marker" verdict while the armed condition was "Reply with
+the single word DONE."). A verdict for the wrong condition must never advance the goal.
+
+- `nativeEvaluationRequest` asks for an echoed `condition` field and declares itself the single authoritative
+  output contract (the worker's task text is no longer the only format the judge sees).
+- `verdictFromNativeReport(body, expectedCondition)` extracts the echo (`condition`/`condition_echo`/`echo`/`goal`,
+  strict or lenient JSON) and rejects a *mismatched* echo — case/punctuation-insensitive with containment and close
+  token overlap so a small model's paraphrase still passes. A *missing* echo is accepted: a live run showed the
+  free-tier judge following the worker's shorter contract and omitting the echo, which made strict rejection stall
+  the loop on `not_met` every turn. The rejection path is a fail-closed `not_met`.
+- `src/index.ts · nativeVerdict` supplies the armed condition from `controller.activeCondition(sessionID)`, so a
+  loop iteration cannot be advanced by a verdict echoing the previous iteration's condition.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2197` in-commit.
+- Tests pin: echo extraction/aliases, exact/paraphrased/stale echoes, `verdictFromNativeReport` rejection,
+  echo-less verdict acceptance (no regression), running-report non-pinning, and plugin-level stale-echo rejection,
+  echo-less acceptance, plus a report landing after the first context read being consumed in the same turn.
+
+## Evaluator scores the parent turn, not its own delegation (CXXXVII)
+
+Live session `ses_e003809c3ffe` (armed condition "simple reply back: hi") exposed three coupled failures: the
+worker re-delegated three times because the judge returned verdicts about conditions from `AGENTS.md`
+("dogfood / dev / merge to main", probe-test work). Root cause, all fixed without a config/command/persisted/port change:
+
+- `src/core/transcript.ts · renderParentSummary` previously kept only tool parts. The only tool call in a
+  text-only reply turn was the `task` call that spawned the judge itself, so the judge read its own armed prompt
+  ("working in background") as "parent evidence" and, with no real evidence, judged an ambient condition. The
+  digest now drops `task`/`subagent`/`delegate` calls whose `agent` is `evaluator`, and keeps a message's text when
+  it has no remaining tool work (a pure reply is the work product for a communication goal); narration interleaved
+  with real tool output is still dropped because the tool output is the proof.
+- `src/core/prompts.ts · DELEGATE_VERDICT` now tells the worker to state its answer in the reply *before* calling
+  `task` in the same turn. Previously "when your turn is done, delegate" led a small model to delegate first and
+  write `hi` 25 ms later — after the judge's prompt was already built.
+- `src/index.ts` enrichment hook re-reads the parent context after a bounded 250 ms settle when the first read
+  finds no evidence, so a mid-turn delegation still scores the turn's actual output. `nativeEvaluationRequest` and
+  `EVALUATOR_SYSTEM_PROMPT` now name `AGENTS.md`/`SPEC.md`/other sessions explicitly as forbidden conditions and
+  direct a not_met when the summary has no supporting evidence, instead of letting the judge substitute one it
+  remembers.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2202` in-commit.
+- Tests pin: the judge's own delegation call never reaching the digest, a pure-text reply being kept as evidence,
+  narration beside tool work still dropped, and the enriched child prompt naming `<condition>` as the sole goal.
+
+## Judge context isolation + single-turn digest (CXXXVIII)
+
+Live session `ses_dffecb743ffee` (armed condition `reply: hi`) needed six worker messages and six native judge
+children before a verdict landed. Every child received the correct injected `<condition>`, but each also carried a
+~7,168-token cached project prefix (AGENTS.md/SPEC.md from the child's directory) and a digest that accumulated
+every reply since session start. On `9router-go/KiloCode-Free` that noise won: four judges returned verdicts about
+other sessions' goals (build/TUI/tests/GUI), and the worker answered each with another delegation.
+
+- `src/index.ts · context hook` strips host-injected system parts from evaluator children except their own identity
+  part, so the judge's system prefix carries no project docs or other conditions. Worker sessions are untouched.
+- `src/core/transcript.ts · currentTurnStart` finds the newest `<goal>` kickoff / goal steer, and
+  `renderParentSummary` accepts a `since` index. The enrichment hook scopes the digest to that turn only: pre-goal
+  chatter and prior replies no longer compete with the current answer.
+- `src/core/prompts.ts · DELEGATE_VERDICT` now says to delegate exactly once per turn and not re-delegate after a
+  report arrives — the harness decides whether another turn is needed.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2207` in-commit.
+- Tests pin: evaluator system isolation vs. worker rules, turn-start detection, and `since`-scoped digest.
+
+## Arm-time plan in the checking prompt + foreign-verdict guard (CXXXIX)
+
+Live session `ses_dffcbe0b` (condition `replay: hello.`) still needed four parent turns. The worker skipped
+delegating twice, then the native judge returned a verbatim verdict from an unrelated i18n/Astro review
+(`rests_on`, `target_files`, `observed_evidence`, `verified_this_turn`, `status: "met"`). The injected condition was
+correct — this was a gateway completion replay plus a parser that accepted `status` as a verdict key.
+
+- `src/core/evaluator-agent.ts · verdictFromNativeReport` now rejects bodies carrying a foreign rubric's keys and
+  requires an authoritative `verdict` / `met` field. `status` / `result` alone are never a decision, so a cached
+  `status: "met"` can no longer advance a goal. Echo-less small-model `met` verdicts are still accepted.
+- `src/core/prompts.ts · nativeEvaluationRequest` accepts the arm-time planner's `scope` and a per-verdict `nonce`.
+  A `trivial` scope tells the judge that a direct reply in the parent summary is sufficient evidence; the nonce
+  changes the prompt prefix so a prefix-keyed gateway cache cannot replay another session's completion.
+- `src/index.ts` keeps the planner's scope in memory per armed session (no new config key, command, persisted
+  field or port contract) and supplies both fields when the check prompt is built. The plan itself is the stored
+  condition the worker already sees; replaying its scope on the check keeps worker and judge on the same reading,
+  so a trivial goal lands on the first verdict instead of waking the parent through several needless turns.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2210` in-commit.
+- Tests pin foreign-contract rejection, authoritative-key requirement, the trivial-arm-plan hint and nonce prefix.
+
+## First-arm goal bar + no re-arm on an unusable verdict (CXL)
+
+Live sessions 20261121_165841/165928 (`replay: hi.`) exposed two flow defects at HEAD. The first `/goal` arm
+showed only the background "Distilling goal into a concise condition…" toast — no goal bar — because the
+record is armed only *after* the planner returns (`src/index.ts · planGoal` before `controller.command`), and a
+`notice` never becomes a `changed` snapshot. The other tab sat in a wake→delegate loop: the native judge replayed
+a verdict from another goal (`chain_verdict: continuation`), the CXXXIX guard rejected it, `Evaluator.evaluate`
+fail-closed to `not_met`, and the normal continuation steer re-armed the worker, which re-delegated to the same
+polluted judge — repeating indefinitely.
+
+- `src/runtime/controller.ts · showPlanning` emits a transient, non-persisted `GoalSnapshot` (`queued: true`,
+  raw condition) straight to the ports before planning; the real `arm()` commit replaces it. No new status,
+  persisted field, command, config or port contract — the existing queued pill face renders it.
+- `src/runtime/evaluator.ts · EvaluatorVerdictError` is thrown for an unreadable, foreign or failed native report
+  instead of returning a fail-closed `not_met`. A turn with no delegated report at all still fails closed to
+  `not_met` so the worker can delegate next turn; a quota error propagates unchanged; a caller with no native port
+  keeps the legacy directive.
+- `src/runtime/controller.ts · evaluationFailed` pauses on that typed error with `pauseCause: "repeated_failure"`
+  and the verdict diagnostic — no continuation steer, no retry timer. A user message resumes; `/goal clear` or a
+  fresh `/goal` starts over. A genuine `not_met` still continues the loop unchanged, so `/goal-loop`
+  summarize/next-condition and opt-in `consensus: 2` are untouched.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2214` in-commit.
+- Tests pin the transient planning snapshot (no stored record, no directive), the typed error on unreadable native
+  reports (no-report still fails closed), and the pause-with-resume path replacing the re-arm loop.
+- Appendix-A single-line steer ref re-pointed to `controller.ts:1167` after the controller insertions; each
+  SPEC ref still lands on a non-blank line.
+
+## Workstream CXLI — fix the position-layer inversion: the harness judges, the worker does not (2026-11-22)
+
+Live goal sessions kept showing the parent narrating or judging its own verdict after the `evaluator` child
+finished. Since CXXXII the worker delegated the verdict with the `task` tool and the harness polled the parent
+transcript for the resulting `<subagent>` report. The host's `subagent-report.ts` always calls `deps.wake(parentID)`
+when any child finishes, so the child's completion woke the working parent regardless of the verdict; the parent
+then became the evaluator. CXXXVII–CXL reduced the damage (clean digest, turn scoping, foreign-verdict guard,
+pause on unusable reports) but left the position inversion in place.
+
+### Root cause
+
+A child with `parentID` is a *subagent* to the host. `deliverReport` admits its `<subagent>` completion into the
+parent transcript and wakes the parent unconditionally. No amount of prompt wording can make a wake conditional on
+the verdict: the wake happens before the harness parses one. The verdict must never arrive as a child completion of
+the working parent.
+
+### Decision
+
+Choice: make the judge a HARNESS-OWNED STANDALONE child session — `ctx.session.create({ location, agent:
+"evaluator", model, title })` with NO `parentID`, driven by `ctx.session.prompt` with its text read from
+`ctx.event.subscribe` (the CXXVII primary-turn pattern, so the free-tier gate still passes). With no `parentID`,
+the host's `subagent-report.ts` early-returns (`!initial?.parentID && jobState.mode === "none"`): no report is
+admitted to the parent and `deps.wake(parentID)` is never called by the child. `nativeVerdict` builds the full
+`nativeEvaluationRequest` from this turn's evidence, runs the child, and passes its text through
+`verdictFromNativeReport`; `Evaluator.evaluate` then decides: `met`/`impossible` stays terminal with no steer,
+only `not_met` dispatches the synthetic continuation (the sole wake, and only when more work is needed). Reverse it
+only if the host exposes a way to deliver a child report without waking its parent.
+
+### Change
+
+1. `src/index.ts · spawnEvaluator`: drop `parentID`, the host `SUBAGENT_PROMPT_PREFIX`, and the synthetic
+   `<subagent>` report delivery; return the child's raw text. `evaluatorChildren` stays for generate/context
+   shaping only. `pluginEvaluatorIDs`, `consumedReports`, `seenNativeTurns`, the report grace/poll loop and the
+   prompt-hook enrichment block for worker-delegated children are removed.
+2. `src/index.ts · nativeVerdict`: build the rubric with `nativeEvaluationRequest` from the current turn's
+   `renderParentSummary` (with the bounded settle retry, arm-plan scope, nonce and loop fields), spawn the child
+   on the session's current model, and parse its text through `verdictFromNativeReport`. Foreign/echo/unreadable
+   text throws; quota/child failure propagates so the controller still pauses on usage limits.
+3. `src/core/prompts.ts`: `DELEGATE_VERDICT` now says to report evidence and end the turn — do not delegate,
+   judge, or narrate the verdict; `continuation()` says the harness judges after the turn. The evaluator-agent
+   registration, tool-stripping generate hook and project-doc-stripping context hook are unchanged.
+4. `src/runtime/evaluator.ts`: `nativeVerdict` doc and the two no-verdict `not_met` reasons no longer tell the
+   worker to delegate; the typed `EvaluatorVerdictError` / consensus behavior is unchanged.
+
+### Verification
+
+- `bun run check` green; marker re-counted to `files=143 tests=2215` in-commit.
+- Tests pin: no delegation instruction in kickoff/continuation, the harness rubric built from fresh tool evidence,
+  the standalone child's text parsed through the authoritative guard, foreign/unreadable child text pausing the
+  goal, no synthetic report / wake on judge completion, and the existing transcript/guard/consensus coverage.
+
+### Honest limits
+
+- The judge no longer appears nested in the parent's subagents tab; it is a standalone session instead. It still
+  persists and stays navigable (no `session.remove`).
+- `findNativeReport` / `parseSubagentReport` stay exported for transcript tooling and tests, but are no longer on
+  the live verdict path.
+
+## Workstream CXLII — the judge must actually run; the worker never judges (2026-11-22)
+
+CXLI moved the verdict into a harness-owned standalone child, but live goals still paused after 120s with
+`no usable evaluator subagent verdict: evaluator timed out after 120s (native verdict)`. The child was created with
+no `parentID`, yet its prompt carried `resume: false`. The host wakes a session's execution only when
+`resume !== false` (`packages/core/src/session/session.ts`, `execution.wake`), so the prompt reached the inbox and
+nothing else happened: no text delta, no `session.execution.succeeded`, no verdict. CXXXVII used a plain
+`ctx.session.prompt({ sessionID, text })`; CXXX added the flag behind worker delegation, which hid the bug; 9667b4c
+restored standalone children without removing it. The same flag sat on `planGoal`, so the planner timed out at 30s
+and silently fell back to the raw goal body.
+
+### Root cause
+
+`resume: false` is an execution wake opt-out, not a "don't notify the parent" switch. Removing it does not restore
+the parent wake: the judge has no `parentID` and is not a host subagent Job, so `subagent-report.ts` early-returns
+with a no-op deliver (`!initial?.parentID && jobState.mode === "none"`) and never calls `deps.wake(parentID)`.
+Only a `not_met` continuation steer wakes the worker. The child also has to run as a `kind:"primary"` turn to pass
+the free-tier gate.
+
+### Decision
+
+Choice: drive both standalone children with the plain two-field prompt call — no resume opt-out — and keep parent
+wake suppression structural (no `parentID`, no subagent Job). Position-layer: append one exported
+`DELEGATE_VERDICT` constant as the final line of every worker-facing prompt, so the worker reports evidence and
+ends its turn while the harness alone judges. Reverse the resume part only if the host gains a wake-free prompt
+mode for children; reverse the position part only if a worker verdict can be trusted without waking the worker.
+
+### Change
+
+1. `src/index.ts · spawnEvaluator` / `planGoal`: remove the resume opt-out from both `ctx.session.prompt` calls;
+   rewrite the stale comment with the real reason (no-parentID + no subagent Job suppress the parent wake).
+   Event collection, abort/quota classification and controller logic are unchanged.
+2. `src/core/prompts.ts`: `DELEGATE_VERDICT` now forbids stating, declaring or assessing the verdict; it is the
+   last line of `directive()` and is appended to `continuation`, `retry`, `checkin`, `loopContinuation`,
+   `loopReanchor` and `systemReminder`. `continuation()` drops its weaker custom wording. Worker-facing lines
+   that invited self-judging ("Prove progress", "until the condition holds", "the evaluator will not mark the
+   goal met") and the exact "Already satisfied at HEAD" audit reply are gone; the evaluator rubric keeps its own
+   wording. Commit-rule text outside those clauses is byte-unchanged.
+3. Tests: byte pins updated; the universal invariant is asserted for all seven worker-facing builders; two new
+   plugin tests capture the actual judge and planner prompt calls and assert no resume property. Both fail against
+   the old bug (verified by temporary mutation), and the goal still reaches `achieved` from the judge's own text.
+
+### Verification
+
+- `bun run check` green: tsc, full suite, dist/tui/docs/invariant/spec gates; marker re-counted in-commit.
+
+### Honest limits
+
+- The no-judge contract is prose, not a host-enforced capability: the worker still has tools and could ignore it.
+  The harness ignores any self-declared verdict, so a lapse costs a turn, not the goal's correctness.
+- The planner still runs only outside tests and probe mode; the new pin lifts `NODE_ENV` locally for one test.

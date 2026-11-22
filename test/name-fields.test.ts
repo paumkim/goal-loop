@@ -102,4 +102,26 @@ describe("SPEC naming declaration", () => {
     expect(read("bin/goal-loop.mjs")).toContain("github:paumkim/goal-loop#v")
     expect(read("src/core/config.ts")).toContain("OPENCODE_GOAL_")
   })
+
+  test("evaluator vocabulary: judge is a prose verb, checking is UI-only, identifiers use evaluator", () => {
+    expect(namingBlock).toContain("`evaluator`")
+    expect(namingBlock).toContain("prose verb")
+    expect(namingBlock).toContain("`checking` is the literal TUI label")
+    expect(namingBlock).toContain("armPlanScope")
+    for (const file of ["src/index.ts", "src/runtime/evaluator.ts", "src/core/evaluator-agent.ts", "src/core/prompts.ts"]) {
+      const text = read(file)
+      expect(text, `${file}: judgeChildren`).not.toMatch(/\bjudgeChildren\b/)
+      expect(text, `${file}: pluginJudgeIDs`).not.toMatch(/\bpluginJudgeIDs\b/)
+      expect(text, `${file}: spawnJudge`).not.toMatch(/\bspawnJudge\b/)
+      expect(text, `${file}: judgeGenerate`).not.toMatch(/\bjudgeGenerate\b/)
+      expect(text, `${file}: asJudgeError`).not.toMatch(/\basJudgeError\b/)
+      expect(text, `${file}: armScope`).not.toMatch(/\barmScope\b/)
+    }
+    expect(read("src/index.ts")).toContain("evaluatorChildren")
+    expect(read("src/index.ts")).toContain("nativeVerdict")
+    expect(read("src/index.ts")).toContain("spawnEvaluator")
+    expect(read("src/index.ts")).not.toContain("pluginEvaluatorIDs")
+    expect(read("src/runtime/evaluator.ts")).toContain("evaluatorGenerate")
+    expect(read("src/core/prompts.ts")).toContain("armPlanScope")
+  })
 })

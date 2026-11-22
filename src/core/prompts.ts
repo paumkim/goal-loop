@@ -6,6 +6,17 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 /** Marks every message this plugin writes, so hooks and digests can recognize them. */
 export const MARKER = "goal"
 
+/**
+ * The worker never judges or delegates the verdict: the harness runs a standalone evaluator child after the turn
+ * and only a `not_met` verdict wakes the worker with more work. Kept as one exported constant and appended to every
+ * worker-facing prompt builder so the kickoff, loop/retry/checkin steers and the system reminder all carry the
+ * same absolute contract — not just the kickoff directive.
+ */
+export const DELEGATE_VERDICT =
+  `Do the work and report the evidence in your reply, then end your turn. A separate evaluator judges the ` +
+  `condition after your turn. Never state, declare, or assess whether the condition is met — do not delegate, ` +
+  `judge, or narrate the verdict.`
+
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 
 /**
@@ -32,7 +43,7 @@ const steerReason = (reason: string, fallback: string) => {
  */
 function commitRule(policy: CommitPolicy) {
   if (policy.required && policy.mode === "coordinator") return coordinatorFlow(policy)
-  return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on, or a \`git status\` on that branch with no uncommitted changes. Work that is done but uncommitted is not done work, and the evaluator will not mark the goal met without a visible commit on \`${policy.branch}\`.`
+  return `Commit rule: the working directory is a git repository. Before the goal counts as done, commit the finished work to the \`${policy.branch}\` branch and show the commit output: the commit hash and the branch it landed on, or a \`git status\` on that branch with no uncommitted changes. Work that is done but uncommitted is not done work, and the work is not complete without a visible commit on \`${policy.branch}\`.`
 }
 
 const DONE = "before the goal counts as done"
@@ -169,7 +180,7 @@ const AUDIT_AND_STOP: ReadonlyArray<string> = [
   `Before working, audit the armed condition against CURRENT HEAD:`,
   `(i) enumerate what the condition requires — files, tests, gates, docs;`,
   `(ii) check each requirement against the tree at current HEAD using only fresh command output produced this turn — never summaries;`,
-  `(iii) if every requirement already holds, respond exactly: Already satisfied at HEAD <sha>. Evidence: <fresh command output>. No new work is produced by this iteration. — and stop; do not redo or fake the work.`,
+  `(iii) if the required work is already present at HEAD, report it with fresh command output and stop — do not state a verdict about the goal.`,
   `If something is missing, proceed and show evidence.`,
 ]
 
@@ -179,12 +190,16 @@ function loopPreamble(loop: LoopPreamble): string[] {
     `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Objective (constant): ${escape(loop.objective)}`,
     `Prior iterations:\n${historyBlock(loop.history)}`,
-    `Keep the objective in mind, not just this condition; the loop arms the next iteration when this one is met.`,
+    `Keep the objective in mind, not just this condition; an independent evaluator checks this iteration and decides what comes next.`,
   ]
 }
 
-/** First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals. */
-export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble): string {
+/**
+ * First turn: the condition itself is the directive. `loop` is set only for `/goal-loop` goals.
+ * `planned` marks a condition distilled by the arm-time planner: the condition is already self-contained, so the
+ * heuristic fuzzy / opencode-cli / coordinator essays are skipped entirely — that bloat is what the planner removes.
+ */
+export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble, planned = false): string {
   const lines = [
     `<goal>`,
     ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
@@ -192,20 +207,24 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     `</goal>`,
     ``,
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
-    `Work autonomously toward this goal until the condition holds. After each of your turns an independent evaluator checks the condition using only what is visible in this conversation.`,
+    `Do the work below, then end your turn. A separate evaluator decides whether the condition is met using what is visible in this conversation.`,
     ``,
-    `Prove progress with evidence: run the checks the condition implies and let their output show. Do not stop to ask for confirmation unless you are truly blocked.`,
+    `Show command output when it is part of the work. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
-  if (isFuzzyCondition(condition)) {
-    lines.push(
-      ``,
-      `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
-    )
+  if (!planned) {
+    if (isFuzzyCondition(condition)) {
+      lines.push(
+        ``,
+        `Fuzzy request: write SPEC.md first (interpretation, acceptance criteria, verification incl screenshot/render for visual), then build, verify against SPEC, commit.`,
+      )
+    }
+    if (isOpencodeCliCondition(condition)) {
+      lines.push(``, opencodeCliGuide())
+    }
+    if (policy.required) lines.push(``, commitRule(policy))
   }
-  if (isOpencodeCliCondition(condition)) {
-    lines.push(``, opencodeCliGuide())
-  }
-  if (policy.required) lines.push(``, commitRule(policy))
+  // Last line on purpose: the no-judge injunction is the final thing the worker reads, after every other rule.
+  lines.push(``, DELEGATE_VERDICT)
   return lines.join("\n")
 }
 
@@ -228,9 +247,10 @@ export function loopContinuation(
     ``,
     ...AUDIT_AND_STOP,
     ``,
-    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it; when it is met, the loop summarizes this iteration and arms the next. Prove progress with evidence.`,
+    `Work autonomously toward this condition under the same rules: after each of your turns an independent evaluator checks it, and the loop acts on that result.`,
     policy.required ? `Before you call it done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-loop>`,
+    DELEGATE_VERDICT,
   ].join("\n")
 }
 
@@ -257,6 +277,7 @@ export function loopReanchor(input: { iteration: number; maxLoops: number; objec
     ``,
     `The compaction cut the thread, not the loop: keep working toward the armed condition. Do not wait for a user message.`,
     `</goal-loop-reanchor>`,
+    DELEGATE_VERDICT,
   ].join("\n")
 }
 
@@ -270,9 +291,10 @@ export function continuation(input: { condition: string; turn: number; reason: s
     `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     ...(learnings ? [``, escape(learnings)] : []),
     ``,
-    `Take the next concrete step, then show the evidence (command output, test results) that demonstrates the condition. If a turn or time limit in the goal applies, report progress against it.`,
+    `Take the next concrete step, then show the evidence (command output, test results) from your work. If a turn or time limit in the goal applies, report progress against it.`,
     policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
     `</goal-continuation>`,
+    DELEGATE_VERDICT,
   ].join("\n")
 }
 
@@ -285,6 +307,7 @@ export function retry(input: { condition: string; label: string; learnings?: str
     ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "prompt") : ``,
     `</goal-retry>`,
+    DELEGATE_VERDICT,
   ].join("\n")
 }
 
@@ -309,6 +332,7 @@ export function checkin(
     ...(learnings ? [``, escape(learnings)] : []),
     policy.required ? commitRuleSentence(policy, "checkin") : ``,
     `</goal-checkin>`,
+    DELEGATE_VERDICT,
   ].join("\n")
 }
 
@@ -375,9 +399,9 @@ export const isGoalNoteMessage = (message: unknown): boolean => {
 export const stripGoalNotes = <T>(messages: ReadonlyArray<T>): T[] => messages.filter((m) => !isGoalNoteMessage(m))
 
 /**
- * The evaluator's own voice echoed back into the transcript. `session.generate` appends the `<goal-evaluation>`
- * rubric prompt to the live session on every evaluation turn, and nothing removes it: it then rides model-bound
- * context on every later turn and floods the independent evaluator's transcript digest (~5 KB of self-talk per
+ * The evaluator's own voice echoed back into the transcript. Every judge child carries the `<goal-evaluation>`
+ * rubric prompt, and nothing removes it: it then rides model-bound context on every later turn and floods the
+ * evaluator's transcript digest (~5 KB of self-talk per
  * turn, ~27% of a saturated digest). The rubric explicitly discounts prior verdicts, so this text is not evidence —
  * it is the evaluator talking to itself. Use-and-forget: drop it from model-bound context once it has been answered.
  * Compaction checkpoints are history, never a live evaluation prompt, so they are never mistaken for one.
@@ -423,12 +447,13 @@ export const stripGoalEvaluations = <T>(messages: ReadonlyArray<T>, options: { r
 export function systemReminder(condition: string, policy: CommitPolicy): string {
   const lines = [
     `An active /goal is set for this session: ${escape(condition)}`,
-    `An independent evaluator checks it after every turn from visible evidence only. Keep working until it holds and surface proof (command output, test results) in the conversation.`,
+    `An independent evaluator checks it after every turn from visible evidence only. Do the work and surface proof (command output, test results) in the conversation.`,
   ]
   if (policy.required) {
     if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy))
     lines.push(commitRuleSentence(policy, "system"))
   }
+  lines.push(DELEGATE_VERDICT)
   return lines.join("\n")
 }
 
@@ -530,7 +555,72 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
   return lines.join("\n")
 }
 
-/** Appended to the live session transcript by `session.generate` (session evaluator). */
+/**
+ * The whole request the harness's standalone evaluator child gets. The harness builds the summary from the
+ * parent's current turn and passes it here; the worker never supplies it. Two inputs only: the original goal and
+ * that summary. No raw transcript dump — in a long-lived session that carried prior verdicts about other
+ * conditions and a small model judged those instead of the armed one.
+ *
+ * `/goal-loop` is structurally different: the original goal is the constant objective, the armed condition is one
+ * numbered iteration (v1, v2, …) of it, and completed iterations ride as a compacted ledger (newest three, with an
+ * explicit omitted count) instead of their old directives. No generation call, no new persisted field.
+ */
+export function nativeEvaluationRequest(input: {
+  readonly condition: string
+  readonly summary: string
+  /** The arm-time planner's scope, replayed on the check so a trivial reply is judged as a reply. */
+  readonly armPlanScope?: "trivial" | "code"
+  /** Per-verdict unique token: keeps a free-tier gateway from replaying a cached completion for another prompt. */
+  readonly nonce?: string
+  readonly loop?: {
+    readonly objective: string
+    readonly iteration: number
+    readonly maxLoops: number
+    readonly history: ReadonlyArray<LoopEntry>
+  }
+}): string {
+  const tag = (text: string) => text.replace(/<\/(original-goal|parent-summary|objective|condition|iteration|prior-iterations|goal-evaluation)>/gi, "<\\/$1>")
+  const goal = input.loop
+    ? [
+        `<objective>${tag(input.loop.objective)}</objective>`,
+        `<iteration>v${input.loop.iteration} of ${input.loop.maxLoops}</iteration>`,
+        `<condition>${tag(input.condition)}</condition>`,
+        `<prior-iterations>${historyBlock(input.loop.history, REANCHOR_HISTORY_INJECT_LIMIT)}</prior-iterations>`,
+      ]
+    : [`<condition>${tag(input.condition)}</condition>`]
+  return [
+    `<goal-evaluation>`,
+    // The arm-time plan is the distilled condition itself (the worker already works from it); replay its scope
+    // here so a conversational goal is scored as a conversation. Without this a small judge demands command
+    // output for "reply: hi", rules not_met, and wakes the parent through another needless turn.
+    ...(input.armPlanScope === "trivial"
+      ? [`Arm plan: this is a trivial reply goal — a direct answer in <parent-summary> is sufficient evidence. Do not require command output or file changes.`, ``]
+      : []),
+    // A short unique id near the top changes the prompt prefix on every verdict, so a gateway that keys its
+    // (broken) completion cache on the prefix cannot hand back another session's cached verdict.
+    ...(input.nonce ? [`Verdict request ${tag(input.nonce)}`, ``] : []),
+    `You are judging ONE condition. The only condition that exists for this verdict is the text inside <condition> in <original-goal> below.`,
+    `Ignore every other condition you can see or remember — project docs (including AGENTS.md / SPEC.md), earlier verdicts, goal continuations, other sessions, and the parent's narration. They belong to different goals. Never judge or name one of them.`,
+    ``,
+    `<original-goal>`,
+    ...goal,
+    `</original-goal>`,
+    ``,
+    `<parent-summary>`,
+    tag(input.summary.trim()) || "(the parent produced no answer or tool evidence this turn)",
+    `</parent-summary>`,
+    ``,
+    `The <parent-summary> above is the parent's complete work for this turn — judge it against the <condition> and nothing else. If it does not show evidence that the condition holds, answer not_met. Do not invent or import a different condition just because another one appears in your instructions or memory.`,
+    ``,
+    // The condition echo is a cross-session guard: a free-tier judge sometimes replays a verdict from a totally
+    // different goal. Require it to copy <condition> verbatim so verdictFromNativeReport can reject a stale reply.
+    `This is the authoritative output contract — ignore any other verdict format in this prompt.`,
+    `Answer with exactly one JSON object: {"verdict":"met"|"not_met"|"impossible","reason":"...","condition":"<copy the text inside <condition> above verbatim>"}. No preamble.`,
+    `</goal-evaluation>`,
+  ].join("\n")
+}
+
+/** Prompt for a session-mode evaluator child (its parent digest is embedded around it). */
 export function evaluateInSession(condition: string, input: EvaluationFacts, policy: CommitPolicy): string {
   return [
     `<goal-evaluation>`,
@@ -626,7 +716,7 @@ const SUMMARY_ASK = (input: LoopSummaryInput) => [
   historyBlock(input.history),
 ]
 
-/** Appended to the live session transcript by `session.generate` (session summarizer). */
+/** Prompt for a session-mode loop summarizer child. */
 export function summarizeInSession(input: LoopSummaryInput): string {
   return [
     `<goal-loop-summary>`,
@@ -670,7 +760,7 @@ const NEXT_GOAL_ASK = [
   `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
 ]
 
-/** Appended to the live session transcript by `session.generate` (session generator). */
+/** Prompt for a session-mode next-condition generator child. */
 export function nextGoalInSession(input: NextGoalInput): string {
   return [
     `<goal-loop-next>`,
@@ -758,7 +848,7 @@ export const STRICT_REPAIR = `Your previous reply was not valid. ${OUTPUT} Do no
 /**
  * The instruction grammar the plugin writes into the transcript: the `<goal>` kickoff, the `<goal-loop>`
  * arming/ continuation steers, `<goal-continuation>`, `<goal-retry>`, `<goal-checkin>`. Every one of these
- * carries "keep working until the condition holds" semantics. While a goal is live they are the state
+ * carries active-work semantics: do the work, leave the verdict to the harness. While a goal is live they are the state
  * carrier and must ride context; once no live goal exists for the session they are history that invites
  * the model to resume a finished goal — the exact post-compaction re-activation class. Suffixes are matched
  * on the opening tag only, so unknown shapes never match.
@@ -802,6 +892,25 @@ export const carriesGoalGrammar = (messages: ReadonlyArray<unknown>): boolean =>
  */
 export const stripGoalContext = <T>(messages: ReadonlyArray<T>): T[] =>
   messages.filter((m) => !isGoalNoteMessage(m) && !isGoalInstructionMessage(m))
+
+/**
+ * While a goal is live, only the newest goal directive is state. Every older `<goal>` / `<goal-loop>` /
+ * `<goal-continuation>` has been superseded: each arm re-states the armed condition and, for `/goal-loop`,
+ * carries the previous summary plus a bounded version ledger. Keeping all of them makes long loops bloat the
+ * worker's context with stale evaluator reasons. Keep the newest instruction, drop the older ones; all other
+ * messages (including compaction checkpoints) are untouched. Notes are stripped separately by the hook.
+ */
+export const compactGoalInstructions = <T>(messages: ReadonlyArray<T>): T[] => {
+  let last = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (isGoalInstructionMessage(messages[i])) {
+      last = i
+      break
+    }
+  }
+  if (last < 0) return messages.slice()
+  return messages.filter((m, i) => i === last || !isGoalInstructionMessage(m))
+}
 
 /**
  * One ground-truth line for a session whose goal ended in this process. Injected by the `context` hook into

@@ -29,6 +29,7 @@ import {
   type VerifyCheckEvidence,
 } from "../core/types.ts"
 import type { BackgroundPort, BackgroundWork, Clock, Delivery, EmitterPort, EvaluationResult, EvaluatorPort, Logger, PromptAttachments, SessionPort, VerifierPort } from "./ports.ts"
+import { EvaluatorVerdictError } from "./evaluator.ts"
 import type { BoundaryCompactResult } from "./compactor.ts"
 import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
@@ -657,7 +658,7 @@ export class GoalController {
   // ---------------------------------------------------------------- commands
 
   /** Entry point for `/goal <args>` and `/goal-loop <args>`. */
-  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean } & PromptAttachments): Promise<void> {
+  async command(input: { sessionID: string; text: string; delivery: Delivery; loop?: boolean; planned?: boolean } & PromptAttachments): Promise<void> {
     const parsed = parseGoalCommand(input.text, this.deps.config.maxConditionChars)
     switch (parsed.type) {
       case "status":
@@ -669,7 +670,7 @@ export class GoalController {
         this.notify(input.sessionID, "error", "error", `${input.loop ? "Loop" : "Goal"} not set`, parsed.message)
         return
       case "set":
-        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}) })
+        return this.set({ ...input, condition: parsed.condition, ...(input.loop ? { loop: true } : {}), ...(input.planned ? { planned: true } : {}) })
     }
   }
 
@@ -789,7 +790,7 @@ export class GoalController {
     return record
   }
 
-  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean; maxLoops?: number } & PromptAttachments): Promise<void> {
+  async set(input: { sessionID: string; condition: string; delivery: Delivery; loop?: boolean; maxLoops?: number; planned?: boolean } & PromptAttachments): Promise<void> {
     const { sessionID, condition } = input
     const loop = input.loop === true
     const maxLoops = input.maxLoops ?? this.deps.config.maxLoops
@@ -803,6 +804,7 @@ export class GoalController {
           condition,
           this.commitForSession(sessionID),
           loop ? { iteration: 1, maxLoops, objective: condition, history: [] } : undefined,
+          input.planned === true,
         ),
         delivery: input.delivery,
         ...(input.files?.length ? { files: input.files } : {}),
@@ -813,6 +815,37 @@ export class GoalController {
       if (this.goals.get(sessionID) === record) this.finish(record, "failed", `Could not start the ${loopLabel.toLowerCase()}: ${errorMessage(error)}`)
       throw error
     }
+  }
+
+  /**
+   * Paint a transient goal bar while the arm-time planner distils the raw `/goal` body. The controller has no
+   * record yet (arming happens after planning), so this snapshot is emitted straight to the ports and never
+   * stored: the real `arm()` commit immediately replaces it with the authoritative condition. `queued` is the
+   * existing "work in flight" face, so no new status, field or TUI change is needed for the first arm to be visible.
+   */
+  showPlanning(sessionID: string, condition: string): void {
+    const now = this.deps.clock.now()
+    const snapshot: GoalSnapshot = {
+      version: 1,
+      id: `planning-${sessionID}`,
+      sessionID,
+      directory: this.directoryFor(sessionID),
+      condition,
+      status: "active",
+      setAt: now,
+      startedAt: now,
+      turns: 0,
+      stall: 0,
+      retries: 0,
+      checkins: 0,
+      baseline: EMPTY_USAGE,
+      history: [],
+      elapsedMs: 0,
+      evaluating: false,
+      waiting: false,
+      queued: true,
+    }
+    this.deps.emitter.changed(sessionID, snapshot)
   }
 
   /** User-visible notice for a present-but-invalid loop count suffix. Stated, never guessed; the default applies. */
@@ -2429,6 +2462,13 @@ export class GoalController {
   private evaluationFailed(record: GoalRecord, runtime: Runtime, tools: number, error: unknown) {
     const { log } = this.deps
     log.warn("goal evaluation failed", { sessionID: record.sessionID, error: errorMessage(error) })
+    // An unreadable/foreign/failed native verdict is not a `not_met` to continue from — the worker cannot repair
+    // the judge's output by taking another turn, and the old fail-closed path bounced wake→delegate→garbage forever.
+    // Pause with the diagnostic; a user message resumes, and /goal clear or a fresh /goal starts over.
+    if (error instanceof EvaluatorVerdictError) {
+      void this.pause(record, error.message, "repeated_failure")
+      return
+    }
     const usageLimit = isUsageLimitError(error)
     record.retries++
     // A free-tier usage/rate limit is provider/account state, not a fault another retry from this session can
@@ -2439,7 +2479,7 @@ export class GoalController {
     // for a user message to resume. A message re-arms evaluation; clearing or setting a separate judge model
     // are the other ways out.
     if (usageLimit) {
-      const reason = `Free usage limit reached — the judge shares this session's model/quota. Set a separate evaluator.model or wait for the quota window to reset, then send a message to resume.`
+      const reason = `Free usage limit reached — the judge child hit the provider's quota. Set a separate evaluator.model or wait for the quota window to reset, then send a message to resume.`
       void this.pause(record, reason, "usage_limit")
       return
     }
