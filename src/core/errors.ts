@@ -95,13 +95,14 @@ export function classifyFailure(error: FailureInfo | undefined): Classified {
   if (status === 402) return { kind: "fatal", label: "credit balance exhausted" }
   if (status === 404) return { kind: "fatal", label: "model not available" }
   if (status === 413) return { kind: "fatal", label: "context overflow that compaction could not clear" }
+  // A genuine quota signal (429 / quota code / asserted hit) pauses with the long window. Check it before the
+  // generic 5xx branch so a provider that wraps a quota hit in a 500 is not retried on the short transient
+  // backoff. A mere mention of a limit in an unrelated error must NOT get this label/branch — it would park the
+  // goal for 15m and mask a transient failure. isUsageLimitError is the single tight detector shared with the
+  // evaluator path, so both paths agree on what counts as a quota.
+  if (isUsageLimitError(error)) return { kind: "pause", label: "rate or usage limit" }
   if (status === 429) return { kind: "pause", label: "rate or usage limit" }
   if (status !== undefined && (status >= 500 || status === 408)) return { kind: "transient", label: "provider overloaded or unavailable" }
-  // A genuine quota signal (429 / quota code / asserted hit) pauses with the long window. A mere mention of a
-  // limit in an unrelated error must NOT get this label/branch — it would park the goal for 15m and mask a
-  // transient failure that a short backoff would clear. isUsageLimitError is the single tight detector shared
-  // with the evaluator path, so both paths agree on what counts as a quota.
-  if (isUsageLimitError(error)) return { kind: "pause", label: "rate or usage limit" }
   for (const [pattern, label] of PAUSE) if (pattern.test(text)) return { kind: "pause", label }
   for (const [pattern, label] of TRANSIENT) if (pattern.test(text)) return { kind: "transient", label }
   const message = (error?.message ?? error?.type ?? "unknown error").replace(/\s+/g, " ").trim().slice(0, 160)

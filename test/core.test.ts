@@ -259,6 +259,14 @@ describe("classifyFailure", () => {
     // Genuine quota signals keep the dedicated pause label/window, including provider codes and asserted hits.
     expect(classifyFailure({ type: "rate_limit_error", message: "provider rejected the request" })).toEqual({ kind: "pause", label: "rate or usage limit" })
     expect(classifyFailure({ message: "HTTP 429 too many requests" }).label).toBe("rate or usage limit")
+    // A provider may wrap an asserted quota hit in a 5xx; the quota signal must win over the generic
+    // transient 5xx branch, matching isUsageLimitError on the evaluator path.
+    for (const input of [
+      { status: 500, message: "rate limit exceeded" },
+      { status: 502, message: "Free usage limit reached" },
+    ]) {
+      expect(classifyFailure(input)).toEqual({ kind: "pause", label: "rate or usage limit" })
+    }
   })
   test("non-quota errors that merely mention a limit are not labelled a quota pause", () => {
     // Regression: the old PAUSE pattern matched a bare "rate limit"/"usage limit"/"quota" phrase anywhere and
