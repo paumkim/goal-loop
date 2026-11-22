@@ -265,7 +265,21 @@ var STATUS_LABEL = {
   failed: "failed after an unrecoverable error"
 };
 var statusLabel = (status) => STATUS_LABEL[status];
+var TRUNCATE_CACHE_LIMIT = 4096;
+var truncateCache = new Map;
 function truncate(text, max, ellipsis = "\u2026") {
+  if (max <= 0)
+    return "";
+  const key = JSON.stringify([max, ellipsis, text]);
+  const hit = truncateCache.get(key);
+  if (hit !== undefined)
+    return hit;
+  const result = truncateUncached(text, max, ellipsis);
+  if (truncateCache.size < TRUNCATE_CACHE_LIMIT)
+    truncateCache.set(key, result);
+  return result;
+}
+function truncateUncached(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
   const flat = text.replace(/\s+/g, " ").trim();
