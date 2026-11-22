@@ -22,7 +22,7 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { GAP, shortSha, stampOf } from "./dossier.ts"
+import { conditionCellOf, shortSha, stampOf } from "./dossier.ts"
 import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
 
@@ -110,8 +110,7 @@ const statusCell = (status: ReachCheckStatus): string =>
  */
 export function reachReportMarkdown(goal: GoalSnapshot, reach: ReachVerification, nowMs: number, directory: string): string {
   const stamp = stampOf(nowMs)
-  const condition = (goal.condition ?? "").replace(/\s+/g, " ").trim()
-  const conditionCell = condition.length > 200 ? `${condition.slice(0, 200)}…` : condition || GAP
+  const conditionCell = conditionCellOf(goal.condition)
   const lines: string[] = [
     "# /goal-loop record ancestry",
     "",

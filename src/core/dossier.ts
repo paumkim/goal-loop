@@ -19,6 +19,12 @@ import { iterationDurations, loopTotals, verdictCounts } from "./history.ts"
 /** Em-dash gap marker — the one thing every absent measurement renders as. */
 export const GAP = "—"
 
+/** Flatten a goal condition to one table cell: whitespace collapsed, 200 chars + ellipsis at most, GAP when empty. */
+export const conditionCellOf = (condition: string | undefined): string => {
+  const flat = (condition ?? "").replace(/\s+/g, " ").trim()
+  return flat.length > 200 ? `${flat.slice(0, 200)}…` : flat || GAP
+}
+
 /** ISO-8601 UTC for a timestamp; non-finite or unrepresentable input renders the gap, never a guess. */
 export const isoOf = (ms: number): string => {
   if (!Number.isFinite(ms)) return GAP
