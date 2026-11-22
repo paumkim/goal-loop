@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-22 03:21 UTC</code></td><td>fix(evaluator): preserve structured quota signal in judge failures</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 03:13 UTC</code></td><td>fix(core): align classifyFailure quota ordering with isUsageLimitError</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 03:05 UTC</code></td><td>fix(core): require a genuine quota signal, not a limit phrase</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 01:42 UTC</code></td><td>fix(goal): wake the standalone judge; keep the worker from judging</td><td>commit</td></tr>
@@ -41,7 +42,6 @@
 <tr><td><code>2026-11-21 02:39 UTC</code></td><td>fix(evaluator): strip tools from judge generations, log unreadable replies</td><td>commit</td></tr>
 <tr><td><code>2026-11-21 02:25 UTC</code></td><td>fix(review): repair prompter retry/whitelist/shutdown paths and tighten verdict forward-pointer + lenient parser</td><td>commit</td></tr>
 <tr><td><code>2026-11-21 02:22 UTC</code></td><td>fix(runtime): flip the waiting pill to active on session heartbeats, instantly</td><td>commit</td></tr>
-<tr><td><code>2026-11-21 01:46 UTC</code></td><td>feat(prompter): bundle autonomous work loop; dedupe improvement prompts and coordinator steps</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
