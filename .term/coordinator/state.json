@@ -5026,6 +5026,25 @@
       ],
       "mergedAt": "2026-11-22T20:07:27Z",
       "mergedInto": "dev"
+    },
+    "why-ledger-column-fill": {
+      "agent": "build",
+      "paths": "src/tui-history.tsx,test/tui-render.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
+      "branch": "wt/why-ledger-column-fill",
+      "worktree": "worktrees/wt-why-ledger-column-fill",
+      "status": "claimed",
+      "createdAt": "2026-11-22T20:09:10Z"
+    },
+    "error-value-quoting": {
+      "agent": "build-agent",
+      "paths": "src/core/errors.ts,src/core/verify-matrix.ts,src/core/dossier-index.ts,src/prompter/util.ts,src/prompter/cli.ts,scripts/e2e-lib.ts,test,SPEC.md,dist/tui.js",
+      "branch": "wt/error-value-quoting",
+      "worktree": "worktrees/wt-error-value-quoting",
+      "status": "done",
+      "createdAt": "2026-11-22T20:14:06Z",
+      "submittedAt": "2026-11-22T20:20:21Z",
+      "mergedAt": "2026-11-22T20:22:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
