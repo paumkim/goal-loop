@@ -4992,6 +4992,24 @@
       "submittedAt": "2026-11-21T23:30:42Z",
       "mergedAt": "2026-11-21T23:33:25Z",
       "mergedInto": "dev"
+    },
+    "eod-maintenance-bloat-pass": {
+      "agent": "build-agent",
+      "paths": "src/core/change-risk.ts,src/core/spend-ledger.ts,src/core/config.ts,src/prompter,README.md,CURRENT_TASK.md,RELEASE-CHECKLIST.md,SPEC.md,docs/changelog.html,test",
+      "branch": "wt/eod-maintenance-bloat-pass",
+      "worktree": "worktrees/wt-eod-maintenance-bloat-pass",
+      "status": "done",
+      "createdAt": "2026-11-22T19:43:01Z",
+      "submittedAt": "2026-11-22T19:54:53Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T19:54:53Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "scripts/e2e-lib.ts",
+        "scripts/invariant-sweep.ts"
+      ],
+      "mergedAt": "2026-11-22T19:56:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
