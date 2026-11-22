@@ -10208,3 +10208,46 @@ a provider reports a genuine quota using a phrase the detector does not cover.
 ### Verification
 
 - `bun run check` green: 2224 pass / 0 fail; dist/tui/docs/invariant/spec gates all ok; marker re-counted in-commit.
+
+## Workstream CXLIV — end-of-day maintenance: single-pass path classification (2026-11-22)
+
+Armed by a maintenance condition covering dead code, duplication, stale docs, inconsistencies, hot paths and
+standardization. This workstream is the hot-path unit: `classifyChangeRisk` (`src/core/change-risk.ts`) is reached
+from the per-session change-risk gate (`src/runtime/controller.ts`), so its cost is paid on every turn.
+
+### Root cause
+
+Each path was normalized once in `classifyChangeRisk` and then re-normalized, lowercased and re-split inside every
+one of the five surface matchers (`deps`, `auth`, `migrations`, `ci-release`, `data`). A 24-path change set therefore
+performed roughly 11 `norm()` calls and 5 `split()` calls per path. The work is pure and identical across matchers.
+
+### Decision
+
+Choice: prepare each path once (`norm`, `lowercase`, `basename`, `segments`) and pass the prepared record to all five
+matchers. Reverse only if a matcher needs raw (un-normalized) input — none does, since the originals already received
+the normalized path from the caller.
+
+### Change
+
+1. `src/core/change-risk.ts`: add an internal `PreparedPath` record and `prepare()` helper; rewrite the five
+   matchers to read `p.n` / `p.lower` / `p.b` / `p.segs` instead of recomputing them. `classifyChangeRisk` calls
+   `prepare(raw)` once per path and pushes `prepared.n` into findings, preserving the exact previously reported
+   string (normalized case as-is, backslashes folded, leading `./` stripped, trimmed). No public export, signature,
+   tier, surface order or notice text changed; the existing 12 tests were left untouched.
+2. Benchmark (same machine, same 24-path corpus, 20 000 iterations, median of five runs):
+   - before: `median=521.4ms runs=[512.0, 516.2, 521.4, 533.7, 541.3]`
+   - after:  `median=212.1ms runs=[208.8, 209.8, 212.1, 213.6, 216.9]`
+   - speedup: **2.46×** (59.3% less time), with identical classification results.
+
+### Verification
+
+- `bunx tsc --noEmit`: clean.
+- `cd test && bun test change-risk.test.ts`: 12 pass / 0 fail, 41 expect() calls (all pre-existing tests).
+- `bun run check` green after the SPEC/changelog companion update.
+
+### Honest limits
+
+- The benchmark measures the pure classifier only; the full change-risk gate also shells out to git via
+  `collectChangedPaths`, which dominates end-to-end latency and is not addressed here.
+- Microbenchmark numbers are machine- and load-dependent; the reported median of five alternating runs is the
+  evidence, not a universal constant.
