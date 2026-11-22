@@ -10553,3 +10553,29 @@ non-matching names were ignored by the selector before, and matching names keep 
   `before 2.228 ms`, `after 0.279 ms`, `8.0x` speedup; both return
   `goal-dossier-sealed-20270116-080000.md`. Harness: /tmp/opencode/bench-sealed-scan.ts.
 - Test count 2228 -> 2229 (one added case); packed file count unchanged at 143. SPEC marker updated.
+
+
+## Workstream CLIII — unify the record gap constant; drop a stale scratch file (2026-11-22)
+
+Repo improvement pass, two small units landed together.
+
+### Unit A — consistency: one gap constant for the record reporters
+
+`GAP = "—"` is the canonical "measurement not carried" cell defined at `src/core/dossier.ts:20` and
+imported by `src/core/spend-ledger.ts`. Three other reporters — `verify-record.ts`, `sign-record.ts`
+and `reach-record.ts` — each carried a byte-identical local copy while already importing `shortSha`
+and `stampOf` from the same module. All three now import `GAP` in that existing import statement and
+the local copies are gone. The string, the cell it renders and every report output are unchanged.
+No test was added or changed; typecheck clean, focused record suites 72 pass / 0 fail.
+
+### Unit B — dead docs: remove `LOOP-COUNT.md`
+
+A two-line scratch note ("v1 1, v2 2") with no source, test or documentation reference; the only
+remaining mentions are historical lease paths in coordinator state. Deleted. It was never in the
+published `files` list, so the pack count stays 143. The marker stays `files=143 tests=2229`.
+
+### Evidence
+
+Before: four local `const GAP = "—"` definitions (dossier.ts + three reporters); `LOOP-COUNT.md`
+present. After: `grep -rn 'const GAP = "—"'` returns only dossier.ts; the three reporters import it;
+`LOOP-COUNT.md` is gone. SPEC and changelog accompany the `src/core` touches for invariant-sweep.
