@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2240 -->
+<!-- spec-check files=143 tests=2241 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10748,3 +10748,22 @@ paths — its id appears in the verification signature and `failingChecksOf` rep
 `unscoped: true`. Focused suite 20 pass / 0 fail (was 19); full suite **2240 pass / 0 fail**.
 Marker `files=143 tests=2240` in this commit. The golden-test note is also renumbered to CLXI
 after concurrent find-spotlight and verify-matrix notes took CLVIII and CLIX.
+
+
+## Workstream CLXII — memoize truncation for stable TUI lines (2026-11-22)
+
+Repo improvement pass, measured hot-path unit.
+
+`src/core/format.ts · truncate` runs an `Intl.Segmenter` grapheme pass plus several `cellWidth`
+lookups on every call. The TUI re-renders the same dossier and card lines every frame, so the same
+(max, ellipsis, text) tuples were recomputed continuously. Added a bounded 4096-entry memo keyed by a
+collision-free `JSON.stringify([max, ellipsis, text])` tuple; the raw computation lives in
+`truncateUncached`, and a hit is one lookup. `truncate` is pure, so output is unchanged.
+
+Measured with the same harness before/after (100 cycles over 300 stable dossier lines, 20 rounds,
+median wall time): `161.12 ms -> 3.91 ms`, `41x`. Harness: `/tmp/opencode/bench-truncate-repeat.ts`.
+
+New `test/truncate-cache.test.ts` compares cold and warm results against an independent oracle that
+reimplements the original algorithm with a fresh Segmenter and raw `string-width`, across custom
+ellipses, CJK, emoji, combining marks, zero/negative limits and ellipsis-wider-than-budget. Focused
+suites 173 pass / 0 fail. Typecheck clean. Marker `tests=2240 -> 2241`.
