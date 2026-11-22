@@ -1976,7 +1976,17 @@ import { For as For2, Show as Show2, createEffect, createMemo as createMemo2, cr
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 
 // src/core/find.ts
-var fold = (text) => text.toLowerCase();
+var FOLD_CACHE_LIMIT = 8192;
+var foldCache = new Map;
+var fold = (text) => {
+  const hit = foldCache.get(text);
+  if (hit !== undefined)
+    return hit;
+  const folded = text.toLowerCase();
+  if (foldCache.size < FOLD_CACHE_LIMIT)
+    foldCache.set(text, folded);
+  return folded;
+};
 var contains = (foldText, foldQuery) => foldText.includes(foldQuery);
 var isBlank = (query) => query.trim().length === 0;
 var findMatches = (texts, query) => {
