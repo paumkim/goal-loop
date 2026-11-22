@@ -10468,3 +10468,52 @@ that prove log values render through `formatValue`. No test was deleted and no a
 - after: 1 test case over 2 inputs, 6 assertions executed (the shared message assertion now also runs for `0`).
 
 SPEC marker re-counted `tests=2229` -> `tests=2228`; file count unchanged at 143.
+
+
+## Workstream CLI — one shared positive-finite-number validator for the render scripts (2026-11-22)
+
+Armed condition: consolidate the duplicated positive-finite-number flag validation in
+`scripts/render-dialog.tsx` and `scripts/render-history.tsx` into one shared `scripts/` helper; keep
+behavior, pinned error text, public API and the test count (2228) unchanged; run `bun run check`
+before/after with evidence.
+
+### Before (fresh HEAD feb9cd3)
+
+Each script carried its own copy of the same rule — `Number(value)`, reject when
+`!Number.isFinite(n) || n <= 0`, log `… must be a positive finite number (got …)`, `process.exit(2)`,
+otherwise return the parsed number:
+
+- `scripts/render-dialog.tsx` `positiveFiniteFlag(name, dflt)` (3 call sites: `height`, `width`, `bench`)
+  extracted the raw value from `--<name>=` argv, then validated it.
+- `scripts/render-history.tsx` `positiveFinite(value, dflt, name)` (2 call sites: positional `width`,
+  `height`) validated an already-extracted value.
+
+Both logged the rejected value through `formatValue` but produced different pinned labels
+(`render-dialog.tsx: --width …` vs `render-history.tsx: width …`), so the copies could drift.
+
+### Change
+
+Added `scripts/positive-finite.ts` exporting one `positiveFinite(value, dflt, label): number`. It owns the
+whole validation rule, the `undefined`-means-default behavior, the exit-2 rejection, and the
+`formatValue` value rendering. Argument extraction stays at the call sites and each caller passes its
+exact `label` verbatim, so both pinned error strings are byte-identical to before:
+
+- `render-dialog.tsx`: `positiveFiniteFlag` is now a one-line adapter that extracts `--<name>=` and calls
+  the helper with label ``render-dialog.tsx: --${name}``.
+- `render-history.tsx`: its `positiveFinite` is now a one-line adapter that calls the helper with label
+  ``render-history.tsx: ${name}``.
+
+No `src/` file changed, so the public API is untouched; `scripts/` is not in the packed `files` list, so
+the pack count stays 143. No test case was added, so the count stays 2228.
+
+### Verification
+
+- Before: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, spec-check `143 files, 2228 tests`.
+- `bunx tsc --noEmit`: clean (noUnusedLocals/noUnusedParameters on).
+- Live text (unchanged, byte-for-byte):
+  `render-dialog.tsx: --width must be a positive finite number (got "abc")`,
+  `render-history.tsx: width must be a positive finite number (got "abc")` / `(got "0")`,
+  `render-dialog.tsx: --width must be a positive finite number (got "")`.
+- Rejection still exits 2; valid/default invocations still exit 0.
+- Focused suites: 198 pass / 0 fail across 3 files (`render-scripts`, `package-integrity`, `core`).
+- After: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok.
