@@ -5032,8 +5032,16 @@
       "paths": "src/tui-history.tsx,test/tui-render.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/why-ledger-column-fill",
       "worktree": "worktrees/wt-why-ledger-column-fill",
-      "status": "claimed",
-      "createdAt": "2026-11-22T20:09:10Z"
+      "status": "done",
+      "createdAt": "2026-11-22T20:09:10Z",
+      "submittedAt": "2026-11-22T20:23:28Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T20:23:28Z",
+      "forcedScopeFiles": [
+        "test/__snapshots__/tui-snapshots.test.tsx.snap"
+      ],
+      "mergedAt": "2026-11-22T20:29:43Z",
+      "mergedInto": "dev"
     },
     "error-value-quoting": {
       "agent": "build-agent",
@@ -5045,6 +5053,14 @@
       "submittedAt": "2026-11-22T20:20:21Z",
       "mergedAt": "2026-11-22T20:22:24Z",
       "mergedInto": "dev"
+    },
+    "log-value-quoting": {
+      "agent": "build-agent",
+      "paths": "scripts/render-dialog.tsx,scripts/render-history.tsx,scripts/tui-load-check.ts,test/render-scripts.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/log-value-quoting",
+      "worktree": "worktrees/wt-log-value-quoting",
+      "status": "claimed",
+      "createdAt": "2026-11-22T20:29:00Z"
     }
   },
   "mergeLock": null,
