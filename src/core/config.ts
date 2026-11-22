@@ -110,7 +110,7 @@ export const MAX_BUSY_RETRIES = 5
  * `inherit` is canonical; the others are accepted aliases so the intent reads naturally in any config style.
  * Matching is trimmed and case-insensitive (see `isInheritModelValue`).
  */
-export const INHERIT_MODEL_TOKENS = ["inherit", "session", "parent", "current", "active"] as const
+const INHERIT_MODEL_TOKENS = ["inherit", "session", "parent", "current", "active"] as const
 
 /** True for a string that asks the evaluator to inherit the parent session's active model. */
 export function isInheritModelValue(value: unknown): boolean {

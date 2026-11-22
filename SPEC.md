@@ -10604,3 +10604,19 @@ import and use `cellWidth` from `format.ts`; the raw `string-width` import is go
 code outside the wrapper. No width value changes: 430 render/hud/alignment tests pass including all
 29 snapshots, and 4/4 standalone render outputs are byte-identical before/after. `dist/tui.js`
 regenerated from `src/tui.tsx` in both leases.
+
+
+## Workstream CLV — dead scratch file and dead config export (2026-11-22)
+
+Repo improvement pass, dead-code unit.
+
+- `thought-log.md` was a scratch log from an earlier improvement loop whose entries are already
+  recorded as workstreams in this file. A repo-wide grep found zero references outside itself; it was
+  never in the published `files` list. Deleted.
+- `src/core/config.ts · INHERIT_MODEL_TOKENS` was exported but had zero importers in `src/`, `test/`,
+  `scripts/` or `bin/`; it is consumed only by `isInheritModelValue` in the same module. Dropped the
+  `export` keyword — the token list, the alias set and the predicate are unchanged.
+
+Evidence: `grep -rn thought-log` → no hits outside the removed file; `grep -rn INHERIT_MODEL_TOKENS`
+→ definition + one same-module use before and after; typecheck clean; `config-defaults` + `core`
+suites 178 pass / 0 fail. No test added or changed; marker stays `files=143 tests=2232`.
