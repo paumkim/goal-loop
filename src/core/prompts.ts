@@ -203,8 +203,8 @@ function loopPreamble(loop: LoopPreamble): string[] {
 export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble, planned = false): string {
   const safeCondition = escape(condition)
   const safeObjective = loop ? escape(loop.objective) : undefined
-  // Iteration 1 arms the objective itself, so condition === objective. Say it once instead of twice; iterate
-  // iterations keep both because the condition is a narrower step toward the constant objective.
+  // Iteration 1 arms the objective itself, so condition === objective. Say it once instead of twice;
+  // later iterations keep both because the condition is a narrower step toward the constant objective.
   const objectiveIsCondition = safeObjective !== undefined && safeObjective.trim() === safeCondition.trim()
   const lines: string[] = [
     `<goal>`,
