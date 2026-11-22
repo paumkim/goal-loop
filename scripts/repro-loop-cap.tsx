@@ -14,14 +14,13 @@ import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { pillModel, type NeutralTheme } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
+import { widthFlag } from "./width-flag.ts"
 const capFlag = process.argv.slice(2).find((a) => a.startsWith("--caps="))
 const caps = (capFlag ? capFlag.slice("--caps=".length) : "5,50,99,100,1000")
   .split(",")
   .map((s) => Number(s.trim()))
   .filter((n) => Number.isFinite(n) && n > 0)
-const widthFlag = process.argv.slice(2).find((a) => a.startsWith("--width="))
-const parsedWidth = widthFlag ? Number(widthFlag.slice("--width=".length)) : Number.NaN
-const terminal = Number.isFinite(parsedWidth) && parsedWidth > 0 ? Math.floor(parsedWidth) : 80
+const terminal = widthFlag(process.argv.slice(2), 80)
 const theme: HudCardTheme & NeutralTheme<RGBA> = {
   text: {
     base: RGBA.fromHex("#e8e8e8"),
