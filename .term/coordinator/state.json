@@ -5330,16 +5330,28 @@
       "paths": "SPEC.md",
       "branch": "wt/spec-workstream-renumber",
       "worktree": "worktrees/wt-spec-workstream-renumber",
-      "status": "claimed",
-      "createdAt": "2026-11-22T23:26:20Z"
+      "status": "done",
+      "createdAt": "2026-11-22T23:26:20Z",
+      "submittedAt": "2026-11-22T23:26:41Z",
+      "mergedAt": "2026-11-22T23:30:42Z",
+      "mergedInto": "dev"
     },
     "prompt-verdict-single-home": {
       "agent": "build",
       "paths": "src/core/prompts.ts,test/core.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prompt-verdict-single-home",
       "worktree": "worktrees/wt-prompt-verdict-single-home",
+      "status": "submitted",
+      "createdAt": "2026-11-22T23:22:54Z",
+      "submittedAt": "2026-11-22T23:30:36Z"
+    },
+    "verify-matrix-error-style": {
+      "agent": "build-agent",
+      "paths": "src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
+      "branch": "wt/verify-matrix-error-style",
+      "worktree": "worktrees/wt-verify-matrix-error-style",
       "status": "claimed",
-      "createdAt": "2026-11-22T23:22:54Z"
+      "createdAt": "2026-11-22T23:30:05Z"
     }
   },
   "mergeLock": null,
