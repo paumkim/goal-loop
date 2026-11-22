@@ -45,7 +45,6 @@
     "packages/coordinator/bin/coordinator",
     "packages/coordinator/README.md",
     "prompts",
-    "bin/prompter.mjs",
     "install.sh"
   ],
   "engines": {
