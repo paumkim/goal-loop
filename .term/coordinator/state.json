@@ -5168,6 +5168,23 @@
       "submittedAt": "2026-11-22T22:05:44Z",
       "mergedAt": "2026-11-22T22:07:39Z",
       "mergedInto": "dev"
+    },
+    "condition-cell-helper": {
+      "agent": "build-agent",
+      "paths": "src/core/dossier.ts,src/core/verify-record.ts,src/core/sign-record.ts,src/core/reach-record.ts,test/verify-record.test.ts",
+      "branch": "wt/condition-cell-helper",
+      "worktree": "worktrees/wt-condition-cell-helper",
+      "status": "done",
+      "createdAt": "2026-11-22T22:11:44Z",
+      "submittedAt": "2026-11-22T22:14:55Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T22:14:55Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T22:16:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
