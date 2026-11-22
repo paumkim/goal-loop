@@ -153,12 +153,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 final       ✓  loop achieved · 2 iterations · 15 turns · 64 tools · 30m wall                        
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -239,12 +239,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -281,12 +281,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -429,12 +429,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -486,12 +486,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -524,9 +524,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 10m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
 elsewhere   6 other sessions holding live goals · click a row to open its transcript                
 1           ●  brisk-falcon  v2/5     ship the deploy pipeline before f…              → transcript  
@@ -536,9 +539,6 @@ elsewhere   6 other sessions holding live goals · click a row to open its trans
             ●  still-bison   v3/5     wheel pin on the dialog                         → transcript  
             ●  ember-crab    v3/5     fold affordance coverage                        → transcript  
             fold to 4  click                                                                        
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -589,9 +589,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                             copy     
 now         ◎  v3 · active · 15 turns · 12m elapsed   last ✗ 10 turns since                         
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                             copy     
-            ✓  met · turn 4 · 2m ago      done                                             copy     
-            ✗  not met · turn 5 · 1m ago  not yet                                          copy     
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                           copy     
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                           copy     
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                        copy     
                                                                                                     
 elsewhere   6 other sessions holding live goals · click a row to open its transcript                
 1           ●  brisk-falcon  v2/5     ship the deploy pipeline before f…              → transcript  
@@ -601,9 +604,6 @@ elsewhere   6 other sessions holding live goals · click a row to open its trans
             ●  still-bison   v3/5     wheel pin on the dialog                         → transcript  
             ‖  ember-crab    paused   fold affordance coverage                        → transcript  
             fold to 4  click                                                                        
-                                                                                                    
-                                                                                                    
-                                                                                                    
                                                                                                     
                                                                                                     
                                                                                                     
@@ -636,12 +636,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · 1✓ 1✗ · ended 12m
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✓ 1 turn since                            
 trail       ✓✗✓   3 of 3 verdicts                                                                   
-why         ✓  met · turn 1 · 26m ago · b1e4d7a      done                                           
-            ✗  not met · turn 2 · 14m ago · a3f5c8e  no evidence of work toward the condition       
-            ✓  met · turn 3 · 4m ago · a3f5c8e       evidence filed                                 
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 1 · 26m ago · b1e4d7a                                                     
+            done                                                                                    
+            ✗  not met · turn 2 · 14m ago · a3f5c8e                                                 
+            no evidence of work toward the condition                                                
+            ✓  met · turn 3 · 4m ago · a3f5c8e                                                      
+            evidence filed                                                                          
                                                                                                     
                                                                                                     
                                                                                                     
@@ -773,12 +773,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · paused · 4 turns · stall 0 · retries 0 · 12m elapsed   last ✗ this turn         
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -820,12 +820,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 final       ⊘  loop impossible · 2 iterations · 15 turns · 64 tools · 30m wall                      
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -865,12 +865,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                                      
 now         ◎  v3 · active · 4 turns · 12m elapsed   last ✗ this turn                               
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago      done                                                      
-            ✓  met · turn 4 · 2m ago      done                                                      
-            ✗  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         ✓  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
@@ -960,12 +960,12 @@ v2          +  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48 �
 |           | Trail renders up to 24 verdicts.                                              copy    
 now         *  v3 · active · 4 turns · 12m elapsed   last x this turn                               
 trail       +x++x   5 of 5 verdicts                                                                 
-why         +  met · turn 3 · 3m ago      done                                                      
-            +  met · turn 4 · 2m ago      done                                                      
-            x  not met · turn 5 · 1m ago  not yet                                                   
-                                                                                                    
-                                                                                                    
-                                                                                                    
+why         +  met · turn 3 · 3m ago                                                                
+            done                                                                                    
+            +  met · turn 4 · 2m ago                                                                
+            done                                                                                    
+            x  not met · turn 5 · 1m ago                                                            
+            not yet                                                                                 
                                                                                                     
                                                                                                     
                                                                                                     
