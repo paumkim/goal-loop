@@ -5245,6 +5245,23 @@
       ],
       "mergedAt": "2026-11-22T22:44:14Z",
       "mergedInto": "dev"
+    },
+    "cell-width-consistency": {
+      "agent": "build-agent",
+      "paths": "src/core/hud.ts,src/hud-card.tsx,src/tui.tsx",
+      "branch": "wt/cell-width-consistency",
+      "worktree": "worktrees/wt-cell-width-consistency",
+      "status": "done",
+      "createdAt": "2026-11-22T22:44:33Z",
+      "submittedAt": "2026-11-22T22:47:48Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T22:47:48Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T22:49:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
