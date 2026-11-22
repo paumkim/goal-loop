@@ -196,7 +196,26 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
  * wider than `max`, whole graphemes of the ellipsis are emitted up to `max` — the width
  * contract wins over showing an ellipsis.
  */
+/**
+ * `truncate` is pure, but it runs an Intl.Segmenter grapheme pass plus several cellWidth lookups on
+ * every call. The TUI renders the same dossier/card lines on every frame, so those results repeat.
+ * A bounded memo keyed by the full (max, ellipsis, text) tuple turns a hit into one lookup. The
+ * JSON.stringify key is collision-free even when the text or ellipsis contains separators.
+ */
+const TRUNCATE_CACHE_LIMIT = 4096
+const truncateCache = new Map<string, string>()
 export function truncate(text: string, max: number, ellipsis: string = "\u2026"): string {
+  if (max <= 0) return ""
+  const key = JSON.stringify([max, ellipsis, text])
+  const hit = truncateCache.get(key)
+  if (hit !== undefined) return hit
+  const result = truncateUncached(text, max, ellipsis)
+  if (truncateCache.size < TRUNCATE_CACHE_LIMIT) truncateCache.set(key, result)
+  return result
+}
+
+/** The raw computation; kept separate so `truncate` is a thin cache lookup around it. */
+function truncateUncached(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
   const flat = text.replace(/\s+/g, " ").trim()
   if (cellWidth(flat) <= max) return flat
