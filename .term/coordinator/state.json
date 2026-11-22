@@ -5059,8 +5059,20 @@
       "paths": "scripts/render-dialog.tsx,scripts/render-history.tsx,scripts/tui-load-check.ts,test/render-scripts.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/log-value-quoting",
       "worktree": "worktrees/wt-log-value-quoting",
-      "status": "claimed",
-      "createdAt": "2026-11-22T20:29:00Z"
+      "status": "done",
+      "createdAt": "2026-11-22T20:29:00Z",
+      "submittedAt": "2026-11-22T20:33:14Z",
+      "mergedAt": "2026-11-22T20:42:47Z",
+      "mergedInto": "dev"
+    },
+    "why-fullwidth-final": {
+      "agent": "build",
+      "paths": "src/tui-history.tsx,test/tui-render.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,dist/tui.js",
+      "branch": "wt/why-fullwidth-final",
+      "worktree": "worktrees/wt-why-fullwidth-final",
+      "status": "submitted",
+      "createdAt": "2026-11-22T20:31:54Z",
+      "submittedAt": "2026-11-22T20:39:23Z"
     }
   },
   "mergeLock": null,
