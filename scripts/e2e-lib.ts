@@ -9,7 +9,7 @@
 export const DEFAULT_MODEL = "opencode/deepseek-v4.1-flash-free"
 
 /** What the harness should do with the target project's `.opencode/opencode.json`. */
-export type ConfigAction = "write" | "skip" | "refuse"
+type ConfigAction = "write" | "skip" | "refuse"
 
 /**
  * Precedence for the model selection: positional argument wins over the E2E_MODEL environment

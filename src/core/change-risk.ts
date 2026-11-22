@@ -40,14 +40,26 @@ function norm(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\/+/, "").trim()
 }
 
-function base(path: string): string {
-  const n = norm(path)
-  const i = n.lastIndexOf("/")
-  return i === -1 ? n : n.slice(i + 1)
+/** A path normalized once, then reused by every surface matcher. */
+interface PreparedPath {
+  /** Normalized path (backslashes folded, leading `./` stripped, trimmed). */
+  readonly n: string
+  /** Lowercased normalized path. */
+  readonly lower: string
+  /** Lowercased basename of the normalized path. */
+  readonly b: string
+  /** Lowercased, non-empty path segments. */
+  readonly segs: readonly string[]
 }
 
-function segments(path: string): string[] {
-  return norm(path).toLowerCase().split("/").filter(Boolean)
+/** Normalize and split a path once per change-set entry instead of once per matcher. */
+function prepare(raw: string): PreparedPath | undefined {
+  const n = norm(raw)
+  if (!n) return undefined
+  const lower = n.toLowerCase()
+  const i = n.lastIndexOf("/")
+  const b = (i === -1 ? n : n.slice(i + 1)).toLowerCase()
+  return { n, lower, b, segs: lower.split("/").filter(Boolean) }
 }
 
 const DEP_BASENAMES = new Set([
@@ -83,28 +95,25 @@ const DEP_BASENAMES = new Set([
   ".tool-versions",
 ])
 
-function isDepsPath(path: string): boolean {
-  const b = base(path).toLowerCase()
+function isDepsPath(p: PreparedPath): boolean {
+  const { b, segs } = p
   if (DEP_BASENAMES.has(b)) return true
   if (/^requirements([.-].+)?\.txt$/i.test(b) || /^requirements.*\.in$/i.test(b)) return true
   if (/\.csproj$/i.test(b) || /\.fsproj$/i.test(b) || /\.vbproj$/i.test(b)) return true
   if (/pyproject\.toml$/i.test(b)) return true
-  const segs = segments(path)
   if (segs.includes("vendor") && (b.endsWith(".lock") || b.endsWith(".sum") || b === "modules.txt")) return true
   return false
 }
 
 const AUTH_SEGMENT = /^(auth|authentication|authorization|authorize|oauth2?|sso|saml|login|logout|signin|signout|signup|session|sessions|jwt|jwks|credential|credentials|passwd|password|passwords|secret|secrets|token|tokens|apikey|api-key|acl|rbac|permissions?|mfa|2fa|otp)(\..*)?$/i
 
-function isAuthPath(path: string): boolean {
-  const segs = segments(path)
-  if (segs.some((s) => AUTH_SEGMENT.test(s))) return true
-  const b = base(path).toLowerCase()
-  return /(^|[._-])(auth|login|oauth|jwt|session|credential|password|secret|token|permission)([._-]|$)/i.test(b)
+function isAuthPath(p: PreparedPath): boolean {
+  if (p.segs.some((s) => AUTH_SEGMENT.test(s))) return true
+  return /(^|[._-])(auth|login|oauth|jwt|session|credential|password|secret|token|permission)([._-]|$)/i.test(p.b)
 }
 
-function isMigrationPath(path: string): boolean {
-  const segs = segments(path)
+function isMigrationPath(p: PreparedPath): boolean {
+  const { segs } = p
   if (segs.some((s) => /^(migrations?|migrate|alembic|flyway|liquibase|dbmate)$/i.test(s))) return true
   // prisma/migrations, db/migrate, supabase/migrations etc.
   for (let i = 0; i < segs.length - 1; i++) {
@@ -115,9 +124,9 @@ function isMigrationPath(path: string): boolean {
   return false
 }
 
-function isCiReleasePath(path: string): boolean {
-  const n = norm(path).toLowerCase()
-  const b = base(path).toLowerCase()
+function isCiReleasePath(p: PreparedPath): boolean {
+  // p.lower is the lowercased normalized path (was recomputed per call before).
+  const { lower: n, b } = p
   if (n.includes(".github/workflows/") || n.includes(".github/actions/")) return true
   if (b === "jenkinsfile" || b.startsWith("jenkinsfile.")) return true
   if (b === ".gitlab-ci.yml" || b === ".gitlab-ci.yaml" || b.startsWith(".gitlab-ci")) return true
@@ -125,16 +134,15 @@ function isCiReleasePath(path: string): boolean {
   if (/^azure-pipelines/i.test(b) || /^\.travis/i.test(b) || /^appveyor/i.test(b) || /^\.drone/i.test(b) || /^\.woodpecker/i.test(b)) return true
   if (n.includes("/.changeset/") || n.includes("/.changesets/")) return true
   if (/^\.releaserc/i.test(b) || /^release[-_.]/i.test(b) || /^publish[-_.]/i.test(b)) return true
-  const segs = segments(path)
+  const { segs } = p
   if (segs.includes("release") && (segs.includes("scripts") || segs.includes("ci") || segs.includes(".github") || b.includes("release"))) return true
   if (segs.some((s) => s === "releases") && (b.endsWith(".yml") || b.endsWith(".yaml") || b.endsWith(".ts") || b.endsWith(".js") || b.endsWith(".sh"))) return true
   if (segs.includes("ci") && (b.endsWith(".yml") || b.endsWith(".yaml") || b.endsWith(".sh") || b.endsWith(".ts") || b.endsWith(".js"))) return true
   return false
 }
 
-function isDataPath(path: string): boolean {
-  const segs = segments(path)
-  const b = base(path).toLowerCase()
+function isDataPath(p: PreparedPath): boolean {
+  const { segs, b } = p
   if (segs.some((s) => /^(data|database|datastore|datasets?|seeds?|seeders?|fixtures?|backups?|snapshots?|dumps?)$/i.test(s))) return true
   if (segs.includes("db") && !segs.some((s) => /^(migrations?|migrate)$/i.test(s))) {
     // db/ as a data/storage directory (not db/migrate which is migrations)
@@ -146,7 +154,7 @@ function isDataPath(path: string): boolean {
   return false
 }
 
-const SURFACE_MATCHERS: Readonly<Record<SensitiveSurface, (path: string) => boolean>> = {
+const SURFACE_MATCHERS: Readonly<Record<SensitiveSurface, (p: PreparedPath) => boolean>> = {
   deps: isDepsPath,
   auth: isAuthPath,
   migrations: isMigrationPath,
@@ -161,12 +169,12 @@ const SURFACE_MATCHERS: Readonly<Record<SensitiveSurface, (path: string) => bool
 export function classifyChangeRisk(paths: readonly string[]): ChangeRiskAssessment {
   const bySurface = new Map<SensitiveSurface, string[]>()
   for (const raw of paths) {
-    const path = norm(raw)
-    if (!path) continue
+    const prepared = prepare(raw)
+    if (!prepared) continue
     for (const surface of SURFACE_ORDER) {
-      if (!SURFACE_MATCHERS[surface](path)) continue
+      if (!SURFACE_MATCHERS[surface](prepared)) continue
       const arr = bySurface.get(surface) ?? []
-      arr.push(path)
+      arr.push(prepared.n)
       bySurface.set(surface, arr)
     }
   }

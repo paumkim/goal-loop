@@ -8,12 +8,12 @@ import { branchExists, commitExists, deleteBranch, isAncestor, removeWorktree, s
 import { killSwitch } from "./safety.ts"
 import { short } from "./util.ts"
 
-export interface ReviewDeps {
+interface ReviewDeps {
   readonly exists: (p: string) => boolean
   readonly env: NodeJS.ProcessEnv
 }
 
-export interface ReviewResult {
+interface ReviewResult {
   readonly ok: boolean
   readonly message: string
 }
