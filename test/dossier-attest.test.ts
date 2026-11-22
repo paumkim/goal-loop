@@ -14,6 +14,7 @@ import {
   attestSummaryLine,
   attestationReportMarkdown,
   parseAttestationAppendix,
+  sealedDossierCandidates,
   selectNewestSealedDossier,
 } from "../src/core/dossier-attest.ts"
 import { sealRecord } from "../src/core/dossier-seal.ts"
@@ -239,6 +240,29 @@ describe("attestSealedDossier", () => {
     attestSealedDossier(sealedFixture(), "/tmp/attest", { verify: record, reach: record, sign: record })
     expect(seen).toContain("a".repeat(7)) // the appendix prints the 7-char short sha
     expect(seen.filter((sha) => sha === "a".repeat(7)).length).toBeGreaterThanOrEqual(3) // all three questions
+  })
+})
+
+describe("sealedDossierCandidates", () => {
+  test("stats only sealed-dossier names and keeps selection identical", () => {
+    const sealedOld = "goal-dossier-sealed-20270115-080000.md"
+    const sealedNew = "goal-dossier-sealed-20270116-080000.md"
+    const names = [
+      ...Array.from({ length: 5000 }, (_, i) => `filler-${i}.txt`),
+      sealedOld,
+      "README.md",
+      sealedNew,
+      "goal-dossier-sealed-20270116-080000-2.md",
+    ]
+    const statted: string[] = []
+    const candidates = sealedDossierCandidates(names, (name) => {
+      statted.push(name)
+      return name === sealedOld ? 100 : 90
+    })
+    // The optimization is pinned: only the three sealed names are statted; 5002 unrelated
+    // entries are skipped. Selection stays byte-identical to the stat-everything scan.
+    expect(statted).toEqual([sealedOld, sealedNew, "goal-dossier-sealed-20270116-080000-2.md"])
+    expect(selectNewestSealedDossier(candidates)).toBe("goal-dossier-sealed-20270116-080000-2.md")
   })
 })
 
