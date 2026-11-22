@@ -1417,6 +1417,25 @@ describe("loop rail fold — controlled expand (keyboard parity)", () => {
 })
 
 describe("why ledger (the evaluator's most recent reasons, inline)", () => {
+  test("reasons wrap across the full content width, not a narrow far-right column", async () => {
+    // The old inline layout pinned the reason to a column sized by the widest furniture cell, so a long
+    // reason wrapped in the right half of the dialog and left a blank slab under the metadata.
+    const longReason = "read-only reconnaissance".repeat(9)
+    const goal = ledgerGoal([{ turn: 1, verdict: "not_met", reason: longReason, at: now - 1000 * 60 * 22, sha: "abe56b31f0c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6" }])
+    const setup = await testRender(() => <HistoryBlock goal={goal} theme={theme} elapsedMs={() => 1000 * 60 * 25} nowMs={() => now} onCopyReason={() => {}} />, { width: 112, height: 40 })
+    await setup.renderOnce()
+    const lines = setup.captureCharFrame().split("\n")
+    const furniture = lines.find((line) => line.includes("not met · turn 1"))!
+    const reasonLines = lines.filter((line) => line.includes("read-only reconnaissance"))
+    expect(furniture).not.toContain("read-only reconnaissance") // metadata and payload are separate rows
+    expect(reasonLines.length).toBeGreaterThan(1) // the reason wrapped
+    // the reason starts just past the 10-cell label gutter + 2-cell gap, not half-way across the dialog
+    expect(Math.min(...reasonLines.map((line) => line.indexOf("read-only reconnaissance")))).toBeLessThanOrEqual(13)
+    // and reaches the right edge (only the copy affordance is reserved there)
+    expect(Math.max(...reasonLines.map((line) => line.trimEnd().length))).toBeGreaterThan(95)
+    await setup.renderer.destroy()
+  })
+
   const ledgerGoal = (history: VerdictEntry[]): GoalSnapshot =>
     loopedGoal({ loopEnabled: false, loopHistory: undefined, loopIteration: undefined, loopMaxLoops: undefined, history, status: "active" } as Partial<GoalSnapshot>)
   const ledgerHistory: VerdictEntry[] = [
