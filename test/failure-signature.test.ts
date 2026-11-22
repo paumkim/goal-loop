@@ -57,6 +57,25 @@ describe("failureSignatureOf", () => {
     expect(sig?.key).toContain("typecheck")
   })
 
+  test("unscoped required check fails both the signature and diagnostic paths", () => {
+    const info = notMet("verification failed", {
+      verification: {
+        profile: "default",
+        broadGoal: true,
+        pass: false,
+        checks: [
+          { id: "lint", type: "lint", command: "bun run lint", required: true, scoped: false, pass: true, code: 0, source: "configured", evidenceMode: "command", runState: "executed", durationMs: 5 },
+        ],
+        missing: [],
+        coverageReasons: ["broad goal requires scoped lint evidence"],
+      },
+    })
+    const sig = failureSignatureOf(info)
+    expect(sig?.kind).toBe("verification")
+    expect(sig?.key).toContain("lint")
+    expect(failingChecksOf(info).find((c) => c.id === "lint")).toMatchObject({ unscoped: true, pass: true })
+  })
+
   test("same verification failure yields same signature", () => {
     const make = () =>
       failureSignatureOf(
