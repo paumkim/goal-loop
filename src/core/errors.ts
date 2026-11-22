@@ -40,8 +40,14 @@ function is429(value: unknown): boolean {
   return value === 429 || (typeof value === "string" && /^\s*429\s*$/.test(value))
 }
 
-/** Provider error codes/types that unambiguously denote a quota or rate limit. */
-const QUOTA_CODE = /\b(?:(?:rate|tpm|usage|free|request)[\s_-]*)+(?:limit|quota)(?:[\s_-]*(?:error|exceeded|reached|hit))?(?:\b|_)|\btoo[\s_-]*many[\s_-]*requests\b|\binsufficient[\s_-]*quota\b|\bquota\b[\s_-]*(?:exceeded|reached|exhausted)\b|\bfreeusage(?:limit|error)(?:error)?\b/i
+/**
+ * Compact provider error codes: the limit/quota words are joined without spaces (rate_limit_error,
+ * tpm_rate_limit_exceeded, provider.free-limit, freeusagelimit, too_many_requests). A *prose* phrase like
+ * "rate limit settings" has spaces and is NOT a code — matching it there was the false positive that
+ * parked goals on ordinary evaluator failures. Prose is judged by QUOTA_HIT/hasUsageLimitText instead,
+ * which requires an assertion that a limit was actually hit.
+ */
+const QUOTA_CODE = /\b(?:(?:rate|tpm|usage|free|request)[_-]*)+(?:limit|quota)(?:[_-]*(?:error|exceeded|reached|hit|exhausted))*\b|\bfreeusage(?:limit|error)(?:error)?\b|\btoo[_-]*many[_-]*requests\b|\bquota[_-]*(?:exceeded|reached|exhausted)\b|\binsufficient[_-]*quota\b/i
 
 /** Free text asserting a limit was actually hit — not mentioned, negated, or merely configured. */
 const QUOTA_HIT = /(?<!\bno\s)(?<!\bnot\s)(?<!\bnever\s)(?<!\bwithout\s)\b(?:free[\s_-]*)?(?:rate|usage|request|tpm|quota)[\s_-]*limit\b(?:\s+(?:was|is|has|have|were|been|of|for|by|at|to|the|a)){0,6}\s+(?:reached|exceeded|hit|exhausted|exceeds?)\b/i
@@ -60,7 +66,7 @@ export function isUsageLimitError(error: unknown): boolean {
   if (is429(record.status) || is429(record.code)) return true
   // Structured provider codes/types are unambiguous; free text must assert a hit, not merely name a limit.
   const codes = [record.type, record.code, record.name].filter((v): v is string => typeof v === "string").join(" ")
-  if (QUOTA_CODE.test(codes)) return true
+  if (QUOTA_CODE.test(codes) || hasUsageLimitText(codes)) return true
   const text = [record.message, record.error].filter((v): v is string => typeof v === "string").join(" ")
   return hasUsageLimitText(text)
 }

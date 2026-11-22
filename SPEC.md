@@ -10187,16 +10187,23 @@ a provider reports a genuine quota using a phrase the detector does not cover.
    route limit classification through `isUsageLimitError` *before* the generic 5xx branch, so an asserted quota
    hit wrapped in a 500 still pauses and both paths agree; an unrelated error keeps its own label and a transient
    error mentioning a limit still gets the short backoff.
+2. `src/core/errors.ts · QUOTA_CODE`: a second false-positive gap remained in the structured-field branch — the
+   code regex matched a bare `rate[\s_-]*limit` phrase, so a prose value like "rate limit settings are documented",
+   "usage limit policy" or "no rate limit is configured" in `type`/`code`/`name` was treated as a quota code.
+   The regex now requires a *compact* token (no prose spaces — `rate_limit_error`, `provider.free-limit`,
+   `tpm_rate_limit_exceeded`, `freeusagelimit`) and delegates prose to `QUOTA_HIT`/`hasUsageLimitText`, which
+   require an asserted hit. Same false-positive family as step 1, closed in the structured branch too.
 3. `src/index.ts · asEvaluatorError`: carry the structured `status`/`code`/`type`/`name`/`error` fields from a
    provider error object onto the flattened `Error`, so the tightened detector sees the genuine 429/code it would
    have read before flattening.
-2. Tests: `test/controller.test.ts` adds a non-quota detector regression (bare/negated/provider-name phrases are
-   false; 429/code/quota-hit signals true) and a controller test proving a non-quota evaluator error retries
-   instead of pausing with `usage_limit`. `test/core.test.ts` adds `classifyFailure` regressions: non-quota
-   limit phrases keep their own label, a transient error mentioning a limit classifies as `transient`, and a
-   quota hit wrapped in a 5xx classifies as `pause` in agreement with `isUsageLimitError`. `test/plugin.test.ts`
-   adds two end-to-end regressions through the real judge-failure path: a structured 429 with a generic message
-   pauses with `usage_limit`, while a structured 500 whose message mentions "rate limit" stays active.
+4. Tests: `test/controller.test.ts` adds non-quota detector regressions (bare/negated/provider-name phrases in
+   messages *and* in structured `type`/`code`/`name` fields are false; 429/code/quota-hit signals true) and a
+   controller test proving a non-quota evaluator error retries instead of pausing with `usage_limit`.
+   `test/core.test.ts` adds `classifyFailure` regressions: non-quota limit phrases keep their own label, a
+   transient error mentioning a limit classifies as `transient`, and a quota hit wrapped in a 5xx classifies as
+   `pause` in agreement with `isUsageLimitError`. `test/plugin.test.ts` adds two end-to-end regressions through
+   the real judge-failure path: a structured 429 with a generic message pauses with `usage_limit`, while a
+   structured 500 whose message mentions "rate limit" stays active.
 
 ### Verification
 

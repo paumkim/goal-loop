@@ -729,6 +729,16 @@ describe("GoalController", () => {
     ]
     for (const message of nonQuota) expect(isUsageLimitError(new Error(message))).toBe(false)
 
+    // The same phrases in structured provider fields must not be codes either. The old QUOTA_CODE regex
+    // matched a bare "rate limit"/"usage limit" anywhere, so these ordinary failures paused the goal.
+    for (const record of [
+      { type: "rate limit settings are documented at example.com", message: "invalid argument" },
+      { type: "usage limit settings", message: "config error" },
+      { type: "no rate limit is configured for this model", message: "model loaded" },
+      { name: "rate limit helper", message: "unrelated failure" },
+      { code: "usage limit policy", message: "unrelated" },
+    ]) expect(isUsageLimitError(record)).toBe(false)
+
     // Genuine code/status signals still fire, including in a plain object thrown by a provider.
     expect(isUsageLimitError({ type: "rate_limit_error", message: "provider rejected the request" })).toBe(true)
     expect(isUsageLimitError({ code: "tpm_rate_limit_exceeded", message: "Provider returned error" })).toBe(true)
