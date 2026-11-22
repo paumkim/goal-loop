@@ -5127,6 +5127,30 @@
       ],
       "mergedAt": "2026-11-22T21:52:14Z",
       "mergedInto": "dev"
+    },
+    "prompt-dedup-structure": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
+      "branch": "wt/prompt-dedup-structure",
+      "worktree": "worktrees/wt-prompt-dedup-structure",
+      "status": "claimed",
+      "createdAt": "2026-11-22T21:55:14Z"
+    },
+    "width-flag-helper": {
+      "agent": "build-agent",
+      "paths": "scripts/width-flag.ts,scripts/render-slot.tsx,scripts/render-pill.tsx,scripts/repro-loop-cap.tsx,test/render-scripts.test.ts",
+      "branch": "wt/width-flag-helper",
+      "worktree": "worktrees/wt-width-flag-helper",
+      "status": "done",
+      "createdAt": "2026-11-22T21:56:42Z",
+      "submittedAt": "2026-11-22T21:59:28Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T21:59:28Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-22T22:01:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
