@@ -59,6 +59,11 @@ describe("config", () => {
     expect(config.stateFile).toBe("/repo/journal.jsonl")
     expect(normalize(mergeConfig(DEFAULT_CONFIG, { stateFile: "/abs/journal.jsonl" }), "/repo").stateFile).toBe("/abs/journal.jsonl")
     expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow(/provider\/model/)
+    // Exact value-rendering is pinned: strings are double-quoted, numbers bare, across every throw site.
+    expect(() => normalize(mergeConfig(DEFAULT_CONFIG, { model: "nope" }), "/repo")).toThrow('model must be "provider/model" (got "nope")')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { maxTasksPerTick: "abc" })).toThrow('expected an integer, got "abc"')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { maxSpendUsd: "abc" })).toThrow('expected a number, got "abc"')
+    expect(() => mergeConfig(DEFAULT_CONFIG, { requireCleanTree: "maybe" })).toThrow('expected a boolean, got "maybe"')
   })
 
   test("isRepoAllowed enforces the configured whitelist without a CLI override", () => {

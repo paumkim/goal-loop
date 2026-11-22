@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { formatValue } from "../core/errors.ts"
 import path from "node:path"
 import { markBacklog, recordOutcome } from "./apply.ts"
 import { parseBacklog, selectNextTask, summarizeBacklog, writeLineStatus } from "./backlog.ts"
@@ -272,7 +273,7 @@ const main = async (): Promise<void> => {
       if (!id) throw new Error("usage: prompter approve <id> [repo] [--verify]")
       const config = loadConfig(repo)
       const state = loadState(config.stateFile ?? statePath(repo)).get(id)
-      if (!state) throw new Error(`unknown task id: ${id}`)
+      if (!state) throw new Error(`unknown task id: ${formatValue(id)}`)
       const result = approve(state, config, repo, config.stateFile ?? statePath(repo), { exists: existsSync, env: process.env }, { runVerify: parsed.flags.has("--verify") })
       say(result.message)
       if (!result.ok) process.exitCode = 1
@@ -286,7 +287,7 @@ const main = async (): Promise<void> => {
       const reason = rest.join(" ")
       const config = loadConfig(repo)
       const state = loadState(config.stateFile ?? statePath(repo)).get(id)
-      if (!state) throw new Error(`unknown task id: ${id}`)
+      if (!state) throw new Error(`unknown task id: ${formatValue(id)}`)
       const result = reject(state, config, repo, config.stateFile ?? statePath(repo), reason)
       say(result.message)
       if (!result.ok) process.exitCode = 1

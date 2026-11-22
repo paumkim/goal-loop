@@ -1,5 +1,18 @@
 import type { FailureInfo } from "./types.ts"
 
+/**
+ * The one rendering for a dynamic value named in an error message. JSON.stringify gives a single
+ * unambiguous convention — strings double-quoted, numbers/booleans/null bare, arrays and objects as
+ * JSON — instead of each throw site quoting by hand. Its few unserializable inputs get a stable
+ * textual fallback, so the helper never throws while building an error.
+ */
+export function formatValue(value: unknown): string {
+  if (typeof value === "bigint") return `${value}n`
+  if (typeof value === "symbol" || typeof value === "function") return String(value)
+  const json = JSON.stringify(value)
+  return json === undefined ? String(value) : json
+}
+
 /** Extracts a readable message from an unknown thrown value. */
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message

@@ -1642,6 +1642,18 @@ function spendSummaryLine(result) {
 import { createHash } from "crypto";
 import { readdirSync, readFileSync, writeFileSync as writeFileSync5 } from "fs";
 import { join as join5, resolve as resolve5 } from "path";
+
+// src/core/errors.ts
+function formatValue(value) {
+  if (typeof value === "bigint")
+    return `${value}n`;
+  if (typeof value === "symbol" || typeof value === "function")
+    return String(value);
+  const json = JSON.stringify(value);
+  return json === undefined ? String(value) : json;
+}
+
+// src/core/dossier-index.ts
 var dossierIndexName = (nowMs, attempt = 0) => {
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
   return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`;
@@ -1687,7 +1699,7 @@ function scanDossierArtifacts(dir) {
 }
 function buildDossierIndex(entries, nowMs, skipped = 0) {
   if (!Number.isInteger(skipped) || skipped < 0)
-    throw new Error(`skipped must be a non-negative integer, got ${skipped}`);
+    throw new Error(`skipped must be a non-negative integer, got ${formatValue(skipped)}`);
   const stamp = isoOf(nowMs);
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
   const lines = [];

@@ -36,6 +36,11 @@ describe("goal-declared verify directive parsing", () => {
     expect(parsed.checks.map((c) => c.id)).toEqual(["ok"])
     expect(parsed.malformed.length).toBeGreaterThanOrEqual(4)
     expect(parsed.malformed.every((m) => m.malformed && m.raw.startsWith("verify:") && m.reason.length > 0)).toBe(true)
+    // Exact text after the quoting standardization: values AND field names use the one JSON convention.
+    expect(parsed.malformed.find((m) => m.raw.includes("type=bogus"))?.reason).toBe('invalid type "bogus"')
+    expect(parsed.malformed.find((m) => m.raw.includes("when=sometimes"))?.reason).toBe('invalid when "sometimes"')
+    expect(parsed.malformed.find((m) => m.raw === 'verify: cmd="bun test"')?.reason).toBe('missing required "type"')
+    expect(parsed.malformed.find((m) => m.raw.includes("cmd=bun test"))?.reason).toBe("expected '=' after \"test\"")
   })
 
   test("merges goal-declared checks after configured/legacy checks with configured precedence by id", () => {

@@ -10320,3 +10320,70 @@ including `boolFrom(1) === true` and the exact `"expected a boolean, got ..."` t
 - `bunx tsc --noEmit`: clean.
 - `bun run check` after the SPEC/changelog companion update: 2228 pass / 0 fail, all gates ok.
 - SPEC marker re-counted `tests=2224` -> `tests=2228` (four new tests); packed file count unchanged at 143.
+
+
+## Workstream CXLVII — one value-quoting format in error messages (2026-11-22)
+
+Armed condition: audit error-message strings across `src/` throw sites for inconsistent value quoting/casing,
+standardize divergent ones to one format, pin exact text with tests, report findings, and keep `bun run check`
+green at 2228 pass / 0 fail.
+
+### Audit findings (fresh HEAD 13b36ce)
+
+Every `throw new Error` in `src/` was enumerated (plus the identical model-parser message in `scripts/e2e-lib.ts`).
+Casing is already consistent: no message starts uppercase and no `TRUE/FALSE/YES/NO` spelling divergence exists —
+so no casing change was needed. Quoting of a dynamic token was not consistent. Four renderings carried the same
+"name the rejected value" intent:
+
+| Rendering | Sites | Example |
+| --- | --- | --- |
+| manual double quotes | `util.ts` parseModel (2), `verify-matrix.ts` (6) | `got "${value}"`, `invalid type "${raw}"` |
+| `JSON.stringify(value)` | `util.ts` (3) | `expected an integer, got ${JSON.stringify(value)}` |
+| bare interpolation | `dossier-index.ts` (1), `cli.ts` (2), `verify-matrix.ts` field names (4) | `got ${skipped}`, `unknown task id: ${id}`, `missing required ${key}` |
+| `evidence=${raw}` | `verify-matrix.ts` (1) | unquoted value after `=` |
+
+Free-form embedded prose (a caught error's `message`, a subagent body slice, a directory in
+`no free ... in ${targetDir}`) was audited and intentionally left alone: quoting a whole sentence is not a
+value quote and would hurt readability. `scripts/render-*.tsx` use manual quotes but are `console.error`, not
+throw sites, so they are outside the condition's scope.
+
+### Decision
+
+Choice: one `formatValue(value: unknown): string` in `src/core/errors.ts`, built on `JSON.stringify` — strings
+double-quoted, numbers/booleans/null bare, arrays/objects as JSON, with non-serializable inputs given a stable
+fallback so the helper never throws while building an error. Every throw site that names a rejected value or
+field token calls it. Reverse only if a site needs prose rather than a value literal; none does, and ordinary
+inputs render byte-identically to before (e.g. `got "abc"`, `got -1`, `invalid type "bogus"`).
+
+### Change
+
+1. `src/core/errors.ts`: add the exported `formatValue` helper.
+2. `src/prompter/util.ts` (5 sites): parseModel's two `got "${value}"` and the three
+   `got ${JSON.stringify(value)}` all call `formatValue(value)`.
+3. `src/prompter/cli.ts` (2 sites): `unknown task id: ${formatValue(id)}`.
+4. `src/core/dossier-index.ts` (1 site): `got ${formatValue(skipped)}`.
+5. `src/core/verify-matrix.ts` (11 sites): invalid type/when/evidence/required/timeoutMs values, the
+   tokenizer's `unexpected token near`, the `evidence=` value, and all four field-name messages now use
+   `formatValue`, so a field name reads `missing required "type"` just like a value.
+6. `scripts/e2e-lib.ts` (1 site): the identical model-parser message uses `formatValue` too.
+
+No export was removed and no signature changed; `formatValue` is additive.
+
+### Exact-text pins
+
+No new test cases were added — assertions were placed inside existing tests, so the suite stays at 2228:
+`test/core.test.ts` pins `formatValue` on strings/numbers/booleans/null/undefined/arrays/objects/bigint;
+`test/e2e-lib.test.ts` pins the full `model must be "provider/model" (got "openrouter")` message;
+`test/prompter-config.test.ts` pins the integer/number/boolean/model messages; `test/dossier-index.test.ts`
+pins `skipped must be a non-negative integer, got -1` / `got 1.5`; `test/verify-matrix-goal-declared.test.ts`
+pins the malformed reasons `invalid type "bogus"`, `invalid when "sometimes"`, `missing required "type"`
+and `expected '=' after "test"`.
+
+### Verification
+
+- `bunx tsc --noEmit`: clean.
+- Focused suites: 230 pass / 0 fail across 6 files.
+- `dist/tui.js` rebuilt (355545 -> 355880 bytes) because `errors.ts` is in the TUI bundle graph;
+  fresh-build match restored.
+- `bun run check` after the SPEC/changelog companion update: 2228 pass / 0 fail, all gates ok.
+- SPEC marker unchanged at `files=143 tests=2228`; packed file count unchanged (no new source file).

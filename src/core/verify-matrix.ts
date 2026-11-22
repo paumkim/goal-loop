@@ -1,3 +1,4 @@
+import { formatValue } from "./errors.ts"
 import { headSha, findRepository } from "./git.ts"
 import { isBroadGoalCondition } from "./prompts.ts"
 import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
@@ -85,13 +86,13 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   const one = (key: string, required = false): { value: string; quoted: boolean } | undefined => {
     const vals = map.get(key)
     if (!vals || vals.length === 0) {
-      if (required) throw new Error(`missing required ${key}`)
+      if (required) throw new Error(`missing required ${formatValue(key)}`)
       return undefined
     }
     return vals[vals.length - 1]
   }
   const typeRaw = one("type", true)!.value
-  if (!TYPES.has(typeRaw as VerifyCheckType)) throw new Error(`invalid type "${typeRaw}"`)
+  if (!TYPES.has(typeRaw as VerifyCheckType)) throw new Error(`invalid type ${formatValue(typeRaw)}`)
   const type = typeRaw as VerifyCheckType
   const cmdTok = one("cmd") ?? one("command")
   if (!cmdTok) throw new Error("missing required cmd")
@@ -99,29 +100,29 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   const cmd = cmdTok.value
   if (!cmd.trim()) throw new Error("cmd must be a non-empty quoted command")
   const whenRaw = one("when")?.value ?? "always"
-  if (!WHENS.has(whenRaw)) throw new Error(`invalid when "${whenRaw}"`)
+  if (!WHENS.has(whenRaw)) throw new Error(`invalid when ${formatValue(whenRaw)}`)
   const when = whenRaw as "always" | "broad"
   const evidenceRaw = (one("evidence")?.value ?? "command") as VerifyEvidenceMode
-  if (!EVIDENCES.has(evidenceRaw)) throw new Error(`invalid evidence "${evidenceRaw}"`)
+  if (!EVIDENCES.has(evidenceRaw)) throw new Error(`invalid evidence ${formatValue(evidenceRaw)}`)
   const id = (one("id")?.value ?? `goal-declared-${type}-${index}`).trim()
   if (!id) throw new Error("id must be non-empty")
   const labelTok = one("label")
   if (labelTok && !labelTok.quoted) throw new Error('label must be a quoted string (label="...")')
   const label = labelTok?.value
   const requiredRaw = one("required")?.value
-  const required = requiredRaw === undefined ? true : requiredRaw === "true" ? true : requiredRaw === "false" ? false : (() => { throw new Error(`invalid required "${requiredRaw}"`) })()
+  const required = requiredRaw === undefined ? true : requiredRaw === "true" ? true : requiredRaw === "false" ? false : (() => { throw new Error(`invalid required ${formatValue(requiredRaw)}`) })()
   const timeoutRaw = one("timeoutMs")?.value ?? one("timeout")?.value
   let timeoutMs: number | undefined
   if (timeoutRaw !== undefined) {
     const n = Number(timeoutRaw)
-    if (!Number.isFinite(n) || n < 1) throw new Error(`invalid timeoutMs "${timeoutRaw}"`)
+    if (!Number.isFinite(n) || n < 1) throw new Error(`invalid timeoutMs ${formatValue(timeoutRaw)}`)
     timeoutMs = Math.floor(n)
   }
   const artifactToks = [...(map.get("artifacts") ?? []), ...(map.get("artifact") ?? [])]
   for (const t of artifactToks) if (!t.quoted) throw new Error('artifact/artifacts values must be quoted strings')
   const artifactPatterns = artifactToks.flatMap((t) => t.value.split("||")).map((x) => x.trim()).filter(Boolean)
   if ((evidenceRaw === "artifact" || evidenceRaw === "either") && artifactPatterns.length === 0) {
-    throw new Error(`evidence=${evidenceRaw} requires at least one artifact pattern (artifacts="..." or artifact="...")`)
+    throw new Error(`evidence=${formatValue(evidenceRaw)} requires at least one artifact pattern (artifacts="..." or artifact="...")`)
   }
   return {
     id,
@@ -147,9 +148,9 @@ function tokenize(body: string): Array<{ key: string; value: string; quoted: boo
     if (i >= s.length) break
     let key = ""
     while (i < s.length && /[A-Za-z0-9_.-]/.test(s[i]!)) key += s[i++]
-    if (!key) throw new Error(`unexpected token near "${s.slice(i, i + 20)}"`)
+    if (!key) throw new Error(`unexpected token near ${formatValue(s.slice(i, i + 20))}`)
     while (i < s.length && /\s/.test(s[i]!)) i++
-    if (s[i] !== "=") throw new Error(`expected '=' after ${key}`)
+    if (s[i] !== "=") throw new Error(`expected '=' after ${formatValue(key)}`)
     i++
     while (i < s.length && /\s/.test(s[i]!)) i++
     let value = ""
@@ -171,10 +172,10 @@ function tokenize(body: string): Array<{ key: string; value: string; quoted: boo
           value += c
         }
       }
-      if (!closed) throw new Error(`unterminated quoted value for ${key}`)
+      if (!closed) throw new Error(`unterminated quoted value for ${formatValue(key)}`)
     } else {
       while (i < s.length && !/\s/.test(s[i]!)) value += s[i++]
-      if (!value) throw new Error(`missing value for ${key}`)
+      if (!value) throw new Error(`missing value for ${formatValue(key)}`)
     }
     out.push({ key, value, quoted })
   }

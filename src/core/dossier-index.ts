@@ -41,6 +41,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { isoOf, inlineCode, fileStampOf } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
+import { formatValue } from "./errors.ts"
 
 /**
  * `goal-dossier-index-20261116-172233.md` from a clock; attempt > 0 appends `-attempt` (`-2`, `-3`, ...).
@@ -143,7 +144,7 @@ export function buildDossierIndex(
   nowMs: number,
   skipped = 0,
 ): BuiltDossierIndex {
-  if (!Number.isInteger(skipped) || skipped < 0) throw new Error(`skipped must be a non-negative integer, got ${skipped}`)
+  if (!Number.isInteger(skipped) || skipped < 0) throw new Error(`skipped must be a non-negative integer, got ${formatValue(skipped)}`)
   const stamp = isoOf(nowMs)
   const totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0)
   const lines: string[] = []
