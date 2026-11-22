@@ -5073,6 +5073,17 @@
       "status": "submitted",
       "createdAt": "2026-11-22T20:31:54Z",
       "submittedAt": "2026-11-22T20:39:23Z"
+    },
+    "log-quoting-count-restore": {
+      "agent": "build-agent",
+      "paths": "test/render-scripts.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/log-quoting-count-restore",
+      "worktree": "worktrees/wt-log-quoting-count-restore",
+      "status": "done",
+      "createdAt": "2026-11-22T20:47:30Z",
+      "submittedAt": "2026-11-22T20:51:56Z",
+      "mergedAt": "2026-11-22T20:54:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
