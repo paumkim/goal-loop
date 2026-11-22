@@ -5352,22 +5352,25 @@
       "paths": "src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
       "branch": "wt/verify-matrix-error-style",
       "worktree": "worktrees/wt-verify-matrix-error-style",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-22T23:30:05Z",
       "submittedAt": "2026-11-22T23:33:48Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-22T23:33:48Z",
       "forcedScopeFiles": [
         "SPEC.md"
-      ]
+      ],
+      "mergedAt": "2026-11-22T23:41:25Z",
+      "mergedInto": "dev"
     },
     "failure-signature-predicate-dedup": {
       "agent": "loop-worker",
       "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/failure-signature-predicate-dedup",
       "worktree": "worktrees/wt-failure-signature-predicate-dedup",
-      "status": "claimed",
-      "createdAt": "2026-11-22T23:31:55Z"
+      "status": "submitted",
+      "createdAt": "2026-11-22T23:31:55Z",
+      "submittedAt": "2026-11-22T23:40:54Z"
     },
     "dead-readability-spec": {
       "agent": "build-agent",
