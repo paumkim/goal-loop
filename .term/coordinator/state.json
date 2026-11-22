@@ -5302,8 +5302,19 @@
       "paths": "test/core.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prompt-kickoff-golden",
       "worktree": "worktrees/wt-prompt-kickoff-golden",
+      "status": "done",
+      "createdAt": "2026-11-22T23:05:54Z",
+      "submittedAt": "2026-11-22T23:09:41Z",
+      "mergedAt": "2026-11-22T23:14:58Z",
+      "mergedInto": "dev"
+    },
+    "find-fold-cache": {
+      "agent": "build-agent",
+      "paths": "src/core/find.ts,test/find.test.ts",
+      "branch": "wt/find-fold-cache",
+      "worktree": "worktrees/wt-find-fold-cache",
       "status": "claimed",
-      "createdAt": "2026-11-22T23:05:54Z"
+      "createdAt": "2026-11-22T23:12:41Z"
     }
   },
   "mergeLock": null,
