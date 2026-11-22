@@ -1,4 +1,20 @@
 import stringWidth from "string-width"
+
+/**
+ * Memoized terminal-cell width. `stringWidth` strips ANSI and runs an Intl.Segmenter pass on every
+ * call; the TUI asks for the width of the same labels, prefixes and graphemes many times per frame.
+ * Cache hits are pure lookups. Bounded so a long session cannot grow the map without limit; an
+ * evicted string is simply recomputed, which yields the same number.
+ */
+const WIDTH_CACHE_LIMIT = 4096
+const widthCache = new Map<string, number>()
+export const cellWidth = (text: string): number => {
+  const hit = widthCache.get(text)
+  if (hit !== undefined) return hit
+  const width = stringWidth(text)
+  if (widthCache.size < WIDTH_CACHE_LIMIT) widthCache.set(text, width)
+  return width
+}
 import { COMPACT_MISS_CAP } from "./types.ts"
 import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 
@@ -17,7 +33,7 @@ export function wrapLines(text: string, width: number): number {
   let used = 0
   for (const word of text.split(" ")) {
     if (word === "") continue
-    const w = stringWidth(word)
+    const w = cellWidth(word)
     const sep = used === 0 ? 0 : 1
     if (used > 0 && used + sep + w > max) {
       lines += 1
@@ -125,7 +141,7 @@ export function formatSpend(spend: UsageSnapshot, maxWidth: number = Number.POSI
   const join = (tokens: string[]) => [...tokens, ...(cost ? [cost] : [])].join(" \u00B7 ")
   let tokens = parts
   let out = join(tokens)
-  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+  while (tokens.length > 0 && cellWidth(out) > maxWidth) {
     tokens = tokens.slice(0, -1)
     out = join(tokens)
   }
@@ -183,13 +199,13 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
 export function truncate(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
   const flat = text.replace(/\s+/g, " ").trim()
-  if (stringWidth(flat) <= max) return flat
-  const ellipsisWidth = stringWidth(ellipsis)
+  if (cellWidth(flat) <= max) return flat
+  const ellipsisWidth = cellWidth(ellipsis)
   if (ellipsisWidth >= max) {
     let fitted = ""
     let used = 0
     for (const { segment } of segmenter.segment(ellipsis)) {
-      const w = stringWidth(segment)
+      const w = cellWidth(segment)
       if (used + w > max) break
       fitted += segment
       used += w
@@ -200,7 +216,7 @@ export function truncate(text: string, max: number, ellipsis: string = "\u2026")
   let out = ""
   let used = 0
   for (const { segment } of segmenter.segment(flat)) {
-    const w = stringWidth(segment)
+    const w = cellWidth(segment)
     if (used + w > budget) break
     out += segment
     used += w
