@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2222 -->
+<!-- spec-check files=143 tests=2224 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10159,7 +10159,10 @@ and treated a non-quota error as a provider quota: `core/errors.ts · isUsageLim
 (whose `PAUSE` table carried `/rate[\s_-]*limit|...|quota/i`, so any error mentioning a limit got the
 "rate or usage limit" label and the 15-minute pause window via `handleFailure`). A follow-up found the two
    paths still disagreed when a provider wrapped an asserted quota hit in a 5xx: `classifyFailure` checked the
-   generic 5xx branch first and returned `transient`, while `isUsageLimitError` correctly returned true.
+   generic 5xx branch first and returned `transient`, while `isUsageLimitError` correctly returned true. A second
+   gap was in the detection chain itself: `asEvaluatorError` (`src/index.ts`) flattened a provider error object to
+   a plain `Error` string, dropping the structured `status`/`code`/`type`, so a genuine 429 with a generic message
+   ("slow down") reached `isUsageLimitError` with no quota signal and was retried instead of paused.
 
 ### Root cause
 
@@ -10184,12 +10187,17 @@ a provider reports a genuine quota using a phrase the detector does not cover.
    route limit classification through `isUsageLimitError` *before* the generic 5xx branch, so an asserted quota
    hit wrapped in a 500 still pauses and both paths agree; an unrelated error keeps its own label and a transient
    error mentioning a limit still gets the short backoff.
+3. `src/index.ts · asEvaluatorError`: carry the structured `status`/`code`/`type`/`name`/`error` fields from a
+   provider error object onto the flattened `Error`, so the tightened detector sees the genuine 429/code it would
+   have read before flattening.
 2. Tests: `test/controller.test.ts` adds a non-quota detector regression (bare/negated/provider-name phrases are
    false; 429/code/quota-hit signals true) and a controller test proving a non-quota evaluator error retries
    instead of pausing with `usage_limit`. `test/core.test.ts` adds `classifyFailure` regressions: non-quota
    limit phrases keep their own label, a transient error mentioning a limit classifies as `transient`, and a
-   quota hit wrapped in a 5xx classifies as `pause` in agreement with `isUsageLimitError`.
+   quota hit wrapped in a 5xx classifies as `pause` in agreement with `isUsageLimitError`. `test/plugin.test.ts`
+   adds two end-to-end regressions through the real judge-failure path: a structured 429 with a generic message
+   pauses with `usage_limit`, while a structured 500 whose message mentions "rate limit" stays active.
 
 ### Verification
 
-- `bun run check` green: 2222 pass / 0 fail; dist/tui/docs/invariant/spec gates all ok; marker re-counted in-commit.
+- `bun run check` green: 2224 pass / 0 fail; dist/tui/docs/invariant/spec gates all ok; marker re-counted in-commit.
