@@ -5228,6 +5228,23 @@
       "submittedAt": "2026-11-22T22:33:53Z",
       "mergedAt": "2026-11-22T22:35:49Z",
       "mergedInto": "dev"
+    },
+    "cell-width-cache": {
+      "agent": "build-agent",
+      "paths": "src/core/format.ts,test/cell-width.test.ts",
+      "branch": "wt/cell-width-cache",
+      "worktree": "worktrees/wt-cell-width-cache",
+      "status": "done",
+      "createdAt": "2026-11-22T22:39:34Z",
+      "submittedAt": "2026-11-22T22:42:19Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T22:42:19Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T22:44:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
