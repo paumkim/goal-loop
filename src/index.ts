@@ -14,7 +14,7 @@ import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin
 import { resolveConfig } from "./core/config.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
-import { parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
+import { parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
 import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
@@ -122,11 +122,7 @@ const sleep = (ms: number, signal: AbortSignal) =>
   })
 
 /** Env flag: `1/true/yes/on` (case-insensitive) enables; anything else is off. Probe mode makes plugin storage read-only. */
-const probeFlag = (value: string | undefined) => {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return ["1", "true", "yes", "on"].includes(normalized)
-}
+const probeFlag = (value: string | undefined) => parseBool(value) === true
 
 /** Runs a verification command via the user's shell, capturing combined output (tail kept). Never touches plugin storage. */
 export function createVerifier() {

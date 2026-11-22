@@ -64,3 +64,23 @@ export function parseGoalLoopDirective(raw: string): GoalLoopDirective | undefin
   if (maxLoops < 1 || maxLoops > 1000) return { objective, invalidCount: suffix }
   return { objective, maxLoops }
 }
+
+
+/** Canonical boolean spellings — the single source of truth shared by config, env flags and the prompter CLI. */
+const BOOL_TRUE = ["1", "true", "yes", "on"]
+const BOOL_FALSE = ["0", "false", "no", "off"]
+
+/**
+ * Classify a boolean-like value as `true`, `false`, or `undefined` when unrecognized.
+ * Booleans pass through; strings are trimmed and lowercased before matching the canonical spellings;
+ * every other type is unrecognized. Each caller keeps its own policy for "unrecognized" (fall back,
+ * throw, or read as off), so consolidating the classifier changes no observable behavior.
+ */
+export function parseBool(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value
+  if (typeof value !== "string") return undefined
+  const token = value.trim().toLowerCase()
+  if (BOOL_TRUE.includes(token)) return true
+  if (BOOL_FALSE.includes(token)) return false
+  return undefined
+}

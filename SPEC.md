@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2224 -->
+<!-- spec-check files=143 tests=2228 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10275,3 +10275,48 @@ unrepresentable clocks render the epoch rather than throw) can drift apart.
 - `bunx tsc --noEmit`: clean.
 - `cd test && bun test spend-ledger.test.ts`: 17 pass / 0 fail, 58 expect() calls (all pre-existing tests).
 - `bun run check` green after the SPEC/changelog companion update.
+
+
+## Workstream CXLVI — consolidate the three boolean flag parsers (2026-11-22)
+
+Armed condition: collapse the duplicated `parseBool` implementations in `src/core/config.ts` (`flag`),
+`src/prompter/util.ts` (`boolFrom`) and `src/index.ts` (`probeFlag`) into one shared helper with no behavior
+or public-API change, prove equivalence with tests, and keep `SPEC.md`/`docs/changelog.html` in sync.
+
+### Root cause
+
+Each site carried its own copy of the same spelling table (`1/true/yes/on`, `0/false/no/off`) plus a trim/lowercase
+step, but wrapped it in a different policy for unrecognized values: config returns `undefined` (tri-state), the
+prompter CLI falls back or throws, and the plugin probe defaults to off. Two copies could drift independently.
+
+### Decision
+
+Choice: one tri-state classifier `parseBool(value): boolean | undefined` in `src/core/parse.ts`, with each site
+keeping its existing thin policy adapter. Reverse only if a site genuinely needs a different spelling set —
+none does, and every old result is preserved.
+
+### Change
+
+1. `src/core/parse.ts`: add the canonical `BOOL_TRUE`/`BOOL_FALSE` tables and exported `parseBool`. Booleans pass
+   through; only strings are trim/lowercased and matched; all other types are unrecognized (`undefined`).
+2. `src/core/config.ts`: delete the local `TRUTHY`/`FALSY`/`flag` block; `parseCoordinator` and `envBool` call
+   `parseBool` directly. The `?? "auto"` / `?? fallback` policies are unchanged.
+3. `src/index.ts`: `probeFlag` is now `parseBool(value) === true` — the same default-off policy in one line.
+4. `src/prompter/util.ts`: `boolFrom` calls `parseBool(String(value))`. The `String()` coercion is preserved for
+   numbers and boxed values; the `undefined`/`null`/`""` fallback and the exact throw text are unchanged.
+   `boolFrom` remains exported; no other export or signature changed.
+
+### Equivalence proof
+
+`test/parse-bool.test.ts` reproduces all three pre-change implementations verbatim as oracles and compares their
+results to the consolidated code over a 45-input corpus (booleans; every spelling with case/whitespace variants;
+blank, unrecognized and numeric strings; `undefined`/`null`/numbers/`NaN`/arrays/objects/boxed strings). Throws
+are compared by error message, not just by occurrence. Result: **4 tests pass, 196 expect() calls, 0 divergences**,
+including `boolFrom(1) === true` and the exact `"expected a boolean, got ..."` throw. Focused call-site suites
+(`core.test.ts`, `prompter-config.test.ts`, `goal-limits.test.ts`, `parse-bool.test.ts`): 185 pass / 0 fail.
+
+### Verification
+
+- `bunx tsc --noEmit`: clean.
+- `bun run check` after the SPEC/changelog companion update: 2228 pass / 0 fail, all gates ok.
+- SPEC marker re-counted `tests=2224` -> `tests=2228` (four new tests); packed file count unchanged at 143.
