@@ -14,7 +14,7 @@ export const shortId = (objective: string): string => sha256(objective.trim()).s
 
 export const prompterHome = (): string => process.env.PROMPTER_HOME?.trim() || path.join(os.homedir(), ".prompter")
 
-export const repoHash = (repo: string): string => sha256(path.resolve(repo)).slice(0, 12)
+const repoHash = (repo: string): string => sha256(path.resolve(repo)).slice(0, 12)
 
 export const statePath = (repo: string): string => path.join(prompterHome(), "state", `${repoHash(repo)}.jsonl`)
 
