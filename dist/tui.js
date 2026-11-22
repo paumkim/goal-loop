@@ -1500,13 +1500,9 @@ function reviewSummaryLine(review) {
 // src/core/spend-ledger.ts
 import { writeFileSync as writeFileSync4 } from "fs";
 import { join as join4, resolve as resolve4 } from "path";
-var pad = (n) => String(n).padStart(2, "0");
 var spendLedgerName = (nowMs, attempt = 0) => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0);
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
-  const stamp = `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` + `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`;
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-spend-ledger-${stamp}${suffix}.md`;
+  return `goal-spend-ledger-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var measuredSpend = (entry) => {
   const spend = entry.spend;
