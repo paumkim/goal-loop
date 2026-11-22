@@ -10670,9 +10670,9 @@ New `test/evaluator-agent-foreign.test.ts` pins all four foreign keys still fail
 verdict still parsing; focused suites 167 pass / 0 fail. Marker `tests=2234 → 2235` after rebase onto dev.
 
 
-## Workstream CLVI — golden test for the deduplicated kickoff (2026-11-22)
+## Workstream CLVIII — golden test for the deduplicated kickoff (2026-11-22)
 
-The dedup workstream (CLIV above) asserted counts: one objective, one `DELEGATE_VERDICT`, both
+The dedup workstream (CLVI above) asserted counts: one objective, one `DELEGATE_VERDICT`, both
 headers, neither superseded sentence. Counts catch duplication but not a reordered or dropped
 section, so this follow-up pins the entire rendered iteration-1 kickoff as one exact string in
 `test/core.test.ts` (the `planned` path keeps the output free of policy-dependent essays). The
