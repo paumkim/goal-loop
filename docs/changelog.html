@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-22 17:02 UTC</code></td><td>refactor: precompile foreign-verdict patterns; drop dead type export</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 16:56 UTC</code></td><td>fix(comment): correct iterate -&gt; later iterations in prompt dedup note</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 16:56 UTC</code></td><td>refactor(prompt): state the objective and no-judge rule once in the kickoff</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 16:51 UTC</code></td><td>chore: remove dead scratch log and unreferenced config export</td><td>commit</td></tr>
@@ -41,7 +42,6 @@
 <tr><td><code>2026-11-22 03:05 UTC</code></td><td>fix(core): require a genuine quota signal, not a limit phrase</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 01:42 UTC</code></td><td>fix(goal): wake the standalone judge; keep the worker from judging</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 00:53 UTC</code></td><td>fix(evaluator): judge in standalone child; wake parent only on not_met</td><td>commit</td></tr>
-<tr><td><code>2026-11-21 17:30 UTC</code></td><td>fix(goal): show bar during first-arm planning; pause on unusable verdict instead of re-arm loop</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>

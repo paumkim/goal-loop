@@ -23,7 +23,7 @@ export function isEvaluatorReport(metadata: unknown): boolean {
   return m.source === "subagent" && typeof m.agent === "string" && m.agent.toLowerCase() === EVALUATOR_AGENT_ID
 }
 
-export interface NativeReportCandidate {
+interface NativeReportCandidate {
   readonly key: string
   readonly body: string
   readonly state: string
@@ -105,8 +105,11 @@ const FOREIGN_VERDICT_KEYS = ["rests_on", "target_files", "observed_evidence", "
 /** Only an authoritative `verdict` / `met` field may decide a goal. `status` / `result` belong to foreign rubrics. */
 const AUTHORITATIVE_VERDICT_KEY = /(?:"verdict"|"met")\s*:/i
 
+/** Compiled once at module load: `isForeignVerdict` runs on every native verdict and regex construction is not free. */
+const FOREIGN_VERDICT_PATTERNS = FOREIGN_VERDICT_KEYS.map((key) => new RegExp(`"${key}"\\s*:`, "i"))
+
 function isForeignVerdict(body: string): boolean {
-  return FOREIGN_VERDICT_KEYS.some((key) => new RegExp(`"${key}"\\s*:`, "i").test(body))
+  return FOREIGN_VERDICT_PATTERNS.some((pattern) => pattern.test(body))
 }
 
 /** Normalize text for echo comparison: case/punctuation/whitespace-insensitive, unicode letters and digits kept. */
