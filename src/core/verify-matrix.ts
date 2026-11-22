@@ -75,6 +75,9 @@ export function parseGoalDeclaredChecks(condition: string): GoalDeclaredParseRes
   return { checks, malformed }
 }
 
+/** The one "missing required key" error shape. `formatValue` keeps key quoting consistent with every other verify-matrix error. */
+const missingRequired = (key: string): Error => new Error(`missing required ${formatValue(key)}`)
+
 function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredCheck {
   const tokens = tokenize(body)
   const map = new Map<string, Array<{ value: string; quoted: boolean }>>()
@@ -86,7 +89,7 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   const one = (key: string, required = false): { value: string; quoted: boolean } | undefined => {
     const vals = map.get(key)
     if (!vals || vals.length === 0) {
-      if (required) throw new Error(`missing required ${formatValue(key)}`)
+      if (required) throw missingRequired(key)
       return undefined
     }
     return vals[vals.length - 1]
@@ -95,7 +98,7 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   if (!TYPES.has(typeRaw as VerifyCheckType)) throw new Error(`invalid type ${formatValue(typeRaw)}`)
   const type = typeRaw as VerifyCheckType
   const cmdTok = one("cmd") ?? one("command")
-  if (!cmdTok) throw new Error("missing required cmd")
+  if (!cmdTok) throw missingRequired("cmd")
   if (!cmdTok.quoted) throw new Error('cmd must be a quoted string (cmd="...")')
   const cmd = cmdTok.value
   if (!cmd.trim()) throw new Error("cmd must be a non-empty quoted command")

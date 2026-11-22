@@ -29,6 +29,7 @@ describe("goal-declared verify directive parsing", () => {
       'verify: type=bogus cmd="bun test"',
       'verify: cmd="bun test"', // missing type
       'verify: type=lint cmd="bun run lint" evidence=artifact', // missing artifacts
+    'verify: type=tests', // missing cmd
       'verify: type=build cmd="bun run build" when=sometimes',
       'verify: type=tests cmd="bun test ok" id=ok',
     ].join("\n")
@@ -40,6 +41,9 @@ describe("goal-declared verify directive parsing", () => {
     expect(parsed.malformed.find((m) => m.raw.includes("type=bogus"))?.reason).toBe('invalid type "bogus"')
     expect(parsed.malformed.find((m) => m.raw.includes("when=sometimes"))?.reason).toBe('invalid when "sometimes"')
     expect(parsed.malformed.find((m) => m.raw === 'verify: cmd="bun test"')?.reason).toBe('missing required "type"')
+
+    // The two "missing required" paths share one formatValue-based message shape.
+    expect(parsed.malformed.find((m) => m.raw === "verify: type=tests")?.reason).toBe('missing required "cmd"')
     expect(parsed.malformed.find((m) => m.raw.includes("cmd=bun test"))?.reason).toBe("expected '=' after \"test\"")
   })
 
