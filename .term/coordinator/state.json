@@ -5084,6 +5084,17 @@
       "submittedAt": "2026-11-22T20:51:56Z",
       "mergedAt": "2026-11-22T20:54:01Z",
       "mergedInto": "dev"
+    },
+    "positive-finite-helper": {
+      "agent": "build-agent",
+      "paths": "scripts/positive-finite.ts,scripts/render-dialog.tsx,scripts/render-history.tsx,test/render-scripts.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/positive-finite-helper",
+      "worktree": "worktrees/wt-positive-finite-helper",
+      "status": "done",
+      "createdAt": "2026-11-22T21:02:03Z",
+      "submittedAt": "2026-11-22T21:05:46Z",
+      "mergedAt": "2026-11-22T21:07:50Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
