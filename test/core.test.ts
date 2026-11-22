@@ -256,6 +256,25 @@ describe("classifyFailure", () => {
   test("rate limits pause", () => {
     expect(classifyFailure({ status: 429, message: "slow down" }).kind).toBe("pause")
     expect(classifyFailure({ message: "Rate limit reached" }).kind).toBe("pause")
+    // Genuine quota signals keep the dedicated pause label/window, including provider codes and asserted hits.
+    expect(classifyFailure({ type: "rate_limit_error", message: "provider rejected the request" })).toEqual({ kind: "pause", label: "rate or usage limit" })
+    expect(classifyFailure({ message: "HTTP 429 too many requests" }).label).toBe("rate or usage limit")
+  })
+  test("non-quota errors that merely mention a limit are not labelled a quota pause", () => {
+    // Regression: the old PAUSE pattern matched a bare "rate limit"/"usage limit"/"quota" phrase anywhere and
+    // parked the goal for 15m with a misleading "rate or usage limit" label. These are ordinary errors.
+    for (const message of [
+      "KiloCode-Free usage is available on this key",
+      "no rate limit is configured for this model",
+      "rate limit settings are documented at example.com",
+      "usage limit was not reached",
+    ]) {
+      const result = classifyFailure({ message })
+      expect(result.label).not.toBe("rate or usage limit")
+      expect(result.label).toBe(message)
+    }
+    // A transient error that happens to mention a limit is still retried quickly, not parked as a quota.
+    expect(classifyFailure({ message: "rate limit check failed: fetch failed ECONNRESET" }).kind).toBe("transient")
   })
   test("overload and network errors retry", () => {
     expect(classifyFailure({ status: 529, message: "Overloaded" }).kind).toBe("transient")

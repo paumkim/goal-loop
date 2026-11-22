@@ -728,12 +728,14 @@ export default Plugin.define({
     // `<goal>` kickoff. The first two are no-ops while no goal work is armed; the third is gated on the
     // request still carrying goal text, so it never becomes a session-long stale system line.
     await ctx.session.hook("context", (event) => {
-      // A native judge child inherits the project's AGENTS.md/SPEC.md rules through the host system prefix. On a
-      // small free-tier model those thousands of cached tokens drown the ~100-token condition block, so the judge
-      // replays a verdict about a condition it saw in the project docs. Keep only the evaluator's own identity
-      // part — the per-turn <goal-evaluation> prompt already carries the complete role and output contract.
+      // CXXXVIII trims the judge's system prefix to its own identity so a ~7k-token AGENTS.md/SPEC.md block cannot
+      // drown the rubric on small models (it caused foreign verdicts on 9router-go/KiloCode-Free). The trim is NOT
+      // safe for the built-in `opencode` provider: that gateway rejects a trimmed judge in ~6ms with
+      // `provider.free-limit` 429 while the worker and planner on the same model keep running. Keep the full host
+      // prefix for `opencode` children; every other provider keeps the narrow CXXXVIII prefix. The per-turn
+      // <goal-evaluation> prompt carries the role and output contract either way.
       const agentID = typeof event.agent === "string" ? event.agent : ""
-      if (agentID === EVALUATOR_AGENT_ID && Array.isArray(event.system)) {
+      if (agentID === EVALUATOR_AGENT_ID && event.model?.providerID !== "opencode" && Array.isArray(event.system)) {
         const sys = event.system
         for (let i = sys.length - 1; i >= 0; i--) {
           const text = (sys[i] as { text?: unknown } | undefined)?.text

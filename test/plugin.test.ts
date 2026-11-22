@@ -569,24 +569,43 @@ describe("the context hook strips end-of-record notes", () => {
   })
 })
 
-describe("the judge child gets a clean system prefix (CXXXVIII)", () => {
+describe("the judge child's system prefix (CXXXVIII, opencode free gate)", () => {
   const systemParts = () => [
     { type: "text", text: "Project rules from AGENTS.md: dogfood, dev branch, merge to main." },
+    { type: "text", text: "# Your Model\n- Name: Hy4 flash Free\n- Provider ID: opencode\n- Model ID: hy4-flash-free" },
     { type: "text", text: EVALUATOR_SYSTEM_PROMPT },
     { type: "text", text: "SPEC.md: another goal about a TUI footer fix." },
   ]
 
-  test("evaluator children keep only their identity part, not project docs", async () => {
+  test("evaluator children keep only their identity on third-party providers", async () => {
     const directory = repository()
     const { ctx, hooks } = context(directory)
     const dispose = await (plugin as any).setup(ctx)
     try {
-      const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
+      const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: { providerID: "9router-go", id: "KiloCode-Free" }, system: systemParts(), messages: [], tools: {}, options: {} }
       hooks.context!(event)
       expect(event.system).toHaveLength(1)
       expect((event.system[0] as any).text).toContain("You are the Evaluator")
       expect(JSON.stringify(event.system)).not.toContain("dogfood")
       expect(JSON.stringify(event.system)).not.toContain("TUI footer")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("evaluator children keep the full host prefix on the opencode provider (free-tier gate)", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = { sessionID: "ses_judge", agent: EVALUATOR_AGENT_ID, model: { providerID: "opencode", id: "hy4-flash-free" }, system: systemParts(), messages: [], tools: {}, options: {} }
+      hooks.context!(event)
+      // A trimmed judge on opencode/hy4-flash-free was rejected in ~6ms with provider.free-limit 429.
+      expect(event.system).toHaveLength(4)
+      expect(JSON.stringify(event.system)).toContain("You are the Evaluator")
+      expect(JSON.stringify(event.system)).toContain("# Your Model")
+      expect(JSON.stringify(event.system)).toContain("dogfood")
+      expect(JSON.stringify(event.system)).toContain("TUI footer")
     } finally {
       await dispose?.()
     }
@@ -599,7 +618,7 @@ describe("the judge child gets a clean system prefix (CXXXVIII)", () => {
     try {
       const event = { sessionID: "ses_worker", agent: "build", model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
       hooks.context!(event)
-      expect(event.system).toHaveLength(3)
+      expect(event.system).toHaveLength(4)
       expect(JSON.stringify(event.system)).toContain("dogfood")
     } finally {
       await dispose?.()

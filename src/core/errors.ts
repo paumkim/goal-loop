@@ -26,25 +26,46 @@ const FATAL: ReadonlyArray<readonly [RegExp, string]> = [
   [/model.{0,40}(not[\s_-]*found|not[\s_-]*available|unavailable|does not exist|not supported|unsupported|deprecated)|unknown[\s_-]*model|no such model/i, "model not available"],
 ]
 
-const USAGE_LIMIT = /rate[\s_-]*limit|too many requests|usage[\s_-]*limit|free[\s_-]*usage|freeusagelimit/i
-
 /**
- * True only for self-clearing provider usage/rate limits (HTTP 429, "Free usage limit reached",
- * "too many requests", "rate limit", "usage limit"). These clear on their own, so a goal must PAUSE and
- * retry after a long window rather than burn its retry cap on a transient quota condition. The
- * execution path gets this through `classifyFailure` → `"pause"`; the evaluator path calls this
- * directly. Deliberately narrow: a generic error must not pause a goal forever.
+ * A genuine provider usage/rate limit is a quota *signal*, not a phrase that merely appears in an evaluator error.
+ * Recognized signals: an HTTP 429 status (numeric `status`/`code`, or "HTTP 429" in text), a provider error code
+ * such as `rate_limit_error` / `tpm_rate_limit_exceeded` / `freeusagelimit`, or an assertion that a limit was
+ * actually hit ("rate limit exceeded", "free usage limit reached", "too many requests"). A bare "rate limit" in a
+ * hint, a negation ("no usage limit"), or a provider name followed by "usage" ("KiloCode-Free usage") is NOT a
+ * signal — matching those paused the goal on ordinary evaluator failures. A generic error must never pause a goal.
  */
+
+/** 429 in a status/code field: numeric or a bare numeric string. */
+function is429(value: unknown): boolean {
+  return value === 429 || (typeof value === "string" && /^\s*429\s*$/.test(value))
+}
+
+/** Provider error codes/types that unambiguously denote a quota or rate limit. */
+const QUOTA_CODE = /\b(?:(?:rate|tpm|usage|free|request)[\s_-]*)+(?:limit|quota)(?:[\s_-]*(?:error|exceeded|reached|hit))?(?:\b|_)|\btoo[\s_-]*many[\s_-]*requests\b|\binsufficient[\s_-]*quota\b|\bquota\b[\s_-]*(?:exceeded|reached|exhausted)\b|\bfreeusage(?:limit|error)(?:error)?\b/i
+
+/** Free text asserting a limit was actually hit — not mentioned, negated, or merely configured. */
+const QUOTA_HIT = /(?<!\bno\s)(?<!\bnot\s)(?<!\bnever\s)(?<!\bwithout\s)\b(?:free[\s_-]*)?(?:rate|usage|request|tpm|quota)[\s_-]*limit\b(?:\s+(?:was|is|has|have|were|been|of|for|by|at|to|the|a)){0,6}\s+(?:reached|exceeded|hit|exhausted|exceeds?)\b/i
+const HTTP_429_TEXT = /\bHTTP[\s:/-]*429\b|\(\s*429\s*\)/i
+const TOO_MANY_REQUESTS = /\btoo[\s_-]*many[\s_-]*requests\b/i
+const FREE_USAGE_ERROR = /\bfreeusage(?:limit|error)(?:error)?\b|\bfree[\s_-]*usage[\s_-]*limit[\s_-]*error\b/i
+
+function hasUsageLimitText(text: string): boolean {
+  return HTTP_429_TEXT.test(text) || TOO_MANY_REQUESTS.test(text) || FREE_USAGE_ERROR.test(text) || QUOTA_HIT.test(text)
+}
+
 export function isUsageLimitError(error: unknown): boolean {
-  if (typeof error === "string") return USAGE_LIMIT.test(error)
+  if (typeof error === "string") return hasUsageLimitText(error)
   if (typeof error !== "object" || error === null) return false
-  const record = error as { status?: unknown; type?: unknown; message?: unknown; name?: unknown }
-  if (record.status === 429) return true
-  return USAGE_LIMIT.test(`${record.type ?? ""} ${record.message ?? ""} ${record.name ?? ""}`)
+  const record = error as { status?: unknown; code?: unknown; type?: unknown; name?: unknown; message?: unknown; error?: unknown }
+  if (is429(record.status) || is429(record.code)) return true
+  // Structured provider codes/types are unambiguous; free text must assert a hit, not merely name a limit.
+  const codes = [record.type, record.code, record.name].filter((v): v is string => typeof v === "string").join(" ")
+  if (QUOTA_CODE.test(codes)) return true
+  const text = [record.message, record.error].filter((v): v is string => typeof v === "string").join(" ")
+  return hasUsageLimitText(text)
 }
 
 const PAUSE: ReadonlyArray<readonly [RegExp, string]> = [
-  [/rate[\s_-]*limit|too many requests|usage[\s_-]*limit|quota/i, "rate or usage limit"],
   [/hook/i, "a hook ended the turn"],
 ]
 
@@ -76,6 +97,11 @@ export function classifyFailure(error: FailureInfo | undefined): Classified {
   if (status === 413) return { kind: "fatal", label: "context overflow that compaction could not clear" }
   if (status === 429) return { kind: "pause", label: "rate or usage limit" }
   if (status !== undefined && (status >= 500 || status === 408)) return { kind: "transient", label: "provider overloaded or unavailable" }
+  // A genuine quota signal (429 / quota code / asserted hit) pauses with the long window. A mere mention of a
+  // limit in an unrelated error must NOT get this label/branch — it would park the goal for 15m and mask a
+  // transient failure that a short backoff would clear. isUsageLimitError is the single tight detector shared
+  // with the evaluator path, so both paths agree on what counts as a quota.
+  if (isUsageLimitError(error)) return { kind: "pause", label: "rate or usage limit" }
   for (const [pattern, label] of PAUSE) if (pattern.test(text)) return { kind: "pause", label }
   for (const [pattern, label] of TRANSIENT) if (pattern.test(text)) return { kind: "transient", label }
   const message = (error?.message ?? error?.type ?? "unknown error").replace(/\s+/g, " ").trim().slice(0, 160)

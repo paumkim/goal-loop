@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2218 -->
+<!-- spec-check files=143 tests=2222 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10149,3 +10149,43 @@ mode for children; reverse the position part only if a worker verdict can be tru
 - The no-judge contract is prose, not a host-enforced capability: the worker still has tools and could ignore it.
   The harness ignores any self-declared verdict, so a lapse costs a turn, not the goal's correctness.
 - The planner still runs only outside tests and probe mode; the new pin lifts `NODE_ENV` locally for one test.
+
+## Workstream CXLIII — quota false positive: a limit *phrase* is not a limit *signal* (2026-11-22)
+
+Armed by a live `/goal` that paused with `Free usage limit reached` after an ordinary evaluator failure whose
+message merely mentioned "rate limit" in prose. Two detectors both matched the bare phrase anywhere in the text
+and treated a non-quota error as a provider quota: `core/errors.ts · isUsageLimitError` (used by
+`GoalController.evaluationFailed` to pause with `pauseCause: "usage_limit"`) and `core/errors.ts · classifyFailure`
+(whose `PAUSE` table carried `/rate[\s_-]*limit|...|quota/i`, so any error mentioning a limit got the
+"rate or usage limit" label and the 15-minute pause window via `handleFailure`).
+
+### Root cause
+
+The old `isUsageLimitError` was `USAGE_LIMIT = /rate[\s_-]*limit|too many requests|usage[\s_-]*limit|free[\s_-]*usage|freeusagelimit/i`
+applied to the whole error string. A hint, a negation, documentation text, or a provider name ("KiloCode-Free
+usage") all matched. `classifyFailure` repeated the same loose match in its `PAUSE` table. Neither distinguished a
+quota *signal* (HTTP 429, a provider error code, or an assertion that a limit was actually hit) from a phrase.
+
+### Decision
+
+Choice: one tight detector, `isUsageLimitError`, is the single source of truth for both paths. It requires a
+numeric-string 429 in `status`/`code`, an unambiguous quota code/type (`rate_limit_error`,
+`tpm_rate_limit_exceeded`, `freeusagelimit`, `quota exhausted`), or free text that asserts a hit ("rate limit
+exceeded", "free usage limit reached", "too many requests", "HTTP 429") with negations excluded. Reverse only if
+a provider reports a genuine quota using a phrase the detector does not cover.
+
+### Change
+
+1. `src/core/errors.ts`: replace `USAGE_LIMIT` with `is429` / `QUOTA_CODE` / `QUOTA_HIT` / `HTTP_429_TEXT` /
+   `TOO_MANY_REQUESTS` / `FREE_USAGE_ERROR` helpers; `isUsageLimitError` checks structured status/code/type first,
+   then free text. Remove the limit phrase from `classifyFailure`'s `PAUSE` table (leaving only the hook rule) and
+   route limit classification through `isUsageLimitError`, so an unrelated error keeps its own label and a
+   transient error mentioning a limit still gets the short backoff.
+2. Tests: `test/controller.test.ts` adds a non-quota detector regression (bare/negated/provider-name phrases are
+   false; 429/code/quota-hit signals true) and a controller test proving a non-quota evaluator error retries
+   instead of pausing with `usage_limit`. `test/core.test.ts` adds `classifyFailure` regressions: non-quota
+   limit phrases keep their own label, and a transient error mentioning a limit classifies as `transient`.
+
+### Verification
+
+- `bun run check` green: 2222 pass / 0 fail; dist/tui/docs/invariant/spec gates all ok; marker re-counted in-commit.
