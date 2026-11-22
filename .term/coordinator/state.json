@@ -5185,6 +5185,17 @@
       ],
       "mergedAt": "2026-11-22T22:16:48Z",
       "mergedInto": "dev"
+    },
+    "dead-prompter-exports": {
+      "agent": "build-agent",
+      "paths": "src/prompter/backlog.ts,src/prompter/defaults.ts,src/prompter/state.ts,src/prompter/util.ts",
+      "branch": "wt/dead-prompter-exports",
+      "worktree": "worktrees/wt-dead-prompter-exports",
+      "status": "done",
+      "createdAt": "2026-11-22T22:17:53Z",
+      "submittedAt": "2026-11-22T22:19:55Z",
+      "mergedAt": "2026-11-22T22:21:49Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
