@@ -5384,6 +5384,31 @@
       "submittedAt": "2026-11-22T23:45:01Z",
       "mergedAt": "2026-11-22T23:47:01Z",
       "mergedInto": "dev"
+    },
+    "truncate-memo": {
+      "agent": "build-agent",
+      "paths": "src/core/format.ts,test/truncate-cache.test.ts",
+      "branch": "wt/truncate-memo",
+      "worktree": "worktrees/wt-truncate-memo",
+      "status": "done",
+      "createdAt": "2026-11-22T23:51:45Z",
+      "submittedAt": "2026-11-22T23:56:53Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T23:56:53Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T23:58:59Z",
+      "mergedInto": "dev"
+    },
+    "backlog-polish-followups": {
+      "agent": "loop-worker",
+      "paths": "docs/improvement-backlog.json",
+      "branch": "wt/backlog-polish-followups",
+      "worktree": "worktrees/wt-backlog-polish-followups",
+      "status": "claimed",
+      "createdAt": "2026-11-22T23:53:29Z"
     }
   },
   "mergeLock": null,
