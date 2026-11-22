@@ -5368,9 +5368,11 @@
       "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/failure-signature-predicate-dedup",
       "worktree": "worktrees/wt-failure-signature-predicate-dedup",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-22T23:31:55Z",
-      "submittedAt": "2026-11-22T23:40:54Z"
+      "submittedAt": "2026-11-22T23:40:54Z",
+      "mergedAt": "2026-11-22T23:51:19Z",
+      "mergedInto": "dev"
     },
     "dead-readability-spec": {
       "agent": "build-agent",
