@@ -35,13 +35,13 @@ const ROOT = join(import.meta.dir, "..");
 const SPEC = join(ROOT, "SPEC.md");
 
 /** Counts claimed by the SPEC marker. */
-export interface SpecCounts {
+interface SpecCounts {
   readonly files: number;
   readonly tests: number;
 }
 
 /** Outcome of the two probes against reality; `undefined` members mean the probe itself failed (see `probeErrors`). */
-export interface ProbeResult {
+interface ProbeResult {
   /** File count from `npm pack --dry-run --json`; undefined when the probe threw. */
   readonly files?: number;
   /** True when `bun test` exited 0. */
