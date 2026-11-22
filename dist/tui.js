@@ -172,6 +172,17 @@ var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.l
 var TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // src/core/format.ts
+var WIDTH_CACHE_LIMIT = 4096;
+var widthCache = new Map;
+var cellWidth = (text) => {
+  const hit = widthCache.get(text);
+  if (hit !== undefined)
+    return hit;
+  const width = stringWidth(text);
+  if (widthCache.size < WIDTH_CACHE_LIMIT)
+    widthCache.set(text, width);
+  return width;
+};
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
 function wrapLines(text, width) {
   const max = Math.max(1, Math.floor(width));
@@ -180,7 +191,7 @@ function wrapLines(text, width) {
   for (const word of text.split(" ")) {
     if (word === "")
       continue;
-    const w = stringWidth(word);
+    const w = cellWidth(word);
     const sep = used === 0 ? 0 : 1;
     if (used > 0 && used + sep + w > max) {
       lines += 1;
@@ -239,7 +250,7 @@ function formatSpend(spend, maxWidth = Number.POSITIVE_INFINITY) {
   const join = (tokens) => [...tokens, ...cost ? [cost] : []].join(" \xB7 ");
   let tokens = parts;
   let out = join(tokens);
-  while (tokens.length > 0 && stringWidth(out) > maxWidth) {
+  while (tokens.length > 0 && cellWidth(out) > maxWidth) {
     tokens = tokens.slice(0, -1);
     out = join(tokens);
   }
@@ -260,14 +271,14 @@ function truncate(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
   const flat = text.replace(/\s+/g, " ").trim();
-  if (stringWidth(flat) <= max)
+  if (cellWidth(flat) <= max)
     return flat;
-  const ellipsisWidth = stringWidth(ellipsis);
+  const ellipsisWidth = cellWidth(ellipsis);
   if (ellipsisWidth >= max) {
     let fitted = "";
     let used = 0;
     for (const { segment } of segmenter2.segment(ellipsis)) {
-      const w = stringWidth(segment);
+      const w = cellWidth(segment);
       if (used + w > max)
         break;
       fitted += segment;
@@ -279,7 +290,7 @@ function truncate(text, max, ellipsis = "\u2026") {
   let out = "";
   let used = 0;
   for (const { segment } of segmenter2.segment(flat)) {
-    const w = stringWidth(segment);
+    const w = cellWidth(segment);
     if (used + w > budget)
       break;
     out += segment;
