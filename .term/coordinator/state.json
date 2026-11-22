@@ -5262,6 +5262,22 @@
       ],
       "mergedAt": "2026-11-22T22:49:46Z",
       "mergedInto": "dev"
+    },
+    "dead-scratch-and-export": {
+      "agent": "build-agent",
+      "paths": "thought-log.md,src/core/config.ts",
+      "branch": "wt/dead-scratch-and-export",
+      "worktree": "worktrees/wt-dead-scratch-and-export",
+      "status": "done",
+      "createdAt": "2026-11-22T22:50:20Z",
+      "submittedAt": "2026-11-22T22:52:45Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T22:52:45Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-22T22:54:43Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
