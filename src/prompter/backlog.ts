@@ -40,7 +40,7 @@ export const selectNextTask = (lines: readonly BacklogLine[], states: ReadonlyMa
   lines.find((line) => !line.checked && !line.marker && !ACTIVE_STATES.has(states.get(line.id)?.status ?? ""))
 
 /** Render one line with an updated marker (and checkbox for terminal-done states). */
-export const renderLine = (line: BacklogLine, status: string, id: string, done: boolean): string => {
+const renderLine = (line: BacklogLine, status: string, id: string, done: boolean): string => {
   const match = CHECKBOX.exec(line.raw)
   if (!match) return line.raw
   const indent = match[1] ?? ""

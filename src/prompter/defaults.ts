@@ -2,7 +2,7 @@ import path from "node:path"
 import type { Config } from "./types.ts"
 
 /** Bundled prompt library: resolves from this source file to <package-root>/prompts. */
-export const DEFAULT_PROMPT_LIBRARY = path.resolve(import.meta.dir, "..", "..", "prompts")
+const DEFAULT_PROMPT_LIBRARY = path.resolve(import.meta.dir, "..", "..", "prompts")
 
 export const DEFAULT_CONFIG: Config = {
   backlog: "AUTONOMY.md",
