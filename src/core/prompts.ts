@@ -184,13 +184,14 @@ const AUDIT_AND_STOP: ReadonlyArray<string> = [
   `If something is missing, proceed and show evidence.`,
 ]
 
-/** Loop preamble for `directive()`; callers pass it only for `/goal-loop` goals. */
+/**
+ * Loop-specific context for `directive()`. The objective and this iteration's condition are emitted once, together,
+ * by `directive()` itself — repeating either here is what made the old kickoff read the same paragraph twice.
+ */
 function loopPreamble(loop: LoopPreamble): string[] {
   return [
-    `Loop context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
-    `Objective (constant): ${escape(loop.objective)}`,
+    `Context: this is iteration ${loop.iteration} of at most ${loop.maxLoops} in a continuous improvement loop.`,
     `Prior iterations:\n${historyBlock(loop.history)}`,
-    `Keep the objective in mind, not just this condition; an independent evaluator checks this iteration and decides what comes next.`,
   ]
 }
 
@@ -200,15 +201,28 @@ function loopPreamble(loop: LoopPreamble): string[] {
  * heuristic fuzzy / opencode-cli / coordinator essays are skipped entirely — that bloat is what the planner removes.
  */
 export function directive(condition: string, policy: CommitPolicy, loop?: LoopPreamble, planned = false): string {
-  const lines = [
+  const safeCondition = escape(condition)
+  const safeObjective = loop ? escape(loop.objective) : undefined
+  // Iteration 1 arms the objective itself, so condition === objective. Say it once instead of twice; iterate
+  // iterations keep both because the condition is a narrower step toward the constant objective.
+  const objectiveIsCondition = safeObjective !== undefined && safeObjective.trim() === safeCondition.trim()
+  const lines: string[] = [
     `<goal>`,
-    ...(loop ? [`<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`, ...loopPreamble(loop), `</loop>`] : []),
-    escape(condition),
+    ...(loop
+      ? [
+          `<loop iteration="${loop.iteration}" max="${loop.maxLoops}">`,
+          ...loopPreamble(loop),
+          `</loop>`,
+          `Objective (constant): ${safeObjective}`,
+          objectiveIsCondition
+            ? `Condition for this iteration: the objective above (no narrower step this iteration).`
+            : `Condition for this iteration: ${safeCondition}`,
+        ]
+      : [safeCondition]),
     `</goal>`,
     ``,
+    `WORKING RULES`,
     // One line per paragraph: clients wrap prose themselves, hard breaks render as ragged lines.
-    `Do the work below, then end your turn. A separate evaluator decides whether the condition is met using what is visible in this conversation.`,
-    ``,
     `Show command output when it is part of the work. Do not stop to ask for confirmation unless you are truly blocked.`,
   ]
   if (!planned) {
@@ -223,8 +237,9 @@ export function directive(condition: string, policy: CommitPolicy, loop?: LoopPr
     }
     if (policy.required) lines.push(``, commitRule(policy))
   }
-  // Last line on purpose: the no-judge injunction is the final thing the worker reads, after every other rule.
-  lines.push(``, DELEGATE_VERDICT)
+  // Last block on purpose: the completion/no-judge contract is the final thing the worker reads.
+  // DELEGATE_VERDICT is the one home for "do the work, end your turn, let the evaluator judge" — no earlier copy.
+  lines.push(``, `VERDICT HANDOFF`, DELEGATE_VERDICT)
   return lines.join("\n")
 }
 
