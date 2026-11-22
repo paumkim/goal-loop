@@ -10720,3 +10720,17 @@ evaluator/do-work instruction once each in `loopContinuation()` and `systemRemin
 both still end with a single `DELEGATE_VERDICT`. Suite 2237 -> **2239 pass / 0 fail**; packed files
 stay **143**; SPEC marker advances to `files=143 tests=2239` in this same commit. `dist/tui.js`
 byte-unchanged (no TUI/JSX source touched).
+
+## Workstream CLIX — one error shape for missing verify-matrix keys (2026-11-22)
+
+Repo improvement pass, error-message consistency unit.
+
+`src/core/verify-matrix.ts` produced `missing required "type"` through `formatValue` (the convention
+used by every other error in the module) but `missing required cmd` with a bare key. Both paths now
+go through one `missingRequired(key)` constructor, so the key is quoted identically. The pinned
+`missing required "type"` text is unchanged; the previously unpinned missing-cmd text becomes
+`missing required "cmd"` and is now pinned by a new case in
+`test/verify-matrix-goal-declared.test.ts`. No test was weakened.
+
+Evidence: `grep -n 'missingRequired'` shows both call sites (lines 92, 101) and the single constructor
+(line 79); typecheck clean; focused suite 8 pass / 0 fail (was 7). Marker `tests=2237 -> 2238`.
