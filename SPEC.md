@@ -10733,4 +10733,4 @@ go through one `missingRequired(key)` constructor, so the key is quoted identica
 `test/verify-matrix-goal-declared.test.ts`. No test was weakened.
 
 Evidence: `grep -n 'missingRequired'` shows both call sites (lines 92, 101) and the single constructor
-(line 79); typecheck clean; focused suite 8 pass / 0 fail (was 7). Marker `tests=2237 -> 2238`.
+(line 79); typecheck clean; focused suite 8 pass / 0 fail (unchanged). Marker unchanged at `tests=2237`; the new case is an assertion inside an existing test, not a new test.
