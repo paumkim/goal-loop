@@ -5133,14 +5133,16 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/prompt-dedup-structure",
       "worktree": "worktrees/wt-prompt-dedup-structure",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-22T21:55:14Z",
       "submittedAt": "2026-11-22T22:06:34Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-22T22:06:34Z",
       "forcedScopeFiles": [
         "test/opencode-cli.test.ts"
-      ]
+      ],
+      "mergedAt": "2026-11-22T22:59:41Z",
+      "mergedInto": "dev"
     },
     "width-flag-helper": {
       "agent": "build-agent",
@@ -5278,6 +5280,14 @@
       ],
       "mergedAt": "2026-11-22T22:54:43Z",
       "mergedInto": "dev"
+    },
+    "foreign-verdict-precompile": {
+      "agent": "build-agent",
+      "paths": "src/core/evaluator-agent.ts,test/evaluator-agent-foreign.test.ts",
+      "branch": "wt/foreign-verdict-precompile",
+      "worktree": "worktrees/wt-foreign-verdict-precompile",
+      "status": "claimed",
+      "createdAt": "2026-11-22T22:59:10Z"
     }
   },
   "mergeLock": null,
