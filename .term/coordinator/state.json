@@ -5313,8 +5313,33 @@
       "paths": "src/core/find.ts,test/find.test.ts",
       "branch": "wt/find-fold-cache",
       "worktree": "worktrees/wt-find-fold-cache",
+      "status": "done",
+      "createdAt": "2026-11-22T23:12:41Z",
+      "submittedAt": "2026-11-22T23:18:08Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T23:18:08Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T23:26:36Z",
+      "mergedInto": "dev"
+    },
+    "spec-workstream-renumber": {
+      "agent": "loop-worker",
+      "paths": "SPEC.md",
+      "branch": "wt/spec-workstream-renumber",
+      "worktree": "worktrees/wt-spec-workstream-renumber",
       "status": "claimed",
-      "createdAt": "2026-11-22T23:12:41Z"
+      "createdAt": "2026-11-22T23:26:20Z"
+    },
+    "prompt-verdict-single-home": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/prompt-verdict-single-home",
+      "worktree": "worktrees/wt-prompt-verdict-single-home",
+      "status": "claimed",
+      "createdAt": "2026-11-22T23:22:54Z"
     }
   },
   "mergeLock": null,
