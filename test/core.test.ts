@@ -1170,6 +1170,23 @@ describe("native evaluator verdict", () => {
     expect(kickoff).toBe(expected)
   })
 
+  test("loop continuation leaves the evaluator contract to DELEGATE_VERDICT alone", () => {
+    const text = loopContinuation({ iteration: 2, maxLoops: 5, condition: "c", previousSummary: "s", reason: "met" }, COMMIT)
+    expect((text.match(/evaluator/gi) ?? []).length).toBe(1)
+    expect(text).toContain("a met result arms the next iteration; a not_met result keeps this one active.")
+    expect(text.split(DELEGATE_VERDICT).length - 1).toBe(1)
+    expect(text.endsWith(DELEGATE_VERDICT)).toBe(true)
+  })
+
+  test("the system reminder states the do-work/evaluator contract once", () => {
+    const text = systemReminder("c", COMMIT)
+    expect((text.match(/evaluator/gi) ?? []).length).toBe(1)
+    expect((text.match(/do the work/gi) ?? []).length).toBe(1)
+    expect(text).toContain("Only command output and test results visible in this conversation count as evidence.")
+    expect(text.split(DELEGATE_VERDICT).length - 1).toBe(1)
+    expect(text.endsWith(DELEGATE_VERDICT)).toBe(true)
+  })
+
   test("a later iteration keeps both the objective and its narrower condition", () => {
     const objective = "the constant objective"
     const condition = "this iteration's narrower condition"

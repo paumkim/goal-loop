@@ -51,7 +51,7 @@ describe("commit rule sentences (byte-identical)", () => {
   test("systemReminder", () => {
     expect(systemReminder("c", direct)).toBe([
       "An active /goal is set for this session: c",
-      "An independent evaluator checks it after every turn from visible evidence only. Do the work and surface proof (command output, test results) in the conversation.",
+      "Only command output and test results visible in this conversation count as evidence.",
       "Finished work has to be committed to the `dev` branch before the goal counts as met.",
       DELEGATE_VERDICT,
     ].join("\n"))

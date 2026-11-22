@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2237 -->
+<!-- spec-check files=143 tests=2239 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10701,3 +10701,22 @@ New regression case in `test/find.test.ts` compares `findMatches`, `countMatches
 against an uncached oracle across ASCII, CJK, emoji, and length-changing folds (ß->ss, İ->i̇), on
 both cold and warm passes; it also pins segment tiling (concatenation equals the input). Focused
 suite 19 pass / 0 fail (was 18). Typecheck clean. Marker `tests=2236 -> 2237` after rebase onto dev.
+
+## Follow-up — one home for the verdict contract in loop and reminder prompts (2026-11-22)
+
+The kickoff dedup gave `DELEGATE_VERDICT` sole ownership of the "do the work / end your turn /
+separate evaluator" instruction in `directive()`. Two other worker-facing paths still stated it a
+second time immediately before that closing block:
+
+- `loopContinuation()` said "after each of your turns an independent evaluator checks it, and the
+  loop acts on that result". It now keeps only the information `DELEGATE_VERDICT` does not carry —
+  what a met or not_met result does to the loop.
+- `systemReminder()` said "An independent evaluator checks it after every turn... Do the work and
+  surface proof...". It now keeps only the evidence-visibility rule unique to that reminder;
+  the do-work and evaluator contract comes from `DELEGATE_VERDICT` alone.
+
+`test/commit-rule.test.ts` pins the new reminder line. Two new `test/core.test.ts` cases count the
+evaluator/do-work instruction once each in `loopContinuation()` and `systemReminder()` and assert
+both still end with a single `DELEGATE_VERDICT`. Suite 2237 -> **2239 pass / 0 fail**; packed files
+stay **143**; SPEC marker advances to `files=143 tests=2239` in this same commit. `dist/tui.js`
+byte-unchanged (no TUI/JSX source touched).
