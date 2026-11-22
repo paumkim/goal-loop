@@ -5133,8 +5133,14 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/prompt-dedup-structure",
       "worktree": "worktrees/wt-prompt-dedup-structure",
-      "status": "claimed",
-      "createdAt": "2026-11-22T21:55:14Z"
+      "status": "submitted",
+      "createdAt": "2026-11-22T21:55:14Z",
+      "submittedAt": "2026-11-22T22:06:34Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T22:06:34Z",
+      "forcedScopeFiles": [
+        "test/opencode-cli.test.ts"
+      ]
     },
     "width-flag-helper": {
       "agent": "build-agent",
@@ -5150,6 +5156,17 @@
         "SPEC.md"
       ],
       "mergedAt": "2026-11-22T22:01:25Z",
+      "mergedInto": "dev"
+    },
+    "core-docs-export-refresh": {
+      "agent": "build-agent",
+      "paths": "docs/core.html,docs/changelog.html",
+      "branch": "wt/core-docs-export-refresh",
+      "worktree": "worktrees/wt-core-docs-export-refresh",
+      "status": "done",
+      "createdAt": "2026-11-22T22:03:19Z",
+      "submittedAt": "2026-11-22T22:05:44Z",
+      "mergedAt": "2026-11-22T22:07:39Z",
       "mergedInto": "dev"
     }
   },
