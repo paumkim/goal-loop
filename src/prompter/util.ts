@@ -1,3 +1,4 @@
+import { parseBool } from "../core/parse.ts"
 import { createHash } from "node:crypto"
 import os from "node:os"
 import path from "node:path"
@@ -58,10 +59,10 @@ export const strFrom = (value: unknown, fallback: string): string => {
 export const boolFrom = (value: unknown, fallback: boolean): boolean => {
   if (value === undefined || value === null || value === "") return fallback
   if (typeof value === "boolean") return value
-  const s = String(value).trim().toLowerCase()
-  if (["1", "true", "yes", "on"].includes(s)) return true
-  if (["0", "false", "no", "off"].includes(s)) return false
-  throw new Error(`expected a boolean, got ${JSON.stringify(value)}`)
+  // String() preserves the CLI's coercion of numbers/boxed values; parseBool owns only the spellings.
+  const parsed = parseBool(String(value))
+  if (parsed === undefined) throw new Error(`expected a boolean, got ${JSON.stringify(value)}`)
+  return parsed
 }
 
 export const money = (value: number): string => `$${value.toFixed(2)}`

@@ -1,3 +1,4 @@
+import { parseBool } from "./parse.ts"
 import type { CommitRequest, ModelRef } from "./types.ts"
 
 type EvaluatorMode = "auto" | "session" | "independent"
@@ -285,25 +286,13 @@ export function resolveConfig(
   }
 }
 
-/** Truthy spellings are `1/true/yes/on`, falsy are `0/false/no/off` (case-insensitive); anything else is unrecognized. */
-const TRUTHY = ["1", "true", "yes", "on"]
-const FALSY = ["0", "false", "no", "off"]
-const flag = (value: unknown): boolean | undefined => {
-  if (typeof value === "boolean") return value
-  if (typeof value !== "string") return undefined
-  const normalized = value.trim().toLowerCase()
-  if (TRUTHY.includes(normalized)) return true
-  if (FALSY.includes(normalized)) return false
-  return undefined
-}
-
 /** Coordinator option: `"auto"` (default, detect from repo), `true` (force), `false` (off). */
 function parseCoordinator(value: unknown): "auto" | boolean {
   if (value === undefined || value === "auto" || value === "") return "auto"
-  return flag(value) ?? "auto"
+  return parseBool(value) ?? "auto"
 }
 
 /** An environment flag: "1", "true", "yes" and "on" are true, "0", "false", "no" and "off" are false. */
 function envBool(value: string | undefined, fallback: boolean) {
-  return (value === undefined ? undefined : flag(value)) ?? fallback
+  return (value === undefined ? undefined : parseBool(value)) ?? fallback
 }
