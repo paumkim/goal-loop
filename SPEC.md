@@ -10436,15 +10436,19 @@ For ordinary string inputs the rendered text is byte-identical to before (`got "
 
 ### Exact-text pins
 
-Added assertions inside existing tests — no new test cases, suite stays at 2228:
+Added assertions inside existing tests — no new test cases. The count follows HEAD: 2228 at this unit's
+base `c81e0fa`, and 2229 after rebasing onto `93a983f` (the concurrent `why-ledger-column-fill` merge
+landed one test). This unit added zero test cases:
 `test/render-scripts.test.ts` pins `(got "abc")` for both non-numeric flags, `(got "0")` for zero width
 and `(got "")` for an empty `--width` value; `test/package-integrity.test.ts` pins the full
 `ok: loaded TUI plugin "goal-loop.tui"` load log.
 
 ### Verification
 
-- Before: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok (baseline at HEAD c81e0fa).
+- Before: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok (baseline at HEAD c81e0fa);
+  after the concurrent merge landed, the rebased baseline is 2229 pass / 0 fail.
 - `bunx tsc --noEmit`: clean.
 - Focused suites: 199 pass / 0 fail across 3 files.
-- After: repo-wide `bun run check` EXIT=0, 2228 pass / 0 fail, all gates ok.
-- SPEC marker unchanged at `files=143 tests=2228`; packed file count unchanged.
+- After: repo-wide `bun run check` EXIT=0, 2229 pass / 0 fail, all gates ok on the rebased branch.
+- SPEC marker `files=143 tests=2229` on the rebased branch; this unit did not change the marker (the
+  2228 -> 2229 bump came from the concurrent merge); packed file count unchanged.
