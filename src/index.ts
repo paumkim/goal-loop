@@ -63,7 +63,18 @@ function asEvaluatorError(value: unknown): Error {
   if (typeof value === "object" && value !== null) {
     const record = value as Record<string, unknown>
     const status = typeof record.status === "number" ? `status ${record.status} ` : ""
-    return new Error(`evaluator child failed (${status}${String(record.message ?? record.type ?? record.error ?? JSON.stringify(record))})`)
+    const error = new Error(`evaluator child failed (${status}${String(record.message ?? record.type ?? record.error ?? JSON.stringify(record))})`)
+    // A provider quota error is an object whose 429/code lives in structured fields, not in the message text
+    // ("slow down" carries no quota phrase). Flattening to a string alone drops that signal, so the tightened
+    // isUsageLimitError would miss a genuine quota and retry instead of pausing. Carry the structured fields
+    // onto the Error so the detector reads the same 429/code it would have read before flattening.
+    for (const key of ["status", "code", "type", "name", "error"] as const) {
+      const field = record[key]
+      if (typeof field === "string" || typeof field === "number") {
+        Object.defineProperty(error, key, { value: field, enumerable: true, configurable: true })
+      }
+    }
+    return error
   }
   return new Error(`evaluator child failed (${String(value)})`)
 }

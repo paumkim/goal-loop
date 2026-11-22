@@ -1334,6 +1334,72 @@ describe("a failed evaluator subagent keeps its provider classification (CXXXI)"
       await dispose?.()
     }
   })
+
+  test("a structured 429 with a generic message still pauses the goal (status is not flattened away)", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, {
+      evaluator: { mode: "independent", model: "provider/model" },
+      maxRetries: 1,
+    })
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).context = async () => [evidence("fresh evidence for the judge")]
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    // A provider quota error is an object. Its 429 lives in `status`, not in the message text ("slow down").
+    // asEvaluatorError must preserve the structured signal for isUsageLimitError to see it.
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+        yield { type: "session.execution.failed", data: { sessionID: "ses_judge", error: { status: 429, type: "provider.free-limit", message: "slow down" } } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "paused")
+      expect((storage.get("goal/v1/ses_1") as any)?.pauseCause).toBe("usage_limit")
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a structured non-quota error that merely mentions a limit does not pause as usage_limit", async () => {
+    const directory = repository()
+    const { ctx, calls, storage } = context(directory, {
+      evaluator: { mode: "independent", model: "provider/model" },
+      maxRetries: 3,
+    })
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).context = async () => [evidence("fresh evidence for the judge")]
+    ;(ctx.session as any).create = async () => ({ id: "ses_judge" })
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await new Promise((r) => setImmediate(r))
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+        yield { type: "session.execution.failed", data: { sessionID: "ses_judge", error: { status: 500, type: "Error", message: "rate limit settings are documented at example.com" } } }
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "active")
+      const record = storage.get("goal/v1/ses_1") as any
+      expect(record.status).toBe("active")
+      expect(record.pauseCause).toBeUndefined()
+    } finally {
+      await dispose?.()
+    }
+  })
 })
 
 describe("the harness judge prompt carries a clean evidence contract (CXXXII)", () => {
