@@ -5010,6 +5010,22 @@
       ],
       "mergedAt": "2026-11-22T19:56:56Z",
       "mergedInto": "dev"
+    },
+    "parse-bool-consolidation": {
+      "agent": "build-agent",
+      "paths": "src/core/parse.ts,src/core/config.ts,src/index.ts,src/prompter/util.ts,test,SPEC.md,dist/tui.js",
+      "branch": "wt/parse-bool-consolidation",
+      "worktree": "worktrees/wt-parse-bool-consolidation",
+      "status": "done",
+      "createdAt": "2026-11-22T20:01:46Z",
+      "submittedAt": "2026-11-22T20:05:30Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T20:05:30Z",
+      "forcedScopeFiles": [
+        "README.md"
+      ],
+      "mergedAt": "2026-11-22T20:07:27Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
