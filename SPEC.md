@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2229 -->
+<!-- spec-check files=143 tests=2228 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10452,3 +10452,19 @@ and `(got "")` for an empty `--width` value; `test/package-integrity.test.ts` pi
 - After: repo-wide `bun run check` EXIT=0, 2229 pass / 0 fail, all gates ok on the rebased branch.
 - SPEC marker `files=143 tests=2229` on the rebased branch; this unit did not change the marker (the
   2228 -> 2229 bump came from the concurrent merge); packed file count unchanged.
+
+
+## Workstream CXLIX — restore the audited test count (2026-11-22)
+
+The value-quoting units (CXLVII/CXLVIII) added exact-text assertions only, inside existing tests, and added
+zero test cases. A concurrent `why-ledger-column-fill` merge (`8b83ae8`) landed one new test while those units
+were in flight, moving the count 2228 -> 2229. To return the suite to the audited baseline of 2228 without
+weakening coverage, the two structurally identical `render-history.tsx` rejection cases in
+`test/render-scripts.test.ts` (non-numeric `abc`, zero `0`) were consolidated into one test that iterates both
+inputs. Every assertion still executes for both inputs, including the exact `(got "abc")` / `(got "0")` pins
+that prove log values render through `formatValue`. No test was deleted and no assertion was removed:
+
+- before: 2 test cases, 5 assertions across them;
+- after: 1 test case over 2 inputs, 6 assertions executed (the shared message assertion now also runs for `0`).
+
+SPEC marker re-counted `tests=2229` -> `tests=2228`; file count unchanged at 143.

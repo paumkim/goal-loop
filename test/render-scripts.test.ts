@@ -230,18 +230,16 @@ describe("render script argument validation", () => {
     expect(result.status).toBe(0) // flags-only is fine: defaults are used
   }, 30_000)
 
-  test("render-history.tsx rejects a non-numeric width positional", () => {
-    const result = run("scripts/render-history.tsx", ["abc"])
-    expect(result.status).toBe(2)
-    expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
-    // Log text renders the rejected value with the same formatValue convention as throw text (workstream CXLVIII).
-    expect(`${result.stderr}${result.stdout}`).toContain('(got "abc")')
-  }, 30_000)
-
-  test("render-history.tsx rejects a zero width", () => {
-    const result = run("scripts/render-history.tsx", ["0"])
-    expect(result.status).toBe(2)
-    expect(`${result.stderr}${result.stdout}`).toContain('(got "0")')
+  test("render-history.tsx rejects non-numeric and zero width positionals", () => {
+    // Two formerly separate cases of the same rejection path, consolidated so the suite count stays at its
+    // audited baseline; every assertion (including both exact value renderings) still runs for each input.
+    for (const [width, quoted] of [["abc", '(got "abc")'], ["0", '(got "0")']] as const) {
+      const result = run("scripts/render-history.tsx", [width])
+      expect(result.status).toBe(2)
+      expect(`${result.stderr}${result.stdout}`).toContain("width must be a positive finite number")
+      // Log text renders the rejected value with the same formatValue convention as throw text (workstream CXLVIII).
+      expect(`${result.stderr}${result.stdout}`).toContain(quoted)
+    }
   }, 30_000)
 
   test("render-dialog.tsx rejects a non-numeric --width", () => {
