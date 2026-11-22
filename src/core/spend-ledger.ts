@@ -28,26 +28,21 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { GAP, isoOf, quote, shortSha } from "./dossier.ts"
+import { GAP, fileStampOf, isoOf, quote, shortSha } from "./dossier.ts"
 import { formatCost } from "./format.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import { MAX_LOOP_HISTORY_ENTRIES, type GoalSnapshot, type LoopEntry, type UsageSnapshot } from "./types.ts"
-
-const pad = (n: number): string => String(n).padStart(2, "0")
 
 /**
  * `goal-spend-ledger-20261116-172233.md` from a clock; attempt > 0 appends `-attempt` (`-2`, `-3`, ...).
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
+ * The stamp itself is the dossier family's shared `fileStampOf`; only the stem and the
+ * collision suffix are local, so every exporter's compact UTC stamp stays identical.
  */
 export const spendLedgerName = (nowMs: number, attempt = 0): string => {
-  const date = new Date(Number.isFinite(nowMs) ? nowMs : 0)
-  const valid = Number.isFinite(date.getTime()) ? date : new Date(0)
-  const stamp =
-    `${valid.getUTCFullYear()}${pad(valid.getUTCMonth() + 1)}${pad(valid.getUTCDate())}` +
-    `-${pad(valid.getUTCHours())}${pad(valid.getUTCMinutes())}${pad(valid.getUTCSeconds())}`
   const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-spend-ledger-${stamp}${suffix}.md`
+  return `goal-spend-ledger-${fileStampOf(nowMs)}${suffix}.md`
 }
 
 /** The full usage snapshot when every field is present and finite and >= 0; undefined otherwise — the one measurement rule this module and its totals share. */

@@ -10251,3 +10251,27 @@ the normalized path from the caller.
   `collectChangedPaths`, which dominates end-to-end latency and is not addressed here.
 - Microbenchmark numbers are machine- and load-dependent; the reported median of five alternating runs is the
   evidence, not a universal constant.
+
+
+## Workstream CXLV — end-of-day maintenance: shared filename stamp (2026-11-22)
+
+The duplication inventory found `src/core/spend-ledger.ts` carrying a private `pad` helper and a full UTC
+`new Date(...).getUTC*()` stamp assembly that is byte-for-byte the `fileStampOf` helper already exported from
+`src/core/dossier.ts` (which spend-ledger already imports). Two copies of the same honesty posture (non-finite or
+unrepresentable clocks render the epoch rather than throw) can drift apart.
+
+### Change
+
+1. `src/core/spend-ledger.ts`: drop the local `pad` and the inlined stamp; import `fileStampOf` from `./dossier.ts`
+   and build the name as `goal-spend-ledger-${fileStampOf(nowMs)}${suffix}.md`. The stem and the `-attempt + 1`
+   collision suffix stay local. No export, signature or rendered string changed; the 17 existing tests were left
+   untouched.
+2. Equivalence probe: the previous inline algorithm and the shared helper were compared over 6 027 name pairs
+   (2 009 clocks including NaN, ±Infinity, 0, the epoch, the current era, JS date extremes, plus 2 000 random
+   values × attempts 0/1/41) — **0 mismatches**.
+
+### Verification
+
+- `bunx tsc --noEmit`: clean.
+- `cd test && bun test spend-ledger.test.ts`: 17 pass / 0 fail, 58 expect() calls (all pre-existing tests).
+- `bun run check` green after the SPEC/changelog companion update.
