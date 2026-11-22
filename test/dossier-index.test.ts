@@ -117,6 +117,8 @@ describe("buildDossierIndex", () => {
   test("the skipped count must be a non-negative integer", () => {
     expect(() => buildDossierIndex([], now, -1)).toThrow("non-negative integer")
     expect(() => buildDossierIndex([], now, 1.5)).toThrow("non-negative integer")
+    expect(() => buildDossierIndex([], now, -1)).toThrow("skipped must be a non-negative integer, got -1")
+    expect(() => buildDossierIndex([], now, 1.5)).toThrow("skipped must be a non-negative integer, got 1.5")
   })
 
   test("the same inputs render the same document, byte for byte", () => {

@@ -51,6 +51,7 @@ describe("parseModelArg", () => {
     ["trailing space", "opencode/model "],
   ])("rejects %s with the documented error", (_label, input) => {
     expect(() => parseModelArg(input)).toThrow('model must be "provider/model"')
+    expect(() => parseModelArg("openrouter")).toThrow('model must be "provider/model" (got "openrouter")')
   })
 })
 

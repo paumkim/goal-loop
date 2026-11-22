@@ -1,3 +1,4 @@
+import { formatValue } from "../core/errors.ts"
 import { parseBool } from "../core/parse.ts"
 import { createHash } from "node:crypto"
 import os from "node:os"
@@ -28,17 +29,17 @@ export const localStopFile = (repo: string): string => path.join(repo, ".prompte
 /** "provider/model" -> { providerID, modelID }. The model id may itself contain slashes. */
 export const parseModel = (value: string): { providerID: string; modelID: string } => {
   const slash = value.indexOf("/")
-  if (slash <= 0) throw new Error(`model must be "provider/model" (got "${value}")`)
+  if (slash <= 0) throw new Error(`model must be "provider/model" (got ${formatValue(value)})`)
   const providerID = value.slice(0, slash)
   const modelID = value.slice(slash + 1)
-  if (!providerID || !modelID || /\s/.test(value)) throw new Error(`model must be "provider/model" (got "${value}")`)
+  if (!providerID || !modelID || /\s/.test(value)) throw new Error(`model must be "provider/model" (got ${formatValue(value)})`)
   return { providerID, modelID }
 }
 
 export const intFrom = (value: unknown, fallback: number, min: number, max: number): number => {
   if (value === undefined || value === null || value === "") return fallback
   const n = typeof value === "number" ? value : Number.parseInt(String(value), 10)
-  if (!Number.isFinite(n)) throw new Error(`expected an integer, got ${JSON.stringify(value)}`)
+  if (!Number.isFinite(n)) throw new Error(`expected an integer, got ${formatValue(value)}`)
   const clamped = Math.min(max, Math.max(min, Math.trunc(n)))
   return clamped
 }
@@ -46,7 +47,7 @@ export const intFrom = (value: unknown, fallback: number, min: number, max: numb
 export const numberFrom = (value: unknown, fallback: number, min: number, max: number): number => {
   if (value === undefined || value === null || value === "") return fallback
   const n = typeof value === "number" ? value : Number(value)
-  if (!Number.isFinite(n)) throw new Error(`expected a number, got ${JSON.stringify(value)}`)
+  if (!Number.isFinite(n)) throw new Error(`expected a number, got ${formatValue(value)}`)
   return Math.min(max, Math.max(min, n))
 }
 
@@ -61,7 +62,7 @@ export const boolFrom = (value: unknown, fallback: boolean): boolean => {
   if (typeof value === "boolean") return value
   // String() preserves the CLI's coercion of numbers/boxed values; parseBool owns only the spellings.
   const parsed = parseBool(String(value))
-  if (parsed === undefined) throw new Error(`expected a boolean, got ${JSON.stringify(value)}`)
+  if (parsed === undefined) throw new Error(`expected a boolean, got ${formatValue(value)}`)
   return parsed
 }
 

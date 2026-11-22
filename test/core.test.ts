@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
-import { classifyFailure, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
+import { classifyFailure, formatValue, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
@@ -289,6 +289,16 @@ describe("classifyFailure", () => {
     expect(classifyFailure({ message: "fetch failed: ECONNRESET" }).kind).toBe("transient")
   })
   test("unknown errors pause with their message", () => {
+    // One canonical value-rendering format for every error message that names a value (workstream CXLVII).
+    expect(formatValue("a b")).toBe('"a b"')
+    expect(formatValue(1.5)).toBe("1.5")
+    expect(formatValue(true)).toBe("true")
+    expect(formatValue(null)).toBe("null")
+    expect(formatValue(undefined)).toBe("undefined")
+    expect(formatValue([1, "x"])).toBe('[1,"x"]')
+    expect(formatValue({ k: "v" })).toBe('{"k":"v"}')
+    expect(formatValue(12n)).toBe("12n")
+
     expect(classifyFailure({ message: "weird thing" })).toEqual({ kind: "pause", label: "weird thing" })
     expect(classifyFailure(undefined).kind).toBe("pause")
   })
