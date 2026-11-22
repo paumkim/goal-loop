@@ -715,6 +715,43 @@ describe("GoalController", () => {
     expect(isUsageLimitError(new Error("evaluator timed out after 120s"))).toBe(false)
   })
 
+  test("isUsageLimitError ignores non-quota errors that merely mention a limit", () => {
+    // A bare "rate/usage/free usage limit" phrase is not a quota signal. The old detector matched the phrase
+    // anywhere, so these ordinary evaluator failures paused the goal as a fake free-usage limit.
+    const nonQuota = [
+      "KiloCode-Free usage is available on this key",
+      "no rate limit is configured for this model",
+      "rate limit settings are documented at example.com",
+      "usage limit was not reached",
+      "no usage limit reached",
+      "free usage is permitted for this account",
+      "evaluator child failed (evaluator timed out after 120s)",
+    ]
+    for (const message of nonQuota) expect(isUsageLimitError(new Error(message))).toBe(false)
+
+    // Genuine code/status signals still fire, including in a plain object thrown by a provider.
+    expect(isUsageLimitError({ type: "rate_limit_error", message: "provider rejected the request" })).toBe(true)
+    expect(isUsageLimitError({ code: "tpm_rate_limit_exceeded", message: "Provider returned error" })).toBe(true)
+    expect(isUsageLimitError({ status: "429", message: "quota" })).toBe(true)
+    expect(isUsageLimitError({ status: 500, message: "Free usage limit reached" })).toBe(true)
+  })
+
+  test("a non-quota evaluator error mentioning limits retries instead of pausing with usage_limit", async () => {
+    h = harness({ maxRetries: 3 })
+    await h.set()
+    h.verdicts.push(new Error("evaluator child failed: rate limit settings are documented in the provider docs"))
+    await h.turn()
+    const record = h.controller.get(SID)
+    expect(record?.status).toBe("active")
+    expect(record?.pauseCause).toBeUndefined()
+    expect(h.notices.at(-1)?.title).toBe("Goal still active")
+    expect(h.notices.at(-1)?.message).not.toContain("usage limit")
+    h.controller.onUserPrompt(SID)
+    h.verdicts.push(met("recovered after the transient evaluator failure"))
+    await h.turn()
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
   test("hasTerminalRecord is true only for a record that went terminal in this process (LXVII)", async () => {
     const first = harness()
     expect(first.controller.hasTerminalRecord(SID)).toBe(false)
