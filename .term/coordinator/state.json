@@ -5111,6 +5111,22 @@
       ],
       "mergedAt": "2026-11-22T21:45:34Z",
       "mergedInto": "dev"
+    },
+    "gap-and-stale-doc-cleanup": {
+      "agent": "build-agent",
+      "paths": "src/core/verify-record.ts,src/core/sign-record.ts,src/core/reach-record.ts,LOOP-COUNT.md,SPEC.md,docs/changelog.html",
+      "branch": "wt/gap-and-stale-doc-cleanup",
+      "worktree": "worktrees/wt-gap-and-stale-doc-cleanup",
+      "status": "done",
+      "createdAt": "2026-11-22T21:46:09Z",
+      "submittedAt": "2026-11-22T21:50:17Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-22T21:50:17Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-22T21:52:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
