@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2234 -->
+<!-- spec-check files=143 tests=2235 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10621,7 +10621,7 @@ Evidence: `grep -rn thought-log` → no hits outside the removed file; `grep -rn
 → definition + one same-module use before and after; typecheck clean; `config-defaults` + `core`
 suites 178 pass / 0 fail. No test added or changed; marker stays `files=143 tests=2232`.
 
-## Workstream CLIV — one home for the objective and the no-judge rule in the kickoff (2026-11-22)
+## Workstream CLVI — one home for the objective and the no-judge rule in the kickoff (2026-11-22)
 
 The user's screenshot of a freshly armed `/goal-loop` kickoff showed the same two paragraphs printed
 twice: the full objective appeared once as `Objective (constant)` inside `<loop>` and again as the
@@ -10654,3 +10654,17 @@ a later iteration keeps the objective and its narrower condition once each. The 
 that pinned the removed sentence now asserts the consolidated `DELEGATE_VERDICT` wording instead.
 Suite 2232 -> **2234 pass / 0 fail**; packed files stay **143**; SPEC marker advances to
 `files=143 tests=2234` in this same commit. `dist/tui.js` byte-unchanged (no TUI/JSX source touched).
+
+## Workstream CLVII — precompile foreign-verdict patterns; drop a dead type export (2026-11-22)
+
+- `src/core/evaluator-agent.ts · isForeignVerdict` built four RegExp objects on each native verdict.
+  The patterns are now compiled once at module load and only `.test` runs per call. Isolated
+  100k-call benchmark: `61.19 ms → 31.65 ms` (1.9x) with identical results on clean and foreign bodies.
+  End-to-end `verdictFromNativeReport` shows no measurable difference (281.91 ms → 281.86 ms over
+  50k calls) because echo normalization and parsing dominate — this is reported as a cleanup, not a
+  claimed end-to-end speedup.
+- `NativeReportCandidate` was exported but had zero importers; it is used only in the same module's
+  exported function signature. Made module-private (`noEmit` build, no declaration surface change).
+
+New `test/evaluator-agent-foreign.test.ts` pins all four foreign keys still failing closed and a clean
+verdict still parsing; focused suites 167 pass / 0 fail. Marker `tests=2234 → 2235` after rebase onto dev.
