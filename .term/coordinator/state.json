@@ -5976,8 +5976,11 @@
       "paths": "SPEC-workstreams.md,test/spec-role-split.test.ts",
       "branch": "wt/spec-index-slug-uniqueness",
       "worktree": "worktree/wt-spec-index-slug-uniqueness",
-      "status": "claimed",
-      "createdAt": "2026-11-23T05:22:43Z"
+      "status": "done",
+      "createdAt": "2026-11-23T05:22:43Z",
+      "submittedAt": "2026-11-23T05:27:03Z",
+      "mergedAt": "2026-11-23T05:31:21Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
