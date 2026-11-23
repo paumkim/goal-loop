@@ -1356,17 +1356,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXC — one status-to-answer cell across the record family (2026-11-23)
-
-The `status -> yes/no/unknown` cell was written six times: `statusCell` in `verify-record.ts`,
-`reach-record.ts` and `sign-record.ts`, plus `verifyCell`/`reachCell`/`signCell` in each of
-`dossier-attest.ts`, `dossier-review.ts` and `dossier-seal.ts`. Added `dossier.ts · recordStatusCell`,
-a pure generic mapping, and reduced all six sites to thin, typed wrappers. Outputs are unchanged:
-a new differential test pins the shared helper against all three former mappings across positive,
-negative, `unknown`, empty and stray statuses. Focused suites (dossier + attest + review + seal +
-the three record modules) 132 pass / 0 fail, 479 expect() calls; `tsc --noEmit` clean. This is a
-consolidation/taste change, not a speed change: the dossier build benchmark is flat within noise
-(`21.09 ms -> 22.38 ms / 50 builds`, best of 20). No shipped-file change; marker +1 test.
 ## Workstream CXCI — worktrees/ to worktree/ everywhere (worktree-dir-rename) (2026-11-23)
 
 Renamed the coordinator worktree directory from `worktrees/` to `worktree/` across the whole repo in one lease. `packages/coordinator/bin/coordinator` now defaults `WORKTREE_DIR` to `worktree` (config fallback too) and all previously hardcoded merge-worktree paths (`merge_wt`, `merge_wt_rel`, the merge parent `mkdir`, the post-merge health exclusion and `merge-abort`) derive from `$WORKTREE_DIR`. `src/core/git.ts`, `src/core/workflow.ts`, `src/core/types.ts`, the checked-in `.term/coordinator/config.json`, `.gitignore`, `scripts/spec-check.ts`, all coordinator/bootstrap/git/core/plugin/package-integrity test fixtures, AGENTS.md, docs/parallel-work.md, docs/core/index/install.html, README.md, MAINTAINER.md, RELEASE-CHECKLIST.md, the coordinator README and the prompt templates use the new name.
