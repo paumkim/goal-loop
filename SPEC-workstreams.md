@@ -19,13 +19,13 @@ there.
 | AC | `compaction-misses-are-counted-once` | compaction misses are counted once |
 | AD | `one-label-constant-for-the-goal-surfaces` | one LABEL constant for the goal surfaces |
 | AE | `formattokens-rounds-at-the-unit-boundary` | formatTokens rounds at the unit boundary |
-| AF | `planner-armed-conditions-respect-maxconditionchars` | planner-armed conditions respect maxConditionChars |
-| AG | `read-only-rpc-list-no-longer-fans-out-boundary-compa` | read-only RPC list no longer fans out boundary compactions |
+| AF | `planner-armed-conditions-respect` | planner-armed conditions respect maxConditionChars |
+| AG | `read-only-rpc-list-no-longer-fans-out-boundary` | read-only RPC list no longer fans out boundary compactions |
 | AH | `repeat-condition-guard-ignores-punctuation` | repeat-condition guard ignores punctuation |
 | AI | `set` | set awaits the initial record write |
 | AJ | `restore` | restore fans out boundary compactions only for armed loops |
 | AK | `the-final-spend-re-save-goes-through-commit` | the final spend re-save goes through commit's no-op cache |
-| AL | `the-cap-freeze-courtesy-warning-fires-once-per-freez` | the cap-freeze courtesy warning fires once per freeze |
+| AL | `the-cap-freeze-courtesy-warning-fires-once-per` | the cap-freeze courtesy warning fires once per freeze |
 | AM | `one-capped-backoff-helper-two-documented-curves` | one capped backoff helper, two documented curves |
 | AN | `stale-loopnotprogress-comment-corrected` | stale loopNotProgress comment corrected |
 | AO | `the-event-payload-boundary-is-unknown-not-any` | the event payload boundary is `unknown`, not `any` |
@@ -37,19 +37,19 @@ there.
 | AU | `the-rpc-tui-boundary-has-zero-trust-casts` | the RPC/TUI boundary has zero trust-casts |
 | AV | `phase-3-async-hole-sweep-commit` | Phase 3 async-hole sweep: commit can no longer reject |
 | AW | `iteration-4-end-to-end-sanity-pass` | Iteration 4: end-to-end sanity pass |
-| AX | `dead-surface-trim-33-zero-user-exports-unexported-st` | dead-surface trim: 33 zero-user exports unexported, stale SPEC claims corrected |
+| AX | `dead-surface-trim-33-zero-user-exports` | dead-surface trim: 33 zero-user exports unexported, stale SPEC claims corrected |
 | AY | `goal-loop-command-syntax` | goal-loop command syntax |
-| AZ | `cli-installer-opencode-goal-bin-two-command-install` | CLI installer: `opencode-goal` bin, two-command install/uninstall |
-| BA | `standalone-rename-el4cteo-opencode-goal-opencode-goa` | standalone rename: `@el4cteo/opencode-goal` → `opencode-goalv2` |
+| AZ | `cli-installer-opencode-goal-bin-two-command` | CLI installer: `opencode-goal` bin, two-command install/uninstall |
+| BA | `standalone-rename-el4cteo-opencode-goal-opencode` | standalone rename: `@el4cteo/opencode-goal` → `opencode-goalv2` |
 | BB | `live-proof-bug-fix-restore-candidate-chronology` | live-proof bug fix: restore candidate chronology |
 | BC | `e2e-proof-at-dev-head-39464c1` | e2e proof at dev HEAD 39464c1 |
 | BD | `packed-artifact-proven-end-to-end` | packed artifact proven end-to-end |
 | BE | `github-install-route-proven-end-to-end` | GitHub install route proven end-to-end |
 | BF | `installer-registers-the-github-specifier` | installer registers the GitHub specifier |
-| BG | `status-stamp-refreshed-and-boundary-compaction-const` | status stamp refreshed and boundary-compaction constants pinned |
-| BH | `headless-render-unit-tests-for-the-dialog-components` | headless render unit tests for the dialog components |
+| BG | `status-stamp-refreshed-and-boundary-compaction` | status stamp refreshed and boundary-compaction constants pinned |
+| BH | `headless-render-unit-tests-for-the-dialog` | headless render unit tests for the dialog components |
 | BI | `plugin-spec-pinned-to-package-json-version` | PLUGIN_SPEC pinned to package.json version |
-| BJ | `headless-render-edge-path-tests-for-the-dialog-compo` | headless render edge-path tests for the dialog components |
+| BJ | `headless-render-edge-path-tests-for-the-dialog` | headless render edge-path tests for the dialog components |
 | BK | `smoke-tests-for-the-standalone-render-scripts` | smoke tests for the standalone render scripts |
 | BL | `unit-tests-for-the-spec-check-gate-itself` | unit tests for the spec-check gate itself |
 | BM | `unit-tests-for-the-docs-freshness-gate-itself` | unit tests for the docs freshness gate itself |
@@ -68,7 +68,7 @@ there.
 | BZ | `palette-parity-for-the-mouse-only-card-actions` | palette parity for the mouse-only card actions |
 | CA | `full-frame-snapshots-for-the-named-layout-states` | full-frame snapshots for the named layout states |
 | CB | `ascii-demotion-for-dumb-terminals` | ASCII demotion for dumb terminals |
-| CC | `snapshot-the-waiting-and-remediation-layout-states` | snapshot the waiting and remediation layout states |
+| CC | `snapshot-the-waiting-and-remediation-layout` | snapshot the waiting and remediation layout states |
 | CD | `every-clear-path-asks-first` | every clear path asks first |
 | CE | `dialog-condition-row-hover-grammar` | dialog condition row hover grammar |
 | CF | `right-and-middle-never-activate-left-does` | right and middle never activate; left does |
@@ -78,274 +78,274 @@ there.
 | CL | `the-riskiest-chrome-gets-named-snapshots` | the riskiest chrome gets named snapshots |
 | CM | `the-card-fits-the-terminal-it-floats-on` | the card fits the terminal it floats on |
 | CN | `the-pill-says-whether-the-card-is-open` | the pill says whether the card is open |
-| CO | `one-door-out-of-the-card-the-status-dialog-disarms-i` | one door out of the card: the status dialog disarms it |
-| CP | `the-dialog-owns-the-screen-the-card-may-never-arm-be` | the dialog owns the screen; the card may never arm behind it |
+| CO | `one-door-out-of-the-card-the-status-dialog` | one door out of the card: the status dialog disarms it |
+| CP | `the-dialog-owns-the-screen-the-card-may-never` | the dialog owns the screen; the card may never arm behind it |
 | CQ | `the-iteration-rail-fold-is-keyboard-reachable` | the iteration rail fold is keyboard-reachable |
 | CR | `the-card-row-plan-owns-its-ceiling-end-to-end` | the card row plan owns its ceiling end-to-end |
-| CS | `the-pinned-condition-budget-counts-cells-not-code-un` | the pinned-condition budget counts cells, not code units |
+| CS | `the-pinned-condition-budget-counts-cells-not` | the pinned-condition budget counts cells, not code units |
 | CT | `a-failed-dialog-snapshot-says-so` | a failed dialog snapshot says so |
-| CU | `reduced-color-surfaces-demote-every-verdict-glyph` | reduced-color surfaces demote every verdict glyph |
+| CU | `reduced-color-surfaces-demote-every-verdict` | reduced-color surfaces demote every verdict glyph |
 | CV | `the-dialog-footer-tier-is-measured-not-assumed` | the dialog footer tier is measured, not assumed |
-| CW | `the-verdict-mix-is-a-single-pass-with-an-identity-me` | the verdict mix is a single pass with an identity memo |
-| CX | `the-footer-prices-in-both-clampedcolumn-paddings-an` | the footer prices in both ClampedColumn paddings; an unparseable snapshot is never fresh |
-| CY | `the-chrome-glyph-family-demotes-under-reduced-color` | the chrome glyph family demotes under reduced color |
-| CZ | `the-verdict-mix-memo-lives-in-the-component-not-the` | the verdict-mix memo lives in the component, not the module |
-| DA | `the-why-ledger-the-evaluator-s-most-recent-reasons-i` | the why ledger: the evaluator's most recent reasons, inline |
-| DB | `keyboard-parity-the-evaluator-reason-gets-its-chord` | keyboard parity: the evaluator reason gets its chord |
-| DE | `the-dumb-terminal-sweep-no-raw-unicode-on-the-reduce` | the dumb-terminal sweep: no raw Unicode on the reduced-color surface |
+| CW | `the-verdict-mix-is-a-single-pass-with-an` | the verdict mix is a single pass with an identity memo |
+| CX | `the-footer-prices-in-both-clampedcolumn-paddings` | the footer prices in both ClampedColumn paddings; an unparseable snapshot is never fresh |
+| CY | `the-chrome-glyph-family-demotes-under-reduced` | the chrome glyph family demotes under reduced color |
+| CZ | `the-verdict-mix-memo-lives-in-the-component-not` | the verdict-mix memo lives in the component, not the module |
+| DA | `the-why-ledger-the-evaluator-s-most-recent` | the why ledger: the evaluator's most recent reasons, inline |
+| DB | `keyboard-parity-the-evaluator-reason-gets-its` | keyboard parity: the evaluator reason gets its chord |
+| DE | `the-dumb-terminal-sweep-no-raw-unicode-on-the` | the dumb-terminal sweep: no raw Unicode on the reduced-color surface |
 | DF | `the-pill-budget-is-measured-not-guessed` | the pill budget is measured, not guessed |
-| DG | `the-ellipsis-never-paints-wider-than-the-cap-it-deco` | the ellipsis never paints wider than the cap it decorates |
-| DH | `the-last-unconditional-painted-em-dash-leaves-the-re` | the last unconditional painted em-dash leaves the reduced-color surface |
-| DI | `the-loop-s-ledger-names-the-commit-each-iteration-la` | the loop's ledger names the commit each iteration landed on |
-| DJ | `hover-never-underlines-weight-and-brightness-carry-t` | hover never underlines: weight and brightness carry the affordance |
+| DG | `the-ellipsis-never-paints-wider-than-the-cap-it` | the ellipsis never paints wider than the cap it decorates |
+| DH | `the-last-unconditional-painted-em-dash-leaves` | the last unconditional painted em-dash leaves the reduced-color surface |
+| DI | `the-loop-s-ledger-names-the-commit-each` | the loop's ledger names the commit each iteration landed on |
+| DJ | `hover-never-underlines-weight-and-brightness` | hover never underlines: weight and brightness carry the affordance |
 | DK | `the-compact-card-carries-the-context-gauge` | the compact card carries the context gauge |
-| CE | `the-card-s-why-row-the-evaluator-s-reason-on-the-sur` | the card's why row: the evaluator's reason, on the surface you see |
-| CI | `the-dialog-s-elsewhere-block-who-else-is-running-a-l` | the dialog's elsewhere block: who else is running a loop in this project |
-| CJ | `satisfied-at-head-a-zero-tool-met-iteration-paints-b` | satisfied-at-HEAD: a zero-tool met iteration paints blue, not gray |
-| CK | `per-iteration-spend-attribution-the-rail-names-what` | per-iteration spend attribution: the rail names what each iteration cost |
-| CL | `satisfied-at-head-turn-level-the-zero-work-met-verdi` | satisfied-at-HEAD, turn level: the zero-work met verdict paints hollow everywhere |
-| CM | `the-card-measures-the-terminal-fluid-width-64-cells` | the card measures the terminal: fluid width, 64 cells exactly at the 80-column floor |
+| CE | `the-card-s-why-row-the-evaluator-s-reason-on-the` | the card's why row: the evaluator's reason, on the surface you see |
+| CI | `the-dialog-s-elsewhere-block-who-else-is-running` | the dialog's elsewhere block: who else is running a loop in this project |
+| CJ | `satisfied-at-head-a-zero-tool-met-iteration` | satisfied-at-HEAD: a zero-tool met iteration paints blue, not gray |
+| CK | `per-iteration-spend-attribution-the-rail-names` | per-iteration spend attribution: the rail names what each iteration cost |
+| CL | `satisfied-at-head-turn-level-the-zero-work-met` | satisfied-at-HEAD, turn level: the zero-work met verdict paints hollow everywhere |
+| CM | `the-card-measures-the-terminal-fluid-width-64` | the card measures the terminal: fluid width, 64 cells exactly at the 80-column floor |
 | CN | `per-turn-spend-in-the-why-ledger` | per-turn spend in the why ledger |
-| CO | `the-three-way-work-ledger-hue-arm-work-produced-gree` | the three-way work ledger, hue arm: work produced green, state inspection amber, satisfied-at-HEAD blue |
-| CP | `the-final-tally-carries-the-loop-s-measured-spend` | the final tally carries the loop's measured spend |
+| CO | `the-three-way-work-ledger-hue-arm-work-produced` | the three-way work ledger, hue arm: work produced green, state inspection amber, satisfied-at-HEAD blue |
+| CP | `the-final-tally-carries-the-loop-s-measured` | the final tally carries the loop's measured spend |
 | CQ | `the-completion-flash-speaks-the-ledger-grammar` | the completion flash speaks the ledger grammar |
-| CR | `the-why-ledger-pins-its-reason-column-the-render-dem` | the why ledger pins its reason column; the render demo exercises the spend grammar |
+| CR | `the-why-ledger-pins-its-reason-column-the-render` | the why ledger pins its reason column; the render demo exercises the spend grammar |
 | CS | `the-finished-loop-retires-its-live-row` | the finished loop retires its live row |
 | CT | `the-spend-line-never-clips-its-cost` | the spend line never clips its cost |
-| CU | `the-frame-matrix-closes-every-painted-surface-has-a` | the frame matrix closes: every painted surface has a committed frame script |
-| CV | `the-dialog-s-advertised-keyboard-is-now-tested-not-j` | the dialog's advertised keyboard is now tested, not just wired |
-| CW | `the-reduced-color-contract-gets-frames-not-just-pred` | the reduced-color contract gets frames, not just predicates |
-| CX | `the-failure-first-contract-gets-frames-not-just-pred` | the failure-first contract gets frames, not just predicates |
-| CY | `the-first-impression-and-the-terminal-verdict-get-fr` | the first impression and the terminal verdict get frames |
-| CZ | `the-verification-gate-s-output-tail-rides-the-record` | the verification gate's output tail rides the record into the dashboard |
-| DL | `the-per-verdict-ledger-gains-its-commit-sha-elsewher` | the per-verdict ledger gains its commit sha, elsewhere rows gain a transcript jump |
-| DM | `the-elsewhere-transcript-jump-gains-its-keyboard-twi` | the elsewhere transcript jump gains its keyboard twin |
-| DN | `the-dialog-s-overflow-is-reachable-and-the-wheel-wor` | the dialog's overflow is reachable, and the wheel works |
-| DO | `the-boundary-compaction-outcome-at-a-glance-on-the-d` | the boundary-compaction outcome, at a glance on the dial |
+| CU | `the-frame-matrix-closes-every-painted-surface` | the frame matrix closes: every painted surface has a committed frame script |
+| CV | `the-dialog-s-advertised-keyboard-is-now-tested` | the dialog's advertised keyboard is now tested, not just wired |
+| CW | `the-reduced-color-contract-gets-frames-not-just` | the reduced-color contract gets frames, not just predicates |
+| CX | `the-failure-first-contract-gets-frames-not-just` | the failure-first contract gets frames, not just predicates |
+| CY | `the-first-impression-and-the-terminal-verdict` | the first impression and the terminal verdict get frames |
+| CZ | `the-verification-gate-s-output-tail-rides-the` | the verification gate's output tail rides the record into the dashboard |
+| DL | `the-per-verdict-ledger-gains-its-commit-sha` | the per-verdict ledger gains its commit sha, elsewhere rows gain a transcript jump |
+| DM | `the-elsewhere-transcript-jump-gains-its-keyboard` | the elsewhere transcript jump gains its keyboard twin |
+| DN | `the-dialog-s-overflow-is-reachable-and-the-wheel` | the dialog's overflow is reachable, and the wheel works |
+| DO | `the-boundary-compaction-outcome-at-a-glance-on` | the boundary-compaction outcome, at a glance on the dial |
 | DP | `the-full-dashboard-grows-tabs` | the full dashboard grows tabs |
 | DQ | `the-card-s-context-menu-gets-its-keyboard` | the card's context menu gets its keyboard |
-| DR | `the-focus-view-never-hides-the-failure-first-screen` | the focus view never hides the failure-first screen |
+| DR | `the-focus-view-never-hides-the-failure-first` | the focus view never hides the failure-first screen |
 | DS | `the-verdict-trail-is-a-control-not-a-picture` | the verdict trail is a control, not a picture |
 | DT | `the-loop-s-dossier-one-document-quoted-once` | the loop's dossier: one document, quoted once |
 | DU | `the-dossier-in-screen-the-third-view` | the dossier, in-screen: the third view |
 | DW | `the-context-size-re-resolves-after-a-compaction` | the context size re-resolves after a compaction |
 | DV | `the-dossier-quoted-in-parts-the-outline-rail` | the dossier, quoted in parts: the outline rail |
-| DY | `the-re-anchor-rides-the-system-counted-once-on-the-c` | the re-anchor rides the system, counted once on the card |
+| DY | `the-re-anchor-rides-the-system-counted-once-on` | the re-anchor rides the system, counted once on the card |
 | DX | `the-dossier-as-a-file-the-loop-can-hand-over` | the dossier, as a file the loop can hand over |
-| DZ | `parallel-work-safety-the-merge-pipeline-can-no-longe` | parallel-work safety: the merge pipeline can no longer destroy work |
-| DD | `the-card-s-menu-grows-the-dossier-s-two-doors-the-do` | the card's menu grows the dossier's two doors; the dossier remembers its re-anchors |
-| DC | `the-dialog-s-scrollbar-stops-being-a-default-widget` | the dialog's scrollbar stops being a default widget |
-| EA | `the-tallies-are-quotable-the-rail-attestation-row-an` | the tallies are quotable: the rail attestation row and the final tally copy one left click |
-| EB | `find-in-record-the-dossier-spotlight-one-click-from` | find-in-record: the dossier spotlight, one click from the record |
-| EC | `the-record-on-trial-the-dossier-answers-is-this-real` | the record, on trial: the dossier answers “is this real?” |
-| ED | `the-record-in-reach-ancestry-one-click-from-the-reco` | the record, in reach: ancestry, one click from the record |
-| EF | `the-record-under-seal-the-shas-the-record-quotes-car` | the record, under seal: the shas the record quotes carry a signature, one click from the record |
+| DZ | `parallel-work-safety-the-merge-pipeline-can-no` | parallel-work safety: the merge pipeline can no longer destroy work |
+| DD | `the-card-s-menu-grows-the-dossier-s-two-doors` | the card's menu grows the dossier's two doors; the dossier remembers its re-anchors |
+| DC | `the-dialog-s-scrollbar-stops-being-a-default` | the dialog's scrollbar stops being a default widget |
+| EA | `the-tallies-are-quotable-the-rail-attestation` | the tallies are quotable: the rail attestation row and the final tally copy one left click |
+| EB | `find-in-record-the-dossier-spotlight-one-click` | find-in-record: the dossier spotlight, one click from the record |
+| EC | `the-record-on-trial-the-dossier-answers-is-this` | the record, on trial: the dossier answers “is this real?” |
+| ED | `the-record-in-reach-ancestry-one-click-from-the` | the record, in reach: ancestry, one click from the record |
+| EF | `the-record-under-seal-the-shas-the-record-quotes` | the record, under seal: the shas the record quotes carry a signature, one click from the record |
 | EG | `the-dossier-sealed-the-proofs-ride-the-file` | the dossier, sealed: the proofs ride the file |
-| EH | `the-sealed-dossier-on-trial-again-drift-since-sealin` | the sealed dossier, on trial again: drift since sealing |
-| EI | `the-review-in-one-file-every-question-git-can-answer` | the review, in one file: every question git can answer |
+| EH | `the-sealed-dossier-on-trial-again-drift-since` | the sealed dossier, on trial again: drift since sealing |
+| EI | `the-review-in-one-file-every-question-git-can` | the review, in one file: every question git can answer |
 | EJ | `the-spend-ledger-one-file` | the spend ledger, one file |
-| EK | `the-inventory-one-file-what-the-dossier-family-left` | the inventory, one file: what the dossier family left behind |
+| EK | `the-inventory-one-file-what-the-dossier-family` | the inventory, one file: what the dossier family left behind |
 | EL | `the-jump-row-stops-lying-once-the-goal-ends` | the jump row stops lying once the goal ends |
-| EM | `the-outcome-line-stays-on-the-terminal-stops-riding` | the outcome line stays on the terminal, stops riding the context |
-| EM2 | `the-crash-report-closes-the-card-speaks-the-v2-compo` | the crash report closes: the card speaks the v2 composer's grammar, and the dialog can no longer take the s... |
-| EN | `the-live-crash-root-caused-and-the-card-paints-the-m` | the live crash root-caused, and the card paints the mount, not the terminal |
+| EM | `the-outcome-line-stays-on-the-terminal-stops` | the outcome line stays on the terminal, stops riding the context |
+| EM2 | `the-crash-report-closes-the-card-speaks-the-v2` | the crash report closes: the card speaks the v2 composer's grammar, and the dialog can no longer take the... |
+| EN | `the-live-crash-root-caused-and-the-card-paints` | the live crash root-caused, and the card paints the mount, not the terminal |
 | EO | `the-mount-width-probe-mounts-before-the-card` | the mount-width probe mounts before the card |
-| EP | `post-merge-review-fixes-one-cell-border-arithmetic-s` | post-merge review fixes: one-cell border arithmetic, stale mount width |
+| EP | `post-merge-review-fixes-one-cell-border` | post-merge review fixes: one-cell border arithmetic, stale mount width |
 | EQ | `the-opencode-cli-guide-tightened` | the <opencode-cli> guide tightened |
-| ER | `the-review-follow-ups-land-one-scrollbar-path-the-ra` | the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept |
-| ES | `the-spec-honesty-sweep-and-the-unused-export-audit` | the SPEC honesty sweep and the unused-export audit |
+| ER | `the-review-follow-ups-land-one-scrollbar-path` | the review follow-ups land: one scrollbar path, the raised token proven painted, stale 2-cell furniture swept |
+| ES | `the-spec-honesty-sweep-and-the-unused-export` | the SPEC honesty sweep and the unused-export audit |
 | ET | `nounusedlocals-nounusedparameters-landed` | noUnusedLocals / noUnusedParameters landed |
-| EU | `the-stale-guard-can-no-longer-be-defeated-at-its-own` | the stale guard can no longer be defeated at its own refresh boundary |
-| EV | `the-bugfix-sweep-audited-findings-land-each-pinned` | the bugfix sweep: audited findings land, each pinned |
-| EG | `the-executable-surfaces-audited-scripts-and-the-coor` | the executable surfaces audited: scripts and the coordinator |
+| EU | `the-stale-guard-can-no-longer-be-defeated-at-its` | the stale guard can no longer be defeated at its own refresh boundary |
+| EV | `the-bugfix-sweep-audited-findings-land-each` | the bugfix sweep: audited findings land, each pinned |
+| EG | `the-executable-surfaces-audited-scripts-and-the` | the executable surfaces audited: scripts and the coordinator |
 | EX | `the-root-surface-audited-installer-ci-packaging` | the root surface audited: installer, CI, packaging |
-| EY | `scripts-e2e-ts-audited-spawn-lifecycle-exit-restore` | scripts/e2e.ts audited: spawn/lifecycle, exit/restore, model resolution |
-| EZ | `the-four-deferred-ex-nits-in-bin-opencode-goal-mjs` | the four deferred EX nits in bin/opencode-goal.mjs |
+| EY | `scripts-e2e-ts-audited-spawn-lifecycle-exit` | scripts/e2e.ts audited: spawn/lifecycle, exit/restore, model resolution |
+| EZ | `the-four-deferred-ex-nits-in-bin-opencode-goal` | the four deferred EX nits in bin/opencode-goal.mjs |
 | EW | `the-d-mts-export-drift-pin` | the .d.mts export-drift pin |
-| FF | `spend-rides-the-stream-carry-forward-on-changed-a-se` | spend rides the stream: carry-forward on `changed` + a settled-spend event at finish |
-| GG | `record-identity-on-the-carry-drop-events-with-no-goa` | record identity on the carry, drop events with no goal key, commit on the planner-retry path |
-| HH | `live-stream-cross-process-truth-peek-reads-backgroun` | live-stream cross-process truth: peek reads, background drain, null re-pull |
-| II | `convergence-hygiene-silent-flag-flips-announce-thems` | convergence hygiene: silent flag flips announce themselves, the dialog refreshes on the tick, the cache cap... |
-| III | `docs-citations-file-line-re-anchored-to-symbols-the` | docs citations: file:line re-anchored to symbols; the reference guard updated |
-| V | `tui-intake-convergence-retained-null-re-pull-targets` | TUI intake convergence: retained null re-pull targets, elapsedMs-deduped snapshots, dead guard removed |
-| VI | `recent-terminal-re-pull-a-post-terminal-clear-conver` | recent-terminal re-pull: a post-terminal clear converges instead of lingering |
-| VII | `reconnecting-rpc-pumps-the-tui-s-event-intake-surviv` | reconnecting RPC pumps: the TUI's event intake survives a dropped service |
-| VIII | `restore` | restore is adopt-only: compaction only ever targets the specific session |
-| IX | `the-dialog-chrome-earns-its-cells-back-1-cell-clampe` | the dialog chrome earns its cells back: 1-cell ClampedColumn padding, footer tier re-priced to width−2 |
-| X | `snapshot-mirror-convergence-when-the-rpc-and-the-bus` | snapshot mirror: convergence when the RPC and the bus are both dead |
+| FF | `spend-rides-the-stream-carry-forward-on-changed` | spend rides the stream: carry-forward on `changed` + a settled-spend event at finish |
+| GG | `record-identity-on-the-carry-drop-events-with-no` | record identity on the carry, drop events with no goal key, commit on the planner-retry path |
+| HH | `live-stream-cross-process-truth-peek-reads` | live-stream cross-process truth: peek reads, background drain, null re-pull |
+| II | `convergence-hygiene-silent-flag-flips-announce` | convergence hygiene: silent flag flips announce themselves, the dialog refreshes on the tick, the cache... |
+| III | `docs-citations-file-line-re-anchored-to-symbols` | docs citations: file:line re-anchored to symbols; the reference guard updated |
+| V | `tui-intake-convergence-retained-null-re-pull` | TUI intake convergence: retained null re-pull targets, elapsedMs-deduped snapshots, dead guard removed |
+| VI | `recent-terminal-re-pull-a-post-terminal-clear` | recent-terminal re-pull: a post-terminal clear converges instead of lingering |
+| VII | `reconnecting-rpc-pumps-the-tui-s-event-intake` | reconnecting RPC pumps: the TUI's event intake survives a dropped service |
+| VIII | `restore-viii` | restore is adopt-only: compaction only ever targets the specific session |
+| IX | `the-dialog-chrome-earns-its-cells-back-1-cell` | the dialog chrome earns its cells back: 1-cell ClampedColumn padding, footer tier re-priced to width−2 |
+| X | `snapshot-mirror-convergence-when-the-rpc-and-the` | snapshot mirror: convergence when the RPC and the bus are both dead |
 | XI | `hover-stability-the-affordance-never-moves` | hover stability: the affordance never moves |
-| XII | `the-ambient-pill-learns-to-breathe-a-sleeping-cat-in` | the ambient pill learns to breathe: a sleeping-cat indicator, not a dashboard |
-| XIV | `the-actions-row-hangs-flush-one-grid-for-the-whole-c` | the actions row hangs flush: one grid for the whole card |
-| XV | `the-pill-drops-the-play-icon-the-dot-is-the-whole-ma` | the pill drops the play icon: the dot is the whole mark, no longer a button-shaped affordance |
+| XII | `the-ambient-pill-learns-to-breathe-a-sleeping` | the ambient pill learns to breathe: a sleeping-cat indicator, not a dashboard |
+| XIV | `the-actions-row-hangs-flush-one-grid-for-the` | the actions row hangs flush: one grid for the whole card |
+| XV | `the-pill-drops-the-play-icon-the-dot-is-the` | the pill drops the play icon: the dot is the whole mark, no longer a button-shaped affordance |
 | XVI | `the-breath-swells-through-the-bullseye-family` | the breath swells through the bullseye family: `◦ ○ ◎ ○` |
-| XVII | `the-pill-yields-to-the-open-card-one-voice-on-the-ro` | the pill yields to the open card: one voice on the row above the prompt |
-| XVIII | `headless-alignment-invariants-for-the-card-and-the-p` | headless alignment invariants for the card and the pill: one grid, measured cell by cell |
-| XIX | `the-live-layer-end-to-end-arm-work-evaluate-achieve` | the live layer, end to end: arm → work → evaluate → achieve, on the real binary |
-| XX | `live-crash-restore-sigkill-mid-turn-fresh-host-adopt` | live crash-restore: SIGKILL mid-turn, fresh host adopts the durable active record |
-| XXI | `the-accordion-pill-the-pill-and-the-card-are-one-sur` | the accordion pill: the pill and the card are one surface |
-| XXII | `the-live-layer-second-half-independent-and-consensus` | the live layer, second half: independent and consensus evaluator modes against a real gateway |
-| XXIII | `the-context-figure-updates-on-turn-boundaries-not-on` | the context figure updates on turn boundaries, not on a 30 s backstop |
-| XXIV | `the-evaluator-becomes-a-defensive-proactive-auditor` | the evaluator becomes a defensive, proactive auditor; the fuzzy objective is reworded into a concrete found... |
-| XXV | `live-verification-of-the-proactive-evaluator-one-kil` | live verification of the proactive evaluator: one KiloCode-Free /goal-loop to met; the verdict and the chai... |
-| XXVI | `the-summarizer-s-reasoning-tag-leak-is-stripped-dete` | the summarizer's reasoning-tag leak is stripped deterministically before it persists or reaches the planner |
-| XXVII | `the-background-wait-state-persists-the-pill-stays-wa` | the background-wait state persists: the pill stays `waiting` across a restart/plugin reload |
-| XXVIII | `completion-releases-everything-no-finished-goal-s-ch` | completion releases everything: no finished goal's chrome, pin or loop-position state sticks around for the... |
-| XXIX | `the-opencode-cli-first-turn-guide-points-at-opencode` | the `<opencode-cli>` first-turn guide points at opencode-headless as the way to drive the real binary |
-| XXX | `the-xxviii-release-verified-live-in-a-wedged-rpc-ses` | the XXVIII release, verified live in a wedged-RPC session: card, context menu, Esc layer, pin, palette and... |
-| XXXI | `documentation-spec-alignment-sweep-the-stale-compact` | documentation/spec alignment sweep: the stale compaction-ladder and restore-compaction claims are retired |
-| XXXII | `the-standalone-stdio-child-s-post-api-rpc-goal-get-5` | the standalone stdio child's `POST /api/rpc/goal/get` 500 posture, re-verified live through opencode-headless |
-| XXXIII | `the-stdio-child-s-post-api-rpc-goal-get-500-root-cau` | the stdio child's `POST /api/rpc/goal/get` 500, root-caused and fixed in-repo: explicit-undefined record ke... |
+| XVII | `the-pill-yields-to-the-open-card-one-voice-on` | the pill yields to the open card: one voice on the row above the prompt |
+| XVIII | `headless-alignment-invariants-for-the-card-and` | headless alignment invariants for the card and the pill: one grid, measured cell by cell |
+| XIX | `the-live-layer-end-to-end-arm-work-evaluate` | the live layer, end to end: arm → work → evaluate → achieve, on the real binary |
+| XX | `live-crash-restore-sigkill-mid-turn-fresh-host` | live crash-restore: SIGKILL mid-turn, fresh host adopts the durable active record |
+| XXI | `the-accordion-pill-the-pill-and-the-card-are-one` | the accordion pill: the pill and the card are one surface |
+| XXII | `the-live-layer-second-half-independent-and` | the live layer, second half: independent and consensus evaluator modes against a real gateway |
+| XXIII | `the-context-figure-updates-on-turn-boundaries` | the context figure updates on turn boundaries, not on a 30 s backstop |
+| XXIV | `the-evaluator-becomes-a-defensive-proactive` | the evaluator becomes a defensive, proactive auditor; the fuzzy objective is reworded into a concrete... |
+| XXV | `live-verification-of-the-proactive-evaluator-one` | live verification of the proactive evaluator: one KiloCode-Free /goal-loop to met; the verdict and the... |
+| XXVI | `the-summarizer-s-reasoning-tag-leak-is-stripped` | the summarizer's reasoning-tag leak is stripped deterministically before it persists or reaches the planner |
+| XXVII | `the-background-wait-state-persists-the-pill` | the background-wait state persists: the pill stays `waiting` across a restart/plugin reload |
+| XXVIII | `completion-releases-everything-no-finished-goal` | completion releases everything: no finished goal's chrome, pin or loop-position state sticks around for... |
+| XXIX | `the-opencode-cli-first-turn-guide-points-at` | the `<opencode-cli>` first-turn guide points at opencode-headless as the way to drive the real binary |
+| XXX | `the-xxviii-release-verified-live-in-a-wedged-rpc` | the XXVIII release, verified live in a wedged-RPC session: card, context menu, Esc layer, pin, palette... |
+| XXXI | `documentation-spec-alignment-sweep-the-stale` | documentation/spec alignment sweep: the stale compaction-ladder and restore-compaction claims are retired |
+| XXXII | `the-standalone-stdio-child-s-post-api-rpc-goal` | the standalone stdio child's `POST /api/rpc/goal/get` 500 posture, re-verified live through opencode-headless |
+| XXXIII | `the-stdio-child-s-post-api-rpc-goal-get-500-root` | the stdio child's `POST /api/rpc/goal/get` 500, root-caused and fixed in-repo: explicit-undefined record... |
 | XXXIV | `opt-in-file-log-sink-opencode-goal-log-file` | opt-in file log sink: `OPENCODE_GOAL_LOG_FILE` |
-| XXXV | `completed-iteration-retention-cap-loophistory-bounde` | completed-iteration retention cap: `loopHistory` bounded at 50 entries |
-| XXXVI | `verdict-trail-retention-made-explicit-historydropped` | verdict-trail retention made explicit: `historyDropped` and honest consumers |
-| XXXVII | `completed-condition-ledger-the-gates-outlive-the-ret` | completed-condition ledger: the gates outlive the retained window |
+| XXXV | `completed-iteration-retention-cap-loophistory` | completed-iteration retention cap: `loopHistory` bounded at 50 entries |
+| XXXVI | `verdict-trail-retention-made-explicit` | verdict-trail retention made explicit: `historyDropped` and honest consumers |
+| XXXVII | `completed-condition-ledger-the-gates-outlive-the` | completed-condition ledger: the gates outlive the retained window |
 | XXXVIII | `terminal-goal-records-bounded-at-plugin-storage` | terminal goal records bounded at plugin storage |
 | XXXIX | `spec-docs-honesty-re-audit-against-the-tree` | SPEC/docs honesty re-audit against the tree |
 | XL | `opportunistic-terminal-record-pruning-on-finish` | Opportunistic terminal-record pruning on finish |
 | XLI | `cross-directory-terminal-record-gc-at-restore` | Cross-directory terminal-record GC at restore |
 | XLII | `bounded-in-memory-terminal-goal-map` | Bounded in-memory terminal-goal map |
-| XLIII | `finish-time-prune-unified-with-the-restore-time-all` | Finish-time prune unified with the restore-time all-directory prune |
-| XLIV | `evaluator-rubric-novelty-advancement-and-the-forward` | Evaluator rubric: novelty, advancement and the forward-pointer gate |
+| XLIII | `finish-time-prune-unified-with-the-restore-time` | Finish-time prune unified with the restore-time all-directory prune |
+| XLIV | `evaluator-rubric-novelty-advancement-and-the` | Evaluator rubric: novelty, advancement and the forward-pointer gate |
 | XLV | `arming-side-no-new-gap-gate` | Arming-side no-new-gap gate |
-| XLVI | `clean-history-audit-and-the-docs-citation-contract` | Clean-history audit and the docs citation contract |
+| XLVI | `clean-history-audit-and-the-docs-citation` | Clean-history audit and the docs citation contract |
 | XLVII | `the-docs-symbol-export-contract` | The docs symbol-export contract |
 | XLVIII | `the-docs-inline-citation-contract` | The docs inline-citation contract |
-| XLIX | `the-docs-inline-citation-pin-gains-membership-grade` | The docs inline-citation pin gains membership-grade checking |
-| LI | `the-achieved-goal-s-outcome-note-stops-riding-the-co` | the achieved goal's outcome note stops riding the context |
-| LII | `legacy-plain-goal-notes-leave-the-model-s-context-to` | legacy plain goal notes leave the model's context too |
-| LIII | `the-docs-citation-contracts-gain-a-src-wide-wildcard` | the docs citation contracts gain a src-wide wildcard re-export absence pin |
-| LIV | `the-loop-advance-re-arm-no-new-gap-refusal-speaks-th` | the loop-advance re-arm no-new-gap refusal speaks the arming-side grep target |
-| LV | `docs-runtime-html-s-goal-loop-guards-list-names-the` | docs/runtime.html's /goal-loop guards list names the loop-advance re-arm refusal |
-| LVI | `the-fresh-goal-loop-arm-does-not-inherit-the-replace` | the fresh /goal-loop arm does not inherit the replaced record's completedConditions |
-| LVII | `the-post-compaction-re-anchor-carries-the-audit-and` | the post-compaction re-anchor carries the audit-and-stop clause |
-| LVIII | `the-post-compaction-re-anchor-carries-a-bounded-hone` | the post-compaction re-anchor carries a bounded, honest history window |
-| LIX | `post-lvii-lviii-dated-corrections-the-re-anchor-hist` | post-LVII/LVIII dated corrections: the re-anchor history-window claims |
-| LX | `the-armed-kickoff-is-dispatched-with-resume-true-and` | the armed kickoff is dispatched with `resume: true` and painted `queued` between dispatch and execution start |
-| LXI | `the-re-arm-boundary-s-planner-evidence-is-elided-at` | the re-arm boundary's planner evidence is elided at a word boundary, with the marker |
-| LXII | `docs-catch-up-to-lx-and-lxi-the-queued-armed-kickoff` | docs catch up to LX and LXI: the queued armed kickoff and the word-boundary summary elision |
-| LXIII | `the-config-index-docs-audit-every-option-verified-do` | the config/index docs audit: every option verified documented, symbol-style citations throughout, the one r... |
-| LXIV | `the-docs-coverage-gate-every-resolveconfig-surface-p` | the docs coverage gate: every resolveConfig surface pinned to docs/config.html |
-| LXV | `the-docs-and-spec-point-at-the-lxiv-docs-coverage-ga` | the docs and SPEC point at the LXIV docs coverage gate |
+| XLIX | `the-docs-inline-citation-pin-gains-membership` | The docs inline-citation pin gains membership-grade checking |
+| LI | `the-achieved-goal-s-outcome-note-stops-riding` | the achieved goal's outcome note stops riding the context |
+| LII | `legacy-plain-goal-notes-leave-the-model-s` | legacy plain goal notes leave the model's context too |
+| LIII | `the-docs-citation-contracts-gain-a-src-wide` | the docs citation contracts gain a src-wide wildcard re-export absence pin |
+| LIV | `the-loop-advance-re-arm-no-new-gap-refusal` | the loop-advance re-arm no-new-gap refusal speaks the arming-side grep target |
+| LV | `docs-runtime-html-s-goal-loop-guards-list-names` | docs/runtime.html's /goal-loop guards list names the loop-advance re-arm refusal |
+| LVI | `the-fresh-goal-loop-arm-does-not-inherit-the` | the fresh /goal-loop arm does not inherit the replaced record's completedConditions |
+| LVII | `the-post-compaction-re-anchor-carries-the-audit` | the post-compaction re-anchor carries the audit-and-stop clause |
+| LVIII | `the-post-compaction-re-anchor-carries-a-bounded` | the post-compaction re-anchor carries a bounded, honest history window |
+| LIX | `post-lvii-lviii-dated-corrections-the-re-anchor` | post-LVII/LVIII dated corrections: the re-anchor history-window claims |
+| LX | `the-armed-kickoff-is-dispatched-with-resume-true` | the armed kickoff is dispatched with `resume: true` and painted `queued` between dispatch and execution start |
+| LXI | `the-re-arm-boundary-s-planner-evidence-is-elided` | the re-arm boundary's planner evidence is elided at a word boundary, with the marker |
+| LXII | `docs-catch-up-to-lx-and-lxi-the-queued-armed` | docs catch up to LX and LXI: the queued armed kickoff and the word-boundary summary elision |
+| LXIII | `the-config-index-docs-audit-every-option` | the config/index docs audit: every option verified documented, symbol-style citations throughout, the one... |
+| LXIV | `the-docs-coverage-gate-every-resolveconfig` | the docs coverage gate: every resolveConfig surface pinned to docs/config.html |
+| LXV | `the-docs-and-spec-point-at-the-lxiv-docs` | the docs and SPEC point at the LXIV docs coverage gate |
 | LXVI | `terminal-goals-are-inert-after-compaction` | terminal goals are inert after compaction |
-| LXVII | `the-terminal-outcome-line-stops-parking-in-the-sessi` | the terminal outcome line stops parking in the session inbox; a finished goal's instruction text leaves con... |
-| LXVIII | `the-terminal-tui-consistency-pass-one-affordance-cel` | the terminal-TUI consistency pass: one affordance cell, a truthful stuck state |
-| LXIX | `the-terminal-tui-consistency-pass-second-tranche-aff` | the terminal-TUI consistency pass, second tranche: affordance grammar for the fold row, cells not code unit... |
+| LXVII | `the-terminal-outcome-line-stops-parking-in-the` | the terminal outcome line stops parking in the session inbox; a finished goal's instruction text leaves... |
+| LXVIII | `the-terminal-tui-consistency-pass-one-affordance` | the terminal-TUI consistency pass: one affordance cell, a truthful stuck state |
+| LXIX | `the-terminal-tui-consistency-pass-second-tranche` | the terminal-TUI consistency pass, second tranche: affordance grammar for the fold row, cells not code... |
 | LXX | `the-dossier-table-keeps-its-right-edge` | the dossier table keeps its right edge |
 | LXXI | `the-context-menu-has-one-row-source` | the context menu has one row source |
-| LXXII | `the-verification-gate-s-timeout-actually-stops-the-c` | the verification gate's timeout actually stops the command |
+| LXXII | `the-verification-gate-s-timeout-actually-stops` | the verification gate's timeout actually stops the command |
 | LXXIII | `the-menu-walk-cannot-rest-on-an-inert-row` | the menu walk cannot rest on an inert row |
-| LXXIV | `the-check-gate-stops-shipping-a-stale-tui-artifact` | the check gate stops shipping a stale TUI artifact |
+| LXXIV | `the-check-gate-stops-shipping-a-stale-tui` | the check gate stops shipping a stale TUI artifact |
 | LXXV | `the-spec-intro-quotes-the-shipped-glyphs` | the SPEC intro quotes the shipped glyphs |
-| LXXVI | `the-created-shell-event-reads-its-id-where-the-other` | the created-shell event reads its id where the others do |
-| LXXVII | `the-compaction-checkpoint-is-history-not-goal-gramma` | the compaction checkpoint is history, not goal grammar |
+| LXXVI | `the-created-shell-event-reads-its-id-where-the` | the created-shell event reads its id where the others do |
+| LXXVII | `the-compaction-checkpoint-is-history-not-goal` | the compaction checkpoint is history, not goal grammar |
 | LXXVIII | `the-project-is-its-own-cli-goal-loop` | the project is its own CLI: `goal-loop` |
 | LXXIX | `name-fields-reflect-the-goal-loop-identity` | name fields reflect the goal-loop identity |
-| LXXX | `the-terminal-ground-truth-line-rides-only-requests-t` | the terminal ground-truth line rides only requests that still carry goal text |
-| LXXXI | `the-coordinator-can-release-a-claimed-lease-it-will` | the coordinator can release a claimed lease it will never submit |
-| LXXXII | `install-use-remove-works-on-a-first-run-and-the-repo` | install/use/remove works on a first run, and the repository is named goal-loop |
-| LXXXIII | `persistent-improvement-backlog-ledger-and-de-dup-hel` | persistent improvement backlog ledger and de-dup helpers |
+| LXXX | `the-terminal-ground-truth-line-rides-only` | the terminal ground-truth line rides only requests that still carry goal text |
+| LXXXI | `the-coordinator-can-release-a-claimed-lease-it` | the coordinator can release a claimed lease it will never submit |
+| LXXXII | `install-use-remove-works-on-a-first-run-and-the` | install/use/remove works on a first run, and the repository is named goal-loop |
+| LXXXIII | `persistent-improvement-backlog-ledger-and-de-dup` | persistent improvement backlog ledger and de-dup helpers |
 | LXXXIV | `loop-planner-consults-the-improvement-backlog` | loop planner consults the improvement backlog |
-| LXXXV | `detail-dialog-stays-consistent-when-goals-pile-up` | detail dialog stays consistent when goals pile up |
-| LXXXVI | `evaluator-staleness-busy-check-recovery-and-snapshot` | evaluator staleness, busy-check recovery, and snapshot/loop-advance resilience |
-| LXXXVII | `evaluator-rubric-requires-clause-evidence-matrix-adv` | evaluator rubric requires clause/evidence matrix, adversarial checks, and structured next actions |
-| LXXXVIII | `profile-aware-verification-matrix-beyond-single-chec` | profile-aware verification matrix beyond single check |
-| LXXXIX | `goal-declared-checks-deterministic-coverage-concurre` | goal-declared checks, deterministic coverage, concurrency/reuse, and artifact evidence modes |
-| XC | `the-ambient-pill-s-leading-icon-joins-the-left-accen` | the ambient pill's leading icon joins the left accent rail |
-| XCI | `a-terminal-verdict-ends-the-run-the-achieved-goal-no` | a terminal verdict ends the run: the achieved goal no longer re-arms |
-| XCII | `workflow-audit-one-terminal-settle-one-head-read-one` | workflow audit: one terminal settle, one HEAD read, one spend diff |
-| XCIII | `consolidate-the-remaining-arming-learning-coverage-o` | consolidate the remaining arming/learning/coverage overlaps |
-| XC | `the-goal-card-breathes-at-its-top-and-bottom-edges` | the goal card breathes at its top and bottom edges |
-| XCIV | `the-evaluator-rubric-requires-verifier-command-corro` | the evaluator rubric requires verifier-command corroboration for broad conditions |
-| XCV | `change-risk-classifier-and-strict-gate-notice-for-hi` | change-risk classifier and strict-gate notice for high-risk tiers |
-| XCVI | `the-loop-position-indicator-stays-visible-at-every-c` | the loop-position indicator stays visible at every cap |
+| LXXXV | `detail-dialog-stays-consistent-when-goals-pile` | detail dialog stays consistent when goals pile up |
+| LXXXVI | `evaluator-staleness-busy-check-recovery-and` | evaluator staleness, busy-check recovery, and snapshot/loop-advance resilience |
+| LXXXVII | `evaluator-rubric-requires-clause-evidence-matrix` | evaluator rubric requires clause/evidence matrix, adversarial checks, and structured next actions |
+| LXXXVIII | `profile-aware-verification-matrix-beyond-single` | profile-aware verification matrix beyond single check |
+| LXXXIX | `goal-declared-checks-deterministic-coverage` | goal-declared checks, deterministic coverage, concurrency/reuse, and artifact evidence modes |
+| XC | `the-ambient-pill-s-leading-icon-joins-the-left` | the ambient pill's leading icon joins the left accent rail |
+| XCI | `a-terminal-verdict-ends-the-run-the-achieved` | a terminal verdict ends the run: the achieved goal no longer re-arms |
+| XCII | `workflow-audit-one-terminal-settle-one-head-read` | workflow audit: one terminal settle, one HEAD read, one spend diff |
+| XCIII | `consolidate-the-remaining-arming-learning` | consolidate the remaining arming/learning/coverage overlaps |
+| XC | `the-goal-card-breathes-at-its-top-and-bottom` | the goal card breathes at its top and bottom edges |
+| XCIV | `the-evaluator-rubric-requires-verifier-command` | the evaluator rubric requires verifier-command corroboration for broad conditions |
+| XCV | `change-risk-classifier-and-strict-gate-notice` | change-risk classifier and strict-gate notice for high-risk tiers |
+| XCVI | `the-loop-position-indicator-stays-visible-at` | the loop-position indicator stays visible at every cap |
 | XCVII | `remove-unused-internal-exports-from-core-modules` | remove unused internal exports from core modules |
-| XCVIII | `unify-learning-log-path-default-and-guard-fixture-pa` | unify learning-log path default and guard fixture-path pollution |
+| XCVIII | `unify-learning-log-path-default-and-guard` | unify learning-log path default and guard fixture-path pollution |
 | XCIX | `remove-unused-verifycheckdefinition-type` | remove unused VerifyCheckDefinition type |
 | C | `unexport-internal-only-core-symbols` | unexport internal-only core symbols |
 | CI | `cache-ensured-directory-for-learning-log-appends` | cache ensured directory for learning-log appends |
-| CII | `cache-ensured-directory-for-failure-diagnostic-write` | cache ensured directory for failure-diagnostic writes |
+| CII | `cache-ensured-directory-for-failure-diagnostic` | cache ensured directory for failure-diagnostic writes |
 | CIII | `cache-ensured-directory-for-goal-mirror-writes` | cache ensured directory for goal-mirror writes |
 | CIV | `unify-windows-drive-path-on-posix-guard-helper` | unify Windows drive-path-on-POSIX guard helper |
-| CV | `structured-outcome-telemetry-over-the-learning-journ` | structured outcome telemetry over the learning journal |
+| CV | `structured-outcome-telemetry-over-the-learning` | structured outcome telemetry over the learning journal |
 | CVI | `self-update-system-with-main-dev-channels` | self-update system with main/dev channels |
 | CVII | `compact-coordinator-status-output` | compact coordinator status output |
-| CIX | `forward-pointer-exemption-for-the-zero-tool-evaluato` | forward-pointer exemption for the zero-tool evaluator guard |
+| CIX | `forward-pointer-exemption-for-the-zero-tool` | forward-pointer exemption for the zero-tool evaluator guard |
 | CX | `pathsof-rename-quote-correctness` | pathsOf rename/quote correctness |
 | CXI | `surrogate-safe-transcript-truncation` | surrogate-safe transcript truncation |
 | CXII | `lean-evaluator-context-across-many-goal-versions` | lean evaluator context across many goal versions |
-| CXIII | `close-the-last-remaining-todo-coordinator-semantic-d` | close the last remaining TODO: coordinator semantic/drift guards |
-| CXIV | `continuous-improvement-pass-unify-dossier-stamps-tri` | continuous improvement pass: unify dossier stamps, trim dead exports, tighten the digest hot path |
-| CXV | `evaluator-use-and-forget-context-strip-self-echo-and` | evaluator use-and-forget context: strip self-echo and compact the digest budget |
+| CXIII | `close-the-last-remaining-todo-coordinator` | close the last remaining TODO: coordinator semantic/drift guards |
+| CXIV | `continuous-improvement-pass-unify-dossier-stamps` | continuous improvement pass: unify dossier stamps, trim dead exports, tighten the digest hot path |
+| CXV | `evaluator-use-and-forget-context-strip-self-echo` | evaluator use-and-forget context: strip self-echo and compact the digest budget |
 | CXVI | `resume-an-interrupted-evaluation-after-restart` | resume an interrupted evaluation after restart |
 | CXVII | `accept-malformed-but-readable-evaluator-verdicts` | accept malformed-but-readable evaluator verdicts |
-| single-package-autonomou | `single-package-autonomous-loop` | single-package autonomous loop |
-| the-waiting-pill-flips-b | `the-waiting-pill-flips-back-to-active-on-session-hea` | the waiting pill flips back to active on session heartbeats, instantly |
-| review-recent-changes-fi | `review-recent-changes-fix-bugs-run-the-normal-routin` | review recent changes, fix bugs, run the normal routines |
-| empty-verdict-evaluator- | `empty-verdict-evaluator-strip-tools-from-judge-gener` | empty-verdict evaluator: strip tools from judge generations, fail loudly |
-| audit-of-coordinator-wor | `audit-of-coordinator-workflow-gotchas-verify-each-cl` | Audit of "Coordinator workflow gotchas": verify each claim, fix the discoverability gaps |
-| inherit-the-parent-sessi | `inherit-the-parent-session-s-model-for-the-evaluator` | inherit the parent session's model for the evaluator |
-| audit-recent-changes-for | `audit-recent-changes-for-bugs` | audit recent changes for bugs |
-| the-goal-follows-the-ses | `the-goal-follows-the-session-that-armed-it-across-di` | the goal follows the session that armed it across directory moves |
-| CXXI | `the-evaluator-inherits-the-parent-session-s-fingerpr` | the evaluator inherits the parent session's fingerprint |
-| CXXII | `evaluator-free-usage-limits-pause-instead-of-failing` | evaluator free-usage limits pause instead of failing the goal |
-| CXXIII | `repo-scoped-term-artifacts-always-anchor-at-the-git` | repo-scoped .term artifacts always anchor at the git root |
+| prompt-loop | `single-package-autonomous-loop` | single-package autonomous loop |
+| waiting-pill-heartbeat | `the-waiting-pill-flips-back-to-active-on-session` | the waiting pill flips back to active on session heartbeats, instantly |
+| review-changes | `review-recent-changes-fix-bugs-run-the-normal` | review recent changes, fix bugs, run the normal routines |
+| empty-verdict-evaluator | `empty-verdict-evaluator-strip-tools-from-judge` | empty-verdict evaluator: strip tools from judge generations, fail loudly |
+| coordinator-workflow-audit | `audit-of-coordinator-workflow-gotchas-verify` | Audit of "Coordinator workflow gotchas": verify each claim, fix the discoverability gaps |
+| parent-session-model | `inherit-the-parent-session-s-model-for-the` | inherit the parent session's model for the evaluator |
+| bug-audit | `audit-recent-changes-for-bugs` | audit recent changes for bugs |
+| session-directory-follow | `the-goal-follows-the-session-that-armed-it` | the goal follows the session that armed it across directory moves |
+| CXXI | `the-evaluator-inherits-the-parent-session-s` | the evaluator inherits the parent session's fingerprint |
+| CXXII | `evaluator-free-usage-limits-pause-instead-of` | evaluator free-usage limits pause instead of failing the goal |
+| CXXIII | `repo-scoped-term-artifacts-always-anchor-at-the` | repo-scoped .term artifacts always anchor at the git root |
 | CXXIV | `follow-up` | audit recent changes for bugs |
-| CXXV | `bound-evaluator-deliberation-without-weakening-the-e` | bound evaluator deliberation without weakening the evidence contract |
-| CXXVI | `evaluator-free-usage-limits-pause-the-goal-and-wait` | evaluator free-usage limits pause the goal and wait for the user |
-| CXXVII | `judge-with-a-real-child-session-not-an-auxiliary-gen` | judge with a real child session, not an auxiliary generate |
-| CXXVIII | `audit-recent-changes-remove-the-redundant-judge-port` | audit recent changes: remove the redundant judge port, fix judge abort handling |
-| CXXIX | `route-the-default-session-mode-judge-through-the-chi` | route the default session-mode judge through the child session |
-| CXXX | `ship-a-first-class-evaluator-agent-and-delegate-verd` | ship a first-class evaluator agent and delegate verdicts to it |
-| CXXXI | `a-failed-judge-child-keeps-its-provider-classificati` | a failed judge child keeps its provider classification |
-| CXXXII | `native-delegated-verdicts-and-a-clean-evidence-diges` | native delegated verdicts and a clean evidence digest |
+| CXXV | `bound-evaluator-deliberation-without-weakening` | bound evaluator deliberation without weakening the evidence contract |
+| CXXVI | `evaluator-free-usage-limits-pause-the-goal-and` | evaluator free-usage limits pause the goal and wait for the user |
+| CXXVII | `judge-with-a-real-child-session-not-an-auxiliary` | judge with a real child session, not an auxiliary generate |
+| CXXVIII | `audit-recent-changes-remove-the-redundant-judge` | audit recent changes: remove the redundant judge port, fix judge abort handling |
+| CXXIX | `route-the-default-session-mode-judge-through-the` | route the default session-mode judge through the child session |
+| CXXX | `ship-a-first-class-evaluator-agent-and-delegate` | ship a first-class evaluator agent and delegate verdicts to it |
+| CXXXI | `a-failed-judge-child-keeps-its-provider` | a failed judge child keeps its provider classification |
+| CXXXII | `native-delegated-verdicts-and-a-clean-evidence` | native delegated verdicts and a clean evidence digest |
 | CXXXIII | `native-only-verdicts-no-generation-judge` | native-only verdicts, no generation judge |
-| CXXXIV | `native-evaluator-reads-the-parent-s-tool-summary-not` | native evaluator reads the parent's tool summary, not the raw transcript |
-| CXLI | `fix-the-position-layer-inversion-the-harness-judges` | fix the position-layer inversion: the harness judges, the worker does not |
-| CXLII | `the-judge-must-actually-run-the-worker-never-judges` | the judge must actually run; the worker never judges |
-| CXLIII | `quota-false-positive-a-limit-phrase-is-not-a-limit-s` | quota false positive: a limit *phrase* is not a limit *signal* |
-| CXLIV | `end-of-day-maintenance-single-pass-path-classificati` | end-of-day maintenance: single-pass path classification |
+| CXXXIV | `native-evaluator-reads-the-parent-s-tool-summary` | native evaluator reads the parent's tool summary, not the raw transcript |
+| CXLI | `fix-the-position-layer-inversion-the-harness` | fix the position-layer inversion: the harness judges, the worker does not |
+| CXLII | `the-judge-must-actually-run-the-worker-never` | the judge must actually run; the worker never judges |
+| CXLIII | `quota-false-positive-a-limit-phrase-is-not-a` | quota false positive: a limit *phrase* is not a limit *signal* |
+| CXLIV | `end-of-day-maintenance-single-pass-path` | end-of-day maintenance: single-pass path classification |
 | CXLV | `end-of-day-maintenance-shared-filename-stamp` | end-of-day maintenance: shared filename stamp |
 | CXLVI | `consolidate-the-three-boolean-flag-parsers` | consolidate the three boolean flag parsers |
 | CXLVII | `one-value-quoting-format-in-error-messages` | one value-quoting format in error messages |
 | CXLVIII | `one-value-quoting-format-in-log-messages` | one value-quoting format in log messages |
 | CXLIX | `restore-the-audited-test-count` | restore the audited test count |
-| CLI | `one-shared-positive-finite-number-validator-for-the` | one shared positive-finite-number validator for the render scripts |
-| CLII | `stat-only-sealed-dossier-names-in-the-tui-re-probe-s` | stat only sealed-dossier names in the TUI re-probe scan |
-| CLIII | `unify-the-record-gap-constant-drop-a-stale-scratch-f` | unify the record gap constant; drop a stale scratch file |
-| CLIV | `one-cached-cell-width-function-across-the-render-cod` | one cached cell-width function across the render code |
+| CLI | `one-shared-positive-finite-number-validator-for` | one shared positive-finite-number validator for the render scripts |
+| CLII | `stat-only-sealed-dossier-names-in-the-tui-re` | stat only sealed-dossier names in the TUI re-probe scan |
+| CLIII | `unify-the-record-gap-constant-drop-a-stale` | unify the record gap constant; drop a stale scratch file |
+| CLIV | `one-cached-cell-width-function-across-the-render` | one cached cell-width function across the render code |
 | CLV | `dead-scratch-file-and-dead-config-export` | dead scratch file and dead config export |
-| CLVI | `one-home-for-the-objective-and-the-no-judge-rule-in` | one home for the objective and the no-judge rule in the kickoff |
-| CLVII | `precompile-foreign-verdict-patterns-drop-a-dead-type` | precompile foreign-verdict patterns; drop a dead type export |
+| CLVI | `one-home-for-the-objective-and-the-no-judge-rule` | one home for the objective and the no-judge rule in the kickoff |
+| CLVII | `precompile-foreign-verdict-patterns-drop-a-dead` | precompile foreign-verdict patterns; drop a dead type export |
 | CLXI | `golden-test-for-the-deduplicated-kickoff` | golden test for the deduplicated kickoff |
 | CLVIII | `memoize-the-dossier-find-spotlight-case-fold` | memoize the dossier find-spotlight case fold |
 | CLIX | `one-error-shape-for-missing-verify-matrix-keys` | one error shape for missing verify-matrix keys |
-| CLX | `one-failing-check-predicate-in-failure-signatures` | one failing-check predicate in failure signatures |
+| CLX | `one-failing-check-predicate-in-failure` | one failing-check predicate in failure signatures |
 | CLXII | `memoize-truncation-for-stable-tui-lines` | memoize truncation for stable TUI lines |
-| CLXIII | `parse-the-verdict-echo-once-precompile-its-alias-pat` | parse the verdict echo once; precompile its alias pattern |
-| CLXIV | `drop-the-unreachable-isrecord-re-check-in-outcome-te` | drop the unreachable isRecord re-check in outcome telemetry |
-| CLXV | `drop-a-dead-verify-condition-branch-in-terminal-lear` | drop a dead verify-condition branch in terminal learning entries |
-| CLXVI | `keep-the-judge-s-own-request-through-goal-grammar-st` | keep the judge's own request through goal-grammar stripping |
+| CLXIII | `parse-the-verdict-echo-once-precompile-its-alias` | parse the verdict echo once; precompile its alias pattern |
+| CLXIV | `drop-the-unreachable-isrecord-re-check-in` | drop the unreachable isRecord re-check in outcome telemetry |
+| CLXV | `drop-a-dead-verify-condition-branch-in-terminal` | drop a dead verify-condition branch in terminal learning entries |
+| CLXVI | `keep-the-judge-s-own-request-through-goal` | keep the judge's own request through goal-grammar stripping |
 | CLXVII | `memoize-the-telemetry-reason-normalizer` | memoize the telemetry reason normalizer |
-| CLXVIII | `one-bounded-preview-for-every-fail-closed-verdict-er` | one bounded preview for every fail-closed verdict error |
+| CLXVIII | `one-bounded-preview-for-every-fail-closed` | one bounded preview for every fail-closed verdict error |
 | CLXIX | `one-doc-block-per-helper-in-wire-and-hud` | one doc block per helper in wire and hud |
 | CLXX | `one-home-for-the-verification-union-types` | one home for the verification union types |
 | CLXXI | `one-canonical-runtime-set-of-verify-check-types` | one canonical runtime set of verify-check types |
-| CLXXII | `memoize-echo-normalization-for-repeated-conditions` | memoize echo normalization for repeated conditions |
+| CLXXII | `memoize-echo-normalization-for-repeated` | memoize echo normalization for repeated conditions |
 | CLXXIII | `verify-the-canonical-set-from-every-parse-path` | verify the canonical set from every parse path |
 | CLXXIV | `memoize-failure-signature-reason-normalization` | memoize failure-signature reason normalization |
 | CLXXV | `one-source-for-the-evaluator-hint-prefix` | one source for the evaluator-hint prefix |
 | CLXXVI | `delete-the-last-duplicate-verify-runtime-sets` | delete the last duplicate verify runtime sets |
-| CLXXVII | `one-canonical-runtime-vocabulary-for-the-verify-cont` | one canonical runtime vocabulary for the verify contract |
+| CLXXVII | `one-canonical-runtime-vocabulary-for-the-verify` | one canonical runtime vocabulary for the verify contract |
 | CLXXVIII | `memoize-the-sanitizer-s-prefix-probe` | memoize the sanitizer's prefix probe |
 | CLXXIX | `key-the-truncate-memo-by-tuple-not-by-json-text` | key the truncate memo by tuple, not by JSON text |
 | CLXXX | `drop-an-unused-verify-run-state-type-export` | drop an unused verify-run-state type export |
-| CLXXXI | `one-bounded-memo-mechanism-for-the-normalize-helpers` | one bounded-memo mechanism for the normalize helpers |
+| CLXXXI | `one-bounded-memo-mechanism-for-the-normalize` | one bounded-memo mechanism for the normalize helpers |
 | CLXXXII | `drop-an-unused-bootstrap-workflow-re-export` | drop an unused bootstrap workflow re-export |
 | CLXXXIII | `one-memo-mechanism-across-the-pure-hot-helpers` | one memo mechanism across the pure hot helpers |
 | CLXXXIV | `precompile-the-lenient-verdict-patterns` | precompile the lenient verdict patterns |
 | CLXXXV | `tag-free-fast-path-in-the-reasoning-filter` | tag-free fast path in the reasoning filter |
 | CLXXXVI | `the-live-pill-shows-the-turn-being-run` | the live pill shows the turn being run |
-| CLXXXVII | `drop-the-zero-reference-google-logging-utils-overrid` | drop the zero-reference `google-logging-utils` override |
+| CLXXXVII | `drop-the-zero-reference-google-logging-utils` | drop the zero-reference `google-logging-utils` override |
 | CLXXXVIII | `one-canonical-condition-reason-fold` | one canonical condition/reason fold |
 | CLXXXIX | `coordinator-merge-status` | read-only merge lock observability |
 
