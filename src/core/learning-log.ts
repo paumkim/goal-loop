@@ -117,7 +117,7 @@ export function buildGoalTerminalLearningEntry(record: GoalRecord, atMs = Date.n
     ...(typeof record.turns === "number" ? { turns: record.turns } : {}),
     ...(typeof elapsedMs === "number" ? { elapsedMs } : {}),
     ...(iterations !== undefined ? { iterations } : {}),
-    ...(clean(record.lastVerify?.command) && record.lastVerify?.code === 0 && record.history.at(-1)?.sha ? { sha: record.history.at(-1)?.sha } : record.history.at(-1)?.sha ? { sha: record.history.at(-1)?.sha } : {}),
+    ...(record.history.at(-1)?.sha ? { sha: record.history.at(-1)?.sha } : {}),
     ...(record.final ? { spend: record.final } : {}),
     lesson: goalLesson(record, reason),
   }

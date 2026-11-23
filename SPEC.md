@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2243 -->
+<!-- spec-check files=143 tests=2244 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10809,3 +10809,14 @@ narrowing holds with no cast. No behavior change.
 New regression test in `test/outcome-telemetry.test.ts` feeds a plain-object `turn_verdict` with
 `verdict=not_met` and asserts its reason still lands in `failureThemes`. Focused suite 15 pass / 0 fail
 (was 14). Marker `tests=2242 -> 2243`.
+## Workstream CLXV — drop a dead verify-condition branch in terminal learning entries (2026-11-22)
+
+`buildGoalTerminalLearningEntry` in `src/core/learning-log.ts` chose between two object literals
+that were identical whenever the last history entry had a sha. The `lastVerify` command/code test
+on the first arm could never change the emitted value, so the ternary collapses to a single
+`record.history.at(-1)?.sha` guard. Terminal entries carry the same sha in the same cases.
+
+New case in `test/learning-log.test.ts`: an achieved record whose `lastVerify` has `code: 1` still
+emits the terminal sha, matching the same record with no `lastVerify`. Focused suite 16 pass /
+0 fail (was 15); full suite **2244 pass / 0 fail**. Marker `files=143 tests=2244`. The
+`learning-log-dead-verify-condition` backlog item is marked done in this commit.

@@ -96,6 +96,21 @@ describe("learning-log core", () => {
     expect(entry.lesson).toContain("bun run check passed")
   })
 
+  test("buildGoalTerminalLearningEntry records the terminal sha regardless of lastVerify state", () => {
+    const history = [{ turn: 2, verdict: "met" as const, reason: "ok", at: 1_700_000_030_000, sha: "abc1234" }]
+    const withFailingVerify = buildGoalTerminalLearningEntry(
+      baseRecord({
+        status: "achieved",
+        history,
+        lastVerify: { command: "bun run check", code: 1, at: 1_700_000_030_050 },
+      }),
+      1_700_000_030_100,
+    )
+    const withoutVerify = buildGoalTerminalLearningEntry(baseRecord({ status: "achieved", history }), 1_700_000_030_100)
+    expect(withFailingVerify.sha).toBe("abc1234")
+    expect(withoutVerify.sha).toBe("abc1234")
+  })
+
   test("buildGoalTerminalLearningEntry derives lessons for non-achieved outcomes without fabricating evidence", () => {
     const impossible = buildGoalTerminalLearningEntry(baseRecord({ status: "impossible", reason: "missing API key" }))
     expect(impossible.lesson).toContain("Judged impossible")
