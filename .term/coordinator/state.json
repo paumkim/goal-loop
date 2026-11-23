@@ -5700,6 +5700,38 @@
       "submittedAt": "2026-11-23T02:21:53Z",
       "mergedAt": "2026-11-23T02:27:33Z",
       "mergedInto": "dev"
+    },
+    "memo-mechanism-unify": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,src/core/sanitize.ts,src/core/evaluator-agent.ts,src/core/find.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/memo-mechanism-unify",
+      "worktree": "worktrees/wt-memo-mechanism-unify",
+      "status": "done",
+      "createdAt": "2026-11-23T02:28:05Z",
+      "submittedAt": "2026-11-23T02:35:21Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T02:35:21Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-23T02:37:22Z",
+      "mergedInto": "dev"
+    },
+    "pill-live-turn-counter": {
+      "agent": "build",
+      "paths": "src/core/hud.ts,test/tui-hud.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
+      "branch": "wt/pill-live-turn-counter",
+      "worktree": "worktrees/wt-pill-live-turn-counter",
+      "status": "claimed",
+      "createdAt": "2026-11-23T02:34:28Z"
+    },
+    "lenient-verdict-regex": {
+      "agent": "build",
+      "paths": "src/core/verdict.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/lenient-verdict-regex",
+      "worktree": "worktrees/wt-lenient-verdict-regex",
+      "status": "claimed",
+      "createdAt": "2026-11-23T02:34:53Z"
     }
   },
   "mergeLock": null,
