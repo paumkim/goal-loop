@@ -7,17 +7,19 @@ import type { CommitPolicy, LoopEntry, UsageSnapshot } from "./types.ts"
 export const MARKER = "goal"
 
 /**
- * The worker never judges or delegates the verdict: the harness runs a standalone evaluator child and only a
- * `not_met` verdict wakes the worker with more work. Background subagents in flight defer that verdict instead of
- * nudging the worker — ending the turn is safe because the harness injects their reports back to wake it. Kept as
- * one exported constant and appended to every worker-facing prompt builder so the kickoff, loop/retry/checkin
- * steers and the system reminder all carry the same absolute contract — not just the kickoff directive.
+ * The worker never judges the verdict or delegates that judgment (delegating work to subagents is fine): the
+ * harness runs a standalone evaluator child and only a `not_met` verdict wakes the worker with more work.
+ * Background subagents in flight defer that verdict instead of nudging the worker — ending the turn is safe
+ * because the harness injects their reports back to wake it. Kept as one exported constant
+ * and appended to every worker-facing prompt builder so the kickoff, loop/retry/checkin steers and the system
+ * reminder all carry the same absolute contract — not just the kickoff directive.
  */
 export const DELEGATE_VERDICT =
-  `Do the work, report the evidence, end your turn. ` +
-  `The evaluator judges; goal-loop detects active sessions and defers its verdict (no nudge), and the harness ` +
+  `Do the work, report evidence, end your turn. ` +
+  `Evaluator judges; goal-loop detects active sessions and defers its verdict (no nudge); the harness ` +
   `injects results back to wake you. ` +
-  `Never state, declare, or assess whether the condition is met — do not delegate, judge, or narrate the verdict.`
+  `Never state, declare, or assess whether the condition is met — don't judge the verdict, delegate that ` +
+  `judgment, or narrate it.`
 
 const escape = (text: string) => text.replace(/<\/(goal[\w-]*)>/gi, "<\\/$1>")
 

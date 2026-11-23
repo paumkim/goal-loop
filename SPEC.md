@@ -1703,6 +1703,12 @@ A parent under a goal-loop, told to "briefly tell the user what you launched and
 
 Verification: `test/core.test.ts` replaces the old wording pin with a negative one and adds a regression asserting the subagent guidance and its presence across four worker-facing prompts; `test/opencode-cli.test.ts` pins the new closing block. Focused `core`/`opencode-cli` suite green. Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check (marker re-counted). Workstream CXCIV rotated into the archive to keep the live recent window at 15.
 
+### Follow-up (delegate-verdict-reword) — scope the no-delegation rule to the verdict (2026-11-23)
+
+The `DELEGATE_VERDICT` closing block in `src/core/prompts.ts` said "do not delegate, judge, or narrate the verdict"; read on its own, "do not delegate" looked like a blanket ban on subagents even though the verdict was the object. Reworded to "don't judge the verdict, delegate that judgment, or narrate it" so delegation is explicitly the verdict judgment, and workers stay free to delegate ordinary work to subagents. The doc comment and the pinning assertion in `test/core.test.ts` were updated to match. No runtime, gate or generated file changed.
+
+Verification: focused `core`/`opencode-cli`/`commit-rule` suites green; full suite 2,325 pass / 0 fail with dist, TUI, docs-freshness and spec-check green.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in

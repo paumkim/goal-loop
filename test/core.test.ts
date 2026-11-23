@@ -1395,7 +1395,8 @@ describe("native evaluator verdict", () => {
     expect(kickoff).not.toContain("delegate the verdict to")
     expect(kickoff).not.toContain("task tool")
     expect(kickoff).not.toContain("Prove progress")
-    expect(DELEGATE_VERDICT).toContain("do not delegate, judge, or narrate the verdict")
+    expect(DELEGATE_VERDICT).toContain("don't judge the verdict, delegate that judgment, or narrate it")
+    expect(DELEGATE_VERDICT).not.toContain("do not delegate, judge, or narrate")
     expect(DELEGATE_VERDICT).not.toContain("after your turn") // the conflicting evaluator-timing advice is gone
     expect(DELEGATE_VERDICT).toContain("Never state, declare, or assess whether the condition is met")
   })
