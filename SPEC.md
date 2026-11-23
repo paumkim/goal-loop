@@ -226,6 +226,13 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Craft gap clearance (`craft-gap-clearance`, 2026-11-23): the README test badge still read 2228 against a
+  2316-test marker; a user-facing loop-arm refusal exposed internal `Jaccard >= 0.6` thresholds; `shorten`
+  in `src/prompter/driver.ts` duplicated `short` from `util.ts`; `isRecord` had three copies and
+  `iterationList` five. All now use one shared home each. No behavior change: the 240-cell log truncation,
+  the plain-object guard, and the `v1, v2` table cells are byte-identical; the refusal keeps its `no new gap`
+  prefix. Stale SPEC claims about an "evidence-based" ended event and a 0.6 drop factor are annotated in
+  place rather than rewritten. Focused core/prompter/loop suites and full check green, marker unchanged.
 - Compaction landing docs (`compaction-landing-doc-truth`, 2026-11-23): `docs/runtime.html` described landing as
   "evidence-based" and introduced the arm-time path with an orphaned "Or a >= 10% drop" fragment, contradicting
   the shipped controller: `onCompactionLanded()` records an ended event unconditionally, and only the arm-time
@@ -965,11 +972,15 @@ boundary request actually lands, record it, surface it, and re-request when it n
     `session.compaction.ended` event settles the pending state via the controller's public
     `onCompactionLanded()` — is evidence-based: it marks `landedAt` only on an observed context-size drop
     (same threshold as (ii)); an unestimable or no-op compaction counts as a miss toward the 2-miss
-    re-request and queues no re-anchor (Workstream AA). Landing detection (ii) runs at the next arm before a
+    re-request and queues no re-anchor (Workstream AA). [SUPERSEDED 2026-11-23: the ended event is now
+    authoritative and lands a pending request unconditionally, with no estimate check; see
+    `docs/runtime.html`.] Landing detection (ii) runs at the next arm before a
     new request is issued — a context-size drop at the next arm — via the new optional
     `ControllerDeps.estimateContext` port (`ctx.session.context` + `estimateContextTokens`, estimate
     unavailable → treated as not-landed) — marks landing when `size <= max(10_000, floor(estimatedTokens
-    × 0.6))` (unknown baseline estimate: `size < 10_000`). An unlanded pending request accumulates `misses`
+    × 0.6))` (unknown baseline estimate: `size < 10_000`). [CURRENT: the factor is
+    `BOUNDARY_DROP_FACTOR = 0.9` in `src/core/constants.ts`, a >=10% drop; 0.6 is AA's original value.]
+    An unlanded pending request accumulates `misses`
     per armed iteration; at `misses >= 2` the next arm passes `{ force: true }` (cooldown bypassed; in-flight
     and busy still enforced) and emits a "Compaction pending" warning notice — the re-request the armed
     condition asks for. A busy deferral counts as a miss but can never bypass the busy gate; `loopCompact`
@@ -1007,7 +1018,8 @@ the host compacting, but it can restore the ground truth on the next one.
     slice as the other loop prompts. [Superseded in part 2026-11-18 by Workstream LVIII: the re-anchor injects the newest 3 (`REANCHOR_HISTORY_INJECT_LIMIT`), not the shared 10-entry slice, and prints `(N older completed iterations omitted — the bounded ledger rides the record)` when history exceeds the window. Annotated in place, never rewritten.]
 100. Controller `onCompactionLanded()` (public, `session.compaction.ended` path): settles any pending
      boundary-compact request as before — evidence-based since Workstream AA: a landing is recorded only on an
-     observed context-size drop, otherwise the event counts as a miss — then, on a landing or with no pending
+     observed context-size drop, otherwise the event counts as a miss [SUPERSEDED 2026-11-23: the ended event
+     is authoritative and lands without an estimate check] — then, on a landing or with no pending
      request, when the record is a LIVE ACTIVE loop (`loopEnabled` and
      `status === "active"`) — queues the re-anchor via `session.synthetic` with `delivery: "queue"` and
      `resume: false`. Queued, never a steer: it cannot wake an idle session behind the loop's back and cannot
@@ -1121,6 +1133,10 @@ Interpretation of the armed condition's accepted-vs-completed remainder: Workstr
 ways, but the `session.compaction.ended` path recorded one unconditionally — the host can complete a
 compaction that removes nothing ("Nothing to compact yet"), and the plugin counted that as a landing, so the
 loop re-armed on false evidence. Landing is now recorded only when the estimated context actually drops.
+
+Note (2026-11-23): this workstream's ended-event path was later superseded — an ended event is now
+authoritative and lands a pending request regardless of the size estimate, and the arm-time drop factor
+is 0.9 (`BOUNDARY_DROP_FACTOR`). The 0.6 and "evidence-based" text below is retained as history.
 
 114. Shared drop heuristic `contextDropped(pending, size)` (private, `src/runtime/controller.ts`): `size < 10_000`
     when the request carried no estimate, else `size <= max(10_000, floor(estimatedTokens × 0.6))` — the same

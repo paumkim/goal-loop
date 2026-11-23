@@ -657,6 +657,7 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) 
 // src/core/dossier.ts
 var GAP = "\u2014";
 var recordStatusCell = (status, positive, negative) => status === positive ? "yes" : status === negative ? "no" : "unknown";
+var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var conditionCellOf = (condition) => {
   const flat = (condition ?? "").replace(/\s+/g, " ").trim();
   return flat.length > 200 ? `${flat.slice(0, 200)}\u2026` : flat || GAP;
@@ -1128,7 +1129,6 @@ function verifyRecord(goal, probe) {
   }
   return { checks, unique: checks.length, mentions, present, missing, unknown };
 }
-var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell = (status) => recordStatusCell(status, "present", "missing");
 function verifyReportMarkdown(goal, verification, nowMs, directory) {
   const stamp = stampOf(nowMs);
@@ -1218,7 +1218,6 @@ function reachRecord(goal, probe) {
   }
   return { checks, unique: checks.length, mentions, ancestors, unreached, unknown };
 }
-var iterationList2 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
 function reachReportMarkdown(goal, reach, nowMs, directory) {
   const stamp = stampOf(nowMs);
@@ -1235,7 +1234,7 @@ function reachReportMarkdown(goal, reach, nowMs, directory) {
     "| --- | --- | --- |"
   ];
   for (const check of reach.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList2(check.iterations)} | ${statusCell2(check.status)} |`);
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell2(check.status)} |`);
   }
   if (reach.checks.length === 0)
     lines.push("| \u2014 | \u2014 | \u2014 |");
@@ -1309,7 +1308,6 @@ function signRecord(goal, probe) {
   }
   return { checks, unique: checks.length, mentions, verified, unverified, unknown };
 }
-var iterationList3 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var statusCell3 = (status) => recordStatusCell(status, "verified", "unverified");
 function signReportMarkdown(goal, sign, nowMs, directory) {
   const stamp = stampOf(nowMs);
@@ -1326,7 +1324,7 @@ function signReportMarkdown(goal, sign, nowMs, directory) {
     "| --- | --- | --- |"
   ];
   for (const check of sign.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList3(check.iterations)} | ${statusCell3(check.status)} |`);
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell3(check.status)} |`);
   }
   if (sign.checks.length === 0)
     lines.push("| \u2014 | \u2014 | \u2014 |");
@@ -1362,7 +1360,6 @@ var sealedDossierName = (nowMs, attempt = 0) => {
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
   return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`;
 };
-var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var verifyCell2 = (status) => recordStatusCell(status, "present", "missing");
 var reachCell = (status) => recordStatusCell(status, "ancestor", "unreached");
 var signCell = (status) => recordStatusCell(status, "verified", "unverified");
@@ -1403,7 +1400,7 @@ function attestationAppendix(_goal, verification, reach, sign, nowMs, directory)
   const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
   lines.push("| sha | iterations | exists | on this line | under seal |", "| --- | --- | --- | --- | --- |");
   for (const check of verification.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList4(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
+    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${verifyCell2(check.status)} | ${reachCell(reachStatus.get(check.sha) ?? "unknown")} | ${signCell(signStatus.get(check.sha) ?? "unknown")} |`);
   }
   const clean = cleanShaCount(verification, reach, sign);
   lines.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal)`, "", "A clean row is the strongest thing this appendix can say: the object resolves, it belongs to this line, and git verified a signature on it at seal time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. The loop that produced this record may be running right now; this file is a snapshot of its receipts at the moment it was written, and the stamp above travels with it.", "");
@@ -1483,7 +1480,6 @@ var reviewName = (nowMs, attempt = 0) => {
   const suffix = attempt > 0 ? `-${attempt + 1}` : "";
   return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`;
 };
-var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
 var verifyCell3 = (status) => recordStatusCell(status, "present", "missing");
 var reachCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
 var signCell2 = (status) => recordStatusCell(status, "verified", "unverified");
@@ -1533,7 +1529,7 @@ function buildReview(goal, directory, nowMs, probes = {}) {
   } else {
     appendix.push("| sha | quoted at | exists | on this line | under seal | verdict |", "| --- | --- | --- | --- | --- | --- |");
     for (const row of rows) {
-      appendix.push(`| ${row.shortSha} | ${iterationList5(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
+      appendix.push(`| ${row.shortSha} | ${iterationList(row.iterations)} | ${row.exists} | ${row.onThisLine} | ${row.underSeal} | ${row.verdict} |`);
     }
     appendix.push("", `- Existence: ${verification.present} of ${verification.unique} shas resolve (${verification.unknown} unknown \u2014 never counted as present)`, `- Ancestry: ${reach.ancestors} of ${reach.unique} shas on this line (${reach.unknown} unknown)`, `- Seal: ${sign.verified} of ${sign.unique} shas under seal (${sign.unverified} not under seal \u2014 not an accusation; ${sign.unknown} unknown)`, `- All three: ${clean} of ${verification.unique} shas clean (present \xB7 on this line \xB7 under seal) \xB7 ${gaps} with gaps \xB7 ${unknown} unverifiable`, "", "A clean row is the strongest thing this review can say: the object resolves, it belongs to this line, and git verified a signature on it at generation time. Anything short of that is not an accusation \u2014 existence is not ancestry, ancestry is not the seal, and most commits are unsigned. This file is a snapshot of the record's receipts at the moment it was written, and the stamp above travels with it. For a re-check weeks later, `goal.dossier.attest` answers whether what a sealed copy attests still holds.", "");
   }
