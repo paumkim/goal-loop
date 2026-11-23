@@ -11125,3 +11125,16 @@ rebuilt from source, TUI load, docs freshness, invariant-sweep and spec-check (`
 
 
 
+
+## Workstream CLXXXVII — drop the zero-reference `google-logging-utils` override (2026-11-23)
+
+Dependency cleanup. `package.json · overrides` pinned `google-logging-utils` to 1.2.0, but the literal
+package name has ZERO references in tracked source (`git grep -n -F google-logging-utils` over
+`*.ts/tsx/mjs/js/json`, excluding manifests and coordinator state → no hits). It is a transitive dedup
+pin, not a project dependency: no code imports or configures it. Removed the override key and
+regenerated `bun.lock` with `bun install --lockfile-only` (deterministic). `gcp-metadata` now resolves
+its own declared 1.1.3 and `google-auth-library` keeps 1.2.0 via `^1.0.0`; both are the natural
+same-major resolutions the overrides had suppressed. No source, test, dist, or API change. Full
+`bun run check` green: 2261 pass / 0 fail (2259 at this unit's base; the pill lease added two
+more), 29 snapshots, dist matches a fresh build, TUI plugin loads, docs/invariant-sweep/spec-check ok
+(`files=143 tests=2261`). Marker unchanged — no files or tests added by this unit.
