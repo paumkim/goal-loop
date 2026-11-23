@@ -5920,6 +5920,17 @@
       ],
       "mergedAt": "2026-11-23T04:44:33Z",
       "mergedInto": "dev"
+    },
+    "format-coarse-nonfinite-guard": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/format-coarse-nonfinite-guard",
+      "worktree": "worktree/wt-format-coarse-nonfinite-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T04:54:29Z",
+      "submittedAt": "2026-11-23T04:59:23Z",
+      "mergedAt": "2026-11-23T05:01:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
