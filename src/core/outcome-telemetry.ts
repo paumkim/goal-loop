@@ -7,7 +7,7 @@
  * Telemetry is advisory context for prompts, not a gate on any verdict.
  */
 import { memoizeBounded } from "./format.ts"
-import { formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries } from "./learning-log.ts"
+import { formatRecentLearnings, recentLearningsFromEntries } from "./learning-log.ts"
 import type { LearningEntry } from "./learning-log.ts"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
 import { isRecord } from "./wire.ts"
@@ -197,11 +197,6 @@ export function summarizeOutcomeTelemetry(entries: readonly LearningEntry[]): Ou
     ...(medianMs !== undefined ? { timeToGreen: { count: greenDurations.length, medianMs } } : { timeToGreen: { count: 0 } }),
     recurringConditions,
   }
-}
-
-/** Convenience: parse best-effort JSONL text and aggregate it in one call. */
-export function summarizeLearningText(text: string): OutcomeTelemetry {
-  return summarizeOutcomeTelemetry(parseLearningEntries(text))
 }
 
 function countLine(counts: Readonly<Record<string, number>>): string {
