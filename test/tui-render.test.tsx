@@ -1431,8 +1431,8 @@ describe("why ledger (the evaluator's most recent reasons, inline)", () => {
     expect(reasonLines.length).toBeGreaterThan(1) // the reason wrapped
     // the reason starts just past the 10-cell label gutter + 2-cell gap, not half-way across the dialog
     expect(Math.min(...reasonLines.map((line) => line.indexOf("read-only reconnaissance")))).toBeLessThanOrEqual(13)
-    // and reaches the right edge (only the copy affordance is reserved there)
-    expect(Math.max(...reasonLines.map((line) => line.trimEnd().length))).toBeGreaterThan(95)
+    // and reaches the right edge — the copy affordance sits on the metadata row, so no cell is reserved here
+    expect(Math.max(...reasonLines.map((line) => line.trimEnd().length))).toBeGreaterThan(105)
     await setup.renderer.destroy()
   })
 
@@ -1480,7 +1480,8 @@ describe("why ledger (the evaluator's most recent reasons, inline)", () => {
     await setup.mockMouse.click(at!.x + 4, at!.y)
     await setup.renderOnce()
     expect(calls).toEqual(["typecheck still fails on the CLI flag"])
-    expect(setup.captureCharFrame().split("\n")[at!.y]!).toContain("✓ copied")
+    // the ack rides the short furniture row, not the full-width reason line
+    expect(setup.captureCharFrame().split("\n").find((line) => line.includes("not met · turn 2"))!).toContain("✓ copied")
     await setup.renderer.destroy()
   })
 
@@ -1514,7 +1515,7 @@ describe("why ledger (the evaluator's most recent reasons, inline)", () => {
     await setup.mockMouse.click(at!.x + 4, at!.y)
     await setup.renderOnce()
     expect(calls).toEqual(["the full acceptance suite passes"])
-    const row = setup.captureCharFrame().split("\n")[at!.y]!
+    const row = setup.captureCharFrame().split("\n").find((line) => line.includes("met · turn 5"))!
     expect(row).toContain("+ copied")
     expect(row).not.toContain("✓ copied")
     await setup.renderer.destroy()

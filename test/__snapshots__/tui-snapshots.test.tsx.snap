@@ -589,12 +589,12 @@ v2          ✓  met · 6 turns · 23 tools · 15m 00s · ended 12m ago at 07:48
 │           │ Trail renders up to 24 verdicts.                                             copy     
 now         ◎  v3 · active · 15 turns · 12m elapsed   last ✗ 10 turns since                         
 trail       ✓✗✓✓✗   5 of 5 verdicts                                                                 
-why         ✓  met · turn 3 · 3m ago                                                                
-            done                                                                           copy     
-            ✓  met · turn 4 · 2m ago                                                                
-            done                                                                           copy     
-            ✗  not met · turn 5 · 1m ago                                                            
-            not yet                                                                        copy     
+why         ✓  met · turn 3 · 3m ago                                                       copy     
+            done                                                                                    
+            ✓  met · turn 4 · 2m ago                                                       copy     
+            done                                                                                    
+            ✗  not met · turn 5 · 1m ago                                                   copy     
+            not yet                                                                                 
                                                                                                     
 elsewhere   6 other sessions holding live goals · click a row to open its transcript                
 1           ●  brisk-falcon  v2/5     ship the deploy pipeline before f…              → transcript  
