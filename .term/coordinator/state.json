@@ -5882,8 +5882,24 @@
       "paths": "src/core/entries.ts,test/entries.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/entries-hotpath-fastpath",
       "worktree": "worktree/wt-entries-hotpath-fastpath",
+      "status": "done",
+      "createdAt": "2026-11-23T04:14:55Z",
+      "submittedAt": "2026-11-23T04:20:12Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T04:20:12Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-23T04:27:06Z",
+      "mergedInto": "dev"
+    },
+    "bounded-completion-condition": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/bounded-completion-condition",
+      "worktree": "worktree/wt-bounded-completion-condition",
       "status": "claimed",
-      "createdAt": "2026-11-23T04:14:55Z"
+      "createdAt": "2026-11-23T04:24:49Z"
     }
   },
   "mergeLock": null,
