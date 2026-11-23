@@ -37,9 +37,6 @@ export interface CommitPolicy {
   readonly worktreeDir?: string
 }
 
-/** The commit rule is off: nothing in the session's directory is a git repository. */
-export const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "not a git repository" }
-
 /** Live (resumable) statuses. `failed` and `cleared` are both terminal but distinct: `failed` means an unrecoverable error ended the goal, `cleared` means the user ended it. Neither is resumable. */
 const LIVE_STATUSES: ReadonlySet<GoalStatus> = new Set(["active", "paused"])
 

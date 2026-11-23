@@ -22,10 +22,12 @@ import {
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
 import { isEvaluatorReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
-import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
+import { EMPTY_USAGE, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
 
 const COMMIT: CommitPolicy = { required: true, branch: "dev", reason: "test" }
+/** Test-only fixture: the no-git policy is a stub for prompt assertions, not a production export. */
+const NO_COMMIT: CommitPolicy = { required: false, branch: "dev", mode: "direct", reason: "not a git repository" }
 
 describe("parseGoalCommand", () => {
   test("no arguments shows status", () => {

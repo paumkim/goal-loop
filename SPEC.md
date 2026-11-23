@@ -252,10 +252,21 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
   leaving the export orphaned. Removed the constant, its import and the tautological assertion. No behavior,
   gate or generated file change; the evaluator agent test still pins every real contract. Focused
   `plugin`/`core`/`evaluator` suites green, full check green, marker unchanged (no `test()` block removed).
-  Follow-ups recorded, not removed: `types.ts · NO_COMMIT` (zero production consumers but 19 test fixture call
-  sites), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test
-  scope). `outcome-telemetry.ts · summarizeLearningText`, `scripts/repro-loop-cap.tsx` and
-  `evaluator-agent.ts · conditionEchoMatches` were later follow-ups and are now removed below.
+  Follow-ups recorded at the time (all now removed): `types.ts · NO_COMMIT` (zero production consumers but
+  19 test fixture call sites), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream
+  LXX, larger grammar-test scope). `outcome-telemetry.ts · summarizeLearningText`,
+  `scripts/repro-loop-cap.tsx` and `evaluator-agent.ts · conditionEchoMatches` were later follow-ups and
+  are also removed.
+
+- Dead export removal (`dead-note-formatter-and-no-commit`, 2026-11-23): `note()` and `TERMINAL_NOTE_TAG` in
+  `src/core/prompts.ts` had no production importer — note dispatch was retired in workstream LXX and the context
+  hook matches the `<goal-note` / `<goal-note final>` literals directly — and `NO_COMMIT` in `src/core/types.ts`
+  had zero production importers, only 19 prompt-assertion fixture call sites in `test/core.test.ts`. Removed all
+  three exports; the grammar-history comment moved onto `isGoalNoteMessage`, `test/notes.test.ts` now builds
+  local literal fixtures so every matcher case keeps its exact bytes, and `test/core.test.ts` defines its own
+  `NO_COMMIT` fixture beside the existing `COMMIT` one. Dropped only the three tautological tests of the deleted
+  formatter; marker re-counted 2342 -> 2339. No runtime behavior, gate or shipped file changed. Focused
+  `notes`/`core` suites and full check green.
 
 - Dead wrapper removal (`dead-summarize-learning-text`, 2026-11-23): `summarizeLearningText` in
   `src/core/outcome-telemetry.ts` was a three-line convenience wrapper over
@@ -592,7 +603,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2342 -->
+<!-- spec-check files=144 tests=2339 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1365,7 +1376,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   and drives TUI rendering).
   Resolution: Workstream XXXV — `loopHistory` is bounded (`MAX_LOOP_HISTORY_ENTRIES = 50`, drops counted on `loopHistoryDropped`); the
   persisted record and every snapshot clone are now O(bounded). This finding's "waive" stand was superseded when the cap landed.
-- **A-13 (low) — `src/core/types.ts:355` — stale comment: "Consecutive iterations with zero tool calls; two pause the loop."** Armed
+- **A-13 (low) — `src/core/types.ts:352` — stale comment: "Consecutive iterations with zero tool calls; two pause the loop."** Armed
   loops never pause (recorded, never a pause, one notice). Stale comment contradicts the never-pause policy and `loop.test.ts`.
   Proposed fix: rewrite the comment.
   Resolution: Workstream AN — comment rewritten to match the never-pause policy.

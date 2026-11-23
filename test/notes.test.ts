@@ -4,31 +4,22 @@
  * These tests pin the grammar and the context-hook predicate.
  */
 import { describe, expect, test } from "bun:test"
-import { note, isGoalNoteMessage, stripGoalNotes, TERMINAL_NOTE_TAG, isGoalInstructionMessage, stripGoalContext, carriesGoalGrammar, TERMINAL_REMINDER, isGoalEvaluationMessage, stripGoalEvaluations } from "../src/core/prompts.ts"
+import { isGoalNoteMessage, stripGoalNotes, isGoalInstructionMessage, stripGoalContext, carriesGoalGrammar, TERMINAL_REMINDER, isGoalEvaluationMessage, stripGoalEvaluations } from "../src/core/prompts.ts"
 
 const textMessage = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
-
-describe("note()", () => {
-  test("plain notes keep the legacy wrapper", () => {
-    expect(note({ title: "t", body: "b" })).toBe("<goal-note>\nt\nb\n</goal-note>")
-  })
-  test("final notes carry the terminal tag", () => {
-    expect(note({ title: "t", body: "b", final: true })).toBe(`${TERMINAL_NOTE_TAG}\nt\nb\n</goal-note>`)
-  })
-  test("non-final final-tagged notes are impossible — final is the only difference", () => {
-    expect(note({ title: "t", body: "b", final: false })).not.toContain(TERMINAL_NOTE_TAG)
-  })
-})
+/** Grammar fixtures: the matchers must accept the exact bytes the host paints, tag and all. */
+const terminalNote = (title: string, body: string) => `<goal-note final>\n${title}\n${body}\n</goal-note>`
+const plainNote = (title: string, body: string) => `<goal-note>\n${title}\n${body}\n</goal-note>`
 
 describe("isGoalNoteMessage", () => {
   test("matches a user message whose text part carries the terminal tag", () => {
-    expect(isGoalNoteMessage(textMessage(note({ title: "Goal achieved (turn 1, 7m 21s).", body: "done", final: true })))).toBe(true)
+    expect(isGoalNoteMessage(textMessage(terminalNote("Goal achieved (turn 1, 7m 21s).", "done")))).toBe(true)
   })
   test("matches a plain loop-advance note too (legacy notes must leave the context)", () => {
-    expect(isGoalNoteMessage(textMessage(note({ title: "Loop 2 of 5 achieved", body: "v3 armed" })))).toBe(true)
+    expect(isGoalNoteMessage(textMessage(plainNote("Loop 2 of 5 achieved", "v3 armed")))).toBe(true)
   })
   test("ignores non-text parts even with a similar payload shape", () => {
-    expect(isGoalNoteMessage({ role: "user", content: [{ type: "media", text: TERMINAL_NOTE_TAG }] })).toBe(false)
+    expect(isGoalNoteMessage({ role: "user", content: [{ type: "media", text: "<goal-note final>" }] })).toBe(false)
   })
   test("ignores malformed messages", () => {
     expect(isGoalNoteMessage(null)).toBe(false)
@@ -40,7 +31,7 @@ describe("isGoalNoteMessage", () => {
     expect(isGoalNoteMessage({ content: [null, { type: "text" }, 42] })).toBe(false)
   })
   test("matches when any of several parts is a goal note of either kind", () => {
-    const message = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: `${TERMINAL_NOTE_TAG}\nx\n` }] }
+    const message = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: "<goal-note final>\nx\n" }] }
     expect(isGoalNoteMessage(message)).toBe(true)
     const plain = { role: "user", content: [{ type: "text", text: "hello" }, { type: "text", text: "<goal-note>\ny\n" }] }
     expect(isGoalNoteMessage(plain)).toBe(true)
@@ -63,9 +54,9 @@ describe("isGoalNoteMessage", () => {
 describe("stripGoalNotes", () => {
   test("drops goal notes of either kind, preserves order and the input array", () => {
     const keep1 = textMessage("user task")
-    const drop1 = textMessage(note({ title: "Goal achieved", body: "done", final: true }))
+    const drop1 = textMessage(terminalNote("Goal achieved", "done"))
     const keep2 = textMessage("assistant answer")
-    const drop2 = textMessage(note({ title: "Loop 1 of 3 achieved", body: "v2 armed" }))
+    const drop2 = textMessage(plainNote("Loop 1 of 3 achieved", "v2 armed"))
     const input = [keep1, drop1, keep2, drop2]
     expect(stripGoalNotes(input)).toEqual([keep1, keep2])
     expect(input).toHaveLength(4)

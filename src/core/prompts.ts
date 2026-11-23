@@ -399,26 +399,6 @@ export function checkin(
   ].join("\n")
 }
 
-/**
- * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
- * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
- * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
- * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
- * hook matches on (see `stripGoalNotes`). Since Workstream LI (2026-11-18) the loop-arm note is emitted
- * terminal too, and since Workstream LII (2026-11-18) the hook strips plain `<goal-note>` messages as
- * well — legacy plain notes (emitted before LI) were folded into the model's context on every later
- * request forever (the reported "false reminder after already achieved"), and a plain `<goal-note>` is a
- * goal outcome line, never an instruction. No goal note of either kind rides model-bound context any more;
- * both remain on the terminal and in the log.
- */
-export const TERMINAL_NOTE_TAG = "<goal-note final>"
-
-export function note(input: { title: string; body: string; final?: boolean }): string {
-  return input.final
-    ? `${TERMINAL_NOTE_TAG}\n${input.title}\n${escape(input.body)}\n</goal-note>`
-    : `<goal-note>\n${input.title}\n${escape(input.body)}\n</goal-note>`
-}
-
 /** Structural view of a model-bound message: the `context` hook sees host-shaped messages, so match on the text content parts rather than any metadata the host may or may not propagate. */
 interface NoteMessageLike {
   readonly content?: unknown
@@ -441,7 +421,21 @@ const isCheckpointPart = (part: unknown): boolean => {
 /** True when any content part carries the compaction-checkpoint marker. */
 const isCompactionCheckpoint = (content: ReadonlyArray<unknown>): boolean => content.some(isCheckpointPart)
 
-/** True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown shapes never match, and a compaction checkpoint is history, never a note. */
+/**
+ * The end-of-record companion to `<goal-note>`: a terminal note (the goal achieved, was judged
+ * impossible, or the loop completed) is history, not instructions. The session keeps it — it stays on
+ * the terminal as the outcome line — but it must not ride the model's context on later turns, where it
+ * only invites a ceremonial acknowledgement. `<goal-note final>` is the stable grammar the context
+ * hook matches on (see `stripGoalNotes`). Since Workstream LI (2026-11-18) the loop-arm note is emitted
+ * terminal too, and since Workstream LII (2026-11-18) the hook strips plain `<goal-note>` messages as
+ * well — legacy plain notes (emitted before LI) were folded into the model's context on every later
+ * request forever (the reported "false reminder after already achieved"), and a plain `<goal-note>` is a
+ * goal outcome line, never an instruction. No goal note of either kind rides model-bound context any more;
+ * both remain on the terminal and in the log.
+ *
+ * True when any text content part carries a goal note of either kind (`<goal-note` prefix). Unknown
+ * shapes never match, and a compaction checkpoint is history, never a note.
+ */
 export const isGoalNoteMessage = (message: unknown): boolean => {
   if (typeof message !== "object" || message === null) return false
   const content = (message as NoteMessageLike).content
