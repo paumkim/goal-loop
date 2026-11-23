@@ -263,6 +263,8 @@ function formatSpend(spend, maxWidth = Number.POSITIVE_INFINITY) {
   if (spend.cacheRead > 0)
     parts.push(`${formatTokens(spend.cacheRead)} cached`);
   const join = (tokens) => [...tokens, ...cost ? [cost] : []].join(" \xB7 ");
+  if (maxWidth === Number.POSITIVE_INFINITY)
+    return join(parts);
   let tokens = parts;
   let out = join(tokens);
   while (tokens.length > 0 && cellWidth(out) > maxWidth) {

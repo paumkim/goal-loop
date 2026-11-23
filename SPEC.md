@@ -507,6 +507,7 @@ Interpretation of the armed condition: six systemic weaknesses of the `/goal-loo
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
 <!-- spec-check files=143 tests=2285 -->
+<!-- spec-check files=143 tests=2284 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
