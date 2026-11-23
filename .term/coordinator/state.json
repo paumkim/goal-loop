@@ -5898,8 +5898,19 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "branch": "wt/bounded-completion-condition",
       "worktree": "worktree/wt-bounded-completion-condition",
+      "status": "done",
+      "createdAt": "2026-11-23T04:24:49Z",
+      "submittedAt": "2026-11-23T04:30:10Z",
+      "mergedAt": "2026-11-23T04:32:32Z",
+      "mergedInto": "dev"
+    },
+    "format-spend-fastpath": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,test/format-spend.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/format-spend-fastpath",
+      "worktree": "worktree/wt-format-spend-fastpath",
       "status": "claimed",
-      "createdAt": "2026-11-23T04:24:49Z"
+      "createdAt": "2026-11-23T04:31:27Z"
     }
   },
   "mergeLock": null,
