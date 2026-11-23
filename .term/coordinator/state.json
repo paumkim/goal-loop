@@ -6214,6 +6214,17 @@
       "submittedAt": "2026-11-23T09:16:57Z",
       "mergedAt": "2026-11-23T09:19:06Z",
       "mergedInto": "dev"
+    },
+    "dead-subagent-prompt-prefix": {
+      "agent": "orchestrator",
+      "paths": "src/core/evaluator-agent.ts,test/plugin.test.ts,SPEC.md,docs",
+      "branch": "wt/dead-subagent-prompt-prefix",
+      "worktree": "worktree/wt-dead-subagent-prompt-prefix",
+      "status": "done",
+      "createdAt": "2026-11-23T09:46:35Z",
+      "submittedAt": "2026-11-23T09:51:27Z",
+      "mergedAt": "2026-11-23T09:53:38Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
