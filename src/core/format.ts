@@ -7,11 +7,13 @@ import stringWidth from "string-width"
  * cap recomputes, which is safe because the transform is pure — no output changes.
  */
 export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A) => R {
-  const cache = new Map<A, R>()
+  // Wrap the value so a cached `undefined` is distinguishable from a miss with a single lookup.
+  const cache = new Map<A, { readonly value: R }>()
   return (arg: A): R => {
-    if (cache.has(arg)) return cache.get(arg) as R
+    const hit = cache.get(arg)
+    if (hit !== undefined) return hit.value
     const result = fn(arg)
-    if (cache.size < limit) cache.set(arg, result)
+    if (cache.size < limit) cache.set(arg, { value: result })
     return result
   }
 }
@@ -22,15 +24,7 @@ export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A)
  * Cache hits are pure lookups. Bounded so a long session cannot grow the map without limit; an
  * evicted string is simply recomputed, which yields the same number.
  */
-const WIDTH_CACHE_LIMIT = 4096
-const widthCache = new Map<string, number>()
-export const cellWidth = (text: string): number => {
-  const hit = widthCache.get(text)
-  if (hit !== undefined) return hit
-  const width = stringWidth(text)
-  if (widthCache.size < WIDTH_CACHE_LIMIT) widthCache.set(text, width)
-  return width
-}
+export const cellWidth = memoizeBounded((text: string): number => stringWidth(text), 4096)
 import { COMPACT_MISS_CAP } from "./types.ts"
 import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 

@@ -11061,3 +11061,18 @@ module `src/core/workflow.ts` and its two internal call sites are unchanged. Evi
 `import ... from bootstrap.ts`. `tsc --noEmit` clean; focused suite (bootstrap) 18 pass / 0 fail;
 full suite 2257 pass / 0 fail. No behavior or public runtime surface change. Marker unchanged at
 `files=143 tests=2257` — no new tests.
+
+## Workstream CLXXXIII — one memo mechanism across the pure hot helpers (2026-11-23)
+
+Follow-up to CLXXXI. `sanitize.ts · probe`, `evaluator-agent.ts · normalizeEcho`, `find.ts · fold` and
+`format.ts · cellWidth` each still carried a private `Map` plus a hand-written hit/limit check — the
+same mechanism the shared `memoizeBounded` now provides. All four now call it with their existing
+caps (2048/2048/8192/4096). The helper was tightened to one `get` per hit using a value wrapper, so a
+cached `undefined` still reads as a hit; the extra wrapper allocation happens only on bounded misses.
+
+Net effect: 12 insertions / 39 deletions across four modules. Outputs unchanged: focused suites
+(find, sanitize, evaluator-agent-foreign, truncate-cache, cell-width) 38 pass / 0 fail, 409 expect()
+calls; `tsc --noEmit` clean. Measured hot sweeps before -> after (best of 20, 400 lines x 200):
+`cellWidth 0.29 -> 0.28 ms`, `findMatches 1.54 -> 1.47 ms`, `stripReasoningControl 30.91 -> 30.41 ms`,
+`truncate 0.86 -> 0.82 ms` — no regression, differences within noise. Marker unchanged at
+`files=143 tests=2257` — no new tests, no shipped-file change.

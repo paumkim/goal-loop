@@ -182,17 +182,19 @@ var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.l
 var TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // src/core/format.ts
-var WIDTH_CACHE_LIMIT = 4096;
-var widthCache = new Map;
-var cellWidth = (text) => {
-  const hit = widthCache.get(text);
-  if (hit !== undefined)
-    return hit;
-  const width = stringWidth(text);
-  if (widthCache.size < WIDTH_CACHE_LIMIT)
-    widthCache.set(text, width);
-  return width;
-};
+function memoizeBounded(fn, limit) {
+  const cache = new Map;
+  return (arg) => {
+    const hit = cache.get(arg);
+    if (hit !== undefined)
+      return hit.value;
+    const result = fn(arg);
+    if (cache.size < limit)
+      cache.set(arg, { value: result });
+    return result;
+  };
+}
+var cellWidth = memoizeBounded((text) => stringWidth(text), 4096);
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
 function wrapLines(text, width) {
   const max = Math.max(1, Math.floor(width));
@@ -2014,17 +2016,7 @@ import { For as For2, Show as Show2, createEffect, createMemo as createMemo2, cr
 import { TextAttributes as TextAttributes3 } from "@opentui/core";
 
 // src/core/find.ts
-var FOLD_CACHE_LIMIT = 8192;
-var foldCache = new Map;
-var fold = (text) => {
-  const hit = foldCache.get(text);
-  if (hit !== undefined)
-    return hit;
-  const folded = text.toLowerCase();
-  if (foldCache.size < FOLD_CACHE_LIMIT)
-    foldCache.set(text, folded);
-  return folded;
-};
+var fold = memoizeBounded((text) => text.toLowerCase(), 8192);
 var contains = (foldText, foldQuery) => foldText.includes(foldQuery);
 var isBlank = (query) => query.trim().length === 0;
 var findMatches = (texts, query) => {

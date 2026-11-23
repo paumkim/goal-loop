@@ -14,6 +14,7 @@
  */
 
 /** One piece of a line, flagged for the paint. Segments always tile the original text in order. */
+import { memoizeBounded } from "./format.ts"
 interface FindSegment {
   readonly text: string
   readonly match: boolean
@@ -25,15 +26,7 @@ interface FindSegment {
  * times. `toLowerCase` is pure, so a bounded memo is output-identical; a miss recomputes, a hit is
  * a lookup. Bounded so a long session cannot grow the map without limit.
  */
-const FOLD_CACHE_LIMIT = 8192
-const foldCache = new Map<string, string>()
-const fold = (text: string): string => {
-  const hit = foldCache.get(text)
-  if (hit !== undefined) return hit
-  const folded = text.toLowerCase()
-  if (foldCache.size < FOLD_CACHE_LIMIT) foldCache.set(text, folded)
-  return folded
-}
+const fold = memoizeBounded((text: string): string => text.toLowerCase(), 8192)
 
 const contains = (foldText: string, foldQuery: string): boolean => foldText.includes(foldQuery)
 

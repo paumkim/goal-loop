@@ -27,6 +27,7 @@
  *  4. Drop any leftover stray closing tag, then trim.
  */
 
+import { memoizeBounded } from "./format.ts"
 const TAG_NAME = String.raw`(?:[A-Za-z][A-Za-z0-9_-]*:)?(?:think(?:ing)?|reasoning|thought)`
 const PAIRED_RE = new RegExp(String.raw`<${TAG_NAME}>[\s\S]*?</${TAG_NAME}>`, "gi")
 const OPEN_RE = new RegExp(String.raw`<${TAG_NAME}>`, "gi")
@@ -39,15 +40,7 @@ const MAX_PASSES = 8
  * the same halves recur when the filter is applied to streamed/duplicated reasoning. `probe` is pure,
  * so a bounded memo keyed by the raw half turns a repeat into one lookup.
  */
-const PROBE_CACHE_LIMIT = 2048
-const probeCache = new Map<string, string>()
-const probe = (value: string): string => {
-  const hit = probeCache.get(value)
-  if (hit !== undefined) return hit
-  const result = value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")
-  if (probeCache.size < PROBE_CACHE_LIMIT) probeCache.set(value, result)
-  return result
-}
+const probe = memoizeBounded((value: string): string => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""), 2048)
 
 export function stripReasoningControl(text: string): string {
   let current = text
