@@ -6176,8 +6176,19 @@
       "paths": "README.md",
       "branch": "wt/readme-badge-2317",
       "worktree": "worktree/wt-readme-badge-2317",
+      "status": "done",
+      "createdAt": "2026-11-23T08:33:00Z",
+      "submittedAt": "2026-11-23T08:36:15Z",
+      "mergedAt": "2026-11-23T08:42:38Z",
+      "mergedInto": "dev"
+    },
+    "lease-first-judge-enforcement": {
+      "agent": "loop-worker",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/lease-first-judge-enforcement",
+      "worktree": "worktree/wt-lease-first-judge-enforcement",
       "status": "claimed",
-      "createdAt": "2026-11-23T08:33:00Z"
+      "createdAt": "2026-11-23T08:39:46Z"
     }
   },
   "mergeLock": null,
