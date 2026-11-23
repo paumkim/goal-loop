@@ -64,7 +64,7 @@ export const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set([
 
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
-export type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
+type VerifyCheckRunState = "executed" | "artifact" | "reused" | "skipped"
 
 /** Runtime counterparts of the verify unions above. One home, consumed by config, verify-matrix and wire. */
 export const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])

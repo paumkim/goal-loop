@@ -11026,3 +11026,13 @@ Correctness: `test/truncate-cache.test.ts` compares cold and warm results agains
 oracle across custom ellipses, CJK, emoji, combining marks and limit edges (162 expect() calls);
 focused suites (truncate-cache, format, tui-hud, tui-hud-width-measure) 182 pass / 0 fail. `tsc
 --noEmit` clean. No new tests; merged marker `files=143 tests=2257`.
+
+## Workstream CLXXX — drop an unused verify-run-state type export (2026-11-23)
+
+Dead-export cleanup found by a repo-wide scan for exported symbols with zero importers:
+`VerifyCheckRunState` in `src/core/types.ts` was exported but used only inside that same module, by
+`VerifyCheckEvidence.runState`. Removed the `export` keyword; the union, the interface field and all
+runtime sets are unchanged. Evidence: `grep -rn VerifyCheckRunState src test scripts` → definition +
+one same-module use before and after. `tsc --noEmit` clean; focused suites (verify-matrix-goal-declared,
+wire) 53 pass / 0 fail. No behavior or public runtime surface change. Marker unchanged at
+`files=143 tests=2257` — no new tests.
