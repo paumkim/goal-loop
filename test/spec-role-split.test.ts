@@ -31,6 +31,11 @@ describe("SPEC role split", () => {
     expect(spec).toContain("## Recent workstreams")
     // The glyph pins read everything before this heading; keep the intro ahead of it.
     expect(spec.split("\n## Acceptance criteria")[0]!).toContain("◦ ○ ◎ ○")
+    // "Short" recent section: keep it a rolling window, not a second archive.
+    const recent = spec.split("\n## Recent workstreams")[1]?.split("\n## Historical workstreams")[0] ?? ""
+    const recentCount = recent.split("\n").filter((line) => /^## Workstream(?:\s|:)/.test(line)).length
+    expect(recentCount).toBeGreaterThan(0)
+    expect(recentCount).toBeLessThanOrEqual(15)
   })
 
   test("SPEC.md points readers at the historical archive", () => {
@@ -42,6 +47,8 @@ describe("SPEC role split", () => {
     const inArchive = workstreamHeadings(archive)
     expect(inSpec.length).toBeGreaterThan(0)
     expect(inArchive.length).toBeGreaterThan(0)
+    // Pin the total so a heading silently deleted from both files cannot pass the disjointness check.
+    expect(inSpec.length + inArchive.length).toBeGreaterThanOrEqual(370)
     const duplicates = inSpec.filter((heading) => inArchive.includes(heading))
     expect(duplicates).toEqual([])
     expect(new Set(inSpec).size).toBe(inSpec.length)
