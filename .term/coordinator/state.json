@@ -6334,6 +6334,25 @@
       "submittedAt": "2026-11-23T12:19:29Z",
       "mergedAt": "2026-11-23T12:21:42Z",
       "mergedInto": "dev"
+    },
+    "error-handling-audit": {
+      "agent": "build-orchestrator",
+      "paths": "src/core/errors.ts,src/runtime,test",
+      "branch": "wt/error-handling-audit",
+      "worktree": "worktree/wt-error-handling-audit",
+      "status": "done",
+      "createdAt": "2026-11-23T12:38:02Z",
+      "submittedAt": "2026-11-23T12:50:21Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T12:50:21Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js",
+        "src/tui-error.ts",
+        "src/tui.tsx"
+      ],
+      "mergedAt": "2026-11-23T12:52:47Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
