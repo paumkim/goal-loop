@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2294 -->
+<!-- spec-check files=143 tests=2297 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1492,6 +1492,19 @@ finite input is byte-identical to the old formatting.
 Verification: new regression in `test/core.test.ts` pins NaN and both infinities to `0`/`$0` for both
 formatters, plus a finite-value oracle across the token/cost ladders. Focused suite 180 pass / 0 fail,
 177343 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
+shipped file added or removed.
+
+## Workstream CCI — non-finite guard on the usage delta (diff-usage-finite-guard) (2026-11-23)
+
+Host-reported usage reaches `diffUsage` through `toUsage()`, which fills only *missing* fields with
+zero — it does not validate finiteness (the wire `isUsageSnapshot` guard applies to records, not to
+this live host reading). A NaN/Infinity cost or token field therefore became a NaN delta in the record
+and the spend ledger. The clamp now returns zero when either side is non-finite; every finite input
+is byte-identical to the old `Math.max(0, a - b)`.
+
+Verification: new regression in `test/core.test.ts` pins NaN and both infinities on either side of the
+delta to zero, plus a finite-value oracle across all six fields. Focused suite 183 pass / 0 fail,
+177346 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
 shipped file added or removed.
 
 ## Historical workstreams
