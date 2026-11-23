@@ -5412,6 +5412,38 @@
       "submittedAt": "2026-11-23T00:01:42Z",
       "mergedAt": "2026-11-23T00:03:49Z",
       "mergedInto": "dev"
+    },
+    "verdict-regex-once": {
+      "agent": "build-agent",
+      "paths": "src/core/evaluator-agent.ts,test/core.test.ts",
+      "branch": "wt/verdict-regex-once",
+      "worktree": "worktrees/wt-verdict-regex-once",
+      "status": "done",
+      "createdAt": "2026-11-23T00:04:00Z",
+      "submittedAt": "2026-11-23T00:07:10Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T00:07:10Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-23T00:09:13Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-request-stripped-by-goal-grammar": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/evaluator-request-context.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-request-stripped-by-goal-grammar",
+      "worktree": "worktrees/wt-evaluator-request-stripped-by-goal-grammar",
+      "status": "claimed",
+      "createdAt": "2026-11-23T00:06:04Z"
+    },
+    "learning-log-dead-verify": {
+      "agent": "loop-worker",
+      "paths": "src/core/learning-log.ts,test/learning-log.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/learning-log-dead-verify",
+      "worktree": "worktrees/wt-learning-log-dead-verify",
+      "status": "claimed",
+      "createdAt": "2026-11-23T00:08:44Z"
     }
   },
   "mergeLock": null,
