@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2242 -->
+<!-- spec-check files=143 tests=2243 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10793,3 +10793,19 @@ New regression test in `test/core.test.ts` pins the exact stale-condition error 
 matched by `/judged a stale condition/`), the JSON-ish alias-fallback path, and the unchanged
 no-expected-condition path. Focused suite 172 pass / 0 fail (was 171). Typecheck clean.
 Marker `tests=2241 -> 2242`.
+
+
+## Workstream CLXIV — drop the unreachable isRecord re-check in outcome telemetry (2026-11-22)
+
+Repo improvement pass, dead-code unit. Closes backlog item `outcome-telemetry-redundant-record-guard`.
+
+`src/core/outcome-telemetry.ts · summarizeOutcomeTelemetry` opens its first loop with
+`if (!isRecord(entry)) continue`, which narrows `entry` to a record for the whole body. Line 139 then
+re-checked `isRecord(entry)` inside the `turn_verdict` branch and fed `undefined` to `normalizeReason`
+on the false arm — unreachable. Dropped the re-check and call `normalizeReason(asString(entry.reason))`
+directly, matching the sibling `entry.condition` use in the same loop. `tsc --noEmit` confirms the
+narrowing holds with no cast. No behavior change.
+
+New regression test in `test/outcome-telemetry.test.ts` feeds a plain-object `turn_verdict` with
+`verdict=not_met` and asserts its reason still lands in `failureThemes`. Focused suite 15 pass / 0 fail
+(was 14). Marker `tests=2242 -> 2243`.
