@@ -5799,8 +5799,25 @@
       "paths": "src/core/dossier.ts,src/core/verify-record.ts,src/core/reach-record.ts,src/core/sign-record.ts,src/core/dossier-attest.ts,src/core/dossier-review.ts,src/core/dossier-seal.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/record-status-cell-unify",
       "worktree": "worktrees/wt-record-status-cell-unify",
+      "status": "done",
+      "createdAt": "2026-11-23T03:16:28Z",
+      "submittedAt": "2026-11-23T03:24:00Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T03:24:00Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/dossier.test.ts"
+      ],
+      "mergedAt": "2026-11-23T03:26:08Z",
+      "mergedInto": "dev"
+    },
+    "worktree-dir-rename": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,packages/coordinator/README.md,src/core/git.ts,src/core/workflow.ts,src/core/types.ts,src/core/bootstrap.ts,scripts/spec-check.ts,test,.gitignore,.term/coordinator/config.json,AGENTS.md,docs/parallel-work.md,docs/core.html,docs/index.html,docs/install.html,SPEC.md,README.md,MAINTAINER.md,RELEASE-CHECKLIST.md,prompts,dist/tui.js",
+      "branch": "wt/worktree-dir-rename",
+      "worktree": "worktrees/wt-worktree-dir-rename",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:16:28Z"
+      "createdAt": "2026-11-23T03:18:29Z"
     }
   },
   "mergeLock": null,
