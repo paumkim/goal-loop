@@ -5662,6 +5662,17 @@
       ],
       "mergedAt": "2026-11-23T01:57:55Z",
       "mergedInto": "dev"
+    },
+    "dead-verify-run-state-export": {
+      "agent": "loop-worker",
+      "paths": "src/core/types.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/dead-verify-run-state-export",
+      "worktree": "worktrees/wt-dead-verify-run-state-export",
+      "status": "done",
+      "createdAt": "2026-11-23T02:03:23Z",
+      "submittedAt": "2026-11-23T02:06:44Z",
+      "mergedAt": "2026-11-23T02:08:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
