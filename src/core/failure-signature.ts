@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { normalizeConditionText } from "./format.ts"
@@ -113,7 +114,7 @@ export function failureEscalationReason(detected: RepeatedFailureSignature): str
   return [
     `Repeated failure signature detected (${detected.count} consecutive not_met evaluations, same ${detected.kind} pattern): ${detected.summary}.`,
     `Escalation required instead of re-arming the same approach: rotate strategy (narrow scope, change approach), produce a diagnostic artifact with concrete evidence of the blocker, or mark blocked with the blocking cause.`,
-    `Do not repeat the same failing strategy. Send a message after changing strategy/evidence to resume, or /goal clear.`,
+    `The goal stays active: the next turn rotates to a different strategy automatically, no user message needed. The diagnostic artifact records the evidence behind this escalation.`,
   ].join(" ")
 }
 
@@ -261,10 +262,14 @@ const ensuredDiagnosticsDirs = new Set<string>()
 
 function writeFailureDiagnosticArtifact(dir: string, artifact: RepeatedFailureDiagnosticArtifact): string {
   const diagnosticsDir = join(dir, ".term", "goal-loop", "diagnostics")
-  const stamp = artifact.at.replace(/[:.]/g, "-")
+  // A proactive loop escalates on every not_met turn, so a timestamped name wrote one file per turn —
+  // 433 files accumulated for a single repeated signature. Key the name by (session, signature) instead:
+  // a digest of the full signature keeps distinct failures distinct while capping the set at one file
+  // per signature per session. Each escalation overwrites that file with the latest count/turn/at.
+  // Pre-existing timestamped artifacts are left in place; nothing is deleted.
   const session = safeToken(artifact.sessionID ?? "session")
-  const turn = typeof artifact.turn === "number" ? `-t${artifact.turn}` : ""
-  const name = `${stamp}-${session}${turn}-repeated-failure.json`
+  const fingerprint = createHash("sha256").update(artifact.signature).digest("hex").slice(0, 12)
+  const name = `${session}-${fingerprint}-repeated-failure.json`
   const file = join(diagnosticsDir, name)
   const body = JSON.stringify(artifact, null, 2) + "\n"
   try {

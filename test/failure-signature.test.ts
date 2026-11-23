@@ -392,12 +392,49 @@ describe("repeated failure diagnostic artifacts", () => {
     const files = await readdir(join(dir, ".term", "goal-loop", "diagnostics"))
     expect(files.length).toBe(1)
     expect(files[0]).toContain("ses_diag")
-    expect(files[0]).toContain("-t5-")
+    expect(files[0]).toContain("-repeated-failure.json")
     const saved = JSON.parse(await readFile(file!, "utf8"))
     expect(saved.signature).toBe(detected.signature)
     expect(saved.count).toBe(3)
     expect(saved.reason).toContain("diagnostic artifact")
     expect(Array.isArray(saved.failingChecks)).toBe(true)
     expect(saved.verdictReason).toBe("same missing evidence")
+  })
+
+  test("a stuck streak overwrites one artifact per (session, signature) instead of one file per turn", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "goal-loop-diag-bound-"))
+    dirs.push(dir)
+    const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
+    const write = (reason: string, count: number, turn: number, atMs: number) => {
+      const info = notMet(reason)
+      return persistFailureDiagnosticArtifact({
+        directory: dir,
+        detected: { signature: `reason:${reason}`, count, kind: "reason", summary: `repeated not_met gap: ${reason}` },
+        escalationReason: failureEscalationReason({ signature: `reason:${reason}`, count, kind: "reason", summary: `repeated not_met gap: ${reason}` }),
+        info,
+        atMs,
+        turn,
+        sessionID: "ses_bound",
+        goalID: "goal_bound",
+        condition: "fix it",
+      })!
+    }
+    // Independent oracle: 12 escalations of one signature and 3 of another must leave exactly 2 files,
+    // not 15. Each write carries the latest count/turn/at in the one surviving artifact.
+    const first = write("same gap", 3, 3, 1_700_000_000_000)
+    for (let turn = 4; turn <= 14; turn++) write("same gap", turn, turn, 1_700_000_000_000 + turn * 1000)
+    const other = write("different gap", 3, 5, 1_700_000_000_000)
+    const files = await readdir(diagDir)
+    expect(files.length).toBe(2)
+    expect(files).toContain(first.split("/").at(-1)!)
+    expect(files).toContain(other.split("/").at(-1)!)
+    expect(first).not.toBe(other)
+    const saved = JSON.parse(await readFile(first, "utf8"))
+    expect(saved.count).toBe(14)
+    expect(saved.turn).toBe(14)
+    expect(saved.signature).toBe("reason:same gap")
+    // Repeating the same session/signature returns the same path — the steer cites a stable artifact.
+    expect(write("same gap", 15, 15, 1_700_000_000_000)).toBe(first)
+    expect(await readdir(diagDir)).toHaveLength(2)
   })
 })
