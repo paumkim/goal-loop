@@ -313,6 +313,43 @@ export function continuation(input: { condition: string; turn: number; reason: s
   ].join("\n")
 }
 
+/**
+ * Proactive escalation steer for a recurring failure signature. Replaces the old "pause and wait for the
+ * user" path: the goal stays active and the worker is handed a concrete, rotated strategy plus the persisted
+ * diagnostic artifact. `rotate strategy` wording is kept so the evaluator rubric and the diagnostic reason
+ * stay consistent with the escalation they are judging.
+ */
+export function strategyEscalation(input: {
+  condition: string
+  turn: number
+  reason: string
+  count: number
+  kind: string
+  summary: string
+  strategy: string
+  diagnostic?: string
+  learnings?: string
+}, policy: CommitPolicy): string {
+  const learnings = input.learnings?.trim()
+  return [
+    `<goal-strategy-escalation turn="${input.turn}" count="${input.count}" kind="${escape(input.kind)}">`,
+    `The same failure has recurred ${input.count} times in a row. Do not repeat the approach that produced it.`,
+    ``,
+    `Goal: ${escape(input.condition)}`,
+    `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
+    `Failure signature: ${escape(input.summary)}`,
+    ``,
+    `Rotate strategy now: ${escape(input.strategy)}`,
+    ...(input.diagnostic ? [`Diagnostic artifact: ${escape(input.diagnostic)}`, `Read it before the next step so the evidence is concrete.`] : []),
+    ...(learnings ? [``, escape(learnings)] : []),
+    ``,
+    `Take a concrete step with the new strategy, then show fresh evidence (command output, test results) from this turn. Keep working toward the goal; do not stop or wait for a user message.`,
+    policy.required ? `Before you call the goal done, ${commitStatusSuffix(policy)}.` : ``,
+    `</goal-strategy-escalation>`,
+    DELEGATE_VERDICT,
+  ].join("\n")
+}
+
 export function retry(input: { condition: string; label: string; learnings?: string }, policy: CommitPolicy): string {
   const learnings = input.learnings?.trim()
   return [

@@ -5,12 +5,14 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
   FAILURE_SIGNATURE_REPEAT_THRESHOLD,
+  STRATEGY_ROTATION,
   buildRepeatedFailureDiagnosticArtifact,
   detectRepeatedFailureSignature,
   failingChecksOf,
   failureEscalationReason,
   failureSignatureOf,
   persistFailureDiagnosticArtifact,
+  strategyForRepeat,
   summarizeFailureSignature,
 } from "../src/core/failure-signature.ts"
 
@@ -267,6 +269,34 @@ describe("failure escalation helpers", () => {
     expect(reason).toContain("rotate strategy")
     expect(reason).toContain("diagnostic artifact")
     expect(reason).toContain("instead of re-arming the same approach")
+  })
+
+  test("strategyForRepeat rotates by streak length against an independent index oracle", () => {
+    // Independent oracle: the rotation starts at the threshold and advances one slot per extra repeat, cycling.
+    const expectedIndex = (count: number) => (count - FAILURE_SIGNATURE_REPEAT_THRESHOLD) % STRATEGY_ROTATION.length
+    const detectedFor = (count: number, kind: "reason" | "verification") => {
+      const entries = Array.from({ length: count }, () =>
+        kind === "reason"
+          ? notMet("same gap")
+          : notMet("verify failed", { verify: { command: "bun run check", code: 1 } }),
+      )
+      return detectRepeatedFailureSignature(entries.slice(0, -1), entries.at(-1)!, FAILURE_SIGNATURE_REPEAT_THRESHOLD)!
+    }
+    const strategies = new Set<string>()
+    for (let count = FAILURE_SIGNATURE_REPEAT_THRESHOLD; count < FAILURE_SIGNATURE_REPEAT_THRESHOLD + 2 * STRATEGY_ROTATION.length; count++) {
+      const outcome = strategyForRepeat(detectedFor(count, "reason"))
+      expect(outcome.index).toBe(expectedIndex(count))
+      expect(outcome.strategy).toBe(STRATEGY_ROTATION[expectedIndex(count)]!)
+      expect(outcome.strategy.length).toBeGreaterThan(0)
+      strategies.add(outcome.strategy)
+    }
+    // A full cycle offers distinct approaches, then repeats — never the same steer twice in a row.
+    expect(strategies.size).toBe(STRATEGY_ROTATION.length)
+    for (let count = FAILURE_SIGNATURE_REPEAT_THRESHOLD; count < FAILURE_SIGNATURE_REPEAT_THRESHOLD + STRATEGY_ROTATION.length; count++) {
+      expect(strategyForRepeat(detectedFor(count, "reason")).strategy).not.toBe(strategyForRepeat(detectedFor(count + 1, "reason")).strategy)
+    }
+    // Rotation is universal: a verification signature and a reason signature at the same count get the same strategy.
+    expect(strategyForRepeat(detectedFor(5, "verification")).strategy).toBe(strategyForRepeat(detectedFor(5, "reason")).strategy)
   })
 })
 

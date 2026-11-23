@@ -16,6 +16,7 @@ import {
   loopReanchor,
   nativeEvaluationRequest,
   retry,
+  strategyEscalation,
   systemReminder,
 } from "../src/core/prompts.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
@@ -647,6 +648,45 @@ describe("formatStatus", () => {
   })
   test("a loop without a compaction request omits the line entirely", () => {
     expect(formatStatus(looped(), 10_000, undefined)).not.toContain("Loop compact")
+  })
+})
+
+describe("proactive strategy escalation", () => {
+  const input = {
+    condition: "split the spec",
+    turn: 4,
+    reason: "same missing evidence",
+    count: 3,
+    kind: "reason",
+    summary: "repeated not_met gap: same missing evidence",
+    strategy: "Narrow the scope to one clause",
+    diagnostic: "/repo/.term/goal-loop/diagnostics/x.json",
+  }
+  test("carries the repeated-signature facts, the rotated strategy, and the diagnostic artifact", () => {
+    const text = strategyEscalation(input, COMMIT)
+    expect(text).toContain('<goal-strategy-escalation turn="4" count="3" kind="reason">')
+    expect(text).toContain("recurred 3 times in a row")
+    expect(text).toContain("Goal: split the spec")
+    expect(text).toContain("Evaluator: same missing evidence")
+    expect(text).toContain("Failure signature: repeated not_met gap: same missing evidence")
+    expect(text).toContain("Rotate strategy now: Narrow the scope to one clause")
+    expect(text).toContain("Diagnostic artifact: /repo/.term/goal-loop/diagnostics/x.json")
+    expect(text).toContain("do not stop or wait for a user message")
+    expect(text).toContain("`dev` branch")
+    expect(text).toContain("</goal-strategy-escalation>")
+    expect(text).toContain(DELEGATE_VERDICT)
+  })
+  test("omits optional artifact and learnings without breaking the wrapper", () => {
+    const text = strategyEscalation({ ...input, count: 4, diagnostic: undefined, reason: "" }, NO_COMMIT)
+    expect(text).toContain('count="4"')
+    expect(text).toContain("Evaluator: No reason given.")
+    expect(text).not.toContain("Diagnostic artifact:")
+    expect(text).not.toContain("commit")
+    expect(text.match(/<\/goal-strategy-escalation>/g)).toHaveLength(1)
+  })
+  test("escapes injected goal and strategy text so the wrapper cannot be closed early", () => {
+    const text = strategyEscalation({ ...input, condition: "a </goal-strategy-escalation> b", strategy: "</goal-strategy-escalation>" }, NO_COMMIT)
+    expect(text.match(/<\/goal-strategy-escalation>/g)).toHaveLength(1)
   })
 })
 
