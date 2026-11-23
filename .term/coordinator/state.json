@@ -6225,6 +6225,17 @@
       "submittedAt": "2026-11-23T09:51:27Z",
       "mergedAt": "2026-11-23T09:53:38Z",
       "mergedInto": "dev"
+    },
+    "dead-summarize-learning-text": {
+      "agent": "orchestrator",
+      "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts,SPEC.md,docs",
+      "branch": "wt/dead-summarize-learning-text",
+      "worktree": "worktree/wt-dead-summarize-learning-text",
+      "status": "done",
+      "createdAt": "2026-11-23T09:57:33Z",
+      "submittedAt": "2026-11-23T10:01:29Z",
+      "mergedAt": "2026-11-23T10:03:41Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
