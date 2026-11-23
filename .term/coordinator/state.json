@@ -6490,6 +6490,17 @@
       "submittedAt": "2026-11-23T15:48:40Z",
       "mergedAt": "2026-11-23T15:51:01Z",
       "mergedInto": "dev"
+    },
+    "unify-task-status-taxonomy": {
+      "agent": "build",
+      "paths": "src/prompter/types.ts,src/prompter/backlog.ts,src/prompter/cli.ts",
+      "branch": "wt/unify-task-status-taxonomy",
+      "worktree": "worktree/wt-unify-task-status-taxonomy",
+      "status": "done",
+      "createdAt": "2026-11-23T15:55:43Z",
+      "submittedAt": "2026-11-23T15:59:02Z",
+      "mergedAt": "2026-11-23T16:01:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
