@@ -732,6 +732,31 @@ describe("the context hook drops the evaluator's own self-echo (CXV use-and-forg
     }
   })
 
+  test("a host-delivered judge completion report never reaches the worker's model request", async () => {
+    const directory = repository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const steer = message("the user's own line")
+      const report = {
+        role: "user",
+        type: "synthetic",
+        metadata: { source: "subagent", childID: "ses_judge", agent: EVALUATOR_AGENT_ID, state: "completed" },
+        content: [{ type: "text", text: '<subagent sessionID="ses_judge" state="completed" description="evaluator">{"verdict":"met","reason":"done"}</subagent>' }],
+      }
+      const event = {
+        sessionID: "ses_1", agent: "build", model: {}, system: [] as any[],
+        messages: [steer, report], tools: {}, options: {},
+      }
+      hooks.context!(event)
+      // The verdict came from the judge's event stream; the report the host admits on wake is stripped, and the
+      // trailing-user repair must not re-add it (CXLI position inversion).
+      expect(event.messages).toEqual([steer])
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("a compaction checkpoint quoting an evaluation prompt survives as history", async () => {
     const directory = repository()
     const { ctx, hooks } = context(directory)
@@ -1070,8 +1095,8 @@ describe("the judge child converges when the host prompt ignores its abort signa
       // the host prompt never settles. The unreadable verdict pauses the goal with a typed verdict error.
       await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "paused", 3_000)
       expect(promptSignal).toBeInstanceOf(AbortSignal)
-      // No synthetic <subagent> report is admitted to the parent and no wake is delivered: that is the whole point
-      // of the standalone (parentless) judge child.
+      // The plugin never synthesizes a report: the verdict is read from the child's own event stream. With a
+      // `parentID` the host admits its own completion report, which the context hook strips before any model turn.
       expect(reports).toHaveLength(0)
       // Judge children persist and stay navigable — no `session.remove` on verdict.
       expect(removed).toBe(false)
@@ -1315,11 +1340,11 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       // The verdict is the judge child's text, parsed through the authoritative contract guard.
       expect(record.reason).toContain("harness judge verdict")
 
-      // The harness spawns exactly one standalone judge child: no `parentID`, so the host never admits a
-      // `<subagent>` report to the parent and never wakes it just because the judge finished.
+      // The harness spawns exactly one judge child, created like the arm-time planner: `parentID` links it to the
+      // working session so its generation is accounted there instead of as a standalone primary turn.
       expect(created).toHaveLength(1)
       expect(created[0]).toMatchObject({ agent: EVALUATOR_AGENT_ID, model: { providerID: "provider", id: "model" } })
-      expect(created[0].parentID).toBeUndefined()
+      expect(created[0].parentID).toBe("ses_1")
       expect(judgePrompt).toContain("<goal-evaluation>")
       expect(judgePrompt).toContain("<condition>the parser is correct</condition>")
       expect(judgePrompt).toContain("<parent-summary>")
@@ -1588,7 +1613,7 @@ describe("standalone child prompts must wake their own execution (CXLII P0)", ()
     try {
       ;(ctx.session as any).context = async () => [evidence("fresh evidence: bun run check green at current HEAD")]
       ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
-      ;(ctx.session as any).create = async (input: any) => ({ id: input.parentID ? "ses_planner" : "ses_judge" })
+      ;(ctx.session as any).create = async (input: any) => ({ id: input.agent === PLANNER_AGENT_ID ? "ses_planner" : "ses_judge" })
       const childCalls: any[] = []
       ;(ctx.session as any).prompt = async (input: any) => {
         if (input.sessionID === "ses_planner" || input.sessionID === "ses_judge") childCalls.push(input)
