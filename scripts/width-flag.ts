@@ -1,9 +1,9 @@
 /**
  * The one `--width=<n>` reader for the standalone render scripts.
  *
- * `render-slot.tsx`, `render-pill.tsx` and `repro-loop-cap.tsx` used to carry byte-identical copies
- * of this parse-and-clamp rule; only the fallback default differed. Keeping it here (scripts/ is
- * not in the published `files` list) prevents the three from drifting. Missing, empty, malformed,
+ * `render-slot.tsx` and `render-pill.tsx` used to carry byte-identical copies of this parse-and-clamp
+ * rule; only the fallback default differed. Keeping it here (scripts/ is not in the published
+ * `files` list) prevents the two from drifting. Missing, empty, malformed,
  * zero and negative flags all fall back to `dflt`; a positive finite value is floored, matching the
  * original arithmetic exactly. The first flag wins when several are supplied.
  */
