@@ -5443,14 +5443,16 @@
       "paths": "src/core/learning-log.ts,test/learning-log.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/learning-log-dead-verify",
       "worktree": "worktrees/wt-learning-log-dead-verify",
-      "status": "submitted",
-      "createdAt": "2026-11-23T00:08:44Z",
-      "submittedAt": "2026-11-23T00:12:51Z",
+      "status": "done",
+      "createdAt": "2026-11-23T00:15:26Z",
+      "submittedAt": "2026-11-23T00:15:27Z",
       "forcedScope": true,
-      "forcedScopeAt": "2026-11-23T00:12:51Z",
+      "forcedScopeAt": "2026-11-23T00:15:27Z",
       "forcedScopeFiles": [
         "docs/improvement-backlog.json"
-      ]
+      ],
+      "mergedAt": "2026-11-23T00:21:13Z",
+      "mergedInto": "dev"
     },
     "telemetry-redundant-guard": {
       "agent": "build-agent",
