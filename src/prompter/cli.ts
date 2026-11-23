@@ -11,7 +11,7 @@ import { readPromptBodies, buildObjective } from "./objective.ts"
 import { approve, cleanupWorktree, reject, reviewLines } from "./review.ts"
 import { describeStop, killSwitch, newBudget, noteUsage, stopReason } from "./safety.ts"
 import { byStatus, loadState } from "./state.ts"
-import type { BacklogLine, Config, TaskState } from "./types.ts"
+import { FINISHED_TASK_STATUSES, TASK_STATUSES, type BacklogLine, type Config, type TaskState } from "./types.ts"
 import { globalStopFile, logPath, money, prompterHome, short, statePath, worktreeRoot } from "./util.ts"
 
 const say = (...parts: unknown[]): void => console.log(parts.map((p) => String(p)).join(" "))
@@ -255,7 +255,7 @@ const main = async (): Promise<void> => {
       say(`base    ${config.baseBranch}   backlog ${config.backlog}`)
       say(`limits  ${describeStop(config)}`)
       say(`stop    ${killSwitch(config, repo, { exists: existsSync, env: process.env }) ?? "clear"}`)
-      say(`states  ${["running", "in_review", "merged", "rejected", "failed", "interrupted"].map((s) => `${s}=${byStatus(states, s).length}`).join("  ")}`)
+      say(`states  ${TASK_STATUSES.map((s) => `${s}=${byStatus(states, s).length}`).join("  ")}`)
       say("backlog:")
       say(summarizeBacklog(parseBacklog(readBacklogText(repo, config)), states))
       return
@@ -312,7 +312,7 @@ const main = async (): Promise<void> => {
       const states = loadState(config.stateFile ?? statePath(repo))
       let removed = 0
       for (const state of states.values()) {
-        if (["merged", "rejected", "failed", "interrupted"].includes(state.status)) {
+        if (FINISHED_TASK_STATUSES.includes(state.status)) {
           // cleanupWorktree checks the worktree and branch independently — reach it even when only a stale
           // branch remains (e.g. the worktree was removed by hand or by the OS).
           const notes = cleanupWorktree(repo, state)
