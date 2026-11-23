@@ -54,6 +54,7 @@ interface Harness {
   notices: Notice[]
   warnings: string[]
   compactCalls: string[]
+  coldCompactCalls: string[]
   contextCalls: number
   setContext: (messages: readonly unknown[] | Error) => void
   setCompact: (fn: (sessionID: string) => Promise<void>) => void
@@ -67,6 +68,7 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
   const warnings: string[] = []
   const infos: string[] = []
   const compactCalls: string[] = []
+  const coldCompactCalls: string[] = []
   let contextCalls = 0
   let busy = false
   let context: readonly unknown[] | Error = [assistant({ input: 10_000, cache: { read: 255_000, write: 0 } })]
@@ -78,8 +80,9 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
   }
   const compactor = new AutoCompactor({
     config: resolveConfig(options),
-    compact: async (sessionID) => {
+    compact: async (sessionID, opts) => {
       compactCalls.push(sessionID)
+      if (opts?.cold) coldCompactCalls.push(sessionID)
       return compactImpl(sessionID)
     },
     context: async () => {
@@ -97,6 +100,7 @@ function harness(options: Record<string, unknown> = { compactAtTokens: 260_000 }
     notices,
     warnings,
     compactCalls,
+    coldCompactCalls,
     get contextCalls() {
       return contextCalls
     },
@@ -273,10 +277,25 @@ describe("AutoCompactor.compactAtBoundary", () => {
   test("work in flight defers the compaction without requesting anything", async () => {
     const h = harness({ compactAtTokens: 260_000 })
     h.setBusy(true)
-    const result = await h.compactor.compactAtBoundary(SID)
+    const result = await h.compactor.compactAtBoundary(SID, { cold: true })
     expect(result).toEqual({ requested: false, reason: "busy" })
     expect(h.compactCalls).toEqual([])
+    expect(h.coldCompactCalls).toEqual([])
     expect(h.contextCalls).toBe(0)
+  })
+
+  test("cold is forwarded only to a host call that actually happens", async () => {
+    const h = harness({ compactAtTokens: 260_000 })
+    const result = await h.compactor.compactAtBoundary(SID, { cold: true })
+    expect(result).toEqual(expect.objectContaining({ requested: true }))
+    expect(h.compactCalls).toEqual([SID])
+    expect(h.coldCompactCalls).toEqual([SID])
+
+    // A skipped request must not leave the session primed for a cold replay later.
+    const skipped = harness({ compactAtTokens: 260_000 })
+    skipped.setContext([assistant({ input: 1_000, cache: { read: 0, write: 0 } })])
+    expect(await skipped.compactor.compactAtBoundary(SID, { cold: true })).toEqual({ requested: false, reason: "too-small" })
+    expect(skipped.coldCompactCalls).toEqual([])
   })
 
   test("maybeCompact defers while work is in flight", async () => {

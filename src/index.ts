@@ -288,8 +288,17 @@ export default Plugin.define({
         await ctx.session.synthetic(input as Parameters<typeof ctx.session.synthetic>[0])
       },
       usage: async (sessionID) => toUsage(await ctx.session.get({ sessionID })),
-      compact: async (sessionID) => {
-        await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+      compact: async (sessionID, opts) => {
+        // A cold compact is a loop-boundary version bump: mark the session so the compaction hook installs
+        // COLD_REPLAY instead of a generated summary. On failure drop the mark so a later ordinary compaction
+        // keeps its normal summary. Ordinary auto-compaction never passes `cold`.
+        if (opts?.cold) resetPending.add(sessionID)
+        try {
+          await ctx.session.compact({ sessionID } as Parameters<typeof ctx.session.compact>[0])
+        } catch (error) {
+          if (opts?.cold) resetPending.delete(sessionID)
+          throw error
+        }
       },
     }
 
@@ -546,7 +555,7 @@ export default Plugin.define({
     })
     compactor = new AutoCompactor({
       config,
-      compact: (sessionID) => session.compact(sessionID),
+      compact: (sessionID, opts) => session.compact(sessionID, opts),
       context: async (sessionID) => (await ctx.session.context({ sessionID })) as readonly unknown[],
       emitter,
       clock: systemClock,
@@ -631,9 +640,10 @@ export default Plugin.define({
       return "update"
     }
 
-    // Sessions whose next compaction is an explicit /reset-context. The compaction hook consumes the entry exactly
-    // once, so an automatic or loop-boundary compaction in the same session keeps its normal summary. A Set keeps
-    // two concurrent sessions independent; the command's catch removes its own entry when compact() fails.
+    // Sessions whose next compaction must replay a cold context: the explicit /reset-context command, or the
+    // compaction a goal-loop version bump requests at its boundary. The hook consumes the entry exactly once, so
+    // an ordinary auto-compaction in the same session keeps its normal summary. A Set keeps concurrent sessions
+    // independent; each caller drops its own mark when compact() fails.
     const resetPending = new Set<string>()
 
     // ---- the /goal, /goal-loop and /reset-context commands

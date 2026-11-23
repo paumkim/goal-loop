@@ -24,8 +24,11 @@ export interface SessionPort {
   }): Promise<void>
   /** Cumulative session spend, or undefined when unavailable. */
   usage(sessionID: string): Promise<UsageSnapshot | undefined>
-  /** Ask the host to compact the session's context. */
-  compact(sessionID: string): Promise<void>
+  /**
+   * Ask the host to compact the session's context. `cold` installs an empty replay window so the next turn sees no
+   * conversation at all; used only at a goal-loop version boundary, never for ordinary auto-compaction.
+   */
+  compact(sessionID: string, opts?: { cold?: boolean }): Promise<void>
 }
 
 export interface EvaluationRequest {
