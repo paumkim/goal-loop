@@ -9,7 +9,7 @@
       "paths": "src/runtime/controller.ts,src/core/types.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:29:13Z",
-      "worktree": "worktrees/wt-a1-compaction-miss-single-source"
+      "worktree": "worktree/wt-a1-compaction-miss-single-source"
     },
     "a11-entries-prune": {
       "agent": "orchestrator",
@@ -20,7 +20,7 @@
       "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:09:14Z",
-      "worktree": "worktrees/wt-a11-entries-prune"
+      "worktree": "worktree/wt-a11-entries-prune"
     },
     "a13-stale-comment": {
       "agent": "orchestrator",
@@ -31,7 +31,7 @@
       "paths": "src/core/types.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:51:56Z",
-      "worktree": "worktrees/wt-a13-stale-comment"
+      "worktree": "worktree/wt-a13-stale-comment"
     },
     "a14-events-unknown": {
       "agent": "orchestrator",
@@ -42,7 +42,7 @@
       "paths": "src/runtime/events.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:55:24Z",
-      "worktree": "worktrees/wt-a14-events-unknown"
+      "worktree": "worktree/wt-a14-events-unknown"
     },
     "a15-events-guard": {
       "agent": "orchestrator",
@@ -53,7 +53,7 @@
       "paths": "src/runtime/events.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:59:14Z",
-      "worktree": "worktrees/wt-a15-events-guard"
+      "worktree": "worktree/wt-a15-events-guard"
     },
     "a2-planner-maxchars": {
       "agent": "orchestrator",
@@ -64,7 +64,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:35:25Z",
-      "worktree": "worktrees/wt-a2-planner-maxchars"
+      "worktree": "worktree/wt-a2-planner-maxchars"
     },
     "a21-backoff-helper": {
       "agent": "orchestrator",
@@ -75,7 +75,7 @@
       "paths": "src/runtime/controller.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:50:10Z",
-      "worktree": "worktrees/wt-a21-backoff-helper"
+      "worktree": "worktree/wt-a21-backoff-helper"
     },
     "a24-cap-paused-oneshot": {
       "agent": "orchestrator",
@@ -86,7 +86,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:48:32Z",
-      "worktree": "worktrees/wt-a24-cap-paused-oneshot"
+      "worktree": "worktree/wt-a24-cap-paused-oneshot"
     },
     "a25-label-width-shared": {
       "agent": "orchestrator",
@@ -97,7 +97,7 @@
       "paths": "src/core/history.ts,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:32:02Z",
-      "worktree": "worktrees/wt-a25-label-width-shared"
+      "worktree": "worktree/wt-a25-label-width-shared"
     },
     "a26-shared-constants": {
       "agent": "orchestrator",
@@ -108,7 +108,7 @@
       "paths": "src/core/constants.ts,src/runtime/controller.ts,src/runtime/compactor.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:01:49Z",
-      "worktree": "worktrees/wt-a26-shared-constants"
+      "worktree": "worktree/wt-a26-shared-constants"
     },
     "a27-maxretries-inert": {
       "agent": "orchestrator",
@@ -119,7 +119,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:03:10Z",
-      "worktree": "worktrees/wt-a27-maxretries-inert"
+      "worktree": "worktree/wt-a27-maxretries-inert"
     },
     "a3-readonly-list-fanout": {
       "agent": "orchestrator",
@@ -130,7 +130,7 @@
       "paths": "src/runtime/controller.ts,src/rpc-handlers.ts,test/loop.test.ts,test/rpc-handlers.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:37:30Z",
-      "worktree": "worktrees/wt-a3-readonly-list-fanout"
+      "worktree": "worktree/wt-a3-readonly-list-fanout"
     },
     "a4-restore-fanout-loop-only": {
       "agent": "orchestrator",
@@ -141,7 +141,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:43:19Z",
-      "worktree": "worktrees/wt-a4-restore-fanout-loop-only"
+      "worktree": "worktree/wt-a4-restore-fanout-loop-only"
     },
     "a5-repeat-condition-normalize": {
       "agent": "orchestrator",
@@ -152,7 +152,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:39:30Z",
-      "worktree": "worktrees/wt-a5-repeat-condition-normalize"
+      "worktree": "worktree/wt-a5-repeat-condition-normalize"
     },
     "a6-formattokens-rollover": {
       "agent": "orchestrator",
@@ -163,7 +163,7 @@
       "paths": "src/core/format.ts,test/core.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:33:42Z",
-      "worktree": "worktrees/wt-a6-formattokens-rollover"
+      "worktree": "worktree/wt-a6-formattokens-rollover"
     },
     "a8-set-await-commit": {
       "agent": "orchestrator",
@@ -174,7 +174,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:41:49Z",
-      "worktree": "worktrees/wt-a8-set-await-commit"
+      "worktree": "worktree/wt-a8-set-await-commit"
     },
     "a9-finish-noop-cache": {
       "agent": "orchestrator",
@@ -185,7 +185,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:45:49Z",
-      "worktree": "worktrees/wt-a9-finish-noop-cache"
+      "worktree": "worktree/wt-a9-finish-noop-cache"
     },
     "async-hole-sweep": {
       "agent": "orchestrator",
@@ -196,7 +196,7 @@
       "paths": "src/runtime/controller.ts,test,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-15T22:08:33Z",
-      "worktree": "worktrees/wt-async-hole-sweep"
+      "worktree": "worktree/wt-async-hole-sweep"
     },
     "audit-phase1": {
       "agent": "orchestrator",
@@ -207,7 +207,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:24:57Z",
-      "worktree": "worktrees/wt-audit-phase1"
+      "worktree": "worktree/wt-audit-phase1"
     },
     "binary-rebuild-cleanup": {
       "agent": "opencode",
@@ -218,7 +218,7 @@
       "paths": "SPEC.md,dist,.term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T05:49:32Z",
-      "worktree": "worktrees/wt-binary-rebuild-cleanup"
+      "worktree": "worktree/wt-binary-rebuild-cleanup"
     },
     "boundary-cast-narrows": {
       "agent": "orchestrator",
@@ -229,7 +229,7 @@
       "paths": "src,test,dist,SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T21:56:39Z",
-      "worktree": "worktrees/wt-boundary-cast-narrows"
+      "worktree": "worktree/wt-boundary-cast-narrows"
     },
     "ci-workflow-test": {
       "agent": "opencode",
@@ -240,7 +240,7 @@
       "paths": "test/ci-workflow.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:55:46Z",
-      "worktree": "worktrees/wt-ci-workflow-test"
+      "worktree": "worktree/wt-ci-workflow-test"
     },
     "cli-installer": {
       "agent": "inkling",
@@ -251,7 +251,7 @@
       "paths": "package.json,bin,scripts/,docs/,README.md,SPEC.md,test/",
       "status": "done",
       "submittedAt": "2026-11-15T22:49:09Z",
-      "worktree": "worktrees/wt-cli-installer"
+      "worktree": "worktree/wt-cli-installer"
     },
     "cli-uninstall-restore": {
       "agent": "inkling",
@@ -262,7 +262,7 @@
       "paths": "bin,test,SPEC.md,docs,README.md",
       "status": "done",
       "submittedAt": "2026-11-15T23:05:34Z",
-      "worktree": "worktrees/wt-cli-uninstall-restore"
+      "worktree": "worktree/wt-cli-uninstall-restore"
     },
     "compact-cap": {
       "agent": "orchestrator",
@@ -273,7 +273,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/changelog.html,docs/index.html",
       "status": "done",
       "submittedAt": "2026-11-15T20:14:17Z",
-      "worktree": "worktrees/wt-compact-cap"
+      "worktree": "worktree/wt-compact-cap"
     },
     "compact-evidence": {
       "agent": "orchestrator",
@@ -284,7 +284,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/changelog.html,docs/index.html,docs/install.html",
       "status": "done",
       "submittedAt": "2026-11-15T20:02:29Z",
-      "worktree": "worktrees/wt-compact-evidence"
+      "worktree": "worktree/wt-compact-evidence"
     },
     "compact-evidence-spec-dedupe": {
       "agent": "compact-evidence-subagent",
@@ -295,7 +295,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T20:07:04Z",
-      "worktree": "worktrees/wt-compact-evidence-spec-dedupe"
+      "worktree": "worktree/wt-compact-evidence-spec-dedupe"
     },
     "compaction-landing-evaluator": {
       "agent": "inkling-goal",
@@ -306,7 +306,7 @@
       "paths": "src,test,SPEC.md,scripts,package.json",
       "status": "done",
       "submittedAt": "2026-11-16T03:58:39Z",
-      "worktree": "worktrees/wt-compaction-landing-evaluator"
+      "worktree": "worktree/wt-compaction-landing-evaluator"
     },
     "config-defaults-test": {
       "agent": "opencode",
@@ -317,7 +317,7 @@
       "paths": "test/config-defaults.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:22:55Z",
-      "worktree": "worktrees/wt-config-defaults-test"
+      "worktree": "worktree/wt-config-defaults-test"
     },
     "context-after-compaction": {
       "agent": "inkling",
@@ -328,7 +328,7 @@
       "paths": "src/core/context-size.ts,src/core/entries.ts,test/entries.test.ts,test/context-size.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T16:44:52Z",
-      "worktree": "worktrees/wt-context-after-compaction"
+      "worktree": "worktree/wt-context-after-compaction"
     },
     "continuous-improvement-iter1": {
       "agent": "orchestrator",
@@ -339,7 +339,7 @@
       "paths": "src,test,docs,README.md,SPEC.md,package.json,scripts",
       "status": "done",
       "submittedAt": "2026-11-15T06:11:42Z",
-      "worktree": "worktrees/wt-continuous-improvement-iter1"
+      "worktree": "worktree/wt-continuous-improvement-iter1"
     },
     "coordinator-merge-safety": {
       "agent": "inkling",
@@ -350,7 +350,7 @@
       "paths": "packages/coordinator/**,docs/parallel-work.md,SPEC.md,scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,test/coordinator.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T17:47:59Z",
-      "worktree": "worktrees/wt-coordinator-merge-safety"
+      "worktree": "worktree/wt-coordinator-merge-safety"
     },
     "coordinator-merge-safety-tests": {
       "agent": "inkling",
@@ -359,7 +359,7 @@
       "paths": "scripts/spec-check.ts,test/coordinator-merge-safety.test.ts,packages/coordinator/README.md",
       "status": "done",
       "submittedAt": "2026-11-16T17:47:59Z",
-      "worktree": "worktrees/wt-coordinator-merge-safety-tests",
+      "worktree": "worktree/wt-coordinator-merge-safety-tests",
       "mergedAt": "2026-11-16T22:31:01Z",
       "mergedInto": "dev"
     },
@@ -370,7 +370,7 @@
       "paths": "packages/coordinator/**,test/coordinator-merge-safety.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T18:02:46Z",
-      "worktree": "worktrees/wt-coordinator-scratch-branch-order",
+      "worktree": "worktree/wt-coordinator-scratch-branch-order",
       "mergedAt": "2026-11-16T22:32:13Z",
       "mergedInto": "dev"
     },
@@ -383,7 +383,7 @@
       "paths": ".term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T05:53:34Z",
-      "worktree": "worktrees/wt-coordinator-state-done"
+      "worktree": "worktree/wt-coordinator-state-done"
     },
     "dead-surface-trim": {
       "agent": "inkling",
@@ -394,7 +394,7 @@
       "paths": "src,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T22:24:59Z",
-      "worktree": "worktrees/wt-dead-surface-trim"
+      "worktree": "worktree/wt-dead-surface-trim"
     },
     "dj-hover-no-underline": {
       "agent": "orchestrator",
@@ -405,7 +405,7 @@
       "paths": "src/tui.tsx src/hud-card.tsx src/tui-history.tsx src/status-dialog.tsx test/tui-render.test.tsx SPEC.md dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T11:01:56Z",
-      "worktree": "worktrees/wt-dj-hover-no-underline"
+      "worktree": "worktree/wt-dj-hover-no-underline"
     },
     "docs-freshness-gate": {
       "agent": "orchestrator",
@@ -416,7 +416,7 @@
       "paths": "scripts,docs,test,package.json,SPEC.md,README.md,AGENTS.md,.github",
       "status": "done",
       "submittedAt": "2026-11-15T06:17:24Z",
-      "worktree": "worktrees/wt-docs-freshness-gate"
+      "worktree": "worktree/wt-docs-freshness-gate"
     },
     "docs-honesty-sweep": {
       "agent": "inkling",
@@ -427,7 +427,7 @@
       "paths": "SPEC.md,test/constants.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T01:05:11Z",
-      "worktree": "worktrees/wt-docs-honesty-sweep"
+      "worktree": "worktree/wt-docs-honesty-sweep"
     },
     "docs-line-refs": {
       "agent": "opencode",
@@ -438,7 +438,7 @@
       "paths": "docs",
       "status": "done",
       "submittedAt": "2026-11-16T01:42:47Z",
-      "worktree": "worktrees/wt-docs-line-refs"
+      "worktree": "worktree/wt-docs-line-refs"
     },
     "docs-line-refs-2": {
       "agent": "opencode",
@@ -449,7 +449,7 @@
       "paths": "docs",
       "status": "done",
       "submittedAt": "2026-11-16T01:48:45Z",
-      "worktree": "worktrees/wt-docs-line-refs-2"
+      "worktree": "worktree/wt-docs-line-refs-2"
     },
     "docs-line-refs-test": {
       "agent": "opencode",
@@ -460,7 +460,7 @@
       "paths": "test/docs-line-refs.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:49:25Z",
-      "worktree": "worktrees/wt-docs-line-refs-test"
+      "worktree": "worktree/wt-docs-line-refs-test"
     },
     "docs-refresh-tool-count": {
       "agent": "orchestrator",
@@ -471,7 +471,7 @@
       "paths": "docs",
       "status": "done",
       "submittedAt": "2026-11-15T06:55:00Z",
-      "worktree": "worktrees/wt-docs-refresh-tool-count"
+      "worktree": "worktree/wt-docs-refresh-tool-count"
     },
     "docs-watch-unit-tests": {
       "agent": "opencode",
@@ -482,7 +482,7 @@
       "paths": "scripts/docs-watch.ts,test/docs-watch.test.ts,SPEC.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T02:05:11Z",
-      "worktree": "worktrees/wt-docs-watch-unit-tests"
+      "worktree": "worktree/wt-docs-watch-unit-tests"
     },
     "dz-evidence-fresh": {
       "agent": "inkling",
@@ -491,7 +491,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T18:03:15Z",
-      "worktree": "worktrees/wt-dz-evidence-fresh",
+      "worktree": "worktree/wt-dz-evidence-fresh",
       "mergedAt": "2026-11-16T22:33:25Z",
       "mergedInto": "dev"
     },
@@ -504,7 +504,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T23:41:59Z",
-      "worktree": "worktrees/wt-e2e-proof"
+      "worktree": "worktree/wt-e2e-proof"
     },
     "e2e-sanity-pass": {
       "agent": "inkling",
@@ -515,7 +515,7 @@
       "paths": "SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T22:15:21Z",
-      "worktree": "worktrees/wt-e2e-sanity-pass"
+      "worktree": "worktree/wt-e2e-sanity-pass"
     },
     "env-vars-test": {
       "agent": "opencode",
@@ -526,7 +526,7 @@
       "paths": "test/env-vars.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:52:47Z",
-      "worktree": "worktrees/wt-env-vars-test"
+      "worktree": "worktree/wt-env-vars-test"
     },
     "esc-mouse-close": {
       "agent": "inkling-goal-loop-6",
@@ -537,7 +537,7 @@
       "paths": "src/tui.tsx,src/status-dialog.tsx,SPEC.md,dist,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-15T18:23:44Z",
-      "worktree": "worktrees/wt-esc-mouse-close"
+      "worktree": "worktree/wt-esc-mouse-close"
     },
     "evaluator-rearm-guard": {
       "agent": "opencode",
@@ -548,7 +548,7 @@
       "paths": "src/core/prompts.ts,src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T03:04:54Z",
-      "worktree": "worktrees/wt-evaluator-rearm-guard"
+      "worktree": "worktree/wt-evaluator-rearm-guard"
     },
     "fix-docs-refs": {
       "agent": "orchestrator",
@@ -559,7 +559,7 @@
       "paths": "docs,SPEC.md,README.md",
       "status": "done",
       "submittedAt": "2026-11-15T16:37:14Z",
-      "worktree": "worktrees/wt-fix-docs-refs"
+      "worktree": "worktree/wt-fix-docs-refs"
     },
     "fix-merge-scratch": {
       "agent": "orchestrator",
@@ -570,7 +570,7 @@
       "paths": "packages/coordinator,test/coordinator.test.ts",
       "status": "done",
       "submittedAt": "2026-11-15T16:30:01Z",
-      "worktree": "worktrees/wt-fix-merge-scratch"
+      "worktree": "worktree/wt-fix-merge-scratch"
     },
     "fix-merge-state-stash": {
       "agent": "orchestrator",
@@ -581,7 +581,7 @@
       "paths": "packages/coordinator,test/coordinator.test.ts,SPEC.md,AGENTS.md,README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T16:51:15Z",
-      "worktree": "worktrees/wt-fix-merge-state-stash"
+      "worktree": "worktree/wt-fix-merge-state-stash"
     },
     "fix-rpc-samedir": {
       "agent": "orchestrator",
@@ -592,7 +592,7 @@
       "paths": "src/runtime,test/loop.test.ts,test/store.test.ts",
       "status": "done",
       "submittedAt": "2026-11-15T16:30:26Z",
-      "worktree": "worktrees/wt-fix-rpc-samedir"
+      "worktree": "worktree/wt-fix-rpc-samedir"
     },
     "fix-spec-rpc-scoping": {
       "agent": "orchestrator",
@@ -603,7 +603,7 @@
       "paths": "SPEC.md,README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T16:54:33Z",
-      "worktree": "worktrees/wt-fix-spec-rpc-scoping"
+      "worktree": "worktree/wt-fix-spec-rpc-scoping"
     },
     "full-audit-fix": {
       "agent": "orchestrator",
@@ -614,7 +614,7 @@
       "paths": "src,packages,scripts,test,docs,package.json,index.ts,rpc.ts,tui.ts",
       "status": "done",
       "submittedAt": "2026-11-09T19:45:10Z",
-      "worktree": "worktrees/wt-full-audit-fix"
+      "worktree": "worktree/wt-full-audit-fix"
     },
     "github-docs-nit": {
       "agent": "orchestrator",
@@ -625,7 +625,7 @@
       "paths": "README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-16T00:44:14Z",
-      "worktree": "worktrees/wt-github-docs-nit"
+      "worktree": "worktree/wt-github-docs-nit"
     },
     "github-install-proof": {
       "agent": "inkling",
@@ -636,7 +636,7 @@
       "paths": "SPEC.md,README.md,docs/install.html",
       "status": "done",
       "submittedAt": "2026-11-15T23:55:36Z",
-      "worktree": "worktrees/wt-github-install-proof"
+      "worktree": "worktree/wt-github-install-proof"
     },
     "github-single-channel": {
       "agent": "orchestrator",
@@ -644,7 +644,7 @@
       "createdAt": "2026-11-18T01:03:56Z",
       "paths": "README.md,docs,RELEASE-CHECKLIST.md",
       "status": "done",
-      "worktree": "worktrees/wt-github-single-channel",
+      "worktree": "worktree/wt-github-single-channel",
       "submittedAt": "2026-11-18T01:04:18Z",
       "mergedAt": "2026-11-18T01:05:33Z",
       "mergedInto": "dev"
@@ -658,7 +658,7 @@
       "paths": "src/tui.tsx,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md,scripts,test,dist,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-15T18:09:38Z",
-      "worktree": "worktrees/wt-goal-dialog-design"
+      "worktree": "worktree/wt-goal-dialog-design"
     },
     "goal-history-nonloop-pips": {
       "agent": "inkling-goal-loop-2",
@@ -669,7 +669,7 @@
       "paths": "src/tui.tsx,src/tui-history.tsx,src/core/history.ts,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T17:42:52Z",
-      "worktree": "worktrees/wt-goal-history-nonloop-pips"
+      "worktree": "worktree/wt-goal-history-nonloop-pips"
     },
     "goal-history-pace": {
       "agent": "inkling-goal-loop-3",
@@ -680,7 +680,7 @@
       "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T17:47:34Z",
-      "worktree": "worktrees/wt-goal-history-pace"
+      "worktree": "worktree/wt-goal-history-pace"
     },
     "goal-history-tui": {
       "agent": "inkling-goal-loop-1",
@@ -691,7 +691,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-15T17:35:38Z",
-      "worktree": "worktrees/wt-goal-history-tui"
+      "worktree": "worktree/wt-goal-history-tui"
     },
     "goal-hud-left-align": {
       "agent": "orchestrator",
@@ -702,7 +702,7 @@
       "paths": "src/tui.tsx,dist",
       "status": "done",
       "submittedAt": "2026-11-09T21:25:56Z",
-      "worktree": "worktrees/wt-goal-hud-left-align"
+      "worktree": "worktree/wt-goal-hud-left-align"
     },
     "goal-hud-move-fix-load": {
       "agent": "orchestrator",
@@ -713,7 +713,7 @@
       "paths": "src/tui.tsx,opencode.json,SPEC.md,test,dist",
       "status": "done",
       "submittedAt": "2026-11-09T21:21:06Z",
-      "worktree": "worktrees/wt-goal-hud-move-fix-load"
+      "worktree": "worktree/wt-goal-hud-move-fix-load"
     },
     "goal-hud-no-backdrop": {
       "agent": "opencode-goal",
@@ -724,7 +724,7 @@
       "paths": "src/tui.tsx,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-09T21:41:51Z",
-      "worktree": "worktrees/wt-goal-hud-no-backdrop"
+      "worktree": "worktree/wt-goal-hud-no-backdrop"
     },
     "goal-jump-row-indicator": {
       "agent": "orchestrator",
@@ -735,7 +735,7 @@
       "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/core.html,docs/runtime.html",
       "status": "done",
       "submittedAt": "2026-11-15T21:04:48Z",
-      "worktree": "worktrees/wt-goal-jump-row-indicator"
+      "worktree": "worktree/wt-goal-jump-row-indicator"
     },
     "goal-loop-audit-hardening": {
       "agent": "orchestrator",
@@ -746,7 +746,7 @@
       "paths": "src,test,docs,scripts,SPEC.md,AGENTS.md,package.json",
       "status": "done",
       "submittedAt": "2026-11-15T17:13:23Z",
-      "worktree": "worktrees/wt-goal-loop-audit-hardening"
+      "worktree": "worktree/wt-goal-loop-audit-hardening"
     },
     "goal-loop-command-syntax": {
       "agent": "orchestrator",
@@ -757,7 +757,7 @@
       "paths": "src,test,docs,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T22:39:32Z",
-      "worktree": "worktrees/wt-goal-loop-command-syntax"
+      "worktree": "worktree/wt-goal-loop-command-syntax"
     },
     "goal-loop-failure-modes": {
       "agent": "opencode",
@@ -768,7 +768,7 @@
       "paths": "src/runtime,src/core,test",
       "status": "done",
       "submittedAt": "2026-11-15T05:10:47Z",
-      "worktree": "worktrees/wt-goal-loop-failure-modes"
+      "worktree": "worktree/wt-goal-loop-failure-modes"
     },
     "goal-rpc-no-500": {
       "agent": "orchestrator",
@@ -779,7 +779,7 @@
       "paths": "src,test",
       "status": "done",
       "submittedAt": "2026-11-15T07:19:59Z",
-      "worktree": "worktrees/wt-goal-rpc-no-500"
+      "worktree": "worktree/wt-goal-rpc-no-500"
     },
     "goal-tool-count-restore": {
       "agent": "orchestrator",
@@ -790,7 +790,7 @@
       "paths": "src,test",
       "status": "done",
       "submittedAt": "2026-11-15T06:53:30Z",
-      "worktree": "worktrees/wt-goal-tool-count-restore"
+      "worktree": "worktree/wt-goal-tool-count-restore"
     },
     "installer-github-spec": {
       "agent": "orchestrator",
@@ -801,7 +801,7 @@
       "paths": "bin,test/cli-installer.test.ts,SPEC.md,README.md,docs,RELEASE-CHECKLIST.md",
       "status": "done",
       "submittedAt": "2026-11-16T00:42:23Z",
-      "worktree": "worktrees/wt-installer-github-spec"
+      "worktree": "worktree/wt-installer-github-spec"
     },
     "iteration-100-review-dossier": {
       "agent": "inkling",
@@ -812,7 +812,7 @@
       "paths": "src/core/dossier-review.ts,test/dossier-review.test.ts,src/tui.tsx,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T20:49:34Z",
-      "worktree": "worktrees/wt-iteration-100-review-dossier"
+      "worktree": "worktree/wt-iteration-100-review-dossier"
     },
     "iteration-101-spend-ledger": {
       "agent": "orchestrator",
@@ -823,7 +823,7 @@
       "paths": "src/core/spend-ledger.ts,test/spend-ledger.test.ts,src/tui.tsx,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
       "status": "done",
       "submittedAt": "2026-11-16T21:01:12Z",
-      "worktree": "worktrees/wt-iteration-101-spend-ledger"
+      "worktree": "worktree/wt-iteration-101-spend-ledger"
     },
     "iteration-102-dossier-index": {
       "agent": "opencode",
@@ -834,7 +834,7 @@
       "paths": "src/core/dossier-index.ts,test/dossier-index.test.ts,src/tui.tsx,test/package-integrity.test.ts,SPEC.md,dist,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T21:13:17Z",
-      "worktree": "worktrees/wt-iteration-102-dossier-index"
+      "worktree": "worktree/wt-iteration-102-dossier-index"
     },
     "iteration-92-scrollbar-chrome": {
       "agent": "orchestrator",
@@ -845,7 +845,7 @@
       "paths": "src/tui.tsx,src/core/scrollbar.ts,test/scrollbar.test.tsx,test/package-integrity.test.ts,SPEC.md,dist/tui.js,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T18:18:39Z",
-      "worktree": "worktrees/wt-iteration-92-scrollbar-chrome"
+      "worktree": "worktree/wt-iteration-92-scrollbar-chrome"
     },
     "iteration-93-quotable-tallies": {
       "agent": "orchestrator",
@@ -856,7 +856,7 @@
       "paths": "src/core/attestation.ts,src/tui-history.tsx,src/status-dialog.tsx,src/tui.tsx,test/attestation.test.ts,test/tui-hud.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T18:37:55Z",
-      "worktree": "worktrees/wt-iteration-93-quotable-tallies"
+      "worktree": "worktree/wt-iteration-93-quotable-tallies"
     },
     "iteration-94-find-in-dossier": {
       "agent": "orchestrator",
@@ -872,7 +872,7 @@
       "paths": "src/core/find.ts,src/status-dialog.tsx,test/find.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T19:32:25Z",
-      "worktree": "worktrees/wt-iteration-94-find-in-dossier"
+      "worktree": "worktree/wt-iteration-94-find-in-dossier"
     },
     "iteration-95-record-on-trial": {
       "agent": "orchestrator",
@@ -883,7 +883,7 @@
       "paths": "src/core/verify-record.ts,src/status-dialog.tsx,src/tui.tsx,test/verify-record.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,docs/changelog.html,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T19:46:59Z",
-      "worktree": "worktrees/wt-iteration-95-record-on-trial"
+      "worktree": "worktree/wt-iteration-95-record-on-trial"
     },
     "iteration-96-record-in-reach": {
       "agent": "orchestrator",
@@ -894,7 +894,7 @@
       "paths": "src/core/reach-record.ts,src/status-dialog.tsx,src/tui.tsx,test/reach-record.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T20:00:45Z",
-      "worktree": "worktrees/wt-iteration-96-record-in-reach"
+      "worktree": "worktree/wt-iteration-96-record-in-reach"
     },
     "iteration-97-record-under-seal": {
       "agent": "orchestrator",
@@ -905,7 +905,7 @@
       "paths": "src/core/sign-record.ts,src/status-dialog.tsx,src/tui.tsx,test/sign-record.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T20:11:55Z",
-      "worktree": "worktrees/wt-iteration-97-record-under-seal"
+      "worktree": "worktree/wt-iteration-97-record-under-seal"
     },
     "iteration-98-sealed-dossier": {
       "agent": "orchestrator",
@@ -916,7 +916,7 @@
       "paths": "src/core/dossier-seal.ts,src/status-dialog.tsx,src/tui.tsx,test/dossier-seal.test.ts,test/tui-render.test.tsx,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T20:26:44Z",
-      "worktree": "worktrees/wt-iteration-98-sealed-dossier"
+      "worktree": "worktree/wt-iteration-98-sealed-dossier"
     },
     "iteration-99-attest-sealed-dossier": {
       "agent": "orchestrator",
@@ -927,7 +927,7 @@
       "paths": "src/core/dossier-attest.ts,src/tui.tsx,test/dossier-attest.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T20:39:54Z",
-      "worktree": "worktrees/wt-iteration-99-attest-sealed-dossier"
+      "worktree": "worktree/wt-iteration-99-attest-sealed-dossier"
     },
     "loop-compact-coalesce": {
       "agent": "orchestrator",
@@ -938,7 +938,7 @@
       "paths": "src,test,SPEC.md,README.md,docs,dist",
       "status": "done",
       "submittedAt": "2026-11-15T19:39:51Z",
-      "worktree": "worktrees/wt-loop-compact-coalesce"
+      "worktree": "worktree/wt-loop-compact-coalesce"
     },
     "loop-compact-landing": {
       "agent": "inkling-goal-loop-8",
@@ -949,7 +949,7 @@
       "paths": "src,test,SPEC.md,README.md,docs,dist",
       "status": "done",
       "submittedAt": "2026-11-15T19:12:21Z",
-      "worktree": "worktrees/wt-loop-compact-landing"
+      "worktree": "worktree/wt-loop-compact-landing"
     },
     "loop-compact-reanchor": {
       "agent": "orchestrator",
@@ -960,7 +960,7 @@
       "paths": "src/core/prompts.ts,src/runtime/controller.ts,src/runtime/events.ts,src/index.ts,test,SPEC.md,README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T19:18:42Z",
-      "worktree": "worktrees/wt-loop-compact-reanchor"
+      "worktree": "worktree/wt-loop-compact-reanchor"
     },
     "loop-compact-surface": {
       "agent": "orchestrator-loop",
@@ -971,7 +971,7 @@
       "paths": "src,test,SPEC.md,README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T19:27:51Z",
-      "worktree": "worktrees/wt-loop-compact-surface"
+      "worktree": "worktree/wt-loop-compact-surface"
     },
     "loop-context-governance": {
       "agent": "inkling-goal-loop-7",
@@ -982,7 +982,7 @@
       "paths": "src,test,SPEC.md,README.md,docs,dist",
       "status": "done",
       "submittedAt": "2026-11-15T18:54:33Z",
-      "worktree": "worktrees/wt-loop-context-governance"
+      "worktree": "worktree/wt-loop-context-governance"
     },
     "loop-final-tally": {
       "agent": "inkling-goal-loop-5",
@@ -993,7 +993,7 @@
       "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T17:53:44Z",
-      "worktree": "worktrees/wt-loop-final-tally"
+      "worktree": "worktree/wt-loop-final-tally"
     },
     "loop-no-pause": {
       "agent": "orchestrator",
@@ -1004,7 +1004,7 @@
       "paths": "src/runtime/controller.ts,test/loop.test.ts,test/controller.test.ts,SPEC.md,README.md,AGENTS.md,docs/runtime.html,docs/config.html,docs/architecture.html,docs/changelog.html,docs/index.html",
       "status": "done",
       "submittedAt": "2026-11-15T19:52:06Z",
-      "worktree": "worktrees/wt-loop-no-pause"
+      "worktree": "worktree/wt-loop-no-pause"
     },
     "loop-rail-ended-paused": {
       "agent": "inkling-goal-loop-4",
@@ -1015,7 +1015,7 @@
       "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T17:50:59Z",
-      "worktree": "worktrees/wt-loop-rail-ended-paused"
+      "worktree": "worktree/wt-loop-rail-ended-paused"
     },
     "loop-wall-share-header": {
       "agent": "inkling-goal-loop-6",
@@ -1026,7 +1026,7 @@
       "paths": "src/tui.tsx,src/tui-history.tsx,src/core/history.ts,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T18:20:50Z",
-      "worktree": "worktrees/wt-loop-wall-share-header"
+      "worktree": "worktree/wt-loop-wall-share-header"
     },
     "merge-next-merged-gate": {
       "agent": "orchestrator",
@@ -1037,7 +1037,7 @@
       "paths": "packages/coordinator,test,SPEC.md,README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T07:06:31Z",
-      "worktree": "worktrees/wt-merge-next-merged-gate"
+      "worktree": "worktree/wt-merge-next-merged-gate"
     },
     "now-row-verdict-clock": {
       "agent": "inkling-goal-loop-5",
@@ -1048,7 +1048,7 @@
       "paths": "src/tui-history.tsx,src/core/history.ts,src/tui.tsx,test/history.test.ts,SPEC.md,scripts/render-history.tsx,docs/changelog.html,dist",
       "status": "done",
       "submittedAt": "2026-11-15T18:16:52Z",
-      "worktree": "worktrees/wt-now-row-verdict-clock"
+      "worktree": "worktree/wt-now-row-verdict-clock"
     },
     "opencode-cli-guide": {
       "agent": "orchestrator",
@@ -1059,7 +1059,7 @@
       "paths": "src/core/opencode-cli.ts src/core/prompts.ts test/opencode-cli.test.ts README.md SPEC.md AGENTS.md docs/core.html",
       "status": "done",
       "submittedAt": "2026-11-15T21:49:38Z",
-      "worktree": "worktrees/wt-opencode-cli-guide"
+      "worktree": "worktree/wt-opencode-cli-guide"
     },
     "opencode-cli-scratch-config-spec-md": {
       "agent": "orchestrator",
@@ -1070,7 +1070,7 @@
       "paths": "src/core/opencode-cli.ts",
       "status": "done",
       "submittedAt": "2026-11-15T22:02:12Z",
-      "worktree": "worktrees/wt-opencode-cli-scratch-config-spec-md"
+      "worktree": "worktree/wt-opencode-cli-scratch-config-spec-md"
     },
     "opencode-cli-slotmap-verify": {
       "agent": "",
@@ -1081,7 +1081,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T22:09:21Z",
-      "worktree": "worktrees/wt-opencode-cli-slotmap-verify"
+      "worktree": "worktree/wt-opencode-cli-slotmap-verify"
     },
     "package-integrity-test": {
       "agent": "opencode",
@@ -1092,7 +1092,7 @@
       "paths": "test/package-integrity.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:34:17Z",
-      "worktree": "worktrees/wt-package-integrity-test"
+      "worktree": "worktree/wt-package-integrity-test"
     },
     "plugin-json-docs": {
       "agent": "opencode",
@@ -1103,7 +1103,7 @@
       "paths": "test/plugin-json.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:42:59Z",
-      "worktree": "worktrees/wt-plugin-json-docs"
+      "worktree": "worktree/wt-plugin-json-docs"
     },
     "plugin-spec-version-pin": {
       "agent": "orchestrator",
@@ -1114,7 +1114,7 @@
       "paths": "test/cli-installer.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T01:12:03Z",
-      "worktree": "worktrees/wt-plugin-spec-version-pin"
+      "worktree": "worktree/wt-plugin-spec-version-pin"
     },
     "reanchor-system-injection": {
       "agent": "inkling",
@@ -1125,7 +1125,7 @@
       "paths": "src/runtime/controller.ts,src/core/types.ts,src/core/wire.ts,src/hud-card.tsx,src/index.ts,test/loop.test.ts,test/tui-context-render.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T17:27:46Z",
-      "worktree": "worktrees/wt-reanchor-system-injection"
+      "worktree": "worktree/wt-reanchor-system-injection"
     },
     "record-final-leases": {
       "agent": "orchestrator",
@@ -1136,7 +1136,7 @@
       "paths": ".term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T17:22:08Z",
-      "worktree": "worktrees/wt-record-final-leases"
+      "worktree": "worktree/wt-record-final-leases"
     },
     "record-fix-spec-scoping": {
       "agent": "orchestrator",
@@ -1147,7 +1147,7 @@
       "paths": ".term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T16:55:09Z",
-      "worktree": "worktrees/wt-record-fix-spec-scoping"
+      "worktree": "worktree/wt-record-fix-spec-scoping"
     },
     "record-leases": {
       "agent": "orchestrator",
@@ -1158,7 +1158,7 @@
       "paths": ".term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T16:38:11Z",
-      "worktree": "worktrees/wt-record-leases"
+      "worktree": "worktree/wt-record-leases"
     },
     "record-stash-leases": {
       "agent": "orchestrator",
@@ -1169,7 +1169,7 @@
       "paths": ".term/coordinator/state.json",
       "status": "done",
       "submittedAt": "2026-11-15T16:51:54Z",
-      "worktree": "worktrees/wt-record-stash-leases"
+      "worktree": "worktree/wt-record-stash-leases"
     },
     "reland-a11": {
       "agent": "orchestrator",
@@ -1180,7 +1180,7 @@
       "paths": "src/core/entries.ts,src/tui.tsx,test/entries.test.ts,dist/tui.js,SPEC.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-15T21:37:39Z",
-      "worktree": "worktrees/wt-reland-a11"
+      "worktree": "worktree/wt-reland-a11"
     },
     "reland-gjr": {
       "agent": "orchestrator",
@@ -1191,7 +1191,7 @@
       "paths": "src/tui.tsx,dist/tui.js,SPEC.md,docs/changelog.html,docs/core.html,docs/runtime.html",
       "status": "done",
       "submittedAt": "2026-11-15T21:37:39Z",
-      "worktree": "worktrees/wt-reland-gjr"
+      "worktree": "worktree/wt-reland-gjr"
     },
     "reland-processnote": {
       "agent": "orchestrator",
@@ -1202,7 +1202,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:37:39Z",
-      "worktree": "worktrees/wt-reland-processnote"
+      "worktree": "worktree/wt-reland-processnote"
     },
     "reland-specnote": {
       "agent": "orchestrator",
@@ -1213,7 +1213,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:37:39Z",
-      "worktree": "worktrees/wt-reland-specnote"
+      "worktree": "worktree/wt-reland-specnote"
     },
     "release-checklist-goal-loop-n": {
       "agent": "orchestrator",
@@ -1224,7 +1224,7 @@
       "paths": "RELEASE-CHECKLIST.md,src/index.ts,src/runtime/controller.ts,src/core/format.ts,src/core/parse.ts,test/loop.test.ts,test/plugin.test.ts",
       "status": "done",
       "submittedAt": "2026-11-15T23:08:18Z",
-      "worktree": "worktrees/wt-release-checklist-goal-loop-n"
+      "worktree": "worktree/wt-release-checklist-goal-loop-n"
     },
     "release-checklist-refresh": {
       "agent": "opencode",
@@ -1235,7 +1235,7 @@
       "paths": "README.md,RELEASE-CHECKLIST.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T02:13:39Z",
-      "worktree": "worktrees/wt-release-checklist-refresh"
+      "worktree": "worktree/wt-release-checklist-refresh"
     },
     "release-checklist-repin": {
       "agent": "opencode",
@@ -1246,7 +1246,7 @@
       "paths": "RELEASE-CHECKLIST.md",
       "status": "done",
       "submittedAt": "2026-11-16T02:16:09Z",
-      "worktree": "worktrees/wt-release-checklist-repin"
+      "worktree": "worktree/wt-release-checklist-repin"
     },
     "release-github-install": {
       "agent": "orchestrator",
@@ -1257,7 +1257,7 @@
       "paths": "README.md,docs",
       "status": "done",
       "submittedAt": "2026-11-15T23:44:36Z",
-      "worktree": "worktrees/wt-release-github-install"
+      "worktree": "worktree/wt-release-github-install"
     },
     "release-prep-1-2-0": {
       "agent": "opencode",
@@ -1268,7 +1268,7 @@
       "paths": "package.json,bin/opencode-goal.mjs,README.md,RELEASE-CHECKLIST.md,docs,AGENTS.md,opencode.json,opencode.json.example,.github/workflows/check.yml,.gitignore,test/cli-installer.test.ts,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T03:24:55Z",
-      "worktree": "worktrees/wt-release-prep-1-2-0"
+      "worktree": "worktree/wt-release-prep-1-2-0"
     },
     "rename-opencode-goalv2": {
       "agent": "inkling",
@@ -1279,7 +1279,7 @@
       "paths": "package.json,bin,docs,README.md,SPEC.md,test",
       "status": "done",
       "submittedAt": "2026-11-15T23:15:10Z",
-      "worktree": "worktrees/wt-rename-opencode-goalv2"
+      "worktree": "worktree/wt-rename-opencode-goalv2"
     },
     "render-script-smoke-tests": {
       "agent": "opencode",
@@ -1290,7 +1290,7 @@
       "paths": "test,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T01:20:18Z",
-      "worktree": "worktrees/wt-render-script-smoke-tests"
+      "worktree": "worktree/wt-render-script-smoke-tests"
     },
     "rpc-restore-read-through": {
       "agent": "orchestrator",
@@ -1301,7 +1301,7 @@
       "paths": "src,test",
       "status": "done",
       "submittedAt": "2026-11-15T07:12:54Z",
-      "worktree": "worktrees/wt-rpc-restore-read-through"
+      "worktree": "worktree/wt-rpc-restore-read-through"
     },
     "ship-coordinator-binary": {
       "agent": "orchestrator",
@@ -1312,7 +1312,7 @@
       "paths": "packages/coordinator",
       "status": "done",
       "submittedAt": "2026-11-09T19:07:43Z",
-      "worktree": "worktrees/wt-ship-coordinator-binary"
+      "worktree": "worktree/wt-ship-coordinator-binary"
     },
     "spec-audit-wave-complete": {
       "agent": "orchestrator",
@@ -1323,7 +1323,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:20:49Z",
-      "worktree": "worktrees/wt-spec-audit-wave-complete"
+      "worktree": "worktree/wt-spec-audit-wave-complete"
     },
     "spec-check-unit-tests": {
       "agent": "opencode",
@@ -1334,7 +1334,7 @@
       "paths": "scripts/spec-check.ts,test/spec-check.test.ts,SPEC.md,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T01:35:51Z",
-      "worktree": "worktrees/wt-spec-check-unit-tests"
+      "worktree": "worktree/wt-spec-check-unit-tests"
     },
     "spec-coordinator-process-note": {
       "agent": "orchestrator",
@@ -1345,7 +1345,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T21:24:11Z",
-      "worktree": "worktrees/wt-spec-coordinator-process-note"
+      "worktree": "worktree/wt-spec-coordinator-process-note"
     },
     "spec-line-refs": {
       "agent": "opencode",
@@ -1356,7 +1356,7 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T01:55:07Z",
-      "worktree": "worktrees/wt-spec-line-refs"
+      "worktree": "worktree/wt-spec-line-refs"
     },
     "tui-80col-floor": {
       "agent": "orchestrator",
@@ -1367,7 +1367,7 @@
       "paths": "src/tui.tsx,src/hud-card.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:32:36Z",
-      "worktree": "worktrees/wt-tui-80col-floor"
+      "worktree": "worktree/wt-tui-80col-floor"
     },
     "tui-ack-ledger-hue": {
       "agent": "orchestrator",
@@ -1378,7 +1378,7 @@
       "paths": "src/core/hud.ts src/tui.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:42:15Z",
-      "worktree": "worktrees/wt-tui-ack-ledger-hue"
+      "worktree": "worktree/wt-tui-ack-ledger-hue"
     },
     "tui-ascii-demotion-sweep": {
       "agent": "orchestrator",
@@ -1389,7 +1389,7 @@
       "paths": "src/core/format.ts,src/core/hud.ts,src/core/history.ts,src/tui-history.tsx,src/hud-card.tsx,src/status-dialog.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:30:07Z",
-      "worktree": "worktrees/wt-tui-ascii-demotion-sweep"
+      "worktree": "worktree/wt-tui-ascii-demotion-sweep"
     },
     "tui-ascii-fallback": {
       "agent": "orchestrator",
@@ -1400,7 +1400,7 @@
       "paths": "src/core/history.ts,src/tui-history.tsx,src/status-dialog.tsx,test/history.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:58:59Z",
-      "worktree": "worktrees/wt-tui-ascii-fallback"
+      "worktree": "worktree/wt-tui-ascii-fallback"
     },
     "tui-ascii-pips": {
       "agent": "orchestrator",
@@ -1411,7 +1411,7 @@
       "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,src/tui.tsx,test/history.test.ts,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:28:32Z",
-      "worktree": "worktrees/wt-tui-ascii-pips"
+      "worktree": "worktree/wt-tui-ascii-pips"
     },
     "tui-card-context-menu": {
       "agent": "orchestrator",
@@ -1422,7 +1422,7 @@
       "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:15:59Z",
-      "worktree": "worktrees/wt-tui-card-context-menu"
+      "worktree": "worktree/wt-tui-card-context-menu"
     },
     "tui-card-context-meter": {
       "agent": "orchestrator",
@@ -1433,7 +1433,7 @@
       "paths": "src/hud-card.tsx test/tui-hud.test.tsx test/tui-render.test.tsx SPEC.md dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T11:14:18Z",
-      "worktree": "worktrees/wt-tui-card-context-meter"
+      "worktree": "worktree/wt-tui-card-context-meter"
     },
     "tui-card-dossier-doors": {
       "agent": "orchestrator",
@@ -1443,7 +1443,7 @@
       "mergedInto": "dev",
       "paths": "src/**",
       "status": "done",
-      "worktree": "worktrees/wt-tui-card-dossier-doors"
+      "worktree": "worktree/wt-tui-card-dossier-doors"
     },
     "tui-card-fit": {
       "agent": "orchestrator",
@@ -1454,7 +1454,7 @@
       "paths": "src/core/format.ts,src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,test/format.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:46:40Z",
-      "worktree": "worktrees/wt-tui-card-fit"
+      "worktree": "worktree/wt-tui-card-fit"
     },
     "tui-card-row-ceiling": {
       "agent": "orchestrator",
@@ -1465,7 +1465,7 @@
       "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:19:51Z",
-      "worktree": "worktrees/wt-tui-card-row-ceiling"
+      "worktree": "worktree/wt-tui-card-row-ceiling"
     },
     "tui-card-spend": {
       "agent": "orchestrator",
@@ -1476,7 +1476,7 @@
       "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:47:26Z",
-      "worktree": "worktrees/wt-tui-card-spend"
+      "worktree": "worktree/wt-tui-card-spend"
     },
     "tui-card-spend-budget": {
       "agent": "orchestrator",
@@ -1487,7 +1487,7 @@
       "paths": "src/core/format.ts src/hud-card.tsx test/core.test.ts test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:02:36Z",
-      "worktree": "worktrees/wt-tui-card-spend-budget"
+      "worktree": "worktree/wt-tui-card-spend-budget"
     },
     "tui-card-why-row": {
       "agent": "orchestrator",
@@ -1498,7 +1498,7 @@
       "paths": "src/hud-card.tsx test/tui-hud.test.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx test/__snapshots__/tui-snapshots.test.tsx.snap SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T11:33:36Z",
-      "worktree": "worktrees/wt-tui-card-why-row"
+      "worktree": "worktree/wt-tui-card-why-row"
     },
     "tui-clear-confirm": {
       "agent": "orchestrator",
@@ -1509,7 +1509,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:08:02Z",
-      "worktree": "worktrees/wt-tui-clear-confirm"
+      "worktree": "worktree/wt-tui-clear-confirm"
     },
     "tui-clear-error-toast": {
       "agent": "orchestrator",
@@ -1520,7 +1520,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:25:32Z",
-      "worktree": "worktrees/wt-tui-clear-error-toast"
+      "worktree": "worktree/wt-tui-clear-error-toast"
     },
     "tui-compaction-landed-marker": {
       "agent": "orchestrator",
@@ -1531,7 +1531,7 @@
       "paths": "src/core/hud.ts src/hud-card.tsx src/status-dialog.tsx test/tui-hud.test.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T14:56:07Z",
-      "worktree": "worktrees/wt-tui-compaction-landed-marker"
+      "worktree": "worktree/wt-tui-compaction-landed-marker"
     },
     "tui-completion-flash": {
       "agent": "orchestrator",
@@ -1542,7 +1542,7 @@
       "paths": "src/tui.tsx,src/core/hud.ts,src/status-dialog.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:39:28Z",
-      "worktree": "worktrees/wt-tui-completion-flash"
+      "worktree": "worktree/wt-tui-completion-flash"
     },
     "tui-condition-underline": {
       "agent": "orchestrator",
@@ -1553,7 +1553,7 @@
       "paths": "src/status-dialog.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:13:41Z",
-      "worktree": "worktrees/wt-tui-condition-underline"
+      "worktree": "worktree/wt-tui-condition-underline"
     },
     "tui-context-meter": {
       "agent": "orchestrator",
@@ -1564,7 +1564,7 @@
       "paths": "src,test,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:03:54Z",
-      "worktree": "worktrees/wt-tui-context-meter"
+      "worktree": "worktree/wt-tui-context-meter"
     },
     "tui-context-sparkline": {
       "agent": "orchestrator",
@@ -1575,7 +1575,7 @@
       "paths": "src/core/types.ts,src/core/wire.ts,src/core/history.ts,src/runtime/controller.ts,src/tui-history.tsx,test/history.test.ts,test/wire.test.ts,test/loop.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:30:12Z",
-      "worktree": "worktrees/wt-tui-context-sparkline"
+      "worktree": "worktree/wt-tui-context-sparkline"
     },
     "tui-copy-parity": {
       "agent": "orchestrator",
@@ -1586,7 +1586,7 @@
       "paths": "src/tui.tsx,src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:44:49Z",
-      "worktree": "worktrees/wt-tui-copy-parity"
+      "worktree": "worktree/wt-tui-copy-parity"
     },
     "tui-copy-reason": {
       "agent": "orchestrator",
@@ -1597,7 +1597,7 @@
       "paths": "src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:30:38Z",
-      "worktree": "worktrees/wt-tui-copy-reason"
+      "worktree": "worktree/wt-tui-copy-reason"
     },
     "tui-dashboard-disarm-card": {
       "agent": "orchestrator",
@@ -1608,7 +1608,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:57:13Z",
-      "worktree": "worktrees/wt-tui-dashboard-disarm-card"
+      "worktree": "worktree/wt-tui-dashboard-disarm-card"
     },
     "tui-dialog-arm-card": {
       "agent": "orchestrator",
@@ -1619,7 +1619,7 @@
       "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:03:11Z",
-      "worktree": "worktrees/wt-tui-dialog-arm-card"
+      "worktree": "worktree/wt-tui-dialog-arm-card"
     },
     "tui-dialog-elsewhere": {
       "agent": "orchestrator",
@@ -1630,7 +1630,7 @@
       "paths": "src/core/wire.ts src/status-dialog.tsx src/tui.tsx test/tui-render.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T11:45:51Z",
-      "worktree": "worktrees/wt-tui-dialog-elsewhere"
+      "worktree": "worktree/wt-tui-dialog-elsewhere"
     },
     "tui-dialog-keyboard-layer": {
       "agent": "orchestrator",
@@ -1641,7 +1641,7 @@
       "paths": "src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:22:10Z",
-      "worktree": "worktrees/wt-tui-dialog-keyboard-layer"
+      "worktree": "worktree/wt-tui-dialog-keyboard-layer"
     },
     "tui-dialog-overflow-wheel": {
       "agent": "orchestrator",
@@ -1652,7 +1652,7 @@
       "paths": "src/status-dialog.tsx src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T14:40:15Z",
-      "worktree": "worktrees/wt-tui-dialog-overflow-wheel"
+      "worktree": "worktree/wt-tui-dialog-overflow-wheel"
     },
     "tui-dialog-reason-chord": {
       "agent": "orchestrator",
@@ -1663,7 +1663,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:21:12Z",
-      "worktree": "worktrees/wt-tui-dialog-reason-chord"
+      "worktree": "worktree/wt-tui-dialog-reason-chord"
     },
     "tui-dialog-snapshot-stale": {
       "agent": "orchestrator",
@@ -1674,7 +1674,7 @@
       "paths": "src/tui.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:25:02Z",
-      "worktree": "worktrees/wt-tui-dialog-snapshot-stale"
+      "worktree": "worktree/wt-tui-dialog-snapshot-stale"
     },
     "tui-dialog-view-tabs": {
       "agent": "orchestrator",
@@ -1685,7 +1685,7 @@
       "paths": "src/status-dialog.tsx src/core/dialog-keys.ts src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T15:16:18Z",
-      "worktree": "worktrees/wt-tui-dialog-view-tabs"
+      "worktree": "worktree/wt-tui-dialog-view-tabs"
     },
     "tui-dist-rebuild": {
       "agent": "orchestrator",
@@ -1696,7 +1696,7 @@
       "paths": "dist/tui.js,dist/tui.d.ts",
       "status": "done",
       "submittedAt": "2026-11-15T20:15:36Z",
-      "worktree": "worktrees/wt-tui-dist-rebuild"
+      "worktree": "worktree/wt-tui-dist-rebuild"
     },
     "tui-dossier-export": {
       "agent": "orchestrator",
@@ -1707,7 +1707,7 @@
       "paths": "src/core/dossier-export.ts,src/tui.tsx,src/status-dialog.tsx,test/dossier-export.test.ts,test/tui-render.test.tsx,SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-16T17:34:29Z",
-      "worktree": "worktrees/wt-tui-dossier-export"
+      "worktree": "worktree/wt-tui-dossier-export"
     },
     "tui-dossier-outline": {
       "agent": "orchestrator",
@@ -1718,7 +1718,7 @@
       "paths": "src/core/dossier-outline.ts,src/status-dialog.tsx,src/tui.tsx,test/dossier-outline.test.ts,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/package-integrity.test.ts,SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-16T17:08:29Z",
-      "worktree": "worktrees/wt-tui-dossier-outline"
+      "worktree": "worktree/wt-tui-dossier-outline"
     },
     "tui-dossier-view": {
       "agent": "orchestrator",
@@ -1729,7 +1729,7 @@
       "paths": "src/core/dossier-view.ts,src/status-dialog.tsx,src/tui.tsx,src/core/dialog-keys.ts,test/dossier-view.test.ts,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/dialog-keys.test.ts,test/package-integrity.test.ts,SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-16T16:47:39Z",
-      "worktree": "worktrees/wt-tui-dossier-view"
+      "worktree": "worktree/wt-tui-dossier-view"
     },
     "tui-elsewhere-key-parity": {
       "agent": "orchestrator",
@@ -1740,7 +1740,7 @@
       "paths": "src/core/dialog-keys.ts src/status-dialog.tsx src/tui.tsx test/dialog-keys.test.ts test/tui-render.test.tsx SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T14:23:17Z",
-      "worktree": "worktrees/wt-tui-elsewhere-key-parity"
+      "worktree": "worktree/wt-tui-elsewhere-key-parity"
     },
     "tui-evaluator-hint": {
       "agent": "orchestrator",
@@ -1751,7 +1751,7 @@
       "paths": "src/core/hud.ts,src/hud-card.tsx,src/status-dialog.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:19:40Z",
-      "worktree": "worktrees/wt-tui-evaluator-hint"
+      "worktree": "worktree/wt-tui-evaluator-hint"
     },
     "tui-failed-label": {
       "agent": "orchestrator",
@@ -1762,7 +1762,7 @@
       "paths": "src/core/types.ts,src/core/wire.ts,src/core/hud.ts,src/runtime/controller.ts,test/tui-hud.test.tsx,test/controller.test.ts,test/wire.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:53:56Z",
-      "worktree": "worktrees/wt-tui-failed-label"
+      "worktree": "worktree/wt-tui-failed-label"
     },
     "tui-failure-first-frames": {
       "agent": "orchestrator",
@@ -1773,7 +1773,7 @@
       "paths": "scripts/render-card.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:34:10Z",
-      "worktree": "worktrees/wt-tui-failure-first-frames"
+      "worktree": "worktree/wt-tui-failure-first-frames"
     },
     "tui-final-tally-spend": {
       "agent": "orchestrator",
@@ -1784,7 +1784,7 @@
       "paths": "src/core/history.ts src/tui-history.tsx test/history.test.ts test/tui-render.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:38:11Z",
-      "worktree": "worktrees/wt-tui-final-tally-spend"
+      "worktree": "worktree/wt-tui-final-tally-spend"
     },
     "tui-finished-loop-now-row": {
       "agent": "orchestrator",
@@ -1795,7 +1795,7 @@
       "paths": "src/tui-history.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx.snap SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:55:51Z",
-      "worktree": "worktrees/wt-tui-finished-loop-now-row"
+      "worktree": "worktree/wt-tui-finished-loop-now-row"
     },
     "tui-first-impression-frames": {
       "agent": "orchestrator",
@@ -1806,7 +1806,7 @@
       "paths": "scripts/render-card.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:38:41Z",
-      "worktree": "worktrees/wt-tui-first-impression-frames"
+      "worktree": "worktree/wt-tui-first-impression-frames"
     },
     "tui-fluid-card-width": {
       "agent": "orchestrator",
@@ -1817,7 +1817,7 @@
       "paths": "src/hud-card.tsx src/tui.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html test/tui-render.test.tsx",
       "status": "done",
       "submittedAt": "2026-11-16T12:19:03Z",
-      "worktree": "worktrees/wt-tui-fluid-card-width"
+      "worktree": "worktree/wt-tui-fluid-card-width"
     },
     "tui-footer-budget-stale-parse": {
       "agent": "orchestrator",
@@ -1828,7 +1828,7 @@
       "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:50:49Z",
-      "worktree": "worktrees/wt-tui-footer-budget-stale-parse"
+      "worktree": "worktree/wt-tui-footer-budget-stale-parse"
     },
     "tui-footer-coherence": {
       "agent": "orchestrator",
@@ -1839,7 +1839,7 @@
       "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:06:55Z",
-      "worktree": "worktrees/wt-tui-footer-coherence"
+      "worktree": "worktree/wt-tui-footer-coherence"
     },
     "tui-footer-tier-cells": {
       "agent": "orchestrator",
@@ -1850,7 +1850,7 @@
       "paths": "src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:38:23Z",
-      "worktree": "worktrees/wt-tui-footer-tier-cells"
+      "worktree": "worktree/wt-tui-footer-tier-cells"
     },
     "tui-frame-matrix": {
       "agent": "orchestrator",
@@ -1861,7 +1861,7 @@
       "paths": "scripts/render-dialog.tsx scripts/render-card.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:13:02Z",
-      "worktree": "worktrees/wt-tui-frame-matrix"
+      "worktree": "worktree/wt-tui-frame-matrix"
     },
     "tui-glyph-ascii-chrome": {
       "agent": "orchestrator",
@@ -1872,7 +1872,7 @@
       "paths": "src/core/format.ts,src/core/hud.ts,src/hud-card.tsx,src/tui.tsx,src/status-dialog.tsx,src/tui-history.tsx,test/tui-hud.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:00:12Z",
-      "worktree": "worktrees/wt-tui-glyph-ascii-chrome"
+      "worktree": "worktree/wt-tui-glyph-ascii-chrome"
     },
     "tui-hint-emdash": {
       "agent": "orchestrator",
@@ -1883,7 +1883,7 @@
       "paths": "src/core/hud.ts,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:44:04Z",
-      "worktree": "worktrees/wt-tui-hint-emdash"
+      "worktree": "worktree/wt-tui-hint-emdash"
     },
     "tui-hud-first-pass": {
       "agent": "inkling",
@@ -1894,7 +1894,7 @@
       "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T04:19:50Z",
-      "worktree": "worktrees/wt-tui-hud-first-pass"
+      "worktree": "worktree/wt-tui-hud-first-pass"
     },
     "tui-hud-menu-keyboard": {
       "agent": "orchestrator",
@@ -1905,7 +1905,7 @@
       "paths": "src/core/hud.ts src/hud-card.tsx src/tui.tsx test/tui-hud.test.tsx SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T15:39:21Z",
-      "worktree": "worktrees/wt-tui-hud-menu-keyboard"
+      "worktree": "worktree/wt-tui-hud-menu-keyboard"
     },
     "tui-inline-copy-ack": {
       "agent": "orchestrator",
@@ -1916,7 +1916,7 @@
       "paths": "src/status-dialog.tsx,src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:35:27Z",
-      "worktree": "worktrees/wt-tui-inline-copy-ack"
+      "worktree": "worktree/wt-tui-inline-copy-ack"
     },
     "tui-keyboard-parity": {
       "agent": "orchestrator",
@@ -1927,7 +1927,7 @@
       "paths": "src/tui.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:47:39Z",
-      "worktree": "worktrees/wt-tui-keyboard-parity"
+      "worktree": "worktree/wt-tui-keyboard-parity"
     },
     "tui-landing-ack": {
       "agent": "orchestrator",
@@ -1938,7 +1938,7 @@
       "paths": "src/tui.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T07:43:39Z",
-      "worktree": "worktrees/wt-tui-landing-ack"
+      "worktree": "worktree/wt-tui-landing-ack"
     },
     "tui-ledger-80col": {
       "agent": "orchestrator",
@@ -1949,7 +1949,7 @@
       "paths": "src/tui-history.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:39:57Z",
-      "worktree": "worktrees/wt-tui-ledger-80col"
+      "worktree": "worktree/wt-tui-ledger-80col"
     },
     "tui-ledger-failure-first": {
       "agent": "orchestrator",
@@ -1960,7 +1960,7 @@
       "paths": "src/status-dialog.tsx test/tui-render.test.tsx test/tui-snapshots.test.tsx SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T15:59:28Z",
-      "worktree": "worktrees/wt-tui-ledger-failure-first"
+      "worktree": "worktree/wt-tui-ledger-failure-first"
     },
     "tui-ledger-sha": {
       "agent": "orchestrator",
@@ -1971,7 +1971,7 @@
       "paths": "src/core/types.ts,src/core/git.ts,src/core/wire.ts,src/runtime/controller.ts,src/tui-history.tsx,test/git.test.ts,test/tui-render.test.tsx,SPEC.md,dist,docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T10:56:00Z",
-      "worktree": "worktrees/wt-tui-ledger-sha"
+      "worktree": "worktree/wt-tui-ledger-sha"
     },
     "tui-ledger-sha-transcript": {
       "agent": "orchestrator",
@@ -1982,7 +1982,7 @@
       "paths": "src/core/types.ts src/runtime/controller.ts src/tui-history.tsx src/status-dialog.tsx src/tui.tsx scripts/render-dialog.tsx test/tui-snapshots.test.tsx test/tui-render.test.tsx test/verify.test.ts test/render-scripts.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T14:08:46Z",
-      "worktree": "worktrees/wt-tui-ledger-sha-transcript"
+      "worktree": "worktree/wt-tui-ledger-sha-transcript"
     },
     "tui-loop-dossier": {
       "agent": "orchestrator",
@@ -1993,7 +1993,7 @@
       "paths": "src/core/dossier.ts,src/tui.tsx,test/dossier.test.ts,SPEC.md,docs",
       "status": "done",
       "submittedAt": "2026-11-16T16:23:11Z",
-      "worktree": "worktrees/wt-tui-loop-dossier"
+      "worktree": "worktree/wt-tui-loop-dossier"
     },
     "tui-loop-satisfied-at-head": {
       "agent": "orchestrator",
@@ -2004,7 +2004,7 @@
       "paths": "src/tui-history.tsx test/tui-hud.test.tsx test/tui-snapshots.test.tsx test/__snapshots__/tui-snapshots.test.tsx.snap SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T11:53:32Z",
-      "worktree": "worktrees/wt-tui-loop-satisfied-at-head"
+      "worktree": "worktree/wt-tui-loop-satisfied-at-head"
     },
     "tui-loop-spend-attribution": {
       "agent": "orchestrator",
@@ -2015,7 +2015,7 @@
       "paths": "src/core/types.ts src/core/format.ts src/core/wire.ts src/runtime/controller.ts src/tui-history.tsx test/loop.test.ts test/wire.test.ts test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html docs/architecture.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:04:00Z",
-      "worktree": "worktrees/wt-tui-loop-spend-attribution"
+      "worktree": "worktree/wt-tui-loop-spend-attribution"
     },
     "tui-mixcache-scoped-memo": {
       "agent": "orchestrator",
@@ -2026,7 +2026,7 @@
       "paths": "src/core/history.ts,src/tui-history.tsx,test/history.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:03:05Z",
-      "worktree": "worktrees/wt-tui-mixcache-scoped-memo"
+      "worktree": "worktree/wt-tui-mixcache-scoped-memo"
     },
     "tui-mouse-correctness": {
       "agent": "orchestrator",
@@ -2037,7 +2037,7 @@
       "paths": "src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:22:41Z",
-      "worktree": "worktrees/wt-tui-mouse-correctness"
+      "worktree": "worktree/wt-tui-mouse-correctness"
     },
     "tui-outcome-story": {
       "agent": "orchestrator",
@@ -2048,7 +2048,7 @@
       "paths": "src/core/format.ts,src/runtime/controller.ts,test/core.test.ts,test/controller.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:24:13Z",
-      "worktree": "worktrees/wt-tui-outcome-story"
+      "worktree": "worktree/wt-tui-outcome-story"
     },
     "tui-pause-firstclass": {
       "agent": "orchestrator",
@@ -2059,7 +2059,7 @@
       "paths": "src/core/types.ts,src/core/wire.ts,src/core/hud.ts,src/runtime/controller.ts,test/tui-hud.test.tsx,test/wire.test.ts,test/controller.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:56:50Z",
-      "worktree": "worktrees/wt-tui-pause-firstclass"
+      "worktree": "worktree/wt-tui-pause-firstclass"
     },
     "tui-pill-affordance": {
       "agent": "orchestrator",
@@ -2070,7 +2070,7 @@
       "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:50:06Z",
-      "worktree": "worktrees/wt-tui-pill-affordance"
+      "worktree": "worktree/wt-tui-pill-affordance"
     },
     "tui-pill-budget-measure": {
       "agent": "orchestrator",
@@ -2081,7 +2081,7 @@
       "paths": "src/tui.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:36:57Z",
-      "worktree": "worktrees/wt-tui-pill-budget-measure"
+      "worktree": "worktree/wt-tui-pill-budget-measure"
     },
     "tui-pill-width": {
       "agent": "orchestrator",
@@ -2092,7 +2092,7 @@
       "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T08:32:46Z",
-      "worktree": "worktrees/wt-tui-pill-width"
+      "worktree": "worktree/wt-tui-pill-width"
     },
     "tui-pin-condition": {
       "agent": "tui",
@@ -2103,7 +2103,7 @@
       "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T04:34:26Z",
-      "worktree": "worktrees/wt-tui-pin-condition"
+      "worktree": "worktree/wt-tui-pin-condition"
     },
     "tui-pinbudget-cells": {
       "agent": "orchestrator",
@@ -2114,7 +2114,7 @@
       "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-hud.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:22:37Z",
-      "worktree": "worktrees/wt-tui-pinbudget-cells"
+      "worktree": "worktree/wt-tui-pinbudget-cells"
     },
     "tui-rail-collapse": {
       "agent": "orchestrator",
@@ -2125,7 +2125,7 @@
       "paths": "src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:57:59Z",
-      "worktree": "worktrees/wt-tui-rail-collapse"
+      "worktree": "worktree/wt-tui-rail-collapse"
     },
     "tui-rail-expand-keyboard": {
       "agent": "orchestrator",
@@ -2136,7 +2136,7 @@
       "paths": "src/tui.tsx,src/status-dialog.tsx,src/tui-history.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:14:07Z",
-      "worktree": "worktrees/wt-tui-rail-expand-keyboard"
+      "worktree": "worktree/wt-tui-rail-expand-keyboard"
     },
     "tui-reduced-color": {
       "agent": "orchestrator",
@@ -2147,7 +2147,7 @@
       "paths": "src/core/hud.ts,src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T06:09:21Z",
-      "worktree": "worktrees/wt-tui-reduced-color"
+      "worktree": "worktree/wt-tui-reduced-color"
     },
     "tui-reduced-color-frames": {
       "agent": "orchestrator",
@@ -2158,7 +2158,7 @@
       "paths": "scripts/render-card.tsx scripts/render-dialog.tsx scripts/render-history.tsx test/render-scripts.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:29:24Z",
-      "worktree": "worktrees/wt-tui-reduced-color-frames"
+      "worktree": "worktree/wt-tui-reduced-color-frames"
     },
     "tui-render-edge-tests": {
       "agent": "opencode",
@@ -2169,7 +2169,7 @@
       "paths": "test/tui-render.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T01:16:41Z",
-      "worktree": "worktrees/wt-tui-render-edge-tests"
+      "worktree": "worktree/wt-tui-render-edge-tests"
     },
     "tui-render-tests": {
       "agent": "inkling",
@@ -2180,7 +2180,7 @@
       "paths": "SPEC.md,test/bunfig.toml,test/tui-render.test.tsx",
       "status": "done",
       "submittedAt": "2026-11-16T01:08:21Z",
-      "worktree": "worktrees/wt-tui-render-tests"
+      "worktree": "worktree/wt-tui-render-tests"
     },
     "tui-retry-narrative": {
       "agent": "orchestrator",
@@ -2191,7 +2191,7 @@
       "paths": "src/core/hud.ts,src/hud-card.tsx,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T05:24:57Z",
-      "worktree": "worktrees/wt-tui-retry-narrative"
+      "worktree": "worktree/wt-tui-retry-narrative"
     },
     "tui-retry-watch": {
       "agent": "orchestrator",
@@ -2202,7 +2202,7 @@
       "paths": "src/core/hud.ts,src/tui.tsx,test/tui-hud.test.tsx,dist,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T05:19:39Z",
-      "worktree": "worktrees/wt-tui-retry-watch"
+      "worktree": "worktree/wt-tui-retry-watch"
     },
     "tui-snapshot-holes": {
       "agent": "orchestrator",
@@ -2213,7 +2213,7 @@
       "paths": "test/tui-snapshots.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T08:36:59Z",
-      "worktree": "worktrees/wt-tui-snapshot-holes"
+      "worktree": "worktree/wt-tui-snapshot-holes"
     },
     "tui-snapshot-remediation": {
       "agent": "orchestrator",
@@ -2224,7 +2224,7 @@
       "paths": "test/tui-snapshots.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T08:03:08Z",
-      "worktree": "worktrees/wt-tui-snapshot-remediation"
+      "worktree": "worktree/wt-tui-snapshot-remediation"
     },
     "tui-snapshot-states": {
       "agent": "orchestrator",
@@ -2235,7 +2235,7 @@
       "paths": "test/tui-snapshots.test.tsx,SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T07:52:49Z",
-      "worktree": "worktrees/wt-tui-snapshot-states"
+      "worktree": "worktree/wt-tui-snapshot-states"
     },
     "tui-terminal-ack": {
       "agent": "opencode-goal",
@@ -2246,7 +2246,7 @@
       "paths": "src/tui.tsx,src/hud-card.tsx,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,dist/tui.js",
       "status": "done",
       "submittedAt": "2026-11-16T04:48:10Z",
-      "worktree": "worktrees/wt-tui-terminal-ack"
+      "worktree": "worktree/wt-tui-terminal-ack"
     },
     "tui-truncate-ellipsis-floor": {
       "agent": "orchestrator",
@@ -2257,7 +2257,7 @@
       "paths": "src/core/format.ts,src/core/hud.ts,test/core.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:39:32Z",
-      "worktree": "worktrees/wt-tui-truncate-ellipsis-floor"
+      "worktree": "worktree/wt-tui-truncate-ellipsis-floor"
     },
     "tui-turn-spend": {
       "agent": "orchestrator",
@@ -2268,7 +2268,7 @@
       "paths": "src/core/types.ts src/core/wire.ts src/runtime/controller.ts src/tui-history.tsx test/controller.test.ts test/wire.test.ts test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html docs/architecture.html docs/index.html docs/runtime.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:27:10Z",
-      "worktree": "worktrees/wt-tui-turn-spend"
+      "worktree": "worktree/wt-tui-turn-spend"
     },
     "tui-unicode-truncate": {
       "agent": "orchestrator",
@@ -2279,7 +2279,7 @@
       "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,dist,package.json,bun.lock",
       "status": "done",
       "submittedAt": "2026-11-16T06:42:38Z",
-      "worktree": "worktrees/wt-tui-unicode-truncate"
+      "worktree": "worktree/wt-tui-unicode-truncate"
     },
     "tui-verdict-glyph-ascii": {
       "agent": "orchestrator",
@@ -2290,7 +2290,7 @@
       "paths": "src/core/history.ts,src/hud-card.tsx,src/tui-history.tsx,src/tui.tsx,test/history.test.ts,test/tui-render.test.tsx,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:33:12Z",
-      "worktree": "worktrees/wt-tui-verdict-glyph-ascii"
+      "worktree": "worktree/wt-tui-verdict-glyph-ascii"
     },
     "tui-verdict-mix-single-pass": {
       "agent": "orchestrator",
@@ -2301,7 +2301,7 @@
       "paths": "src/core/history.ts,test/history.test.ts,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T09:43:13Z",
-      "worktree": "worktrees/wt-tui-verdict-mix-single-pass"
+      "worktree": "worktree/wt-tui-verdict-mix-single-pass"
     },
     "tui-verdict-trail-scrub": {
       "agent": "orchestrator",
@@ -2312,7 +2312,7 @@
       "paths": "src/tui-history.tsx test/tui-render.test.tsx SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-16T16:10:09Z",
-      "worktree": "worktrees/wt-tui-verdict-trail-scrub"
+      "worktree": "worktree/wt-tui-verdict-trail-scrub"
     },
     "tui-verdict-zero-work": {
       "agent": "orchestrator",
@@ -2323,7 +2323,7 @@
       "paths": "src/core/types.ts src/core/wire.ts src/core/history.ts src/runtime/controller.ts src/tui-history.tsx test/history.test.ts test/wire.test.ts test/tui-hud.test.tsx test/loop.test.ts SPEC.md dist/tui.js docs/changelog.html src/hud-card.tsx",
       "status": "done",
       "submittedAt": "2026-11-16T12:11:33Z",
-      "worktree": "worktrees/wt-tui-verdict-zero-work"
+      "worktree": "worktree/wt-tui-verdict-zero-work"
     },
     "tui-verify-tail-dashboard": {
       "agent": "orchestrator",
@@ -2334,7 +2334,7 @@
       "paths": "src/core/types.ts src/runtime/controller.ts src/status-dialog.tsx src/tui.tsx scripts/render-dialog.tsx test/tui-snapshots.test.tsx test/verify.test.ts SPEC.md docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T13:52:26Z",
-      "worktree": "worktrees/wt-tui-verify-tail-dashboard"
+      "worktree": "worktree/wt-tui-verify-tail-dashboard"
     },
     "tui-why-ledger": {
       "agent": "orchestrator",
@@ -2345,7 +2345,7 @@
       "paths": "src/tui-history.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist",
       "status": "done",
       "submittedAt": "2026-11-16T10:13:11Z",
-      "worktree": "worktrees/wt-tui-why-ledger"
+      "worktree": "worktree/wt-tui-why-ledger"
     },
     "tui-why-ledger-alignment": {
       "agent": "orchestrator",
@@ -2356,7 +2356,7 @@
       "paths": "src/tui-history.tsx scripts/render-history.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:49:35Z",
-      "worktree": "worktrees/wt-tui-why-ledger-alignment"
+      "worktree": "worktree/wt-tui-why-ledger-alignment"
     },
     "tui-work-ledger-accents": {
       "agent": "orchestrator",
@@ -2367,7 +2367,7 @@
       "paths": "src/core/hud.ts src/tui-history.tsx src/hud-card.tsx test/tui-hud.test.tsx SPEC.md dist/tui.js docs/changelog.html",
       "status": "done",
       "submittedAt": "2026-11-16T12:33:37Z",
-      "worktree": "worktrees/wt-tui-work-ledger-accents"
+      "worktree": "worktree/wt-tui-work-ledger-accents"
     },
     "v4-proof": {
       "agent": "inkling",
@@ -2378,13 +2378,13 @@
       "paths": "SPEC.md",
       "status": "done",
       "submittedAt": "2026-11-15T23:45:28Z",
-      "worktree": "worktrees/wt-v4-proof"
+      "worktree": "worktree/wt-v4-proof"
     },
     "tui-stale-pill-refresh": {
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/core/hud.ts,test/**,SPEC.md,dist,docs/changelog.html",
       "branch": "wt/tui-stale-pill-refresh",
-      "worktree": "worktrees/wt-tui-stale-pill-refresh",
+      "worktree": "worktree/wt-tui-stale-pill-refresh",
       "status": "done",
       "createdAt": "2026-11-16T23:31:39Z",
       "submittedAt": "2026-11-16T23:33:04Z",
@@ -2395,7 +2395,7 @@
       "agent": "orchestrator",
       "paths": "src/core/prompts.ts,src/index.ts,src/runtime/controller.ts,test/**,SPEC.md,dist",
       "branch": "wt/goal-note-context-strip",
-      "worktree": "worktrees/wt-goal-note-context-strip",
+      "worktree": "worktree/wt-goal-note-context-strip",
       "status": "done",
       "createdAt": "2026-11-16T23:47:19Z",
       "submittedAt": "2026-11-17T00:04:32Z",
@@ -2406,7 +2406,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,src,test,scripts",
       "branch": "wt/em2-first-class-channel",
-      "worktree": "worktrees/wt-em2-first-class-channel",
+      "worktree": "worktree/wt-em2-first-class-channel",
       "status": "done",
       "createdAt": "2026-11-17T00:20:30Z",
       "submittedAt": "2026-11-17T01:06:45Z",
@@ -2417,7 +2417,7 @@
       "agent": "orchestrator",
       "paths": "src/core/opencode-cli.ts,test/opencode-cli.test.ts",
       "branch": "wt/opencode-real-clone-path",
-      "worktree": "worktrees/wt-opencode-real-clone-path",
+      "worktree": "worktree/wt-opencode-real-clone-path",
       "status": "done",
       "createdAt": "2026-11-17T00:44:15Z",
       "submittedAt": "2026-11-17T00:45:43Z",
@@ -2428,7 +2428,7 @@
       "agent": "orchestrator",
       "paths": "src/core/bootstrap.ts,test/bootstrap.test.ts",
       "branch": "wt/bootstrap-coordinator-scope",
-      "worktree": "worktrees/wt-bootstrap-coordinator-scope",
+      "worktree": "worktree/wt-bootstrap-coordinator-scope",
       "status": "done",
       "createdAt": "2026-11-17T00:50:32Z",
       "forcedScope": true,
@@ -2444,7 +2444,7 @@
       "agent": "orchestrator",
       "paths": "dist/tui.js",
       "branch": "wt/em2-dist-rebuild",
-      "worktree": "worktrees/wt-em2-dist-rebuild",
+      "worktree": "worktree/wt-em2-dist-rebuild",
       "status": "done",
       "createdAt": "2026-11-17T01:12:35Z",
       "submittedAt": "2026-11-17T01:12:58Z",
@@ -2455,7 +2455,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/hud-card.tsx,src/core/scrollbar.ts,test/scrollbar.test.tsx,SPEC.md,dist/tui.js",
       "branch": "wt/hud-card-mount-width",
-      "worktree": "worktrees/wt-hud-card-mount-width",
+      "worktree": "worktree/wt-hud-card-mount-width",
       "status": "done",
       "createdAt": "2026-11-17T01:43:09Z",
       "submittedAt": "2026-11-17T01:47:22Z",
@@ -2466,7 +2466,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,test/tui-hud-width-measure.test.tsx,SPEC.md,dist/tui.js",
       "branch": "wt/hud-card-measure",
-      "worktree": "worktrees/wt-hud-card-measure",
+      "worktree": "worktree/wt-hud-card-measure",
       "status": "done",
       "createdAt": "2026-11-17T01:52:12Z",
       "submittedAt": "2026-11-17T02:03:52Z",
@@ -2477,7 +2477,7 @@
       "agent": "orchestrator",
       "paths": "RELEASE-CHECKLIST.md",
       "branch": "wt/release-checklist-sync-2",
-      "worktree": "worktrees/wt-release-checklist-sync-2",
+      "worktree": "worktree/wt-release-checklist-sync-2",
       "status": "done",
       "createdAt": "2026-11-17T02:09:00Z",
       "submittedAt": "2026-11-17T02:10:05Z",
@@ -2488,7 +2488,7 @@
       "agent": "orchestrator",
       "paths": "src/hud-card.tsx,src/tui.tsx,src/core/scrollbar.ts,SPEC.md",
       "branch": "wt/hud-card-width-fix",
-      "worktree": "worktrees/wt-hud-card-width-fix",
+      "worktree": "worktree/wt-hud-card-width-fix",
       "status": "done",
       "createdAt": "2026-11-17T02:38:31Z",
       "forcedScope": true,
@@ -2506,7 +2506,7 @@
       "agent": "orchestrator",
       "paths": "src/core/opencode-cli.ts,SPEC.md",
       "branch": "wt/opencode-cli-guide-tighten",
-      "worktree": "worktrees/wt-opencode-cli-guide-tighten",
+      "worktree": "worktree/wt-opencode-cli-guide-tighten",
       "status": "done",
       "createdAt": "2026-11-17T03:03:12Z",
       "submittedAt": "2026-11-17T03:04:57Z",
@@ -2517,7 +2517,7 @@
       "agent": "orchestrator",
       "paths": "src/core/scrollbar.ts,test/scrollbar.test.tsx,src/hud-card.tsx,src/tui.tsx,test/core.test.ts,test/tui-hud-width-measure.test.tsx,SPEC.md",
       "branch": "wt/review-ep-followups",
-      "worktree": "worktrees/wt-review-ep-followups",
+      "worktree": "worktree/wt-review-ep-followups",
       "status": "done",
       "createdAt": "2026-11-17T03:09:16Z",
       "submittedAt": "2026-11-17T03:16:30Z",
@@ -2528,7 +2528,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,src,dist",
       "branch": "wt/spec-honesty-unused-exports",
-      "worktree": "worktrees/wt-spec-honesty-unused-exports",
+      "worktree": "worktree/wt-spec-honesty-unused-exports",
       "status": "done",
       "createdAt": "2026-11-17T03:25:14Z",
       "submittedAt": "2026-11-17T03:28:26Z",
@@ -2539,7 +2539,7 @@
       "agent": "orchestrator",
       "paths": "tsconfig.json,src,test,scripts,SPEC.md,dist",
       "branch": "wt/no-unused-flags",
-      "worktree": "worktrees/wt-no-unused-flags",
+      "worktree": "worktree/wt-no-unused-flags",
       "status": "done",
       "createdAt": "2026-11-17T03:34:19Z",
       "submittedAt": "2026-11-17T03:39:27Z",
@@ -2550,7 +2550,7 @@
       "agent": "orchestrator",
       "paths": "README.md,docs,dist/tui.js",
       "branch": "wt/docs-prose-simplify",
-      "worktree": "worktrees/wt-docs-prose-simplify",
+      "worktree": "worktree/wt-docs-prose-simplify",
       "status": "done",
       "createdAt": "2026-11-17T05:31:10Z",
       "submittedAt": "2026-11-17T05:32:21Z",
@@ -2561,7 +2561,7 @@
       "agent": "inkling",
       "paths": "src/tui.tsx,src/core/hud.ts,src/core/entries.ts,src/core/wire.ts,src/runtime/controller.ts,src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,test/tui-hud.test.tsx,test/wire.test.ts,SPEC.md,dist/tui.js",
       "branch": "wt/tui-stale-pill-terminal",
-      "worktree": "worktrees/wt-tui-stale-pill-terminal",
+      "worktree": "worktree/wt-tui-stale-pill-terminal",
       "status": "done",
       "createdAt": "2026-11-17T05:40:44Z",
       "forcedScope": true,
@@ -2579,7 +2579,7 @@
       "agent": "orchestrator",
       "paths": "src/**,test/**,SPEC.md",
       "branch": "wt/bugfix-sweep",
-      "worktree": "worktrees/wt-bugfix-sweep",
+      "worktree": "worktree/wt-bugfix-sweep",
       "status": "done",
       "createdAt": "2026-11-17T12:42:33Z",
       "forcedScope": true,
@@ -2595,7 +2595,7 @@
       "agent": "orchestrator",
       "paths": "scripts/**,packages/coordinator/**,test/**,SPEC.md",
       "branch": "wt/scripts-audit",
-      "worktree": "worktrees/wt-scripts-audit",
+      "worktree": "worktree/wt-scripts-audit",
       "status": "done",
       "createdAt": "2026-11-17T13:42:05Z",
       "submittedAt": "2026-11-17T14:09:21Z",
@@ -2606,7 +2606,7 @@
       "agent": "orchestrator",
       "paths": "packages/coordinator/**",
       "branch": "wt/state-lock-ignore",
-      "worktree": "worktrees/wt-state-lock-ignore",
+      "worktree": "worktree/wt-state-lock-ignore",
       "status": "done",
       "createdAt": "2026-11-17T14:11:47Z",
       "submittedAt": "2026-11-17T14:13:31Z",
@@ -2617,7 +2617,7 @@
       "agent": "orchestrator",
       "paths": "index.ts,rpc.ts,tui.ts,bin/**,.github/**,package.json,tsconfig.json,.gitignore,.gitattributes,opencode.json.example,test/**,SPEC.md",
       "branch": "wt/root-surfaces",
-      "worktree": "worktrees/wt-root-surfaces",
+      "worktree": "worktree/wt-root-surfaces",
       "status": "done",
       "createdAt": "2026-11-17T14:20:08Z",
       "forcedScope": true,
@@ -2633,7 +2633,7 @@
       "agent": "orchestrator",
       "paths": "scripts/e2e.ts,scripts/e2e-lib.ts,test/e2e-lib.test.ts,SPEC.md",
       "branch": "wt/e2e-audit",
-      "worktree": "worktrees/wt-e2e-audit",
+      "worktree": "worktree/wt-e2e-audit",
       "status": "done",
       "createdAt": "2026-11-17T14:55:22Z",
       "submittedAt": "2026-11-17T15:00:07Z",
@@ -2644,7 +2644,7 @@
       "agent": "pauk",
       "paths": "bin/opencode-goal.mjs,test/cli-installer.test.ts,SPEC.md",
       "branch": "wt/ex-nits",
-      "worktree": "worktrees/wt-ex-nits",
+      "worktree": "worktree/wt-ex-nits",
       "status": "done",
       "createdAt": "2026-11-17T15:08:57Z",
       "forcedScope": true,
@@ -2660,7 +2660,7 @@
       "agent": "orchestrator",
       "paths": "test/cli-installer.test.ts,SPEC.md",
       "branch": "wt/dmts-export-pin",
-      "worktree": "worktrees/wt-dmts-export-pin",
+      "worktree": "worktree/wt-dmts-export-pin",
       "status": "done",
       "createdAt": "2026-11-17T15:22:50Z",
       "submittedAt": "2026-11-17T15:25:13Z",
@@ -2671,7 +2671,7 @@
       "agent": "inkling",
       "paths": "src/core/entries.ts,src/tui.tsx,src/runtime/controller.ts,test/entries.test.ts,test/wire.test.ts,test/context-size.test.ts,test/tui-context-render.test.tsx,SPEC.md,dist",
       "branch": "wt/tui-spend-carryforward",
-      "worktree": "worktrees/wt-tui-spend-carryforward",
+      "worktree": "worktree/wt-tui-spend-carryforward",
       "status": "done",
       "createdAt": "2026-11-17T19:18:37Z",
       "forcedScope": true,
@@ -2687,7 +2687,7 @@
       "agent": "inkling",
       "paths": "src/core/wire.ts",
       "branch": "wt/live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md",
-      "worktree": "worktrees/wt-live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md",
+      "worktree": "worktree/wt-live-stream-guards-src-core-entries-ts-src-runtime-controller-ts-test-wire-test-ts-test-entries-test-ts-test-context-size-test-ts-test-controller-test-ts-spec-md",
       "status": "done",
       "createdAt": "2026-11-17T19:26:59Z",
       "forcedScope": true,
@@ -2709,7 +2709,7 @@
       "agent": "inkling-hh",
       "paths": "src/rpc-handlers.ts,src/runtime/controller.ts,src/runtime/events.ts,src/core/entries.ts,src/core/hud.ts,src/tui.tsx,test/loop.test.ts,test/rpc-handlers.test.ts,test/tui-hud.test.tsx,test/entries.test.ts,SPEC.md,dist/tui.js",
       "branch": "wt/live-stream-cross-process-truth-drain-and-repull-hh",
-      "worktree": "worktrees/wt-live-stream-cross-process-truth-drain-and-repull-hh",
+      "worktree": "worktree/wt-live-stream-cross-process-truth-drain-and-repull-hh",
       "status": "done",
       "createdAt": "2026-11-17T19:52:11Z",
       "forcedScope": true,
@@ -2725,7 +2725,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/core/entries.ts,src/core/wire.ts,src/runtime/store.ts,src/tui.tsx,test/loop.test.ts,test/entries.test.ts,SPEC.md",
       "branch": "wt/tui-emit-hygiene-ii",
-      "worktree": "worktrees/wt-tui-emit-hygiene-ii",
+      "worktree": "worktree/wt-tui-emit-hygiene-ii",
       "status": "done",
       "createdAt": "2026-11-17T20:26:58Z",
       "forcedScope": true,
@@ -2741,7 +2741,7 @@
       "agent": "orchestrator",
       "paths": "docs",
       "branch": "wt/docs-line-refs-reanchor",
-      "worktree": "worktrees/wt-docs-line-refs-reanchor",
+      "worktree": "worktree/wt-docs-line-refs-reanchor",
       "status": "done",
       "createdAt": "2026-11-17T20:35:46Z",
       "forcedScope": true,
@@ -2758,7 +2758,7 @@
       "agent": "orchestrator",
       "paths": "README.md,RELEASE-CHECKLIST.md",
       "branch": "wt/docs-readme-staleness-sweep",
-      "worktree": "worktrees/wt-docs-readme-staleness-sweep",
+      "worktree": "worktree/wt-docs-readme-staleness-sweep",
       "status": "done",
       "createdAt": "2026-11-17T20:44:37Z",
       "submittedAt": "2026-11-17T20:47:29Z",
@@ -2769,7 +2769,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/core/entries.ts,src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,docs",
       "branch": "wt/tui-intake-converge-v5",
-      "worktree": "worktrees/wt-tui-intake-converge-v5",
+      "worktree": "worktree/wt-tui-intake-converge-v5",
       "status": "done",
       "createdAt": "2026-11-17T20:58:43Z",
       "forcedScope": true,
@@ -2787,7 +2787,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md",
       "branch": "wt/spec-item-747-accuracy",
-      "worktree": "worktrees/wt-spec-item-747-accuracy",
+      "worktree": "worktree/wt-spec-item-747-accuracy",
       "status": "done",
       "createdAt": "2026-11-17T21:06:33Z",
       "submittedAt": "2026-11-17T21:07:42Z",
@@ -2798,7 +2798,7 @@
       "agent": "orchestrator",
       "paths": "src/core/entries.ts,src/core/hud.ts,src/tui.tsx,test/entries.test.ts,test/tui-hud.test.tsx,SPEC.md",
       "branch": "wt/tui-recent-terminal-repull",
-      "worktree": "worktrees/wt-tui-recent-terminal-repull",
+      "worktree": "worktree/wt-tui-recent-terminal-repull",
       "status": "done",
       "createdAt": "2026-11-17T21:13:34Z",
       "forcedScope": true,
@@ -2814,7 +2814,7 @@
       "agent": "orchestrator",
       "paths": "scripts/build.ts,dist/tui.js",
       "branch": "wt/build-tool-determinism",
-      "worktree": "worktrees/wt-build-tool-determinism",
+      "worktree": "worktree/wt-build-tool-determinism",
       "status": "done",
       "createdAt": "2026-11-18T01:00:39Z",
       "submittedAt": "2026-11-18T01:02:00Z",
@@ -2825,7 +2825,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/runtime/controller.ts,src/runtime/evaluator.ts,src/runtime/events.ts,src/runtime/ports.ts,src/runtime/store.ts,src/core/wire.ts,src/core/types.ts,src/core/hud.ts,src/core/entries.ts,src/core/repull.ts,rpc.ts,test,SPEC.md,dist,docs",
       "branch": "wt/tui-checking-indicator-stuck",
-      "worktree": "worktrees/wt-tui-checking-indicator-stuck",
+      "worktree": "worktree/wt-tui-checking-indicator-stuck",
       "status": "done",
       "createdAt": "2026-11-18T01:24:16Z",
       "forcedScope": true,
@@ -2841,7 +2841,7 @@
       "agent": "inkling",
       "paths": "src/status-dialog.tsx,scripts/render-dialog.tsx,src/tui-history.tsx,src/core/history.ts",
       "branch": "wt/tui-detail-dialog-compact",
-      "worktree": "worktrees/wt-tui-detail-dialog-compact",
+      "worktree": "worktree/wt-tui-detail-dialog-compact",
       "status": "done",
       "createdAt": "2026-11-18T01:48:31Z",
       "forcedScope": true,
@@ -2857,7 +2857,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/index.ts,test,docs,SPEC.md,README.md",
       "branch": "wt/per-session-compaction",
-      "worktree": "worktrees/wt-per-session-compaction",
+      "worktree": "worktree/wt-per-session-compaction",
       "status": "done",
       "createdAt": "2026-11-18T01:55:10Z",
       "forcedScope": true,
@@ -2873,7 +2873,7 @@
       "agent": "inkling",
       "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/tui.tsx,scripts/render-dialog.tsx",
       "branch": "wt/tui-detail-dialog-compact-2",
-      "worktree": "worktrees/wt-tui-detail-dialog-compact-2",
+      "worktree": "worktree/wt-tui-detail-dialog-compact-2",
       "status": "done",
       "createdAt": "2026-11-18T02:06:36Z",
       "forcedScope": true,
@@ -2894,7 +2894,7 @@
       "agent": "orchestrator",
       "paths": "dist/tui.js",
       "branch": "wt/dist-tui-rebuild",
-      "worktree": "worktrees/wt-dist-tui-rebuild",
+      "worktree": "worktree/wt-dist-tui-rebuild",
       "status": "done",
       "createdAt": "2026-11-18T02:11:10Z",
       "submittedAt": "2026-11-18T02:12:43Z",
@@ -2905,7 +2905,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/core/storage-pull.ts,test,SPEC.md,dist,docs",
       "branch": "wt/tui-storage-convergence-fallback",
-      "worktree": "worktrees/wt-tui-storage-convergence-fallback",
+      "worktree": "worktree/wt-tui-storage-convergence-fallback",
       "status": "done",
       "createdAt": "2026-11-18T02:11:57Z",
       "forcedScope": true,
@@ -2923,7 +2923,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/core/entries.ts,src/core/hud.ts,src/core/types.ts,src/core/wire.ts,src/core/format.ts,test/loop.test.ts,test/controller.test.ts,test/entries.test.ts,test/pill-timer.test.tsx,dist/tui.js,dist/tui.d.ts,SPEC.md",
       "branch": "wt/tui-pill-timer-continuity",
-      "worktree": "worktrees/wt-tui-pill-timer-continuity",
+      "worktree": "worktree/wt-tui-pill-timer-continuity",
       "status": "done",
       "createdAt": "2026-11-18T02:32:23Z",
       "submittedAt": "2026-11-18T02:32:29Z",
@@ -2934,7 +2934,7 @@
       "agent": "inkling",
       "paths": "src/status-dialog.tsx,src/tui-history.tsx",
       "branch": "wt/tui-dialog-gap-closure",
-      "worktree": "worktrees/wt-tui-dialog-gap-closure",
+      "worktree": "worktree/wt-tui-dialog-gap-closure",
       "status": "done",
       "createdAt": "2026-11-18T02:37:52Z",
       "forcedScope": true,
@@ -2950,7 +2950,7 @@
       "agent": "orchestrator",
       "paths": "src/hud-card.tsx,src/tui-history.tsx,src/status-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/tui-hud.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/hover-stability",
-      "worktree": "worktrees/wt-hover-stability",
+      "worktree": "worktree/wt-hover-stability",
       "status": "done",
       "createdAt": "2026-11-18T02:41:06Z",
       "forcedScope": true,
@@ -2966,7 +2966,7 @@
       "agent": "orchestrator",
       "paths": "src/core/hud.ts,src/core/format.ts,src/tui.tsx,src/hud-card.tsx,src/status-dialog.tsx,src/tui-history.tsx,SPEC.md,test/,scripts/,dist/",
       "branch": "wt/goal-alive-indicator",
-      "worktree": "worktrees/wt-goal-alive-indicator",
+      "worktree": "worktree/wt-goal-alive-indicator",
       "status": "done",
       "createdAt": "2026-11-18T03:21:44Z",
       "submittedAt": "2026-11-18T03:38:07Z",
@@ -2977,7 +2977,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/hud-card.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/tui-indication-alignment",
-      "worktree": "worktrees/wt-tui-indication-alignment",
+      "worktree": "worktree/wt-tui-indication-alignment",
       "status": "done",
       "createdAt": "2026-11-18T03:41:58Z",
       "forcedScope": true,
@@ -2993,7 +2993,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,src/core/hud.ts,scripts/render-pill.tsx,test/tui-hud.test.tsx,test/render-scripts.test.ts,test/pill-timer.test.tsx,SPEC.md,dist/",
       "branch": "wt/drop-pill-caret",
-      "worktree": "worktrees/wt-drop-pill-caret",
+      "worktree": "worktree/wt-drop-pill-caret",
       "status": "done",
       "createdAt": "2026-11-18T03:50:37Z",
       "submittedAt": "2026-11-18T04:07:31Z",
@@ -3004,7 +3004,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/tui.tsx,test/tui-pill-card-coherence.test.tsx,scripts/render-slot.tsx,test/render-scripts.test.ts,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/pill-card-coherence",
-      "worktree": "worktrees/wt-pill-card-coherence",
+      "worktree": "worktree/wt-pill-card-coherence",
       "status": "done",
       "createdAt": "2026-11-18T04:14:10Z",
       "submittedAt": "2026-11-18T04:33:42Z",
@@ -3015,7 +3015,7 @@
       "agent": "inkling-2-small-free",
       "paths": "test/tui-alignment-invariants.test.tsx,SPEC.md",
       "branch": "wt/tui-alignment-invariants",
-      "worktree": "worktrees/wt-tui-alignment-invariants",
+      "worktree": "worktree/wt-tui-alignment-invariants",
       "status": "done",
       "createdAt": "2026-11-18T04:43:19Z",
       "submittedAt": "2026-11-18T04:47:56Z",
@@ -3026,7 +3026,7 @@
       "agent": "inkling",
       "paths": "scripts/live-smoke.ts,test/live-smoke.test.ts,SPEC.md,package.json",
       "branch": "wt/live-tui-smoke",
-      "worktree": "worktrees/wt-live-tui-smoke",
+      "worktree": "worktree/wt-live-tui-smoke",
       "status": "done",
       "createdAt": "2026-11-18T05:02:44Z",
       "submittedAt": "2026-11-18T05:13:55Z",
@@ -3037,7 +3037,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md",
       "branch": "wt/crash-restore-live",
-      "worktree": "worktrees/wt-crash-restore-live",
+      "worktree": "worktree/wt-crash-restore-live",
       "status": "done",
       "createdAt": "2026-11-18T05:19:31Z",
       "submittedAt": "2026-11-18T05:39:49Z",
@@ -3048,7 +3048,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,test/tui-pill-card-coherence.test.tsx,SPEC.md,src/hud-card.tsx",
       "branch": "wt/accordion-pill",
-      "worktree": "worktrees/wt-accordion-pill",
+      "worktree": "worktree/wt-accordion-pill",
       "status": "done",
       "createdAt": "2026-11-18T05:44:15Z",
       "forcedScope": true,
@@ -3065,7 +3065,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/evaluator.ts,src/core/prompts.ts,src/core/config.ts,src/core/verdict.ts,src/core/transcript.ts,src/index.ts,test/evaluator.test.ts,SPEC.md",
       "branch": "wt/independent-consensus-live",
-      "worktree": "worktrees/wt-independent-consensus-live",
+      "worktree": "worktree/wt-independent-consensus-live",
       "status": "done",
       "createdAt": "2026-11-18T05:57:22Z",
       "submittedAt": "2026-11-18T06:19:12Z",
@@ -3076,7 +3076,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
       "branch": "wt/live-context-refresh",
-      "worktree": "worktrees/wt-live-context-refresh",
+      "worktree": "worktree/wt-live-context-refresh",
       "status": "done",
       "createdAt": "2026-11-18T06:25:34Z",
       "submittedAt": "2026-11-18T06:33:12Z",
@@ -3087,7 +3087,7 @@
       "agent": "orchestrator",
       "paths": "README.md,docs,assets,package.json",
       "branch": "wt/readme-attribution-detach-screenshots",
-      "worktree": "worktrees/wt-readme-attribution-detach-screenshots",
+      "worktree": "worktree/wt-readme-attribution-detach-screenshots",
       "status": "done",
       "createdAt": "2026-11-18T08:07:43Z",
       "submittedAt": "2026-11-18T08:21:20Z",
@@ -3098,7 +3098,7 @@
       "agent": "orchestrator",
       "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,test/evaluator.test.ts,test/commit-rule.test.ts,SPEC.md",
       "branch": "wt/evaluator-proactive-auditor",
-      "worktree": "worktrees/wt-evaluator-proactive-auditor",
+      "worktree": "worktree/wt-evaluator-proactive-auditor",
       "status": "done",
       "createdAt": "2026-11-18T08:38:59Z",
       "forcedScope": true,
@@ -3114,7 +3114,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md",
       "branch": "wt/live-loop-next-hint",
-      "worktree": "worktrees/wt-live-loop-next-hint",
+      "worktree": "worktree/wt-live-loop-next-hint",
       "status": "done",
       "createdAt": "2026-11-18T08:55:03Z",
       "submittedAt": "2026-11-18T09:23:05Z",
@@ -3125,7 +3125,7 @@
       "agent": "orchestrator",
       "paths": "src/core/sanitize.ts,src/runtime/evaluator.ts,test/sanitize.test.ts,SPEC.md,docs/runtime.html",
       "branch": "wt/summarizer-control-tag-strip",
-      "worktree": "worktrees/wt-summarizer-control-tag-strip",
+      "worktree": "worktree/wt-summarizer-control-tag-strip",
       "status": "done",
       "createdAt": "2026-11-18T09:30:19Z",
       "forcedScope": true,
@@ -3142,7 +3142,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/fix-stale-after-loop-goal-complete",
-      "worktree": "worktrees/wt-fix-stale-after-loop-goal-complete",
+      "worktree": "worktree/wt-fix-stale-after-loop-goal-complete",
       "status": "done",
       "createdAt": "2026-11-18T09:46:53Z",
       "submittedAt": "2026-11-18T10:12:54Z",
@@ -3153,7 +3153,7 @@
       "agent": "inkling-2-small-free",
       "paths": "SPEC.md,src,test,docs",
       "branch": "wt/live-completion-release-verify",
-      "worktree": "worktrees/wt-live-completion-release-verify",
+      "worktree": "worktree/wt-live-completion-release-verify",
       "status": "done",
       "createdAt": "2026-11-18T10:45:32Z",
       "submittedAt": "2026-11-18T11:48:28Z",
@@ -3164,7 +3164,7 @@
       "agent": "orchestrator",
       "paths": "src/core/opencode-cli.ts,test/opencode-cli.test.ts,README.md,docs/core.html,AGENTS.md,SPEC.md,docs/changelog.html",
       "branch": "wt/opencode-cli-headless",
-      "worktree": "worktrees/wt-opencode-cli-headless",
+      "worktree": "worktree/wt-opencode-cli-headless",
       "status": "done",
       "createdAt": "2026-11-18T11:16:58Z",
       "submittedAt": "2026-11-18T11:24:25Z",
@@ -3175,7 +3175,7 @@
       "agent": "inkling-2-small-free",
       "paths": "SPEC.md,AGENTS.md,README.md,src/runtime/compactor.ts,src/core/types.ts,src/core/config.ts,test/loop.test.ts",
       "branch": "wt/spec-doc-alignment-sweep",
-      "worktree": "worktrees/wt-spec-doc-alignment-sweep",
+      "worktree": "worktree/wt-spec-doc-alignment-sweep",
       "status": "done",
       "createdAt": "2026-11-18T13:24:23Z",
       "submittedAt": "2026-11-18T13:27:02Z",
@@ -3186,7 +3186,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "SPEC.md",
       "branch": "wt/stdio-rpc-500-recheck",
-      "worktree": "worktrees/wt-stdio-rpc-500-recheck",
+      "worktree": "worktree/wt-stdio-rpc-500-recheck",
       "status": "done",
       "createdAt": "2026-11-18T13:33:30Z",
       "submittedAt": "2026-11-18T13:38:12Z",
@@ -3197,7 +3197,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "SPEC.md,src/,test/",
       "branch": "wt/stdio-rpc-500-rootcause",
-      "worktree": "worktrees/wt-stdio-rpc-500-rootcause",
+      "worktree": "worktree/wt-stdio-rpc-500-rootcause",
       "status": "done",
       "createdAt": "2026-11-18T13:52:42Z",
       "submittedAt": "2026-11-18T14:42:18Z",
@@ -3208,7 +3208,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/index.ts,src/core/file-log.ts,test/file-log.test.ts,README.md,docs/config.html,SPEC.md,package.json,test/package-integrity.test.ts",
       "branch": "wt/log-file-sink",
-      "worktree": "worktrees/wt-log-file-sink",
+      "worktree": "worktree/wt-log-file-sink",
       "status": "done",
       "createdAt": "2026-11-18T15:44:54Z",
       "submittedAt": "2026-11-18T15:50:04Z",
@@ -3219,7 +3219,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/core/types.ts,src/core/history.ts,src/runtime/controller.ts,src/core/hud.ts,src/hud-card.tsx,src/tui-history.tsx,src/core/spend-ledger.ts,src/core/dossier.ts,test/loop-history-retention.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/loop-history-retention",
-      "worktree": "worktrees/wt-loop-history-retention",
+      "worktree": "worktree/wt-loop-history-retention",
       "status": "done",
       "createdAt": "2026-11-18T15:58:10Z",
       "forcedScope": true,
@@ -3236,7 +3236,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/core/types.ts,src/runtime/controller.ts,src/core/dossier.ts,src/core/dossier-seal.ts,src/core/hud.ts,src/tui-history.tsx,test/loop.test.ts,test/verdict-history-retention.test.ts,dist/tui.js,SPEC.md,docs/changelog.html,docs/runtime.html",
       "branch": "wt/verdict-history-retention",
-      "worktree": "worktrees/wt-verdict-history-retention",
+      "worktree": "worktree/wt-verdict-history-retention",
       "status": "done",
       "createdAt": "2026-11-18T16:22:17Z",
       "submittedAt": "2026-11-18T16:29:26Z",
@@ -3247,7 +3247,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/core/types.ts,src/runtime/controller.ts,test/loop.test.ts,test/completed-condition-ledger.test.ts,SPEC.md",
       "branch": "wt/completed-condition-ledger",
-      "worktree": "worktrees/wt-completed-condition-ledger",
+      "worktree": "worktree/wt-completed-condition-ledger",
       "status": "done",
       "createdAt": "2026-11-18T16:37:53Z",
       "submittedAt": "2026-11-18T16:42:42Z",
@@ -3258,7 +3258,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/core/types.ts,src/runtime/store.ts,src/runtime/controller.ts,test/terminal-record-prune.test.ts,test/controller.test.ts,SPEC.md,docs/runtime.html",
       "branch": "wt/terminal-record-prune",
-      "worktree": "worktrees/wt-terminal-record-prune",
+      "worktree": "worktree/wt-terminal-record-prune",
       "status": "done",
       "createdAt": "2026-11-18T16:52:43Z",
       "forcedScope": true,
@@ -3274,7 +3274,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "SPEC.md,docs/runtime.html,docs/core.html",
       "branch": "wt/spec-docs-honesty-audit",
-      "worktree": "worktrees/wt-spec-docs-honesty-audit",
+      "worktree": "worktree/wt-spec-docs-honesty-audit",
       "status": "done",
       "createdAt": "2026-11-18T17:07:30Z",
       "submittedAt": "2026-11-18T17:10:23Z",
@@ -3285,7 +3285,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
       "branch": "wt/opportunistic-terminal-prune",
-      "worktree": "worktrees/wt-opportunistic-terminal-prune",
+      "worktree": "worktree/wt-opportunistic-terminal-prune",
       "status": "done",
       "createdAt": "2026-11-18T17:18:52Z",
       "submittedAt": "2026-11-18T17:23:47Z",
@@ -3296,7 +3296,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/runtime/store.ts,src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
       "branch": "wt/cross-directory-terminal-gc",
-      "worktree": "worktrees/wt-cross-directory-terminal-gc",
+      "worktree": "worktree/wt-cross-directory-terminal-gc",
       "status": "done",
       "createdAt": "2026-11-18T17:31:19Z",
       "submittedAt": "2026-11-18T17:34:41Z",
@@ -3307,7 +3307,7 @@
       "agent": "opencode-goalv2-loop",
       "paths": "src/core/types.ts,src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
       "branch": "wt/in-memory-terminal-goal-retention",
-      "worktree": "worktrees/wt-in-memory-terminal-goal-retention",
+      "worktree": "worktree/wt-in-memory-terminal-goal-retention",
       "status": "done",
       "createdAt": "2026-11-18T17:44:13Z",
       "submittedAt": "2026-11-18T17:49:05Z",
@@ -3318,7 +3318,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/runtime/controller.ts,src/runtime/store.ts,test/controller.test.ts,SPEC.md,docs/runtime.html,dist/tui.js",
       "branch": "wt/finish-prune-all-directories",
-      "worktree": "worktrees/wt-finish-prune-all-directories",
+      "worktree": "worktree/wt-finish-prune-all-directories",
       "status": "done",
       "createdAt": "2026-11-18T18:30:31Z",
       "submittedAt": "2026-11-18T18:34:11Z",
@@ -3329,7 +3329,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/core/verdict.ts,src/core/prompts.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md,dist/tui.js",
       "branch": "wt/evaluator-novelty-rubric",
-      "worktree": "worktrees/wt-evaluator-novelty-rubric",
+      "worktree": "worktree/wt-evaluator-novelty-rubric",
       "status": "done",
       "createdAt": "2026-11-18T18:46:58Z",
       "submittedAt": "2026-11-18T18:53:35Z",
@@ -3340,7 +3340,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/runtime/controller.ts,src/index.ts,test/loop.test.ts,SPEC.md,dist/tui.js",
       "branch": "wt/arm-no-new-gap-gate",
-      "worktree": "worktrees/wt-arm-no-new-gap-gate",
+      "worktree": "worktree/wt-arm-no-new-gap-gate",
       "status": "done",
       "createdAt": "2026-11-18T19:02:29Z",
       "forcedScope": true,
@@ -3356,7 +3356,7 @@
       "agent": "inkling-2-small-free",
       "paths": "docs/core.html,test/docs-line-refs.test.ts,src/runtime/controller.ts,test/plugin.test.ts,SPEC.md,dist/tui.js",
       "branch": "wt/clean-history-docs-pin",
-      "worktree": "worktrees/wt-clean-history-docs-pin",
+      "worktree": "worktree/wt-clean-history-docs-pin",
       "status": "done",
       "createdAt": "2026-11-18T19:24:25Z",
       "submittedAt": "2026-11-18T19:30:08Z",
@@ -3367,7 +3367,7 @@
       "agent": "inkling-2-small-free",
       "paths": "test/docs-line-refs.test.ts,SPEC.md,docs/core.html",
       "branch": "wt/docs-symbol-export-contract",
-      "worktree": "worktrees/wt-docs-symbol-export-contract",
+      "worktree": "worktree/wt-docs-symbol-export-contract",
       "status": "done",
       "createdAt": "2026-11-18T19:36:32Z",
       "submittedAt": "2026-11-18T19:41:35Z",
@@ -3378,7 +3378,7 @@
       "agent": "inkling-2-small-free",
       "paths": "test/docs-line-refs.test.ts,SPEC.md,docs/architecture.html,docs/index.html,docs/install.html,docs/runtime.html",
       "branch": "wt/docs-inline-citation-contract",
-      "worktree": "worktrees/wt-docs-inline-citation-contract",
+      "worktree": "worktree/wt-docs-inline-citation-contract",
       "status": "done",
       "createdAt": "2026-11-18T19:46:59Z",
       "submittedAt": "2026-11-18T19:49:37Z",
@@ -3389,7 +3389,7 @@
       "agent": "inkling-2-small-free",
       "paths": "test/docs-line-refs.test.ts,SPEC.md,docs/architecture.html,docs/index.html,docs/install.html,docs/runtime.html",
       "branch": "wt/docs-membership-citation-contract",
-      "worktree": "worktrees/wt-docs-membership-citation-contract",
+      "worktree": "worktree/wt-docs-membership-citation-contract",
       "status": "done",
       "createdAt": "2026-11-18T19:54:25Z",
       "submittedAt": "2026-11-18T19:57:34Z",
@@ -3400,7 +3400,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/runtime/controller.ts,src/core/prompts.ts,test/loop.test.ts,test/notes.test.ts,SPEC.md,docs/runtime.html",
       "branch": "wt/achieved-goal-note-final",
-      "worktree": "worktrees/wt-achieved-goal-note-final",
+      "worktree": "worktree/wt-achieved-goal-note-final",
       "status": "done",
       "createdAt": "2026-11-18T20:07:12Z",
       "submittedAt": "2026-11-18T20:10:12Z",
@@ -3411,7 +3411,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src/core/prompts.ts,src/index.ts,test/notes.test.ts,test/plugin.test.ts,SPEC.md",
       "branch": "wt/stale-plain-goal-notes-strip",
-      "worktree": "worktrees/wt-stale-plain-goal-notes-strip",
+      "worktree": "worktree/wt-stale-plain-goal-notes-strip",
       "status": "done",
       "createdAt": "2026-11-18T20:13:40Z",
       "submittedAt": "2026-11-18T20:16:25Z",
@@ -3422,7 +3422,7 @@
       "agent": "orchestrator",
       "paths": "test/docs-line-refs.test.ts,SPEC.md",
       "branch": "wt/docs-citation-export-star-absence-pin",
-      "worktree": "worktrees/wt-docs-citation-export-star-absence-pin",
+      "worktree": "worktree/wt-docs-citation-export-star-absence-pin",
       "status": "done",
       "createdAt": "2026-11-18T20:21:32Z",
       "submittedAt": "2026-11-18T20:26:07Z",
@@ -3433,7 +3433,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/rearm-no-new-gap-refusal-contract",
-      "worktree": "worktrees/wt-rearm-no-new-gap-refusal-contract",
+      "worktree": "worktree/wt-rearm-no-new-gap-refusal-contract",
       "status": "done",
       "createdAt": "2026-11-18T20:33:26Z",
       "submittedAt": "2026-11-18T20:36:36Z",
@@ -3444,7 +3444,7 @@
       "agent": "orchestrator",
       "paths": "docs/runtime.html,docs/changelog.html,SPEC.md",
       "branch": "wt/docs-loop-advance-rearm-refusal",
-      "worktree": "worktrees/wt-docs-loop-advance-rearm-refusal",
+      "worktree": "worktree/wt-docs-loop-advance-rearm-refusal",
       "status": "done",
       "createdAt": "2026-11-18T20:43:12Z",
       "submittedAt": "2026-11-18T20:45:19Z",
@@ -3455,7 +3455,7 @@
       "agent": "orchestrator",
       "paths": "test/loop.test.ts,SPEC.md",
       "branch": "wt/xlv-e-fresh-arm-ledger-pin",
-      "worktree": "worktrees/wt-xlv-e-fresh-arm-ledger-pin",
+      "worktree": "worktree/wt-xlv-e-fresh-arm-ledger-pin",
       "status": "done",
       "createdAt": "2026-11-18T20:54:13Z",
       "submittedAt": "2026-11-18T20:56:30Z",
@@ -3466,7 +3466,7 @@
       "agent": "orchestrator",
       "paths": "src/core/prompts.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/loop-reanchor-audit-and-stop",
-      "worktree": "worktrees/wt-loop-reanchor-audit-and-stop",
+      "worktree": "worktree/wt-loop-reanchor-audit-and-stop",
       "status": "done",
       "createdAt": "2026-11-18T21:04:01Z",
       "submittedAt": "2026-11-18T21:05:53Z",
@@ -3477,7 +3477,7 @@
       "agent": "orchestrator",
       "paths": "src/core/prompts.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/reanchor-history-bound",
-      "worktree": "worktrees/wt-reanchor-history-bound",
+      "worktree": "worktree/wt-reanchor-history-bound",
       "status": "done",
       "createdAt": "2026-11-18T21:08:11Z",
       "submittedAt": "2026-11-18T21:10:16Z",
@@ -3488,7 +3488,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,docs/runtime.html,README.md",
       "branch": "wt/spec-reanchor-stale-claims",
-      "worktree": "worktrees/wt-spec-reanchor-stale-claims",
+      "worktree": "worktree/wt-spec-reanchor-stale-claims",
       "status": "done",
       "createdAt": "2026-11-18T21:14:49Z",
       "submittedAt": "2026-11-18T21:20:46Z",
@@ -3499,7 +3499,7 @@
       "agent": "orchestrator-v11",
       "paths": "src/runtime/controller.ts,src/core/types.ts,src/core/hud.ts,src/hud-card.tsx,src/tui-history.tsx,test/controller.test.ts,test/loop.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,SPEC.md,dist/tui.js",
       "branch": "wt/loop-arm-queued-honesty",
-      "worktree": "worktrees/wt-loop-arm-queued-honesty",
+      "worktree": "worktree/wt-loop-arm-queued-honesty",
       "status": "done",
       "createdAt": "2026-11-18T21:54:42Z",
       "submittedAt": "2026-11-18T21:55:06Z",
@@ -3510,7 +3510,7 @@
       "agent": "inkling",
       "paths": "src/core/format.ts,src/runtime/controller.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/loop-arm-summary-elision",
-      "worktree": "worktrees/wt-loop-arm-summary-elision",
+      "worktree": "worktree/wt-loop-arm-summary-elision",
       "status": "done",
       "createdAt": "2026-11-18T22:15:29Z",
       "submittedAt": "2026-11-18T22:20:53Z",
@@ -3521,7 +3521,7 @@
       "agent": "inkling-2-small-free",
       "paths": "docs/runtime.html,README.md,SPEC.md,docs/changelog.html",
       "branch": "wt/loop-docs-lx-lxi",
-      "worktree": "worktrees/wt-loop-docs-lx-lxi",
+      "worktree": "worktree/wt-loop-docs-lx-lxi",
       "status": "done",
       "createdAt": "2026-11-18T22:26:03Z",
       "submittedAt": "2026-11-18T22:28:34Z",
@@ -3532,7 +3532,7 @@
       "agent": "orchestrator",
       "paths": "docs/config.html,docs/index.html,docs/changelog.html,docs/runtime.html,docs/core.html,docs/install.html,docs/architecture.html,SPEC.md",
       "branch": "wt/wt-docs-config-audit",
-      "worktree": "worktrees/wt-wt-docs-config-audit",
+      "worktree": "worktree/wt-wt-docs-config-audit",
       "status": "done",
       "createdAt": "2026-11-18T22:35:56Z",
       "submittedAt": "2026-11-18T22:38:55Z",
@@ -3543,7 +3543,7 @@
       "agent": "inkling-2-small-free",
       "paths": "SPEC.md,test/docs-coverage.test.ts",
       "branch": "wt/docs-coverage-gate",
-      "worktree": "worktrees/wt-docs-coverage-gate",
+      "worktree": "worktree/wt-docs-coverage-gate",
       "status": "done",
       "createdAt": "2026-11-18T22:45:40Z",
       "submittedAt": "2026-11-18T22:47:58Z",
@@ -3554,7 +3554,7 @@
       "agent": "inkling-2-small-free",
       "paths": "docs/index.html,docs/install.html,docs/changelog.html,SPEC.md",
       "branch": "wt/docs-gate-pointer",
-      "worktree": "worktrees/wt-docs-gate-pointer",
+      "worktree": "worktree/wt-docs-gate-pointer",
       "status": "done",
       "createdAt": "2026-11-18T22:50:57Z",
       "submittedAt": "2026-11-18T22:52:28Z",
@@ -3565,7 +3565,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src,test,SPEC.md",
       "branch": "wt/terminal-goal-inert-after-compact",
-      "worktree": "worktrees/wt-terminal-goal-inert-after-compact",
+      "worktree": "worktree/wt-terminal-goal-inert-after-compact",
       "status": "done",
       "createdAt": "2026-11-19T03:26:55Z",
       "forcedScope": true,
@@ -3581,7 +3581,7 @@
       "agent": "inkling-2-small-free",
       "paths": "src,test,SPEC.md,docs,README.md,opencode.json.example",
       "branch": "wt/terminal-goal-lingering-note",
-      "worktree": "worktrees/wt-terminal-goal-lingering-note",
+      "worktree": "worktree/wt-terminal-goal-lingering-note",
       "status": "done",
       "createdAt": "2026-11-19T04:03:17Z",
       "submittedAt": "2026-11-19T04:32:51Z",
@@ -3592,7 +3592,7 @@
       "agent": "inkling-2-small-free",
       "paths": "LOOP-COUNT.md",
       "branch": "wt/loop-count-v1",
-      "worktree": "worktrees/wt-loop-count-v1",
+      "worktree": "worktree/wt-loop-count-v1",
       "status": "done",
       "createdAt": "2026-11-19T04:38:48Z",
       "submittedAt": "2026-11-19T04:38:54Z",
@@ -3603,7 +3603,7 @@
       "agent": "inkling-2-small-free",
       "paths": "LOOP-COUNT.md",
       "branch": "wt/loop-count-v2",
-      "worktree": "worktrees/wt-loop-count-v2",
+      "worktree": "worktree/wt-loop-count-v2",
       "status": "done",
       "createdAt": "2026-11-19T04:41:13Z",
       "submittedAt": "2026-11-19T04:41:18Z",
@@ -3614,7 +3614,7 @@
       "agent": "orchestrator",
       "paths": ".",
       "branch": "wt/keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
-      "worktree": "worktrees/wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
+      "worktree": "worktree/wt-keep-improving-keep-on-fixing-the-current-directory-codebase-from-back-to-front",
       "status": "done",
       "createdAt": "2026-11-19T08:29:45Z",
       "submittedAt": "2026-11-19T09:13:31Z",
@@ -3625,7 +3625,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/iteration-cap-counts-dropped-history",
-      "worktree": "worktrees/wt-iteration-cap-counts-dropped-history",
+      "worktree": "worktree/wt-iteration-cap-counts-dropped-history",
       "status": "done",
       "createdAt": "2026-11-19T07:47:36Z",
       "submittedAt": "2026-11-19T07:49:32Z",
@@ -3636,7 +3636,7 @@
       "agent": "orchestrator",
       "paths": ".",
       "branch": "wt/keep-improving-the-terminal-tui-focusing-on-users-experiences-smooth-it-out-all-the-rough-edges-the-in-consistencies",
-      "worktree": "worktrees/wt-keep-improving-the-terminal-tui-focusing-on-users-experiences-smooth-it-out-all-the-rough-edges-the-in-consistencies",
+      "worktree": "worktree/wt-keep-improving-the-terminal-tui-focusing-on-users-experiences-smooth-it-out-all-the-rough-edges-the-in-consistencies",
       "status": "done",
       "createdAt": "2026-11-19T09:13:20Z",
       "submittedAt": "2026-11-19T09:13:20Z",
@@ -3647,7 +3647,7 @@
       "agent": "orchestrator",
       "paths": "src,test,SPEC.md",
       "branch": "wt/behavior-regression-inspection",
-      "worktree": "worktrees/wt-behavior-regression-inspection",
+      "worktree": "worktree/wt-behavior-regression-inspection",
       "status": "done",
       "createdAt": "2026-11-19T09:25:34Z",
       "submittedAt": "2026-11-19T09:31:40Z",
@@ -3658,7 +3658,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,src/core/prompts.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts,test/core.test.ts",
       "branch": "wt/evaluator-slow-connection-timeout",
-      "worktree": "worktrees/wt-evaluator-slow-connection-timeout",
+      "worktree": "worktree/wt-evaluator-slow-connection-timeout",
       "status": "done",
       "createdAt": "2026-11-19T10:32:07Z",
       "submittedAt": "2026-11-19T10:32:25Z",
@@ -3669,7 +3669,7 @@
       "agent": "orchestrator",
       "paths": "src/status-dialog.tsx,test/tui-render.test.tsx,SPEC.md",
       "branch": "wt/dossier-table-wrap",
-      "worktree": "worktrees/wt-dossier-table-wrap",
+      "worktree": "worktree/wt-dossier-table-wrap",
       "status": "done",
       "createdAt": "2026-11-19T10:34:12Z",
       "submittedAt": "2026-11-19T10:43:47Z",
@@ -3680,7 +3680,7 @@
       "agent": "orchestrator",
       "paths": "src/hud-card.tsx,src/tui.tsx,test/tui-render.test.tsx,SPEC.md",
       "branch": "wt/tui-context-menu-single-rows",
-      "worktree": "worktrees/wt-tui-context-menu-single-rows",
+      "worktree": "worktree/wt-tui-context-menu-single-rows",
       "status": "done",
       "createdAt": "2026-11-19T11:04:44Z",
       "forcedScope": true,
@@ -3698,7 +3698,7 @@
       "agent": "orchestrator",
       "paths": "src/index.ts,test/verifier.test.ts,SPEC.md",
       "branch": "wt/verifier-timeout-kills-tree",
-      "worktree": "worktrees/wt-verifier-timeout-kills-tree",
+      "worktree": "worktree/wt-verifier-timeout-kills-tree",
       "status": "done",
       "createdAt": "2026-11-19T11:22:12Z",
       "submittedAt": "2026-11-19T11:25:43Z",
@@ -3709,7 +3709,7 @@
       "agent": "orchestrator",
       "paths": "src/core/hud.ts,test/tui-hud.test.ts,SPEC.md",
       "branch": "wt/menu-index-delta-normalize",
-      "worktree": "worktrees/wt-menu-index-delta-normalize",
+      "worktree": "worktree/wt-menu-index-delta-normalize",
       "status": "done",
       "createdAt": "2026-11-19T11:47:48Z",
       "forcedScope": true,
@@ -3726,7 +3726,7 @@
       "agent": "orchestrator",
       "paths": "scripts/build.ts,package.json,test/build-freshness.test.ts,SPEC.md",
       "branch": "wt/dist-freshness-gate",
-      "worktree": "worktrees/wt-dist-freshness-gate",
+      "worktree": "worktree/wt-dist-freshness-gate",
       "status": "done",
       "createdAt": "2026-11-19T12:01:57Z",
       "forcedScope": true,
@@ -3742,7 +3742,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,pending_fixes.md,test/spec-intro-glyphs.test.ts",
       "branch": "wt/spec-intro-glyphs",
-      "worktree": "worktrees/wt-spec-intro-glyphs",
+      "worktree": "worktree/wt-spec-intro-glyphs",
       "status": "done",
       "createdAt": "2026-11-19T12:27:32Z",
       "submittedAt": "2026-11-19T12:31:42Z",
@@ -3753,7 +3753,7 @@
       "agent": "orchestrator",
       "paths": "src,test,scripts,docs,SPEC.md,pending_fixes.md,dist,README.md,package.json",
       "branch": "wt/review-recent-changes-fix-merge-rebuild",
-      "worktree": "worktrees/wt-review-recent-changes-fix-merge-rebuild",
+      "worktree": "worktree/wt-review-recent-changes-fix-merge-rebuild",
       "status": "done",
       "createdAt": "2026-11-19T12:46:14Z",
       "submittedAt": "2026-11-19T13:05:15Z",
@@ -3764,7 +3764,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,src/core/prompts.ts,src/index.ts,test/notes.test.ts,test/plugin.test.ts",
       "branch": "wt/fix-context-strip-compaction-checkpoint-trailing-user",
-      "worktree": "worktrees/wt-fix-context-strip-compaction-checkpoint-trailing-user",
+      "worktree": "worktree/wt-fix-context-strip-compaction-checkpoint-trailing-user",
       "status": "done",
       "createdAt": "2026-11-19T13:43:57Z",
       "submittedAt": "2026-11-19T13:45:41Z",
@@ -3775,7 +3775,7 @@
       "agent": "orchestrator",
       "paths": "bin,package.json,install.sh,test,README.md,SPEC.md,AGENTS.md,docs,scripts,rpc.ts",
       "branch": "wt/goal-loop-cli",
-      "worktree": "worktrees/wt-goal-loop-cli",
+      "worktree": "worktree/wt-goal-loop-cli",
       "status": "done",
       "createdAt": "2026-11-19T14:22:25Z",
       "forcedScope": true,
@@ -3798,7 +3798,7 @@
       "agent": "orchestrator",
       "paths": "bun.lock,docs,README.md,RELEASE-CHECKLIST.md,test,SPEC.md",
       "branch": "wt/name-consistency-goal-loop",
-      "worktree": "worktrees/wt-name-consistency-goal-loop",
+      "worktree": "worktree/wt-name-consistency-goal-loop",
       "status": "done",
       "createdAt": "2026-11-20T03:25:21Z",
       "submittedAt": "2026-11-20T03:30:09Z",
@@ -3809,7 +3809,7 @@
       "agent": "orchestrator",
       "paths": "SPEC.md,test,docs",
       "branch": "wt/spec-naming-declaration",
-      "worktree": "worktrees/wt-spec-naming-declaration",
+      "worktree": "worktree/wt-spec-naming-declaration",
       "status": "done",
       "createdAt": "2026-11-20T03:33:43Z",
       "submittedAt": "2026-11-20T03:37:04Z",
@@ -3820,7 +3820,7 @@
       "agent": "orchestrator",
       "paths": "src/index.ts,src/core/prompts.ts,test,SPEC.md",
       "branch": "wt/terminal-reminder-only-when-goal-text-remains",
-      "worktree": "worktrees/wt-terminal-reminder-only-when-goal-text-remains",
+      "worktree": "worktree/wt-terminal-reminder-only-when-goal-text-remains",
       "status": "done",
       "createdAt": "2026-11-20T03:38:51Z",
       "forcedScope": true,
@@ -3836,7 +3836,7 @@
       "agent": "goal-loop-improver",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/keep-improving-goal-loop",
-      "worktree": "worktrees/wt-keep-improving-goal-loop",
+      "worktree": "worktree/wt-keep-improving-goal-loop",
       "status": "done",
       "createdAt": "2026-11-20T04:35:27Z",
       "releasedAt": "2026-11-20T05:13:20Z",
@@ -3846,7 +3846,7 @@
       "agent": "orchestrator",
       "paths": "docs",
       "branch": "wt/recent-changes-regression-review",
-      "worktree": "worktrees/wt-recent-changes-regression-review",
+      "worktree": "worktree/wt-recent-changes-regression-review",
       "status": "done",
       "createdAt": "2026-11-20T05:01:27Z",
       "submittedAt": "2026-11-20T05:04:00Z",
@@ -3857,7 +3857,7 @@
       "agent": "orchestrator",
       "paths": "packages/coordinator,test,SPEC.md,docs,README.md,AGENTS.md",
       "branch": "wt/coordinator-release-command",
-      "worktree": "worktrees/wt-coordinator-release-command",
+      "worktree": "worktree/wt-coordinator-release-command",
       "status": "done",
       "createdAt": "2026-11-20T05:07:24Z",
       "submittedAt": "2026-11-20T05:11:34Z",
@@ -3868,7 +3868,7 @@
       "agent": "orchestrator",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/release-verification-probe",
-      "worktree": "worktrees/wt-release-verification-probe",
+      "worktree": "worktree/wt-release-verification-probe",
       "status": "done",
       "createdAt": "2026-11-20T05:13:32Z",
       "releasedAt": "2026-11-20T05:13:42Z",
@@ -3878,7 +3878,7 @@
       "agent": "orchestrator",
       "paths": ".term/coordinator/state.json",
       "branch": "wt/record-release-bookkeeping",
-      "worktree": "worktrees/wt-record-release-bookkeeping",
+      "worktree": "worktree/wt-record-release-bookkeeping",
       "status": "done",
       "createdAt": "2026-11-20T05:16:45Z",
       "submittedAt": "2026-11-20T05:16:53Z",
@@ -3889,7 +3889,7 @@
       "agent": "orchestrator",
       "paths": "bin/goal-loop.mjs,install.sh,package.json,README.md,docs,SPEC.md,test,RELEASE-CHECKLIST.md",
       "branch": "wt/install-ux",
-      "worktree": "worktrees/wt-install-ux",
+      "worktree": "worktree/wt-install-ux",
       "status": "done",
       "createdAt": "2026-11-20T05:30:37Z",
       "forcedScope": true,
@@ -3905,7 +3905,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/runtime/compactor.ts,src/core/wire.ts,src/index.ts,test/controller.test.ts,test/compactor.test.ts,test/wire.test.ts,test/plugin.test.ts",
       "branch": "wt/runtime-correctness-batch",
-      "worktree": "worktrees/wt-runtime-correctness-batch",
+      "worktree": "worktree/wt-runtime-correctness-batch",
       "status": "done",
       "createdAt": "2026-11-20T05:50:39Z",
       "forcedScope": true,
@@ -3922,7 +3922,7 @@
       "agent": "iceman",
       "paths": "src/core/wire.ts,test/wire.test.ts",
       "branch": "wt/wire-verdict-sha",
-      "worktree": "worktrees/wt-wire-verdict-sha",
+      "worktree": "worktree/wt-wire-verdict-sha",
       "status": "done",
       "createdAt": "2026-11-20T06:15:44Z",
       "forcedScope": true,
@@ -3939,7 +3939,7 @@
       "agent": "iceman",
       "paths": "src/core/wire.ts,test/wire.test.ts",
       "branch": "wt/wire-snapshot-optional-fields",
-      "worktree": "worktrees/wt-wire-snapshot-optional-fields",
+      "worktree": "worktree/wt-wire-snapshot-optional-fields",
       "status": "done",
       "createdAt": "2026-11-20T06:26:32Z",
       "forcedScope": true,
@@ -3956,7 +3956,7 @@
       "agent": "iceman",
       "paths": "docs,src,test,SPEC.md,README.md,packages",
       "branch": "wt/improvement-backlog-ledger",
-      "worktree": "worktrees/wt-improvement-backlog-ledger",
+      "worktree": "worktree/wt-improvement-backlog-ledger",
       "status": "done",
       "createdAt": "2026-11-20T06:42:01Z",
       "submittedAt": "2026-11-20T06:49:44Z",
@@ -3967,7 +3967,7 @@
       "agent": "iceman",
       "paths": "src,rpc.ts,test,docs,SPEC.md,index.ts",
       "branch": "wt/backlog-planner-integration",
-      "worktree": "worktrees/wt-backlog-planner-integration",
+      "worktree": "worktree/wt-backlog-planner-integration",
       "status": "done",
       "createdAt": "2026-11-20T06:55:25Z",
       "submittedAt": "2026-11-20T07:11:46Z",
@@ -3978,7 +3978,7 @@
       "agent": "iceman",
       "paths": "src/status-dialog.tsx,src/tui-history.tsx,src/core/history.ts,scripts/render-dialog.tsx,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,SPEC.md,dist/tui.js,docs/changelog.html",
       "branch": "wt/tui-detail-pileup-consistency",
-      "worktree": "worktrees/wt-tui-detail-pileup-consistency",
+      "worktree": "worktree/wt-tui-detail-pileup-consistency",
       "status": "done",
       "createdAt": "2026-11-20T06:56:22Z",
       "forcedScope": true,
@@ -3994,7 +3994,7 @@
       "agent": "iceman",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/fix-evaluator-staleness",
-      "worktree": "worktrees/wt-fix-evaluator-staleness",
+      "worktree": "worktree/wt-fix-evaluator-staleness",
       "status": "done",
       "createdAt": "2026-11-20T07:28:40Z",
       "submittedAt": "2026-11-20T07:47:29Z",
@@ -4005,7 +4005,7 @@
       "agent": "iceman",
       "paths": "src/runtime/controller.ts,test/loop.test.ts,test/controller.test.ts",
       "branch": "wt/evaluator-zero-tool-turn1-guard",
-      "worktree": "worktrees/wt-evaluator-zero-tool-turn1-guard",
+      "worktree": "worktree/wt-evaluator-zero-tool-turn1-guard",
       "status": "done",
       "createdAt": "2026-11-20T08:36:05Z",
       "forcedScope": true,
@@ -4021,7 +4021,7 @@
       "agent": "iceman",
       "paths": "CURRENT_TASK.md,test/dialog-crash-records.test.tsx",
       "branch": "wt/resume-stash2-path-fixes",
-      "worktree": "worktrees/wt-resume-stash2-path-fixes",
+      "worktree": "worktree/wt-resume-stash2-path-fixes",
       "status": "done",
       "createdAt": "2026-11-20T08:50:03Z",
       "submittedAt": "2026-11-20T08:52:46Z",
@@ -4032,7 +4032,7 @@
       "agent": "iceman",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/verification-matrix-trail-evidence",
-      "worktree": "worktrees/wt-verification-matrix-trail-evidence",
+      "worktree": "worktree/wt-verification-matrix-trail-evidence",
       "status": "done",
       "createdAt": "2026-11-20T08:56:05Z",
       "forcedScope": true,
@@ -4048,7 +4048,7 @@
       "agent": "iceman",
       "paths": "src,test,SPEC.md,docs,dist",
       "branch": "wt/evaluator-rubric-evidence-matrix",
-      "worktree": "worktrees/wt-evaluator-rubric-evidence-matrix",
+      "worktree": "worktree/wt-evaluator-rubric-evidence-matrix",
       "status": "done",
       "createdAt": "2026-11-20T09:10:39Z",
       "submittedAt": "2026-11-20T09:18:01Z",
@@ -4059,7 +4059,7 @@
       "agent": "iceman",
       "paths": "src,test,SPEC.md,docs,dist",
       "branch": "wt/verification-matrix-beyond-check",
-      "worktree": "worktrees/wt-verification-matrix-beyond-check",
+      "worktree": "worktree/wt-verification-matrix-beyond-check",
       "status": "done",
       "createdAt": "2026-11-20T09:23:02Z",
       "forcedScope": true,
@@ -4075,7 +4075,7 @@
       "agent": "iceman",
       "paths": "src,test,SPEC.md,docs,dist,README.md",
       "branch": "wt/verify-matrix-auto-deterministic",
-      "worktree": "worktrees/wt-verify-matrix-auto-deterministic",
+      "worktree": "worktree/wt-verify-matrix-auto-deterministic",
       "status": "done",
       "createdAt": "2026-11-20T09:50:00Z",
       "submittedAt": "2026-11-20T10:20:00Z",
@@ -4086,7 +4086,7 @@
       "agent": "iceman",
       "paths": "SPEC.md,src,rpc.ts,index.ts,test,docs",
       "branch": "wt/continuous-improvement-logging",
-      "worktree": "worktrees/wt-continuous-improvement-logging",
+      "worktree": "worktree/wt-continuous-improvement-logging",
       "status": "done",
       "createdAt": "2026-11-20T10:43:05Z",
       "forcedScope": true,
@@ -4103,7 +4103,7 @@
       "agent": "iceman",
       "paths": "AGENTS.md,README.md,docs",
       "branch": "wt/merge-next-ownership-guidance",
-      "worktree": "worktrees/wt-merge-next-ownership-guidance",
+      "worktree": "worktree/wt-merge-next-ownership-guidance",
       "status": "done",
       "createdAt": "2026-11-20T11:29:56Z",
       "submittedAt": "2026-11-20T11:31:28Z",
@@ -4114,7 +4114,7 @@
       "agent": "iceman",
       "paths": "src/core,src/runtime,test,SPEC.md,docs,README.md,dist",
       "branch": "wt/failure-signature-escalation",
-      "worktree": "worktrees/wt-failure-signature-escalation",
+      "worktree": "worktree/wt-failure-signature-escalation",
       "status": "done",
       "createdAt": "2026-11-20T11:38:32Z",
       "submittedAt": "2026-11-20T11:59:00Z",
@@ -4125,7 +4125,7 @@
       "agent": "orchestrator",
       "paths": "src/tui.tsx,scripts/render-pill.tsx,scripts/render-slot.tsx,test/tui-alignment-invariants.test.tsx,test/tui-pill-card-coherence.test.tsx,test/render-scripts.test.ts,SPEC.md,dist,docs",
       "branch": "wt/pill-icon-left-rail",
-      "worktree": "worktrees/wt-pill-icon-left-rail",
+      "worktree": "worktree/wt-pill-icon-left-rail",
       "status": "done",
       "createdAt": "2026-11-20T11:41:20Z",
       "submittedAt": "2026-11-20T11:41:36Z",
@@ -4136,7 +4136,7 @@
       "agent": "iceman",
       "paths": "packages/coordinator/**,test/**",
       "branch": "wt/coordinator-lease-race-fix",
-      "worktree": "worktrees/wt-coordinator-lease-race-fix",
+      "worktree": "worktree/wt-coordinator-lease-race-fix",
       "status": "done",
       "createdAt": "2026-11-20T12:31:45Z",
       "submittedAt": "2026-11-20T12:55:24Z",
@@ -4147,7 +4147,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md",
       "branch": "wt/no-rearm-after-achieved",
-      "worktree": "worktrees/wt-no-rearm-after-achieved",
+      "worktree": "worktree/wt-no-rearm-after-achieved",
       "status": "done",
       "createdAt": "2026-11-20T11:59:17Z",
       "submittedAt": "2026-11-20T12:02:58Z",
@@ -4158,7 +4158,7 @@
       "agent": "iceman",
       "paths": "src/core/failure-signature.ts,src/core/failure-diagnostics.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/failure-diagnostics.test.ts,test/controller.test.ts,SPEC.md,docs,dist",
       "branch": "wt/failure-diagnostic-artifact",
-      "worktree": "worktrees/wt-failure-diagnostic-artifact",
+      "worktree": "worktree/wt-failure-diagnostic-artifact",
       "status": "done",
       "createdAt": "2026-11-20T12:22:58Z",
       "submittedAt": "2026-11-20T12:32:40Z",
@@ -4169,7 +4169,7 @@
       "agent": "iceman",
       "paths": ".github/workflows/pages.yml,docs/.nojekyll,README.md",
       "branch": "wt/docs-github-pages-live",
-      "worktree": "worktrees/wt-docs-github-pages-live",
+      "worktree": "worktree/wt-docs-github-pages-live",
       "status": "done",
       "createdAt": "2026-11-20T12:27:12Z",
       "submittedAt": "2026-11-20T12:27:43Z",
@@ -4180,7 +4180,7 @@
       "agent": "iceman",
       "paths": "docs/**,SPEC.md",
       "branch": "wt/docs-readability-redesign",
-      "worktree": "worktrees/wt-docs-readability-redesign",
+      "worktree": "worktree/wt-docs-readability-redesign",
       "status": "done",
       "createdAt": "2026-11-20T12:36:56Z",
       "submittedAt": "2026-11-20T12:42:29Z",
@@ -4191,7 +4191,7 @@
       "agent": "iceman",
       "paths": "src/core/prompts.ts",
       "branch": "wt/evaluator-rubric-evidence-types",
-      "worktree": "worktrees/wt-evaluator-rubric-evidence-types",
+      "worktree": "worktree/wt-evaluator-rubric-evidence-types",
       "status": "done",
       "createdAt": "2026-11-20T12:42:31Z",
       "submittedAt": "2026-11-20T12:44:47Z",
@@ -4202,7 +4202,7 @@
       "agent": "iceman",
       "paths": "scripts/invariant-sweep.ts,package.json",
       "branch": "wt/invariant-sweep-gate",
-      "worktree": "worktrees/wt-invariant-sweep-gate",
+      "worktree": "worktree/wt-invariant-sweep-gate",
       "status": "done",
       "createdAt": "2026-11-20T12:50:43Z",
       "submittedAt": "2026-11-20T13:00:45Z",
@@ -4219,7 +4219,7 @@
       "agent": "iceman",
       "paths": "test,docs,SPEC.md",
       "branch": "wt/troubleshoot-parallel-goal-loop-evaluator",
-      "worktree": "worktrees/wt-troubleshoot-parallel-goal-loop-evaluator",
+      "worktree": "worktree/wt-troubleshoot-parallel-goal-loop-evaluator",
       "status": "done",
       "createdAt": "2026-11-20T13:12:11Z",
       "submittedAt": "2026-11-20T13:18:27Z",
@@ -4230,7 +4230,7 @@
       "agent": "orchestrator",
       "paths": "src/hud-card.tsx,src/tui.tsx,dist/tui.js,test,scripts,SPEC.md,docs",
       "branch": "wt/goal-tui-card-breathing-room",
-      "worktree": "worktrees/wt-goal-tui-card-breathing-room",
+      "worktree": "worktree/wt-goal-tui-card-breathing-room",
       "status": "done",
       "createdAt": "2026-11-20T13:19:52Z",
       "submittedAt": "2026-11-20T13:52:00Z",
@@ -4241,7 +4241,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/core/learning-log.ts,test/controller.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prune-workflow-overlap",
-      "worktree": "worktrees/wt-prune-workflow-overlap",
+      "worktree": "worktree/wt-prune-workflow-overlap",
       "status": "done",
       "createdAt": "2026-11-20T13:24:20Z",
       "submittedAt": "2026-11-20T13:35:52Z",
@@ -4252,7 +4252,7 @@
       "agent": "orchestrator",
       "paths": "src/runtime/controller.ts,src/core/verify-matrix.ts,test/controller.test.ts,test/loop.test.ts,test/verify-matrix-goal-declared.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prune-workflow-overlap-2",
-      "worktree": "worktrees/wt-prune-workflow-overlap-2",
+      "worktree": "worktree/wt-prune-workflow-overlap-2",
       "status": "done",
       "createdAt": "2026-11-20T13:44:10Z",
       "submittedAt": "2026-11-20T13:50:22Z",
@@ -4263,7 +4263,7 @@
       "agent": "orchestrator",
       "paths": "src/core/prompts.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-rubric-verifier-corroboration",
-      "worktree": "worktrees/wt-evaluator-rubric-verifier-corroboration",
+      "worktree": "worktree/wt-evaluator-rubric-verifier-corroboration",
       "status": "done",
       "createdAt": "2026-11-20T13:55:22Z",
       "submittedAt": "2026-11-20T14:01:55Z",
@@ -4274,7 +4274,7 @@
       "agent": "orchestrator",
       "paths": "src/core/history.ts,src/core/hud.ts,src/hud-card.tsx,scripts/render-pill.tsx,scripts/render-card.tsx,scripts/render-slot.tsx,scripts/render-dialog.tsx,test/history.test.ts,test/tui-hud.test.tsx,test/tui-render.test.tsx,test/tui-alignment-invariants.test.tsx,test/tui-snapshots.test.tsx,test/__snapshots__/,dist/tui.js",
       "branch": "wt/loop-indicator-always-visible",
-      "worktree": "worktrees/wt-loop-indicator-always-visible",
+      "worktree": "worktree/wt-loop-indicator-always-visible",
       "status": "done",
       "createdAt": "2026-11-20T14:07:11Z",
       "submittedAt": "2026-11-20T14:21:30Z",
@@ -4291,7 +4291,7 @@
       "agent": "orchestrator",
       "paths": "src/core/change-risk.ts,src/runtime/controller.ts,test/change-risk.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/change-risk-strict-gate",
-      "worktree": "worktrees/wt-change-risk-strict-gate",
+      "worktree": "worktree/wt-change-risk-strict-gate",
       "status": "done",
       "createdAt": "2026-11-20T14:18:19Z",
       "submittedAt": "2026-11-20T14:28:16Z",
@@ -4307,7 +4307,7 @@
       "agent": "orchestrator",
       "paths": "src/core/changed-paths.ts,src/core/change-risk.ts,scripts/invariant-sweep.ts,test/invariant-sweep.test.ts,test/change-risk.test.ts,test/changed-paths.test.ts,SPEC.md,docs/changelog.html,test/package-integrity.test.ts",
       "branch": "wt/shared-changed-path-collector",
-      "worktree": "worktrees/wt-shared-changed-path-collector",
+      "worktree": "worktree/wt-shared-changed-path-collector",
       "status": "done",
       "createdAt": "2026-11-20T14:37:44Z",
       "submittedAt": "2026-11-20T14:44:45Z",
@@ -4318,7 +4318,7 @@
       "agent": "iceman",
       "paths": "src/core/changed-paths.ts,src/core/file-log.ts,src/core/learning-log.ts,test",
       "branch": "wt/dead-internal-exports",
-      "worktree": "worktrees/wt-dead-internal-exports",
+      "worktree": "worktree/wt-dead-internal-exports",
       "status": "done",
       "createdAt": "2026-11-20T15:10:04Z",
       "submittedAt": "2026-11-20T15:15:17Z",
@@ -4334,7 +4334,7 @@
       "agent": "iceman",
       "paths": "test/loop.test.ts,test/controller.test.ts,test/verify.test.ts,test/pill-timer.test.tsx,test/terminal-record-prune.test.ts,test/goal-limits.test.ts,test/store.test.ts",
       "branch": "wt/test-c-path-pollution",
-      "worktree": "worktrees/wt-test-c-path-pollution",
+      "worktree": "worktree/wt-test-c-path-pollution",
       "status": "done",
       "createdAt": "2026-11-20T15:21:35Z",
       "submittedAt": "2026-11-20T15:25:04Z",
@@ -4345,7 +4345,7 @@
       "agent": "iceman",
       "paths": "src/runtime/controller.ts",
       "branch": "wt/unify-learning-path-default",
-      "worktree": "worktrees/wt-unify-learning-path-default",
+      "worktree": "worktree/wt-unify-learning-path-default",
       "status": "done",
       "createdAt": "2026-11-20T15:32:02Z",
       "submittedAt": "2026-11-20T15:37:44Z",
@@ -4362,7 +4362,7 @@
       "agent": "iceman",
       "paths": "src/core/types.ts",
       "branch": "wt/remove-unused-verify-check-definition",
-      "worktree": "worktrees/wt-remove-unused-verify-check-definition",
+      "worktree": "worktree/wt-remove-unused-verify-check-definition",
       "status": "done",
       "createdAt": "2026-11-20T15:46:54Z",
       "submittedAt": "2026-11-20T15:52:35Z",
@@ -4378,7 +4378,7 @@
       "agent": "iceman",
       "paths": "src/core/failure-signature.ts,src/core/types.ts,src/core/change-risk.ts,src/core/repull.ts,src/core/rpc-pump.ts,src/core/improvement-backlog.ts,src/core/verify-matrix.ts",
       "branch": "wt/unexport-internal-core-symbols",
-      "worktree": "worktrees/wt-unexport-internal-core-symbols",
+      "worktree": "worktree/wt-unexport-internal-core-symbols",
       "status": "done",
       "createdAt": "2026-11-20T16:01:11Z",
       "submittedAt": "2026-11-20T16:05:32Z",
@@ -4394,7 +4394,7 @@
       "agent": "iceman",
       "paths": "src/core/learning-log.ts",
       "branch": "wt/optimize-learning-log-mkdir",
-      "worktree": "worktrees/wt-optimize-learning-log-mkdir",
+      "worktree": "worktree/wt-optimize-learning-log-mkdir",
       "status": "done",
       "createdAt": "2026-11-20T16:12:43Z",
       "submittedAt": "2026-11-20T16:16:26Z",
@@ -4410,7 +4410,7 @@
       "agent": "iceman",
       "paths": "src/core/failure-signature.ts",
       "branch": "wt/optimize-failure-diagnostic-mkdir",
-      "worktree": "worktrees/wt-optimize-failure-diagnostic-mkdir",
+      "worktree": "worktree/wt-optimize-failure-diagnostic-mkdir",
       "status": "done",
       "createdAt": "2026-11-20T16:23:20Z",
       "submittedAt": "2026-11-20T16:26:31Z",
@@ -4426,7 +4426,7 @@
       "agent": "iceman",
       "paths": "src/core/mirror.ts",
       "branch": "wt/optimize-mirror-mkdir",
-      "worktree": "worktrees/wt-optimize-mirror-mkdir",
+      "worktree": "worktree/wt-optimize-mirror-mkdir",
       "status": "done",
       "createdAt": "2026-11-20T16:48:57Z",
       "submittedAt": "2026-11-20T16:53:11Z",
@@ -4443,7 +4443,7 @@
       "agent": "iceman",
       "paths": "src/core/wire.ts,src/runtime/controller.ts,src/core/failure-signature.ts",
       "branch": "wt/unify-windows-drive-guard",
-      "worktree": "worktrees/wt-unify-windows-drive-guard",
+      "worktree": "worktree/wt-unify-windows-drive-guard",
       "status": "done",
       "createdAt": "2026-11-20T17:08:29Z",
       "submittedAt": "2026-11-20T17:10:51Z",
@@ -4459,7 +4459,7 @@
       "agent": "iceman",
       "paths": ".gitignore",
       "branch": "wt/ignore-goal-loop-learnings",
-      "worktree": "worktrees/wt-ignore-goal-loop-learnings",
+      "worktree": "worktree/wt-ignore-goal-loop-learnings",
       "status": "done",
       "createdAt": "2026-11-20T17:27:10Z",
       "submittedAt": "2026-11-20T17:27:46Z",
@@ -4470,7 +4470,7 @@
       "agent": "iceman",
       "paths": "src/core/bootstrap.ts,src/index.ts,src/core/workflow.ts,test/bootstrap.test.ts,test/workflow.test.ts,docs/changelog.html,docs/config.html,docs/install.html,docs/index.html,SPEC.md,.gitignore,README.md",
       "branch": "wt/startup-workflow-scaffold",
-      "worktree": "worktrees/wt-startup-workflow-scaffold",
+      "worktree": "worktree/wt-startup-workflow-scaffold",
       "status": "done",
       "createdAt": "2026-11-20T17:42:12Z",
       "submittedAt": "2026-11-20T17:54:28Z",
@@ -4489,7 +4489,7 @@
       "agent": "antigravity",
       "paths": "src/runtime/controller.ts,src/runtime/evaluator.ts,src/core/config.ts,test/controller.test.ts,test/evaluator.test.ts",
       "branch": "wt/evaluator-retry-caps",
-      "worktree": "worktrees/wt-evaluator-retry-caps",
+      "worktree": "worktree/wt-evaluator-retry-caps",
       "status": "done",
       "createdAt": "2026-11-20T17:53:04Z",
       "submittedAt": "2026-11-20T18:05:04Z",
@@ -4508,7 +4508,7 @@
       "agent": "proof",
       "paths": "README.md,assets,docs,SPEC.md,AGENTS.md,MAINTAINER.md,src/core,test",
       "branch": "wt/readme-redesign-assets",
-      "worktree": "worktrees/wt-readme-redesign-assets",
+      "worktree": "worktree/wt-readme-redesign-assets",
       "status": "done",
       "createdAt": "2026-11-20T19:14:06Z",
       "submittedAt": "2026-11-20T19:16:20Z",
@@ -4519,7 +4519,7 @@
       "agent": "build",
       "paths": "src,test,docs,SPEC.md,README.md,dist",
       "branch": "wt/continuous-improvement-gap-closure",
-      "worktree": "worktrees/wt-continuous-improvement-gap-closure",
+      "worktree": "worktree/wt-continuous-improvement-gap-closure",
       "status": "done",
       "createdAt": "2026-11-20T20:14:34Z",
       "submittedAt": "2026-11-20T20:30:38Z",
@@ -4530,7 +4530,7 @@
       "agent": "build",
       "paths": "bin,src,test,docs,AGENTS.md,README.md,SPEC.md",
       "branch": "wt/self-update-wip-landing",
-      "worktree": "worktrees/wt-self-update-wip-landing",
+      "worktree": "worktree/wt-self-update-wip-landing",
       "status": "done",
       "createdAt": "2026-11-20T20:41:52Z",
       "submittedAt": "2026-11-20T20:43:33Z",
@@ -4541,7 +4541,7 @@
       "agent": "build",
       "paths": "packages/coordinator/bin/coordinator,test/coordinator-merge-safety.test.ts,SPEC.md,docs/changelog.html,docs/parallel-work.md,AGENTS.md",
       "branch": "wt/coordinator-status-compact",
-      "worktree": "worktrees/wt-coordinator-status-compact",
+      "worktree": "worktree/wt-coordinator-status-compact",
       "status": "done",
       "createdAt": "2026-11-20T20:46:54Z",
       "submittedAt": "2026-11-20T20:51:35Z",
@@ -4552,7 +4552,7 @@
       "agent": "build",
       "paths": "src/core/verdict.ts,src/runtime/controller.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-forward-pointer-exemption",
-      "worktree": "worktrees/wt-evaluator-forward-pointer-exemption",
+      "worktree": "worktree/wt-evaluator-forward-pointer-exemption",
       "status": "done",
       "createdAt": "2026-11-20T21:07:14Z",
       "submittedAt": "2026-11-20T21:13:37Z",
@@ -4568,7 +4568,7 @@
       "agent": "build",
       "paths": "src/core/changed-paths.ts,test/changed-paths.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/paths-of-rename-quote-fix",
-      "worktree": "worktrees/wt-paths-of-rename-quote-fix",
+      "worktree": "worktree/wt-paths-of-rename-quote-fix",
       "status": "done",
       "createdAt": "2026-11-20T21:21:41Z",
       "submittedAt": "2026-11-20T21:24:38Z",
@@ -4579,7 +4579,7 @@
       "agent": "build",
       "paths": "src/core/transcript.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/transcript-surrogate-safe-truncation",
-      "worktree": "worktrees/wt-transcript-surrogate-safe-truncation",
+      "worktree": "worktree/wt-transcript-surrogate-safe-truncation",
       "status": "done",
       "createdAt": "2026-11-20T21:30:14Z",
       "submittedAt": "2026-11-20T21:32:56Z",
@@ -4590,7 +4590,7 @@
       "agent": "build",
       "paths": "src/core/learning-log.ts,src/core/outcome-telemetry.ts,src/core/prompts.ts,src/runtime/controller.ts,test/learning-log.test.ts,test/core.test.ts,test/outcome-telemetry.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-context-lean",
-      "worktree": "worktrees/wt-evaluator-context-lean",
+      "worktree": "worktree/wt-evaluator-context-lean",
       "status": "done",
       "createdAt": "2026-11-20T22:07:54Z",
       "submittedAt": "2026-11-20T22:15:20Z",
@@ -4601,7 +4601,7 @@
       "agent": "build",
       "paths": "packages/coordinator/bin/coordinator,test/coordinator-merge-safety.test.ts,docs/improvement-backlog.json,SPEC.md,docs/changelog.html,docs/coordinator.html",
       "branch": "wt/close-remaining-todos",
-      "worktree": "worktrees/wt-close-remaining-todos",
+      "worktree": "worktree/wt-close-remaining-todos",
       "status": "done",
       "createdAt": "2026-11-20T22:22:28Z",
       "submittedAt": "2026-11-20T22:33:18Z",
@@ -4618,7 +4618,7 @@
       "agent": "goal-loop-primary",
       "paths": "package.json,bun.lock",
       "branch": "wt/unify-gaxios",
-      "worktree": "worktrees/wt-unify-gaxios",
+      "worktree": "worktree/wt-unify-gaxios",
       "status": "done",
       "createdAt": "2026-11-20T22:51:16Z",
       "submittedAt": "2026-11-20T22:55:11Z",
@@ -4629,7 +4629,7 @@
       "agent": "you",
       "paths": "src,bin,test,scripts,docs,package.json,SPEC.md,README.md,AGENTS.md",
       "branch": "wt/continuous-improve",
-      "worktree": "worktrees/wt-continuous-improve",
+      "worktree": "worktree/wt-continuous-improve",
       "status": "done",
       "createdAt": "2026-11-20T23:29:18Z",
       "submittedAt": "2026-11-20T23:41:44Z",
@@ -4645,7 +4645,7 @@
       "agent": "opencode",
       "paths": "src/core/prompts.ts,src/index.ts,src/core/config.ts,src/core/transcript.ts,test/notes.test.ts,test/plugin.test.ts,test/config-defaults.test.ts,SPEC.md,README.md,dist",
       "branch": "wt/evaluator-context-forget",
-      "worktree": "worktrees/wt-evaluator-context-forget",
+      "worktree": "worktree/wt-evaluator-context-forget",
       "status": "done",
       "createdAt": "2026-11-21T00:20:26Z",
       "submittedAt": "2026-11-21T00:31:11Z",
@@ -4661,7 +4661,7 @@
       "agent": "opencode",
       "paths": "src/runtime/controller.ts,src/runtime/store.ts,src/core/types.ts,src/index.ts,src/core/config.ts,src/core/prompts.ts,test/controller.test.ts,test/plugin.test.ts,test/store.test.ts,SPEC.md,README.md,docs/runtime.html,docs/config.html,docs/changelog.html,dist",
       "branch": "wt/eval-restart-resume",
-      "worktree": "worktrees/wt-eval-restart-resume",
+      "worktree": "worktree/wt-eval-restart-resume",
       "status": "done",
       "createdAt": "2026-11-21T00:40:48Z",
       "submittedAt": "2026-11-21T00:52:13Z",
@@ -4672,7 +4672,7 @@
       "agent": "tui-polisher",
       "paths": "src/tui.tsx,src/status-dialog.tsx,src/hud-card.tsx,src/tui-history.tsx,src/core/hud.ts,src/core/scrollbar.ts,dist/tui.js,test/tui-render.test.tsx,test/tui-snapshots.test.tsx,test/tui-hud.test.tsx,test/__snapshots__,SPEC.md",
       "branch": "wt/tui-polish",
-      "worktree": "worktrees/wt-tui-polish",
+      "worktree": "worktree/wt-tui-polish",
       "status": "done",
       "createdAt": "2026-11-21T01:17:18Z",
       "submittedAt": "2026-11-21T01:17:46Z",
@@ -4683,7 +4683,7 @@
       "agent": "",
       "paths": "",
       "branch": "wt/eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md",
-      "worktree": "worktrees/wt-eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md",
+      "worktree": "worktree/wt-eval-malformed-verdict-agent-builder-paths-src-core-verdict-ts-test-core-test-ts-test-evaluator-test-ts-spec-md",
       "status": "done",
       "createdAt": "2026-11-21T01:27:55Z",
       "releasedAt": "2026-11-21T01:28:12Z",
@@ -4693,7 +4693,7 @@
       "agent": "builder",
       "paths": "src/core/verdict.ts,test/core.test.ts,test/evaluator.test.ts,SPEC.md",
       "branch": "wt/eval-malformed-verdict",
-      "worktree": "worktrees/wt-eval-malformed-verdict",
+      "worktree": "worktree/wt-eval-malformed-verdict",
       "status": "done",
       "createdAt": "2026-11-21T01:28:22Z",
       "submittedAt": "2026-11-21T01:35:24Z",
@@ -4704,7 +4704,7 @@
       "agent": "primary",
       "paths": "AGENTS.md,README.md,SPEC.md,bun.lock,docs,package.json,packages,bin,prompts,src,test",
       "branch": "wt/audit-dedupe-and-prompter",
-      "worktree": "worktrees/wt-audit-dedupe-and-prompter",
+      "worktree": "worktree/wt-audit-dedupe-and-prompter",
       "status": "done",
       "createdAt": "2026-11-21T07:48:45Z",
       "submittedAt": "2026-11-21T07:48:51Z",
@@ -4715,7 +4715,7 @@
       "agent": "build-agent",
       "paths": "src/**,bin/**,test/**,prompts/**,package.json,SPEC.md,AGENTS.md,README.md,docs/**",
       "branch": "wt/review-recent-changes-fixes",
-      "worktree": "worktrees/wt-review-recent-changes-fixes",
+      "worktree": "worktree/wt-review-recent-changes-fixes",
       "status": "done",
       "createdAt": "2026-11-21T08:27:59Z",
       "submittedAt": "2026-11-21T08:27:59Z",
@@ -4726,7 +4726,7 @@
       "agent": "build-primary",
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs,AGENTS.md",
       "branch": "wt/tui-active-flip-heartbeat",
-      "worktree": "worktrees/wt-tui-active-flip-heartbeat",
+      "worktree": "worktree/wt-tui-active-flip-heartbeat",
       "status": "done",
       "createdAt": "2026-11-21T08:14:35Z",
       "submittedAt": "2026-11-21T08:22:12Z",
@@ -4737,7 +4737,7 @@
       "agent": "build-agent",
       "paths": "src/runtime/**,src/core/verdict.ts,src/core/parse.ts,src/core/errors.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md,AGENTS.md",
       "branch": "wt/evaluator-unreadable-verdict-root-cause",
-      "worktree": "worktrees/wt-evaluator-unreadable-verdict-root-cause",
+      "worktree": "worktree/wt-evaluator-unreadable-verdict-root-cause",
       "status": "done",
       "createdAt": "2026-11-21T08:28:10Z",
       "submittedAt": "2026-11-21T08:38:09Z",
@@ -4754,7 +4754,7 @@
       "agent": "primary",
       "paths": "SPEC.md,docs,packages/coordinator,test,scripts,AGENTS.md,README.md",
       "branch": "wt/audit-coordinator-workflow-gotchas",
-      "worktree": "worktrees/wt-audit-coordinator-workflow-gotchas",
+      "worktree": "worktree/wt-audit-coordinator-workflow-gotchas",
       "status": "done",
       "createdAt": "2026-11-21T08:45:41Z",
       "submittedAt": "2026-11-21T08:50:52Z",
@@ -4765,7 +4765,7 @@
       "agent": "primary",
       "paths": "src/core/config.ts,src/runtime/evaluator.ts,src/index.ts,test/evaluator.test.ts,test/core.test.ts,SPEC.md,README.md,docs/config.html,docs/changelog.html",
       "branch": "wt/evaluator-inherit-parent-model",
-      "worktree": "worktrees/wt-evaluator-inherit-parent-model",
+      "worktree": "worktree/wt-evaluator-inherit-parent-model",
       "status": "done",
       "createdAt": "2026-11-21T08:57:14Z",
       "submittedAt": "2026-11-21T09:12:45Z",
@@ -4776,7 +4776,7 @@
       "agent": "build-primary",
       "paths": "SPEC.md,src,packages/coordinator/bin,test",
       "branch": "wt/audit-recent-changes-bugs",
-      "worktree": "worktrees/wt-audit-recent-changes-bugs",
+      "worktree": "worktree/wt-audit-recent-changes-bugs",
       "status": "done",
       "createdAt": "2026-11-21T09:23:52Z",
       "submittedAt": "2026-11-21T09:41:24Z",
@@ -4787,7 +4787,7 @@
       "agent": "build-primary",
       "paths": "SPEC.md,src,test,docs,README.md",
       "branch": "wt/goal-follows-session-move",
-      "worktree": "worktrees/wt-goal-follows-session-move",
+      "worktree": "worktree/wt-goal-follows-session-move",
       "status": "done",
       "createdAt": "2026-11-21T09:27:16Z",
       "submittedAt": "2026-11-21T10:00:40Z",
@@ -4798,7 +4798,7 @@
       "agent": "primary",
       "paths": "src/runtime/evaluator.ts,src/runtime/ports.ts,src/index.ts,test/evaluator.test.ts,SPEC.md,docs/changelog.html,docs/config.html,README.md",
       "branch": "wt/evaluator-session-fingerprint",
-      "worktree": "worktrees/wt-evaluator-session-fingerprint",
+      "worktree": "worktree/wt-evaluator-session-fingerprint",
       "status": "done",
       "createdAt": "2026-11-21T10:20:15Z",
       "submittedAt": "2026-11-21T10:28:21Z",
@@ -4809,7 +4809,7 @@
       "agent": "claude",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/audit-recent-changes-bugs-followup",
-      "worktree": "worktrees/wt-audit-recent-changes-bugs-followup",
+      "worktree": "worktree/wt-audit-recent-changes-bugs-followup",
       "status": "done",
       "createdAt": "2026-11-21T11:02:47Z",
       "submittedAt": "2026-11-21T11:17:28Z",
@@ -4820,7 +4820,7 @@
       "agent": "build",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/evaluator-usage-limit-pause",
-      "worktree": "worktrees/wt-evaluator-usage-limit-pause",
+      "worktree": "worktree/wt-evaluator-usage-limit-pause",
       "status": "done",
       "createdAt": "2026-11-21T11:27:59Z",
       "submittedAt": "2026-11-21T11:32:17Z",
@@ -4831,7 +4831,7 @@
       "agent": "build",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/repo-root-term-anchor",
-      "worktree": "worktrees/wt-repo-root-term-anchor",
+      "worktree": "worktree/wt-repo-root-term-anchor",
       "status": "done",
       "createdAt": "2026-11-21T11:35:38Z",
       "submittedAt": "2026-11-21T11:37:16Z",
@@ -4842,7 +4842,7 @@
       "agent": "build",
       "paths": "src/core/prompts.ts,src/core/opencode-cli.ts,src/runtime/evaluator.ts,src/core/config.ts,SPEC.md",
       "branch": "wt/rubric-thinking-loop",
-      "worktree": "worktrees/wt-rubric-thinking-loop",
+      "worktree": "worktree/wt-rubric-thinking-loop",
       "status": "done",
       "createdAt": "2026-11-21T11:56:43Z",
       "submittedAt": "2026-11-21T12:04:03Z",
@@ -4860,7 +4860,7 @@
       "agent": "cleanup-agent",
       "paths": "src,test,docs,scripts,bin,package.json,SPEC.md,README.md,MAINTAINER.md,RELEASE-CHECKLIST.md",
       "branch": "wt/eod-cleanup-1",
-      "worktree": "worktrees/wt-eod-cleanup-1",
+      "worktree": "worktree/wt-eod-cleanup-1",
       "status": "done",
       "createdAt": "2026-11-21T13:45:06Z",
       "submittedAt": "2026-11-21T13:50:08Z",
@@ -4871,7 +4871,7 @@
       "agent": "goal-loop",
       "paths": "src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
-      "worktree": "worktrees/wt-review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
+      "worktree": "worktree/wt-review-recent-changes-for-bugs-update-legacy-codes-remove-them-fix-what-needs-fixing",
       "status": "done",
       "createdAt": "2026-11-21T15:23:34Z",
       "submittedAt": "2026-11-21T15:34:49Z",
@@ -4882,7 +4882,7 @@
       "agent": "goal-loop",
       "paths": "src/core/evaluator-agent.ts,src/core/prompts.ts,src/index.ts,src/runtime/controller.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/package-integrity.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/review-recent-changes-cxxx-judge-failure-paths",
-      "worktree": "worktrees/wt-review-recent-changes-cxxx-judge-failure-paths",
+      "worktree": "worktree/wt-review-recent-changes-cxxx-judge-failure-paths",
       "status": "done",
       "createdAt": "2026-11-21T16:46:24Z",
       "submittedAt": "2026-11-21T16:53:16Z",
@@ -4893,7 +4893,7 @@
       "agent": "primary",
       "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/core/prompts.ts,src/core/transcript.ts,src/index.ts,src/runtime/evaluator.ts,test/core.test.ts,test/evaluator.test.ts,test/plugin.test.ts",
       "branch": "wt/cxxxii-native-verdict-review-fixes",
-      "worktree": "worktrees/wt-cxxxii-native-verdict-review-fixes",
+      "worktree": "worktree/wt-cxxxii-native-verdict-review-fixes",
       "status": "done",
       "createdAt": "2026-11-21T17:45:34Z",
       "submittedAt": "2026-11-21T17:47:18Z",
@@ -4904,7 +4904,7 @@
       "agent": "primary",
       "paths": "SPEC.md,docs/changelog.html,src/core/evaluator-agent.ts,src/runtime/evaluator.ts,src/index.ts,test/core.test.ts,test/evaluator.test.ts",
       "branch": "wt/cxxxii-audit-failure-path-fixes",
-      "worktree": "worktrees/wt-cxxxii-audit-failure-path-fixes",
+      "worktree": "worktree/wt-cxxxii-audit-failure-path-fixes",
       "status": "done",
       "createdAt": "2026-11-21T18:08:20Z",
       "submittedAt": "2026-11-21T18:09:46Z",
@@ -4915,7 +4915,7 @@
       "agent": "primary",
       "paths": "SPEC.md,docs/changelog.html,docs/config.html,src/core/config.ts,src/index.ts,src/runtime/evaluator.ts,test/evaluator.test.ts,test/plugin.test.ts",
       "branch": "wt/cxxxiii-native-only-verdict",
-      "worktree": "worktrees/wt-cxxxiii-native-only-verdict",
+      "worktree": "worktree/wt-cxxxiii-native-only-verdict",
       "status": "done",
       "createdAt": "2026-11-21T18:32:58Z",
       "submittedAt": "2026-11-21T18:34:22Z",
@@ -4926,7 +4926,7 @@
       "agent": "primary",
       "paths": "src/core/transcript.ts,src/index.ts,src/core/evaluator-agent.ts,src/core/prompts.ts,test/plugin.test.ts,SPEC.md,docs/config.html",
       "branch": "wt/evaluator-summary-digest-fix",
-      "worktree": "worktrees/wt-evaluator-summary-digest-fix",
+      "worktree": "worktree/wt-evaluator-summary-digest-fix",
       "status": "done",
       "createdAt": "2026-11-21T18:52:00Z",
       "submittedAt": "2026-11-21T19:11:18Z",
@@ -4942,7 +4942,7 @@
       "agent": "pauk",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/evaluator-scores-parent-turn-not-own-delegation",
-      "worktree": "worktrees/wt-evaluator-scores-parent-turn-not-own-delegation",
+      "worktree": "worktree/wt-evaluator-scores-parent-turn-not-own-delegation",
       "status": "done",
       "createdAt": "2026-11-21T20:41:12Z",
       "submittedAt": "2026-11-21T20:43:02Z",
@@ -4953,7 +4953,7 @@
       "agent": "pauk",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/judge-context-isolation-and-single-turn-digest",
-      "worktree": "worktrees/wt-judge-context-isolation-and-single-turn-digest",
+      "worktree": "worktree/wt-judge-context-isolation-and-single-turn-digest",
       "status": "done",
       "createdAt": "2026-11-21T21:59:02Z",
       "submittedAt": "2026-11-21T22:00:35Z",
@@ -4964,7 +4964,7 @@
       "agent": "pauk",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/arm-plan-checking-and-foreign-verdict-guard",
-      "worktree": "worktrees/wt-arm-plan-checking-and-foreign-verdict-guard",
+      "worktree": "worktree/wt-arm-plan-checking-and-foreign-verdict-guard",
       "status": "done",
       "createdAt": "2026-11-21T22:36:43Z",
       "submittedAt": "2026-11-21T22:38:10Z",
@@ -4975,7 +4975,7 @@
       "agent": "pauk",
       "paths": "src,test,SPEC.md,docs",
       "branch": "wt/evaluator-naming-consistency",
-      "worktree": "worktrees/wt-evaluator-naming-consistency",
+      "worktree": "worktree/wt-evaluator-naming-consistency",
       "status": "done",
       "createdAt": "2026-11-21T22:52:43Z",
       "submittedAt": "2026-11-21T22:54:08Z",
@@ -4986,7 +4986,7 @@
       "agent": "build",
       "paths": "src/index.ts,src/runtime/evaluator.ts,src/runtime/controller.ts,test/evaluator.test.ts,test/controller.test.ts,SPEC.md",
       "branch": "wt/fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
-      "worktree": "worktrees/wt-fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
+      "worktree": "worktree/wt-fix-first-arm-goal-bar-and-evaluator-unusable-wake-loop",
       "status": "done",
       "createdAt": "2026-11-21T23:09:32Z",
       "submittedAt": "2026-11-21T23:30:42Z",
@@ -4997,7 +4997,7 @@
       "agent": "build-agent",
       "paths": "src/core/change-risk.ts,src/core/spend-ledger.ts,src/core/config.ts,src/prompter,README.md,CURRENT_TASK.md,RELEASE-CHECKLIST.md,SPEC.md,docs/changelog.html,test",
       "branch": "wt/eod-maintenance-bloat-pass",
-      "worktree": "worktrees/wt-eod-maintenance-bloat-pass",
+      "worktree": "worktree/wt-eod-maintenance-bloat-pass",
       "status": "done",
       "createdAt": "2026-11-22T19:43:01Z",
       "submittedAt": "2026-11-22T19:54:53Z",
@@ -5015,7 +5015,7 @@
       "agent": "build-agent",
       "paths": "src/core/parse.ts,src/core/config.ts,src/index.ts,src/prompter/util.ts,test,SPEC.md,dist/tui.js",
       "branch": "wt/parse-bool-consolidation",
-      "worktree": "worktrees/wt-parse-bool-consolidation",
+      "worktree": "worktree/wt-parse-bool-consolidation",
       "status": "done",
       "createdAt": "2026-11-22T20:01:46Z",
       "submittedAt": "2026-11-22T20:05:30Z",
@@ -5031,7 +5031,7 @@
       "agent": "build",
       "paths": "src/tui-history.tsx,test/tui-render.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/why-ledger-column-fill",
-      "worktree": "worktrees/wt-why-ledger-column-fill",
+      "worktree": "worktree/wt-why-ledger-column-fill",
       "status": "done",
       "createdAt": "2026-11-22T20:09:10Z",
       "submittedAt": "2026-11-22T20:23:28Z",
@@ -5047,7 +5047,7 @@
       "agent": "build-agent",
       "paths": "src/core/errors.ts,src/core/verify-matrix.ts,src/core/dossier-index.ts,src/prompter/util.ts,src/prompter/cli.ts,scripts/e2e-lib.ts,test,SPEC.md,dist/tui.js",
       "branch": "wt/error-value-quoting",
-      "worktree": "worktrees/wt-error-value-quoting",
+      "worktree": "worktree/wt-error-value-quoting",
       "status": "done",
       "createdAt": "2026-11-22T20:14:06Z",
       "submittedAt": "2026-11-22T20:20:21Z",
@@ -5058,7 +5058,7 @@
       "agent": "build-agent",
       "paths": "scripts/render-dialog.tsx,scripts/render-history.tsx,scripts/tui-load-check.ts,test/render-scripts.test.ts,test/package-integrity.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/log-value-quoting",
-      "worktree": "worktrees/wt-log-value-quoting",
+      "worktree": "worktree/wt-log-value-quoting",
       "status": "done",
       "createdAt": "2026-11-22T20:29:00Z",
       "submittedAt": "2026-11-22T20:33:14Z",
@@ -5069,7 +5069,7 @@
       "agent": "build",
       "paths": "src/tui-history.tsx,test/tui-render.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,dist/tui.js",
       "branch": "wt/why-fullwidth-final",
-      "worktree": "worktrees/wt-why-fullwidth-final",
+      "worktree": "worktree/wt-why-fullwidth-final",
       "status": "done",
       "createdAt": "2026-11-22T20:31:54Z",
       "submittedAt": "2026-11-22T20:39:23Z",
@@ -5080,7 +5080,7 @@
       "agent": "build-agent",
       "paths": "test/render-scripts.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/log-quoting-count-restore",
-      "worktree": "worktrees/wt-log-quoting-count-restore",
+      "worktree": "worktree/wt-log-quoting-count-restore",
       "status": "done",
       "createdAt": "2026-11-22T20:47:30Z",
       "submittedAt": "2026-11-22T20:51:56Z",
@@ -5091,7 +5091,7 @@
       "agent": "build-agent",
       "paths": "scripts/positive-finite.ts,scripts/render-dialog.tsx,scripts/render-history.tsx,test/render-scripts.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/positive-finite-helper",
-      "worktree": "worktrees/wt-positive-finite-helper",
+      "worktree": "worktree/wt-positive-finite-helper",
       "status": "done",
       "createdAt": "2026-11-22T21:02:03Z",
       "submittedAt": "2026-11-22T21:05:46Z",
@@ -5102,7 +5102,7 @@
       "agent": "build-agent",
       "paths": "src/core/dossier-attest.ts,src/tui.tsx,test/dossier-attest.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/sealed-dossier-stat-sweep",
-      "worktree": "worktrees/wt-sealed-dossier-stat-sweep",
+      "worktree": "worktree/wt-sealed-dossier-stat-sweep",
       "status": "done",
       "createdAt": "2026-11-22T21:41:00Z",
       "submittedAt": "2026-11-22T21:43:34Z",
@@ -5118,7 +5118,7 @@
       "agent": "build-agent",
       "paths": "src/core/verify-record.ts,src/core/sign-record.ts,src/core/reach-record.ts,LOOP-COUNT.md,SPEC.md,docs/changelog.html",
       "branch": "wt/gap-and-stale-doc-cleanup",
-      "worktree": "worktrees/wt-gap-and-stale-doc-cleanup",
+      "worktree": "worktree/wt-gap-and-stale-doc-cleanup",
       "status": "done",
       "createdAt": "2026-11-22T21:46:09Z",
       "submittedAt": "2026-11-22T21:50:17Z",
@@ -5134,7 +5134,7 @@
       "agent": "build",
       "paths": "src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md",
       "branch": "wt/prompt-dedup-structure",
-      "worktree": "worktrees/wt-prompt-dedup-structure",
+      "worktree": "worktree/wt-prompt-dedup-structure",
       "status": "done",
       "createdAt": "2026-11-22T21:55:14Z",
       "submittedAt": "2026-11-22T22:06:34Z",
@@ -5150,7 +5150,7 @@
       "agent": "build-agent",
       "paths": "scripts/width-flag.ts,scripts/render-slot.tsx,scripts/render-pill.tsx,scripts/repro-loop-cap.tsx,test/render-scripts.test.ts",
       "branch": "wt/width-flag-helper",
-      "worktree": "worktrees/wt-width-flag-helper",
+      "worktree": "worktree/wt-width-flag-helper",
       "status": "done",
       "createdAt": "2026-11-22T21:56:42Z",
       "submittedAt": "2026-11-22T21:59:28Z",
@@ -5166,7 +5166,7 @@
       "agent": "build-agent",
       "paths": "docs/core.html,docs/changelog.html",
       "branch": "wt/core-docs-export-refresh",
-      "worktree": "worktrees/wt-core-docs-export-refresh",
+      "worktree": "worktree/wt-core-docs-export-refresh",
       "status": "done",
       "createdAt": "2026-11-22T22:03:19Z",
       "submittedAt": "2026-11-22T22:05:44Z",
@@ -5177,7 +5177,7 @@
       "agent": "build-agent",
       "paths": "src/core/dossier.ts,src/core/verify-record.ts,src/core/sign-record.ts,src/core/reach-record.ts,test/verify-record.test.ts",
       "branch": "wt/condition-cell-helper",
-      "worktree": "worktrees/wt-condition-cell-helper",
+      "worktree": "worktree/wt-condition-cell-helper",
       "status": "done",
       "createdAt": "2026-11-22T22:11:44Z",
       "submittedAt": "2026-11-22T22:14:55Z",
@@ -5194,7 +5194,7 @@
       "agent": "build-agent",
       "paths": "src/prompter/backlog.ts,src/prompter/defaults.ts,src/prompter/state.ts,src/prompter/util.ts",
       "branch": "wt/dead-prompter-exports",
-      "worktree": "worktrees/wt-dead-prompter-exports",
+      "worktree": "worktree/wt-dead-prompter-exports",
       "status": "done",
       "createdAt": "2026-11-22T22:17:53Z",
       "submittedAt": "2026-11-22T22:19:55Z",
@@ -5205,7 +5205,7 @@
       "agent": "build-agent",
       "paths": "src/core/format.ts,test/format-controls.test.ts",
       "branch": "wt/strip-controls-fastpath",
-      "worktree": "worktrees/wt-strip-controls-fastpath",
+      "worktree": "worktree/wt-strip-controls-fastpath",
       "status": "done",
       "createdAt": "2026-11-22T22:25:02Z",
       "releasedAt": "2026-11-22T22:26:00Z",
@@ -5215,7 +5215,7 @@
       "agent": "build-agent",
       "paths": "scripts/docs-watch.ts,scripts/spec-check.ts",
       "branch": "wt/dead-script-exports",
-      "worktree": "worktrees/wt-dead-script-exports",
+      "worktree": "worktree/wt-dead-script-exports",
       "status": "done",
       "createdAt": "2026-11-22T22:27:09Z",
       "submittedAt": "2026-11-22T22:29:09Z",
@@ -5226,7 +5226,7 @@
       "agent": "build-agent",
       "paths": "package.json",
       "branch": "wt/redundant-pack-entry",
-      "worktree": "worktrees/wt-redundant-pack-entry",
+      "worktree": "worktree/wt-redundant-pack-entry",
       "status": "done",
       "createdAt": "2026-11-22T22:31:43Z",
       "submittedAt": "2026-11-22T22:33:53Z",
@@ -5237,7 +5237,7 @@
       "agent": "build-agent",
       "paths": "src/core/format.ts,test/cell-width.test.ts",
       "branch": "wt/cell-width-cache",
-      "worktree": "worktrees/wt-cell-width-cache",
+      "worktree": "worktree/wt-cell-width-cache",
       "status": "done",
       "createdAt": "2026-11-22T22:39:34Z",
       "submittedAt": "2026-11-22T22:42:19Z",
@@ -5254,7 +5254,7 @@
       "agent": "build-agent",
       "paths": "src/core/hud.ts,src/hud-card.tsx,src/tui.tsx",
       "branch": "wt/cell-width-consistency",
-      "worktree": "worktrees/wt-cell-width-consistency",
+      "worktree": "worktree/wt-cell-width-consistency",
       "status": "done",
       "createdAt": "2026-11-22T22:44:33Z",
       "submittedAt": "2026-11-22T22:47:48Z",
@@ -5271,7 +5271,7 @@
       "agent": "build-agent",
       "paths": "thought-log.md,src/core/config.ts",
       "branch": "wt/dead-scratch-and-export",
-      "worktree": "worktrees/wt-dead-scratch-and-export",
+      "worktree": "worktree/wt-dead-scratch-and-export",
       "status": "done",
       "createdAt": "2026-11-22T22:50:20Z",
       "submittedAt": "2026-11-22T22:52:45Z",
@@ -5287,7 +5287,7 @@
       "agent": "build-agent",
       "paths": "src/core/evaluator-agent.ts,test/evaluator-agent-foreign.test.ts",
       "branch": "wt/foreign-verdict-precompile",
-      "worktree": "worktrees/wt-foreign-verdict-precompile",
+      "worktree": "worktree/wt-foreign-verdict-precompile",
       "status": "done",
       "createdAt": "2026-11-22T22:59:10Z",
       "submittedAt": "2026-11-22T23:01:16Z",
@@ -5303,7 +5303,7 @@
       "agent": "build",
       "paths": "test/core.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prompt-kickoff-golden",
-      "worktree": "worktrees/wt-prompt-kickoff-golden",
+      "worktree": "worktree/wt-prompt-kickoff-golden",
       "status": "done",
       "createdAt": "2026-11-22T23:05:54Z",
       "submittedAt": "2026-11-22T23:09:41Z",
@@ -5314,7 +5314,7 @@
       "agent": "build-agent",
       "paths": "src/core/find.ts,test/find.test.ts",
       "branch": "wt/find-fold-cache",
-      "worktree": "worktrees/wt-find-fold-cache",
+      "worktree": "worktree/wt-find-fold-cache",
       "status": "done",
       "createdAt": "2026-11-22T23:12:41Z",
       "submittedAt": "2026-11-22T23:18:08Z",
@@ -5331,7 +5331,7 @@
       "agent": "loop-worker",
       "paths": "SPEC.md",
       "branch": "wt/spec-workstream-renumber",
-      "worktree": "worktrees/wt-spec-workstream-renumber",
+      "worktree": "worktree/wt-spec-workstream-renumber",
       "status": "done",
       "createdAt": "2026-11-22T23:26:20Z",
       "submittedAt": "2026-11-22T23:26:41Z",
@@ -5342,7 +5342,7 @@
       "agent": "build",
       "paths": "src/core/prompts.ts,test/core.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/prompt-verdict-single-home",
-      "worktree": "worktrees/wt-prompt-verdict-single-home",
+      "worktree": "worktree/wt-prompt-verdict-single-home",
       "status": "done",
       "createdAt": "2026-11-22T23:22:54Z",
       "submittedAt": "2026-11-22T23:30:36Z",
@@ -5353,7 +5353,7 @@
       "agent": "build-agent",
       "paths": "src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
       "branch": "wt/verify-matrix-error-style",
-      "worktree": "worktrees/wt-verify-matrix-error-style",
+      "worktree": "worktree/wt-verify-matrix-error-style",
       "status": "done",
       "createdAt": "2026-11-22T23:30:05Z",
       "submittedAt": "2026-11-22T23:33:48Z",
@@ -5369,7 +5369,7 @@
       "agent": "loop-worker",
       "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/failure-signature-predicate-dedup",
-      "worktree": "worktrees/wt-failure-signature-predicate-dedup",
+      "worktree": "worktree/wt-failure-signature-predicate-dedup",
       "status": "done",
       "createdAt": "2026-11-22T23:31:55Z",
       "submittedAt": "2026-11-22T23:40:54Z",
@@ -5380,7 +5380,7 @@
       "agent": "build-agent",
       "paths": "docs/READABILITY-SPEC.md",
       "branch": "wt/dead-readability-spec",
-      "worktree": "worktrees/wt-dead-readability-spec",
+      "worktree": "worktree/wt-dead-readability-spec",
       "status": "done",
       "createdAt": "2026-11-22T23:34:28Z",
       "submittedAt": "2026-11-22T23:45:01Z",
@@ -5391,7 +5391,7 @@
       "agent": "build-agent",
       "paths": "src/core/format.ts,test/truncate-cache.test.ts",
       "branch": "wt/truncate-memo",
-      "worktree": "worktrees/wt-truncate-memo",
+      "worktree": "worktree/wt-truncate-memo",
       "status": "done",
       "createdAt": "2026-11-22T23:51:45Z",
       "submittedAt": "2026-11-22T23:56:53Z",
@@ -5408,7 +5408,7 @@
       "agent": "loop-worker",
       "paths": "docs/improvement-backlog.json",
       "branch": "wt/backlog-polish-followups",
-      "worktree": "worktrees/wt-backlog-polish-followups",
+      "worktree": "worktree/wt-backlog-polish-followups",
       "status": "done",
       "createdAt": "2026-11-23T00:01:42Z",
       "submittedAt": "2026-11-23T00:01:42Z",
@@ -5419,7 +5419,7 @@
       "agent": "build-agent",
       "paths": "src/core/evaluator-agent.ts,test/core.test.ts",
       "branch": "wt/verdict-regex-once",
-      "worktree": "worktrees/wt-verdict-regex-once",
+      "worktree": "worktree/wt-verdict-regex-once",
       "status": "done",
       "createdAt": "2026-11-23T00:04:00Z",
       "submittedAt": "2026-11-23T00:07:10Z",
@@ -5435,7 +5435,7 @@
       "agent": "build",
       "paths": "src/core/prompts.ts,test/evaluator-request-context.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-request-stripped-by-goal-grammar",
-      "worktree": "worktrees/wt-evaluator-request-stripped-by-goal-grammar",
+      "worktree": "worktree/wt-evaluator-request-stripped-by-goal-grammar",
       "status": "done",
       "createdAt": "2026-11-23T00:06:04Z",
       "submittedAt": "2026-11-23T00:14:41Z",
@@ -5446,7 +5446,7 @@
       "agent": "loop-worker",
       "paths": "src/core/learning-log.ts,test/learning-log.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/learning-log-dead-verify",
-      "worktree": "worktrees/wt-learning-log-dead-verify",
+      "worktree": "worktree/wt-learning-log-dead-verify",
       "status": "done",
       "createdAt": "2026-11-23T00:15:26Z",
       "submittedAt": "2026-11-23T00:15:27Z",
@@ -5462,7 +5462,7 @@
       "agent": "build-agent",
       "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts",
       "branch": "wt/telemetry-redundant-guard",
-      "worktree": "worktrees/wt-telemetry-redundant-guard",
+      "worktree": "worktree/wt-telemetry-redundant-guard",
       "status": "done",
       "createdAt": "2026-11-23T00:10:57Z",
       "submittedAt": "2026-11-23T00:13:05Z",
@@ -5478,7 +5478,7 @@
       "agent": "build-agent",
       "paths": "CURRENT_TASK.md,pending_fixes.md",
       "branch": "wt/dead-archived-task-logs",
-      "worktree": "worktrees/wt-dead-archived-task-logs",
+      "worktree": "worktree/wt-dead-archived-task-logs",
       "status": "done",
       "createdAt": "2026-11-23T00:21:39Z",
       "submittedAt": "2026-11-23T00:23:31Z",
@@ -5489,7 +5489,7 @@
       "agent": "loop-worker",
       "paths": "AGENTS.md,docs/parallel-work.md",
       "branch": "wt/doc-parallel-agents-hygiene",
-      "worktree": "worktrees/wt-doc-parallel-agents-hygiene",
+      "worktree": "worktree/wt-doc-parallel-agents-hygiene",
       "status": "done",
       "createdAt": "2026-11-23T00:28:06Z",
       "submittedAt": "2026-11-23T00:31:06Z",
@@ -5500,7 +5500,7 @@
       "agent": "build-agent",
       "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts,src/core/evaluator-agent.ts,test/core.test.ts",
       "branch": "wt/core-pure-cleanups",
-      "worktree": "worktrees/wt-core-pure-cleanups",
+      "worktree": "worktree/wt-core-pure-cleanups",
       "status": "done",
       "createdAt": "2026-11-23T00:29:28Z",
       "submittedAt": "2026-11-23T00:33:46Z",
@@ -5516,7 +5516,7 @@
       "agent": "loop-worker",
       "paths": "src/core/wire.ts,src/core/hud.ts,docs/improvement-backlog.json,SPEC.md,docs/changelog.html",
       "branch": "wt/doc-comment-cleanup",
-      "worktree": "worktrees/wt-doc-comment-cleanup",
+      "worktree": "worktree/wt-doc-comment-cleanup",
       "status": "done",
       "createdAt": "2026-11-23T00:40:14Z",
       "submittedAt": "2026-11-23T00:50:02Z",
@@ -5527,7 +5527,7 @@
       "agent": "build-agent",
       "paths": "src/core/types.ts,src/core/config.ts,src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
       "branch": "wt/dedupe-verify-types",
-      "worktree": "worktrees/wt-dedupe-verify-types",
+      "worktree": "worktree/wt-dedupe-verify-types",
       "status": "done",
       "createdAt": "2026-11-23T00:54:26Z",
       "submittedAt": "2026-11-23T00:54:52Z",
@@ -5543,7 +5543,7 @@
       "agent": "loop-worker",
       "paths": "src/core/verdict.ts,test/verdict.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/verdict-regex-precompile",
-      "worktree": "worktrees/wt-verdict-regex-precompile",
+      "worktree": "worktree/wt-verdict-regex-precompile",
       "status": "done",
       "createdAt": "2026-11-23T01:03:22Z",
       "releasedAt": "2026-11-23T01:18:36Z",
@@ -5553,7 +5553,7 @@
       "agent": "loop-worker",
       "paths": "src/core/verdict.ts,test/verdict-intake.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/verdict-pattern-precompile",
-      "worktree": "worktrees/wt-verdict-pattern-precompile",
+      "worktree": "worktree/wt-verdict-pattern-precompile",
       "status": "done",
       "createdAt": "2026-11-23T01:08:31Z",
       "releasedAt": "2026-11-23T01:18:46Z",
@@ -5563,7 +5563,7 @@
       "agent": "build-agent",
       "paths": "src/core/types.ts,src/core/config.ts,src/core/verify-matrix.ts,src/core/wire.ts,src/core/evaluator-agent.ts,test/verify-matrix-goal-declared.test.ts,test/core.test.ts",
       "branch": "wt/verify-contract-trio",
-      "worktree": "worktrees/wt-verify-contract-trio",
+      "worktree": "worktree/wt-verify-contract-trio",
       "status": "done",
       "createdAt": "2026-11-23T01:09:23Z",
       "submittedAt": "2026-11-23T01:15:49Z",
@@ -5580,7 +5580,7 @@
       "agent": "loop-worker",
       "paths": "AGENTS.md,docs/parallel-work.md",
       "branch": "wt/fix-changelog-guidance",
-      "worktree": "worktrees/wt-fix-changelog-guidance",
+      "worktree": "worktree/wt-fix-changelog-guidance",
       "status": "done",
       "createdAt": "2026-11-23T01:14:07Z",
       "submittedAt": "2026-11-23T01:16:22Z",
@@ -5591,7 +5591,7 @@
       "agent": "build-agent",
       "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts",
       "branch": "wt/failure-normalize-memo",
-      "worktree": "worktrees/wt-failure-normalize-memo",
+      "worktree": "worktree/wt-failure-normalize-memo",
       "status": "done",
       "createdAt": "2026-11-23T01:28:54Z",
       "submittedAt": "2026-11-23T01:28:54Z",
@@ -5607,7 +5607,7 @@
       "agent": "loop-worker",
       "paths": "docs/improvement-backlog.json",
       "branch": "wt/backlog-regex-benchmark",
-      "worktree": "worktrees/wt-backlog-regex-benchmark",
+      "worktree": "worktree/wt-backlog-regex-benchmark",
       "status": "done",
       "createdAt": "2026-11-23T01:25:34Z",
       "submittedAt": "2026-11-23T01:27:32Z",
@@ -5618,7 +5618,7 @@
       "agent": "loop-worker",
       "paths": "src/core/hud.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-hint-prefix",
-      "worktree": "worktrees/wt-evaluator-hint-prefix",
+      "worktree": "worktree/wt-evaluator-hint-prefix",
       "status": "done",
       "createdAt": "2026-11-23T01:34:14Z",
       "submittedAt": "2026-11-23T01:42:32Z",
@@ -5634,7 +5634,7 @@
       "agent": "build-agent",
       "paths": "src/core/types.ts,src/core/wire.ts,src/core/verify-matrix.ts,src/core/sanitize.ts,test/wire.test.ts,test/sanitize.test.ts",
       "branch": "wt/verify-sets-and-probe",
-      "worktree": "worktrees/wt-verify-sets-and-probe",
+      "worktree": "worktree/wt-verify-sets-and-probe",
       "status": "done",
       "createdAt": "2026-11-23T01:43:53Z",
       "submittedAt": "2026-11-23T01:43:53Z",
@@ -5651,7 +5651,7 @@
       "agent": "loop-worker",
       "paths": "src/core/format.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/truncate-cache-key",
-      "worktree": "worktrees/wt-truncate-cache-key",
+      "worktree": "worktree/wt-truncate-cache-key",
       "status": "done",
       "createdAt": "2026-11-23T01:49:56Z",
       "submittedAt": "2026-11-23T01:55:55Z",
@@ -5667,7 +5667,7 @@
       "agent": "loop-worker",
       "paths": "src/core/types.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/dead-verify-run-state-export",
-      "worktree": "worktrees/wt-dead-verify-run-state-export",
+      "worktree": "worktree/wt-dead-verify-run-state-export",
       "status": "done",
       "createdAt": "2026-11-23T02:03:23Z",
       "submittedAt": "2026-11-23T02:06:44Z",
@@ -5678,7 +5678,7 @@
       "agent": "loop-worker",
       "paths": "src/core/memo.ts,src/core/failure-signature.ts,src/core/outcome-telemetry.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/normalize-memo-unify",
-      "worktree": "worktrees/wt-normalize-memo-unify",
+      "worktree": "worktree/wt-normalize-memo-unify",
       "status": "done",
       "createdAt": "2026-11-23T02:13:46Z",
       "submittedAt": "2026-11-23T02:20:52Z",
@@ -5694,7 +5694,7 @@
       "agent": "build",
       "paths": "src/core/bootstrap.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/dead-bootstrap-reexport",
-      "worktree": "worktrees/wt-dead-bootstrap-reexport",
+      "worktree": "worktree/wt-dead-bootstrap-reexport",
       "status": "done",
       "createdAt": "2026-11-23T02:21:53Z",
       "submittedAt": "2026-11-23T02:21:53Z",
@@ -5705,7 +5705,7 @@
       "agent": "loop-worker",
       "paths": "src/core/format.ts,src/core/sanitize.ts,src/core/evaluator-agent.ts,src/core/find.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/memo-mechanism-unify",
-      "worktree": "worktrees/wt-memo-mechanism-unify",
+      "worktree": "worktree/wt-memo-mechanism-unify",
       "status": "done",
       "createdAt": "2026-11-23T02:28:05Z",
       "submittedAt": "2026-11-23T02:35:21Z",
@@ -5721,7 +5721,7 @@
       "agent": "build",
       "paths": "src/core/hud.ts,test/tui-hud.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/pill-live-turn-counter",
-      "worktree": "worktrees/wt-pill-live-turn-counter",
+      "worktree": "worktree/wt-pill-live-turn-counter",
       "status": "done",
       "createdAt": "2026-11-23T02:34:28Z",
       "submittedAt": "2026-11-23T02:44:50Z",
@@ -5732,7 +5732,7 @@
       "agent": "build",
       "paths": "src/core/verdict.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/lenient-verdict-regex",
-      "worktree": "worktrees/wt-lenient-verdict-regex",
+      "worktree": "worktree/wt-lenient-verdict-regex",
       "status": "done",
       "createdAt": "2026-11-23T02:34:53Z",
       "submittedAt": "2026-11-23T02:43:09Z",
@@ -5748,7 +5748,7 @@
       "agent": "loop-worker",
       "paths": "src/core/sanitize.ts,test/sanitize.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/sanitize-tagless-fastpath",
-      "worktree": "worktrees/wt-sanitize-tagless-fastpath",
+      "worktree": "worktree/wt-sanitize-tagless-fastpath",
       "status": "done",
       "createdAt": "2026-11-23T02:42:03Z",
       "submittedAt": "2026-11-23T02:50:03Z",
@@ -5759,7 +5759,7 @@
       "agent": "build",
       "paths": "package.json,bun.lock,SPEC.md,docs/changelog.html",
       "branch": "wt/unused-dep-cleanup",
-      "worktree": "worktrees/wt-unused-dep-cleanup",
+      "worktree": "worktree/wt-unused-dep-cleanup",
       "status": "done",
       "createdAt": "2026-11-23T02:53:20Z",
       "submittedAt": "2026-11-23T03:01:09Z",
@@ -5770,7 +5770,7 @@
       "agent": "loop-worker",
       "paths": "src/core/format.ts,src/core/failure-signature.ts,src/runtime/controller.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/normalize-condition-unify",
-      "worktree": "worktrees/wt-normalize-condition-unify",
+      "worktree": "worktree/wt-normalize-condition-unify",
       "status": "done",
       "createdAt": "2026-11-23T02:57:28Z",
       "submittedAt": "2026-11-23T03:05:37Z",
@@ -5787,7 +5787,7 @@
       "agent": "build",
       "paths": "packages/coordinator/bin/coordinator,test/coordinator.test.ts,test/coordinator-merge-safety.test.ts,test/coordinator-lease-races.test.ts,AGENTS.md,docs/parallel-work.md,SPEC.md,docs/changelog.html",
       "branch": "wt/coordinator-merge-status",
-      "worktree": "worktrees/wt-coordinator-merge-status",
+      "worktree": "worktree/wt-coordinator-merge-status",
       "status": "done",
       "createdAt": "2026-11-23T03:02:18Z",
       "submittedAt": "2026-11-23T03:11:55Z",
@@ -5798,7 +5798,7 @@
       "agent": "loop-worker",
       "paths": "src/core/dossier.ts,src/core/verify-record.ts,src/core/reach-record.ts,src/core/sign-record.ts,src/core/dossier-attest.ts,src/core/dossier-review.ts,src/core/dossier-seal.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/record-status-cell-unify",
-      "worktree": "worktrees/wt-record-status-cell-unify",
+      "worktree": "worktree/wt-record-status-cell-unify",
       "status": "done",
       "createdAt": "2026-11-23T03:16:28Z",
       "submittedAt": "2026-11-23T03:24:00Z",
@@ -5815,7 +5815,7 @@
       "agent": "build",
       "paths": "packages/coordinator/bin/coordinator,packages/coordinator/README.md,src/core/git.ts,src/core/workflow.ts,src/core/types.ts,src/core/bootstrap.ts,scripts/spec-check.ts,test,.gitignore,.term/coordinator/config.json,AGENTS.md,docs/parallel-work.md,docs/core.html,docs/index.html,docs/install.html,SPEC.md,README.md,MAINTAINER.md,RELEASE-CHECKLIST.md,prompts,dist/tui.js",
       "branch": "wt/worktree-dir-rename",
-      "worktree": "worktrees/wt-worktree-dir-rename",
+      "worktree": "worktree/wt-worktree-dir-rename",
       "status": "done",
       "createdAt": "2026-11-23T03:18:29Z",
       "submittedAt": "2026-11-23T03:30:54Z",
@@ -5826,7 +5826,7 @@
       "agent": "loop-worker",
       "paths": "src/core/entries.ts,test/entries.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/goals-equal-fastpath",
-      "worktree": "worktrees/wt-goals-equal-fastpath",
+      "worktree": "worktree/wt-goals-equal-fastpath",
       "status": "done",
       "createdAt": "2026-11-23T03:38:07Z",
       "submittedAt": "2026-11-23T03:47:18Z",
@@ -5854,8 +5854,25 @@
       "paths": "src/core/format.ts,src/core/history.ts,src/core/attestation.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/nonneg-clamp-unify",
       "worktree": "worktree/wt-nonneg-clamp-unify",
+      "status": "done",
+      "createdAt": "2026-11-23T03:51:57Z",
+      "submittedAt": "2026-11-23T03:59:01Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T03:59:01Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/history.test.ts"
+      ],
+      "mergedAt": "2026-11-23T04:09:03Z",
+      "mergedInto": "dev"
+    },
+    "pill-evaluated-turn-count": {
+      "agent": "build",
+      "paths": "src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/pill-evaluated-turn-count",
+      "worktree": "worktree/wt-pill-evaluated-turn-count",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:51:57Z"
+      "createdAt": "2026-11-23T04:04:45Z"
     }
   },
   "mergeLock": null,
