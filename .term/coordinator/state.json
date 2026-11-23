@@ -6203,6 +6203,17 @@
       "submittedAt": "2026-11-23T09:04:27Z",
       "mergedAt": "2026-11-23T09:06:35Z",
       "mergedInto": "dev"
+    },
+    "maxretries-doc-truth": {
+      "agent": "orchestrator",
+      "paths": "docs,SPEC.md",
+      "branch": "wt/maxretries-doc-truth",
+      "worktree": "worktree/wt-maxretries-doc-truth",
+      "status": "done",
+      "createdAt": "2026-11-23T09:13:08Z",
+      "submittedAt": "2026-11-23T09:16:57Z",
+      "mergedAt": "2026-11-23T09:19:06Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
