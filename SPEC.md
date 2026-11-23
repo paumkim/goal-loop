@@ -226,6 +226,18 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Dead export removal (`dead-subagent-prompt-prefix`, 2026-11-23): `SUBAGENT_PROMPT_PREFIX` in
+  `src/core/evaluator-agent.ts` had exactly five repo-wide hits — definition, one test import, one assertion
+  that the constant equals its own literal, and two historical `SPEC-workstreams.md` notes. The only production
+  consumer was dropped in the earlier `spawnEvaluator` rewrite (workstream at `SPEC-workstreams.md:9095`),
+  leaving the export orphaned. Removed the constant, its import and the tautological assertion. No behavior,
+  gate or generated file change; the evaluator agent test still pins every real contract. Focused
+  `plugin`/`core`/`evaluator` suites green, full check green, marker unchanged (no `test()` block removed).
+  Follow-ups recorded, not removed: `types.ts · NO_COMMIT` (zero production consumers but 19 test fixture call
+  sites), `scripts/repro-loop-cap.tsx` (161-line repro renderer, zero automated invocations but possible manual
+  use), `outcome-telemetry.ts · summarizeLearningText` (test-only wrapper, possibly a deliberate public helper),
+  `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test scope).
+
 - Max-retries doc truth (`maxretries-doc-truth`, 2026-11-23): `docs/runtime.html` alone still called
   `maxRetries` "retained for compatibility, no longer gates anything". The controller gates on it in two
   places (evaluator failures and transient execution failures), the config comment, `docs/config.html`,
