@@ -686,20 +686,21 @@ var shortSha = (sha) => {
     return GAP;
   return flat.length > 7 ? flat.slice(0, 7) : flat;
 };
-var inlineCode = (text) => {
-  let longest = 0;
+var longestBacktickRun = (text, min) => {
+  let longest = min;
   for (const run of text.match(/`+/g) ?? [])
     longest = Math.max(longest, run.length);
+  return longest;
+};
+var inlineCode = (text) => {
+  const longest = longestBacktickRun(text, 0);
   if (longest === 0)
     return `\`${text}\``;
   const fence = "`".repeat(longest + 1);
   return `${fence} ${text} ${fence}`;
 };
 var fenceBlock = (text) => {
-  let longest = 2;
-  for (const run of text.match(/`{3,}/g) ?? [])
-    longest = Math.max(longest, run.length);
-  const fence = "`".repeat(longest + 1);
+  const fence = "`".repeat(longestBacktickRun(text, 2) + 1);
   const body = text.replace(/\r\n?/g, `
 `).replace(/\n+$/, "").split(`
 `);
