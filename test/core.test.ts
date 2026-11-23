@@ -1343,6 +1343,23 @@ describe("native evaluator verdict", () => {
     expect(verdictFromNativeReport(noEcho, "Reply with the single word DONE.")).toEqual({ verdict: "met", reason: "the reply was DONE" })
   })
 
+  test("every fail-closed verdict error clips the raw body at one shared 500-char preview", () => {
+    // The four error paths used to repeat a literal `slice(0, 500)`; pin that they all still clip at
+    // the same width so moving to one helper changed no message.
+    const long = "A".repeat(700)
+    const first500 = "A".repeat(500)
+    const errorFor = (state: string, body: string) => {
+      try { verdictFromNativeReport({ key: "x", body, state }); return "" } catch (e) { return (e as Error).message }
+    }
+    expect(errorFor("error", long)).toBe(`evaluator subagent failed: ${first500}`)
+    expect(errorFor("completed", `"rests_on":{} ${long}`)).toBe(
+      `evaluator subagent returned a verdict from a different evaluation contract: ${`"rests_on":{} ${long}`.slice(0, 500)}`,
+    )
+    expect(errorFor("completed", long)).toBe(
+      `unreadable verdict: evaluator subagent returned no authoritative verdict/met field (status/result are not verdicts): ${first500}`,
+    )
+  })
+
   test("a failed or unreadable native report throws so the generation judge can take over", () => {
     expect(() => verdictFromNativeReport({ key: "x", body: "Free usage limit reached (429)", state: "error" })).toThrow(/evaluator subagent failed: Free usage limit reached/)
     expect(() => verdictFromNativeReport({ key: "x", body: "no verdict here", state: "completed" })).toThrow(/unreadable verdict/)
