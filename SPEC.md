@@ -226,6 +226,13 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Max-retries doc truth (`maxretries-doc-truth`, 2026-11-23): `docs/runtime.html` alone still called
+  `maxRetries` "retained for compatibility, no longer gates anything". The controller gates on it in two
+  places (evaluator failures and transient execution failures), the config comment, `docs/config.html`,
+  `README.md`, SPEC item 93 and two controller tests all describe it as active. The row now states the real
+  cap semantics and cites both source files; the tied A-27 resolution is annotated as superseded. A stale
+  SPEC reference to a nonexistent README section ("Running the loop safely") now points to the real headings.
+  Documentation only, no behavior change, marker unchanged, focused controller/config suites and full check green.
 - Compaction notice wording (`compaction-notice-wording`, 2026-11-23): the one host-unwilling warning read
   "compaction did not land; loop is running hot; consider /compact manually" — lowercase, semicolon
   fragments, and "running hot" implying escalation while the contract is a trickle. The message now states
@@ -591,7 +598,8 @@ guard, tests, and documentation. Follow-ups bigger than one iteration are listed
     (`loopNotProgress`) and never pause an armed loop. Regression test: a loop whose evaluator claims heavy work with zero harness tool
     calls keeps arming (zero-tool iterations never pause an armed loop; corrected 2026-11-18, Workstream XXXIX), and both loop-history entries record `toolCalls: 0`.
 50. Audit trail: SPEC (this workstream), AGENTS.md (evidence requirements, probe isolation, bookkeeping
-    policy, spec gate, re-arm hygiene), README.md ("Running the loop safely" checklist + options table),
+    policy, spec gate, re-arm hygiene), README.md ("Catches False Agent Claims" + "Options Reference" and
+    "Environment Variables" tables),
     `docs/runtime.html` (verification gate and fresh-session promotion checklist), `docs/config.html`,
     `docs/install.html`, `docs/core.html`. `bun run docs:check` stays green.
 51. `bun run check` passes: tsc, `bun test` (244 tests at the time of writing), compile, `check:tui`,
@@ -1350,6 +1358,9 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
 - **A-27 (low) — `src/core/config.ts` — `maxRetries` is dead surface.** Retained "for compatibility", gates nothing, advertised in config
   docs. Proposed fix: keep the key parsing (backward compat) but flag in docs as inert, or remove with a SPEC/docs note; never silently drop.
   Resolution: Workstream AR — parsing retained, docs flag inert on all surfaces; superseded mentions noted as design history.
+  [SUPERSEDED 2026-11-23: `maxRetries` gates again — `src/runtime/controller.ts:2531,2554` settle the goal as
+  `failed` when the cap is reached, `config.ts` and `docs/config.html` describe it as active, and
+  `test/controller.test.ts:530,627` pin that behavior. `docs/runtime.html` now matches.]
 - **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
   verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped; both caps landed — XXXV
   `loopHistory` 50, XXXVI verdict trail 20 — so the record size, and this comparison, is bounded).

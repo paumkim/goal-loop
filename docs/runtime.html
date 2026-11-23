@@ -36,7 +36,7 @@
 <tr><td>Rate/usage-limit retry</td><td><code>15m</code> fixed, unlimited</td><td><code>src/runtime/controller.ts</code></td></tr>
 <tr><td>Evaluator retry backoff</td><td><code>10s × 3^(n-1)</code>, cap 5m, unlimited</td><td><code>src/runtime/controller.ts</code></td></tr>
 <tr><td>Loop-planner retry backoff</td><td><code>15s × 4^n</code>, cap 5m, unlimited</td><td><code>src/runtime/controller.ts</code></td></tr>
-<tr><td>Max retries</td><td><code>3</code> (<code>maxRetries</code>); retained for compatibility, no longer gates anything</td><td><code>src/core/config.ts</code></td></tr>
+<tr><td>Max retries</td><td><code>3</code> (<code>maxRetries</code>); consecutive evaluator failures and transient execution errors fail the goal at this cap. <code>0</code> disables it for unlimited retries with capped backoff</td><td><code>src/core/config.ts</code>, <code>src/runtime/controller.ts</code></td></tr>
 <tr><td>Stall pause</td><td>opt-in; <code>stallTurns</code> default <code>0</code> = never; plain goals only, an armed <code>/goal-loop</code> emits one notice and keeps running</td><td><code>src/core/config.ts</code></td></tr>
 <tr><td>Turn cap</td><td>opt-in; <code>maxTurns</code> default <code>0</code> = none; plain goals only, an armed <code>/goal-loop</code> emits one notice and keeps running; cap pause stays paused until clear/new goal</td><td><code>src/core/config.ts</code></td></tr>
 <tr><td>History kept</td><td>last 20 verdicts, drops counted (<code>historyDropped</code>)</td><td><code>src/core/types.ts · MAX_VERDICT_HISTORY_ENTRIES</code></td></tr>
