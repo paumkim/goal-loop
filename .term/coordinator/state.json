@@ -5434,9 +5434,11 @@
       "paths": "src/core/prompts.ts,test/evaluator-request-context.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-request-stripped-by-goal-grammar",
       "worktree": "worktrees/wt-evaluator-request-stripped-by-goal-grammar",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T00:06:04Z",
-      "submittedAt": "2026-11-23T00:14:41Z"
+      "submittedAt": "2026-11-23T00:14:41Z",
+      "mergedAt": "2026-11-23T00:30:50Z",
+      "mergedInto": "dev"
     },
     "learning-log-dead-verify": {
       "agent": "loop-worker",
@@ -5480,6 +5482,22 @@
       "submittedAt": "2026-11-23T00:23:31Z",
       "mergedAt": "2026-11-23T00:25:46Z",
       "mergedInto": "dev"
+    },
+    "doc-parallel-agents-hygiene": {
+      "agent": "loop-worker",
+      "paths": "AGENTS.md,docs/parallel-work.md",
+      "branch": "wt/doc-parallel-agents-hygiene",
+      "worktree": "worktrees/wt-doc-parallel-agents-hygiene",
+      "status": "claimed",
+      "createdAt": "2026-11-23T00:28:06Z"
+    },
+    "core-pure-cleanups": {
+      "agent": "build-agent",
+      "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts,src/core/evaluator-agent.ts,test/core.test.ts",
+      "branch": "wt/core-pure-cleanups",
+      "worktree": "worktrees/wt-core-pure-cleanups",
+      "status": "claimed",
+      "createdAt": "2026-11-23T00:29:28Z"
     }
   },
   "mergeLock": null,
