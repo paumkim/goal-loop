@@ -11200,3 +11200,13 @@ pairs against the original implementation plus null/identity cases; focused suit
 Completed the physical half of the `worktrees/` → `worktree/` rename on the shared checkout. `coordinator migrate-worktree-dir` now accepts `--with-live-leases`: when a live lease still points into `worktrees/`, the default remains a hard refusal (another session's worktree is never disturbed), but the explicit flag moves the directory anyway, leaves a `worktrees -> worktree` compatibility symlink, and skips rewriting those leases' records so their old paths keep resolving for their owner. The move also handles an already-existing destination (new-style leases claimed before the migration) and runs `git worktree repair` on every relocated worktree. Help text and docs/parallel-work.md / AGENTS.md describe both modes.
 
 Verification: `test/worktree-dir-rename.test.ts` grows a ninth case asserting the symlink, both old and new paths resolving to the same worktree, the live lease keeping its old record while a done lease is rewritten, and git records repaired; focused suite 9 pass / 0 fail (70 expect() calls). Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check. On the shared checkout the command was then run with `--with-live-leases` to perform the actual physical rename, with `git worktree list` confirming the repaired `worktree/` paths.
+
+## Workstream CXCIV — one finite-or-zero clamp for the chrome renderers (2026-11-23)
+
+The `Number.isFinite(n) ? Math.max(0, n) : 0` clamp was spelled out three times in `history.ts`
+(renderBar, barCaption, contextMeter) and once as a private `nonNegative` in `attestation.ts`. Added
+`format.ts · nonNegative` and reduced all four sites to call it. A non-finite or negative count, size
+or clock has always painted nothing; the shared helper preserves that exactly. Differential test
+pins it against the former inline expression across finite, negative, NaN and both infinities.
+Focused suites (history, tui-hud, dossier-attest) 294 pass / 0 fail, 22854 expect() calls;
+`tsc --noEmit` clean. Consolidation/taste change, not a speed claim. Marker +1 test.

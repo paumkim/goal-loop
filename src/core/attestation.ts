@@ -18,7 +18,7 @@
  * fraction rides the tally exactly as it rides the painted row).
  */
 import type { LoopEntry } from "./types.ts"
-import { formatCost, formatDuration, formatDurationCoarse } from "./format.ts"
+import { formatCost, formatDuration, formatDurationCoarse, nonNegative } from "./format.ts"
 
 /** The numbers the final tally paints — the `loopTotals` shape from history.ts, restated so this module does not import the renderer's world. `spend.measured` is the count of iterations whose usage delta was measurable; the tally never claims a complete total from a partial measurement. */
 interface AttestationTotals {
@@ -35,8 +35,6 @@ export const quoteSha = (sha: string | undefined): string | undefined => {
   const trimmed = sha.trim()
   return trimmed.length > 0 ? trimmed.slice(0, 7) : undefined
 }
-
-const nonNegative = (n: number): number => (Number.isFinite(n) ? Math.max(0, n) : 0)
 
 /**
  * The iteration attestation: `v3 · met · 9 turns · 41 tools · 27m 05s · already satisfied at HEAD · a1b2c3d` —

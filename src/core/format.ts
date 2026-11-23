@@ -19,6 +19,12 @@ export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A)
 }
 
 /**
+ * One home for the "finite or zero, never negative" clamp used by the chrome renderers. A non-finite
+ * clock, count or size paints nothing; a negative one paints nothing; a valid one passes through.
+ */
+export const nonNegative = (n: number): number => (Number.isFinite(n) ? Math.max(0, n) : 0)
+
+/**
  * Canonical condition/reason fold: lowercase, collapse every run of non-alphanumerics to one space
  * (Unicode letters and numbers kept), trim. One home for the controller's anti-repeat ledger and
  * failure-signature's signature keys, so the two implementations cannot drift. Memoized because the
