@@ -6381,8 +6381,11 @@
       "paths": "src/index.ts,test,SPEC.md",
       "branch": "wt/error-handling-audit-3",
       "worktree": "worktree/wt-error-handling-audit-3",
-      "status": "claimed",
-      "createdAt": "2026-11-23T13:33:50Z"
+      "status": "done",
+      "createdAt": "2026-11-23T13:33:50Z",
+      "submittedAt": "2026-11-23T14:05:03Z",
+      "mergedAt": "2026-11-23T14:13:15Z",
+      "mergedInto": "dev"
     },
     "evaluator-child-session-parity": {
       "agent": "hy4-flash-free",
