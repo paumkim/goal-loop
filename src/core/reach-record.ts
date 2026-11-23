@@ -22,7 +22,7 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { conditionCellOf, shortSha, stampOf , recordStatusCell } from "./dossier.ts"
+import { conditionCellOf, shortSha, stampOf , recordStatusCell, iterationList } from "./dossier.ts"
 import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
 
@@ -96,9 +96,6 @@ export function reachRecord(goal: GoalSnapshot, probe: ReachProbe): ReachVerific
   }
   return { checks, unique: checks.length, mentions, ancestors, unreached, unknown }
 }
-
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
-
 
 const statusCell = (status: string): string => recordStatusCell(status, "ancestor", "unreached")
 

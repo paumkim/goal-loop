@@ -28,6 +28,12 @@ export type RecordAnswer = "yes" | "no" | "unknown"
 export const recordStatusCell = (status: string, positive: string, negative: string): RecordAnswer =>
   status === positive ? "yes" : status === negative ? "no" : "unknown"
 
+/**
+ * Iteration column shared by the verify, reach, sign and review record tables. Those five renderers
+ * used to spell the same `v1, v2` list out locally; one home keeps every table identical.
+ */
+export const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
+
 /** Flatten a goal condition to one table cell: whitespace collapsed, 200 chars + ellipsis at most, GAP when empty. */
 export const conditionCellOf = (condition: string | undefined): string => {
   const flat = (condition ?? "").replace(/\s+/g, " ").trim()

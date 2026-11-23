@@ -23,7 +23,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha, stampOf, fileStampOf , recordStatusCell } from "./dossier.ts"
+import { buildLoopDossier, shortSha, stampOf, fileStampOf , recordStatusCell, iterationList } from "./dossier.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -93,8 +93,6 @@ export const reviewName = (nowMs: number, attempt = 0): string => {
   const suffix = attempt > 0 ? `-${attempt + 1}` : ""
   return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`
 }
-
-const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
 const verifyCell = (status: string): ReviewAnswer => recordStatusCell(status, "present", "missing")
 const reachCell = (status: string): ReviewAnswer => recordStatusCell(status, "ancestor", "unreached")

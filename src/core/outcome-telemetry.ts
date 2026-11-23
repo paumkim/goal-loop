@@ -10,6 +10,7 @@ import { memoizeBounded } from "./format.ts"
 import { formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries } from "./learning-log.ts"
 import type { LearningEntry } from "./learning-log.ts"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
+import { isRecord } from "./wire.ts"
 
 /** A failure theme is flagged recurring once it is seen this many times. */
 export const RECURRING_THEME_THRESHOLD = 3
@@ -52,10 +53,6 @@ interface OutcomeTelemetry {
   readonly timeToGreen: TimeToGreen
   /** Normalized goal conditions seen at more than one boundary. */
   readonly recurringConditions: readonly RecurringCondition[]
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function asString(value: unknown): string | undefined {

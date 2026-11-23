@@ -716,7 +716,7 @@ export class GoalController {
       if (hit !== undefined) {
         const capped = boundCompletedConditions([...ledger])
         const totalDropped = dropped + capped.dropped
-        const refusalReason = `no new gap: the proposed objective near-duplicates (exact repeat, or token containment >= 0.7 / Jaccard >= 0.6) the already-completed "${truncate(normalizeCondition(hit), 140)}" recorded for this session; the loop was not armed.`
+        const refusalReason = `no new gap: the proposed objective near-duplicates the already-completed "${truncate(normalizeCondition(hit), 140)}" recorded for this session; the loop was not armed.`
         const refusal: GoalRecord = {
           version: 1,
           id: this.newId(),

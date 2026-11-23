@@ -9,6 +9,8 @@
  * Pure data helpers only: no I/O, no side effects.
  */
 
+import { isRecord } from "./wire.ts"
+
 type ImprovementImpact = "low" | "medium" | "high"
 type ImprovementRisk = "low" | "medium" | "high"
 type ImprovementStatus = "open" | "in_progress" | "blocked" | "deferred" | "done"
@@ -67,10 +69,6 @@ interface NextItemOptions {
 const IMPACTS = new Set<ImprovementImpact>(["low", "medium", "high"])
 const RISKS = new Set<ImprovementRisk>(["low", "medium", "high"])
 const STATUSES = new Set<ImprovementStatus>(["open", "in_progress", "blocked", "deferred", "done"])
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function isStringArray(value: unknown): value is readonly string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string")
