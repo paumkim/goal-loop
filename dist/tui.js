@@ -5850,43 +5850,45 @@ var goalsEqual = (a, b) => {
 };
 var ENTRY_CAP = 64;
 function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
+  const keys = Object.keys(entries);
+  if (keys.length <= cap)
+    return entries;
   let changed = false;
   const out = {};
   for (const [sessionID, entry] of Object.entries(entries)) {
     out[sessionID] = entry;
   }
-  const keys = Object.keys(out);
-  if (keys.length > cap) {
-    const rank = (k) => {
-      const g = out[k].goal;
-      return g !== null && isLive(g.status) ? 1 : 0;
-    };
-    const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a].receivedAt - out[b].receivedAt);
-    let overflow = keys.length - cap;
-    for (const k of sorted) {
-      if (overflow <= 0)
-        break;
-      if (k === keep || rank(k) === 1)
-        continue;
-      delete out[k];
-      overflow--;
-      changed = true;
-    }
+  const rank = (k) => {
+    const g = out[k].goal;
+    return g !== null && isLive(g.status) ? 1 : 0;
+  };
+  const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a].receivedAt - out[b].receivedAt);
+  let overflow = keys.length - cap;
+  for (const k of sorted) {
+    if (overflow <= 0)
+      break;
+    if (k === keep || rank(k) === 1)
+      continue;
+    delete out[k];
+    overflow--;
+    changed = true;
   }
   return changed ? out : entries;
 }
 function dropSessions(entries, ids, keep) {
   if (ids.length === 0)
     return entries;
+  const drop = new Set(ids);
   const out = {};
+  let removed = false;
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (ids.includes(sessionID) && sessionID !== keep)
+    if (drop.has(sessionID) && sessionID !== keep) {
+      removed = true;
       continue;
+    }
     out[sessionID] = entry;
   }
-  if (Object.keys(out).length === Object.keys(entries).length)
-    return entries;
-  return out;
+  return removed ? out : entries;
 }
 function terminalStampOf(existing, goal, now) {
   if (goal !== null && !isLive(goal.status))
