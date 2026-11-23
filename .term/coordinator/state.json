@@ -6446,6 +6446,17 @@
       "submittedAt": "2026-11-23T14:58:44Z",
       "mergedAt": "2026-11-23T15:00:59Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-script-fixtures": {
+      "agent": "orchestrator",
+      "paths": "scripts/**",
+      "branch": "wt/eod-cleanup-script-fixtures",
+      "worktree": "worktree/wt-eod-cleanup-script-fixtures",
+      "status": "done",
+      "createdAt": "2026-11-23T15:03:08Z",
+      "submittedAt": "2026-11-23T15:05:53Z",
+      "mergedAt": "2026-11-23T15:08:08Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
