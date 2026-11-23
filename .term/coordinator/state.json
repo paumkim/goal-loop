@@ -6247,6 +6247,17 @@
       "submittedAt": "2026-11-23T10:08:33Z",
       "mergedAt": "2026-11-23T10:10:44Z",
       "mergedInto": "dev"
+    },
+    "dead-condition-echo-wrapper": {
+      "agent": "loop-worker",
+      "paths": "src/core/evaluator-agent.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/dead-condition-echo-wrapper",
+      "worktree": "worktree/wt-dead-condition-echo-wrapper",
+      "status": "done",
+      "createdAt": "2026-11-23T10:16:08Z",
+      "submittedAt": "2026-11-23T10:19:34Z",
+      "mergedAt": "2026-11-23T10:21:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
