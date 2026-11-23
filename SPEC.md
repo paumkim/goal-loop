@@ -10882,3 +10882,14 @@ New regression test in `test/core.test.ts` feeds a 700-char body through the err
 and no-authoritative-verdict paths and pins that each message contains exactly the first 500 chars and
 nothing beyond — so a future drift in any single path is caught. Focused suites 189 pass / 0 fail.
 Typecheck clean. Combined marker for both units `tests=2249 -> 2251` after rebase.
+
+## Workstream CLXIX — one doc block per helper in wire and hud (2026-11-23)
+
+Two comment-only cleanups from the deferred backlog items. `src/core/wire.ts` carried the `goal`
+RPC narrow's JSDoc above `parseListGoalOutput`; moved it to its actual subject,
+`parseGetGoalOutput`, leaving the list-parser doc in place. `src/core/hud.ts` had two adjacent doc
+blocks on both `pillModel` and `terminalPill`; merged each pair into one, keeping the full
+budget/phase and completion/acknowledgment contracts. No exported name, signature, literal or
+code line changed; `tsc --noEmit` clean, focused suites (wire + tui-hud) 219 pass / 0 fail.
+The `wire-jsdoc-reattach` and `hud-doubled-jsdoc` backlog items are marked done. Marker unchanged
+at `files=143 tests=2251` — no new tests.
