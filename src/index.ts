@@ -12,7 +12,7 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
-import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, verdictFromNativeReport } from "./core/evaluator-agent.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, isEvaluatorReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
@@ -302,17 +302,27 @@ export default Plugin.define({
       },
     }
 
-    // Judge child created by the harness for every verdict. It has NO `parentID`, so the host's
-    // `subagent-report.ts` early-returns (`!initial?.parentID && jobState.mode === "none"`): no `<subagent>`
-    // report is admitted to the working parent and `deps.wake(parentID)` is never called by the child. The harness
-    // reads the verdict text directly and `Evaluator.evaluate` decides: `met` ends the goal, `not_met` is the ONLY
-    // path that dispatches a continuation steer (and therefore the only wake). Tracked so the generate/context
-    // hooks can shape the judge child's generation without touching worker sessions.
+    // Judge child created by the harness for every verdict. It rides the same parent-linked subagent shape as the
+    // arm-time planner (`ctx.session.create({ parentID: sessionID, agent, model })`), so its generation is accounted
+    // under the working session instead of a standalone primary turn — a standalone judge hit the provider's free
+    // usage gate while the planner on the same model kept running. The harness reads the verdict from the child's
+    // own event stream and `Evaluator.evaluate` decides: `met` ends the goal, `not_met` is the only path that
+    // dispatches a continuation steer. Tracked so the generate/context hooks can shape the judge's generation
+    // without touching worker sessions.
     const evaluatorChildren = new Set<string>()
+    /** Host-delivered `<subagent>` report from a judge child. The verdict comes from the child's event stream, never
+     * from this report, so it is stripped from model-bound context: with `parentID` the host admits it and wakes the
+     * parent, and the parent must not narrate or re-judge its own verdict (SPEC-workstreams.md CXLI). */
+    const isJudgeReport = (message: unknown) => {
+      if (!message || typeof message !== "object") return false
+      const m = message as Record<string, unknown>
+      return m.type === "synthetic" && isEvaluatorReport(m.metadata)
+    }
 
-    const spawnEvaluator = async (model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
+    const spawnEvaluator = async (sessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string> => {
       const { id } = await ctx.session.create({
         location: ctx.location,
+        parentID: sessionID,
         title: EVALUATOR_AGENT_TITLE,
         agent: EVALUATOR_AGENT_ID,
         model: model as any,
@@ -354,12 +364,10 @@ export default Plugin.define({
         })()
         // The signal must reach the host prompt: a child turn that ignores an external abort used to keep
         // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. No resume opt-out
-        // here: the host only wakes a session's execution when `resume !== false`, so that flag left this fresh
-        // child admitted to the inbox but never running (no text deltas, no terminal event, 120s timeout). The
-        // parent wake is suppressed structurally instead — the child has no `parentID` and is not a host subagent
-        // Job, so `subagent-report.ts` early-returns and never calls `deps.wake(parentID)`. The child MUST run as a
-        // `kind:"primary"` turn to pass the free-tier gate. Race so any abort converges immediately; the text
-        // still comes from `done` (the child's text deltas), never from a reported synthetic message.
+        // here, exactly as for the planner child: the host only wakes a session's execution when `resume !== false`,
+        // so that flag left this fresh child admitted to the inbox but never running (no text deltas, no terminal
+        // event, 120s timeout). Race so any abort converges immediately; the text still comes from `done` (the
+        // child's text deltas), never from the host's completion report.
         await Promise.race([
           ctx.session.prompt({
             sessionID: id,
@@ -378,12 +386,13 @@ export default Plugin.define({
       }
     }
 
-    // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt from the transcript digest.
+    // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt and any host-delivered judge report
+    // from the transcript digest, so a parent-linked child's completion cannot be scored as the parent's own work.
     const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
-      stripGoalEvaluations(await ctx.session.context({ sessionID }, { signal }))
+      stripGoalEvaluations((await ctx.session.context({ sessionID }, { signal })).filter((message) => !isJudgeReport(message)))
 
     // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in a
-    // standalone judge child on the session's current model, then pass the child's text through the same contract
+    // parent-linked judge child on the session's current model, then pass the child's text through the same contract
     // guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable text throws, so
     // `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale verdict.
     const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
@@ -417,7 +426,7 @@ export default Plugin.define({
             }
           : {}),
       })
-      const text = await spawnEvaluator(model, prompt, signal)
+      const text = await spawnEvaluator(sessionID, model, prompt, signal)
       return verdictFromNativeReport({ key: sessionID, body: text, state: "completed" }, controller.activeCondition(sessionID))
     }
 
@@ -505,9 +514,9 @@ export default Plugin.define({
           const model = await sessionModel(sessionID, signal)
           if (!model) throw new Error("inherited evaluator model unavailable: session has no active model")
           const transcript = renderTranscript(await evaluatorContext(sessionID, signal), { maxChars: config.evaluator.maxTranscriptChars })
-          return spawnEvaluator(model, `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`, signal)
+          return spawnEvaluator(sessionID, model, `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`, signal)
         },
-        modelGenerate: (_sessionID, model, prompt, signal) => spawnEvaluator(model, prompt, signal),
+        modelGenerate: (sessionID, model, prompt, signal) => spawnEvaluator(sessionID, model, prompt, signal),
         context: evaluatorContext,
         sessionModel,
       },
@@ -841,6 +850,10 @@ export default Plugin.define({
         // On a working turn drop every <goal-evaluation> prompt; while an evaluation is in flight keep
         // only the most recent one — the live rubric the model must answer — and drop older echoes.
         kept = stripGoalEvaluations(kept, { keepLast: evaluator.isEvaluating(event.sessionID) || evaluatorChildren.has(event.sessionID) })
+        // The judge's verdict is read from its own event stream. With `parentID` the host also admits a
+        // `<subagent>` completion into this session and wakes it; never let that report teach the worker the
+        // verdict it was supposed to earn on its own (SPEC-workstreams.md CXLI position inversion).
+        kept = kept.filter((message) => !isJudgeReport(message))
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be
@@ -850,7 +863,7 @@ export default Plugin.define({
           const trailing = original[original.length - 1]
           // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
           // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
-          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) ? trailing : undefined
+          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) && !isJudgeReport(trailing) ? trailing : undefined
           const last = kept[kept.length - 1]
           const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
           original.splice(0, original.length, ...repaired)
