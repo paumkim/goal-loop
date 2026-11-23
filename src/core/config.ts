@@ -1,9 +1,9 @@
 import { parseBool } from "./parse.ts"
-import type { CommitRequest, ModelRef } from "./types.ts"
+import type { CommitRequest, ModelRef, VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
+// Canonical unions live in types.ts; re-exported here so existing `from "./config.ts"` imports keep working.
+export type { VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
 
 type EvaluatorMode = "auto" | "session" | "independent"
-
-export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
 
 export interface VerifyCheckConfig {
   readonly id: string
@@ -14,7 +14,7 @@ export interface VerifyCheckConfig {
   readonly when?: "always" | "broad"
   readonly label?: string
   /** How this required check may be satisfied. Default: command (executed). */
-  readonly evidence?: "command" | "artifact" | "either"
+  readonly evidence?: VerifyEvidenceMode
   /** Required literal patterns for fresh scoped transcript/artifact evidence (evidence artifact|either). */
   readonly artifactPatterns?: readonly string[]
 }

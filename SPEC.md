@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2251 -->
+<!-- spec-check files=143 tests=2252 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10893,3 +10893,24 @@ budget/phase and completion/acknowledgment contracts. No exported name, signatur
 code line changed; `tsc --noEmit` clean, focused suites (wire + tui-hud) 219 pass / 0 fail.
 The `wire-jsdoc-reattach` and `hud-doubled-jsdoc` backlog items are marked done. Marker unchanged
 at `files=143 tests=2251` — no new tests.
+
+## Workstream CLXX — one home for the verification union types (2026-11-23)
+
+Repo improvement pass, dead-code removal + consistency unit.
+
+The verification contract's three union types had multiple copies with no behavioral difference:
+`VerifyCheckType` was declared in both `src/core/types.ts` and `src/core/config.ts`;
+`VerifyEvidenceMode` in `types.ts` and `src/core/verify-matrix.ts`; `VerifyCheckSource` in `types.ts` and
+`verify-matrix.ts`. `VerifyCheckConfig.evidence` also spelled out the mode union inline a fourth time.
+Four duplicate declarations — dead code that could drift silently.
+
+`types.ts` is now the single canonical home. `config.ts` imports `VerifyCheckType` / `VerifyEvidenceMode`
+from it (and re-exports them so existing `from "./config.ts"` imports keep working), uses `VerifyEvidenceMode`
+for the `evidence` field, and drops its local copy. `verify-matrix.ts` imports and re-exports
+`VerifyEvidenceMode` / `VerifyCheckSource` from `types.ts` and drops both local copies. No runtime
+behavior changes; the public import surface is preserved.
+
+New regression test in `test/verify-matrix-goal-declared.test.ts` adds compile-time `Same<A, B>` identity
+bindings across all three import paths (a drift fails `tsc`) plus a runtime case pinning the accepted
+literals (7 types, 3 evidence modes, 3 sources). Focused suite 9 pass / 0 fail (was 8). Typecheck clean.
+Marker `tests=2251 -> 2252`.
