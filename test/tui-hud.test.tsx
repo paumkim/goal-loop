@@ -9,7 +9,7 @@ import { testRender } from "@opentui/solid"
 import { RGBA, TextAttributes } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import { HudCard, hudCardRows, cardRowPlan, CARD_VERTICAL_PADDING, cardWidth, pinBudget, footerCopyLabel, footerPinLabel, footerButtonCells, dialogFooterTier, DIALOG_FOOTER_FULL_HINT, DIALOG_FOOTER_SHORT_HINT, type HudCardTheme } from "../src/hud-card.tsx"
-import { isCompactHot, compactMarker, pillModel, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
+import { isCompactHot, compactMarker, pillModel, currentTurnCount, breathGlyph, breathCrest, BREATH_PERIOD_MS, BREATH_PHASE_MS, BREATH_REST, landingSuffix, hudArmEnabled, remediationFor, pinSuffix, motionDisabled, terminalPill, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, LANDING_SUFFIX, pillMotionNeeded, stateAccentColor, borderAccentColor, verdictAccentColor, verdictEntryAccentColor, achievedAckAccentColor, fixAccentColor, evaluatorHint, EVALUATOR_HINT_CARD, EVALUATOR_HINT_FULL, contextMenuRows, nextMenuIndex, CONTEXT_MENU_CLEAR, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, STALE_LIVE_ENTRY_MS, RECENT_TERMINAL_WINDOW_MS } from "../src/core/hud.ts"
 import stringWidth from "string-width"
 import { GOAL_GLYPH, goalGlyph } from "../src/core/format.ts"
 import { LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
@@ -90,8 +90,43 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal(), 1000 * 60 * 12)
     expect(pill.text).toContain("loop · v3/5")
     expect(pill.text).toContain("●●")
-    expect(pill.text).toContain("4 turns")
+    // Active goal on its 5th turn: the record has 4 completed evaluations, the agent is running turn 5.
+    expect(pill.text).toContain("5 turns")
     expect(pill.tone).toBe("armed")
+  })
+
+  test("the live turn counter is the turn being run, and increments on every not_met re-dispatch", () => {
+    // Fresh arm: no evaluation yet, the agent is on turn 1.
+    const fresh = loopedGoal({ turns: 0, history: [] })
+    expect(currentTurnCount(fresh)).toBe(1)
+    expect(pillModel(fresh, 0).text).toContain("1 turn")
+
+    // The evaluator rules turn 1 not_met and re-dispatches turn 2. `turns` is still 1 until turn 2
+    // is evaluated, so the pill must read 2 here — matching the `goal · turn 2` continuation steer.
+    const afterFirst = loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "not yet", at: now }] })
+    expect(currentTurnCount(afterFirst)).toBe(2)
+    expect(pillModel(afterFirst, 0).text).toContain("2 turns")
+
+    // Second not_met re-dispatch: the counter visibly moves again.
+    const afterSecond = loopedGoal({ turns: 2, history: verdicts(["not_met", "not_met"]) })
+    expect(currentTurnCount(afterSecond)).toBe(3)
+    expect(pillModel(afterSecond, 0).text).toContain("3 turns")
+  })
+
+  test("the counter keeps the evaluated count when a turn is in flight, paused, or terminal", () => {
+    // Evaluating turn 2: the agent has still run 2 turns; the verdict has not landed yet.
+    expect(currentTurnCount(loopedGoal({ turns: 1, evaluating: true }))).toBe(2)
+    expect(pillModel(loopedGoal({ turns: 1, evaluating: true }), 0).text).toContain("2 turns")
+
+    // Paused: no next turn was dispatched, so the last evaluated turn is the honest count.
+    const paused = loopedGoal({ turns: 1, status: "paused" })
+    expect(currentTurnCount(paused)).toBe(1)
+    expect(pillModel(paused, 0).text).toContain("1 turn")
+
+    // The met verdict for turn 2 settles on the same number the live pill just showed — no backwards jump.
+    const done = loopedGoal({ turns: 2, status: "achieved" })
+    expect(currentTurnCount(done)).toBe(2)
+    expect(terminalPill(done, 0)!.text).toContain("2 turns")
   })
 
   test("an armed goal whose kickoff is in flight paints 'queued', not 'active'", () => {
@@ -249,7 +284,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("the resting (reduced-motion) frame is itself legible — a working pill at rest reads goal active", () => {
     const text = pillModel(working(), 1000 * 60 * 41).text
-    expect(text).toBe("\u25CB goal active · 41m · 3 turns")
+    expect(text).toBe("\u25CB goal active · 41m · 4 turns")
   })
 
   test("waiting, paused and stuck paint static, distinct glyphs — never the wave, in any phase", () => {
@@ -275,7 +310,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("an evaluating goal paints the full wave at rest — the crest face is ◎, and weight is the caller's lever", () => {
     const text = pillModel(working({ evaluating: true }), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, 2).text
-    expect(text.startsWith("\u25CE goal checking · 41m · 3 turns")).toBe(true)
+    expect(text.startsWith("\u25CE goal checking · 41m · 4 turns")).toBe(true)
   })
 })
 

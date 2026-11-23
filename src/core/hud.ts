@@ -21,6 +21,19 @@ type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying
 /** Every turn keeps failing at the retry threshold or beyond: the goal is stuck, not merely slow. */
 export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RETRY_HOT_THRESHOLD
 
+/**
+ * The turn number the ambient pill shows. `GoalRecord.turns` counts COMPLETED evaluations, so it lags the
+ * work in flight: a not_met verdict bumps `turns` to N and the controller re-dispatches turn N+1 (the
+ * continuation steer is labelled `goal · turn N+1`), but `turns` stays N until the NEXT verdict lands.
+ * Painting `turns` verbatim left the pill reading "1 turn" while the transcript said "turn 2" and made the
+ * counter look frozen for the whole working turn. An active goal therefore shows the turn it is running,
+ * `turns + 1`, which increments at every not_met re-dispatch. Paused and terminal goals show `turns`: no
+ * next turn was dispatched, and the last evaluated turn is exactly the number the live pill just painted,
+ * so the count never jumps backwards when the goal settles.
+ */
+export const currentTurnCount = (goal: GoalSnapshot): number =>
+  goal.status === "active" ? Math.max(1, goal.turns + 1) : goal.turns
+
 interface PillModel {
   readonly text: string
   readonly tone: HudTone
@@ -174,7 +187,8 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
  */
 export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY, phase?: number): PillModel => {
   const state = stateWord(goal)
-  const turns = goal.turns > 0 ? ` · ${goal.turns} turn${goal.turns === 1 ? "" : "s"}` : ""
+  const count = currentTurnCount(goal)
+  const turns = count > 0 ? ` · ${count} turn${count === 1 ? "" : "s"}` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
   // Paused outranks the retry counter (a pause IS the rate-limit story); a stuck-retrying goal outranks a hot compaction — nothing executes at all, so the compaction is not the urgent part.
   const tone: HudTone =
