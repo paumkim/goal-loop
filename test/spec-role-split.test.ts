@@ -48,9 +48,13 @@ describe("SPEC role split", () => {
     expect(new Set(inArchive).size).toBe(inArchive.length)
   })
 
-  test("the archive index has one row per archived workstream", () => {
+  test("the archive index has one row and one unique slug per archived workstream", () => {
     const indexText = archive.split("\n## Workstream")[0]!
     const rows = indexText.split("\n").filter((line) => /^\| .* \| `[^`]+` \| /.test(line))
     expect(rows.length).toBe(workstreamHeadings(archive).length)
+    const slugs = rows.map((row) => /`([^`]+)`/.exec(row)?.[1] ?? "")
+    expect(slugs.every((slug) => slug.length > 0)).toBe(true)
+    // The slug is the stable key (workstream numbers are contested); duplicates make it useless.
+    expect(new Set(slugs).size).toBe(slugs.length)
   })
 })
