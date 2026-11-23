@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2280 -->
+<!-- spec-check files=143 tests=2281 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11210,3 +11210,25 @@ or clock has always painted nothing; the shared helper preserves that exactly. D
 pins it against the former inline expression across finite, negative, NaN and both infinities.
 Focused suites (history, tui-hud, dossier-attest) 294 pass / 0 fail, 22854 expect() calls;
 `tsc --noEmit` clean. Consolidation/taste change, not a speed claim. Marker +1 test.
+
+
+## Workstream CXCV — the live pill counts evaluated turns (2026-11-23)
+
+The ambient pill read "1 turn" while the detail card beside it read "14x not_met in a row". The pill's
+counter was `turns + 1` — the turn being run — and `turns` is a per-iteration counter that a loop advance
+resets to 0 while the verdict trail keeps every evaluation. A snapshot from a re-armed or restored record
+can therefore carry 0 turns and a 14-entry trail at once; the number the user wanted at a glance ("how
+many turns have I been on this goal") was reading the wrong field.
+
+`src/core/hud.ts · currentTurnCount` now derives the count from the verdict trail — `totalVerdictCount`,
+which includes entries the retention cap dropped — taking `max` with `turns` so legacy records (trail
+absent, turns present) stay honest. The pill segment is worded "N turns evaluated" instead of a bare
+"N turns", which read as "turn N" and implied the number should advance in place while a turn was in
+flight. The count moves on every verdict: the live snapshot carries the trail and a `changed` event fires
+on each commit. The degradation ladder keeps its order (retry, compact, evaluated turns, pips); the test
+width budgets were re-measured for the longer segment. No controller, persistence, or API change. The
+terminal acknowledgment pill is unchanged — this is about the live one.
+
+Verification: focused `tui-hud` 180 pass / 0 fail, 22539 expect() calls, including a regression that pins
+the "0 turns / 14 not_met verdicts -> 14 turns evaluated" case. Full `bun run check` green with
+`files=143 tests=2281` (+1 test, not weakened).

@@ -4,7 +4,7 @@
  * No I/O, no JSX; everything here is unit-tested headlessly. Presentation lives in
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
-import { COMPACT_MISS_CAP, isLive, completedIterationCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
+import { COMPACT_MISS_CAP, isLive, completedIterationCount, totalVerdictCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
 import { cellWidth, formatDurationCoarse, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
@@ -22,17 +22,17 @@ type HudTone = "armed" | "evaluating" | "waiting" | "paused" | "hot" | "retrying
 export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RETRY_HOT_THRESHOLD
 
 /**
- * The turn number the ambient pill shows. `GoalRecord.turns` counts COMPLETED evaluations, so it lags the
- * work in flight: a not_met verdict bumps `turns` to N and the controller re-dispatches turn N+1 (the
- * continuation steer is labelled `goal · turn N+1`), but `turns` stays N until the NEXT verdict lands.
- * Painting `turns` verbatim left the pill reading "1 turn" while the transcript said "turn 2" and made the
- * counter look frozen for the whole working turn. An active goal therefore shows the turn it is running,
- * `turns + 1`, which increments at every not_met re-dispatch. Paused and terminal goals show `turns`: no
- * next turn was dispatched, and the last evaluated turn is exactly the number the live pill just painted,
- * so the count never jumps backwards when the goal settles.
+ * How many turns the agent has actually been evaluated on the goal the pill is showing — the count the
+ * user wants at a glance ("14 turns evaluated"), and the same verdict trail that produces the detail
+ * card's "14x not_met in a row". The trail (via `totalVerdictCount`, which includes entries the retention
+ * cap dropped) is authoritative, NOT the per-iteration `turns` counter: a loop advance resets `turns` to 0
+ * while the trail keeps every evaluation, and a snapshot restored or re-armed out of band can read 0 turns
+ * beside a trail that already holds 14 verdicts — the exact state that made the live pill say "1 turn"
+ * next to a detail card saying "14x not_met in a row". `max` keeps legacy records (a trail absent but
+ * `turns` present) honest. Pure; the snapshot carries the trail, so the count moves on every changed event.
  */
 export const currentTurnCount = (goal: GoalSnapshot): number =>
-  goal.status === "active" ? Math.max(1, goal.turns + 1) : goal.turns
+  Math.max(totalVerdictCount(goal), goal.turns)
 
 interface PillModel {
   readonly text: string
@@ -104,7 +104,9 @@ export const hudArmEnabled = (hasGoal: boolean, statusDialogOpen: boolean): bool
 /**
  * Walk a degradation ladder (fullest first) and pick the first rung that fits `budget` terminal cells,
  * width-aware via cellWidth. The final rung — the irreducible state core — is hard-truncated with the
- * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells.
+ * caller's ellipsis when even it cannot fit; the pill never paints wider than `budget` cells. The
+ * evaluated-turn count is the last detail dropped before the core, so the number the user watches stays
+ * visible for as long as the width allows.
  */
 const fitLadder = (rungs: readonly string[], budget: number, ellipsis: string = "\u2026"): string => {
   for (const rung of rungs) {
@@ -188,7 +190,10 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
 export const pillModel = (goal: GoalSnapshot, elapsed: number, ascii: boolean = false, budget: number = Number.POSITIVE_INFINITY, phase?: number): PillModel => {
   const state = stateWord(goal)
   const count = currentTurnCount(goal)
-  const turns = count > 0 ? ` · ${count} turn${count === 1 ? "" : "s"}` : ""
+  // "N turns evaluated" names what the number counts: completed evaluations of this goal, not the
+  // turn currently being run. A bare "N turns" read as "turn N" and left users expecting the number to
+  // advance in place while a turn was in flight; the verdict trail only moves when a verdict lands.
+  const turns = count > 0 ? ` · ${count} turn${count === 1 ? "" : "s"} evaluated` : ""
   const retrying = isRetryStuck(goal) ? ` · retry ${goal.retries}` : ""
   // Paused outranks the retry counter (a pause IS the rate-limit story); a stuck-retrying goal outranks a hot compaction — nothing executes at all, so the compaction is not the urgent part.
   const tone: HudTone =
