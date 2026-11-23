@@ -5695,9 +5695,11 @@
       "paths": "src/core/bootstrap.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/dead-bootstrap-reexport",
       "worktree": "worktrees/wt-dead-bootstrap-reexport",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T02:21:53Z",
-      "submittedAt": "2026-11-23T02:21:53Z"
+      "submittedAt": "2026-11-23T02:21:53Z",
+      "mergedAt": "2026-11-23T02:27:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
