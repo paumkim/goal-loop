@@ -6291,6 +6291,36 @@
       "submittedAt": "2026-11-23T11:47:17Z",
       "mergedAt": "2026-11-23T11:49:31Z",
       "mergedInto": "dev"
+    },
+    "doctor-json-output-test-coordinator-test-ts-packages-coordinator-readme-md-spec-md-docs-changelog-html": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator",
+      "branch": "wt/doctor-json-output-test-coordinator-test-ts-packages-coordinator-readme-md-spec-md-docs-changelog-html",
+      "worktree": "worktree/wt-doctor-json-output-test-coordinator-test-ts-packages-coordinator-readme-md-spec-md-docs-changelog-html",
+      "status": "done",
+      "createdAt": "2026-11-23T11:58:02Z",
+      "releasedAt": "2026-11-23T11:58:37Z",
+      "releaseReason": "released"
+    },
+    "doctor-json-output": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/coordinator.test.ts,packages/coordinator/README.md,SPEC.md,docs/changelog.html",
+      "branch": "wt/doctor-json-output",
+      "worktree": "worktree/wt-doctor-json-output",
+      "status": "done",
+      "createdAt": "2026-11-23T11:58:42Z",
+      "submittedAt": "2026-11-23T12:08:14Z",
+      "mergedAt": "2026-11-23T12:12:20Z",
+      "mergedInto": "dev"
+    },
+    "delegate-verdict-reword": {
+      "agent": "build",
+      "paths": "src/core/prompts.ts,test/core.test.ts,SPEC.md",
+      "branch": "wt/delegate-verdict-reword",
+      "worktree": "worktree/wt-delegate-verdict-reword",
+      "status": "submitted",
+      "createdAt": "2026-11-23T12:08:40Z",
+      "submittedAt": "2026-11-23T12:09:07Z"
     }
   },
   "mergeLock": null,
