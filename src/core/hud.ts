@@ -163,9 +163,9 @@ export const nextMenuIndex = (index: number, delta: number, rows: readonly { rea
   return norm
 }
 
-/** The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can be unit-tested. */
 /**
- * `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
+ * The 1-row ambient pill label plus its tone. Mirrors the composer-top indicator; extracted so it can
+ * be unit-tested. `budget` caps the label at this many terminal cells, degrading by dropping whole segments in priority
  * order — `retry`, then `compact pending`, then `turns`, then the pips — before hard-truncating the
  * core with the surface's ellipsis. An unbounded budget (the default) composes exactly the historical
  * full label. `phase` is the breath cycle index (0..3, advanced by the caller's slow timer); an
@@ -335,8 +335,6 @@ export const pillMotionNeeded = (args: { readonly working?: boolean; readonly ev
  * transition (wired in tui.tsx from the snapshot path). `cleared` and still-live statuses return
  * undefined — a deliberate user reset is silent, an active goal is not a completion. Same grammar
  * as `pillModel` so the jump-row text does not change shape.
- */
-/**
  * The terminal acknowledgment pill. `budget` (cells) is optional: when provided and the armed text would
  * exceed it, the text truncates to the budget with the surface's ellipsis instead of painting past the
  * row. Mirrors `pillModel`'s contract — the pill never exceeds the cells it is given.
