@@ -6424,6 +6424,17 @@
       "submittedAt": "2026-11-23T14:40:16Z",
       "mergedAt": "2026-11-23T14:42:31Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-tests": {
+      "agent": "orchestrator",
+      "paths": "test/prompter-state.test.ts,test/prompter-apply.test.ts,test/verify.test.ts,SPEC.md",
+      "branch": "wt/eod-cleanup-tests",
+      "worktree": "worktree/wt-eod-cleanup-tests",
+      "status": "done",
+      "createdAt": "2026-11-23T14:45:20Z",
+      "submittedAt": "2026-11-23T14:50:24Z",
+      "mergedAt": "2026-11-23T14:52:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
