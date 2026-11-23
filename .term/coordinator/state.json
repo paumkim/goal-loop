@@ -5843,8 +5843,19 @@
       "paths": "packages/coordinator/bin/coordinator,test/worktree-dir-rename.test.ts,docs/parallel-work.md,AGENTS.md,SPEC.md,docs/changelog.html",
       "branch": "wt/worktree-dir-physical-migrate",
       "worktree": "worktree/wt-worktree-dir-physical-migrate",
+      "status": "done",
+      "createdAt": "2026-11-23T03:42:59Z",
+      "submittedAt": "2026-11-23T03:49:47Z",
+      "mergedAt": "2026-11-23T03:55:30Z",
+      "mergedInto": "dev"
+    },
+    "nonneg-clamp-unify": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,src/core/history.ts,src/core/attestation.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/nonneg-clamp-unify",
+      "worktree": "worktree/wt-nonneg-clamp-unify",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:42:59Z"
+      "createdAt": "2026-11-23T03:51:57Z"
     }
   },
   "mergeLock": null,
