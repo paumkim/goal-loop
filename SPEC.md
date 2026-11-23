@@ -1356,15 +1356,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCI — worktrees/ to worktree/ everywhere (worktree-dir-rename) (2026-11-23)
-
-Renamed the coordinator worktree directory from `worktrees/` to `worktree/` across the whole repo in one lease. `packages/coordinator/bin/coordinator` now defaults `WORKTREE_DIR` to `worktree` (config fallback too) and all previously hardcoded merge-worktree paths (`merge_wt`, `merge_wt_rel`, the merge parent `mkdir`, the post-merge health exclusion and `merge-abort`) derive from `$WORKTREE_DIR`. `src/core/git.ts`, `src/core/workflow.ts`, `src/core/types.ts`, the checked-in `.term/coordinator/config.json`, `.gitignore`, `scripts/spec-check.ts`, all coordinator/bootstrap/git/core/plugin/package-integrity test fixtures, AGENTS.md, docs/parallel-work.md, docs/core/index/install.html, README.md, MAINTAINER.md, RELEASE-CHECKLIST.md, the coordinator README and the prompt templates use the new name.
-
-Legacy compatibility: an old config still selecting `worktrees`, or an old lease whose stored `worktree` path starts with `worktrees/`, is honoured (the lease path is preserved on submit) and emits one warning per repo (`.legacy-worktree-warned`). `coordinator migrate-worktree-dir [--dry-run]` moves the physical directory, runs `git worktree repair` on the relocated worktrees, atomically rewrites `config.json` and the lease paths under the state lock, clears the warning marker, and refuses while any active lease still points into `worktrees/` so another session's live worktree is never moved.
-
-Verification: new `test/worktree-dir-rename.test.ts` (8 tests) greps shipped code/config/docs/scripts for stale `worktrees` defaults/paths and exercises the new dir, the one-time legacy warning, old-lease-path validity after a default flip, migration with git-record repair, refusal on active leases and `--dry-run`. Focused suites: 71 pass / 0 fail (new + three coordinator suites, 508 expect() calls) and 277 pass / 0 fail (bootstrap, git, core, plugin, package-integrity, 177943 expect() calls). `bash -n` clean; full `bun run check` green including spec-check, dist freshness, TUI load, docs freshness and invariant-sweep.
-
-
 ## Workstream CXCII — scalar precheck in the snapshot equality gate (2026-11-23)
 
 `goalsEqual` in `src/core/entries.ts` serialized both goal snapshots on every `changed` event — two
@@ -1570,6 +1561,26 @@ non-stuck states, and verification-kind parity; `test/controller.test.ts` now pi
 signatures produce a `diverse_failure` escalation instead of evading it; `test/core.test.ts` pins the
 visible signal list. Focused suite: 322 pass / 0 fail, 178078 expect() calls. Full `bun run check` green after
 artifact regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CCVI — stop the turn-1 zero-tool downgrade from recurring on restore (restore-turn-counter-fix) (2026-11-23)
+
+Root cause of the repeated canned "no evidence of work toward the condition, only state inspection (zero
+tool calls this turn)" not_met: `restore()` reset `turns` to 0 for every active goal whose `pendingEvaluation`
+had already been cleared by a dispatched continuation. Each reload therefore evaluated the same live goal
+as turn 1 again, which re-tripped the turn-1-only zero-tool downgrade and overwrote the judge's verdict with
+the same reason forever — a self-fulfilling stuck loop that no amount of strategy escalation could clear.
+The live learnings log confirmed 49 verdicts recorded as `turn: 1, toolCalls: 0` for one goal id.
+
+`restore()` now preserves the counter for any active goal with verdict history; only a genuinely fresh goal
+(no verdicts yet) keeps the Claude-Code-parity reset. The downgrade also checks that history is still empty
+(it runs before the current verdict is pushed), so any other path that renumbers a live goal cannot re-trip
+it. The judge's own reason now stands once a goal has been evaluated before.
+
+Verification: the restore regression now pins `turns: 1` after restore and a subsequent zero-tool `met`
+verdict surviving undowngraded; the existing fresh-goal downgrade pins in `test/loop.test.ts` still pass.
+Focused suite: 275 pass / 0 fail across controller and loop. Full `bun run check` green after artifact
+regeneration; marker unchanged at 2310 tests, no shipped file added or removed. Workstream CXCI rotated
+into the archive to keep the live recent window at 15.
 
 ## Historical workstreams
 

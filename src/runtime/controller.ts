@@ -1252,10 +1252,13 @@ export class GoalController {
     // evaluate() — after the bookkeeping mutations but before the commit, so the goal wedged
     // silently, forever. Normalize on adoption instead.
     if (!Array.isArray(record.history)) record.history = []
-    // A pending evaluation owns turn N-1's identity: resetting turns to 0 would make the resumed evaluate()
-    // recompute turn 1 (wrong verdict numbering, and it would trip the turn-1 zero-tool downgrade). Other
-    // restored goals keep the Claude-Code-parity counter reset.
-    const resuming = record.status === "active" && record.pendingEvaluation !== undefined
+    // A live goal that has already been evaluated owns its turn counter. Resetting it to 0 on every
+    // restore made each post-continuation reload look like turn 1 again, which re-tripped the turn-1
+    // zero-tool downgrade forever ("no evidence of work ... zero tool calls this turn") even when the
+    // judge had seen real evidence. Preserve the counter whenever an active goal has verdict history;
+    // only a genuinely fresh goal (no verdicts yet) keeps the Claude-Code-parity reset.
+    const evaluated = Array.isArray(record.history) && record.history.length > 0
+    const resuming = record.status === "active" && (record.pendingEvaluation !== undefined || evaluated)
     Object.assign(record, {
       ...(resuming ? {} : { turns: 0, stall: 0, retries: 0, checkins: 0 }),
       baseline: usage ?? record.baseline ?? EMPTY_USAGE,
@@ -1438,7 +1441,10 @@ export class GoalController {
     // (core/verdict.ts · applyForwardPointerGate), not state inspection posing as work — exempt it from the
     // zero-tool downgrade so it can proceed to the verifier matrix and loop advance. A bare already-satisfied
     // claim without a pointer is still rejected upstream by the forward-pointer gate.
-    if (result.verdict === "met" && tools === 0 && turn === 1 && PRODUCING_CONDITION.test(record.condition) && !isAlreadySatisfiedLanding(result.reason)) {
+    // The guard is for a fresh goal's very first evaluation: this runs before the verdict is pushed, so
+    // an empty history means no prior verdicts. A restored/evaluated goal keeps its counter now, but the
+    // history check is a second line of defence against any other path that renumbers a live goal to turn 1.
+    if (result.verdict === "met" && tools === 0 && turn === 1 && record.history.length === 0 && PRODUCING_CONDITION.test(record.condition) && !isAlreadySatisfiedLanding(result.reason)) {
       result = {
         verdict: "not_met" as const,
         reason: "no evidence of work toward the condition, only state inspection (zero tool calls this turn; the condition names production of a thing).",
