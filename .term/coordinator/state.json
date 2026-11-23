@@ -5931,6 +5931,25 @@
       "submittedAt": "2026-11-23T04:59:23Z",
       "mergedAt": "2026-11-23T05:01:45Z",
       "mergedInto": "dev"
+    },
+    "spec-role-split": {
+      "agent": "orchestrator",
+      "paths": "test/spec-role-split.test.ts",
+      "branch": "wt/spec-role-split",
+      "worktree": "worktree/wt-spec-role-split",
+      "status": "claimed",
+      "createdAt": "2026-11-23T05:02:44Z"
+    },
+    "format-finite-guards": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/format-finite-guards",
+      "worktree": "worktree/wt-format-finite-guards",
+      "status": "done",
+      "createdAt": "2026-11-23T05:06:21Z",
+      "submittedAt": "2026-11-23T05:09:53Z",
+      "mergedAt": "2026-11-23T05:12:04Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
