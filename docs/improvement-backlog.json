@@ -218,9 +218,9 @@
       "priority": 2,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "src/core/learning-log.ts:120 chooses between two object literals that are identical whenever sha is truthy, so the lastVerify/command/code condition can never change the emitted entry.",
-      "improvement": "Emit the sha-only object whenever the last history entry has a sha; add a case with lastVerify present but code!=0 to pin that sha is still recorded.",
+      "improvement": "Collapsed the dead ternary in src/core/learning-log.ts to a single last-history sha guard; both former arms emitted the same object. Added a regression case pinning that a non-zero lastVerify code still records the terminal sha.",
       "evidence": [
         "Explore research 2026-11-22: both ternary arms return the same object when sha is truthy.",
         "test/learning-log.test.ts:93,139,164 already assert sha on terminal entries."
@@ -241,7 +241,7 @@
       "priority": 2,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "src/core/outcome-telemetry.ts:139 re-checks isRecord(entry) inside a loop that already continues on !isRecord(entry) at line 121, so the inner guard is unreachable-false.",
       "improvement": "Call normalizeReason(asString(entry.reason)) directly; add a plain-object turn_verdict with verdict=not_met and assert its reason still lands in failureThemes.",
       "evidence": [
