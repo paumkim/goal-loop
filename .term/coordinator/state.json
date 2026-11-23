@@ -5981,6 +5981,35 @@
       "submittedAt": "2026-11-23T05:27:03Z",
       "mergedAt": "2026-11-23T05:31:21Z",
       "mergedInto": "dev"
+    },
+    "usage-intake-finite-guard": {
+      "agent": "loop-worker",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/usage-intake-finite-guard",
+      "worktree": "worktree/wt-usage-intake-finite-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T05:33:34Z",
+      "releasedAt": "2026-11-23T05:34:45Z",
+      "releaseReason": "released"
+    },
+    "spec-split-docs-guard": {
+      "agent": "orchestrator",
+      "paths": "SPEC-workstreams.md,test/spec-role-split.test.ts",
+      "branch": "wt/spec-split-docs-guard",
+      "worktree": "worktree/wt-spec-split-docs-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T05:34:34Z",
+      "submittedAt": "2026-11-23T05:37:23Z",
+      "mergedAt": "2026-11-23T05:39:34Z",
+      "mergedInto": "dev"
+    },
+    "outline-id-collision-guard": {
+      "agent": "loop-worker",
+      "paths": "src/core/dossier-outline.ts,test/dossier-outline.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/outline-id-collision-guard",
+      "worktree": "worktree/wt-outline-id-collision-guard",
+      "status": "claimed",
+      "createdAt": "2026-11-23T05:34:49Z"
     }
   },
   "mergeLock": null,
