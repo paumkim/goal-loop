@@ -6029,6 +6029,25 @@
       ],
       "mergedAt": "2026-11-23T06:03:24Z",
       "mergedInto": "dev"
+    },
+    "leverage-lesson-prompts": {
+      "agent": "orchestrator",
+      "paths": "prompts/",
+      "branch": "wt/leverage-lesson-prompts",
+      "worktree": "worktree/wt-leverage-lesson-prompts",
+      "status": "done",
+      "createdAt": "2026-11-23T06:06:44Z",
+      "submittedAt": "2026-11-23T06:08:40Z",
+      "mergedAt": "2026-11-23T06:10:51Z",
+      "mergedInto": "dev"
+    },
+    "bounded-failure-diagnostics": {
+      "agent": "orchestrator",
+      "paths": "src/core/failure-signature.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/bounded-failure-diagnostics",
+      "worktree": "worktree/wt-bounded-failure-diagnostics",
+      "status": "claimed",
+      "createdAt": "2026-11-23T06:08:58Z"
     }
   },
   "mergeLock": null,
