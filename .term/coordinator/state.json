@@ -6375,6 +6375,30 @@
       "submittedAt": "2026-11-23T13:26:22Z",
       "mergedAt": "2026-11-23T13:28:46Z",
       "mergedInto": "dev"
+    },
+    "error-handling-audit-3": {
+      "agent": "build-orchestrator",
+      "paths": "src/index.ts,test,SPEC.md",
+      "branch": "wt/error-handling-audit-3",
+      "worktree": "worktree/wt-error-handling-audit-3",
+      "status": "claimed",
+      "createdAt": "2026-11-23T13:33:50Z"
+    },
+    "evaluator-child-session-parity": {
+      "agent": "hy4-flash-free",
+      "paths": "src/index.ts,src/core/evaluator-agent.ts,src/core/prompts.ts,src/runtime/evaluator.ts,test/plugin.test.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-child-session-parity",
+      "worktree": "worktree/wt-evaluator-child-session-parity",
+      "status": "done",
+      "createdAt": "2026-11-23T13:41:23Z",
+      "submittedAt": "2026-11-23T13:54:34Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T13:54:34Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-23T13:57:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
