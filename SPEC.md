@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2303 -->
+<!-- spec-check files=143 tests=2304 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1543,6 +1543,23 @@ artifact, escaping, and optional omissions; `test/controller.test.ts` now pins a
 self-resuming `resume: true` steer, strategy rotation across five repeats, the cited diagnostic path,
 and no `paused` notice. Focused suite: 315 pass / 0 fail, 178043 expect() calls. Full `bun run check`
 green after artifact regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CCIV — one diagnostic artifact per failure streak (bounded-failure-diagnostics) (2026-11-23)
+
+CCIII made escalation proactive, which means it now fires on every not_met turn of a stuck streak instead
+of pausing after the third. The diagnostic writer still used a timestamped filename, so a single recurring
+signature produced a new JSON file on every turn — 433 artifacts accumulated for one repeated signature in
+this repository, and a proactive loop would keep growing that set without bound. Artifact names are now
+keyed by `(sessionID, SHA-256 prefix of the full signature)`, so the set is capped at one file per distinct
+signature per session; each escalation overwrites that file with the latest count, turn, and timestamp, and
+the steer cites a stable path. Pre-existing timestamped files are never deleted. The escalation reason text
+also dropped its now-stale "send a message to resume" instruction and states that the goal stays active
+while the next turn rotates strategy automatically.
+
+Verification: new regression in `test/failure-signature.test.ts` writes 12 escalations of one signature and
+3 of another and pins an independent oracle of exactly 2 files, the latest count/turn in the overwritten
+artifact, and path stability on repeat. Focused suite: 130 pass / 0 fail, 689 expect() calls. Full
+`bun run check` green after artifact regeneration; marker re-counted, no shipped file added or removed.
 
 ## Historical workstreams
 
