@@ -20,7 +20,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
-import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport, echoedCondition, conditionEchoMatches } from "../src/core/evaluator-agent.ts"
+import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
@@ -1509,17 +1509,23 @@ describe("native evaluator verdict", () => {
     expect(echoedCondition('{"verdict":"met","reason":"no echo"}')).toBeUndefined()
   })
 
-  test("conditionEchoMatches accepts exact, punctuated and paraphrased echoes but rejects a different goal", () => {
+  test("echoMatches accepts exact, punctuated and paraphrased echoes but rejects a different goal", () => {
+    // Re-pointed from the deleted conditionEchoMatches wrapper: compose the two underlying exports directly,
+    // keeping the same assertions on the production token-overlap primitive.
     const expected = "Reply with the single word DONE."
-    expect(conditionEchoMatches('{"condition":"Reply with the single word DONE."}', expected)).toBe(true)
-    expect(conditionEchoMatches('{"condition":"reply with the single word done"}', expected)).toBe(true)
-    expect(conditionEchoMatches('{"condition":"Reply with the single word DONE. Extra."}', expected)).toBe(true)
-    expect(conditionEchoMatches('{"condition":"Fix the roadmap-renderer.html layout"}', expected)).toBe(false)
-    expect(conditionEchoMatches('{"condition":"Verify the anti-dup marker in the plugin"}', expected)).toBe(false)
-    expect(conditionEchoMatches('{"verdict":"met","reason":"stale"}', expected)).toBe(false)
+    const matches = (body: string) => {
+      const echo = echoedCondition(body)
+      return echo === undefined ? false : echoMatches(echo, expected)
+    }
+    expect(matches('{"condition":"Reply with the single word DONE."}')).toBe(true)
+    expect(matches('{"condition":"reply with the single word done"}')).toBe(true)
+    expect(matches('{"condition":"Reply with the single word DONE. Extra."}')).toBe(true)
+    expect(matches('{"condition":"Fix the roadmap-renderer.html layout"}')).toBe(false)
+    expect(matches('{"condition":"Verify the anti-dup marker in the plugin"}')).toBe(false)
+    expect(matches('{"verdict":"met","reason":"stale"}')).toBe(false)
   })
 
-  test("the bounded echo-normalization memo keeps conditionEchoMatches exact cold and warm", () => {
+  test("the bounded echo-normalization memo keeps echoMatches exact cold and warm", () => {
     // Independent oracle: the same NFKC + Unicode-letter fold, reimplemented without the cache.
     const oracle = (text: string) => text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
     const expected = "Reply with the single word DONE."
@@ -1529,12 +1535,11 @@ describe("native evaluator verdict", () => {
       "İstanbul — 魚🐟 release!", "  padded   reply  ",
     ]
     for (const echo of echoes) {
-      const body = JSON.stringify({ verdict: "met", condition: echo })
+      const a = oracle(echo), b = oracle(expected)
+      const want = a === b || a.includes(b) || b.includes(a)
       // Two passes: the second hits the memo for both the echo and the expected condition.
       for (let pass = 0; pass < 2; pass++) {
-        const a = oracle(echo), b = oracle(expected)
-        const want = a === b || a.includes(b) || b.includes(a)
-        expect(conditionEchoMatches(body, expected)).toBe(want)
+        expect(echoMatches(echo, expected)).toBe(want)
       }
     }
   })

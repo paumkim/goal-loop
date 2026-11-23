@@ -226,6 +226,15 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Dead echo wrapper removal (`dead-condition-echo-wrapper`, 2026-11-23): `conditionEchoMatches` in
+  `src/core/evaluator-agent.ts` was a two-line wrapper (`echoedCondition(body)` then `echoMatches`). A repo-wide
+  sweep found only its definition, two exclusive tests and historical SPEC-workstreams notes — the production
+  stale-condition guard calls `echoMatches` directly with an already-parsed echo, so the wrapper had no runtime
+  consumer, config/dynamic entry point or docs listing. Removed it, exported the underlying `echoMatches` (already
+  live in the verdict path) and re-pointed both exclusive tests to it as `echoedCondition(body)` + `echoMatches`,
+  preserving the exact echo/paraphrase assertions and the cold/warm memo oracle instead of deleting coverage.
+  Focused `core`/`commit-rule` suites green; full `bun run check` green after artifact regeneration, marker
+  re-counted, no shipped file added or removed.
 - Dead repro script removal (`dead-repro-loop-cap`, 2026-11-23): `scripts/repro-loop-cap.tsx` was a 161-line
   headless renderer that mounted the pill, HUD card and `/goal` dialog at loop caps 5, 50, 99, 100 and 1000.
   A repo-wide symbol/config/docs sweep found only its own header, a stale mention in `scripts/width-flag.ts`,
@@ -245,8 +254,8 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
   `plugin`/`core`/`evaluator` suites green, full check green, marker unchanged (no `test()` block removed).
   Follow-ups recorded, not removed: `types.ts · NO_COMMIT` (zero production consumers but 19 test fixture call
   sites), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test
-  scope). `outcome-telemetry.ts · summarizeLearningText` and `scripts/repro-loop-cap.tsx` were later
-  follow-ups and are now removed below.
+  scope). `outcome-telemetry.ts · summarizeLearningText`, `scripts/repro-loop-cap.tsx` and
+  `evaluator-agent.ts · conditionEchoMatches` were later follow-ups and are now removed below.
 
 - Dead wrapper removal (`dead-summarize-learning-text`, 2026-11-23): `summarizeLearningText` in
   `src/core/outcome-telemetry.ts` was a three-line convenience wrapper over

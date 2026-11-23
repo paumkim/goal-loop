@@ -122,20 +122,12 @@ function isForeignVerdict(body: string): boolean {
 const normalizeEcho = memoizeBounded((text: string): string => text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 2048)
 
 /**
- * True when a report's echoed condition still matches the armed one. A free-tier judge sometimes replays a verdict
- * from another session; its echo names that other goal, so it is rejected instead of advancing the wrong condition.
- * Missing echo is NOT a mismatch here — the pure helper reports false so callers can decide. Identical / contained
- * echoes and close token overlap (paraphrase or truncation by a small model) are accepted; a different condition
- * has near-zero overlap.
+ * Token-overlap match on two already-extracted echoes. A free-tier judge sometimes replays a verdict from another
+ * session; its echo names that other goal, so the caller rejects it instead of advancing the wrong condition.
+ * Identical / contained echoes and close token overlap (paraphrase or truncation by a small model) are accepted;
+ * a different condition has near-zero overlap. Split out so a verdict can parse the echo once and reuse it.
  */
-export function conditionEchoMatches(body: string, expected: string): boolean {
-  const echo = echoedCondition(body)
-  if (!echo) return false
-  return echoMatches(echo, expected)
-}
-
-/** Token-overlap match on two already-extracted echoes. Split out so a verdict can parse the echo once and reuse it. */
-function echoMatches(echo: string, expected: string): boolean {
+export function echoMatches(echo: string, expected: string): boolean {
   const a = normalizeEcho(echo)
   const b = normalizeEcho(expected)
   if (!a || !b) return false
