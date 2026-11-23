@@ -9,7 +9,7 @@ import {
   parseNotice,
   stripUndefined,
 } from "../src/core/wire.ts"
-import { isLive } from "../src/core/types.ts"
+import { isLive, VERIFY_EVIDENCE_MODES, VERIFY_CHECK_SOURCES, VERIFY_RUN_STATES, VERIFY_CHECK_TYPES } from "../src/core/types.ts"
 import { preserveCarriedFields, pruneSnapshotEntries } from "../src/core/entries.ts"
 import { staleUnprovenSessionIDs, STALE_LIVE_ENTRY_MS } from "../src/core/hud.ts"
 
@@ -499,5 +499,14 @@ describe("stripUndefined (RPC payload strict-JSON hygiene)", () => {
     expect(out[0]).toBeUndefined()
     expect(out[1]).toEqual({ b: date, c: null })
     expect(out[2]).toBe("x")
+  })
+})
+
+describe("canonical runtime verify sets", () => {
+  test("the shared sets hold exactly the literals the unions allow", () => {
+    expect([...VERIFY_CHECK_TYPES].sort()).toEqual(["build", "custom", "goal-declared", "lint", "smoke", "tests", "typecheck"])
+    expect([...VERIFY_EVIDENCE_MODES].sort()).toEqual(["artifact", "command", "either"])
+    expect([...VERIFY_CHECK_SOURCES].sort()).toEqual(["configured", "goal-declared", "legacy"])
+    expect([...VERIFY_RUN_STATES].sort()).toEqual(["artifact", "executed", "reused", "skipped"])
   })
 })

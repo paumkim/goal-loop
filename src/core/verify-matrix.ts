@@ -1,5 +1,5 @@
 import { formatValue } from "./errors.ts"
-import { VERIFY_CHECK_TYPES } from "./types.ts"
+import { VERIFY_CHECK_TYPES, VERIFY_EVIDENCE_MODES } from "./types.ts"
 import { headSha, findRepository } from "./git.ts"
 import { isBroadGoalCondition } from "./prompts.ts"
 import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
@@ -42,7 +42,6 @@ interface ScopePolicy {
 }
 
 const WHENS = new Set(["always", "broad"])
-const EVIDENCES = new Set<VerifyEvidenceMode>(["command", "artifact", "either"])
 
 /**
  * Safe, explicit goal-declared check syntax (inline directives in goal condition):
@@ -106,7 +105,7 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
   if (!WHENS.has(whenRaw)) throw new Error(`invalid when ${formatValue(whenRaw)}`)
   const when = whenRaw as "always" | "broad"
   const evidenceRaw = (one("evidence")?.value ?? "command") as VerifyEvidenceMode
-  if (!EVIDENCES.has(evidenceRaw)) throw new Error(`invalid evidence ${formatValue(evidenceRaw)}`)
+  if (!VERIFY_EVIDENCE_MODES.has(evidenceRaw)) throw new Error(`invalid evidence ${formatValue(evidenceRaw)}`)
   const id = (one("id")?.value ?? `goal-declared-${type}-${index}`).trim()
   if (!id) throw new Error("id must be non-empty")
   const labelTok = one("label")

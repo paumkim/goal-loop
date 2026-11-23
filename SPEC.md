@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2255 -->
+<!-- spec-check files=143 tests=2257 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10980,3 +10980,35 @@ its prefix. It is now a template literal built from the card constant, so the tw
 apart. Both exported strings are byte-identical to before (asserted by `test/tui-hud.test.tsx`, which
 pins both constants); focused suite 177 pass / 0 fail. No behavior, signature or test change. Marker
 unchanged by this change; merged marker `files=143 tests=2255`.
+
+
+## Workstream CLXXVI — delete the last duplicate verify runtime sets (2026-11-23)
+
+Repo improvement pass, dead-code removal unit.
+
+`src/core/wire.ts` still declared three runtime sets that duplicate unions already in `types.ts`:
+`VERIFY_SOURCES`, `VERIFY_EVIDENCE_MODES`, `VERIFY_RUN_STATES`. `src/core/verify-matrix.ts` had a fourth
+copy (`EVIDENCES`). Together with the earlier `VERIFY_CHECK_TYPES` dedup, these are four dead
+declarations of contracts that already have one canonical home. All four are **deleted**; the modules
+now import the canonical sets. Evidence: `grep -rn '^const VERIFY_SOURCES\|^const VERIFY_EVIDENCE_MODES: ReadonlySet\|^const VERIFY_RUN_STATES\|^const EVIDENCES' src/core/*.ts` → none.
+
+## Workstream CLXXVII — one canonical runtime vocabulary for the verify contract (2026-11-23)
+
+Repo improvement pass, config/style unification unit.
+
+`src/core/types.ts` now exports the runtime counterparts of its verify unions — `VERIFY_EVIDENCE_MODES`,
+`VERIFY_CHECK_SOURCES`, `VERIFY_RUN_STATES` beside the existing `VERIFY_CHECK_TYPES` — and exports the
+previously private `VerifyCheckRunState`. `config.ts`, `verify-matrix.ts` and `wire.ts` all consume those
+sets, so accepted values have one source of truth across parse, config resolution and RPC validation.
+New test in `test/wire.test.ts` pins the exact literals of each set. Typecheck clean.
+
+## Workstream CLXXVIII — memoize the sanitizer's prefix probe (2026-11-23)
+
+Repo improvement pass, measured hot-path unit.
+
+`src/core/sanitize.ts · probe` lowercases and Unicode-folds both halves of a message on every filter
+pass; the same halves recur when reasoning is streamed/duplicated. Pure function, so a bounded 2048-entry
+m keyed by the raw half turns a repeat into one lookup. Measured with the same harness before/after
+(`/tmp/opencode/bench-sanitize2.ts`, 100 cycles x 3 long inputs, 20 rounds, median of runs):
+`1.40 ms -> 0.33 ms`, ~4.2x. New test in `test/sanitize.test.ts` pins cold/warm byte-identical output and
+idempotence after the cache is warm. Focused suites 69 pass / 0 fail. Combined marker `tests=2255 -> 2257`.
