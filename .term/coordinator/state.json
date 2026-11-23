@@ -5816,8 +5816,19 @@
       "paths": "packages/coordinator/bin/coordinator,packages/coordinator/README.md,src/core/git.ts,src/core/workflow.ts,src/core/types.ts,src/core/bootstrap.ts,scripts/spec-check.ts,test,.gitignore,.term/coordinator/config.json,AGENTS.md,docs/parallel-work.md,docs/core.html,docs/index.html,docs/install.html,SPEC.md,README.md,MAINTAINER.md,RELEASE-CHECKLIST.md,prompts,dist/tui.js",
       "branch": "wt/worktree-dir-rename",
       "worktree": "worktrees/wt-worktree-dir-rename",
+      "status": "done",
+      "createdAt": "2026-11-23T03:18:29Z",
+      "submittedAt": "2026-11-23T03:30:54Z",
+      "mergedAt": "2026-11-23T03:38:39Z",
+      "mergedInto": "dev"
+    },
+    "goals-equal-fastpath": {
+      "agent": "loop-worker",
+      "paths": "src/core/entries.ts,test/entries.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/goals-equal-fastpath",
+      "worktree": "worktrees/wt-goals-equal-fastpath",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:18:29Z"
+      "createdAt": "2026-11-23T03:38:07Z"
     }
   },
   "mergeLock": null,
