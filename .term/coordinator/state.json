@@ -5722,16 +5722,33 @@
       "paths": "src/core/hud.ts,test/tui-hud.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/pill-live-turn-counter",
       "worktree": "worktrees/wt-pill-live-turn-counter",
-      "status": "claimed",
-      "createdAt": "2026-11-23T02:34:28Z"
+      "status": "submitted",
+      "createdAt": "2026-11-23T02:34:28Z",
+      "submittedAt": "2026-11-23T02:44:50Z"
     },
     "lenient-verdict-regex": {
       "agent": "build",
       "paths": "src/core/verdict.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/lenient-verdict-regex",
       "worktree": "worktrees/wt-lenient-verdict-regex",
+      "status": "done",
+      "createdAt": "2026-11-23T02:34:53Z",
+      "submittedAt": "2026-11-23T02:43:09Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T02:43:09Z",
+      "forcedScopeFiles": [
+        "test/core.test.ts"
+      ],
+      "mergedAt": "2026-11-23T02:45:30Z",
+      "mergedInto": "dev"
+    },
+    "sanitize-tagless-fastpath": {
+      "agent": "loop-worker",
+      "paths": "src/core/sanitize.ts,test/sanitize.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/sanitize-tagless-fastpath",
+      "worktree": "worktrees/wt-sanitize-tagless-fastpath",
       "status": "claimed",
-      "createdAt": "2026-11-23T02:34:53Z"
+      "createdAt": "2026-11-23T02:42:03Z"
     }
   },
   "mergeLock": null,
