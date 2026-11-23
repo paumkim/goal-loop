@@ -61,6 +61,13 @@ const PRODUCING_CONDITION = /\b(tests?|files?|merge|merged|commit|create|created
 // Applies to armed loops only; plain goals never request boundary compaction at all.
 const COMPACT_MISS_RETRY = 2
 
+/**
+ * The one host-unwilling warning, shared with its acceptance pins so code and tests cannot drift. States the
+ * trickle contract in plain words: the loop keeps running, and re-requests slow down after the forced retry.
+ */
+export const COMPACT_MISS_NOTICE =
+  "The boundary compaction has not landed after 2 armed iterations; re-requests drop to a trickle every 3rd arm. The loop keeps running. Run /compact manually if you want it now."
+
 interface ControllerDeps {
   readonly config: GoalConfig
   readonly directory: string
@@ -2444,7 +2451,7 @@ export class GoalController {
           record.loopCompact = measurableLoopState
           if (misses === COMPACT_MISS_RETRY && pending.unwillingWarned !== true) {
             // The host will not compact (2 measurable arms, no landing): say it once, exactly.
-            this.notify(sessionID, "compact", "warning", "Compaction not landing", "compaction did not land; loop is running hot; consider /compact manually")
+            this.notify(sessionID, "compact", "warning", "Compaction not landing", COMPACT_MISS_NOTICE)
           } else if (misses === COMPACT_MISS_CAP) {
             // Backstop only: one final warning at the cap crossing; re-requests continue as a trickle.
             this.notify(sessionID, "compact", "warning", "Compaction not landing", `The boundary compaction has not landed after ${COMPACT_MISS_CAP} armed iterations; re-requests drop to a trickle every 3rd arm. The loop keeps running.`)

@@ -226,6 +226,11 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Compaction notice wording (`compaction-notice-wording`, 2026-11-23): the one host-unwilling warning read
+  "compaction did not land; loop is running hot; consider /compact manually" — lowercase, semicolon
+  fragments, and "running hot" implying escalation while the contract is a trickle. The message now states
+  the real behavior in full sentences, and lives in one exported `COMPACT_MISS_NOTICE` constant that the four
+  exact-text acceptance pins import instead of restating. No logic change; both doc quotes updated.
 - Lease-first judge enforcement (`lease-first-judge-enforcement`, 2026-11-23): the coordinator judge rubric only
   flagged a direct commit on the target branch, so an agent that edited files there without claiming a lease could
   still collect a `met` verdict before it ever committed. A `Lease-first rule (coordinator)` now rides both judge
