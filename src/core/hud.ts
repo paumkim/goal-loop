@@ -589,7 +589,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
  * the remediation row does not need the onboarding hint. Looped or not — the rule is identical.
  */
 export const EVALUATOR_HINT_CARD = "the evaluator reads only the transcript"
-export const EVALUATOR_HINT_FULL = "the evaluator reads only the transcript - it cannot run commands; prove the condition with visible output"
+export const EVALUATOR_HINT_FULL = `${EVALUATOR_HINT_CARD} - it cannot run commands; prove the condition with visible output`
 export const evaluatorHint = (goal: GoalSnapshot): { readonly card: string; readonly full: string } | null => {
   // `evaluating` / `waiting` are boolean flags on an otherwise-`active` record; the hint applies while the status is active.
   if (goal.status !== "active") return null

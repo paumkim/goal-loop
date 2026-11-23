@@ -10973,3 +10973,10 @@ New regression in `test/failure-signature.test.ts` compares cold and warm signat
 independent reimplementation of the original fold across punctuation, whitespace, unicode and long
 inputs, and pins that a six-entry repeated-reason history still counts 7 on both passes. Focused suite
 21 pass / 0 fail (was 20). Typecheck clean. Marker `tests=2254 -> 2255`.
+## Workstream CLXXV — one source for the evaluator-hint prefix (2026-11-23)
+
+`EVALUATOR_HINT_FULL` in `src/core/hud.ts` repeated the `EVALUATOR_HINT_CARD` sentence verbatim as
+its prefix. It is now a template literal built from the card constant, so the two hints cannot drift
+apart. Both exported strings are byte-identical to before (asserted by `test/tui-hud.test.tsx`, which
+pins both constants); focused suite 177 pass / 0 fail. No behavior, signature or test change. Marker
+unchanged by this change; merged marker `files=143 tests=2255`.
