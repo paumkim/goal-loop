@@ -1090,6 +1090,20 @@ describe("formatSpend", () => {
     expect(formatSpend(spend)).toBe("2.22M in \u00B7 2.1k out \u00B7 739k cached \u00B7 $0.90")
   })
 
+  test("the default unbounded-width fast path matches the general degradation loop", () => {
+    const cases = [
+      spend,
+      { ...EMPTY_USAGE, input: 120_000, output: 8_400 },
+      { ...EMPTY_USAGE, input: 1, output: 1, cacheRead: 1, cost: 0.001 },
+      { ...EMPTY_USAGE, input: 999_999, output: 9_999, reasoning: 99, cacheWrite: 5, cost: 12.5 },
+    ]
+    for (const value of cases) {
+      // A finite width larger than any rendered line can never trigger a drop, so the general loop and
+      // the early return for the default Infinity must agree exactly.
+      expect(formatSpend(value)).toBe(formatSpend(value, Number.MAX_SAFE_INTEGER))
+    }
+  })
+
   test("an absent cost renders tokens only — no fabricated $ figure", () => {
     const noCost = { ...EMPTY_USAGE, input: 120_000, output: 8_400 }
     expect(formatSpend(noCost)).toBe("120k in \u00B7 8.4k out")
