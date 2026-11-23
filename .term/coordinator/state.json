@@ -6479,6 +6479,17 @@
       "submittedAt": "2026-11-23T15:38:57Z",
       "mergedAt": "2026-11-23T15:41:30Z",
       "mergedInto": "dev"
+    },
+    "unify-review-status-guard": {
+      "agent": "build",
+      "paths": "src/prompter/review.ts",
+      "branch": "wt/unify-review-status-guard",
+      "worktree": "worktree/wt-unify-review-status-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T15:46:31Z",
+      "submittedAt": "2026-11-23T15:48:40Z",
+      "mergedAt": "2026-11-23T15:51:01Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
