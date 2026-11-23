@@ -20,7 +20,7 @@ import {
   systemReminder,
 } from "../src/core/prompts.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "../src/core/transcript.ts"
-import { findNativeReport, isEvaluatorReport, parseSubagentReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
+import { isEvaluatorReport, verdictFromNativeReport, echoedCondition, echoMatches } from "../src/core/evaluator-agent.ts"
 import { DELEGATE_VERDICT } from "../src/core/prompts.ts"
 import { EMPTY_USAGE, NO_COMMIT, type CommitPolicy, type GoalRecord } from "../src/core/types.ts"
 import { isAlreadySatisfiedLanding, parseVerdict } from "../src/core/verdict.ts"
@@ -1441,66 +1441,6 @@ describe("native evaluator verdict", () => {
     expect(isEvaluatorReport({ source: "subagent", agent: "review" })).toBe(false)
     expect(isEvaluatorReport({ source: "shell", agent: "evaluator" })).toBe(false)
     expect(isEvaluatorReport(undefined)).toBe(false)
-  })
-
-  test("a native <subagent> report yields its body and state", () => {
-    const text = '<subagent sessionID="ses_child" state="completed" description="evaluator">\n{"verdict":"met","reason":"fresh"}\n</subagent>'
-    expect(parseSubagentReport(text)).toEqual({ body: '{"verdict":"met","reason":"fresh"}', state: "completed", childID: "ses_child" })
-    expect(parseSubagentReport("not a report")).toBeUndefined()
-  })
-
-  const report = (id: string, verdict: string, childID = `ses_${id}`, state = "completed") => ({
-    id,
-    type: "synthetic",
-    text: `<subagent sessionID="${childID}" state="${state}" description="evaluator">\n{"verdict":"${verdict}","reason":"r"}\n</subagent>`,
-    metadata: { source: "subagent", childID, agent: "Evaluator", state },
-  })
-  const marker = (turn: number) => ({ id: `kickoff_${turn}`, type: "synthetic", metadata: { source: "goal", goal: "g1", turn } })
-  const pick = (messages: unknown[], turn = 1, consumed = new Set<string>(), pluginEvaluatorIDs = new Set<string>(), seenTurns = new Map<string, number>()) =>
-    findNativeReport(messages, consumed, pluginEvaluatorIDs, seenTurns, turn)
-
-  test("the newest report is picked once; a consumed report is never replayed", () => {
-    const messages = [report("a", "not_met"), report("b", "met")]
-    const consumed = new Set<string>()
-    expect(pick(messages, 1, consumed)?.body).toContain('"met"')
-    consumed.add("b")
-    expect(pick(messages, 1, consumed)?.body).toContain('"not_met"')
-  })
-
-  test("plugin fallback-judge reports and still-running reports are never read as verdicts", () => {
-    const native = report("c", "met")
-    const fallback = report("judge", "not_met", "plugin_judge_1")
-    const running = report("d", "met", "ses_d", "running")
-    expect(pick([fallback, running, native], 1, new Set(), new Set(["plugin_judge_1"]))).toEqual({
-      key: "c",
-      body: '{"verdict":"met","reason":"r"}',
-      state: "completed",
-    })
-    expect(pick([fallback], 1, new Set(), new Set(["plugin_judge_1"]))).toBeUndefined()
-  })
-
-  test("a report delivered before this turn's kickoff is stale and never replayed", () => {
-    const stale = report("old", "met")
-    const fresh = report("new", "not_met")
-    const messages = [stale, marker(2), fresh]
-    // turn 2: only the report after the marker is eligible, even though the stale met is unconsumed.
-    expect(pick(messages, 2)?.key).toBe("new")
-    // With no marker in context (e.g. the first turn), first-observed-turn is the fallback guard.
-    const seen = new Map([["old", 1]])
-    expect(pick([stale], 2, new Set(), new Set(), seen)).toBeUndefined()
-    expect(pick([stale], 2, new Set(), new Set(), new Map())?.key).toBe("old")
-  })
-
-  test("a still-running report is not pinned to a turn until it completes", () => {
-    const running = report("late", "met", "ses_late", "running")
-    const seen = new Map<string, number>()
-    // First look while the child is still running: eligible, but nothing returned and nothing pinned.
-    expect(pick([running], 2, new Set(), new Set(), seen)).toBeUndefined()
-    expect(seen.size).toBe(0)
-    // The same report, now completed, can be consumed for this turn (and only now is it pinned).
-    const done = report("late", "met", "ses_late", "completed")
-    expect(pick([done], 2, new Set(), new Set(), seen)?.key).toBe("late")
-    expect(seen.get("late")).toBe(2)
   })
 
   test("echoedCondition tolerates aliases and a strict-parse-failed body", () => {

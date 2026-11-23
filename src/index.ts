@@ -728,8 +728,8 @@ export default Plugin.define({
     await ctx.session.hook("prompt", async (event) => {
       // The planner child's own prompt is already complete (raw body + output contract). Never re-arm it.
       if (plannerChildren.has(event.sessionID)) return
-      // The judge is now a harness-owned standalone child: its full rubric is built in `nativeVerdict`, not here.
-      // No worker delegation prompt to enrich, so every other prompt is left untouched.
+      // The judge is a harness-owned parent-linked subagent child: its full rubric is built in `nativeVerdict`,
+      // not here. No worker delegation prompt to enrich, so every other prompt is left untouched.
       const text = typeof event.prompt?.text === "string" ? event.prompt.text : ""
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
