@@ -226,6 +226,14 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Review guard coverage (`prompter-review-tests`, 2026-11-23): `src/prompter/review.ts` owns the decision that a
+  task really landed yet had zero tests. Added `test/prompter-review.test.ts` with a real temp git repo pinning
+  every refusal path (not-in-review, kill switch, missing/nonexistent commit, commit not on the base branch with
+  the exact merge command, opt-in verify command failure) plus the approve/reject success records and the
+  best-effort cleanup no-op. Also tightened `test/learning-log.test.ts` from a `summary || lesson` truthiness
+  check to separate assertions on both fields. No production behavior changed; focused suites green, marker
+  re-counted 2345 -> 2354, full check green.
+
 - Prompter crash-safety coverage (`prompter-journal-tests`, 2026-11-23): `src/prompter/state.ts` (`reduceJournal`
   via `loadState`) and `src/prompter/apply.ts` (`recordOutcome`) had no tests despite owning the append-only
   journal's torn-tail recovery and the `finishedAt` lifecycle. Added `test/prompter-state.test.ts` (missing file,
@@ -613,7 +621,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2345 -->
+<!-- spec-check files=144 tests=2354 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
