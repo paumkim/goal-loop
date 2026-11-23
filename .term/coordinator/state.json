@@ -6051,6 +6051,22 @@
       "submittedAt": "2026-11-23T06:13:46Z",
       "mergedAt": "2026-11-23T06:18:52Z",
       "mergedInto": "dev"
+    },
+    "universal-no-progress-recognition": {
+      "agent": "orchestrator",
+      "paths": "src/core/failure-signature.ts,src/core/prompts.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/controller.test.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/universal-no-progress-recognition",
+      "worktree": "worktree/wt-universal-no-progress-recognition",
+      "status": "done",
+      "createdAt": "2026-11-23T06:23:11Z",
+      "submittedAt": "2026-11-23T06:37:07Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T06:37:07Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-23T06:39:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
