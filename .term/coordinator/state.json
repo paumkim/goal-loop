@@ -6321,6 +6321,17 @@
       "status": "submitted",
       "createdAt": "2026-11-23T12:08:40Z",
       "submittedAt": "2026-11-23T12:09:07Z"
+    },
+    "doctor-check-names": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/coordinator.test.ts,packages/coordinator/README.md",
+      "branch": "wt/doctor-check-names",
+      "worktree": "worktree/wt-doctor-check-names",
+      "status": "done",
+      "createdAt": "2026-11-23T12:16:02Z",
+      "submittedAt": "2026-11-23T12:19:29Z",
+      "mergedAt": "2026-11-23T12:21:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
