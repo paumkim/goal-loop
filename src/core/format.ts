@@ -54,6 +54,35 @@ import type { GoalRecord, GoalStatus, UsageSnapshot } from "./types.ts"
 const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" })
 
 /**
+ * Drop unpaired UTF-16 surrogates. Model/host text can carry a lone half of an astral pair (an upstream
+ * cut); both truncate and elide promise never to emit one. Sanitizing once at the source keeps every
+ * width/segment calculation on well-formed text — a lone surrogate's width inside a concatenated
+ * cluster differs from its per-grapheme sum, which let a malformed string paint one cell wider than
+ * truncate's cap. A string with no surrogate code unit is returned as-is (no copy, no scan cost beyond
+ * the single quick pass); ordinary text is byte-identical.
+ */
+export function stripLoneSurrogates(text: string): string {
+  let first = -1
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdfff) { first = i; break }
+  }
+  if (first === -1) return text
+  let out = text.slice(0, first)
+  for (let i = first; i < text.length; i++) {
+    const code = text.charCodeAt(i)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(i + 1)
+      if (next >= 0xdc00 && next <= 0xdfff) { out += text[i]! + text[i + 1]!; i++ }
+      continue // lone high surrogate — drop
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) continue // lone low surrogate — drop
+    out += text[i]!
+  }
+  return out
+}
+
+/**
  * Rows a `wrapMode="word"` cell needs to paint `text` at `width` terminal cells. Greedy word wrap on
  * single spaces (the card's remediation grammar), width measured with stringWidth, never mid-word.
  * A word longer than the line hard-breaks across as many rows as it needs. An empty string paints one
@@ -276,7 +305,7 @@ export function truncate(text: string, max: number, ellipsis: string = "\u2026")
 /** The raw computation; kept separate so `truncate` is a thin cache lookup around it. */
 function truncateUncached(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
-  const flat = text.replace(/\s+/g, " ").trim()
+  const flat = stripLoneSurrogates(text).replace(/\s+/g, " ").trim()
   if (cellWidth(flat) <= max) return flat
   const ellipsisWidth = cellWidth(ellipsis)
   if (ellipsisWidth >= max) {
@@ -321,24 +350,27 @@ function truncateUncached(text: string, max: number, ellipsis: string = "\u2026"
  */
 export function elideAtWordBoundary(text: string, maxChars: number): string {
   if (maxChars <= 0) return ""
-  if (text.length <= maxChars) return text
+  // Sanitize before measuring/cutting: a lone surrogate in the input would otherwise be emitted as a
+  // half character and a cut beside it could leave a different orphan. Well-formed text is unchanged.
+  const clean = stripLoneSurrogates(text)
+  if (clean.length <= maxChars) return clean
   const budget = maxChars - 1 // reserve one code unit for the elision marker "…"
   if (budget <= 0) return "…"
   // Prefer the last whitespace at or before `budget` within the trailing quarter of the
   // window: a cut near the front of a long line would drop more payload than it saves.
   let cut = -1
   for (let i = budget; i >= Math.max(0, budget - Math.floor(budget / 4)); i--) {
-    const code = text.charCodeAt(i)
+    const code = clean.charCodeAt(i)
     if (code === 0x20 || code === 0x09 || code === 0x0a || code === 0x0d) {
       cut = i
       break
     }
   }
-  if (cut !== -1) return `${text.slice(0, cut).replace(/\s+$/, "")}…`
+  if (cut !== -1) return `${clean.slice(0, cut).replace(/\s+$/, "")}…`
   // No whitespace in the window: cut at the budget, backing off a high surrogate so the
   // pair stays whole (a low surrogate at the boundary is the split half — skip it too).
   let end = budget
-  const before = text.charCodeAt(end - 1)
+  const before = clean.charCodeAt(end - 1)
   if (before >= 0xd800 && before <= 0xdbff) end -= 1
-  return `${text.slice(0, end)}…`
+  return `${clean.slice(0, end)}…`
 }

@@ -199,6 +199,34 @@ var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
 var normalizeConditionText = memoizeBounded((value) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 4096);
 var cellWidth = memoizeBounded((text) => stringWidth(text), 4096);
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
+function stripLoneSurrogates(text) {
+  let first = -1;
+  for (let i = 0;i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 55296 && code <= 57343) {
+      first = i;
+      break;
+    }
+  }
+  if (first === -1)
+    return text;
+  let out = text.slice(0, first);
+  for (let i = first;i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 55296 && code <= 56319) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 56320 && next <= 57343) {
+        out += text[i] + text[i + 1];
+        i++;
+      }
+      continue;
+    }
+    if (code >= 56320 && code <= 57343)
+      continue;
+    out += text[i];
+  }
+  return out;
+}
 function wrapLines(text, width) {
   const max = Math.max(1, Math.floor(width));
   let lines = 1;
@@ -317,7 +345,7 @@ function truncate(text, max, ellipsis = "\u2026") {
 function truncateUncached(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
-  const flat = text.replace(/\s+/g, " ").trim();
+  const flat = stripLoneSurrogates(text).replace(/\s+/g, " ").trim();
   if (cellWidth(flat) <= max)
     return flat;
   const ellipsisWidth = cellWidth(ellipsis);
