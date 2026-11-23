@@ -1632,7 +1632,7 @@ describe("standalone child prompts must wake their own execution (CXLII P0)", ()
 })
 
 describe("/reset-context drops context in place", () => {
-  test("the command compacts the same session and the hook installs an all-none checkpoint", async () => {
+  test("the command compacts the same session and the hook installs an empty native replay window", async () => {
     const { ctx, calls, hooks } = context(repository())
     const dispose = await (plugin as any).setup(ctx)
     try {
@@ -1644,25 +1644,10 @@ describe("/reset-context drops context in place", () => {
       expect(calls.compacts).toEqual(["ses_1"])
       const event: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(event)
-      const summary: string = event.result?.summary ?? ""
-      for (const heading of [
-        "## Objective",
-        "## Requirements",
-        "## Decisions",
-        "## Work State",
-        "### Completed",
-        "### Active",
-        "### Blocked",
-        "## Next Move",
-        "## Relevant Files",
-        "## Important Context",
-      ]) {
-        expect(summary).toContain(heading)
-      }
-      // Every section is explicitly empty: objective, requirements, decisions, three work states, next move,
-      // relevant files, important context.
-      expect(summary.match(/\(none\)/g)?.length).toBe(9)
-      expect(calls.notices.some((notice: any) => notice.message.includes("compaction.keep.tokens"))).toBe(true)
+      // An empty native window replays as zero LLM messages: a cold-start context with the same session ID.
+      expect(event.result?.summary).toBe("")
+      expect(event.result?.native).toEqual({ messages: [] })
+      expect(calls.notices.some((notice: any) => notice.message.includes("no conversation history"))).toBe(true)
     } finally {
       await dispose?.()
     }
@@ -1676,7 +1661,7 @@ describe("/reset-context drops context in place", () => {
       await command.execute({ sessionID: "ses_1", prompt: { text: "" }, delivery: "steer" })
       const first: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(first)
-      expect(first.result?.summary).toContain("(none)")
+      expect(first.result?.native).toEqual({ messages: [] })
       const second: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(second)
       expect(second.result).toBeUndefined()
