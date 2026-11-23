@@ -5959,6 +5959,25 @@
       "submittedAt": "2026-11-23T05:09:53Z",
       "mergedAt": "2026-11-23T05:12:04Z",
       "mergedInto": "dev"
+    },
+    "diff-usage-finite-guard": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/diff-usage-finite-guard",
+      "worktree": "worktree/wt-diff-usage-finite-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T05:21:30Z",
+      "submittedAt": "2026-11-23T05:24:51Z",
+      "mergedAt": "2026-11-23T05:27:00Z",
+      "mergedInto": "dev"
+    },
+    "spec-index-slug-uniqueness": {
+      "agent": "orchestrator",
+      "paths": "SPEC-workstreams.md,test/spec-role-split.test.ts",
+      "branch": "wt/spec-index-slug-uniqueness",
+      "worktree": "worktree/wt-spec-index-slug-uniqueness",
+      "status": "claimed",
+      "createdAt": "2026-11-23T05:22:43Z"
     }
   },
   "mergeLock": null,
