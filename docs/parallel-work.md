@@ -72,8 +72,14 @@ path is honoured and produces one warning per repo. `coordinator migrate-worktre
 [--dry-run]` moves the physical directory to the configured dir, runs `git worktree repair`
 so git's linked-worktree records follow, rewrites `config.json` and every lease path, and
 clears the warning marker. It refuses while any active (`claimed`/`submitted`) lease still
-points into `worktrees/`, so it never moves another session's live worktree — re-run after
+points into `worktrees/`, so it never disturbs another session's live worktree — re-run after
 those leases land. Both directory names stay gitignored until the move completes.
+
+When a live lease cannot be waited for, `coordinator migrate-worktree-dir --with-live-leases`
+performs the same move but leaves a `worktrees -> worktree` compatibility symlink and does not
+rewrite the blocked leases' records: their old paths keep resolving exactly as before, while
+new worktrees and git's repaired records use `worktree/`. The symlink is temporary — remove it
+once those leases land.
 
 ## Check merge status before claim / submit / merge-next
 

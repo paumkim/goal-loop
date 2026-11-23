@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, test } from "bun:test"
 import { execFileSync, spawnSync } from "node:child_process"
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -173,6 +173,24 @@ describe("legacy fallback and migration", () => {
     expect(result.stderr).toContain("active leases still use worktrees/")
     expect(existsSync(join(dir, "worktrees", "wt-active"))).toBe(true)
     expect(existsSync(join(dir, "worktree"))).toBe(false)
+  })
+
+  test("migration --with-live-leases moves the dir but keeps live lease paths valid via a symlink", () => {
+    setup()
+    seedWorktree("blocked", "worktrees/wt-blocked", "claimed")
+    seedWorktree("migrated", "worktrees/wt-migrated", "done")
+    const result = run(dir, ["migrate-worktree-dir", "--with-live-leases"])
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("migrated worktree dir: worktrees -> worktree")
+    expect(result.stdout).toContain("compat: worktrees -> worktree symlink kept")
+    expect(readlinkSync(join(dir, "worktrees"))).toBe("worktree")
+    // Both paths resolve to the same physical worktree.
+    expect(existsSync(join(dir, "worktree", "wt-blocked", ".git"))).toBe(true)
+    expect(existsSync(join(dir, "worktrees", "wt-blocked", ".git"))).toBe(true)
+    // The live lease keeps its old path; the done lease is rewritten.
+    expect(state().leases["blocked"].worktree).toBe("worktrees/wt-blocked")
+    expect(state().leases["migrated"].worktree).toBe("worktree/wt-migrated")
+    expect(git(dir, ["worktree", "list", "--porcelain"])).toContain(`worktree ${join(dir, "worktree", "wt-blocked")}`)
   })
 
   test("migration --dry-run reports the move without touching anything", () => {
