@@ -29,7 +29,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, stampOf, fileStampOf } from "./dossier.ts"
+import { buildLoopDossier, stampOf, fileStampOf , recordStatusCell } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import {
   gitCatFileProbe,
@@ -73,9 +73,9 @@ export const sealedDossierName = (nowMs: number, attempt = 0): string => {
 
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
-const verifyCell = (status: string): string => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): string => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): string => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const verifyCell = (status: string): string => recordStatusCell(status, "present", "missing")
+const reachCell = (status: string): string => recordStatusCell(status, "ancestor", "unreached")
+const signCell = (status: string): string => recordStatusCell(status, "verified", "unverified")
 
 /** Shas that answered yes on all three questions, joined by sha (the same mention order in all three sweeps). */
 export const cleanShaCount = (

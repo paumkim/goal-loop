@@ -35,7 +35,7 @@ import {
 } from "./verify-record.ts"
 import { gitAncestorProbe, reachRecord, type ReachProbe, type ReachVerification } from "./reach-record.ts"
 import { gitSignProbe, signRecord, type SignProbe, type SignVerification } from "./sign-record.ts"
-import { shortSha, stampOf } from "./dossier.ts"
+import { shortSha, stampOf , recordStatusCell } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** One answer cell, exactly as the appendix prints it. */
@@ -183,9 +183,9 @@ type AttestationResult =
   | { readonly kind: "unsealed" }
   | { readonly kind: "unparsable" }
 
-const verifyCell = (status: string): AttestationAnswer => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): AttestationAnswer => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): AttestationAnswer => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const verifyCell = (status: string): AttestationAnswer => recordStatusCell(status, "present", "missing")
+const reachCell = (status: string): AttestationAnswer => recordStatusCell(status, "ancestor", "unreached")
+const signCell = (status: string): AttestationAnswer => recordStatusCell(status, "verified", "unverified")
 
 /** A one-off record view so the existing sweeps (and their injected probes) run over the file's shas verbatim. */
 const shasAsGoal = (rows: readonly AttestationRow[]): GoalSnapshot =>

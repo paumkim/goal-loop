@@ -22,7 +22,7 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { conditionCellOf, shortSha, stampOf } from "./dossier.ts"
+import { conditionCellOf, shortSha, stampOf , recordStatusCell } from "./dossier.ts"
 import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
 
@@ -100,8 +100,7 @@ export function reachRecord(goal: GoalSnapshot, probe: ReachProbe): ReachVerific
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
 
-const statusCell = (status: ReachCheckStatus): string =>
-  status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown"
+const statusCell = (status: string): string => recordStatusCell(status, "ancestor", "unreached")
 
 /**
  * The ancestry report as Markdown — freshly generated, self-describing, safe to hand to a reviewer.
