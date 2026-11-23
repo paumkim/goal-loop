@@ -6236,6 +6236,17 @@
       "submittedAt": "2026-11-23T10:01:29Z",
       "mergedAt": "2026-11-23T10:03:41Z",
       "mergedInto": "dev"
+    },
+    "dead-repro-loop-cap": {
+      "agent": "loop-worker",
+      "paths": "scripts/repro-loop-cap.tsx,scripts/width-flag.ts,test/history.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/dead-repro-loop-cap",
+      "worktree": "worktree/wt-dead-repro-loop-cap",
+      "status": "done",
+      "createdAt": "2026-11-23T10:04:56Z",
+      "submittedAt": "2026-11-23T10:08:33Z",
+      "mergedAt": "2026-11-23T10:10:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
