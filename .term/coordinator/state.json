@@ -5633,7 +5633,7 @@
       "paths": "src/core/types.ts,src/core/wire.ts,src/core/verify-matrix.ts,src/core/sanitize.ts,test/wire.test.ts,test/sanitize.test.ts",
       "branch": "wt/verify-sets-and-probe",
       "worktree": "worktrees/wt-verify-sets-and-probe",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T01:43:53Z",
       "submittedAt": "2026-11-23T01:43:53Z",
       "forcedScope": true,
@@ -5641,7 +5641,17 @@
       "forcedScopeFiles": [
         "SPEC.md",
         "dist/tui.js"
-      ]
+      ],
+      "mergedAt": "2026-11-23T01:50:42Z",
+      "mergedInto": "dev"
+    },
+    "truncate-cache-key": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/truncate-cache-key",
+      "worktree": "worktrees/wt-truncate-cache-key",
+      "status": "claimed",
+      "createdAt": "2026-11-23T01:49:56Z"
     }
   },
   "mergeLock": null,
