@@ -6435,6 +6435,17 @@
       "submittedAt": "2026-11-23T14:50:24Z",
       "mergedAt": "2026-11-23T14:52:39Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-review-tests": {
+      "agent": "orchestrator",
+      "paths": "test/prompter-review.test.ts,test/learning-log.test.ts,SPEC.md",
+      "branch": "wt/eod-cleanup-review-tests",
+      "worktree": "worktree/wt-eod-cleanup-review-tests",
+      "status": "done",
+      "createdAt": "2026-11-23T14:55:21Z",
+      "submittedAt": "2026-11-23T14:58:44Z",
+      "mergedAt": "2026-11-23T15:00:59Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
