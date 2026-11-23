@@ -1,10 +1,29 @@
 import { describe, expect, test } from "bun:test"
 import type { GoalSnapshot, UsageSnapshot } from "../src/core/types.ts"
-import { buildLoopDossier, fenceBlock, fileStampOf, inlineCode, isoOf, quote, shortSha, stampOf, GAP } from "../src/core/dossier.ts"
+import { buildLoopDossier, fenceBlock, fileStampOf, inlineCode, isoOf, quote, recordStatusCell, shortSha, stampOf, GAP } from "../src/core/dossier.ts"
 import { dossierExportName } from "../src/core/dossier-export.ts"
 import { dossierIndexName } from "../src/core/dossier-index.ts"
 import { reviewName } from "../src/core/dossier-review.ts"
 import { sealedDossierName } from "../src/core/dossier-seal.ts"
+
+describe("recordStatusCell", () => {
+  test("matches every former per-domain mapping, including unknown and stray statuses", () => {
+    const old = {
+      verify: (v: string) => (v === "present" ? "yes" : v === "missing" ? "no" : "unknown"),
+      reach: (v: string) => (v === "ancestor" ? "yes" : v === "unreached" ? "no" : "unknown"),
+      sign: (v: string) => (v === "verified" ? "yes" : v === "unverified" ? "no" : "unknown"),
+    }
+    const domains = [
+      ["present", "missing", old.verify],
+      ["ancestor", "unreached", old.reach],
+      ["verified", "unverified", old.sign],
+    ] as const
+    const statuses = ["present", "missing", "ancestor", "unreached", "verified", "unverified", "unknown", "", "stray"]
+    for (const [positive, negative, oracle] of domains) {
+      for (const status of statuses) expect(recordStatusCell(status, positive, negative)).toBe(oracle(status))
+    }
+  })
+})
 
 const now = 1_800_000_000_000
 const zero: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }

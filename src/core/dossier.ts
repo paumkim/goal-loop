@@ -19,6 +19,15 @@ import { iterationDurations, loopTotals, verdictCounts } from "./history.ts"
 /** Em-dash gap marker — the one thing every absent measurement renders as. */
 export const GAP = "—"
 
+/**
+ * Yes/no/unknown cell for a three-way record status. The verify, reach and sign record renderers and
+ * their three dossier exporters used to spell this mapping out six times; one home keeps the answer
+ * for a positive status, a negative status and everything else (including `"unknown"`) identical.
+ */
+export type RecordAnswer = "yes" | "no" | "unknown"
+export const recordStatusCell = (status: string, positive: string, negative: string): RecordAnswer =>
+  status === positive ? "yes" : status === negative ? "no" : "unknown"
+
 /** Flatten a goal condition to one table cell: whitespace collapsed, 200 chars + ellipsis at most, GAP when empty. */
 export const conditionCellOf = (condition: string | undefined): string => {
   const flat = (condition ?? "").replace(/\s+/g, " ").trim()

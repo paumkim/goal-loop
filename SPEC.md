@@ -11159,3 +11159,15 @@ AGENTS.md and docs/parallel-work.md now state the rule: check `coordinator merge
 
 Verification: `test/coordinator-merge-safety.test.ts` gains five cases — free-lock JSON shape, two concurrent readers agreeing under a real flock holder plus await timeout/release, a dead pid reported stale and not blocking await, a holder past 3600s labelled stale, and `merge-next --wait` merging normally when free. Focused suites 63 pass / 0 fail across coordinator, coordinator-lease-races and coordinator-merge-safety (447 expect() calls); `bash -n` clean; full `bun run check` green including spec-check, dist freshness, TUI load, docs freshness and invariant-sweep.
 
+
+## Workstream CXC — one status-to-answer cell across the record family (2026-11-23)
+
+The `status -> yes/no/unknown` cell was written six times: `statusCell` in `verify-record.ts`,
+`reach-record.ts` and `sign-record.ts`, plus `verifyCell`/`reachCell`/`signCell` in each of
+`dossier-attest.ts`, `dossier-review.ts` and `dossier-seal.ts`. Added `dossier.ts · recordStatusCell`,
+a pure generic mapping, and reduced all six sites to thin, typed wrappers. Outputs are unchanged:
+a new differential test pins the shared helper against all three former mappings across positive,
+negative, `unknown`, empty and stray statuses. Focused suites (dossier + attest + review + seal +
+the three record modules) 132 pass / 0 fail, 479 expect() calls; `tsc --noEmit` clean. This is a
+consolidation/taste change, not a speed change: the dossier build benchmark is flat within noise
+(`21.09 ms -> 22.38 ms / 50 builds`, best of 20). No shipped-file change; marker +1 test.

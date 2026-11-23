@@ -23,7 +23,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha, stampOf, fileStampOf } from "./dossier.ts"
+import { buildLoopDossier, shortSha, stampOf, fileStampOf , recordStatusCell } from "./dossier.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -96,9 +96,9 @@ export const reviewName = (nowMs: number, attempt = 0): string => {
 
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
-const verifyCell = (status: string): ReviewAnswer => (status === "present" ? "yes" : status === "missing" ? "no" : "unknown")
-const reachCell = (status: string): ReviewAnswer => (status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown")
-const signCell = (status: string): ReviewAnswer => (status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown")
+const verifyCell = (status: string): ReviewAnswer => recordStatusCell(status, "present", "missing")
+const reachCell = (status: string): ReviewAnswer => recordStatusCell(status, "ancestor", "unreached")
+const signCell = (status: string): ReviewAnswer => recordStatusCell(status, "verified", "unverified")
 
 /** yes on all three → clean; any no → gaps; else unknown. The one honest collapse of the three cells. */
 export const reviewVerdict = (exists: ReviewAnswer, onThisLine: ReviewAnswer, underSeal: ReviewAnswer): ReviewVerdict => {

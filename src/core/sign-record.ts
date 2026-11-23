@@ -26,7 +26,7 @@
  *     are printed so a stale copy cannot masquerade as a live check.
  */
 import { execFileSync } from "node:child_process"
-import { conditionCellOf, shortSha, stampOf } from "./dossier.ts"
+import { conditionCellOf, shortSha, stampOf , recordStatusCell } from "./dossier.ts"
 import { recordShaMentions } from "./verify-record.ts"
 import type { GoalSnapshot } from "./types.ts"
 
@@ -113,8 +113,7 @@ export function signRecord(goal: GoalSnapshot, probe: SignProbe): SignVerificati
 const iterationList = (iterations: readonly number[]): string => iterations.map((v) => `v${v}`).join(", ")
 
 
-const statusCell = (status: SignCheckStatus): string =>
-  status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown"
+const statusCell = (status: string): string => recordStatusCell(status, "verified", "unverified")
 
 /**
  * The signature report as Markdown — freshly generated, self-describing, safe to hand to a reviewer.
