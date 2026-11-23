@@ -5488,16 +5488,25 @@
       "paths": "AGENTS.md,docs/parallel-work.md",
       "branch": "wt/doc-parallel-agents-hygiene",
       "worktree": "worktrees/wt-doc-parallel-agents-hygiene",
-      "status": "claimed",
-      "createdAt": "2026-11-23T00:28:06Z"
+      "status": "done",
+      "createdAt": "2026-11-23T00:28:06Z",
+      "submittedAt": "2026-11-23T00:31:06Z",
+      "mergedAt": "2026-11-23T00:35:55Z",
+      "mergedInto": "dev"
     },
     "core-pure-cleanups": {
       "agent": "build-agent",
       "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts,src/core/evaluator-agent.ts,test/core.test.ts",
       "branch": "wt/core-pure-cleanups",
       "worktree": "worktrees/wt-core-pure-cleanups",
-      "status": "claimed",
-      "createdAt": "2026-11-23T00:29:28Z"
+      "status": "submitted",
+      "createdAt": "2026-11-23T00:29:28Z",
+      "submittedAt": "2026-11-23T00:33:46Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T00:33:46Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ]
     }
   },
   "mergeLock": null,
