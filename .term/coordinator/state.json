@@ -5590,14 +5590,16 @@
       "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts",
       "branch": "wt/failure-normalize-memo",
       "worktree": "worktrees/wt-failure-normalize-memo",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T01:28:54Z",
       "submittedAt": "2026-11-23T01:28:54Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-23T01:28:54Z",
       "forcedScopeFiles": [
         "SPEC.md"
-      ]
+      ],
+      "mergedAt": "2026-11-23T01:34:42Z",
+      "mergedInto": "dev"
     },
     "backlog-regex-benchmark": {
       "agent": "loop-worker",
@@ -5609,6 +5611,14 @@
       "submittedAt": "2026-11-23T01:27:32Z",
       "mergedAt": "2026-11-23T01:29:30Z",
       "mergedInto": "dev"
+    },
+    "evaluator-hint-prefix": {
+      "agent": "loop-worker",
+      "paths": "src/core/hud.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-hint-prefix",
+      "worktree": "worktrees/wt-evaluator-hint-prefix",
+      "status": "claimed",
+      "createdAt": "2026-11-23T01:34:14Z"
     }
   },
   "mergeLock": null,
