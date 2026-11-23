@@ -28,12 +28,24 @@ interface RepeatedFailureSignature {
   readonly summary: string
 }
 
+/**
+ * Failure signatures are computed over a history of past verdicts, where the same handful of reasons
+ * and missing-check names recur entry after entry. `normalize` is pure but runs a Unicode fold plus two
+ * regex passes on every call, so those repeats were re-normalized each time. A bounded memo keyed by the
+ * raw text turns a repeat into one lookup; a miss recomputes. Memory stays capped.
+ */
+const NORMALIZE_CACHE_LIMIT = 4096
+const normalizeCache = new Map<string, string>()
 function normalize(text: string): string {
-  return text
+  const hit = normalizeCache.get(text)
+  if (hit !== undefined) return hit
+  const result = text
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ")
+  if (normalizeCache.size < NORMALIZE_CACHE_LIMIT) normalizeCache.set(text, result)
+  return result
 }
 
 function clamp(text: string, max: number): string {

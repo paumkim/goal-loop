@@ -186,6 +186,42 @@ describe("detectRepeatedFailureSignature", () => {
   })
 })
 
+describe("the bounded reason-normalization memo", () => {
+  test("cold and warm failure signatures equal an uncached oracle", () => {
+    // Independent reimplementation of the original fold — no cache.
+    const oracle = (text: string) =>
+      text
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .trim()
+        .replace(/\s+/g, " ")
+    const reasons = [
+      "MISSING verifier output (30s) — see the 4-part prompt",
+      "missing   verifier  output  (30s)",
+      "Evaluator request was stripped by the goal grammar",
+      "İstanbul 魚🐟 — repeated 12 hrs later",
+      "   ",
+      "x".repeat(300),
+    ]
+    for (const reason of reasons) {
+      // Two passes per reason: the second hits the memo for both the reason and its normalized form.
+      for (let pass = 0; pass < 2; pass++) {
+        const sig = failureSignatureOf(notMet(reason))
+        expect(sig?.kind).toBe("reason")
+        expect(sig?.key.startsWith("reason:")).toBe(true)
+        // The signature's normalized reason must equal the oracle's fold (clamped as in the source).
+        const norm = oracle(reason)
+        expect(sig?.key.includes(norm.slice(0, 200))).toBe(true)
+      }
+    }
+    // A history of repeated reasons still detects the same repeated-signature count cold and warm.
+    const history = Array.from({ length: 6 }, () => notMet("MISSING verifier output (30s)"))
+    for (let pass = 0; pass < 2; pass++) {
+      expect(detectRepeatedFailureSignature(history, notMet("MISSING verifier output (30s)"))?.count).toBe(7)
+    }
+  })
+})
+
 describe("failure escalation helpers", () => {
   test("summarizes verification failures", () => {
     const summary = summarizeFailureSignature(
