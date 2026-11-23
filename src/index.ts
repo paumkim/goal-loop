@@ -30,6 +30,8 @@ import { createRouter, type ServerEvent } from "./runtime/events.ts"
 import { systemClock, type EmitterPort, type Logger, type SessionPort } from "./runtime/ports.ts"
 import { GoalStore } from "./runtime/store.ts"
 import { withFileSink } from "./core/file-log.ts"
+// Shared plain-language error formatter (the filename is historical: it was born in the TUI).
+import { userFacingError } from "./tui-error.ts"
 import { update as cliUpdate } from "../bin/goal-loop.mjs"
 
 const PLUGIN_ID = "goal-loop"
@@ -633,7 +635,7 @@ export default Plugin.define({
               kind: "set",
               level: "warning",
               title: "goal-loop update",
-              message: `Update check failed: ${error instanceof Error ? error.message : String(error)}`,
+              message: `Could not check for updates. ${userFacingError(error)}`,
             })
           }
         })()
