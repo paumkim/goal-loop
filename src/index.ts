@@ -35,38 +35,15 @@ import { update as cliUpdate } from "../bin/goal-loop.mjs"
 const PLUGIN_ID = "goal-loop"
 
 /**
- * Checkpoint installed by `/reset-context` in place of the harness summary. OpenCode writes compaction summaries
- * with a fixed prompt that reads the conversation, so telling the agent to "carry nothing over" can never suppress
- * it. A plugin hook sets `event.result` to this text instead, which skips the summary model entirely and leaves
- * every section explicitly empty. The session ID is unchanged — only its model-visible context is dropped.
+ * The native replay window installed by `/reset-context`. OpenCode's transcript builder replays a completed
+ * compaction's `native.messages` *instead of* its summary (`to-llm-message.ts`, `case "compaction"`), and an empty
+ * array replays as zero LLM messages. That makes the next request look like a cold session start — fresh system
+ * prompt, no conversation messages — while the session ID, its metadata and its on-disk history survive.
+ *
+ * An empty `summary` is kept as a fallback for hosts predating native replay: there the compaction message renders
+ * as a `<conversation-checkpoint>` containing only empty text, still far smaller than a generated summary.
  */
-const EMPTY_CHECKPOINT = `## Objective
-- (none)
-
-## Requirements
-- (none)
-
-## Decisions
-- (none)
-
-## Work State
-### Completed
-- (none)
-
-### Active
-- (none)
-
-### Blocked
-- (none)
-
-## Next Move
-1. (none)
-
-## Relevant Files
-- (none)
-
-## Important Context
-- (none)`
+const COLD_REPLAY = { summary: "", native: { messages: [] } }
 
 /**
  * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
@@ -691,8 +668,8 @@ export default Plugin.define({
       addCommand("goal-loop", LOOP_DESCRIPTION, true)
 
       // Same-session context reset. The host still performs a real compaction (so prior messages leave the model
-      // request), but the compaction hook below replaces the generated summary with EMPTY_CHECKPOINT. No new session
-      // is created, so the session ID, its files and its history on disk all survive.
+      // request), but the compaction hook below installs an empty native replay window. No new session is created,
+      // so the session ID, its files and its history on disk all survive; only the model-visible context is cleared.
       editor.add({
         name: "reset-context",
         description: "Drop this session's context in place, keeping the same session ID",
@@ -709,7 +686,7 @@ export default Plugin.define({
             kind: "compact",
             level: "info",
             title: "goal-loop",
-            message: "Context reset. Set compaction.keep.tokens to 0 to also drop the retained tail.",
+            message: "Context reset. Same session ID; the next turn starts with no conversation history.",
           })
         },
       })
@@ -718,10 +695,11 @@ export default Plugin.define({
     // ---- hooks
     // OpenCode's own compaction prompt always summarizes the conversation, so an instruction from the user to carry
     // nothing over cannot change its output. /reset-context marks the session; setting `result` here makes the host
-    // skip the summary model and store EMPTY_CHECKPOINT verbatim. Only a marked session is affected, once.
+    // skip the summary model and store COLD_REPLAY instead. Its empty native window replays as zero messages, which
+    // is what makes the next turn look like a cold session start. Only a marked session is affected, once.
     await ctx.session.hook("compaction", (event) => {
       if (!resetPending.delete(event.sessionID)) return
-      event.result = { summary: EMPTY_CHECKPOINT }
+      event.result = COLD_REPLAY as typeof event.result
     })
     // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
     // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
