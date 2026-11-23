@@ -5584,6 +5584,31 @@
       "submittedAt": "2026-11-23T01:16:22Z",
       "mergedAt": "2026-11-23T01:18:19Z",
       "mergedInto": "dev"
+    },
+    "failure-normalize-memo": {
+      "agent": "build-agent",
+      "paths": "src/core/failure-signature.ts,test/failure-signature.test.ts",
+      "branch": "wt/failure-normalize-memo",
+      "worktree": "worktrees/wt-failure-normalize-memo",
+      "status": "submitted",
+      "createdAt": "2026-11-23T01:28:54Z",
+      "submittedAt": "2026-11-23T01:28:54Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T01:28:54Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ]
+    },
+    "backlog-regex-benchmark": {
+      "agent": "loop-worker",
+      "paths": "docs/improvement-backlog.json",
+      "branch": "wt/backlog-regex-benchmark",
+      "worktree": "worktrees/wt-backlog-regex-benchmark",
+      "status": "done",
+      "createdAt": "2026-11-23T01:25:34Z",
+      "submittedAt": "2026-11-23T01:27:32Z",
+      "mergedAt": "2026-11-23T01:29:30Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
