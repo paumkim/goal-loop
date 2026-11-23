@@ -1733,10 +1733,39 @@ do_doctor() {
   need_jq
   ensure_state
   read_config
-  local fails=0
-  say_ok()   { printf 'ok   %s\n' "$1"; }
-  say_warn() { printf 'warn %s\n' "$1"; }
-  say_fail() { printf 'FAIL %s\n' "$1"; fails=$((fails+1)); }
+  local fails=0 as_json=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --help|-h)
+        printf 'usage: coordinator doctor [--json]\n'
+        printf '\n  --json  emit one machine-readable object: {ok, failures, checks:[{level,message}]}\n'
+        return 0 ;;
+      --json)
+        as_json=1; shift ;;
+      -*)
+        printf 'error: unknown flag %s\n' "$1" >&2; return 2 ;;
+      *)
+        printf 'error: unexpected argument %s\n' "$1" >&2; return 2 ;;
+    esac
+  done
+  # One record per check. Human mode prints each line as it is produced; JSON mode
+  # buffers the same records into a single object so stdout stays machine-readable.
+  local -a CHECKS=()
+  emit_check() {
+    local level="$1" message="$2" json
+    json=$(jq -nc --arg level "$level" --arg message "$message" '{level:$level,message:$message}')
+    CHECKS+=("$json")
+    if [ "$as_json" -eq 0 ]; then
+      case "$level" in
+        ok)   printf 'ok   %s\n' "$message" ;;
+        warn) printf 'warn %s\n' "$message" ;;
+        fail) printf 'FAIL %s\n' "$message" ;;
+      esac
+    fi
+  }
+  say_ok()   { emit_check ok "$1"; }
+  say_warn() { emit_check warn "$1"; }
+  say_fail() { emit_check fail "$1"; fails=$((fails+1)); }
 
   # 1. main checkout on dev
   local cur_main
@@ -1817,7 +1846,15 @@ do_doctor() {
     say_ok "no merge lock held"
   fi
 
-  printf 'doctor: %s failure(s)\n' "$fails"
+  if [ "$as_json" -eq 1 ]; then
+    local checks_json ok_json
+    checks_json=$(printf '%s\n' "${CHECKS[@]}" | jq -sc '.')
+    if [ "$fails" -eq 0 ]; then ok_json=true; else ok_json=false; fi
+    jq -nc --argjson ok "$ok_json" --argjson failures "$fails" --argjson checks "$checks_json" \
+      '{ok:$ok, failures:$failures, checks:$checks}'
+  else
+    printf 'doctor: %s failure(s)\n' "$fails"
+  fi
   [ "$fails" -eq 0 ]
 }
 
@@ -1923,7 +1960,7 @@ show_help() {
   printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
   printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
   printf '  migrate-worktree-dir [--dry-run] [--with-live-leases]  move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
-  printf '  doctor                                              health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock\n'
+  printf '  doctor [--json]                                     health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock; --json emits {ok,failures,checks}\n'
 }
 
 main() {

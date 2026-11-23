@@ -376,6 +376,39 @@ describe("coordinator release", () => {
     expect(doc.status).toBe(0)
     expect(doc.stdout).not.toContain("done lease idle-3")
   })
+
+  test("doctor --json emits one machine-readable object in the healthy case", () => {
+    setup("true")
+    const doc = run(dir, ["doctor", "--json"])
+    expect(doc.status).toBe(0)
+    // stdout is exactly one JSON value: no human lines mixed in.
+    const parsed = JSON.parse(doc.stdout)
+    expect(parsed.ok).toBe(true)
+    expect(parsed.failures).toBe(0)
+    expect(Array.isArray(parsed.checks)).toBe(true)
+    expect(parsed.checks.length).toBeGreaterThan(0)
+    for (const check of parsed.checks) {
+      expect(["ok", "warn", "fail"]).toContain(check.level)
+      expect(typeof check.message).toBe("string")
+      expect(check.message.length).toBeGreaterThan(0)
+    }
+    expect(parsed.checks.some((c: { level: string }) => c.level === "fail")).toBe(false)
+  })
+
+  test("doctor --json reflects a failing check and keeps the non-zero exit", () => {
+    setup("true")
+    // A live lease whose worktree was removed is a doctor failure ("has no worktree").
+    expect(run(dir, ["claim", "ghost-json", "--agent", "t", "--paths", "."]).status).toBe(0)
+    git(dir, ["worktree", "remove", join(dir, "worktree", "wt-ghost-json")])
+    const doc = run(dir, ["doctor", "--json"])
+    expect(doc.status).toBe(1)
+    const parsed = JSON.parse(doc.stdout)
+    expect(parsed.ok).toBe(false)
+    expect(parsed.failures).toBeGreaterThan(0)
+    const fails = parsed.checks.filter((c: { level: string }) => c.level === "fail")
+    expect(fails.length).toBe(parsed.failures)
+    expect(fails.some((c: { message: string }) => c.message.includes("has no worktree"))).toBe(true)
+  })
 })
 
 describe("coordinator help discoverability", () => {
@@ -385,5 +418,13 @@ describe("coordinator help discoverability", () => {
     expect(help.status).toBe(0)
     expect(help.stdout).toContain("merge-next [<slug>|--target <slug>] [--review]")
     expect(help.stdout).toContain("--target names a lease from the main repo")
+  })
+
+  test("top-level help advertises doctor --json", () => {
+    setup("true")
+    const help = run(dir, ["--help"])
+    expect(help.status).toBe(0)
+    expect(help.stdout).toContain("doctor [--json]")
+    expect(help.stdout).toContain("--json emits {ok,failures,checks}")
   })
 })
