@@ -6121,6 +6121,25 @@
       "submittedAt": "2026-11-23T07:49:12Z",
       "mergedAt": "2026-11-23T07:51:22Z",
       "mergedInto": "dev"
+    },
+    "compaction-landing-doc-truth": {
+      "agent": "orchestrator",
+      "paths": "docs,SPEC.md",
+      "branch": "wt/compaction-landing-doc-truth",
+      "worktree": "worktree/wt-compaction-landing-doc-truth",
+      "status": "done",
+      "createdAt": "2026-11-23T08:05:09Z",
+      "submittedAt": "2026-11-23T08:07:55Z",
+      "mergedAt": "2026-11-23T08:14:31Z",
+      "mergedInto": "dev"
+    },
+    "parent-guidance-subagents": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,test/core.test.ts,test/opencode-cli.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/parent-guidance-subagents",
+      "worktree": "worktree/wt-parent-guidance-subagents",
+      "status": "claimed",
+      "createdAt": "2026-11-23T08:12:30Z"
     }
   },
   "mergeLock": null,
