@@ -1,3 +1,4 @@
+import { memoizeBounded } from "./format.ts"
 import { parseVerdict } from "./verdict.ts"
 
 /**
@@ -121,15 +122,7 @@ function isForeignVerdict(body: string): boolean {
  * same armed condition is echoed by many verdicts in a session. A bounded memo keyed by the raw text
  * turns a repeat into one lookup. Unbounded growth is impossible (the map is capped).
  */
-const ECHO_CACHE_LIMIT = 2048
-const echoCache = new Map<string, string>()
-function normalizeEcho(text: string): string {
-  const hit = echoCache.get(text)
-  if (hit !== undefined) return hit
-  const result = text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
-  if (echoCache.size < ECHO_CACHE_LIMIT) echoCache.set(text, result)
-  return result
-}
+const normalizeEcho = memoizeBounded((text: string): string => text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 2048)
 
 /**
  * True when a report's echoed condition still matches the armed one. A free-tier judge sometimes replays a verdict
