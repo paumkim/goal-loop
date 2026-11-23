@@ -516,7 +516,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2316 -->
+<!-- spec-check files=143 tests=2317 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1366,17 +1366,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCIV — one finite-or-zero clamp for the chrome renderers (2026-11-23)
-
-The `Number.isFinite(n) ? Math.max(0, n) : 0` clamp was spelled out three times in `history.ts`
-(renderBar, barCaption, contextMeter) and once as a private `nonNegative` in `attestation.ts`. Added
-`format.ts · nonNegative` and reduced all four sites to call it. A non-finite or negative count, size
-or clock has always painted nothing; the shared helper preserves that exactly. Differential test
-pins it against the former inline expression across finite, negative, NaN and both infinities.
-Focused suites (history, tui-hud, dossier-attest) 294 pass / 0 fail, 22854 expect() calls;
-`tsc --noEmit` clean. Consolidation/taste change, not a speed claim. Marker +1 test.
-
-
 ## Workstream CXCV — the live pill counts evaluated turns (2026-11-23)
 
 The ambient pill read "1 turn" while the detail card beside it read "14x not_met in a row". The pill's
@@ -1593,6 +1582,14 @@ The bounded completion condition from CXCVII reached the session/independent jud
 One shared line, `VERIFIER_CLOSES_COMPLETION` in `src/core/prompts.ts`, now states that a configured verifier (or required check) exiting 0 at the current HEAD with a clean tracked tree conclusively proves the check clause, and that speculative polish/speed/taste is not a gap. It is embedded in `EVALUATOR_SYSTEM_PROMPT` (the single instruction source for every live verdict), in `nativeEvaluationRequest`, and in `COMPLETION_CONDITION` (so the planner and the opt-in independent judge agree); the rubric's adversarial self-check is bounded to gaps the completion condition counts. The `met` verdict still flows through the unchanged `verifyMet` matrix gate, which fails closed for failing, missing, unscoped or timed-out checks and for the broad generic-only coverage case. No gate, test or generated artifact was weakened; `dist/` is untouched because no TUI source changed.
 
 Verification: `test/core.test.ts` pins the line in both judge prompts and in the native request (including the `<2,000`-char loop-request budget); `test/loop.test.ts` pins it in the planner prompt. Focused `core`/`loop` suite 359 pass / 0 fail, 178198 expect() calls, after rebasing this work onto the merged HUD-counter fix. Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check (marker re-counted to 2,316 tests). Workstream CXCIII rotated into the archive to keep the live recent window at 15.
+
+## Workstream CCIX — end the turn safely while background subagents run (parent-guidance-subagents) (2026-11-23)
+
+A parent under a goal-loop, told to "briefly tell the user what you launched and end your response", spent several turns second-guessing itself: the shared worker handoff said a separate evaluator judges the condition "after your turn", which read as "ending the turn now triggers a verdict while my subagents are still running". The runtime already handles this — `resolveBackgroundAndEvaluate` defers the verdict while `background.busy()` reports active sessions or shells, and `onBackgroundDrained` re-runs it once they finish — but the guidance contradicted the harness contract that injects subagent reports back to wake the parent.
+
+`DELEGATE_VERDICT` in `src/core/prompts.ts` now keeps the no-judge rule, drops the "after your turn" timing claim, and adds one sentence: background subagents are safe to leave running because goal-loop detects active sessions and defers its verdict (no "not met" nudge) and the harness injects their results back to wake the parent. As the single closing block of every worker-facing prompt, that reaches kickoffs, continuations, retries, check-ins, loop arms and the system reminder at once. No runtime, gate or generated file changed.
+
+Verification: `test/core.test.ts` replaces the old wording pin with a negative one and adds a regression asserting the subagent guidance and its presence across four worker-facing prompts; `test/opencode-cli.test.ts` pins the new closing block. Focused `core`/`opencode-cli` suite green. Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check (marker re-counted). Workstream CXCIV rotated into the archive to keep the live recent window at 15.
 
 ## Historical workstreams
 
