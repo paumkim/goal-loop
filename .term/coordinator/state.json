@@ -6457,6 +6457,17 @@
       "submittedAt": "2026-11-23T15:05:53Z",
       "mergedAt": "2026-11-23T15:08:08Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-dossier-fence": {
+      "agent": "orchestrator",
+      "paths": "src/core/dossier.ts,test/dossier.test.ts,SPEC.md,docs/**,dist/tui.js",
+      "branch": "wt/eod-cleanup-dossier-fence",
+      "worktree": "worktree/wt-eod-cleanup-dossier-fence",
+      "status": "done",
+      "createdAt": "2026-11-23T15:15:45Z",
+      "submittedAt": "2026-11-23T15:15:52Z",
+      "mergedAt": "2026-11-23T15:18:07Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
