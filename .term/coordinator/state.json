@@ -6187,8 +6187,11 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/lease-first-judge-enforcement",
       "worktree": "worktree/wt-lease-first-judge-enforcement",
-      "status": "claimed",
-      "createdAt": "2026-11-23T08:39:46Z"
+      "status": "done",
+      "createdAt": "2026-11-23T08:39:46Z",
+      "submittedAt": "2026-11-23T08:43:19Z",
+      "mergedAt": "2026-11-23T08:53:56Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
