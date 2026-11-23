@@ -2,7 +2,7 @@ import { OpenCode } from "@opencode/client"
 import { spawn } from "node:child_process"
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { logPath, money, short } from "./util.ts"
+import { logPath, money, short, sleep } from "./util.ts"
 import { SUCCESS_STATUS, TERMINAL_STATUSES } from "./defaults.ts"
 import { GoalRpc } from "./goal-rpc.ts"
 import type { Config, TaskResult } from "./types.ts"
@@ -122,7 +122,6 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
   process.once("SIGTERM", stopSignal)
   process.once("SIGINT", stopSignal)
 
-  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
   let last: unknown
   let reason = ""
   let budgetBreach = ""
