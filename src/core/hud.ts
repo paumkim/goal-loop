@@ -5,7 +5,7 @@
  * `src/hud-card.tsx` (card), `src/tui-history.tsx` (dialog sections) and `src/tui.tsx` (wiring).
  */
 import { COMPACT_MISS_CAP, isLive, completedIterationCount, totalVerdictCount, type GoalSnapshot, type LoopCompactState } from "./types.ts"
-import { cellWidth, formatDurationCoarse, truncate } from "./format.ts"
+import { cellWidth, formatDurationCoarse, nonNegative, truncate } from "./format.ts"
 import { renderPips, verdictStreak } from "./history.ts"
 
 /**
@@ -32,7 +32,9 @@ export const isRetryStuck = (goal: GoalSnapshot): boolean => goal.retries >= RET
  * `turns` present) honest. Pure; the snapshot carries the trail, so the count moves on every changed event.
  */
 export const currentTurnCount = (goal: GoalSnapshot): number =>
-  Math.max(totalVerdictCount(goal), goal.turns)
+  // A corrupt/non-finite legacy turns counter must not make the pill read "NaN turns"; the verdict
+  // trail stays authoritative and the clamp is a no-op for every finite counter.
+  Math.max(totalVerdictCount(goal), nonNegative(goal.turns))
 
 interface PillModel {
   readonly text: string
@@ -570,7 +572,7 @@ export const remediationFor = (goal: GoalSnapshot): Remediation | undefined => {
   if (goal.status === "paused") {
     const cause = goal.pauseCause
     if (cause === "cap") return { tone: "warning", text: `turn cap reached · /goal clear or set a new goal - a message will not extend it` }
-    if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns · send a message to resume, or /goal clear` }
+    if (cause === "stall") return { tone: "warning", text: `no tool use for ${Math.floor(nonNegative(goal.stall))} turns · send a message to resume, or /goal clear` }
     if (cause === "repeated_failure") return { tone: "warning", text: `repeated not_met failure signature · rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` }
     if (cause === "usage_limit") return { tone: "warning", text: `free usage limit on the judge · set a separate evaluator.model or wait for the quota window, then send a message to resume (or /goal clear)` }
     if (cause === "user") return { tone: "warning", text: `interrupted · send a message to resume` }

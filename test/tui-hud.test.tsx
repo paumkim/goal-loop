@@ -124,6 +124,13 @@ describe("pillModel", () => {
     expect(text).not.toMatch(/ · 1 turn\b/)
   })
 
+  test("a non-finite legacy turns counter falls back to the verdict trail, never NaN", () => {
+    for (const turns of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(currentTurnCount(loopedGoal({ turns, history: verdicts(["not_met", "not_met"]) }))).toBe(2)
+      expect(currentTurnCount(loopedGoal({ turns, history: [] }))).toBe(0)
+    }
+  })
+
   test("the evaluated count stays stable across an in-flight turn, pause, and terminal settle", () => {
     // A turn in flight is not evaluated yet: one landed verdict stays one.
     const inFlight = loopedGoal({ turns: 1, history: verdicts(["not_met"]), evaluating: true })
@@ -449,6 +456,14 @@ describe("remediationFor paused", () => {
     expect(fix?.tone).toBe("warning")
     expect(fix?.text).toContain("no tool use for 4 turns")
     expect(fix?.text).toContain("send a message to resume")
+  })
+
+  test("a non-finite stall counter renders 0 turns, never NaN/Infinity", () => {
+    for (const stall of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      const fix = remediationFor(loopedGoal({ status: "paused", pauseCause: "stall", stall }))
+      expect(fix?.text).toContain("no tool use for 0 turns")
+      expect(fix?.text).not.toMatch(/NaN|Infinity/)
+    }
   })
 
   test("a user-interrupted pause gets the resume remedy", () => {

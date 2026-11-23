@@ -2113,7 +2113,7 @@ var matchLabel = (count) => {
 // src/core/hud.ts
 var RETRY_HOT_THRESHOLD = 3;
 var isRetryStuck = (goal) => goal.retries >= RETRY_HOT_THRESHOLD;
-var currentTurnCount = (goal) => Math.max(totalVerdictCount(goal), goal.turns);
+var currentTurnCount = (goal) => Math.max(totalVerdictCount(goal), nonNegative(goal.turns));
 var isCompactHot = (goal) => {
   const pending = goal.loopCompact;
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
@@ -2339,7 +2339,7 @@ var remediationFor = (goal) => {
     if (cause === "cap")
       return { tone: "warning", text: `turn cap reached \xB7 /goal clear or set a new goal - a message will not extend it` };
     if (cause === "stall")
-      return { tone: "warning", text: `no tool use for ${Math.max(0, Math.floor(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
+      return { tone: "warning", text: `no tool use for ${Math.floor(nonNegative(goal.stall))} turns \xB7 send a message to resume, or /goal clear` };
     if (cause === "repeated_failure")
       return { tone: "warning", text: `repeated not_met failure signature \xB7 rotate strategy, narrow scope, or produce a diagnostic artifact, then send a message to resume (or /goal clear)` };
     if (cause === "usage_limit")
