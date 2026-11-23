@@ -34,7 +34,20 @@ const CLOSE_RE = new RegExp(String.raw`</${TAG_NAME}>`, "gi")
 const MAX_PASSES = 8
 
 /** Whitespace/punctuation-insensitive probe for the prefix test. */
-const probe = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")
+/**
+ * The prefix comparison runs a lowercase + Unicode fold on both halves of a message on every pass;
+ * the same halves recur when the filter is applied to streamed/duplicated reasoning. `probe` is pure,
+ * so a bounded memo keyed by the raw half turns a repeat into one lookup.
+ */
+const PROBE_CACHE_LIMIT = 2048
+const probeCache = new Map<string, string>()
+const probe = (value: string): string => {
+  const hit = probeCache.get(value)
+  if (hit !== undefined) return hit
+  const result = value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "")
+  if (probeCache.size < PROBE_CACHE_LIMIT) probeCache.set(value, result)
+  return result
+}
 
 export function stripReasoningControl(text: string): string {
   let current = text
