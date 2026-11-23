@@ -5070,9 +5070,11 @@
       "paths": "src/tui-history.tsx,test/tui-render.test.tsx,test/__snapshots__/tui-snapshots.test.tsx.snap,dist/tui.js",
       "branch": "wt/why-fullwidth-final",
       "worktree": "worktrees/wt-why-fullwidth-final",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-22T20:31:54Z",
-      "submittedAt": "2026-11-22T20:39:23Z"
+      "submittedAt": "2026-11-22T20:39:23Z",
+      "mergedAt": "2026-11-23T02:02:20Z",
+      "mergedInto": "dev"
     },
     "log-quoting-count-restore": {
       "agent": "build-agent",
