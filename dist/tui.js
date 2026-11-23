@@ -194,6 +194,7 @@ function memoizeBounded(fn, limit) {
     return result;
   };
 }
+var normalizeConditionText = memoizeBounded((value) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 4096);
 var cellWidth = memoizeBounded((text) => stringWidth(text), 4096);
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
 function wrapLines(text, width) {
