@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2283 -->
+<!-- spec-check files=143 tests=2285 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11247,3 +11247,11 @@ Measured (64-entry map, best of 200 unless noted):
 `/tmp/opencode/bench-drop.ts`. New regression tests pin reference identity at/under the cap and
 `dropSessions`' keep/duplicate-id semantics. Focused suite 43 pass / 0 fail, 153 expect() calls;
 `tsc --noEmit` clean. Marker +2 tests; no shipped-file change.
+
+## Workstream CXCVII — a bounded, objective completion condition for the loop (2026-11-23)
+
+The loop never terminated: the planner's `LOOP_COMPLETE` clause asked whether "nothing meaningful remains to improve toward the objective" and "every meaningful improvement ... is already complete", and the evaluator's `next: none` clause asked whether the verdict was met "with no gap". None of those has a terminal definition — there is always another conceivable polish/speed/taste tweak — so a fully green build (all objective gates passing) still produced a `next:` action, which the planner carried forward as a fresh condition and re-armed the loop.
+
+`src/core/prompts.ts` now defines `COMPLETION_CONDITION` once and embeds it in both `OUTPUT` (evaluator) and `NEXT_GOAL_ASK` (planner). Completion is a finite four-item checklist, each item checkable from fresh visible output at current HEAD: (1) every required check and verifier command passes with exit 0 and zero failures; (2) the tracked tree is clean (`git status --short` shows no uncommitted source changes); (3) no active or submitted lease requires work ABSENT at HEAD and the merge queue has no pending entry; (4) the latest met verdict's `next:` pointer names no concrete gap whose required work is ABSENT at HEAD. If any item is unproven or fails, the loop is not complete and the planner arms the highest-priority unmet item; speculative polish/speed/taste preferences are not gaps and never justify re-arming. "No gap" now means exactly those four checks pass, not that the repository is perfect. The old subjective clauses are removed from both prompts; the structured `next:` form and the `next: none` token are unchanged, so verdict parsing and the forward-pointer/novelty gates stay compatible. This mirrors the bounded `<condition>` block the `/goal` path already uses. No controller, verdict-parsing, or API change.
+
+Verification: focused `core`/`loop`/`evaluator` 399 pass / 0 fail, 178303 expect() calls, including two regressions that pin the bounded checklist in both evaluator judges and both planner paths and forbid the removed wording. Full `bun run check` green with `files=143 tests=2283` (+2 tests, none weakened).

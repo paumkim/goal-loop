@@ -508,6 +508,24 @@ const RULES = [
 ]
 
 /**
+ * The loop's terminal condition, stated once so the evaluator's `next: none` and the planner's
+ * `LOOP_COMPLETE` are decided by the same bounded test. The former wording ("nothing meaningful
+ * remains to improve", "every meaningful improvement already complete", "no gap") had no terminal
+ * definition: there is always another conceivable polish/speed/taste tweak, so even a fully green
+ * build kept re-arming. Completion is now a finite checklist, every item checkable from fresh visible
+ * output at current HEAD — the same discipline the `/goal` path uses for its `<condition>` block.
+ * Shared as one constant so the two prompts cannot drift apart.
+ */
+const COMPLETION_CONDITION = [
+  `Bounded completion condition — the loop is complete only when ALL of these hold at current HEAD, each shown by fresh visible output:`,
+  `  1. Every required check and verifier command for the goal passes with exit 0 and zero failures.`,
+  `  2. The tracked tree is clean (git status --short shows no uncommitted source changes).`,
+  `  3. No active or submitted lease requires work that is ABSENT at HEAD, and the merge queue has no pending entry.`,
+  `  4. The latest met verdict's "next:" pointer names no concrete gap whose required work is ABSENT at HEAD.`,
+  `If any item is unproven or fails, the loop is NOT complete: arm the highest-priority unmet item. Speculative polish, speed or taste preferences are not gaps and never justify re-arming. "No gap" means exactly these four checks pass, not that the repository is perfect.`,
+].join("\n")
+
+/**
  * The rubric, with the commit rule folded in.
  *
  * The evaluator judges from the conversation alone, so the commit rule has to be spelled out here as evidence it
@@ -553,7 +571,8 @@ const OUTPUT = [
   `(b) Gaps/flaws/risks found, or "none material".`,
   `(c) Repeated-failure/escalation note if any (same missing evidence, same failing gate, same flaky/error pattern, or same unaddressed gap seen in recent visible verdicts/reasons/gate output); if repeating, state required escalation (narrow scope, produce a diagnostic artifact, or mark blocked with blocker). Otherwise state "none".`,
   ``,
-  `Then next actions: when not_met, or when met with improvements remaining, list 1-3 in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; when met with no gap, write "next: none".`,
+  `Then next actions: when not_met, list 1-3 concrete gaps in this exact form — "next:" then "1. [priority/risk] <exact improvement> — evidence gap/finding — required proof to close it."; each gap must name required work that is ABSENT at HEAD. When met, write "next: none" — emit next actions only for a concrete absent-work gap, never for subjective polish, speed or taste preferences.`,
+  COMPLETION_CONDITION,
   `Never invent evidence.`,
 ].join("\n")
 
@@ -762,7 +781,7 @@ export function summarizeIndependently(input: LoopSummaryInput, transcript: stri
 const NEXT_GOAL_ASK = [
   `Reply with EXACTLY ONE of these, and nothing else:`,
   `1. A single goal condition for the next iteration: concrete, verifiable, imperative, under 300 characters, checkable from visible evidence (command output, files, tests, commits). One line, no quotes, no preamble.`,
-  `2. The exact token LOOP_COMPLETE — only if nothing meaningful remains to improve toward the objective.`,
+  `2. The exact token LOOP_COMPLETE — only when every item of the bounded completion condition below holds at current HEAD.`,
   `You are the loop's defensive auditor, not just a planner. Audit in this order and arm the highest entry on which work is genuinely ABSENT at HEAD:`,
   `a. Failing, weakened or unwired gates (tests skipped, deleted or relaxed; checks detached from the build) — broken truth outranks all cosmetic work.`,
   `b. Stale or contradictory state (docs or SPEC vs the tree, artifacts older than their source, half-landed work, uncommitted leftovers).`,
@@ -771,8 +790,9 @@ const NEXT_GOAL_ASK = [
   `e. Speed and friction (repeated expensive work, slow checks, redundant steps).`,
   `Before proposing, audit the candidate against CURRENT HEAD via the completed history above: enumerate what it would require, and only propose a condition whose required work is ABSENT at HEAD.`,
   `Carry forward any "next:" hint the evaluator attached to the latest met verdict — it is a first-class candidate, subject to the same ABSENT-at-HEAD audit.`,
-  `If every meaningful improvement under the objective is already complete, reply LOOP_COMPLETE. Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored).`,
-  `Pick concrete, finishable goals over open-ended polish. Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+  COMPLETION_CONDITION,
+  `Do not propose a near-duplicate of a completed condition (case/punctuation/whitespace/wording ignored). Do not restate the previous condition. Do not invent new objectives beyond the constant objective above.`,
+  `Pick concrete, finishable goals whose required work is ABSENT at HEAD; do not re-arm on speculative polish, speed or taste preferences. A green build with no absent-work gap is done — reply LOOP_COMPLETE, not another polish condition.`,
 ]
 
 /** Prompt for a session-mode next-condition generator child. */

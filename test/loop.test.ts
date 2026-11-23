@@ -1410,6 +1410,26 @@ describe("loop prompts", () => {
     }
   })
 
+  test("the next-goal planner uses a bounded, objective completion condition, not 'nothing meaningful remains'", () => {
+    for (const text of [
+      Prompt.nextGoalInSession({ objective: "o", history: [entry], latestSummary: "s" }),
+      Prompt.nextGoalIndependently({ objective: "o", history: [entry], latestSummary: "s" }),
+    ]) {
+      expect(text).toContain("Bounded completion condition")
+      expect(text).toContain("Every required check and verifier command for the goal passes with exit 0 and zero failures")
+      expect(text).toContain("git status --short shows no uncommitted source changes")
+      expect(text).toContain("No active or submitted lease requires work that is ABSENT at HEAD")
+      expect(text).toContain("names no concrete gap whose required work is ABSENT at HEAD")
+      expect(text).toContain("Speculative polish, speed or taste preferences are not gaps")
+      expect(text).toContain("A green build with no absent-work gap is done")
+      expect(text).toContain("LOOP_COMPLETE")
+      // The subjective terminal test is gone: it could never be satisfied while any tweak was imaginable.
+      expect(text).not.toContain("nothing meaningful remains to improve")
+      expect(text).not.toContain("every meaningful improvement under the objective is already complete")
+      expect(text).not.toContain("open-ended polish")
+    }
+  })
+
   test("isLoopComplete tolerates quotes and case", () => {
     expect(Prompt.isLoopComplete("LOOP_COMPLETE")).toBe(true)
     expect(Prompt.isLoopComplete('  "loop_complete"  ')).toBe(true)
