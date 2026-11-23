@@ -203,14 +203,24 @@ export function formatStatus(record: GoalRecord, now: number, spend: UsageSnapsh
  * JSON.stringify key is collision-free even when the text or ellipsis contains separators.
  */
 const TRUNCATE_CACHE_LIMIT = 4096
-const truncateCache = new Map<string, string>()
+// Nested maps keyed by (max, ellipsis, text) avoid JSON.stringify-ing the full text on every hit.
+// A string key's hash is cached by the engine, so repeated lookups of long dossier lines are pure
+// map walks; the bound is tracked separately to preserve the original cache cap.
+const truncateCache = new Map<number, Map<string, Map<string, string>>>()
+let truncateCacheEntries = 0
 export function truncate(text: string, max: number, ellipsis: string = "\u2026"): string {
   if (max <= 0) return ""
-  const key = JSON.stringify([max, ellipsis, text])
-  const hit = truncateCache.get(key)
+  const hit = truncateCache.get(max)?.get(ellipsis)?.get(text)
   if (hit !== undefined) return hit
   const result = truncateUncached(text, max, ellipsis)
-  if (truncateCache.size < TRUNCATE_CACHE_LIMIT) truncateCache.set(key, result)
+  if (truncateCacheEntries < TRUNCATE_CACHE_LIMIT) {
+    let byEllipsis = truncateCache.get(max)
+    if (!byEllipsis) { byEllipsis = new Map(); truncateCache.set(max, byEllipsis) }
+    let byText = byEllipsis.get(ellipsis)
+    if (!byText) { byText = new Map(); byEllipsis.set(ellipsis, byText) }
+    byText.set(text, result)
+    truncateCacheEntries++
+  }
   return result
 }
 
