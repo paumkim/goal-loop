@@ -138,6 +138,69 @@ export function strategyForRepeat(detected: RepeatedFailureSignature, threshold 
   return { index, strategy: STRATEGY_ROTATION[index]! }
 }
 
+/**
+ * Universal no-progress recognition. A stuck goal is not only the same signature three times: alternating
+ * failures, zero-tool reporting turns, retry streaks, stalls, and loop iterations with no work all mean the
+ * current approach is not moving. One recognizer reads every signal so the loop escalates proactively for
+ * every stuck shape, not one particular signature. The `diverse_failure` signal is the key generalization:
+ * three not_met turns with *different* signatures are still stuck and still get a strategy rotation.
+ */
+export const NO_PROGRESS_ZERO_TOOL_THRESHOLD = 2
+
+export type NoProgressSignal = "repeated_signature" | "diverse_failure" | "zero_tool_turn" | "retry_streak" | "stall" | "loop_not_progress"
+
+export interface NoProgressRecognition extends RepeatedFailureSignature {
+  readonly signals: readonly NoProgressSignal[]
+}
+
+export function recognizeNoProgress(input: {
+  readonly info: FailureSignatureInfo
+  readonly history: readonly Pick<VerdictEntry, "verdict" | "reason" | "verification" | "verify" | "toolCalls">[]
+  readonly tools: number
+  readonly retries: number
+  readonly stall: number
+  readonly loopNotProgress: number
+}): NoProgressRecognition | undefined {
+  if (input.info.verdict !== "not_met") return undefined
+  const sig = failureSignatureOf(input.info)
+  const kind = sig?.kind ?? "reason"
+  const baseSummary = summarizeFailureSignature(input.info, kind)
+
+  // Walk the trailing not_met run once, accumulating both the identical-signature run and the all-failures run.
+  let notMetRun = 1
+  let sameSigRun = 1
+  let zeroToolRun = input.tools === 0 ? 1 : 0
+  let zeroBroken = input.tools !== 0
+  for (let i = input.history.length - 1; i >= 0; i--) {
+    const entry = input.history[i]!
+    if (entry.verdict !== "not_met") break
+    notMetRun++
+    if (sig && failureSignatureOf(entry)?.key === sig.key) sameSigRun++
+    if (!zeroBroken) {
+      if (entry.toolCalls === 0) zeroToolRun++
+      else zeroBroken = true
+    }
+  }
+
+  const signals: NoProgressSignal[] = []
+  if (sameSigRun >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("repeated_signature")
+  if (notMetRun >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("diverse_failure")
+  if (zeroToolRun >= NO_PROGRESS_ZERO_TOOL_THRESHOLD) signals.push("zero_tool_turn")
+  if (input.retries >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("retry_streak")
+  if (input.stall >= FAILURE_SIGNATURE_REPEAT_THRESHOLD) signals.push("stall")
+  if (input.loopNotProgress >= 2) signals.push("loop_not_progress")
+  if (!signals.length) return undefined
+
+  const streak = Math.max(sameSigRun, notMetRun, zeroToolRun, input.retries, input.stall, input.loopNotProgress)
+  return {
+    signature: sig?.key ?? `reason:${normalize(input.info.reason) || "empty"}`,
+    count: streak,
+    kind,
+    summary: `${baseSummary} · stuck across ${notMetRun} not_met turn${notMetRun === 1 ? "" : "s"} (${signals.join(" + ")})`,
+    signals,
+  }
+}
+
 interface FailingCheckDiagnostic {
   readonly id?: string
   readonly type?: string

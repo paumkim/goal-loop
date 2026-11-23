@@ -660,6 +660,7 @@ describe("proactive strategy escalation", () => {
     kind: "reason",
     summary: "repeated not_met gap: same missing evidence",
     strategy: "Narrow the scope to one clause",
+    signals: ["diverse_failure", "zero_tool_turn"],
     diagnostic: "/repo/.term/goal-loop/diagnostics/x.json",
   }
   test("carries the repeated-signature facts, the rotated strategy, and the diagnostic artifact", () => {
@@ -669,6 +670,7 @@ describe("proactive strategy escalation", () => {
     expect(text).toContain("Goal: split the spec")
     expect(text).toContain("Evaluator: same missing evidence")
     expect(text).toContain("Failure signature: repeated not_met gap: same missing evidence")
+    expect(text).toContain("Recognized no-progress signals: diverse_failure, zero_tool_turn")
     expect(text).toContain("Rotate strategy now: Narrow the scope to one clause")
     expect(text).toContain("Diagnostic artifact: /repo/.term/goal-loop/diagnostics/x.json")
     expect(text).toContain("do not stop or wait for a user message")
@@ -677,10 +679,11 @@ describe("proactive strategy escalation", () => {
     expect(text).toContain(DELEGATE_VERDICT)
   })
   test("omits optional artifact and learnings without breaking the wrapper", () => {
-    const text = strategyEscalation({ ...input, count: 4, diagnostic: undefined, reason: "" }, NO_COMMIT)
+    const text = strategyEscalation({ ...input, count: 4, diagnostic: undefined, signals: undefined, reason: "" }, NO_COMMIT)
     expect(text).toContain('count="4"')
     expect(text).toContain("Evaluator: No reason given.")
     expect(text).not.toContain("Diagnostic artifact:")
+    expect(text).not.toContain("Recognized no-progress signals:")
     expect(text).not.toContain("commit")
     expect(text.match(/<\/goal-strategy-escalation>/g)).toHaveLength(1)
   })

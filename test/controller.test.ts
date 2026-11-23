@@ -2071,7 +2071,7 @@ describe("repeated failure-signature escalation", () => {
     expect(new Set(steers).size).toBe(3)
   })
 
-  test("different failure signatures do not trigger escalation", async () => {
+  test("different failure signatures still trigger the universal diverse-failure escalation", async () => {
     const h = harness()
     await h.set("fix the failing tests")
     h.verdicts.push(
@@ -2087,7 +2087,11 @@ describe("repeated failure-signature escalation", () => {
     expect(goal.status).toBe("active")
     expect(goal.pauseCause).toBeUndefined()
     expect(h.calls.synthetic).toHaveLength(3)
-    expect(h.calls.synthetic.every((s) => !String(s.text).includes("<goal-strategy-escalation"))).toBe(true)
+    // Stuck is stuck even when each not_met names a different gap: one universal recognizer, not one signature.
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).toContain("Recognized no-progress signals: diverse_failure")
+    expect(steer.text).toContain("Rotate strategy now:")
   })
 
   test("a met verdict breaks a repeated failure streak", async () => {

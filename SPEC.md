@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2304 -->
+<!-- spec-check files=143 tests=2310 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1356,17 +1356,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXC — one status-to-answer cell across the record family (2026-11-23)
-
-The `status -> yes/no/unknown` cell was written six times: `statusCell` in `verify-record.ts`,
-`reach-record.ts` and `sign-record.ts`, plus `verifyCell`/`reachCell`/`signCell` in each of
-`dossier-attest.ts`, `dossier-review.ts` and `dossier-seal.ts`. Added `dossier.ts · recordStatusCell`,
-a pure generic mapping, and reduced all six sites to thin, typed wrappers. Outputs are unchanged:
-a new differential test pins the shared helper against all three former mappings across positive,
-negative, `unknown`, empty and stray statuses. Focused suites (dossier + attest + review + seal +
-the three record modules) 132 pass / 0 fail, 479 expect() calls; `tsc --noEmit` clean. This is a
-consolidation/taste change, not a speed change: the dossier build benchmark is flat within noise
-(`21.09 ms -> 22.38 ms / 50 builds`, best of 20). No shipped-file change; marker +1 test.
 ## Workstream CXCI — worktrees/ to worktree/ everywhere (worktree-dir-rename) (2026-11-23)
 
 Renamed the coordinator worktree directory from `worktrees/` to `worktree/` across the whole repo in one lease. `packages/coordinator/bin/coordinator` now defaults `WORKTREE_DIR` to `worktree` (config fallback too) and all previously hardcoded merge-worktree paths (`merge_wt`, `merge_wt_rel`, the merge parent `mkdir`, the post-merge health exclusion and `merge-abort`) derive from `$WORKTREE_DIR`. `src/core/git.ts`, `src/core/workflow.ts`, `src/core/types.ts`, the checked-in `.term/coordinator/config.json`, `.gitignore`, `scripts/spec-check.ts`, all coordinator/bootstrap/git/core/plugin/package-integrity test fixtures, AGENTS.md, docs/parallel-work.md, docs/core/index/install.html, README.md, MAINTAINER.md, RELEASE-CHECKLIST.md, the coordinator README and the prompt templates use the new name.
@@ -1560,6 +1549,27 @@ Verification: new regression in `test/failure-signature.test.ts` writes 12 escal
 3 of another and pins an independent oracle of exactly 2 files, the latest count/turn in the overwritten
 artifact, and path stability on repeat. Focused suite: 130 pass / 0 fail, 689 expect() calls. Full
 `bun run check` green after artifact regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CCV — one universal no-progress recognizer (universal-no-progress-recognition) (2026-11-23)
+
+CCIII's escalation still keyed on a single repeated *identical* failure signature, so alternating gaps —
+the "no evidence of work ... zero tool calls this turn" downgrade recurring beside other reasons — could
+keep a goal stuck without ever matching. The trigger is now one pure recognizer,
+`recognizeNoProgress()` in `src/core/failure-signature.ts`, which reads six independent signals in one pass:
+`repeated_signature`, `diverse_failure` (three not_met turns with *different* signatures), `zero_tool_turn`,
+`retry_streak`, `stall`, and `loop_not_progress`. Any signal produces one escalation; the streak is the max
+across signals, rotation keeps advancing, and every recognized signal is named in the steer
+("Recognized no-progress signals: ..."). The result is a single self-recognizing mechanism for every stuck
+shape instead of a special case per guard, and it still routes through the proactive, non-pausing path from
+CCIII — loops and plain goals alike. `detectRepeatedFailureSignature` remains the low-level primitive; the
+controller calls only the recognizer.
+
+Verification: six new pure regressions in `test/failure-signature.test.ts` use independent oracles for
+alternating signatures, dual signals, zero-tool turns below threshold, scalar retry/stall/loop signals,
+non-stuck states, and verification-kind parity; `test/controller.test.ts` now pins that different
+signatures produce a `diverse_failure` escalation instead of evading it; `test/core.test.ts` pins the
+visible signal list. Focused suite: 322 pass / 0 fail, 178078 expect() calls. Full `bun run check` green after
+artifact regeneration; marker re-counted, no shipped file added or removed.
 
 ## Historical workstreams
 

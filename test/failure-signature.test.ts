@@ -12,6 +12,7 @@ import {
   failureEscalationReason,
   failureSignatureOf,
   persistFailureDiagnosticArtifact,
+  recognizeNoProgress,
   strategyForRepeat,
   summarizeFailureSignature,
 } from "../src/core/failure-signature.ts"
@@ -436,5 +437,66 @@ describe("repeated failure diagnostic artifacts", () => {
     // Repeating the same session/signature returns the same path — the steer cites a stable artifact.
     expect(write("same gap", 15, 15, 1_700_000_000_000)).toBe(first)
     expect(await readdir(diagDir)).toHaveLength(2)
+  })
+})
+
+describe("recognizeNoProgress (universal stuck detection)", () => {
+  const base = { tools: 1, retries: 0, stall: 0, loopNotProgress: 0 }
+
+  test("alternating failure signatures are still recognized as stuck (diverse_failure)", () => {
+    // Independent oracle: three not_met turns with different reasons used to evade escalation entirely.
+    const history = [notMet("missing tests"), notMet("missing commit"), notMet("missing merge")]
+    const got = recognizeNoProgress({ info: notMet("missing type"), history, ...base })
+    expect(got).toBeDefined()
+    expect(got!.signals).toContain("diverse_failure")
+    expect(got!.signals).not.toContain("repeated_signature")
+    expect(got!.count).toBe(4)
+    expect(got!.summary).toContain("4 not_met turns")
+    expect(got!.summary).toContain("diverse_failure")
+  })
+
+  test("one recurring signature reports both repeated and diverse signals", () => {
+    const history = [notMet("same gap"), notMet("same gap")]
+    const got = recognizeNoProgress({ info: notMet("same gap"), history, ...base })!
+    expect([...got.signals].sort()).toEqual(["diverse_failure", "repeated_signature"])
+    expect(got.count).toBe(3)
+    expect(got.kind).toBe("reason")
+  })
+
+  test("zero-tool reporting turns are recognized even below the failure threshold", () => {
+    const history = [notMet("gap one", { toolCalls: 0 })]
+    const active = recognizeNoProgress({ info: notMet("gap two"), history, ...base, tools: 0 })!
+    expect(active.signals).toContain("zero_tool_turn")
+    expect(active.count).toBe(2)
+    const working = recognizeNoProgress({ info: notMet("gap two"), history, ...base, tools: 2 })
+    expect(working).toBeUndefined()
+  })
+
+  test("retry, stall, and loop-inactivity signals are recognized from scalar state", () => {
+    const info = notMet("gap")
+    expect(recognizeNoProgress({ info, history: [], ...base, retries: 3 })!.signals).toEqual(["retry_streak"])
+    expect(recognizeNoProgress({ info, history: [], ...base, stall: 4 })!.signals).toEqual(["stall"])
+    expect(recognizeNoProgress({ info, history: [], ...base, loopNotProgress: 2 })!.signals).toEqual(["loop_not_progress"])
+    // The count is the max across signals — an independent oracle for mixed state.
+    const mixed = recognizeNoProgress({ info, history: [], ...base, retries: 2, stall: 5, loopNotProgress: 3 })!
+    expect(mixed.signals).toEqual(["stall", "loop_not_progress"])
+    expect(mixed.count).toBe(5)
+  })
+
+  test("a met verdict and sub-threshold state are not stuck", () => {
+    expect(recognizeNoProgress({ info: { verdict: "met", reason: "done" }, history: [], ...base })).toBeUndefined()
+    expect(recognizeNoProgress({ info: notMet("gap"), history: [notMet("gap")], ...base })).toBeUndefined()
+  })
+
+  test("recognition is universal across signature kinds", () => {
+    const verification = {
+      verdict: "not_met" as const,
+      reason: "gate failed",
+      verify: { command: "bun run check", code: 1 },
+    }
+    const got = recognizeNoProgress({ info: verification, history: [verification, verification], ...base })!
+    expect(got.kind).toBe("verification")
+    expect(got.signals).toContain("repeated_signature")
+    expect(got.summary).toContain("verification")
   })
 })

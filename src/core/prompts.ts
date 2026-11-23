@@ -327,6 +327,7 @@ export function strategyEscalation(input: {
   kind: string
   summary: string
   strategy: string
+  signals?: readonly string[]
   diagnostic?: string
   learnings?: string
 }, policy: CommitPolicy): string {
@@ -338,6 +339,7 @@ export function strategyEscalation(input: {
     `Goal: ${escape(input.condition)}`,
     `Evaluator: ${steerReason(input.reason, "No reason given.")}`,
     `Failure signature: ${escape(input.summary)}`,
+    ...(input.signals?.length ? [`Recognized no-progress signals: ${escape(input.signals.join(", "))}`] : []),
     ``,
     `Rotate strategy now: ${escape(input.strategy)}`,
     ...(input.diagnostic ? [`Diagnostic artifact: ${escape(input.diagnostic)}`, `Read it before the next step so the evidence is concrete.`] : []),
