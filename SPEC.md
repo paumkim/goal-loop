@@ -11138,3 +11138,16 @@ same-major resolutions the overrides had suppressed. No source, test, dist, or A
 `bun run check` green: 2261 pass / 0 fail (2259 at this unit's base; the pill lease added two
 more), 29 snapshots, dist matches a fresh build, TUI plugin loads, docs/invariant-sweep/spec-check ok
 (`files=143 tests=2261`). Marker unchanged — no files or tests added by this unit.
+## Workstream CLXXXVIII — one canonical condition/reason fold (2026-11-23)
+
+`src/runtime/controller.ts · normalizeCondition` and `src/core/failure-signature.ts · normalize`
+implemented the same fold (lowercase, collapse non-alphanumeric runs to one space, trim), with the
+latter chaining a redundant `.replace(/\s+/g, " ")`. Added `format.ts · normalizeConditionText`, a
+memoized (4096) single home for both; the controller imports it under its old local name so every
+call site is unchanged, and failure-signature drops its private cache. The redundant collapse was
+proven a no-op by a 100000-string differential fuzz (0 mismatches) and is pinned by a new regression
+test against an independent oracle across whitespace/Unicode/punctuation cases.
+
+Measured on 20000 repeated folds (best of 100): `6.95 ms -> 0.05 ms` (~139x on the hit path).
+Focused suites (failure-signature, controller, package-integrity) 139 pass / 0 fail, 840 expect()
+calls; `tsc --noEmit` clean. No shipped-file change; marker +1 test.

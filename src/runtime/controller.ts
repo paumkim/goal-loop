@@ -3,7 +3,7 @@ import type { GoalConfig } from "../core/config.ts"
 import { MAX_BUSY_RETRIES } from "../core/config.ts"
 import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
 import { classifyFailure, errorMessage, isNotFoundError, isUsageLimitError } from "../core/errors.ts"
-import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, normalizeConditionText as normalizeCondition, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import { isAlreadySatisfiedLanding } from "../core/verdict.ts"
 import * as Prompt from "../core/prompts.ts"
@@ -172,8 +172,6 @@ const isNearDuplicate = (a: Set<string>, b: Set<string>): boolean => {
   return containment >= 0.7 || jaccard >= 0.6
 }
 
-/** Normalize a condition for anti-repeat matching: lowercase, collapse every run of non-alphanumerics to one space (unicode letters/numbers kept), trim. */
-const normalizeCondition = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
 /**
  * The completed-condition ledger of one record, as raw condition strings (deduped by exact match): the persisted
  * `completedConditions` (harness-measured completed iterations), the retained iteration conditions that verdicts met,
