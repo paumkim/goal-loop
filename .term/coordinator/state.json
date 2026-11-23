@@ -6192,6 +6192,17 @@
       "submittedAt": "2026-11-23T08:43:19Z",
       "mergedAt": "2026-11-23T08:53:56Z",
       "mergedInto": "dev"
+    },
+    "compaction-notice-wording": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/loop.test.ts,docs,SPEC.md,dist/tui.js",
+      "branch": "wt/compaction-notice-wording",
+      "worktree": "worktree/wt-compaction-notice-wording",
+      "status": "done",
+      "createdAt": "2026-11-23T08:58:02Z",
+      "submittedAt": "2026-11-23T09:04:27Z",
+      "mergedAt": "2026-11-23T09:06:35Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
