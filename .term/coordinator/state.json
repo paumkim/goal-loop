@@ -5526,14 +5526,24 @@
       "paths": "src/core/types.ts,src/core/config.ts,src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
       "branch": "wt/dedupe-verify-types",
       "worktree": "worktrees/wt-dedupe-verify-types",
-      "status": "submitted",
-      "createdAt": "2026-11-23T00:46:32Z",
-      "submittedAt": "2026-11-23T00:49:06Z",
+      "status": "done",
+      "createdAt": "2026-11-23T00:54:26Z",
+      "submittedAt": "2026-11-23T00:54:52Z",
       "forcedScope": true,
-      "forcedScopeAt": "2026-11-23T00:49:06Z",
+      "forcedScopeAt": "2026-11-23T00:54:52Z",
       "forcedScopeFiles": [
         "SPEC.md"
-      ]
+      ],
+      "mergedAt": "2026-11-23T01:05:23Z",
+      "mergedInto": "dev"
+    },
+    "verdict-regex-precompile": {
+      "agent": "loop-worker",
+      "paths": "src/core/verdict.ts,test/verdict.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/verdict-regex-precompile",
+      "worktree": "worktrees/wt-verdict-regex-precompile",
+      "status": "claimed",
+      "createdAt": "2026-11-23T01:03:22Z"
     }
   },
   "mergeLock": null,
