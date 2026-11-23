@@ -226,6 +226,16 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Dead repro script removal (`dead-repro-loop-cap`, 2026-11-23): `scripts/repro-loop-cap.tsx` was a 161-line
+  headless renderer that mounted the pill, HUD card and `/goal` dialog at loop caps 5, 50, 99, 100 and 1000.
+  A repo-wide symbol/config/docs sweep found only its own header, a stale mention in `scripts/width-flag.ts`,
+  a follow-up note in this file and a historical workstream entry — no `package.json` script, no test
+  invocation, no import, no docs or dynamic entry point; `scripts/` is not in the published `files` list.
+  Deleted it, refreshed the stale width-flag comment, and re-pointed its dialog-caption assertion to the
+  underlying `barCaption(3, cap, 2)` in `test/history.test.ts` (the same `v3 of at most <cap>` string at all
+  five caps) instead of dropping the coverage; the pill and pip-visual caps were already pinned on
+  `pillModel` / `renderPips`. Focused `history`/`render-scripts` suites green; full `bun run check` green after
+  artifact regeneration, marker re-counted, no shipped file added or removed.
 - Dead export removal (`dead-subagent-prompt-prefix`, 2026-11-23): `SUBAGENT_PROMPT_PREFIX` in
   `src/core/evaluator-agent.ts` had exactly five repo-wide hits — definition, one test import, one assertion
   that the constant equals its own literal, and two historical `SPEC-workstreams.md` notes. The only production
@@ -234,9 +244,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
   gate or generated file change; the evaluator agent test still pins every real contract. Focused
   `plugin`/`core`/`evaluator` suites green, full check green, marker unchanged (no `test()` block removed).
   Follow-ups recorded, not removed: `types.ts · NO_COMMIT` (zero production consumers but 19 test fixture call
-  sites), `scripts/repro-loop-cap.tsx` (161-line repro renderer, zero automated invocations but possible manual
-  use), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test
-  scope). `outcome-telemetry.ts · summarizeLearningText` was the next follow-up and is now removed below.
+  sites), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test
+  scope). `outcome-telemetry.ts · summarizeLearningText` and `scripts/repro-loop-cap.tsx` were later
+  follow-ups and are now removed below.
 
 - Dead wrapper removal (`dead-summarize-learning-text`, 2026-11-23): `summarizeLearningText` in
   `src/core/outcome-telemetry.ts` was a three-line convenience wrapper over
@@ -573,7 +583,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2321 -->
+<!-- spec-check files=143 tests=2322 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

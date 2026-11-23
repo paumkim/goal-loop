@@ -68,6 +68,15 @@ describe("barCaption", () => {
     expect(barCaption(3, 5, 2)).toBe("v3 of at most 5 · 2 complete")
   })
 
+  test("the dialog caption names every cap the loop-position repro used to render", () => {
+    // Re-pointed from the deleted scripts/repro-loop-cap.tsx: its dialog frame asserted `v3 of at most
+    // <cap>` at caps 5, 50, 99, 100 and 1000. The exact same string comes from barCaption, now pinned
+    // here on the underlying function instead of through a headless render of a manual-only script.
+    for (const cap of [5, 50, 99, 100, 1000]) {
+      expect(barCaption(3, cap, 2)).toBe(`v3 of at most ${cap} · 2 complete`)
+    }
+  })
+
   test("without a max omits the cap", () => {
     expect(barCaption(3, undefined, 2)).toBe("v3 · 2 complete")
     expect(barCaption(3, 0, 2)).toBe("v3 · 2 complete")
