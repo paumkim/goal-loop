@@ -11036,3 +11036,16 @@ runtime sets are unchanged. Evidence: `grep -rn VerifyCheckRunState src test scr
 one same-module use before and after. `tsc --noEmit` clean; focused suites (verify-matrix-goal-declared,
 wire) 53 pass / 0 fail. No behavior or public runtime surface change. Marker unchanged at
 `files=143 tests=2257` — no new tests.
+
+## Workstream CLXXXI — one bounded-memo mechanism for the normalize helpers (2026-11-23)
+
+`failure-signature.ts` and `outcome-telemetry.ts` each carried their own `NORMALIZE_CACHE_LIMIT`,
+`normalizeCache` and hand-written hit/limit checks around a pure text transform. Added
+`format.ts · memoizeBounded(fn, limit)` — one home for the hit path and the 4096/2048 caps — and
+reduced both call sites to a memoized function plus their existing blank guard. The helper lives in
+`format.ts` (already home to the cellWidth and truncate memos), so the shipped-file count stays 143
+and no test pin needs changing. Outputs are byte-identical: focused suites
+(failure-signature, outcome-telemetry, package-integrity) 49 pass / 0 fail, 383 expect() calls;
+probed output unchanged (`normalize: "missing test output"`). Benchmark of mixed warm calls is
+unchanged at `0.05 ms / 2000 pairs` (best of 30) before and after. `tsc --noEmit` clean. Marker
+unchanged at `files=143 tests=2257` — no new tests.

@@ -6,6 +6,7 @@
  * malformed data — a missing/empty/all-garbage journal must never affect a goal run.
  * Telemetry is advisory context for prompts, not a gate on any verdict.
  */
+import { memoizeBounded } from "./format.ts"
 import { formatRecentLearnings, parseLearningEntries, recentLearningsFromEntries } from "./learning-log.ts"
 import type { LearningEntry } from "./learning-log.ts"
 import { elideAtWordBoundary, formatDuration } from "./format.ts"
@@ -73,16 +74,10 @@ function asString(value: unknown): string | undefined {
  * by the raw string turns a repeat into one lookup. The guard rejects blanks before the key, and the cache
  * is bounded so a long session cannot grow it without limit.
  */
-const NORMALIZE_CACHE_LIMIT = 2048
-const normalizeCache = new Map<string, string>()
+const normalizeReasonMemo = memoizeBounded(normalizeReasonUncached, 2048)
 export function normalizeReason(reason: string | undefined): string {
   if (!asString(reason)) return ""
-  const key = reason as string
-  const hit = normalizeCache.get(key)
-  if (hit !== undefined) return hit
-  const result = normalizeReasonUncached(reason)
-  if (normalizeCache.size < NORMALIZE_CACHE_LIMIT) normalizeCache.set(key, result)
-  return result
+  return normalizeReasonMemo(reason)
 }
 
 /** The raw six-pass normalization, kept separate so `normalizeReason` is a thin cache lookup around it. */

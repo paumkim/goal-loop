@@ -1,6 +1,22 @@
 import stringWidth from "string-width"
 
 /**
+ * Bounded single-argument memo for pure text transforms. One home for the hit path and the eviction
+ * policy shared by the normalize helpers in failure-signature and outcome-telemetry: a hit is one map
+ * lookup, a miss runs the pure function once, and the cache stops growing at `limit`. A miss after the
+ * cap recomputes, which is safe because the transform is pure — no output changes.
+ */
+export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A) => R {
+  const cache = new Map<A, R>()
+  return (arg: A): R => {
+    if (cache.has(arg)) return cache.get(arg) as R
+    const result = fn(arg)
+    if (cache.size < limit) cache.set(arg, result)
+    return result
+  }
+}
+
+/**
  * Memoized terminal-cell width. `stringWidth` strips ANSI and runs an Intl.Segmenter pass on every
  * call; the TUI asks for the width of the same labels, prefixes and graphemes many times per frame.
  * Cache hits are pure lookups. Bounded so a long session cannot grow the map without limit; an
