@@ -6,6 +6,12 @@ the frozen Appendix A, verification notes, and a rolling "Recent workstreams" se
 goes in `SPEC.md`; when its recent section fills, rotate the oldest entries here and add them to the
 index below. The body below is verbatim from `SPEC.md` at the time of the split — no text was edited.
 
+Workstreams are divided three ways, not two: the early acceptance-criteria workstreams (A–AB) stay
+inline in `SPEC.md` because they carry the numbered current-behavior items; the most recent ones stay
+in `SPEC.md`'s "Recent workstreams" section; and the historical tail between them — workstream AC
+onward at the time of the split — is archived verbatim below. No workstream heading is duplicated
+across the two files.
+
 **Workstream numbers are contested between parallel sessions; the lease slug is the stable key.**
 The index maps each archived workstream to its lease slug (explicit in the heading where one exists,
 otherwise derived from the title) and a one-line summary. To find all records for a task, grep this
