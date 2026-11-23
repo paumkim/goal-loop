@@ -18,10 +18,26 @@ import { isLive, type GoalSnapshot } from "./types.ts"
  */
 const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
 
+/**
+ * Cheap inequality precheck. Every key here is part of the serialized comparison (`elapsedMs` is the
+ * only stripped field and is deliberately absent), so any mismatch means the two snapshots really do
+ * differ and the two full serializations below can be skipped. Live `changed` events almost always move
+ * one of these — a new turn, a verdict, a status change — so this is the common path.
+ */
+const CHEAP_KEYS = [
+  "version", "id", "sessionID", "directory", "condition", "status",
+  "setAt", "startedAt", "turns", "stall", "retries", "checkins",
+  "evaluating", "waiting", "queued",
+] as const
+
 /** Snapshots arrive over RPC and from local helpers, so compare by value (key order is stable) to keep redundant `changed` events from re-rendering. */
 export const goalsEqual = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
   if (a === b) return true
   if (!a || !b) return false
+  for (const key of CHEAP_KEYS) {
+    if (a[key] !== b[key]) return false
+  }
+  if (a.history.length !== b.history.length) return false
   return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
 }
 

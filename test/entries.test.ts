@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -8,6 +8,51 @@ const snap = (status: GoalStatus): GoalSnapshot =>
 const entry = (status: GoalStatus | null, receivedAt = 1000): GoalSnapshotCacheEntry => ({
   goal: status === null ? null : snap(status),
   receivedAt,
+})
+
+describe("goalsEqual", () => {
+  const stripVolatile = (key: string, value: unknown) => (key === "elapsedMs" ? undefined : value)
+  const original = (a: GoalSnapshot | null, b: GoalSnapshot | null) => {
+    if (a === b) return true
+    if (!a || !b) return false
+    return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile)
+  }
+  const variants: Array<[string, (g: GoalSnapshot) => GoalSnapshot]> = [
+    ["same", (g) => ({ ...g })],
+    ["elapsed only (stripped)", (g) => ({ ...g, elapsedMs: g.elapsedMs + 1 })],
+    ["turns", (g) => ({ ...g, turns: g.turns + 1 })],
+    ["status", (g) => ({ ...g, status: "achieved" })],
+    ["condition", (g) => ({ ...g, condition: g.condition + "!" })],
+    ["history length", (g) => ({ ...g, history: [...g.history, g.history[0]!] })],
+    ["nested baseline", (g) => ({ ...g, baseline: { ...g.baseline, cost: 9 } })],
+    ["nested history value", (g) => ({ ...g, history: g.history.map((h, i) => (i === 0 ? { ...h, reason: h.reason + "x" } : h)) })],
+    ["loopIteration", (g) => ({ ...g, loopIteration: (g.loopIteration ?? 0) + 1 })],
+  ]
+  const base = {
+    ...snap("active"),
+    turns: 3,
+    condition: "ship it",
+    elapsedMs: 42,
+    loopIteration: 2,
+    history: [1, 2, 3].map((turn) => ({ turn, verdict: "not_met" as const, reason: `r${turn}`, at: turn * 1000, toolCalls: 1 })),
+  }
+
+  test("the scalar precheck agrees with the original deep comparison on every variant pair", () => {
+    for (const [nameA, makeA] of variants) {
+      for (const [nameB, makeB] of variants) {
+        const a = makeA(base)
+        const b = makeB(base)
+        expect(goalsEqual(a, b), `${nameA} vs ${nameB}`).toBe(original(a, b))
+      }
+    }
+  })
+
+  test("null and identity cases still hold", () => {
+    expect(goalsEqual(null, null)).toBe(true)
+    expect(goalsEqual(null, base)).toBe(false)
+    expect(goalsEqual(base, null)).toBe(false)
+    expect(goalsEqual(base, base)).toBe(true)
+  })
 })
 
 describe("pruneSnapshotEntries", () => {
