@@ -5434,16 +5434,39 @@
       "paths": "src/core/prompts.ts,test/evaluator-request-context.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-request-stripped-by-goal-grammar",
       "worktree": "worktrees/wt-evaluator-request-stripped-by-goal-grammar",
-      "status": "claimed",
-      "createdAt": "2026-11-23T00:06:04Z"
+      "status": "submitted",
+      "createdAt": "2026-11-23T00:06:04Z",
+      "submittedAt": "2026-11-23T00:14:41Z"
     },
     "learning-log-dead-verify": {
       "agent": "loop-worker",
       "paths": "src/core/learning-log.ts,test/learning-log.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/learning-log-dead-verify",
       "worktree": "worktrees/wt-learning-log-dead-verify",
-      "status": "claimed",
-      "createdAt": "2026-11-23T00:08:44Z"
+      "status": "submitted",
+      "createdAt": "2026-11-23T00:08:44Z",
+      "submittedAt": "2026-11-23T00:12:51Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T00:12:51Z",
+      "forcedScopeFiles": [
+        "docs/improvement-backlog.json"
+      ]
+    },
+    "telemetry-redundant-guard": {
+      "agent": "build-agent",
+      "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts",
+      "branch": "wt/telemetry-redundant-guard",
+      "worktree": "worktrees/wt-telemetry-redundant-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T00:10:57Z",
+      "submittedAt": "2026-11-23T00:13:05Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T00:13:05Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-23T00:15:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
