@@ -35,6 +35,40 @@ import { update as cliUpdate } from "../bin/goal-loop.mjs"
 const PLUGIN_ID = "goal-loop"
 
 /**
+ * Checkpoint installed by `/reset-context` in place of the harness summary. OpenCode writes compaction summaries
+ * with a fixed prompt that reads the conversation, so telling the agent to "carry nothing over" can never suppress
+ * it. A plugin hook sets `event.result` to this text instead, which skips the summary model entirely and leaves
+ * every section explicitly empty. The session ID is unchanged — only its model-visible context is dropped.
+ */
+const EMPTY_CHECKPOINT = `## Objective
+- (none)
+
+## Requirements
+- (none)
+
+## Decisions
+- (none)
+
+## Work State
+### Completed
+- (none)
+
+### Active
+- (none)
+
+### Blocked
+- (none)
+
+## Next Move
+1. (none)
+
+## Relevant Files
+- (none)
+
+## Important Context
+- (none)`
+
+/**
  * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
  * `maxTranscriptChars` (20k): a native child gets the condition explicitly and only needs the worker's latest
  * tool evidence. A large digest in a long-lived session carried prior verdicts about other conditions and
@@ -620,7 +654,12 @@ export default Plugin.define({
       return "update"
     }
 
-    // ---- the /goal and /goal-loop commands
+    // Sessions whose next compaction is an explicit /reset-context. The compaction hook consumes the entry exactly
+    // once, so an automatic or loop-boundary compaction in the same session keeps its normal summary. A Set keeps
+    // two concurrent sessions independent; the command's catch removes its own entry when compact() fails.
+    const resetPending = new Set<string>()
+
+    // ---- the /goal, /goal-loop and /reset-context commands
     await ctx.command.transform((editor) => {
       const addCommand = (name: string, description: string, loop: boolean) =>
         editor.add({
@@ -650,9 +689,40 @@ export default Plugin.define({
         })
       addCommand("goal", DESCRIPTION, false)
       addCommand("goal-loop", LOOP_DESCRIPTION, true)
+
+      // Same-session context reset. The host still performs a real compaction (so prior messages leave the model
+      // request), but the compaction hook below replaces the generated summary with EMPTY_CHECKPOINT. No new session
+      // is created, so the session ID, its files and its history on disk all survive.
+      editor.add({
+        name: "reset-context",
+        description: "Drop this session's context in place, keeping the same session ID",
+        execute: async ({ sessionID }) => {
+          resetPending.add(sessionID)
+          try {
+            await session.compact(sessionID)
+          } catch (error) {
+            resetPending.delete(sessionID)
+            throw error
+          }
+          emit.notice({
+            sessionID,
+            kind: "compact",
+            level: "info",
+            title: "goal-loop",
+            message: "Context reset. Set compaction.keep.tokens to 0 to also drop the retained tail.",
+          })
+        },
+      })
     })
 
     // ---- hooks
+    // OpenCode's own compaction prompt always summarizes the conversation, so an instruction from the user to carry
+    // nothing over cannot change its output. /reset-context marks the session; setting `result` here makes the host
+    // skip the summary model and store EMPTY_CHECKPOINT verbatim. Only a marked session is affected, once.
+    await ctx.session.hook("compaction", (event) => {
+      if (!resetPending.delete(event.sessionID)) return
+      event.result = { summary: EMPTY_CHECKPOINT }
+    })
     // Only real user prompts pass through this hook (synthetic continuations do not), so it is the resume signal.
     // The hook also carries the /goal-loop directive: harnesses that do not know the `/goal-loop-<N>` spelling fall
     // through to a plain prompt, and the plugin arms the loop right here — the host awaits this hook before the

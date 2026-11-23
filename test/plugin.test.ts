@@ -42,7 +42,7 @@ function coordinatorRepository(): string {
  * the plugin asked the host to do.
  */
 function context(directory: string, options: Record<string, unknown> = {}) {
-  const calls = { prompts: [] as any[], commands: [] as any[], notices: [] as any[], agents: [] as any[] }
+  const calls = { prompts: [] as any[], commands: [] as any[], notices: [] as any[], agents: [] as any[], compacts: [] as string[] }
   const hooks: Record<string, (event: any) => any> = {}
   const storage = new Map<string, unknown>()
   const ctx = {
@@ -61,7 +61,7 @@ function context(directory: string, options: Record<string, unknown> = {}) {
       prompt: async (input: any) => void calls.prompts.push(input),
       synthetic: async (input: any) => void calls.prompts.push(input),
       get: async () => ({ id: "ses_1", parentID: undefined, tokens: {} }),
-      compact: async () => ({}),
+      compact: async (input: any) => void calls.compacts.push(input.sessionID),
       context: async () => [],
       hook: async (name: string, callback: (event: any) => any) => void (hooks[name] = callback),
     },
@@ -1627,6 +1627,64 @@ describe("standalone child prompts must wake their own execution (CXLII P0)", ()
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV
       else process.env.NODE_ENV = previous
+    }
+  })
+})
+
+describe("/reset-context drops context in place", () => {
+  test("the command compacts the same session and the hook installs an all-none checkpoint", async () => {
+    const { ctx, calls, hooks } = context(repository())
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const command = calls.commands.find((command: any) => command.name === "reset-context")
+      expect(command).toBeDefined()
+      expect(command.description).toContain("same session ID")
+      await command.execute({ sessionID: "ses_1", prompt: { text: "" }, delivery: "steer" })
+      // The host is asked to compact this session — no new session is created.
+      expect(calls.compacts).toEqual(["ses_1"])
+      const event: any = { sessionID: "ses_1", result: undefined }
+      await hooks.compaction!(event)
+      const summary: string = event.result?.summary ?? ""
+      for (const heading of [
+        "## Objective",
+        "## Requirements",
+        "## Decisions",
+        "## Work State",
+        "### Completed",
+        "### Active",
+        "### Blocked",
+        "## Next Move",
+        "## Relevant Files",
+        "## Important Context",
+      ]) {
+        expect(summary).toContain(heading)
+      }
+      // Every section is explicitly empty: objective, requirements, decisions, three work states, next move,
+      // relevant files, important context.
+      expect(summary.match(/\(none\)/g)?.length).toBe(9)
+      expect(calls.notices.some((notice: any) => notice.message.includes("compaction.keep.tokens"))).toBe(true)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("the override is consumed once, so a later automatic compaction keeps the harness summary", async () => {
+    const { ctx, calls, hooks } = context(repository())
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const command = calls.commands.find((command: any) => command.name === "reset-context")
+      await command.execute({ sessionID: "ses_1", prompt: { text: "" }, delivery: "steer" })
+      const first: any = { sessionID: "ses_1", result: undefined }
+      await hooks.compaction!(first)
+      expect(first.result?.summary).toContain("(none)")
+      const second: any = { sessionID: "ses_1", result: undefined }
+      await hooks.compaction!(second)
+      expect(second.result).toBeUndefined()
+      const other: any = { sessionID: "ses_other", result: undefined }
+      await hooks.compaction!(other)
+      expect(other.result).toBeUndefined()
+    } finally {
+      await dispose?.()
     }
   })
 })
