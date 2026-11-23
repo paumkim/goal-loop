@@ -2025,7 +2025,7 @@ describe("terminal record pruning after finish (opportunistic)", () => {
 })
 
 describe("repeated failure-signature escalation", () => {
-  test("pauses after consecutive same-signature not_met verdicts instead of re-arming", async () => {
+  test("keeps the goal active and rotates strategy instead of pausing on consecutive same-signature not_met verdicts", async () => {
     const h = harness()
     await h.set("fix the failing tests")
     h.verdicts.push(
@@ -2038,13 +2038,37 @@ describe("repeated failure-signature escalation", () => {
     await h.turn()
 
     const goal = h.controller.get(SID)!
-    expect(goal.status).toBe("paused")
-    expect(goal.pauseCause).toBe("repeated_failure")
-    expect(goal.reason).toContain("Repeated failure signature detected")
-    expect(goal.reason).toContain("rotate strategy")
-    // Two continuations for turns 2 and 3; escalation blocks turn 4 re-arm.
-    expect(h.calls.synthetic).toHaveLength(2)
-    expect(h.notices.some((n) => n.kind === "paused" && n.message.includes("Repeated failure signature detected"))).toBe(true)
+    expect(goal.status).toBe("active")
+    expect(goal.pauseCause).toBeUndefined()
+    expect(goal.reason).toContain("same missing test evidence")
+    // A continuation on every turn; the third is the proactive escalation, not a pause.
+    expect(h.calls.synthetic).toHaveLength(3)
+    const steer = h.calls.synthetic[2]!
+    expect(steer.text).toContain("<goal-strategy-escalation")
+    expect(steer.text).toContain('count="3"')
+    expect(steer.text).toContain("Narrow the scope")
+    expect(steer.text).toContain("repeated not_met gap: same missing test evidence")
+    expect(steer.text).toContain("do not stop or wait for a user message")
+    expect(steer.resume).toBe(true)
+    expect(h.notices.some((n) => n.kind === "paused")).toBe(false)
+    expect(h.notices.some((n) => n.title === "Repeated failure — rotating strategy")).toBe(true)
+  })
+
+  test("rotates to a different strategy on every repeated escalation", async () => {
+    const h = harness()
+    await h.set("fix the failing tests")
+    h.verdicts.push(
+      ...Array.from({ length: 5 }, () => ({ verdict: "not_met" as const, reason: "same missing test evidence" })),
+    )
+    for (let i = 0; i < 5; i++) await h.turn()
+
+    expect(h.controller.get(SID)!.status).toBe("active")
+    expect(h.calls.synthetic).toHaveLength(5)
+    const steers = h.calls.synthetic.slice(2).map((s) => String(s.text))
+    expect(steers[0]).toContain("Rotate strategy now: Narrow the scope")
+    expect(steers[1]).toContain("Rotate strategy now: Change the approach")
+    expect(steers[2]).toContain("Rotate strategy now: Produce a diagnostic artifact")
+    expect(new Set(steers).size).toBe(3)
   })
 
   test("different failure signatures do not trigger escalation", async () => {
@@ -2063,6 +2087,7 @@ describe("repeated failure-signature escalation", () => {
     expect(goal.status).toBe("active")
     expect(goal.pauseCause).toBeUndefined()
     expect(h.calls.synthetic).toHaveLength(3)
+    expect(h.calls.synthetic.every((s) => !String(s.text).includes("<goal-strategy-escalation"))).toBe(true)
   })
 
   test("a met verdict breaks a repeated failure streak", async () => {
@@ -2082,7 +2107,7 @@ describe("repeated failure-signature escalation", () => {
     expect(h.calls.synthetic).toHaveLength(2)
   })
 
-  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ on escalation", async () => {
+  test("persists a diagnostic artifact under .term/goal-loop/diagnostics/ and cites it in the steer", async () => {
     const dir = await mkdtemp(join(tmpdir(), "goal-loop-ctrl-diag-"))
     try {
       const h = harness({}, new MemoryStorage(), { required: false, branch: "dev", reason: "test" }, dir)
@@ -2097,12 +2122,16 @@ describe("repeated failure-signature escalation", () => {
       await h.turn()
 
       const goal = h.controller.get(SID)!
-      expect(goal.status).toBe("paused")
-      expect(goal.pauseCause).toBe("repeated_failure")
+      expect(goal.status).toBe("active")
+      expect(goal.pauseCause).toBeUndefined()
 
       const diagDir = join(dir, ".term", "goal-loop", "diagnostics")
       const files = await readdir(diagDir)
       expect(files.length).toBe(1)
+      const steer = h.calls.synthetic[2]!
+      expect(steer.text).toContain("<goal-strategy-escalation")
+      expect(steer.text).toContain("Diagnostic artifact:")
+      expect(steer.text).toContain(join(diagDir, files[0]!))
       const saved = JSON.parse(await readFile(join(diagDir, files[0]!), "utf8"))
       expect(saved.signature).toBeString()
       expect(saved.count).toBe(3)

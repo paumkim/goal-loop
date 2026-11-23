@@ -117,6 +117,26 @@ export function failureEscalationReason(detected: RepeatedFailureSignature): str
   ].join(" ")
 }
 
+/**
+ * Universal strategy rotation for a recurring failure. A repeated signature means the previous approach
+ * did not close the gap, so every escalation must try a different angle. The rotation index is derived from
+ * the streak length (count - threshold) instead of persisted state: it survives restarts, applies to every
+ * goal, and works for every signature kind (verification, legacy-verify, or plain reason). The diagnostic
+ * artifact keeps the concrete evidence; this keeps the *response* fresh instead of re-arming the same steer.
+ */
+export const STRATEGY_ROTATION = [
+  `Narrow the scope: pick the single most critical clause behind this failure and close only that gap with fresh, scoped evidence.`,
+  `Change the approach: use a different tool, command, or technique than the last attempt. If a gate keeps failing, gather its evidence from a different source instead of repeating it.`,
+  `Produce a diagnostic artifact: record the concrete blocker with command output, exit codes, and file paths, then plan the next step around that evidence.`,
+  `Re-examine the condition: identify the exact clause this failure blocks and either close it with a new line of attack or name the specific blocker preventing progress.`,
+] as const
+
+export function strategyForRepeat(detected: RepeatedFailureSignature, threshold = FAILURE_SIGNATURE_REPEAT_THRESHOLD): { readonly index: number; readonly strategy: string } {
+  const base = threshold > 1 ? threshold : FAILURE_SIGNATURE_REPEAT_THRESHOLD
+  const index = Math.max(0, detected.count - base) % STRATEGY_ROTATION.length
+  return { index, strategy: STRATEGY_ROTATION[index]! }
+}
+
 interface FailingCheckDiagnostic {
   readonly id?: string
   readonly type?: string

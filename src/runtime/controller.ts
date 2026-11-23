@@ -35,7 +35,7 @@ import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, readLearningEntriesTail, type LearningEntry } from "../core/learning-log.ts"
 import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
-import { detectRepeatedFailureSignature, failureEscalationReason, persistFailureDiagnosticArtifact } from "../core/failure-signature.ts"
+import { detectRepeatedFailureSignature, FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, strategyForRepeat } from "../core/failure-signature.ts"
 import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
@@ -1534,8 +1534,34 @@ export class GoalController {
           goalID: record.id,
           condition: record.condition,
         })
-        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature, ...(diagnostic ? { diagnostic } : {}) })
-        await this.pause(record, escalation, "repeated_failure")
+        const rotation = strategyForRepeat(detected)
+        this.deps.log.warn("repeated failure signature escalated", { sessionID, turn, count: detected.count, kind: detected.kind, signature: detected.signature, strategy: rotation.strategy, ...(diagnostic ? { diagnostic } : {}) })
+        // A recurring failure means the last approach did not close the gap. Keep the goal active and steer the
+        // worker onto a different strategy instead of pausing — the same proactive path for loops and plain goals,
+        // every signature kind, and every repetition. The diagnostic artifact stays as the durable evidence trail.
+        if (detected.count === FAILURE_SIGNATURE_REPEAT_THRESHOLD) {
+          this.notify(sessionID, "loop", "warning", "Repeated failure — rotating strategy", `${detected.summary} The goal keeps running with a different approach; see the diagnostic artifact for the evidence.`)
+        }
+        record.pendingEvaluation = { turn, tools, condition: record.condition, phase: "continue", at: clock.now() }
+        this.commit(record)
+        // A user turn already started: it gets evaluated when it ends, so don't stack a continuation on it.
+        if (this.running.has(sessionID)) return
+        if (record.status !== "active") return
+        await this.continueWith(record, {
+          text: Prompt.strategyEscalation({
+            condition: record.condition,
+            turn: turn + 1,
+            reason: result.reason,
+            count: detected.count,
+            kind: detected.kind,
+            summary: detected.summary,
+            strategy: rotation.strategy,
+            ...(diagnostic ? { diagnostic } : {}),
+            learnings: this.recentLearningsForPrompt(record),
+          }, this.commitForSession(sessionID)),
+          description: `goal · turn ${turn + 1} · rotate strategy · ${truncate(detected.summary, 70)}`,
+          turn: turn + 1,
+        })
         return
       }
     }
