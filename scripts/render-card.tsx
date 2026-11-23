@@ -16,11 +16,12 @@
  */
 import { testRender } from "@opentui/solid"
 import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
-import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
+import type { GoalSnapshot } from "../src/core/types.ts"
 import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
+import { verdicts } from "./render-fixtures.ts"
 
-const mono = process.argv.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag()
 const theme: HudCardTheme = {
   text: {
     base: PALETTE.base,
@@ -37,8 +38,6 @@ const theme: HudCardTheme = {
 }
 
 const now = 1_800_000_000_000
-const verdicts = (list: Verdict[]): GoalSnapshot["history"] =>
-  list.map((verdict, index) => ({ turn: index + 1, verdict, reason: verdict === "met" ? "done" : "not yet", at: now - 1000 * 60 * (list.length - index), toolCalls: verdict === "met" ? 4 : 2 }))
 const base: GoalSnapshot = {
   version: 1,
   id: "goal_card",
@@ -54,7 +53,7 @@ const base: GoalSnapshot = {
   retries: 0,
   checkins: 0,
   baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
-  history: verdicts(["met", "not_met", "met", "met", "not_met", "met", "met"]),
+  history: verdicts(["met", "not_met", "met", "met", "not_met", "met", "met"], now),
   spend: { input: 1_480_000, output: 2_100, reasoning: 0, cacheRead: 739_000, cacheWrite: 0, cost: 0.9 },
   contextSize: 512_000,
   compactAtTokens: 900_000,
