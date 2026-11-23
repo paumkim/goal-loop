@@ -828,6 +828,9 @@ describe("prompts", () => {
       expect(text).toContain("No active or submitted lease requires work that is ABSENT at HEAD")
       expect(text).toContain("names no concrete gap whose required work is ABSENT at HEAD")
       expect(text).toContain("Speculative polish, speed or taste preferences are not gaps")
+      expect(text).toContain("A clean verifier closes the condition")
+      expect(text).toContain("exited 0 at the current HEAD")
+      expect(text).toContain("no polish, speed or taste gap remains")
       expect(text).toContain("next: none")
       // The unbounded wording kept re-arming a fully green build; it must be gone from both judges.
       expect(text).not.toContain("when met with improvements remaining")
@@ -1003,6 +1006,29 @@ describe("nativeEvaluationRequest: original goal + parent summary only", () => {
   test("a code arm plan does not add the trivial-reply shortcut", () => {
     const req = nativeEvaluationRequest({ condition: "fix the tests", summary: "12 pass 0 fail", armPlanScope: "code" })
     expect(req).not.toContain("trivial reply goal")
+  })
+
+  test("the default native judge carries the verifier-closes completion rule", () => {
+    // The native judge is the only per-turn evaluator by default. Without this line it demanded
+    // unprovable "no polish gap remains" proof even when a clean verifyCommand exited 0.
+    for (const req of [
+      nativeEvaluationRequest({ condition: "fix the bug", summary: "bun run check: 2314 pass / 0 fail" }),
+      nativeEvaluationRequest({
+        condition: "fix the bug",
+        summary: "bun run check: 2314 pass / 0 fail",
+        loop: { objective: "improve the repo", iteration: 2, maxLoops: 5, history: [] },
+      }),
+    ]) {
+      expect(req).toContain("A clean verifier closes the condition")
+      expect(req).toContain("evaluator.verifyCommand")
+      expect(req).toContain("no polish, speed or taste gap remains")
+    }
+    const loop = nativeEvaluationRequest({
+      condition: "fix the bug",
+      summary: "bun run check: 2314 pass / 0 fail",
+      loop: { objective: "improve the repo", iteration: 4, maxLoops: 5, history: [1, 2, 3].map((v) => ({ version: v, condition: `old ${v}`, summary: `s${v}`, reason: "met", turns: 2, toolCalls: 1, endedAt: v })) },
+    })
+    expect(loop.length).toBeLessThan(2_000)
   })
 })
 

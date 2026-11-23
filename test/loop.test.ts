@@ -1421,6 +1421,8 @@ describe("loop prompts", () => {
       expect(text).toContain("No active or submitted lease requires work that is ABSENT at HEAD")
       expect(text).toContain("names no concrete gap whose required work is ABSENT at HEAD")
       expect(text).toContain("Speculative polish, speed or taste preferences are not gaps")
+      expect(text).toContain("A clean verifier closes the condition")
+      expect(text).toContain("no polish, speed or taste gap remains")
       expect(text).toContain("A green build with no absent-work gap is done")
       expect(text).toContain("LOOP_COMPLETE")
       // The subjective terminal test is gone: it could never be satisfied while any tweak was imaginable.

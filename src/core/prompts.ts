@@ -530,7 +530,7 @@ const VERDICTS = [
   `Judge in this order, from fresh visible evidence only (command/test/build/lint/typecheck output, diffs/files shown, commit hashes/branches, gate output at current HEAD), i.e. this turn's output at post-change HEAD. Narration, prior claims, previous verdicts, summaries, absence of failure, and "should pass" are not evidence. Constraints in the condition are clauses.`,
   `1. Parse the armed condition into explicit, verifiable clauses.`,
   `2. Build an evidence matrix per clause; name a concrete evidence type for each observed item (full clause schema in the OUTPUT list below).`,
-  `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met.`,
+  `3. Adversarial self-check: "What would falsify met?" and "What important risk is untested?" If any plausible falsifier or material gap remains, do not verdict met. Only gaps counted by the bounded completion condition are material; speculative polish/speed/taste is never one.`,
   `4. Gate policy:`,
   `   - "met": every clause satisfied by fresh, scoped evidence (incl. required commits/submit/merge/checks). Green but unscoped is insufficient for broad goals; transcript-only green does not corroborate a broad claim. See the "Verification matrix/profile" and "Broad-condition verifier corroboration" rules below for the full required-check and verifier-command requirements.`,
   `   - "not_met": missing/weak/stale/contradictory/unscoped evidence, weakened or detached tests/gates, uncommitted or unsubmitted required work, drift, or visible regressions remain. Name the most critical falsifiable gap and the evidence that would close it.`,
@@ -547,6 +547,14 @@ const RULES = [
 ]
 
 /**
+ * The deterministic verifier is the closure proof, not just a gate. The default native judge never saw the
+ * bounded completion condition and kept demanding unprovable "no polish gap remains" proof even when an
+ * evaluator.verifyCommand exited 0 on a clean checkout — the loop never ended. One short line, shared by every
+ * completion-facing prompt so the judge cannot re-invent the unprovable clause.
+ */
+const VERIFIER_CLOSES_COMPLETION = `A clean verifier closes the condition: if an evaluator.verifyCommand (or required check) exited 0 at the current HEAD and the tracked tree is clean, that is conclusive proof the required checks pass — do not demand proof that no polish, speed or taste gap remains; another tweak is always conceivable and is not a gap.`
+
+/**
  * The loop's terminal condition, stated once so the evaluator's `next: none` and the planner's
  * `LOOP_COMPLETE` are decided by the same bounded test. The former wording ("nothing meaningful
  * remains to improve", "every meaningful improvement already complete", "no gap") had no terminal
@@ -561,6 +569,7 @@ const COMPLETION_CONDITION = [
   `  2. The tracked tree is clean (git status --short shows no uncommitted source changes).`,
   `  3. No active or submitted lease requires work that is ABSENT at HEAD, and the merge queue has no pending entry.`,
   `  4. The latest met verdict's "next:" pointer names no concrete gap whose required work is ABSENT at HEAD.`,
+  VERIFIER_CLOSES_COMPLETION,
   `If any item is unproven or fails, the loop is NOT complete: arm the highest-priority unmet item. Speculative polish, speed or taste preferences are not gaps and never justify re-arming. "No gap" means exactly these four checks pass, not that the repository is perfect.`,
 ].join("\n")
 
@@ -684,6 +693,8 @@ export function nativeEvaluationRequest(input: {
     `</parent-summary>`,
     ``,
     `The <parent-summary> above is the parent's complete work for this turn — judge it against the <condition> and nothing else. If it does not show evidence that the condition holds, answer not_met. Do not invent or import a different condition just because another one appears in your instructions or memory.`,
+    ``,
+    VERIFIER_CLOSES_COMPLETION,
     ``,
     // The condition echo is a cross-session guard: a free-tier judge sometimes replays a verdict from a totally
     // different goal. Require it to copy <condition> verbatim so verdictFromNativeReport can reject a stale reply.
