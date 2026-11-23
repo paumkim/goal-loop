@@ -10973,7 +10973,6 @@ New regression in `test/failure-signature.test.ts` compares cold and warm signat
 independent reimplementation of the original fold across punctuation, whitespace, unicode and long
 inputs, and pins that a six-entry repeated-reason history still counts 7 on both passes. Focused suite
 21 pass / 0 fail (was 20). Typecheck clean. Marker `tests=2254 -> 2255`.
-<<<<<<< HEAD
 ## Workstream CLXXV — one source for the evaluator-hint prefix (2026-11-23)
 
 `EVALUATOR_HINT_FULL` in `src/core/hud.ts` repeated the `EVALUATOR_HINT_CARD` sentence verbatim as
@@ -10981,10 +10980,9 @@ its prefix. It is now a template literal built from the card constant, so the tw
 apart. Both exported strings are byte-identical to before (asserted by `test/tui-hud.test.tsx`, which
 pins both constants); focused suite 177 pass / 0 fail. No behavior, signature or test change. Marker
 unchanged by this change; merged marker `files=143 tests=2255`.
-=======
 
 
-## Workstream CLXXV — delete the last duplicate verify runtime sets (2026-11-23)
+## Workstream CLXXVI — delete the last duplicate verify runtime sets (2026-11-23)
 
 Repo improvement pass, dead-code removal unit.
 
@@ -10994,7 +10992,7 @@ copy (`EVIDENCES`). Together with the earlier `VERIFY_CHECK_TYPES` dedup, these 
 declarations of contracts that already have one canonical home. All four are **deleted**; the modules
 now import the canonical sets. Evidence: `grep -rn '^const VERIFY_SOURCES\|^const VERIFY_EVIDENCE_MODES: ReadonlySet\|^const VERIFY_RUN_STATES\|^const EVIDENCES' src/core/*.ts` → none.
 
-## Workstream CLXXVI — one canonical runtime vocabulary for the verify contract (2026-11-23)
+## Workstream CLXXVII — one canonical runtime vocabulary for the verify contract (2026-11-23)
 
 Repo improvement pass, config/style unification unit.
 
@@ -11004,7 +11002,7 @@ previously private `VerifyCheckRunState`. `config.ts`, `verify-matrix.ts` and `w
 sets, so accepted values have one source of truth across parse, config resolution and RPC validation.
 New test in `test/wire.test.ts` pins the exact literals of each set. Typecheck clean.
 
-## Workstream CLXXVII — memoize the sanitizer's prefix probe (2026-11-23)
+## Workstream CLXXVIII — memoize the sanitizer's prefix probe (2026-11-23)
 
 Repo improvement pass, measured hot-path unit.
 
@@ -11014,4 +11012,3 @@ m keyed by the raw half turns a repeat into one lookup. Measured with the same h
 (`/tmp/opencode/bench-sanitize2.ts`, 100 cycles x 3 long inputs, 20 rounds, median of runs):
 `1.40 ms -> 0.33 ms`, ~4.2x. New test in `test/sanitize.test.ts` pins cold/warm byte-identical output and
 idempotence after the cache is warm. Focused suites 69 pass / 0 fail. Combined marker `tests=2255 -> 2257`.
->>>>>>> e596762 (refactor: one verify vocabulary; memoize sanitizer probe)
