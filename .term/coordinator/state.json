@@ -6353,6 +6353,17 @@
       ],
       "mergedAt": "2026-11-23T12:52:47Z",
       "mergedInto": "dev"
+    },
+    "judge-parent-child-parity": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts",
+      "branch": "wt/judge-parent-child-parity",
+      "worktree": "worktree/wt-judge-parent-child-parity",
+      "status": "done",
+      "createdAt": "2026-11-23T13:07:27Z",
+      "submittedAt": "2026-11-23T13:17:11Z",
+      "mergedAt": "2026-11-23T13:19:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
