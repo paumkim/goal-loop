@@ -1,5 +1,7 @@
 # Land Integration Branch to Release Branch
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Promote the integration branch to the release branch using the repository's sanctioned release process, from a clean checkout.
 
 ## Preconditions (must all hold; stop and report if not)

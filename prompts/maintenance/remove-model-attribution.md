@@ -1,5 +1,7 @@
 # Remove AI Model Attribution Stamps
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Clean the current repository of AI model attribution claims while preserving legitimate code and required literals.
 
 ## Remove

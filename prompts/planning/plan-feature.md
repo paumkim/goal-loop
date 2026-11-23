@@ -1,5 +1,7 @@
 # Plan a Feature or Change
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Turn a request into a small, verifiable plan before writing code.
 
 ## Before acting

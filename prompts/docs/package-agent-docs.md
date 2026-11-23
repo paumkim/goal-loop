@@ -1,5 +1,7 @@
 # Create/Update Package AGENT Documentation
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Write a documentation system for future agents so they can use, configure, and maintain the current project without guessing.
 
 ## Deliverable

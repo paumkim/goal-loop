@@ -1,5 +1,7 @@
 # Diff Self-Review
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Review your own uncommitted diff before you commit or hand work off. Catch
 defects, scope leaks, and missing tests while the change is still cheap to fix.
 

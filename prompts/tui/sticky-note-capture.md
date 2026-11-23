@@ -1,5 +1,7 @@
 # TUI Persistent Sticky-Note Capture
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Build a low-friction, persistent sticky-note capture system in the TUI so users can jot thoughts, feedback, bugs, and feature ideas mid-conversation without losing focus.
 
 ## Discovery and constraints

@@ -1,5 +1,7 @@
 # Goal/Plugin Repository Improvement Pass
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Run a continuous, evidence-based improvement pass over a goal-loop-style plugin repository: remove bloat, unify inconsistencies, and improve speed/responsiveness without changing intended behavior unless tests or spec require it.
 
 Repo-specific specialization of `maintenance/universal-improvement-pass.md`; the shared method is inlined here so this file stands alone.

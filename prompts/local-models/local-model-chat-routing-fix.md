@@ -1,5 +1,7 @@
 # Fix Local Model Chat Routing
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Wire local model selection into the actual chat/completion pipeline so that choosing a local model routes requests to it immediately, with safe fallback behavior.
 
 ## Discovery

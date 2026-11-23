@@ -1,5 +1,7 @@
 # Safe Refactor
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Restructure code to improve clarity or reduce duplication while preserving
 observable behavior.
 

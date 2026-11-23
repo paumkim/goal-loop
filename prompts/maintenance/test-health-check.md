@@ -1,5 +1,7 @@
 # Test Health Check
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Run the current repository's tests and improve test health without lowering
 coverage or hiding failures.
 

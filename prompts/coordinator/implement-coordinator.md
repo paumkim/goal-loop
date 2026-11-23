@@ -1,5 +1,7 @@
 # Implement a CLI-Independent Coordinator System
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Implement a coordinator system for the current repository so multiple agents (from different CLIs/tools) can work safely without colliding.
 
 ## Problem

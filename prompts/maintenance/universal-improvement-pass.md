@@ -1,5 +1,7 @@
 # Universal Improvement Pass
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Improve clarity, consistency, and performance in the current repository without changing intended behavior unless tests or specification require it. Canonical method for the improvement-pass family (see `goal-loop/goal-repo-improvement-pass.md` for the plugin specialization and `maintenance/autonomous-maintainer.md` for the single-unit variant).
 
 ## Before acting

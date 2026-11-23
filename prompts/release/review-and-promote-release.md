@@ -1,5 +1,7 @@
 # Review, Fix, and Promote Release
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 You are the release coordinator for the current repository. Review everything merged to the integration branch since the last release promotion, fix what needs fixing properly, then promote to the release branch and rebuild artifacts as required.
 
 ## Ground rules
