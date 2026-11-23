@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
-import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX } from "../src/core/evaluator-agent.ts"
+import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "../src/core/evaluator-agent.ts"
 import { PLANNER_AGENT_ID } from "../src/core/planner.ts"
 
 /** A throwaway git repository with a `dev` branch. */
@@ -1159,7 +1159,6 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       expect(evaluator.system).toBe(EVALUATOR_SYSTEM_PROMPT)
       expect(evaluator.system).toContain("You are the Evaluator")
       expect(evaluator.permissions).toEqual([{ action: "*", resource: "*", effect: "deny" }])
-      expect(SUBAGENT_PROMPT_PREFIX).toBe("You are a subagent spawned by another session.\n")
     } finally {
       await dispose?.()
     }

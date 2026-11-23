@@ -14,9 +14,6 @@ import { parseVerdict } from "./verdict.ts"
 export const EVALUATOR_AGENT_ID = "evaluator"
 export const EVALUATOR_AGENT_TITLE = "evaluator"
 
-/** The exact prefix the host's own `subagent` tool prepends to every delegated prompt. */
-export const SUBAGENT_PROMPT_PREFIX = "You are a subagent spawned by another session.\n"
-
 /** True for a native `<subagent>` completion report whose agent was the goal-loop evaluator. */
 export function isEvaluatorReport(metadata: unknown): boolean {
   if (!metadata || typeof metadata !== "object") return false
