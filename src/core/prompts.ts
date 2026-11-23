@@ -85,8 +85,12 @@ const commitRuleSentence = (policy: CommitPolicy, kind: "suffix" | "prompt" | "c
   }
 }
 
-/** The coordinator flow injected into every /goal prompt in a coordinator repo. */
-function coordinatorFlow(policy: CommitPolicy): string {
+/**
+ * The coordinator flow injected into every /goal prompt in a coordinator repo, and — from the context hook —
+ * into every worker model request whether or not a goal is armed. Exported as one home so the standing
+ * activation rule and the kickoff directive cannot drift apart.
+ */
+export function coordinatorFlow(policy: CommitPolicy): string {
   const target = policy.branch
   if (!policy.coordinatorBin) {
     // Detection held on the json markers but no absolute binary could be located: never invent or
@@ -506,7 +510,8 @@ export function systemReminder(condition: string, policy: CommitPolicy): string 
     `Only command output and test results visible in this conversation count as evidence.`,
   ]
   if (policy.required) {
-    if (policy.mode === "coordinator") lines.push(coordinatorFlow(policy))
+    // The claim-before-editing flow is injected standing by the context hook on every worker request, so
+    // it is not repeated here when a live goal also turns on the system reminder.
     lines.push(commitRuleSentence(policy, "system"))
   }
   lines.push(DELEGATE_VERDICT)

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import plugin from "../index.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT, SUBAGENT_PROMPT_PREFIX } from "../src/core/evaluator-agent.ts"
+import { PLANNER_AGENT_ID } from "../src/core/planner.ts"
 
 /** A throwaway git repository with a `dev` branch. */
 function repository(): string {
@@ -618,8 +619,72 @@ describe("the judge child's system prefix (CXXXVIII, opencode free gate)", () =>
     try {
       const event = { sessionID: "ses_worker", agent: "build", model: {}, system: systemParts(), messages: [], tools: {}, options: {} }
       hooks.context!(event)
-      expect(event.system).toHaveLength(4)
+      // 4 host parts + the standing coordinator claim rule (every worker activation, not just armed goals).
+      expect(event.system).toHaveLength(5)
       expect(JSON.stringify(event.system)).toContain("dogfood")
+      expect(JSON.stringify(event.system)).toContain("Before editing: claim first")
+    } finally {
+      await dispose?.()
+    }
+  })
+})
+
+describe("the standing coordinator activation rule", () => {
+  test("a worker in a coordinator repo gets the claim-before-edit flow with no goal and the reminder off", async () => {
+    const directory = coordinatorRepository()
+    const { ctx, hooks } = context(directory) // no /goal armed, systemReminder defaults off
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const activate = (sessionID: string) => {
+        const event = { sessionID, agent: "build", model: {}, system: [] as any[], messages: [], tools: {}, options: {} }
+        hooks.context!(event)
+        return event.system.map((part: any) => part.text).join("\n")
+      }
+      const first = activate("ses_w1")
+      expect(first).toContain("Coordinator repo. Before editing: claim first")
+      expect(first).toContain("coordinator claim <goal-slug>")
+      expect(first).toContain("work only there")
+      expect(first).toContain("submit")
+      expect(first).toContain("Never commit to dev/main directly.")
+      // Not a one-shot: the same standing rule rides every later activation of the worker.
+      expect(activate("ses_w1")).toBe(first)
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("judge and planner children never receive the standing worker rule", async () => {
+    const directory = coordinatorRepository()
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      for (const agent of [EVALUATOR_AGENT_ID, PLANNER_AGENT_ID]) {
+        const event = {
+          sessionID: `ses_${agent}`,
+          agent,
+          model: { providerID: "opencode", id: "hy4-flash-free" },
+          system: [] as any[],
+          messages: [],
+          tools: {},
+          options: {},
+        }
+        hooks.context!(event)
+        expect(JSON.stringify(event.system)).not.toContain("Before editing: claim first")
+      }
+    } finally {
+      await dispose?.()
+    }
+  })
+
+  test("a directory with no git repository gets no lease rule", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "goal-nogit-"))
+    process.on("exit", () => rmSync(directory, { recursive: true, force: true }))
+    const { ctx, hooks } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const event = { sessionID: "ses_w", agent: "build", model: {}, system: [] as any[], messages: [], tools: {}, options: {} }
+      hooks.context!(event)
+      expect(event.system).toHaveLength(0)
     } finally {
       await dispose?.()
     }
@@ -881,7 +946,9 @@ describe("a terminal goal is inert in later context (LXVII)", () => {
       const event = { sessionID: "ses_1", agent: "build", model: {}, system: [] as any[], messages: [kickoff, keep], tools: {}, options: {} }
       hooks.context!(event)
       expect(event.messages).toEqual([keep])
-      expect(event.system).toHaveLength(0)
+      // No goal-shaped system line, but the standing coordinator claim rule is present on every activation.
+      expect(event.system).toHaveLength(1)
+      expect((event.system[0] as any).text).toContain("Before editing: claim first")
     } finally {
       await dispose?.()
     }
