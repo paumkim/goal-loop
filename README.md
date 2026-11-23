@@ -5,7 +5,7 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 
 [![Version](https://img.shields.io/github/v/tag/paumkim/goal-loop?label=version&color=blue)](https://github.com/paumkim/goal-loop/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Tests Passing](https://img.shields.io/badge/tests-2316%20passing-brightgreen.svg)](SPEC.md)
+[![Tests Passing](https://img.shields.io/badge/tests-passing-brightgreen.svg)](SPEC.md)
 [![OpenCode v2](https://img.shields.io/badge/opencode-v2.0.29%2B-purple.svg)](https://opencode.ai)
 [![Runtime: Bun](https://img.shields.io/badge/runtime-bun-black.svg)](https://bun.sh)
 [![Documentation](https://img.shields.io/badge/docs-online-blue.svg)](https://paumkim.github.io/goal-loop/)
