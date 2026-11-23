@@ -15,12 +15,13 @@
  * The footer is the real DialogFooter, never a hand-painted line. Both arms paint the verify section
  * (the last evaluator.verifyCommand gate's own output — the dialog's proof panel).
  */
-import { RGBA, TextAttributes } from "@opentui/core"
+import { TextAttributes } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { StatusDialogBody } from "../src/status-dialog.tsx"
 import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import { goalGlyph } from "../src/core/format.ts"
 import { positiveFinite } from "./positive-finite.ts"
+import { PALETTE } from "./render-theme.ts"
 import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
@@ -43,17 +44,17 @@ const now = Date.now()
 
 const theme: HistoryTheme & HudCardTheme = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-      error: { base: RGBA.fromHex("#ff6c6c") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
+      error: { base: PALETTE.error },
     },
   },
-  border: { base: RGBA.fromHex("#3f3f3f") },
-  background: { raised: { high: RGBA.fromHex("#161616") } },
+  border: { base: PALETTE.border },
+  background: { raised: { high: PALETTE.raised } },
 }
 
 const verdicts = [

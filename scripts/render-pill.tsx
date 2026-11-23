@@ -17,6 +17,7 @@ import { testRender } from "@opentui/solid"
 import { pillModel, terminalPill, breathCrest, type NeutralTheme } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 import { widthFlag } from "./width-flag.ts"
+import { PALETTE } from "./render-theme.ts"
 
 const mono = process.argv.includes("--mono")
 if (mono) process.env.NO_COLOR = "1"
@@ -24,14 +25,14 @@ const terminal = widthFlag(process.argv.slice(2), 150)
 
 const theme: NeutralTheme<RGBA> = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-      error: { base: RGBA.fromHex("#ff6c6c") },
-      success: { base: RGBA.fromHex("#7ee787") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
+      error: { base: PALETTE.error },
+      success: { base: PALETTE.success },
     },
   },
 }
