@@ -153,6 +153,13 @@ describe("dossierOutline", () => {
     expect(outline.map((entry) => entry.id)).toEqual(["custom", "custom-2", "custom-3"])
   })
 
+  test("a heading whose own slug is a generated suffix does not steal another heading's id", () => {
+    const doc = ["## Custom", "", "a", "", "## Custom-2", "", "b", "", "## Custom", "", "c"].join("\n")
+    const outline = dossierOutline(doc)
+    expect(outline.map((entry) => entry.id)).toEqual(["custom", "custom-2", "custom-3"])
+    expect(new Set(outline.map((entry) => entry.id)).size).toBe(outline.length)
+  })
+
   test("labels are ≤ 12 columns — known labels fit, unknown headings truncate with a trailing ellipsis", () => {
     for (const entry of dossierOutline(DOC)) {
       expect(entry.label.length).toBeLessThanOrEqual(DOSSIER_OUTLINE_LABEL_MAX)

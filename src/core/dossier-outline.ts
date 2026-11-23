@@ -90,15 +90,18 @@ export const dossierOutline = (markdown: string): readonly DossierOutlineEntry[]
       headings.push({ line: i, title: raw.slice(3) })
     }
   }
-  const seen = new Map<string, number>()
+  // Allocate against the IDs actually taken, not a per-base counter: a heading whose own slug is a
+  // generated suffix (e.g. "Custom-2") would otherwise collide with the second "Custom" and both
+  // chips would acknowledge together. Non-colliding documents get byte-identical IDs.
+  const used = new Set<string>()
   const out: DossierOutlineEntry[] = []
   for (let i = 0; i < headings.length; i += 1) {
     const heading = headings[i]!
     const endLine = i + 1 < headings.length ? headings[i + 1]!.line : lines.length
     const base = slugOf(heading.title)
-    const count = seen.get(base) ?? 0
-    seen.set(base, count + 1)
-    const id = count === 0 ? base : `${base}-${count + 1}`
+    let id = base
+    for (let n = 2; used.has(id); n += 1) id = `${base}-${n}`
+    used.add(id)
     out.push({
       id,
       label: labelOf(heading.title),
