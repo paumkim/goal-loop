@@ -57,6 +57,10 @@ export interface UsageSnapshot {
 export const EMPTY_USAGE: UsageSnapshot = { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
 
 export type VerifyCheckType = "typecheck" | "tests" | "lint" | "build" | "smoke" | "custom" | "goal-declared"
+/** Runtime counterpart of {@link VerifyCheckType}: the one set of accepted verify-check types. */
+export const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set([
+  "typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared",
+])
 
 export type VerifyEvidenceMode = "command" | "artifact" | "either"
 export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"

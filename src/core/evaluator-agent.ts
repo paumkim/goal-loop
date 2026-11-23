@@ -116,8 +116,19 @@ function isForeignVerdict(body: string): boolean {
 }
 
 /** Normalize text for echo comparison: case/punctuation/whitespace-insensitive, unicode letters and digits kept. */
+/**
+ * Echo normalization is pure, but the NFKC pass plus Unicode punctuation fold is not cheap, and the
+ * same armed condition is echoed by many verdicts in a session. A bounded memo keyed by the raw text
+ * turns a repeat into one lookup. Unbounded growth is impossible (the map is capped).
+ */
+const ECHO_CACHE_LIMIT = 2048
+const echoCache = new Map<string, string>()
 function normalizeEcho(text: string): string {
-  return text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+  const hit = echoCache.get(text)
+  if (hit !== undefined) return hit
+  const result = text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+  if (echoCache.size < ECHO_CACHE_LIMIT) echoCache.set(text, result)
+  return result
 }
 
 /**

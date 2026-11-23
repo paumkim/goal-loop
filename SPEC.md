@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2252 -->
+<!-- spec-check files=143 tests=2254 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10914,3 +10914,43 @@ New regression test in `test/verify-matrix-goal-declared.test.ts` adds compile-t
 bindings across all three import paths (a drift fails `tsc`) plus a runtime case pinning the accepted
 literals (7 types, 3 evidence modes, 3 sources). Focused suite 9 pass / 0 fail (was 8). Typecheck clean.
 Marker `tests=2251 -> 2252`.
+
+
+## Workstream CLXXI — one canonical runtime set of verify-check types (2026-11-23)
+
+Repo improvement pass, dead-code removal + config unification units.
+
+The seven accepted verify-check types were declared three times as runtime sets: `VERIFY_TYPES` in
+`src/core/config.ts`, `TYPES` in `src/core/verify-matrix.ts`, and `VERIFY_CHECK_TYPES` in
+`src/core/wire.ts` — plus the `VerifyCheckType` union in `types.ts`. Three duplicate declarations of one
+contract, free to drift; no behavioral difference between them.
+
+`src/core/types.ts` now exports the single `VERIFY_CHECK_TYPES: ReadonlySet<string>`, beside the
+`VerifyCheckType` union it mirrors. The three modules import it and their local copies are **deleted**
+(config.ts still re-exports the union type from the earlier dedup workstream). `tsc --noEmit` clean.
+
+New test in `test/verify-matrix-goal-declared.test.ts` checks the canonical set holds exactly the seven
+types and drives `parseGoalDeclaredChecks` for every one of them (and rejects an off-list type).
+Combined marker for this lease's three units `tests=2252 -> 2254`.
+
+## Workstream CLXXII — memoize echo normalization for repeated conditions (2026-11-23)
+
+Repo improvement pass, measured hot path.
+
+`src/core/evaluator-agent.ts · normalizeEcho` performs a `toLowerCase`, an NFKC normalization and a
+Unicode punctuation fold on every call. `conditionEchoMatches` calls it for both the echoed condition
+and the armed condition on every verdict, and free-tier judges repeatedly echo the same armed text
+across a session. Added a bounded 2048-entry memo keyed by the raw string; a hit is one lookup, a miss
+recomputes, and the function is pure so every output is unchanged.
+
+Measured with the same harness before/after (`/tmp/opencode/bench-normalize-echo.ts`, 200 cycles x 8
+echo checks, 20 rounds, median of 3 runs): `1.28 ms -> 0.23 ms`, ~5.6x.
+
+New regression in `test/core.test.ts` compares `conditionEchoMatches` cold and warm against an
+independent reimplementation of the fold across exact, punctuated, unicode and blank echoes.
+
+## Workstream CLXXIII — verify the canonical set from every parse path (2026-11-23)
+
+The runtime pin for CLXXI: all seven check types parse through the shared set in
+`test/verify-matrix-goal-declared.test.ts`, and an off-list type is rejected by that same set rather
+than a per-module copy. Focused suites for this lease 184 pass / 0 fail; typecheck clean.

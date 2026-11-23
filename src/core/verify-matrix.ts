@@ -1,4 +1,5 @@
 import { formatValue } from "./errors.ts"
+import { VERIFY_CHECK_TYPES } from "./types.ts"
 import { headSha, findRepository } from "./git.ts"
 import { isBroadGoalCondition } from "./prompts.ts"
 import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
@@ -40,7 +41,6 @@ interface ScopePolicy {
   readonly reason: string
 }
 
-const TYPES = new Set<VerifyCheckType>(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
 const WHENS = new Set(["always", "broad"])
 const EVIDENCES = new Set<VerifyEvidenceMode>(["command", "artifact", "either"])
 
@@ -95,7 +95,7 @@ function parseDirectiveBody(body: string, index: number): ParsedGoalDeclaredChec
     return vals[vals.length - 1]
   }
   const typeRaw = one("type", true)!.value
-  if (!TYPES.has(typeRaw as VerifyCheckType)) throw new Error(`invalid type ${formatValue(typeRaw)}`)
+  if (!VERIFY_CHECK_TYPES.has(typeRaw)) throw new Error(`invalid type ${formatValue(typeRaw)}`)
   const type = typeRaw as VerifyCheckType
   const cmdTok = one("cmd") ?? one("command")
   if (!cmdTok) throw missingRequired("cmd")

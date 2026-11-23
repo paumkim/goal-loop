@@ -18,6 +18,7 @@ import type {
   Verdict,
   VerdictEntry,
 } from "./types.ts"
+import { VERIFY_CHECK_TYPES } from "./types.ts"
 
 /** Normalizes paths for cross-platform equality (case-insensitive drive letters, separators). */
 export const sameDirectory = (a: string, b: string) => {
@@ -101,7 +102,6 @@ const isUsageSnapshot = (value: unknown): value is UsageSnapshot =>
   isFiniteNumber(value.cacheRead) &&
   isFiniteNumber(value.cacheWrite)
 
-const VERIFY_CHECK_TYPES: ReadonlySet<string> = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
 const VERIFY_SOURCES: ReadonlySet<string> = new Set(["configured", "legacy", "goal-declared"])
 const VERIFY_EVIDENCE_MODES: ReadonlySet<string> = new Set(["command", "artifact", "either"])
 const VERIFY_RUN_STATES: ReadonlySet<string> = new Set(["executed", "artifact", "reused", "skipped"])

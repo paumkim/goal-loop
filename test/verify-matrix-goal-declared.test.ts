@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { computeScopePolicy, parseGoalDeclaredChecks, resolveVerifyChecks, evaluateCoveragePolicy } from "../src/core/verify-matrix.ts"
+import { VERIFY_CHECK_TYPES, type VerifyCheckType } from "../src/core/types.ts"
 import type { VerifyCheckType as TCanonical, VerifyEvidenceMode as ECanonical, VerifyCheckSource as SCanonical } from "../src/core/types.ts"
 import type { VerifyCheckType as TConfig, VerifyEvidenceMode as EConfig } from "../src/core/config.ts"
 import type { VerifyEvidenceMode as EMatrix, VerifyCheckSource as SMatrix } from "../src/core/verify-matrix.ts"
@@ -129,5 +130,20 @@ describe("verification union types have one canonical home", () => {
     expect(types.length).toBe(7)
     expect(evidence.length).toBe(3)
     expect(sources.length).toBe(3)
+  })
+})
+
+describe("verify check types have one canonical set", () => {
+  test("the canonical set drives parsing in config and verify-matrix for every accepted type", () => {
+    const all = ["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]
+    expect([...VERIFY_CHECK_TYPES].sort()).toEqual(all.slice().sort())
+    for (const type of all) {
+      const parsed = parseGoalDeclaredChecks(`Fix it.\nverify: type=${type} cmd="bun test" id=x`)
+      expect(parsed.checks.length).toBe(1)
+      expect(parsed.checks[0]?.type).toBe(type as VerifyCheckType)
+      expect(parsed.malformed.length).toBe(0)
+    }
+    // An off-list type is rejected by the same set, not by a per-module copy.
+    expect(parseGoalDeclaredChecks('Fix it.\nverify: type=bogus cmd="bun test" id=x').malformed.length).toBe(1)
   })
 })

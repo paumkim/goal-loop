@@ -164,6 +164,15 @@ function stringWidth(string, options = {}) {
 // src/core/types.ts
 var LIVE_STATUSES = new Set(["active", "paused"]);
 var isLive = (status) => LIVE_STATUSES.has(status);
+var VERIFY_CHECK_TYPES = new Set([
+  "typecheck",
+  "tests",
+  "lint",
+  "build",
+  "smoke",
+  "custom",
+  "goal-declared"
+]);
 var COMPACT_MISS_CAP = 4;
 var MAX_LOOP_HISTORY_ENTRIES = 50;
 var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.loopHistory?.length ?? 0);
@@ -5921,7 +5930,6 @@ var isNoticeKind = (value) => isString(value) && NOTICE_KINDS.has(value);
 var NOTICE_LEVELS = new Set(["info", "success", "warning", "error"]);
 var isNoticeLevel = (value) => isString(value) && NOTICE_LEVELS.has(value);
 var isUsageSnapshot = (value) => isRecord(value) && isFiniteNumber(value.cost) && isFiniteNumber(value.input) && isFiniteNumber(value.output) && isFiniteNumber(value.reasoning) && isFiniteNumber(value.cacheRead) && isFiniteNumber(value.cacheWrite);
-var VERIFY_CHECK_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"]);
 var VERIFY_SOURCES = new Set(["configured", "legacy", "goal-declared"]);
 var VERIFY_EVIDENCE_MODES = new Set(["command", "artifact", "either"]);
 var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);

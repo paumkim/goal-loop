@@ -1,5 +1,6 @@
 import { parseBool } from "./parse.ts"
 import type { CommitRequest, ModelRef, VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
+import { VERIFY_CHECK_TYPES } from "./types.ts"
 // Canonical unions live in types.ts; re-exported here so existing `from "./config.ts"` imports keep working.
 export type { VerifyCheckType, VerifyEvidenceMode } from "./types.ts"
 
@@ -161,7 +162,6 @@ const branch = (value: unknown, fallback: string) => {
 }
 
 
-const VERIFY_TYPES = new Set(["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"])
 
 function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyCheckConfig[] {
   if (!Array.isArray(value)) return []
@@ -172,7 +172,7 @@ function parseVerifyChecks(value: unknown, fallbackTimeoutMs: number): VerifyChe
     const command = typeof v.command === "string" ? v.command.trim() : ""
     if (!command) continue
     const typeRaw = typeof v.type === "string" ? v.type.trim().toLowerCase() : "custom"
-    const type = (VERIFY_TYPES.has(typeRaw) ? typeRaw : "custom") as VerifyCheckType
+    const type = (VERIFY_CHECK_TYPES.has(typeRaw) ? typeRaw : "custom") as VerifyCheckType
     const idRaw = typeof v.id === "string" ? v.id.trim() : ""
     const id = idRaw || `${type}-${out.length + 1}`
     const when = v.when === "broad" ? "broad" : "always"
