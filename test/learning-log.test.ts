@@ -413,7 +413,9 @@ describe("learning-log runtime emission", () => {
     expect(turnRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows.length).toBeGreaterThanOrEqual(1)
     expect(iterRows[0]?.iteration).toBe(1)
-    expect(iterRows[0]?.summary || iterRows[0]?.lesson).toBeTruthy()
+    expect(typeof iterRows[0]?.summary).toBe("string")
+    expect(iterRows[0]!.summary!.length).toBeGreaterThan(0)
+    expect(iterRows[0]?.lesson).toMatch(/^Iteration v1 met /)
     // loop ended clean (no planner) -> also terminal achieved
     expect(goalRows.some((r) => r.status === "achieved")).toBe(true)
   })
