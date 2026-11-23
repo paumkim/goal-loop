@@ -728,6 +728,24 @@ describe("prompts", () => {
       expect(independent).toContain(token)
     }
   })
+  test("the evaluator's next: none is a bounded completion condition, not a subjective 'no gap'", () => {
+    const facts = { turn: 1, elapsedMs: 1_000 }
+    for (const text of [
+      evaluateInSession("all objective gates pass", facts, COMMIT),
+      evaluateIndependently("all objective gates pass", facts, "transcript", COMMIT),
+    ]) {
+      expect(text).toContain("Bounded completion condition")
+      expect(text).toContain("Every required check and verifier command for the goal passes with exit 0 and zero failures")
+      expect(text).toContain("git status --short shows no uncommitted source changes")
+      expect(text).toContain("No active or submitted lease requires work that is ABSENT at HEAD")
+      expect(text).toContain("names no concrete gap whose required work is ABSENT at HEAD")
+      expect(text).toContain("Speculative polish, speed or taste preferences are not gaps")
+      expect(text).toContain("next: none")
+      // The unbounded wording kept re-arming a fully green build; it must be gone from both judges.
+      expect(text).not.toContain("when met with improvements remaining")
+      expect(text).not.toContain("when met with no gap")
+    }
+  })
   test("the evaluator rubric bounds deliberation without dropping the evidence contract (CXXV)", () => {
     const facts = { turn: 1, elapsedMs: 1_000 }
     for (const text of [
