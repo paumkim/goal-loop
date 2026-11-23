@@ -5499,14 +5499,24 @@
       "paths": "src/core/outcome-telemetry.ts,test/outcome-telemetry.test.ts,src/core/evaluator-agent.ts,test/core.test.ts",
       "branch": "wt/core-pure-cleanups",
       "worktree": "worktrees/wt-core-pure-cleanups",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T00:29:28Z",
       "submittedAt": "2026-11-23T00:33:46Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-23T00:33:46Z",
       "forcedScopeFiles": [
         "SPEC.md"
-      ]
+      ],
+      "mergedAt": "2026-11-23T00:40:45Z",
+      "mergedInto": "dev"
+    },
+    "doc-comment-cleanup": {
+      "agent": "loop-worker",
+      "paths": "src/core/wire.ts,src/core/hud.ts,docs/improvement-backlog.json,SPEC.md,docs/changelog.html",
+      "branch": "wt/doc-comment-cleanup",
+      "worktree": "worktrees/wt-doc-comment-cleanup",
+      "status": "claimed",
+      "createdAt": "2026-11-23T00:40:14Z"
     }
   },
   "mergeLock": null,
