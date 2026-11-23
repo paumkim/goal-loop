@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2259 -->
+<!-- spec-check files=143 tests=2261 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11103,3 +11103,25 @@ Measured before/after (400 clean tag-free lines, 200 sweeps, best of 30): `8.81 
 ~12.6x. Harness: `/tmp/opencode/bench-sanitize-clean.ts`. Correctness: new regression test pins the
 fast path against the trimmed text across empty/whitespace/Unicode/no-angle cases; focused suite
 (sanitize) 17 pass / 0 fail, 44 expect() calls. `tsc --noEmit` clean.
+## Workstream CLXXXVI — the live pill shows the turn being run (2026-11-23)
+
+The screenshot that triggered this workstream (2026-11-22 20:25) captured the mismatch plainly: the
+transcript's re-dispatched continuation was labelled `goal · turn 2` while the ambient pill read
+`⊙ loop · v1/100 · active · 3h12m · 1 turn`. `GoalRecord.turns` counts COMPLETED evaluations, so a
+not_met verdict bumps it to N and the controller re-dispatches turn N+1, but the pill painted N verbatim —
+it looked frozen for the whole working turn and disagreed with every `turn N+1` label in the conversation.
+
+`src/core/hud.ts` now exports `currentTurnCount(goal)`: an active goal shows `turns + 1` (the turn actually
+being run), so the counter visibly advances at each not_met re-dispatch; paused and terminal goals keep
+`turns`, which equals the last number the live pill painted, so settling never moves the count backwards.
+`pillModel` renders that count; the terminal pill's evaluator count is unchanged. Nothing in the state
+machine changed — no `turns` write, no maxTurns/stall arithmetic, no verdict/loop ledger field.
+
+Verification: `test/tui-hud.test.tsx` grows three cases (fresh arm reads 1; two successive not_met
+re-dispatches read 2 then 3; evaluating/paused/terminal keep the evaluated count with no backwards jump)
+and the two exact-frame assertions are restated for the live count. Focused suite 179 pass / 0 fail;
+coherence suite 6 pass / 0 fail. `bun run check` green: 2261 pass / 0 fail, 29 snapshots, dist/tui.js
+rebuilt from source, TUI load, docs freshness, invariant-sweep and spec-check (`files=143 tests=2261`).
+
+
+
