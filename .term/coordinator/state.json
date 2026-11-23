@@ -5771,8 +5771,17 @@
       "paths": "src/core/format.ts,src/core/failure-signature.ts,src/runtime/controller.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/normalize-condition-unify",
       "worktree": "worktrees/wt-normalize-condition-unify",
-      "status": "claimed",
-      "createdAt": "2026-11-23T02:57:28Z"
+      "status": "done",
+      "createdAt": "2026-11-23T02:57:28Z",
+      "submittedAt": "2026-11-23T03:05:37Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T03:05:37Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/failure-signature.test.ts"
+      ],
+      "mergedAt": "2026-11-23T03:11:42Z",
+      "mergedInto": "dev"
     },
     "coordinator-merge-status": {
       "agent": "build",
