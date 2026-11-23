@@ -35,7 +35,7 @@ import { readFileSync } from "node:fs"
 import { isAbsolute, join } from "node:path"
 import { appendLearningEntry, buildGoalArmedLearningEntry, buildGoalTerminalLearningEntry, buildLoopIterationLearningEntry, buildSessionOutcomeLearningEntry, buildTurnVerdictLearningEntry, readLearningEntriesTail, type LearningEntry } from "../core/learning-log.ts"
 import { formatLearningsForPrompt } from "../core/outcome-telemetry.ts"
-import { detectRepeatedFailureSignature, FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, strategyForRepeat } from "../core/failure-signature.ts"
+import { FAILURE_SIGNATURE_REPEAT_THRESHOLD, failureEscalationReason, persistFailureDiagnosticArtifact, recognizeNoProgress, strategyForRepeat } from "../core/failure-signature.ts"
 import { resolveProjectRoot } from "../core/git.ts"
 import { isWindowsDrivePathOnPosix } from "../core/wire.ts"
 import { sameDirectory, type GoalStore } from "./store.ts"; import { stripUndefined } from "../core/wire.ts"
@@ -1520,7 +1520,14 @@ export class GoalController {
       this.notify(sessionID, "loop", "warning", "No progress — loop keeps running", `${stall} turns in a row without tool use; an armed /goal-loop does not pause. Run /goal clear to stop it.`)
     }
     if (result.verdict === "not_met" && record.status === "active") {
-      const detected = detectRepeatedFailureSignature(record.history.slice(0, -1), { ...verdictEntry, verdict: "not_met" as const })
+      const detected = recognizeNoProgress({
+        info: { ...verdictEntry, verdict: "not_met" as const },
+        history: record.history.slice(0, -1),
+        tools,
+        retries: record.retries,
+        stall,
+        loopNotProgress: record.loopNotProgress ?? 0,
+      })
       if (detected) {
         const escalation = failureEscalationReason(detected)
         const diagnostic = persistFailureDiagnosticArtifact({
@@ -1556,6 +1563,7 @@ export class GoalController {
             kind: detected.kind,
             summary: detected.summary,
             strategy: rotation.strategy,
+            signals: detected.signals,
             ...(diagnostic ? { diagnostic } : {}),
             learnings: this.recentLearningsForPrompt(record),
           }, this.commitForSession(sessionID)),

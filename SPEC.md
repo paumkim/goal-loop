@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2304 -->
+<!-- spec-check files=143 tests=2310 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1560,6 +1560,27 @@ Verification: new regression in `test/failure-signature.test.ts` writes 12 escal
 3 of another and pins an independent oracle of exactly 2 files, the latest count/turn in the overwritten
 artifact, and path stability on repeat. Focused suite: 130 pass / 0 fail, 689 expect() calls. Full
 `bun run check` green after artifact regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CCV — one universal no-progress recognizer (universal-no-progress-recognition) (2026-11-23)
+
+CCIII's escalation still keyed on a single repeated *identical* failure signature, so alternating gaps —
+the "no evidence of work ... zero tool calls this turn" downgrade recurring beside other reasons — could
+keep a goal stuck without ever matching. The trigger is now one pure recognizer,
+`recognizeNoProgress()` in `src/core/failure-signature.ts`, which reads six independent signals in one pass:
+`repeated_signature`, `diverse_failure` (three not_met turns with *different* signatures), `zero_tool_turn`,
+`retry_streak`, `stall`, and `loop_not_progress`. Any signal produces one escalation; the streak is the max
+across signals, rotation keeps advancing, and every recognized signal is named in the steer
+("Recognized no-progress signals: ..."). The result is a single self-recognizing mechanism for every stuck
+shape instead of a special case per guard, and it still routes through the proactive, non-pausing path from
+CCIII — loops and plain goals alike. `detectRepeatedFailureSignature` remains the low-level primitive; the
+controller calls only the recognizer.
+
+Verification: six new pure regressions in `test/failure-signature.test.ts` use independent oracles for
+alternating signatures, dual signals, zero-tool turns below threshold, scalar retry/stall/loop signals,
+non-stuck states, and verification-kind parity; `test/controller.test.ts` now pins that different
+signatures produce a `diverse_failure` escalation instead of evading it; `test/core.test.ts` pins the
+visible signal list. Focused suite: 322 pass / 0 fail, 178078 expect() calls. Full `bun run check` green after
+artifact regeneration; marker re-counted, no shipped file added or removed.
 
 ## Historical workstreams
 
