@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2257 -->
+<!-- spec-check files=143 tests=2258 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11076,3 +11076,18 @@ calls; `tsc --noEmit` clean. Measured hot sweeps before -> after (best of 20, 40
 `cellWidth 0.29 -> 0.28 ms`, `findMatches 1.54 -> 1.47 ms`, `stripReasoningControl 30.91 -> 30.41 ms`,
 `truncate 0.86 -> 0.82 ms` — no regression, differences within noise. Marker unchanged at
 `files=143 tests=2257` — no new tests, no shipped-file change.
+
+## Workstream CLXXXIV — precompile the lenient verdict patterns (2026-11-23)
+
+Hot-path speedup in `src/core/verdict.ts · lenientFields`, which runs for every malformed evaluator
+verdict (a raw newline or stray quote in the reason that strict JSON.parse rejects). It used to build
+four field and up to three reason `RegExp` objects on every call. Compiled the seven patterns once at
+module load and reused them; the `g` field patterns reset `lastIndex` at each use to preserve the old
+fresh-regex behavior exactly (including the object-key guard that skips a verdict quoted inside the
+reason). Regression test added for the shared-regex state: without the reset, a second lenient call
+silently loses its verdict (`test/core.test.ts`). Differential oracle: 31 curated verdict strings plus
+5000 interleaved stress calls, HEAD vs optimized `parseVerdict`, zero output mismatches. Focused suites
+(core, evaluator) 229 pass / 0 fail; full suite 2258 pass / 0 fail. Bench (best of 30, 3000 calls x 4
+lenient cases): baseline 35.37 ms → optimized 31.19 ms (~1.13x); five paired best-of-30 runs gave
+1.07x–1.15x, all positive. `tsc --noEmit` clean. Marker bumped 2257 → 2258 tests (no files added);
+no behavior change.
