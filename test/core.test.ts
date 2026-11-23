@@ -1396,8 +1396,25 @@ describe("native evaluator verdict", () => {
     expect(kickoff).not.toContain("task tool")
     expect(kickoff).not.toContain("Prove progress")
     expect(DELEGATE_VERDICT).toContain("do not delegate, judge, or narrate the verdict")
-    expect(DELEGATE_VERDICT).toContain("separate evaluator judges the condition after your turn")
+    expect(DELEGATE_VERDICT).not.toContain("after your turn") // the conflicting evaluator-timing advice is gone
     expect(DELEGATE_VERDICT).toContain("Never state, declare, or assess whether the condition is met")
+  })
+
+  test("the verdict handoff makes delegated background subagents safe and drops timing advice (CCIX)", () => {
+    // A parent must be able to end its turn while subagents run: goal-loop defers the verdict for active
+    // sessions, and the harness injects the reports back to wake the parent. No "judges after your turn" worry.
+    expect(DELEGATE_VERDICT).toContain("goal-loop detects active sessions and defers its verdict")
+    expect(DELEGATE_VERDICT).toContain("no nudge")
+    expect(DELEGATE_VERDICT).toContain("the harness injects results back to wake you")
+    expect(DELEGATE_VERDICT).not.toContain("after your turn")
+    for (const text of [
+      directive("all tests pass", COMMIT),
+      continuation({ condition: "a", turn: 2, reason: "not yet" }, COMMIT),
+      checkin({ condition: "a", waitedMs: 1_000, subagents: 1, shells: 0 }, COMMIT),
+      systemReminder("a", COMMIT),
+    ]) {
+      expect(text).toContain("the harness injects results back to wake you")
+    }
   })
 
   test("every worker-facing prompt ends with the shared no-judge invariant (CXLII coverage hole)", () => {
