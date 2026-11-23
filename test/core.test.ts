@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, formatValue, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, elideAtWordBoundary, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatCost, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import { PLANNED_CONDITION_MAX_CHARS, parsePlan, planGoalRequest } from "../src/core/planner.ts"
@@ -1146,6 +1146,27 @@ describe("formatDurationCoarse regression: non-finite input", () => {
     expect(formatDurationCoarse(Number.NaN)).toBe("<1m")
     expect(formatDurationCoarse(Number.POSITIVE_INFINITY)).toBe("<1m")
     expect(formatDurationCoarse(Number.NEGATIVE_INFINITY)).toBe("<1m")
+  })
+})
+
+describe("formatTokens/formatCost regression: non-finite input", () => {
+  test("non-finite token and cost metrics render as zero, never NaNM/InfinityM", () => {
+    expect(formatTokens(Number.NaN)).toBe("0")
+    expect(formatTokens(Number.POSITIVE_INFINITY)).toBe("0")
+    expect(formatTokens(Number.NEGATIVE_INFINITY)).toBe("0")
+    expect(formatCost(Number.NaN)).toBe("$0")
+    expect(formatCost(Number.POSITIVE_INFINITY)).toBe("$0")
+    expect(formatCost(Number.NEGATIVE_INFINITY)).toBe("$0")
+  })
+  test("finite values are byte-identical to the pre-guard formatting", () => {
+    expect(formatTokens(950)).toBe("950")
+    expect(formatTokens(12_345)).toBe("12k")
+    expect(formatTokens(2_500_000)).toBe("2.50M")
+    expect(formatCost(0)).toBe("$0")
+    expect(formatCost(-5)).toBe("$0")
+    expect(formatCost(0.005)).toBe("<$0.01")
+    expect(formatCost(0.5)).toBe("$0.50")
+    expect(formatCost(12.345)).toBe("$12.35")
   })
 })
 

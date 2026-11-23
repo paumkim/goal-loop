@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2287 -->
+<!-- spec-check files=143 tests=2289 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11282,3 +11282,18 @@ Verification: new regression in `test/core.test.ts` pins NaN, `+Infinity`, and `
 (the coarse rendering of a zero duration), mirroring the existing `formatDuration` non-finite pin.
 Focused suite: 178 pass / 0 fail, 177329 expect() calls. Full `bun run check` green after artifact
 regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CC — non-finite guards in the token/cost formatters (format-finite-guards) (2026-11-23)
+
+Follow-up to CXCIX. `formatDuration` and the coarse renderer now treat a non-finite clock as zero,
+and the dossier/attestation call sites already guard `Number.isFinite` before formatting spend and
+context metrics — but `formatTokens`/`formatCost` themselves did not, and the TUI passes raw snapshot
+values (`contextSize`, `compactAtTokens`, `estimatedTokens`, peak) without a guard. A NaN or Infinity
+metric therefore painted `NaNM`/`InfinityM`/`$NaN` in always-on chrome. Both formatters now guard
+non-finite once at the source, so every surface agrees; negative cost still maps to `$0` and every
+finite input is byte-identical to the old formatting.
+
+Verification: new regression in `test/core.test.ts` pins NaN and both infinities to `0`/`$0` for both
+formatters, plus a finite-value oracle across the token/cost ladders. Focused suite 180 pass / 0 fail,
+177343 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
+shipped file added or removed.
