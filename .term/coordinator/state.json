@@ -6099,6 +6099,17 @@
       ],
       "mergedAt": "2026-11-23T07:17:48Z",
       "mergedInto": "dev"
+    },
+    "hud-counter-finite-guard": {
+      "agent": "loop-worker",
+      "paths": "src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/hud-counter-finite-guard",
+      "worktree": "worktree/wt-hud-counter-finite-guard",
+      "status": "done",
+      "createdAt": "2026-11-23T07:24:40Z",
+      "submittedAt": "2026-11-23T07:31:13Z",
+      "mergedAt": "2026-11-23T07:43:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
