@@ -83,10 +83,16 @@ export const shortSha = (sha: string | undefined): string => {
   return flat.length > 7 ? flat.slice(0, 7) : flat
 }
 
+/** Longest backtick run in `text`, floored at `min` (0 for inline code, 2 for a fenced block). */
+const longestBacktickRun = (text: string, min: number): number => {
+  let longest = min
+  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length)
+  return longest
+}
+
 /** Inline-code fence that outgrows any backtick run inside the text. */
 export const inlineCode = (text: string): string => {
-  let longest = 0
-  for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length)
+  const longest = longestBacktickRun(text, 0)
   if (longest === 0) return `\`${text}\``
   const fence = "`".repeat(longest + 1)
   return `${fence} ${text} ${fence}`
@@ -94,9 +100,7 @@ export const inlineCode = (text: string): string => {
 
 /** Fenced code block whose fence outgrows any ``` run inside the payload. Returns the block's lines. */
 export const fenceBlock = (text: string): string[] => {
-  let longest = 2
-  for (const run of text.match(/`{3,}/g) ?? []) longest = Math.max(longest, run.length)
-  const fence = "`".repeat(longest + 1)
+  const fence = "`".repeat(longestBacktickRun(text, 2) + 1)
   const body = text.replace(/\r\n?/g, "\n").replace(/\n+$/, "").split("\n")
   return [fence, ...body, fence]
 }

@@ -226,6 +226,12 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Backtick-fence dedup (`dossier-fence-helper`, 2026-11-23): `inlineCode` and `fenceBlock` in
+  `src/core/dossier.ts` each scanned the text for the longest backtick run to size their fence. Extracted
+  one `longestBacktickRun(text, min)` helper (floor 0 for inline code, 2 for blocks) and kept the two
+  wrappers' exact outputs. Extended `test/dossier.test.ts` with the no-backtick inline case and the
+  short-run block case; no test block added, marker unchanged. Focused dossier suite and full check green.
+
 - Review guard coverage (`prompter-review-tests`, 2026-11-23): `src/prompter/review.ts` owns the decision that a
   task really landed yet had zero tests. Added `test/prompter-review.test.ts` with a real temp git repo pinning
   every refusal path (not-in-review, kill switch, missing/nonexistent commit, commit not on the base branch with
