@@ -6269,6 +6269,17 @@
       "submittedAt": "2026-11-23T10:46:07Z",
       "mergedAt": "2026-11-23T10:48:42Z",
       "mergedInto": "dev"
+    },
+    "reset-context-cold-start": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/",
+      "branch": "wt/reset-context-cold-start",
+      "worktree": "worktree/wt-reset-context-cold-start",
+      "status": "done",
+      "createdAt": "2026-11-23T11:01:15Z",
+      "submittedAt": "2026-11-23T11:14:00Z",
+      "mergedAt": "2026-11-23T11:16:11Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
