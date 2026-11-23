@@ -5788,8 +5788,19 @@
       "paths": "packages/coordinator/bin/coordinator,test/coordinator.test.ts,test/coordinator-merge-safety.test.ts,test/coordinator-lease-races.test.ts,AGENTS.md,docs/parallel-work.md,SPEC.md,docs/changelog.html",
       "branch": "wt/coordinator-merge-status",
       "worktree": "worktrees/wt-coordinator-merge-status",
+      "status": "done",
+      "createdAt": "2026-11-23T03:02:18Z",
+      "submittedAt": "2026-11-23T03:11:55Z",
+      "mergedAt": "2026-11-23T03:18:04Z",
+      "mergedInto": "dev"
+    },
+    "record-status-cell-unify": {
+      "agent": "loop-worker",
+      "paths": "src/core/dossier.ts,src/core/verify-record.ts,src/core/reach-record.ts,src/core/sign-record.ts,src/core/dossier-attest.ts,src/core/dossier-review.ts,src/core/dossier-seal.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/record-status-cell-unify",
+      "worktree": "worktrees/wt-record-status-cell-unify",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:02:18Z"
+      "createdAt": "2026-11-23T03:16:28Z"
     }
   },
   "mergeLock": null,
