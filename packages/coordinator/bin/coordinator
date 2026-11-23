@@ -1825,12 +1825,13 @@ do_migrate_worktree_dir() {
   need_jq
   ensure_state
   read_config
-  local legacy="worktrees" target="$WORKTREE_DIR" dry=0
+  local legacy="worktrees" target="$WORKTREE_DIR" dry=0 compat=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) dry=1; shift ;;
+      --with-live-leases) compat=1; shift ;;
       -h|--help)
-        printf 'usage: coordinator migrate-worktree-dir [--dry-run]\n\n  Move the legacy worktrees/ directory to the configured worktree dir (default worktree/), repair git worktree records, and rewrite config/lease paths. Refuses while any live lease still uses the legacy dir.\n'
+        printf 'usage: coordinator migrate-worktree-dir [--dry-run] [--with-live-leases]\n\n  Move the legacy worktrees/ directory to the configured worktree dir (default worktree/), repair git worktree records, and rewrite config/lease paths. By default it refuses while a live lease still uses the legacy dir. --with-live-leases moves the directory anyway and leaves a worktrees -> worktree compatibility symlink so those leases keep resolving at their old paths (their lease records are left untouched).\n'
         return 0 ;;
       *) printf 'unknown migrate-worktree-dir option: %s\n' "$1" >&2; return 1 ;;
     esac
@@ -1840,29 +1841,38 @@ do_migrate_worktree_dir() {
     return 1
   fi
   local src="$MAIN_ROOT/$legacy" dst="$MAIN_ROOT/$target"
-  if [ ! -d "$src" ]; then
+  if [ ! -d "$src" ] || [ -L "$src" ]; then
     printf 'error: no legacy worktree dir at %s (nothing to migrate)\n' "$src" >&2
     return 1
   fi
-  if [ -e "$dst" ]; then
-    printf 'error: destination %s already exists\n' "$dst" >&2
-    return 1
-  fi
-  # Never move another session's live worktree: refuse while any active lease points there.
+  # Never disturb another session's live worktree: refuse by default. With the explicit
+  # compatibility flag, move the directory but keep the old path alive via a symlink and
+  # leave those lease records pointing at the path that still works for their owner.
   local blockers
   blockers=$(jq -r --arg d "$legacy/" '.leases | to_entries[] | select(.value.status != "done") | select((.value.worktree // "") | startswith($d)) | .key' "$STATE_FILE" 2>/dev/null || true)
-  if [ -n "$blockers" ]; then
+  if [ -n "$blockers" ] && [ "$compat" -eq 0 ]; then
     printf 'error: active leases still use %s/: %s\n' "$legacy" "$(printf '%s' "$blockers" | tr '\n' ' ')" >&2
-    printf 'recovery: let those leases merge/release, then re-run migrate-worktree-dir\n' >&2
+    printf 'recovery: let those leases merge/release, then re-run migrate-worktree-dir (or use --with-live-leases to keep their old paths working via a symlink)\n' >&2
     return 1
   fi
   if [ "$dry" -eq 1 ]; then
     printf 'dry-run: would move %s -> %s and rewrite config/lease paths\n' "$src" "$dst"
     return 0
   fi
-  if ! mv "$src" "$dst"; then
+  # The destination may already exist (new-style leases claimed before the move).
+  if [ -d "$dst" ]; then
+    if find "$src" -mindepth 1 -maxdepth 1 -exec mv -t "$dst" {} + 2>/dev/null; then
+      rmdir "$src" 2>/dev/null || true
+    else
+      printf 'error: failed to move legacy worktree contents into %s\n' "$dst" >&2
+      return 1
+    fi
+  elif ! mv "$src" "$dst"; then
     printf 'error: failed to move %s to %s\n' "$src" "$dst" >&2
     return 1
+  fi
+  if [ -n "$blockers" ] && [ "$compat" -eq 1 ] && [ ! -e "$src" ]; then
+    ln -s "$target" "$src" 2>/dev/null || printf 'warning: could not create %s -> %s compatibility symlink\n' "$legacy" "$target" >&2
   fi
   # git records the absolute path of each linked worktree; repair them after the move.
   local -a repair=()
@@ -1885,10 +1895,18 @@ do_migrate_worktree_dir() {
       [ -n "$ctmp" ] && rm -f "$ctmp"
     fi
   fi
-  state_jq --arg old "$legacy/" --arg new "$target/" \
-    '.leases |= with_entries(if ((.value.worktree // "") | startswith($old)) then .value.worktree = ($new + (.value.worktree | ltrimstr($old))) else . end)'
+  # Leave blocked leases on their old (symlinked) path; migrate the rest.
+  local blocked_json="[]"
+  if [ "$compat" -eq 1 ] && [ -n "$blockers" ]; then
+    blocked_json=$(printf '%s\n' "$blockers" | jq -Rsc 'split("\n") | map(select(length > 0))')
+  fi
+  state_jq --arg old "$legacy/" --arg new "$target/" --argjson blocked "$blocked_json" \
+    '.leases |= with_entries(if ((.value.worktree // "") | startswith($old)) and ((.key as $k | $blocked | index($k)) | not) then .value.worktree = ($new + (.value.worktree | ltrimstr($old))) else . end)'
   rm -f "$LEGACY_WARN_FILE" 2>/dev/null || true
   printf 'migrated worktree dir: %s -> %s\n' "$legacy" "$target"
+  if [ "$compat" -eq 1 ] && [ -n "$blockers" ]; then
+    printf 'compat: %s -> %s symlink kept for live lease(s): %s\n' "$legacy" "$target" "$(printf '%s' "$blockers" | tr '\n' ' ')"
+  fi
 }
 
 show_help() {
@@ -1904,7 +1922,7 @@ show_help() {
   printf '  queue [--json]                                      submitted leases FIFO with position, wait time and ETA\n'
   printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
   printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
-  printf '  migrate-worktree-dir [--dry-run]                    move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
+  printf '  migrate-worktree-dir [--dry-run] [--with-live-leases]  move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
   printf '  doctor                                              health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock\n'
 }
 
