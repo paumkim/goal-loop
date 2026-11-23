@@ -5515,8 +5515,25 @@
       "paths": "src/core/wire.ts,src/core/hud.ts,docs/improvement-backlog.json,SPEC.md,docs/changelog.html",
       "branch": "wt/doc-comment-cleanup",
       "worktree": "worktrees/wt-doc-comment-cleanup",
-      "status": "claimed",
-      "createdAt": "2026-11-23T00:40:14Z"
+      "status": "done",
+      "createdAt": "2026-11-23T00:40:14Z",
+      "submittedAt": "2026-11-23T00:50:02Z",
+      "mergedAt": "2026-11-23T00:54:01Z",
+      "mergedInto": "dev"
+    },
+    "dedupe-verify-types": {
+      "agent": "build-agent",
+      "paths": "src/core/types.ts,src/core/config.ts,src/core/verify-matrix.ts,test/verify-matrix-goal-declared.test.ts",
+      "branch": "wt/dedupe-verify-types",
+      "worktree": "worktrees/wt-dedupe-verify-types",
+      "status": "submitted",
+      "createdAt": "2026-11-23T00:46:32Z",
+      "submittedAt": "2026-11-23T00:49:06Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T00:49:06Z",
+      "forcedScopeFiles": [
+        "SPEC.md"
+      ]
     }
   },
   "mergeLock": null,
