@@ -12,6 +12,8 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-22 21:06 UTC</code></td><td>build: sync dist, marker and changelog after normalize rebase</td><td>commit</td></tr>
+<tr><td><code>2026-11-22 21:06 UTC</code></td><td>refactor(core): share one canonical condition/reason fold</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 20:53 UTC</code></td><td>fix(tui): show the live turn number in the ambient goal pill</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 20:46 UTC</code></td><td>perf(sanitize): short-circuit the reasoning filter on tag-free text</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 20:41 UTC</code></td><td>perf(verdict): precompile lenient verdict/reason regexes with lastIndex reset</td><td>commit</td></tr>
@@ -40,12 +42,10 @@
 <tr><td><code>2026-11-22 18:11 UTC</code></td><td>refactor: drop unreachable isRecord re-check in outcome telemetry</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 18:05 UTC</code></td><td>refactor: parse the verdict echo once; precompile alias pattern</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 17:59 UTC</code></td><td>chore(backlog): record four polish follow-ups from improvement research</td><td>commit</td></tr>
-<tr><td><code>2026-11-22 17:52 UTC</code></td><td>perf: memoize truncate for stable TUI lines</td><td>commit</td></tr>
-<tr><td><code>2026-11-22 17:47 UTC</code></td><td>refactor(core): share one failing-check predicate in failure signatures</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-22 20:32 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-22 21:06 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->

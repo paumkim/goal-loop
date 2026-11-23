@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { memoizeBounded } from "./format.ts"
+import { normalizeConditionText } from "./format.ts"
 import { isWindowsDrivePathOnPosix } from "./wire.ts"
 import type { Verdict, VerdictEntry, VerdictVerificationMatrix, VerifyCheckEvidence } from "./types.ts"
 
@@ -35,12 +35,7 @@ interface RepeatedFailureSignature {
  * regex passes on every call, so those repeats were re-normalized each time. A bounded memo keyed by the
  * raw text turns a repeat into one lookup; a miss recomputes. Memory stays capped.
  */
-const normalize = memoizeBounded((text: string): string =>
-  text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim()
-    .replace(/\s+/g, " "), 4096)
+const normalize = normalizeConditionText
 
 function clamp(text: string, max: number): string {
   return text.length <= max ? text : text.slice(0, max)

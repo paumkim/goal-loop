@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { normalizeConditionText } from "../src/core/format.ts"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
@@ -12,6 +13,26 @@ import {
   persistFailureDiagnosticArtifact,
   summarizeFailureSignature,
 } from "../src/core/failure-signature.ts"
+
+describe("normalizeConditionText", () => {
+  test("matches the canonical fold byte-for-byte, including no-op collapse removal", () => {
+    // Independent implementation of the documented fold as it existed in both call sites: the extra
+    // whitespace collapse is retained here to prove removing it changed no output.
+    const oracle = (value: string) =>
+      value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ")
+    const cases = [
+      "",
+      "   ",
+      "Iteration 3: ship the thing — verify /check 3! (v2)",
+      "a\tb\nc",
+      "Café — 日本語 🚀",
+      "a  b   c",
+      "\u00a0x\u00a0",
+      "—",
+    ]
+    for (const value of cases) expect(normalizeConditionText(value)).toBe(oracle(value))
+  })
+})
 
 const notMet = (reason: string, extra: Record<string, unknown> = {}) => ({
   verdict: "not_met" as const,

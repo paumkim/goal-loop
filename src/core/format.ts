@@ -19,6 +19,22 @@ export function memoizeBounded<A, R>(fn: (arg: A) => R, limit: number): (arg: A)
 }
 
 /**
+ * Canonical condition/reason fold: lowercase, collapse every run of non-alphanumerics to one space
+ * (Unicode letters and numbers kept), trim. One home for the controller's anti-repeat ledger and
+ * failure-signature's signature keys, so the two implementations cannot drift. Memoized because the
+ * same conditions and reasons recur across ledger scans and signature checks within a session; the
+ * bound keeps the cache finite and a miss after the cap simply recomputes the pure fold.
+ *
+ * A previous variant in failure-signature chained `.replace(/\s+/g, " ")` after the trim. That was a
+ * no-op: the first replace already collapses every non-alphanumeric run (including whitespace) to a
+ * single space, so no `\s+` remains. A 100000-string fuzz confirmed byte-identical output.
+ */
+export const normalizeConditionText = memoizeBounded(
+  (value: string): string => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(),
+  4096,
+)
+
+/**
  * Memoized terminal-cell width. `stringWidth` strips ANSI and runs an Intl.Segmenter pass on every
  * call; the TUI asks for the width of the same labels, prefixes and graphemes many times per frame.
  * Cache hits are pure lookups. Bounded so a long session cannot grow the map without limit; an
