@@ -1316,6 +1316,26 @@ describe("native evaluator verdict", () => {
     expect(conditionEchoMatches('{"verdict":"met","reason":"stale"}', expected)).toBe(false)
   })
 
+  test("the bounded echo-normalization memo keeps conditionEchoMatches exact cold and warm", () => {
+    // Independent oracle: the same NFKC + Unicode-letter fold, reimplemented without the cache.
+    const oracle = (text: string) => text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+    const expected = "Reply with the single word DONE."
+    const echoes = [
+      "Reply with the single word DONE.", "reply with the single word done",
+      "Reply with the single word DONE. Extra.", "Verify the anti-dup marker",
+      "İstanbul — 魚🐟 release!", "  padded   reply  ",
+    ]
+    for (const echo of echoes) {
+      const body = JSON.stringify({ verdict: "met", condition: echo })
+      // Two passes: the second hits the memo for both the echo and the expected condition.
+      for (let pass = 0; pass < 2; pass++) {
+        const a = oracle(echo), b = oracle(expected)
+        const want = a === b || a.includes(b) || b.includes(a)
+        expect(conditionEchoMatches(body, expected)).toBe(want)
+      }
+    }
+  })
+
   test("verdictFromNativeReport pins the exact stale-condition error text after the single-parse refactor", () => {
     const stale = { key: "stale", state: "completed", body: '{"verdict":"met","reason":"the 4-part prompt was implemented","condition":"Verify the anti-dup marker"}' }
     const expected = "Reply with the single word DONE."
