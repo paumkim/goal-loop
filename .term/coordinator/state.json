@@ -5747,8 +5747,11 @@
       "paths": "src/core/sanitize.ts,test/sanitize.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/sanitize-tagless-fastpath",
       "worktree": "worktrees/wt-sanitize-tagless-fastpath",
-      "status": "claimed",
-      "createdAt": "2026-11-23T02:42:03Z"
+      "status": "done",
+      "createdAt": "2026-11-23T02:42:03Z",
+      "submittedAt": "2026-11-23T02:50:03Z",
+      "mergedAt": "2026-11-23T02:52:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
