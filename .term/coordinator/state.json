@@ -5407,8 +5407,11 @@
       "paths": "docs/improvement-backlog.json",
       "branch": "wt/backlog-polish-followups",
       "worktree": "worktrees/wt-backlog-polish-followups",
-      "status": "claimed",
-      "createdAt": "2026-11-22T23:53:29Z"
+      "status": "done",
+      "createdAt": "2026-11-23T00:01:42Z",
+      "submittedAt": "2026-11-23T00:01:42Z",
+      "mergedAt": "2026-11-23T00:03:49Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
