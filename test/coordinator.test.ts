@@ -30,7 +30,7 @@ const setup = (checkScript: string) => {
   git(dir, ["init", "-q", "-b", "dev"])
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "fixture", scripts: { check: checkScript } }) + "\n")
   mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
-  writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}\n')
+  writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktree"}\n')
   writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
   git(dir, ["add", "-A"])
   git(dir, ["commit", "-q", "-m", "initial"], "2026-11-01T10:00:00+00:00")
@@ -43,7 +43,7 @@ afterEach(() => {
 /** Claim, commit in the wt worktree, submit. Returns the worktree path. */
 const claimCommitSubmit = (slug: string, files: Record<string, string>, date: string) => {
   expect(run(dir, ["claim", slug, "--agent", "t", "--paths", "."]).status).toBe(0)
-  const wt = join(dir, "worktrees", `wt-${slug}`)
+  const wt = join(dir, "worktree", `wt-${slug}`)
   for (const [rel, content] of Object.entries(files)) writeFileSync(join(wt, rel), content)
   git(wt, ["add", "-A"])
   git(wt, ["commit", "-q", "-m", `work for ${slug}`], date)
@@ -156,7 +156,7 @@ describe("coordinator merge-next", () => {
     // The bookkeeping branch carries a fabricated record for a PREVIOUS merge — never the lease
     // being merged now (exactly like the real-world record-leases branch).
     const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
-    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
+    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktree/wt-old-record", status: "done", mergedInto: "dev" }
     const wtRc = claimCommitSubmit("record-clean", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
     const result = run(wtRc, ["merge-next"])
     expect(result.status).toBe(0)
@@ -189,7 +189,7 @@ describe("coordinator merge-next", () => {
   test("a failing merged result restores the exempt state.json dirt and keeps the lease submitted", () => {
     setup("false")
     const committed = JSON.parse(git(dir, ["show", "dev:.term/coordinator/state.json"]))
-    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktrees/wt-old-record", status: "done", mergedInto: "dev" }
+    committed.leases["old-record"] = { agent: "t", paths: ".", branch: "wt/old-record", worktree: "worktree/wt-old-record", status: "done", mergedInto: "dev" }
     const wtRf = claimCommitSubmit("record-fail", { ".term/coordinator/state.json": JSON.stringify(committed, null, 2) }, "2026-11-02T10:00:00+00:00")
     const devBefore = git(dir, ["rev-parse", "dev"]).trim()
     const result = run(wtRf, ["merge-next"])
@@ -224,7 +224,7 @@ describe("coordinator scope parsing and scratch selection", () => {
   test("submit enforces whitespace-separated claimed scopes (space-separated paths in state.json)", () => {
     setup("true")
     expect(run(dir, ["claim", "spaced", "--agent", "t", "--paths", "src/** test/**"]).status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-spaced")
+    const wt = join(dir, "worktree", "wt-spaced")
     mkdirSync(join(wt, "src"), { recursive: true })
     mkdirSync(join(wt, "test"), { recursive: true })
     writeFileSync(join(wt, "src", "a.ts"), "export const a = 1\n")
@@ -249,12 +249,12 @@ describe("coordinator scope parsing and scratch selection", () => {
     git(dir, ["checkout", "-q", "main"])
     git(dir, ["merge", "-q", "--no-edit", "--allow-unrelated-histories", "-m", "merge two roots", "other"])
     mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
-    writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}\n')
+    writeFileSync(join(dir, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktree"}\n')
     writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "-m", "unrelated-history merge fixture"], "2026-11-03T10:00:00+00:00")
     expect(run(dir, ["claim", "multiroot", "--agent", "t", "--paths", "SPEC.md"]).status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-multiroot")
+    const wt = join(dir, "worktree", "wt-multiroot")
     writeFileSync(join(wt, "totally-out-of-scope.ts"), "export const x = 1\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "out of scope work"], "2026-11-04T10:00:00+00:00")
@@ -293,7 +293,7 @@ describe("coordinator release", () => {
     expect(idle.status).toBe("done")
     expect(idle.releaseReason).toBe("released")
     expect(idle.releasedAt).toBeTruthy()
-    expect(existsSync(join(dir, "worktrees", "wt-idle"))).toBe(false)
+    expect(existsSync(join(dir, "worktree", "wt-idle"))).toBe(false)
     expect(git(dir, ["branch", "--list", "wt/idle"]).trim()).toBe("")
 
     // the same claim that was rejected now succeeds without --force
@@ -303,7 +303,7 @@ describe("coordinator release", () => {
   test("uncommitted work is refused without --force and preserved in a ref with it", () => {
     setup("true")
     expect(run(dir, ["claim", "busy", "--agent", "t", "--paths", "."]).status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-busy")
+    const wt = join(dir, "worktree", "wt-busy")
     writeFileSync(join(wt, "half-done.ts"), "export const half = 1\n")
 
     const refused = run(dir, ["release", "busy"])
@@ -324,7 +324,7 @@ describe("coordinator release", () => {
   test("a branch with unique commits is kept and the recovery command printed", () => {
     setup("true")
     expect(run(dir, ["claim", "wip", "--agent", "t", "--paths", "."]).status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-wip")
+    const wt = join(dir, "worktree", "wt-wip")
     writeFileSync(join(wt, "wip.txt"), "wip\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "wip"], "2026-11-02T10:00:00+00:00")
@@ -361,7 +361,7 @@ describe("coordinator release", () => {
   test("a claimed lease whose worktree is missing is still releasable", () => {
     setup("true")
     expect(run(dir, ["claim", "ghost", "--agent", "t", "--paths", "."]).status).toBe(0)
-    git(dir, ["worktree", "remove", join(dir, "worktrees", "wt-ghost")])
+    git(dir, ["worktree", "remove", join(dir, "worktree", "wt-ghost")])
     const result = run(dir, ["release", "ghost"])
     expect(result.status).toBe(0)
     expect(lease("ghost").status).toBe("done")

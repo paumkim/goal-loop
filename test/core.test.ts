@@ -672,7 +672,7 @@ describe("prompts", () => {
     expect(independent).toContain("`dev` branch")
   })
   test("coordinator mode injects the wt/<slug> flow everywhere and the rubric accepts submit evidence", () => {
-    const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktrees" }
+    const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktree" }
     const text = directive("add feature", coord)
     expect(text).toContain("Coordinator repo. Before editing")
     expect(text).toContain("wt/<slug>")
@@ -691,7 +691,7 @@ describe("prompts", () => {
     expect(evaluateInSession("add feature", facts, coord)).toContain("merge-next")
   })
   test("a coordinator policy without an absolute bin never emits a repo-relative path", () => {
-    const noBin: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", worktreeDir: "worktrees" }
+    const noBin: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", worktreeDir: "worktree" }
     const text = directive("add feature", noBin)
     expect(text).toContain("no coordinator binary")
     expect(text).not.toContain("packages/coordinator/bin/coordinator")
@@ -1432,7 +1432,7 @@ describe("native evaluator verdict", () => {
 })
 
 describe("arm-time planner", () => {
-  const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktrees" }
+  const coord: CommitPolicy = { required: true, branch: "dev", mode: "coordinator", reason: "test", coordinatorBin: "packages/coordinator/bin/coordinator", worktreeDir: "worktree" }
 
   test("the request carries only the raw body and the output contract", () => {
     const raw = "simple reply back."

@@ -21,7 +21,7 @@ You are the coordinator for the current repository. You are a single agent: ther
 5. When integrating: run the serial merge flow with required validation and wait until the queue is empty.
 6. Verify merges landed on the integration branch with quoted evidence (commit hash, log, ancestry/status as applicable).
 7. Run release/promotion only when explicitly requested and only via the repository's sanctioned release path.
-8. Clean up claims, leases, and merged worktrees/branches according to repo rules.
+8. Clean up claims, leases, and merged worktree/branches according to repo rules.
 9. Record durable learnings/decisions in project memory when available.
 
 ## Non-negotiable rules

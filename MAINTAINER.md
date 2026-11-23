@@ -6,7 +6,7 @@ A minimal, repeatable workflow for making changes safely.
 - **Specs / acceptance:** define or update the task's acceptance and verification (see `SPEC.md` if present) before or alongside implementation.
 - **Code & tests:** implement in the appropriate source locations; keep changes scoped to the task.
 - **Docs:** update user/maintainer docs when behavior or workflow changes.
-- **Runtime/state:** local runtime artifacts (caches, learnings, locks, scratch worktrees/state) are not source-of-truth and should stay untracked.
+- **Runtime/state:** local runtime artifacts (caches, learnings, locks, scratch worktree/state) are not source-of-truth and should stay untracked.
 
 ## How work moves
 1. **Claim scope:** identify the task and the files/areas in scope.

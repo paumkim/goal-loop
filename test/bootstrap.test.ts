@@ -44,12 +44,12 @@ describe("ensureCoordinatorLayout", () => {
     const root = repo()
     const result = ensureCoordinatorLayout(root)
     expect(result.created).toContain(".term/coordinator")
-    expect(result.created).toContain("worktrees")
+    expect(result.created).toContain("worktree")
     expect(result.created).toContain(".term/coordinator/config.json")
     expect(result.created).toContain(".term/coordinator/state.json")
     expect(JSON.parse(readFileSync(join(root, ".term/coordinator/config.json"), "utf8"))).toEqual({
       devBranch: "dev",
-      worktreeDir: "worktrees",
+      worktreeDir: "worktree",
     })
     expect(JSON.parse(readFileSync(join(root, ".term/coordinator/state.json"), "utf8"))).toEqual({
       version: 1,
@@ -61,12 +61,12 @@ describe("ensureCoordinatorLayout", () => {
     const root = plainRepo()
     const result = ensureCoordinatorLayout(root)
     expect(result.created).toContain(".term/coordinator")
-    expect(result.created).toContain("worktrees")
+    expect(result.created).toContain("worktree")
     expect(result.created).toContain(".term/coordinator/config.json")
     expect(result.created).toContain(".term/coordinator/state.json")
     expect(JSON.parse(readFileSync(join(root, ".term/coordinator/config.json"), "utf8"))).toEqual({
       devBranch: "dev",
-      worktreeDir: "worktrees",
+      worktreeDir: "worktree",
     })
   })
   test("is idempotent and never overwrites existing files", () => {
@@ -95,13 +95,13 @@ describe("ensureCoordinatorLayout", () => {
     const once = readFileSync(join(root, ".gitignore"), "utf8")
     expect(once).toContain("node_modules")
     expect(once).toContain("custom-keep/")
-    expect(once).toContain("worktrees/")
+    expect(once).toContain("worktree/")
     expect(once).toContain(".term/coordinator/*.lock")
     expect(once).toContain(".term/goal-loop/")
     ensureCoordinatorLayout(root)
     const twice = readFileSync(join(root, ".gitignore"), "utf8")
     expect(twice).toBe(once)
-    expect(twice.match(/worktrees\//g)?.length).toBe(1)
+    expect(twice.match(/worktree\//g)?.length).toBe(1)
   })
   test("creates .gitignore when missing and runtime rules are needed", () => {
     const root = repo()
@@ -188,22 +188,22 @@ describe("ensureWorkflowDocs", () => {
 describe("appendGitignoreRules", () => {
   test("appends only missing rules and never removes existing ones", () => {
     const root = scratch()
-    writeFileSync(join(root, ".gitignore"), "node_modules\nworktrees/\n")
-    const result = appendGitignoreRules(root, ["worktrees/", ".term/goal-loop/", "node_modules"])
+    writeFileSync(join(root, ".gitignore"), "node_modules\nworktree/\n")
+    const result = appendGitignoreRules(root, ["worktree/", ".term/goal-loop/", "node_modules"])
     expect(result.added).toEqual([".term/goal-loop/"])
     const content = readFileSync(join(root, ".gitignore"), "utf8")
     expect(content).toContain("node_modules")
-    expect(content).toContain("worktrees/")
+    expect(content).toContain("worktree/")
     expect(content).toContain(".term/goal-loop/")
-    const again = appendGitignoreRules(root, ["worktrees/", ".term/goal-loop/", "node_modules"])
+    const again = appendGitignoreRules(root, ["worktree/", ".term/goal-loop/", "node_modules"])
     expect(again.added).toEqual([])
     expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(content)
   })
   test("creates .gitignore when missing", () => {
     const root = scratch()
-    const result = appendGitignoreRules(root, ["worktrees/"])
+    const result = appendGitignoreRules(root, ["worktree/"])
     expect(result.created).toBe(true)
-    expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain("worktrees/")
+    expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain("worktree/")
   })
 })
 
@@ -213,7 +213,7 @@ describe("ensureStartupScaffold", () => {
     const first = ensureStartupScaffold({ projectRoot: root, learningPath: ".term/goal-loop/learnings.jsonl" })
     expect(first.created).toContain(".term/coordinator/config.json")
     expect(first.created).toContain(".term/coordinator/state.json")
-    expect(first.created).toContain("worktrees")
+    expect(first.created).toContain("worktree")
     expect(first.created).toContain(".term/goal-loop")
     expect(first.created).toContain("SPEC.md")
     expect(first.created).toContain("docs/README.md")
@@ -238,14 +238,14 @@ describe("ensureStartupScaffold", () => {
   test("fills gaps in an existing setup without overwriting", () => {
     const root = plainRepo()
     mkdirSync(join(root, ".term/coordinator"), { recursive: true })
-    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}')
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktree"}')
     writeFileSync(join(root, "SPEC.md"), "# Existing\n")
     const result = ensureStartupScaffold({ projectRoot: root })
     expect(result.created).toContain(".term/coordinator/state.json")
-    expect(result.created).toContain("worktrees")
+    expect(result.created).toContain("worktree")
     expect(result.created).toContain("MAINTAINER.md")
     expect(result.existing).toContain(".term/coordinator/config.json")
     expect(readFileSync(join(root, "SPEC.md"), "utf8")).toBe("# Existing\n")
-    expect(JSON.parse(readFileSync(join(root, ".term/coordinator/config.json"), "utf8"))).toEqual({ devBranch: "dev", worktreeDir: "worktrees" })
+    expect(JSON.parse(readFileSync(join(root, ".term/coordinator/config.json"), "utf8"))).toEqual({ devBranch: "dev", worktreeDir: "worktree" })
   })
 })

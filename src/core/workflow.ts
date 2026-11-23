@@ -63,7 +63,7 @@ A minimal, repeatable workflow for making changes safely.
 - **Specs / acceptance:** define or update the task's acceptance and verification (see \`SPEC.md\` if present) before or alongside implementation.
 - **Code & tests:** implement in the appropriate source locations; keep changes scoped to the task.
 - **Docs:** update user/maintainer docs when behavior or workflow changes.
-- **Runtime/state:** local runtime artifacts (caches, learnings, locks, scratch worktrees/state) are not source-of-truth and should stay untracked.
+- **Runtime/state:** local runtime artifacts (caches, learnings, locks, scratch worktree/state) are not source-of-truth and should stay untracked.
 
 ## How work moves
 1. **Claim scope:** identify the task and the files/areas in scope.
@@ -118,6 +118,8 @@ export function appendGitignoreRules(projectRoot: string, wanted: readonly strin
 
 /** Runtime/state gitignore rules that must stay untracked. Tracked workflow docs are never added here. */
 export const RUNTIME_GITIGNORE_RULES: readonly string[] = [
+  "worktree/",
+  // Legacy: worktrees left by pre-migration leases stay ignored until migrate-worktree-dir moves them.
   "worktrees/",
   ".term/goal-loop/",
   ".term/coordinator/*.lock",
@@ -176,10 +178,10 @@ export function ensureCoordinatorWorkplaceLayout(projectRoot: string): { created
   const created: string[] = []
   const existing: string[] = []
   const coordDir = join(projectRoot, ".term", "coordinator")
-  const worktreesDir = join(projectRoot, "worktrees")
+  const worktreeDir = join(projectRoot, "worktree")
   ensureDir(coordDir, ".term/coordinator", created, existing)
-  ensureDir(worktreesDir, "worktrees", created, existing)
-  ensureFile(join(coordDir, "config.json"), ".term/coordinator/config.json", JSON.stringify({ devBranch: "dev", worktreeDir: "worktrees" }), created, existing)
+  ensureDir(worktreeDir, "worktree", created, existing)
+  ensureFile(join(coordDir, "config.json"), ".term/coordinator/config.json", JSON.stringify({ devBranch: "dev", worktreeDir: "worktree" }), created, existing)
   ensureFile(join(coordDir, "state.json"), ".term/coordinator/state.json", JSON.stringify({ version: 1, leases: {}, mergeLock: null }), created, existing)
   return { created, existing }
 }
