@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2297 -->
+<!-- spec-check files=143 tests=2298 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1506,6 +1506,21 @@ Verification: new regression in `test/core.test.ts` pins NaN and both infinities
 delta to zero, plus a finite-value oracle across all six fields. Focused suite 183 pass / 0 fail,
 177346 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
 shipped file added or removed.
+
+## Workstream CCII — unique outline ids when a heading slug is a generated suffix (outline-id-collision-guard) (2026-11-23)
+
+`dossierOutline` de-duplicated heading ids with a per-base counter: the second "Custom" became
+`custom-2`. A document that also had a real `## Custom-2` heading therefore produced two entries with
+the same id, and both chips acknowledged together (`section:custom-2`) because the status dialog
+keys acknowledgment off that id. IDs are now allocated against the set of ids actually taken — the
+smallest free `-n` suffix — so a slug-shaped heading cannot steal another section's id.
+
+Reproduced on the parent code: `["Custom", "Custom-2", "Custom"]` yielded
+`["custom", "custom-2", "custom-2"]`; after the fix it yields `["custom", "custom-2", "custom-3"]`.
+Every non-colliding document is byte-identical (the existing `Custom ×3` → `custom, custom-2,
+custom-3` pin still holds). Verification: new regression in `test/dossier-outline.test.ts`; focused
+suite 17 pass / 0 fail, 57 expect() calls. Full `bun run check` green after artifact regeneration;
+marker re-counted, no shipped file added or removed.
 
 ## Historical workstreams
 

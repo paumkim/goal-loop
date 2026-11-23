@@ -2477,15 +2477,16 @@ var dossierOutline = (markdown) => {
       headings.push({ line: i, title: raw.slice(3) });
     }
   }
-  const seen = new Map;
+  const used = new Set;
   const out = [];
   for (let i = 0;i < headings.length; i += 1) {
     const heading = headings[i];
     const endLine = i + 1 < headings.length ? headings[i + 1].line : lines.length;
     const base = slugOf(heading.title);
-    const count = seen.get(base) ?? 0;
-    seen.set(base, count + 1);
-    const id = count === 0 ? base : `${base}-${count + 1}`;
+    let id = base;
+    for (let n = 2;used.has(id); n += 1)
+      id = `${base}-${n}`;
+    used.add(id);
     out.push({
       id,
       label: labelOf(heading.title),
