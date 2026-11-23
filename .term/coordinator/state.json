@@ -6280,6 +6280,17 @@
       "submittedAt": "2026-11-23T11:14:00Z",
       "mergedAt": "2026-11-23T11:16:11Z",
       "mergedInto": "dev"
+    },
+    "cold-reset-loop-boundary": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/ports.ts,src/runtime/compactor.ts,src/runtime/controller.ts,test/compactor.test.ts,test/loop.test.ts,test/plugin.test.ts,SPEC.md,docs/",
+      "branch": "wt/cold-reset-loop-boundary",
+      "worktree": "worktree/wt-cold-reset-loop-boundary",
+      "status": "done",
+      "createdAt": "2026-11-23T11:25:57Z",
+      "submittedAt": "2026-11-23T11:47:17Z",
+      "mergedAt": "2026-11-23T11:49:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
