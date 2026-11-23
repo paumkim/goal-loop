@@ -6046,8 +6046,11 @@
       "paths": "src/core/failure-signature.ts,src/runtime/controller.ts,test/failure-signature.test.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/bounded-failure-diagnostics",
       "worktree": "worktree/wt-bounded-failure-diagnostics",
-      "status": "claimed",
-      "createdAt": "2026-11-23T06:08:58Z"
+      "status": "done",
+      "createdAt": "2026-11-23T06:08:58Z",
+      "submittedAt": "2026-11-23T06:13:46Z",
+      "mergedAt": "2026-11-23T06:18:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
