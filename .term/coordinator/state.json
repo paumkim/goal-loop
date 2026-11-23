@@ -5827,8 +5827,24 @@
       "paths": "src/core/entries.ts,test/entries.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/goals-equal-fastpath",
       "worktree": "worktrees/wt-goals-equal-fastpath",
+      "status": "done",
+      "createdAt": "2026-11-23T03:38:07Z",
+      "submittedAt": "2026-11-23T03:47:18Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T03:47:18Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-23T03:49:32Z",
+      "mergedInto": "dev"
+    },
+    "worktree-dir-physical-migrate": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/worktree-dir-rename.test.ts,docs/parallel-work.md,AGENTS.md,SPEC.md,docs/changelog.html",
+      "branch": "wt/worktree-dir-physical-migrate",
+      "worktree": "worktree/wt-worktree-dir-physical-migrate",
       "status": "claimed",
-      "createdAt": "2026-11-23T03:38:07Z"
+      "createdAt": "2026-11-23T03:42:59Z"
     }
   },
   "mergeLock": null,
