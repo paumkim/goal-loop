@@ -136,7 +136,7 @@ export function summarizeOutcomeTelemetry(entries: readonly LearningEntry[]): Ou
       const verdict = asString(entry.verdict)
       if (verdict) bump(verdictCounts, verdict)
       if (verdict === "not_met") {
-        const theme = normalizeReason(isRecord(entry) ? asString(entry.reason) : undefined)
+        const theme = normalizeReason(asString(entry.reason))
         if (theme) bump(themeCounts, theme)
       }
     }

@@ -140,6 +140,26 @@ describe("summarizeOutcomeTelemetry", () => {
     expect(s.failureThemes[1]?.recurring).toBe(false)
   })
 
+  test("a plain-object not_met verdict still lands in failureThemes after the guard removal", () => {
+    // summarizeOutcomeTelemetry narrows `entry` with one isRecord guard at the top of the loop.
+    // This plain object exercises that path: its reason must still be normalized and counted.
+    const plain = {
+      version: 1,
+      ts: "2026-01-01T00:01:00.000Z",
+      kind: "turn_verdict",
+      sessionID: "ses_test",
+      goalID: "goal_x",
+      turn: 1,
+      verdict: "not_met",
+      reason: "flaky render snapshot mismatch",
+      lesson: "not met: flaky render snapshot mismatch",
+    }
+    const s = summarizeOutcomeTelemetry([plain as LearningEntry])
+    expect(s.verdictCounts.not_met).toBe(1)
+    expect(s.failureThemes.length).toBe(1)
+    expect(s.failureThemes[0]?.theme).toContain("flaky render snapshot mismatch")
+  })
+
   test("ignores non-not_met verdicts when building the failure taxonomy", () => {
     const entries = [verdict("x"), base({ kind: "turn_verdict", verdict: "met", reason: "all good", lesson: "met" })]
     const s = summarizeOutcomeTelemetry(entries)
