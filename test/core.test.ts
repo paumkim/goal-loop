@@ -1316,6 +1316,20 @@ describe("native evaluator verdict", () => {
     expect(conditionEchoMatches('{"verdict":"met","reason":"stale"}', expected)).toBe(false)
   })
 
+  test("verdictFromNativeReport pins the exact stale-condition error text after the single-parse refactor", () => {
+    const stale = { key: "stale", state: "completed", body: '{"verdict":"met","reason":"the 4-part prompt was implemented","condition":"Verify the anti-dup marker"}' }
+    const expected = "Reply with the single word DONE."
+    // The message is assembled from one parsed echo; quoting must stay byte-identical.
+    expect(() => verdictFromNativeReport(stale, expected)).toThrow(
+      'evaluator subagent judged a stale condition: expected "Reply with the single word DONE.", report echoed "Verify the anti-dup marker"',
+    )
+    // A JSON-ish body whose echo needed the alias fallback still parses once and produces the same text.
+    const jsonish = { key: "jsonish", state: "completed", body: '{"verdict":"met","reason":"bad \" quote","condition":"Verify the anti-dup marker"}' }
+    expect(() => verdictFromNativeReport(jsonish, expected)).toThrow(/report echoed "Verify the anti-dup marker"/)
+    // No expected condition: the echo is never parsed and behavior is unchanged.
+    expect(verdictFromNativeReport(stale)).toEqual({ verdict: "met", reason: "the 4-part prompt was implemented" })
+  })
+
   test("verdictFromNativeReport rejects a verdict that echoes a stale condition", () => {
     const stale = { key: "x", state: "completed", body: '{"verdict":"met","reason":"the 4-part prompt was implemented","condition":"Verify the anti-dup marker"}' }
     expect(() => verdictFromNativeReport(stale, "Reply with the single word DONE.")).toThrow(/judged a stale condition/)
