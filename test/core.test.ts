@@ -1141,6 +1141,14 @@ describe("formatDuration regression: non-finite input", () => {
   })
 })
 
+describe("formatDurationCoarse regression: non-finite input", () => {
+  test("NaN and Infinity render <1m, never NaN/Infinity garbage", () => {
+    expect(formatDurationCoarse(Number.NaN)).toBe("<1m")
+    expect(formatDurationCoarse(Number.POSITIVE_INFINITY)).toBe("<1m")
+    expect(formatDurationCoarse(Number.NEGATIVE_INFINITY)).toBe("<1m")
+  })
+})
+
 describe("renderTranscript regression: a zero per-tool budget", () => {
   const toolHeavy = [
     { type: "user", text: "run the tests" },
