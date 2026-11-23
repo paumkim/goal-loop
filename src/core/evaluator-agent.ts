@@ -146,6 +146,10 @@ function echoMatches(echo: string, expected: string): boolean {
   return shared / Math.max(expectedTokens.length, 1) >= 0.6
 }
 
+/** One bounded preview of a raw judge body for error messages. Single home so every fail-closed path clips at the same width. */
+const MAX_BODY_PREVIEW = 500
+const bodyPreview = (body: string): string => body.slice(0, MAX_BODY_PREVIEW)
+
 /**
  * Turn a native report into the verdict. A failed, unreadable or stale-condition report *throws* so
  * `Evaluator.evaluate` fails closed with `not_met`, rather than scoring a dead or wrong-goal judge as a `met`.
@@ -154,15 +158,15 @@ function echoMatches(echo: string, expected: string): boolean {
  * the loop with `not_met` on every turn, which is worse than a bounded staleness risk.
  */
 export function verdictFromNativeReport(candidate: NativeReportCandidate, expectedCondition?: string) {
-  if (candidate.state === "error") throw new Error(`evaluator subagent failed: ${candidate.body.slice(0, 500)}`)
+  if (candidate.state === "error") throw new Error(`evaluator subagent failed: ${bodyPreview(candidate.body)}`)
   // A gateway cache replay can deliver a complete verdict for a *different* goal. It carries a foreign rubric's
   // keys (rests_on/target_files/...) and uses `status` instead of `verdict`. Without these guards parseVerdict
   // would happily read its `status: "met"` as a real met and advance the wrong condition. Fail closed instead.
   if (isForeignVerdict(candidate.body)) {
-    throw new Error(`evaluator subagent returned a verdict from a different evaluation contract: ${candidate.body.slice(0, 500)}`)
+    throw new Error(`evaluator subagent returned a verdict from a different evaluation contract: ${bodyPreview(candidate.body)}`)
   }
   if (!AUTHORITATIVE_VERDICT_KEY.test(candidate.body)) {
-    throw new Error(`unreadable verdict: evaluator subagent returned no authoritative verdict/met field (status/result are not verdicts): ${candidate.body.slice(0, 500)}`)
+    throw new Error(`unreadable verdict: evaluator subagent returned no authoritative verdict/met field (status/result are not verdicts): ${bodyPreview(candidate.body)}`)
   }
   // Parse the echo once. The old code called `echoedCondition` up to three times on the same body —
   // three JSON.parse attempts per verdict — and the message used a separately re-parsed value. A single
@@ -176,7 +180,7 @@ export function verdictFromNativeReport(candidate: NativeReportCandidate, expect
   }
   const parsed = parseVerdict(candidate.body)
   if (parsed) return parsed
-  throw new Error(`evaluator subagent returned an unreadable verdict: ${candidate.body.slice(0, 500)}`)
+  throw new Error(`evaluator subagent returned an unreadable verdict: ${bodyPreview(candidate.body)}`)
 }
 
 /**
