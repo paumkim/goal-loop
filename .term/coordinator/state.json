@@ -5617,8 +5617,31 @@
       "paths": "src/core/hud.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-hint-prefix",
       "worktree": "worktrees/wt-evaluator-hint-prefix",
-      "status": "claimed",
-      "createdAt": "2026-11-23T01:34:14Z"
+      "status": "done",
+      "createdAt": "2026-11-23T01:34:14Z",
+      "submittedAt": "2026-11-23T01:42:32Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T01:42:32Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-23T01:44:30Z",
+      "mergedInto": "dev"
+    },
+    "verify-sets-and-probe": {
+      "agent": "build-agent",
+      "paths": "src/core/types.ts,src/core/wire.ts,src/core/verify-matrix.ts,src/core/sanitize.ts,test/wire.test.ts,test/sanitize.test.ts",
+      "branch": "wt/verify-sets-and-probe",
+      "worktree": "worktrees/wt-verify-sets-and-probe",
+      "status": "submitted",
+      "createdAt": "2026-11-23T01:43:53Z",
+      "submittedAt": "2026-11-23T01:43:53Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T01:43:53Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ]
     }
   },
   "mergeLock": null,
