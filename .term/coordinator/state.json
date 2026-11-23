@@ -6067,6 +6067,22 @@
       ],
       "mergedAt": "2026-11-23T06:39:17Z",
       "mergedInto": "dev"
+    },
+    "restore-turn-counter-fix": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,test/loop.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/restore-turn-counter-fix",
+      "worktree": "worktree/wt-restore-turn-counter-fix",
+      "status": "done",
+      "createdAt": "2026-11-23T06:47:34Z",
+      "submittedAt": "2026-11-23T06:54:07Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T06:54:07Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-23T06:56:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
