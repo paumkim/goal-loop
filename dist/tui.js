@@ -245,6 +245,8 @@ function formatDurationCoarse(ms) {
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`;
 }
 function formatTokens(n) {
+  if (!Number.isFinite(n))
+    return "0";
   if (n < 1000)
     return String(Math.round(n));
   const k = (n / 1000).toFixed(n < 1e4 ? 1 : 0);
@@ -253,6 +255,8 @@ function formatTokens(n) {
   return `${(n / 1e6).toFixed(2)}M`;
 }
 function formatCost(usd) {
+  if (!Number.isFinite(usd))
+    return "$0";
   if (usd <= 0)
     return "$0";
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`;

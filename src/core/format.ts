@@ -139,6 +139,10 @@ export function formatDurationCoarse(ms: number): string {
 }
 
 export function formatTokens(n: number): string {
+  // A corrupt/unavailable token metric must never paint "NaNM" or "InfinityM" in chrome. Callers in
+  // dossier/attestation already guard finite before calling; the TUI call sites pass raw snapshot
+  // values. Guard once here so every surface agrees. Finite inputs are byte-identical.
+  if (!Number.isFinite(n)) return "0"
   if (n < 1_000) return String(Math.round(n))
   // Round-then-compare at the unit boundary: a value whose rounded k-form reaches 1000k renders as M instead.
   const k = (n / 1_000).toFixed(n < 10_000 ? 1 : 0)
@@ -147,6 +151,10 @@ export function formatTokens(n: number): string {
 }
 
 export function formatCost(usd: number): string {
+  // Same honesty rule as the token formatter and the finite guards at the dossier/attestation call
+  // sites: a non-finite cost is an unavailable measurement, not "$NaN"/"$Infinity". Finite inputs,
+  // including negatives ($0), are unchanged.
+  if (!Number.isFinite(usd)) return "$0"
   if (usd <= 0) return "$0"
   return usd < 0.01 ? "<$0.01" : `$${usd.toFixed(2)}`
 }
