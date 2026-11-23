@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2254 -->
+<!-- spec-check files=143 tests=2255 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10954,3 +10954,22 @@ independent reimplementation of the fold across exact, punctuated, unicode and b
 The runtime pin for CLXXI: all seven check types parse through the shared set in
 `test/verify-matrix-goal-declared.test.ts`, and an off-list type is rejected by that same set rather
 than a per-module copy. Focused suites for this lease 184 pass / 0 fail; typecheck clean.
+
+
+## Workstream CLXXIV — memoize failure-signature reason normalization (2026-11-23)
+
+Repo improvement pass, measured hot-path unit.
+
+`src/core/failure-signature.ts · normalize` lowercases, folds Unicode punctuation, trims and collapses
+whitespace on every call. `failureSignatureOf` calls it for the reason and for each missing-check name,
+and `detectRepeatedFailureSignature` walks a history of past verdicts — the same handful of reasons and
+check names recur entry after entry, so those folds were repeated. Added a bounded 4096-entry memo keyed
+by the raw text; a hit is one lookup, a miss recomputes, and the pure function's output is unchanged.
+
+Measured with the same harness before/after (`/tmp/opencode/bench-fs-repeat.ts`, 200 cycles over 120
+signatures with repeated reasons, 20 rounds, median of 3 runs): `13.7 ms -> 0.31 ms`, ~44x.
+
+New regression in `test/failure-signature.test.ts` compares cold and warm signature keys against an
+independent reimplementation of the original fold across punctuation, whitespace, unicode and long
+inputs, and pins that a six-entry repeated-reason history still counts 7 on both passes. Focused suite
+21 pass / 0 fail (was 20). Typecheck clean. Marker `tests=2254 -> 2255`.
