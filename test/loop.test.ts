@@ -73,7 +73,7 @@ function harness(options: Record<string, unknown> = {}, storage = new MemoryStor
     error: (message: unknown) => void logs.push({ level: "error", message: String(message) }),
   }
   const work = { subagents: 0, shells: 0 }
-  const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean } }> = []
+  const compactCalls: Array<{ sessionID: string; opts?: { force?: boolean; cold?: boolean } }> = []
   let compactOutcome: BoundaryCompactResult = { requested: true, estimatedTokens: 250_000 }
   let contextSize: number | undefined = 250_000
   let usageValue: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
@@ -416,7 +416,7 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v2 condition")
     let release!: () => void
     const gate = new Promise<void>((resolve) => (release = resolve))
-    ;(h.controller as any).deps.compactAtBoundary = async (sessionID: string, opts?: { force?: boolean }) => {
+    ;(h.controller as any).deps.compactAtBoundary = async (sessionID: string, opts?: { force?: boolean; cold?: boolean }) => {
       h.compactCalls.push(opts ? { sessionID, opts } : { sessionID })
       await gate
       return { requested: true, estimatedTokens: 250_000 }
@@ -640,7 +640,7 @@ describe("/goal-loop", () => {
     const record = h.controller.get(SID)!
     expect(record.loopCompact).toMatchObject({ iteration: 2, misses: 0, estimatedTokens: 250_000 })
     expect(record.loopCompact!.landedAt).toBeUndefined()
-    expect(h.compactCalls).toEqual([{ sessionID: SID }])
+    expect(h.compactCalls).toEqual([{ sessionID: SID, opts: { cold: true } }])
   })
 
   test("onCompactionLanded marks the pending request landed and emits a success notice", async () => {
@@ -699,7 +699,7 @@ describe("/goal-loop", () => {
     const record = h.controller.get(SID)!
     expect(record.loopCompact).toMatchObject({ iteration: 4, misses: 2 })
     expect(h.compactCalls).toHaveLength(2)
-    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /has not landed/i.test(n.message))).toBe(true)
   })
 
@@ -723,7 +723,7 @@ describe("/goal-loop", () => {
     expect(record.loopCompact!.misses).toBe(2)
     // Force was requested at the wiring level, but the outcome stayed a busy denial:
     // the record keeps pointing at the original unlanded request.
-    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     expect(record.loopCompact!.iteration).toBe(2)
   })
 
@@ -874,7 +874,7 @@ describe("/goal-loop", () => {
     await h.turn(1) // miss 2: one warning, then forced re-request
     expect(h.controller.get(SID)!.loopCompact!.misses).toBe(2)
     expect(h.compactCalls).toHaveLength(2)
-    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
   })
 
   test("an ended-event landing resets the record; the next arm starts from a clean slate with a fresh request", async () => {
@@ -892,7 +892,7 @@ describe("/goal-loop", () => {
     h.nextGoals.push("v3 condition")
     await h.turn(1)
     expect(h.compactCalls).toHaveLength(2)
-    expect(h.compactCalls[1]).toEqual({ sessionID: SID })
+    expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { cold: true } })
     expect(h.controller.get(SID)!.loopCompact!.misses).toBe(0)
     expect(h.controller.get(SID)!.loopCompact!.iteration).toBe(3)
   })
@@ -921,17 +921,17 @@ describe("/goal-loop", () => {
       await h4.turn(1)
     }
     await arm() // fresh boundary request
-    expect(h4.compactCalls).toEqual([{ sessionID: SID }])
+    expect(h4.compactCalls).toEqual([{ sessionID: SID, opts: { cold: true } }])
     await arm() // miss 1: silent skip, no request
     expect(h4.compactCalls).toHaveLength(1)
     await arm() // miss 2: ONE warning (exact text), forced re-request
     expect(h4.compactCalls).toHaveLength(2)
-    expect(h4.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h4.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     const hostUnwilling = h4.notices.filter((n2) => n2.kind === "compact" && n2.level === "warning" && n2.message === COMPACT_MISS_NOTICE)
     expect(hostUnwilling).toHaveLength(1)
     await arm() // miss 3: trickle (3 % 3 === 0), no new warning
     expect(h4.compactCalls).toHaveLength(3)
-    expect(h4.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h4.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     expect(h4.notices.filter((n2) => n2.message === COMPACT_MISS_NOTICE)).toHaveLength(1)
     await arm() // miss 4: backstop final warning, no request (4 % 3 !== 0)
     expect(h4.compactCalls).toHaveLength(3)
@@ -940,7 +940,7 @@ describe("/goal-loop", () => {
     expect(h4.compactCalls).toHaveLength(3)
     await arm() // miss 6: trickle re-request — never permanent silence
     expect(h4.compactCalls).toHaveLength(4)
-    expect(h4.compactCalls[3]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h4.compactCalls[3]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     expect(h4.controller.get(SID)?.status).toBe("active")
   })
 
@@ -956,11 +956,11 @@ describe("/goal-loop", () => {
     }
     h7.setContextSize(undefined) // the host cannot show us a number at all
     await arm() // fresh boundary request (estimate unknown at request time)
-    expect(h7.compactCalls).toEqual([{ sessionID: SID }])
+    expect(h7.compactCalls).toEqual([{ sessionID: SID, opts: { cold: true } }])
     await arm() // unmeasurable tick 1: one forced re-request past cooldown, misses untouched
     expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
     expect(h7.compactCalls).toHaveLength(2)
-    expect(h7.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
+    expect(h7.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true, cold: true } })
     await arm() // tick 2: staleness unknown (one warning), forced re-request (2 % 2 === 0)
     expect(h7.controller.get(SID)!.loopCompact!.misses).toBe(0)
     expect(h7.controller.get(SID)!.loopCompact!.stalenessUnknown).toBe(true)
@@ -996,7 +996,7 @@ describe("/goal-loop", () => {
     expect(h5.controller.get(SID)!.loopCompact!.landedAt).toBeNumber()
     await arm() // fresh request resumes from misses 0
     expect(h5.compactCalls).toHaveLength(4)
-    expect(h5.compactCalls[3]).toEqual({ sessionID: SID })
+    expect(h5.compactCalls[3]).toEqual({ sessionID: SID, opts: { cold: true } })
     expect(h5.controller.get(SID)!.loopCompact!.misses).toBe(0)
   })
 
@@ -2383,7 +2383,7 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     h.nextGoals.push("v4 condition")
     h.setContextSize(250_000)
     await h.turn(1)
-    expect(h.compactCalls[h.compactCalls.length - 1]).toEqual({ sessionID: SID })
+    expect(h.compactCalls[h.compactCalls.length - 1]).toEqual({ sessionID: SID, opts: { cold: true } })
   })
 
   test("(ii-b) a drop under 10% is not a landing", async () => {

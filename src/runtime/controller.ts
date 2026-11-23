@@ -90,8 +90,10 @@ interface ControllerDeps {
    * Asks the host to compact the session at a loop-iteration boundary so the next iteration arms with a fresh
    * context. Optional so tests/probes can omit it; awaiting only waits for the host's acceptance of the request.
    * `force` skips the cooldown (never the in-flight/busy gate): used to re-request a compaction that never landed.
+   * `cold` makes that compaction replay as no conversation — this is a new goal version, so the worker starts from
+   * the freshly armed condition rather than the previous version's transcript.
    */
-  readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean }) => Promise<BoundaryCompactResult>
+  readonly compactAtBoundary?: (sessionID: string, opts?: { force?: boolean; cold?: boolean }) => Promise<BoundaryCompactResult>
   /** Estimated model-visible context size in tokens, or undefined when unknown. Used to detect a landed boundary compaction. */
   readonly estimateContext?: (sessionID: string) => Promise<number | undefined>
   /** Session context/messages for scoped transcript/artifact evidence checks (best-effort). */
@@ -2471,7 +2473,7 @@ export class GoalController {
         skipRequest !== undefined
           ? { requested: false, reason: skipRequest === "landed" ? "too-small" : "cooldown" }
           : await this.deps
-              .compactAtBoundary(sessionID, force ? { force: true } : undefined)
+              .compactAtBoundary(sessionID, { ...(force ? { force: true } : {}), cold: true })
               .catch((error): BoundaryCompactResult => {
                 log.warn("loop boundary compact failed", { sessionID, error: errorMessage(error) })
                 return { requested: false, reason: "read-failed" }

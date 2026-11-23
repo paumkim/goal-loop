@@ -592,7 +592,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2324 -->
+<!-- spec-check files=143 tests=2325 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1271,6 +1271,29 @@ Files touched: `src/core/types.ts`, `src/core/format.ts`, `src/runtime/compactor
 
 Verification: `test/loop.test.ts` + `test/core.test.ts`, `bun test` (346 tests), `bun run check` green;
 coordinator submit.
+
+122. Cold context at the loop boundary. `/reset-context` establishes `COLD_REPLAY = { summary: "", native:
+    { messages: [] } }`: OpenCode replays a compaction's `native.messages` instead of its summary
+    (`to-llm-message.ts`), so an empty array replays as zero LLM messages — a cold session start (fresh system
+    prompt, no conversation) on the same session ID. The plugin's `compaction` hook installs it for sessions
+    marked in a one-shot `resetPending` set. That marker is now also set by the loop-boundary compaction: the
+    controller calls `compactAtBoundary(sessionID, { cold: true })` only from `loopAdvance`, after the vN+1
+    arm commit and before the new version's steer, so a new goal version starts with no prior transcript;
+    forced re-requests carry the same flag. `cold` flows through the optional port
+    (`ControllerDeps.compactAtBoundary` → `AutoCompactor.compactAtBoundary` → `CompactorDeps.compact` →
+    `SessionPort.compact`) and is forwarded to the host only after every busy/in-flight/cooldown guard has
+    passed — a deferred or skipped request never leaves the session primed for a cold replay later. The marker
+    is set inside the host call and dropped on failure, so a new user turn or background subagent/shell (the
+    `isBusy` gates at `compactor.ts`) cannot be compacted cold. Threshold auto-compaction
+    (`maybeCompact`) and ordinary `/compact` never pass `cold`; they keep their generated summary.
+
+Files touched: `src/index.ts`, `src/runtime/ports.ts`, `src/runtime/compactor.ts`, `src/runtime/controller.ts`,
+`test/compactor.test.ts`, `test/loop.test.ts`, `test/plugin.test.ts`.
+
+Verification: `test/compactor.test.ts` asserts `cold` reaches the host only when a boundary call actually
+compacts (busy/too-small skips record none); `test/loop.test.ts` asserts every boundary call carries
+`{ cold: true }`, including forced re-requests; `test/plugin.test.ts` covers the hook's cold replay. `bun run
+check` green; coordinator submit.
 
 ## Appendix A — Phase 1 audit findings (read-only sweep)
 
