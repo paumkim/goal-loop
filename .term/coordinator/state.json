@@ -5760,8 +5760,11 @@
       "paths": "package.json,bun.lock,SPEC.md,docs/changelog.html",
       "branch": "wt/unused-dep-cleanup",
       "worktree": "worktrees/wt-unused-dep-cleanup",
-      "status": "claimed",
-      "createdAt": "2026-11-23T02:53:20Z"
+      "status": "done",
+      "createdAt": "2026-11-23T02:53:20Z",
+      "submittedAt": "2026-11-23T03:01:09Z",
+      "mergedAt": "2026-11-23T03:03:20Z",
+      "mergedInto": "dev"
     },
     "normalize-condition-unify": {
       "agent": "loop-worker",
@@ -5770,6 +5773,14 @@
       "worktree": "worktrees/wt-normalize-condition-unify",
       "status": "claimed",
       "createdAt": "2026-11-23T02:57:28Z"
+    },
+    "coordinator-merge-status": {
+      "agent": "build",
+      "paths": "packages/coordinator/bin/coordinator,test/coordinator.test.ts,test/coordinator-merge-safety.test.ts,test/coordinator-lease-races.test.ts,AGENTS.md,docs/parallel-work.md,SPEC.md,docs/changelog.html",
+      "branch": "wt/coordinator-merge-status",
+      "worktree": "worktrees/wt-coordinator-merge-status",
+      "status": "claimed",
+      "createdAt": "2026-11-23T03:02:18Z"
     }
   },
   "mergeLock": null,
