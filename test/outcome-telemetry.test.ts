@@ -123,6 +123,37 @@ describe("summarizeOutcomeTelemetry", () => {
     expect(formatOutcomeTelemetry(empty)).toBe("")
   })
 
+  test("normalizeReason memo returns cold and warm results identical to an uncached oracle", () => {
+    // Independent reimplementation of the six-pass normalization — the oracle for the bounded memo.
+    const oracle = (reason: string | undefined): string => {
+      if (!(typeof reason === "string" && reason.trim())) return ""
+      return (reason ?? "")
+        .toLowerCase()
+        .replace(/https?:\/\/\S+/g, " ")
+        .replace(/\b[0-9a-f]{7,40}\b/g, " ")
+        .replace(/\b\d+(?:\.\d+)?\s*(?:ms|s|sec|secs|second|seconds|min|mins|minute|minutes|h|hr|hrs|hour|hours|day|days)\b/g, " ")
+        .replace(/[^\p{L}\p{N}]+/gu, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 120)
+    }
+    const inputs = [
+      undefined, "", "   ", "MISSING verifier output (30s)",
+      "see https://example.com/run/42 for sha abc1234567890def",
+      "flaky render snapshot mismatch", "the loop did not advance",
+      "REPEAT reason with 12 hrs delay", "x".repeat(200),
+    ]
+    for (const input of inputs) {
+      for (let pass = 0; pass < 2; pass++) expect(normalizeReason(input)).toBe(oracle(input))
+    }
+    // A summary over repeated reasons must be identical to the uncached path's grouped result.
+    const repeated = Array.from({ length: 20 }, () => verdict("MISSING verifier output (30s)"))
+    const s = summarizeOutcomeTelemetry(repeated)
+    expect(s.verdictCounts.not_met).toBe(20)
+    expect(s.failureThemes.length).toBe(1)
+    expect(s.failureThemes[0]?.count).toBe(20)
+  })
+
   test("groups not_met reasons into a taxonomy and flags recurring themes at the threshold", () => {
     const entries = [
       verdict("missing verifier output"),

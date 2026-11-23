@@ -66,8 +66,27 @@ function asString(value: unknown): string | undefined {
  * hashes, durations and punctuation, and collapses whitespace. Never fabricates words:
  * the result is a lossy key for grouping, not a replacement for the original reason.
  */
+/**
+ * `normalizeReason` is pure and the journal tail it scans is dominated by repeated reasons and
+ * conditions (the same handful of failure themes and armed conditions recur across entries). Each call
+ * runs six regex passes, so the repeated values were being normalized over and over. A bounded memo keyed
+ * by the raw string turns a repeat into one lookup. The guard rejects blanks before the key, and the cache
+ * is bounded so a long session cannot grow it without limit.
+ */
+const NORMALIZE_CACHE_LIMIT = 2048
+const normalizeCache = new Map<string, string>()
 export function normalizeReason(reason: string | undefined): string {
   if (!asString(reason)) return ""
+  const key = reason as string
+  const hit = normalizeCache.get(key)
+  if (hit !== undefined) return hit
+  const result = normalizeReasonUncached(reason)
+  if (normalizeCache.size < NORMALIZE_CACHE_LIMIT) normalizeCache.set(key, result)
+  return result
+}
+
+/** The raw six-pass normalization, kept separate so `normalizeReason` is a thin cache lookup around it. */
+function normalizeReasonUncached(reason: string | undefined): string {
   return (reason ?? "")
     .toLowerCase()
     .replace(/https?:\/\/\S+/g, " ")
