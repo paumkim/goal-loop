@@ -6468,6 +6468,17 @@
       "submittedAt": "2026-11-23T15:15:52Z",
       "mergedAt": "2026-11-23T15:18:07Z",
       "mergedInto": "dev"
+    },
+    "unify-prompter-sleep": {
+      "agent": "build",
+      "paths": "src/prompter/driver.ts,src/prompter/util.ts",
+      "branch": "wt/unify-prompter-sleep",
+      "worktree": "worktree/wt-unify-prompter-sleep",
+      "status": "done",
+      "createdAt": "2026-11-23T15:36:42Z",
+      "submittedAt": "2026-11-23T15:38:57Z",
+      "mergedAt": "2026-11-23T15:41:30Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
