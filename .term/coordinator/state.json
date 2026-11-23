@@ -6413,6 +6413,17 @@
       "submittedAt": "2026-11-23T14:29:46Z",
       "mergedAt": "2026-11-23T14:32:05Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-dead-exports": {
+      "agent": "orchestrator",
+      "paths": "src/core/prompts.ts,src/core/types.ts,test/notes.test.ts,test/core.test.ts,SPEC.md,docs/**",
+      "branch": "wt/eod-cleanup-dead-exports",
+      "worktree": "worktree/wt-eod-cleanup-dead-exports",
+      "status": "done",
+      "createdAt": "2026-11-23T14:34:04Z",
+      "submittedAt": "2026-11-23T14:40:16Z",
+      "mergedAt": "2026-11-23T14:42:31Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
