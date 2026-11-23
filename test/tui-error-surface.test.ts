@@ -32,4 +32,39 @@ describe("src/tui.tsx user-facing error surfaces", () => {
     // the user only sees the plain line. One shared logger keeps that contract in one place.
     expect(source).toContain("logUiError(")
   })
+
+  test("every individual failed-action path is routed, not just counted in aggregate", () => {
+    // One assertion per pre-fix failure site (file:line at the time of the audit):
+    // 744 copy, 754 export, 776 verify, 799 reach, 822 sign, 840/852/876 attest,
+    // 889 review, 902 spend, 916 seal, 929 index, 951 clear.
+    const titles = [
+      "copy failed",
+      "export failed",
+      "verify failed",
+      "reach check failed",
+      "sign check failed",
+      "attest failed",
+      "review failed",
+      "spend report failed",
+      "seal failed",
+      "index failed",
+      "clear failed",
+    ]
+    for (const title of titles) {
+      expect(source, `${title} is still a raw safeToast`).toMatch(new RegExp(`toastError\\("${title}", error`))
+    }
+    // The one remaining "failed" safeToast is the notice-handler catch (line ~494), whose body is
+    // the fixed plain string "see logs" — an intentional error surface, not a raw error dump.
+    expect(source).not.toMatch(/safeToast\(\{ title: "(?!goal plugin notice handler failed)[^"]*failed"/)
+  })
+
+  test("the two stack sites keep a plain user line beside a full-error log call", () => {
+    const dialogCatch = source.slice(source.indexOf('showStatusDialogInner(sessionID, fallback)'), source.indexOf("const showStatusDialogInner"))
+    expect(dialogCatch).toContain("logUiError(\"status dialog failed\", error)")
+    expect(dialogCatch).toContain("userFacingError(error)")
+
+    const fallback = source.slice(source.indexOf("<ErrorBoundary"), source.indexOf("</ErrorBoundary>"))
+    expect(fallback).toContain("logUiError(\"dialog render failed\", error)")
+    expect(fallback).toContain("{userFacingError(error)}")
+  })
 })
