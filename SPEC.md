@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2258 -->
+<!-- spec-check files=143 tests=2259 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11091,3 +11091,15 @@ silently loses its verdict (`test/core.test.ts`). Differential oracle: 31 curate
 lenient cases): baseline 35.37 ms → optimized 31.19 ms (~1.13x); five paired best-of-30 runs gave
 1.07x–1.15x, all positive. `tsc --noEmit` clean. Marker bumped 2257 → 2258 tests (no files added);
 no behavior change.
+## Workstream CLXXXV — tag-free fast path in the reasoning filter (2026-11-23)
+
+`stripReasoningControl` in `src/core/sanitize.ts` runs up to three regex passes (paired block, stray
+closer, unterminated opener) over every summary. Every reasoning tag begins with `<`, so text with no
+`<` cannot match any pass; the loop would reach `return current.trim()` unchanged. Added that
+short-circuit, so clean model output — the common case — skips all regex work. Also removed a stray
+duplicated doc-comment line above the `probe` memo.
+
+Measured before/after (400 clean tag-free lines, 200 sweeps, best of 30): `8.81 ms -> 0.70 ms`,
+~12.6x. Harness: `/tmp/opencode/bench-sanitize-clean.ts`. Correctness: new regression test pins the
+fast path against the trimmed text across empty/whitespace/Unicode/no-angle cases; focused suite
+(sanitize) 17 pass / 0 fail, 44 expect() calls. `tsc --noEmit` clean.

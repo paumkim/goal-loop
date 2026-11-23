@@ -34,7 +34,6 @@ const OPEN_RE = new RegExp(String.raw`<${TAG_NAME}>`, "gi")
 const CLOSE_RE = new RegExp(String.raw`</${TAG_NAME}>`, "gi")
 const MAX_PASSES = 8
 
-/** Whitespace/punctuation-insensitive probe for the prefix test. */
 /**
  * The prefix comparison runs a lowercase + Unicode fold on both halves of a message on every pass;
  * the same halves recur when the filter is applied to streamed/duplicated reasoning. `probe` is pure,
@@ -43,6 +42,9 @@ const MAX_PASSES = 8
 const probe = memoizeBounded((value: string): string => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""), 2048)
 
 export function stripReasoningControl(text: string): string {
+  // Every reasoning tag starts with '<'. Clean model output (the common case) cannot match any of the
+  // three passes, so skip the regex work entirely and return the same result the loop would reach.
+  if (text.indexOf("<") < 0) return text.trim()
   let current = text
   for (let pass = 0; pass < MAX_PASSES; pass++) {
     const paired = current.replace(PAIRED_RE, "")
