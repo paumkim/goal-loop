@@ -12,7 +12,6 @@ import {
   formatLearningsForPrompt,
   formatOutcomeTelemetry,
   normalizeReason,
-  summarizeLearningText,
   summarizeOutcomeTelemetry,
 } from "../src/core/outcome-telemetry.ts"
 import { GoalController } from "../src/runtime/controller.ts"
@@ -234,8 +233,8 @@ describe("summarizeOutcomeTelemetry", () => {
     expect(s.recurringConditions[0]?.condition).toContain("make tests pass")
   })
 
-  test("summarizeLearningText parses JSONL end to end", () => {
-    const s = summarizeLearningText([serializeLearningEntry(verdict("flaky test")), "{bad", ""].join("\n"))
+  test("parseLearningEntries and summarizeOutcomeTelemetry parse JSONL end to end", () => {
+    const s = summarizeOutcomeTelemetry(parseLearningEntries([serializeLearningEntry(verdict("flaky test")), "{bad", ""].join("\n")))
     expect(s.entries).toBe(1)
     expect(s.failureThemes[0]?.theme).toBe("flaky test")
   })

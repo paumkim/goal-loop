@@ -235,8 +235,17 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
   `plugin`/`core`/`evaluator` suites green, full check green, marker unchanged (no `test()` block removed).
   Follow-ups recorded, not removed: `types.ts · NO_COMMIT` (zero production consumers but 19 test fixture call
   sites), `scripts/repro-loop-cap.tsx` (161-line repro renderer, zero automated invocations but possible manual
-  use), `outcome-telemetry.ts · summarizeLearningText` (test-only wrapper, possibly a deliberate public helper),
-  `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test scope).
+  use), `prompts.ts · note()` / `TERMINAL_NOTE_TAG` (dispatch retired per workstream LXX, larger grammar-test
+  scope). `outcome-telemetry.ts · summarizeLearningText` was the next follow-up and is now removed below.
+
+- Dead wrapper removal (`dead-summarize-learning-text`, 2026-11-23): `summarizeLearningText` in
+  `src/core/outcome-telemetry.ts` was a three-line convenience wrapper over
+  `summarizeOutcomeTelemetry(parseLearningEntries(text))`. Repo-wide grep found only its definition, a test
+  import and one end-to-end call; no production consumer, no docs listing, no dynamic or config entry point.
+  Removed the export and re-pointed the end-to-end test to the exact underlying composition, preserving the
+  same assertions and test count. `parseLearningEntries` and `summarizeOutcomeTelemetry` keep their own
+  extensive independent coverage, so no gate was weakened. No behavior change; focused outcome-telemetry suite
+  and full check green, marker unchanged.
 
 - Max-retries doc truth (`maxretries-doc-truth`, 2026-11-23): `docs/runtime.html` alone still called
   `maxRetries` "retained for compatibility, no longer gates anything". The controller gates on it in two
