@@ -279,16 +279,28 @@ var STATUS_LABEL = {
 var statusLabel = (status) => STATUS_LABEL[status];
 var TRUNCATE_CACHE_LIMIT = 4096;
 var truncateCache = new Map;
+var truncateCacheEntries = 0;
 function truncate(text, max, ellipsis = "\u2026") {
   if (max <= 0)
     return "";
-  const key = JSON.stringify([max, ellipsis, text]);
-  const hit = truncateCache.get(key);
+  const hit = truncateCache.get(max)?.get(ellipsis)?.get(text);
   if (hit !== undefined)
     return hit;
   const result = truncateUncached(text, max, ellipsis);
-  if (truncateCache.size < TRUNCATE_CACHE_LIMIT)
-    truncateCache.set(key, result);
+  if (truncateCacheEntries < TRUNCATE_CACHE_LIMIT) {
+    let byEllipsis = truncateCache.get(max);
+    if (!byEllipsis) {
+      byEllipsis = new Map;
+      truncateCache.set(max, byEllipsis);
+    }
+    let byText = byEllipsis.get(ellipsis);
+    if (!byText) {
+      byText = new Map;
+      byEllipsis.set(ellipsis, byText);
+    }
+    byText.set(text, result);
+    truncateCacheEntries++;
+  }
   return result;
 }
 function truncateUncached(text, max, ellipsis = "\u2026") {

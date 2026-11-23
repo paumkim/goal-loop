@@ -11012,3 +11012,17 @@ m keyed by the raw half turns a repeat into one lookup. Measured with the same h
 (`/tmp/opencode/bench-sanitize2.ts`, 100 cycles x 3 long inputs, 20 rounds, median of runs):
 `1.40 ms -> 0.33 ms`, ~4.2x. New test in `test/sanitize.test.ts` pins cold/warm byte-identical output and
 idempotence after the cache is warm. Focused suites 69 pass / 0 fail. Combined marker `tests=2255 -> 2257`.
+## Workstream CLXXIX — key the truncate memo by tuple, not by JSON text (2026-11-23)
+
+`truncate` in `src/core/format.ts` memoized on `JSON.stringify([max, ellipsis, text])`, which serializes
+the whole line on every cached hit. TUI frames re-truncate the same dossier lines repeatedly, so the
+hit path paid an O(text) allocation to avoid an O(text) computation. The cache is now nested
+`Map<max, Map<ellipsis, Map<text, result>>>` with a separate entry count preserving the 4096 bound.
+A string key's hash is cached by the engine, so a hit is three map walks and no allocation.
+
+Measured before/after with the same harness (20000 memo hits on a 700-char line, best of 50 rounds):
+`5.35 ms -> 0.12 ms`, ~44x on the hit path. Harness: `/tmp/opencode/bench-truncate.ts`.
+Correctness: `test/truncate-cache.test.ts` compares cold and warm results against an independent
+oracle across custom ellipses, CJK, emoji, combining marks and limit edges (162 expect() calls);
+focused suites (truncate-cache, format, tui-hud, tui-hud-width-measure) 182 pass / 0 fail. `tsc
+--noEmit` clean. No new tests; merged marker `files=143 tests=2257`.
