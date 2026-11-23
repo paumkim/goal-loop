@@ -357,6 +357,7 @@ there.
 | CXC | `one-status-to-answer-cell-across-the-record` | one status-to-answer cell across the record family |
 | CXCI | `worktree-dir-rename` | worktrees/ to worktree/ everywhere |
 | CXCII | `entries-scalar-precheck` | scalar precheck in the snapshot equality gate |
+| CXCIII | `worktree-dir-physical-migrate` | physical worktree dir migration with live-lease compatibility |
 
 ## Workstream AC — compaction misses are counted once (A-1)
 
@@ -10214,3 +10215,9 @@ within noise, as expected). Harnesses: `/tmp/opencode/bench-goalsequal-change.ts
 `/tmp/opencode/bench-goalsequal.ts`. Correctness: new differential test cross-checks all 9x9 variant
 pairs against the original implementation plus null/identity cases; focused suite 41 pass / 0 fail,
 147 expect() calls. `tsc --noEmit` clean. Marker +2 tests; no shipped-file change.
+
+## Workstream CXCIII — physical worktree dir migration with live-lease compatibility (worktree-dir-physical-migrate) (2026-11-23)
+
+Completed the physical half of the `worktrees/` → `worktree/` rename on the shared checkout. `coordinator migrate-worktree-dir` now accepts `--with-live-leases`: when a live lease still points into `worktrees/`, the default remains a hard refusal (another session's worktree is never disturbed), but the explicit flag moves the directory anyway, leaves a `worktrees -> worktree` compatibility symlink, and skips rewriting those leases' records so their old paths keep resolving for their owner. The move also handles an already-existing destination (new-style leases claimed before the migration) and runs `git worktree repair` on every relocated worktree. Help text and docs/parallel-work.md / AGENTS.md describe both modes.
+
+Verification: `test/worktree-dir-rename.test.ts` grows a ninth case asserting the symlink, both old and new paths resolving to the same worktree, the live lease keeping its old record while a done lease is rewritten, and git records repaired; focused suite 9 pass / 0 fail (70 expect() calls). Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check. On the shared checkout the command was then run with `--with-live-leases` to perform the actual physical rename, with `git worktree list` confirming the repaired `worktree/` paths.

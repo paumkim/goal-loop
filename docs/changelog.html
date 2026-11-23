@@ -7,11 +7,12 @@
 <a href="index.html">Home</a><a href="architecture.html">Architecture</a><a href="runtime.html">Runtime</a><a href="config.html">Config</a><a href="core.html">Core</a><a href="install.html">Install</a><a href="changelog.html">Changelog</a>
 </aside>
 <main id="main"><h1>Changelog</h1>
-<!-- pending: CXXXV arm-time planner; CXXXVI native verdict report-race grace + stale-condition echo guard; CXXXVII evaluator no longer judges its own delegation, keeps pure-text reply evidence, and re-reads a mid-turn parent; CXL first-arm goal bar + pause on an unusable native verdict instead of re-arming the worker; CXLI position-layer fix — harness-owned standalone judge child, no worker delegation and no wake on judge completion; CXLII P0 — standalone judge and planner prompts no longer opt out of execution wake, and every worker-facing prompt ends with the shared no-judge directive (uncommitted; rows appear after commit) -->
+<!-- pending: CXXXV arm-time planner; CXXXVI native verdict report-race grace + stale-condition echo guard; CXXXVII evaluator no longer judges its own delegation, keeps pure-text reply evidence, and re-reads a mid-turn parent; CXL first-arm goal bar + pause on an unusable native verdict instead of re-arming the worker; CXLI position-layer fix — harness-owned standalone judge child, no worker delegation and no wake on judge completion; CXLII P0 — standalone judge and planner prompts no longer opt out of execution wake, and every worker-facing prompt ends with the shared no-judge directive ; CCVIII live judge carries the verifier-closes completion rule; CXCIII rotated into the archive (uncommitted; rows appear after commit) -->
 <p>Recent changes to this repository, newest first. Rows are read from <code>git log</code> (<code>git log -- docs/ README.md src/ scripts/</code>), so the committed page can never drift from history. Uncommitted working-tree edits detected by the watcher are kept in a local, gitignored log (<code>.docs-watch.log</code>); view them with <code>bun scripts/docs-watch.ts log</code>.</p>
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-23 01:47 UTC</code></td><td>fix(judge): close completion with a clean verifier in live judge prompts</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 01:29 UTC</code></td><td>fix(hud): clamp non-finite counters in pill and stall remedy</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 01:13 UTC</code></td><td>fix(format): sanitize lone surrogates in truncate and elide; rotate full SPEC window</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 00:52 UTC</code></td><td>fix(runtime): preserve turn counter on restore so the zero-tool guard stops recurring</td><td>commit</td></tr>
@@ -41,11 +42,10 @@
 <tr><td><code>2026-11-22 20:41 UTC</code></td><td>perf(verdict): precompile lenient verdict/reason regexes with lastIndex reset</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 20:32 UTC</code></td><td>build: regenerate dist and changelog after memo unification</td><td>commit</td></tr>
 <tr><td><code>2026-11-22 20:29 UTC</code></td><td>refactor(core): route all pure hot memos through one bounded helper</td><td>commit</td></tr>
-<tr><td><code>2026-11-22 20:23 UTC</code></td><td>refactor(bootstrap): drop unused workflow re-export of ensureCoordinatorWorkplaceLayout</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-22 22:30 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-23 01:47 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->

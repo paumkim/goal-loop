@@ -511,7 +511,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2315 -->
+<!-- spec-check files=143 tests=2316 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1361,12 +1361,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCIII — physical worktree dir migration with live-lease compatibility (worktree-dir-physical-migrate) (2026-11-23)
-
-Completed the physical half of the `worktrees/` → `worktree/` rename on the shared checkout. `coordinator migrate-worktree-dir` now accepts `--with-live-leases`: when a live lease still points into `worktrees/`, the default remains a hard refusal (another session's worktree is never disturbed), but the explicit flag moves the directory anyway, leaves a `worktrees -> worktree` compatibility symlink, and skips rewriting those leases' records so their old paths keep resolving for their owner. The move also handles an already-existing destination (new-style leases claimed before the migration) and runs `git worktree repair` on every relocated worktree. Help text and docs/parallel-work.md / AGENTS.md describe both modes.
-
-Verification: `test/worktree-dir-rename.test.ts` grows a ninth case asserting the symlink, both old and new paths resolving to the same worktree, the live lease keeping its old record while a done lease is rewritten, and git records repaired; focused suite 9 pass / 0 fail (70 expect() calls). Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check. On the shared checkout the command was then run with `--with-live-leases` to perform the actual physical rename, with `git worktree list` confirming the repaired `worktree/` paths.
-
 ## Workstream CXCIV — one finite-or-zero clamp for the chrome renderers (2026-11-23)
 
 The `Number.isFinite(n) ? Math.max(0, n) : 0` clamp was spelled out three times in `history.ts`
@@ -1586,6 +1580,14 @@ Verification: fuzz harness went from 6 violations to 0 on the same seeded shapes
 `test/core.test.ts` pin the sanitizer, the width cap, and marker-safe output. Focused suite 189 pass /
 0 fail, 177373 expect() calls. Full `bun run check` green after artifact regeneration; marker
 re-counted, no shipped file added or removed.
+
+## Workstream CCVIII — a clean passing verifier closes the live judge (live-judge-completion) (2026-11-23)
+
+The bounded completion condition from CXCVII reached the session/independent judge prompts (`OUTPUT`, `NEXT_GOAL_ASK`) but never the live path: every per-turn verdict comes from the native judge, whose `nativeEvaluationRequest` carried only the condition, the parent summary and a short output contract, and whose `EVALUATOR_SYSTEM_PROMPT` says "judge solely from that". A goal armed with "complete only when a clean-checkout `bun run check` passes and no meaningful polish/speed/taste gap remains" was judged directly from its condition: the judge credited the green check, then rejected the second clause as unprovable, returning `not_met` for 20+ turns. `evaluator.verifyCommand` only runs after a candidate `met`, so the deterministic exit-0 proof never entered the judge prompt — a chicken-and-egg the live path could not break.
+
+One shared line, `VERIFIER_CLOSES_COMPLETION` in `src/core/prompts.ts`, now states that a configured verifier (or required check) exiting 0 at the current HEAD with a clean tracked tree conclusively proves the check clause, and that speculative polish/speed/taste is not a gap. It is embedded in `EVALUATOR_SYSTEM_PROMPT` (the single instruction source for every live verdict), in `nativeEvaluationRequest`, and in `COMPLETION_CONDITION` (so the planner and the opt-in independent judge agree); the rubric's adversarial self-check is bounded to gaps the completion condition counts. The `met` verdict still flows through the unchanged `verifyMet` matrix gate, which fails closed for failing, missing, unscoped or timed-out checks and for the broad generic-only coverage case. No gate, test or generated artifact was weakened; `dist/` is untouched because no TUI source changed.
+
+Verification: `test/core.test.ts` pins the line in both judge prompts and in the native request (including the `<2,000`-char loop-request budget); `test/loop.test.ts` pins it in the planner prompt. Focused `core`/`loop` suite 359 pass / 0 fail, 178198 expect() calls, after rebasing this work onto the merged HUD-counter fix. Full `bun run check` green including dist freshness, TUI load, docs freshness, invariant-sweep and spec-check (marker re-counted to 2,316 tests). Workstream CXCIII rotated into the archive to keep the live recent window at 15.
 
 ## Historical workstreams
 
