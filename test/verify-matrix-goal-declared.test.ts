@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { computeScopePolicy, parseGoalDeclaredChecks, resolveVerifyChecks, evaluateCoveragePolicy } from "../src/core/verify-matrix.ts"
+import type { VerifyCheckType as TCanonical, VerifyEvidenceMode as ECanonical, VerifyCheckSource as SCanonical } from "../src/core/types.ts"
+import type { VerifyCheckType as TConfig, VerifyEvidenceMode as EConfig } from "../src/core/config.ts"
+import type { VerifyEvidenceMode as EMatrix, VerifyCheckSource as SMatrix } from "../src/core/verify-matrix.ts"
+
+/** Compile-time identity: the re-exported aliases must be the very same union as the canonical one. */
+type Same<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
+const _sameType: Same<TCanonical, TConfig> = true
+const _sameEvidenceConfig: Same<ECanonical, EConfig> = true
+const _sameEvidenceMatrix: Same<ECanonical, EMatrix> = true
+const _sameSource: Same<SCanonical, SMatrix> = true
+void [_sameType, _sameEvidenceConfig, _sameEvidenceMatrix, _sameSource]
 
 describe("goal-declared verify directive parsing", () => {
   test("parses explicit structured directives and merges as typed command-executed checks", () => {
@@ -105,5 +116,18 @@ describe("deterministic verification coverage policy", () => {
     const resolved = resolveVerifyChecks({ configured: [], condition })
     const opts = { condition, profile: "default", checks: resolved.checks }
     expect(evaluateCoveragePolicy(opts, computeScopePolicy(opts))).toEqual(evaluateCoveragePolicy(opts))
+  })
+})
+
+describe("verification union types have one canonical home", () => {
+  test("re-exports from config.ts and verify-matrix.ts are identical to the types.ts unions", () => {
+    // The compile-time Same<> bindings above fail `tsc` if any alias drifts. This runtime case pins the
+    // values the unions describe, so a future edit that changes one path's accepted literals is caught here.
+    const types = ["typecheck", "tests", "lint", "build", "smoke", "custom", "goal-declared"] as const satisfies readonly TConfig[]
+    const evidence = ["command", "artifact", "either"] as const satisfies readonly EMatrix[]
+    const sources = ["configured", "legacy", "goal-declared"] as const satisfies readonly SMatrix[]
+    expect(types.length).toBe(7)
+    expect(evidence.length).toBe(3)
+    expect(sources.length).toBe(3)
   })
 })

@@ -3,9 +3,9 @@ import { headSha, findRepository } from "./git.ts"
 import { isBroadGoalCondition } from "./prompts.ts"
 import type { VerifyCheckConfig, VerifyCheckType } from "./config.ts"
 
-export type VerifyEvidenceMode = "command" | "artifact" | "either"
-export type VerifyCheckSource = "configured" | "legacy" | "goal-declared"
-
+// Canonical unions live in types.ts; re-exported so existing imports from this module keep working.
+export type { VerifyEvidenceMode, VerifyCheckSource } from "./types.ts"
+import type { VerifyEvidenceMode, VerifyCheckSource } from "./types.ts"
 interface ParsedGoalDeclaredCheck extends VerifyCheckConfig {
   readonly source: "goal-declared"
   readonly evidence: VerifyEvidenceMode
