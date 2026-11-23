@@ -6165,8 +6165,19 @@
       "paths": "src/core/prompts.ts,src/index.ts,test/plugin.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
       "branch": "wt/coordinator-claim-always-on",
       "worktree": "worktree/wt-coordinator-claim-always-on",
+      "status": "done",
+      "createdAt": "2026-11-23T08:27:38Z",
+      "submittedAt": "2026-11-23T08:34:00Z",
+      "mergedAt": "2026-11-23T08:36:10Z",
+      "mergedInto": "dev"
+    },
+    "readme-badge-2317": {
+      "agent": "orchestrator",
+      "paths": "README.md",
+      "branch": "wt/readme-badge-2317",
+      "worktree": "worktree/wt-readme-badge-2317",
       "status": "claimed",
-      "createdAt": "2026-11-23T08:27:38Z"
+      "createdAt": "2026-11-23T08:33:00Z"
     }
   },
   "mergeLock": null,
