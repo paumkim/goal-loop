@@ -11255,3 +11255,15 @@ The loop never terminated: the planner's `LOOP_COMPLETE` clause asked whether "n
 `src/core/prompts.ts` now defines `COMPLETION_CONDITION` once and embeds it in both `OUTPUT` (evaluator) and `NEXT_GOAL_ASK` (planner). Completion is a finite four-item checklist, each item checkable from fresh visible output at current HEAD: (1) every required check and verifier command passes with exit 0 and zero failures; (2) the tracked tree is clean (`git status --short` shows no uncommitted source changes); (3) no active or submitted lease requires work ABSENT at HEAD and the merge queue has no pending entry; (4) the latest met verdict's `next:` pointer names no concrete gap whose required work is ABSENT at HEAD. If any item is unproven or fails, the loop is not complete and the planner arms the highest-priority unmet item; speculative polish/speed/taste preferences are not gaps and never justify re-arming. "No gap" now means exactly those four checks pass, not that the repository is perfect. The old subjective clauses are removed from both prompts; the structured `next:` form and the `next: none` token are unchanged, so verdict parsing and the forward-pointer/novelty gates stay compatible. This mirrors the bounded `<condition>` block the `/goal` path already uses. No controller, verdict-parsing, or API change.
 
 Verification: focused `core`/`loop`/`evaluator` 399 pass / 0 fail, 178303 expect() calls, including two regressions that pin the bounded checklist in both evaluator judges and both planner paths and forbid the removed wording. Full `bun run check` green with `files=143 tests=2283` (+2 tests, none weakened).
+## Workstream CXCVIII — skip the width loop for unbounded spend lines (2026-11-23)
+
+`formatSpend` measured every rendered line with `cellWidth` inside the degradation loop even at its
+default `maxWidth = Infinity`, where `width > Infinity` can never be true. That path now returns the
+joined line directly, skipping one memoized width lookup and the extra array/string allocation the
+loop needed. Finite budgets are untouched.
+
+Measured on 20000 calls with a cost + cached usage line (best of 100, paired runs in the same harness):
+`6.13 ms -> 5.63 ms` (~8%); an earlier paired run gave `5.83 -> 5.18 ms`. Harness:
+`/tmp/opencode/bench-misc.ts`. New regression pins the default result against an explicit
+`Number.MAX_SAFE_INTEGER` width across four spend shapes. Focused suite (core) 176 pass / 0 fail,
+177308 expect() calls; `tsc --noEmit` clean. Marker +1 test; no shipped-file change.

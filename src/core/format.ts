@@ -171,6 +171,9 @@ export function formatSpend(spend: UsageSnapshot, maxWidth: number = Number.POSI
   const parts = [`${formatTokens(spend.input + spend.cacheRead + spend.cacheWrite)} in`, `${formatTokens(spend.output + spend.reasoning)} out`]
   if (spend.cacheRead > 0) parts.push(`${formatTokens(spend.cacheRead)} cached`)
   const join = (tokens: string[]) => [...tokens, ...(cost ? [cost] : [])].join(" \u00B7 ")
+  // The default width is unbounded, so the degradation loop below can never fire. Skip both the
+  // cellWidth measurement and the extra array/string allocation on that common path.
+  if (maxWidth === Number.POSITIVE_INFINITY) return join(parts)
   let tokens = parts
   let out = join(tokens)
   while (tokens.length > 0 && cellWidth(out) > maxWidth) {
