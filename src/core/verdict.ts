@@ -66,6 +66,17 @@ const MAX_JSON_UNWRAP = 3
 const VERDICT_KEYS = ["verdict", "status", "result", "met"] as const
 const REASON_KEYS = ["reason", "explanation", "rationale"] as const
 
+// lenientFields runs for every malformed evaluator verdict (a raw newline or stray quote inside the reason
+// that strict JSON.parse rejects), and used to build 4 field + up to 3 reason RegExp objects per call.
+// Compile them once. Field patterns keep `g` (they scan every occurrence), so each use resets lastIndex —
+// matching the old fresh-regex behavior exactly, including the object-key guard skipping quoted matches.
+const LENIENT_FIELD_PATTERNS: readonly RegExp[] = VERDICT_KEYS.map((key) =>
+  new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "gi"),
+)
+const LENIENT_REASON_PATTERNS: readonly RegExp[] = REASON_KEYS.map((key) =>
+  new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i"),
+)
+
 /**
  * Extracts the evaluator's verdict from free-form model output. Accepts strict JSON, JSON in a code fence
  * or surrounded by prose, and a `VERDICT: x` fallback. Returns undefined when nothing trustworthy is found.
@@ -140,10 +151,10 @@ function isObjectKeyPosition(text: string, index: number): boolean {
  * field (or end of text, which covers an object truncated mid-reason). No verdict token means no verdict.
  */
 function lenientFields(text: string): { verdict: Verdict; reason: string } | undefined {
-  for (const key of VERDICT_KEYS) {
+  for (const fieldPattern of LENIENT_FIELD_PATTERNS) {
     // Scan *every* occurrence, not just the first: a malformed reason can quote `"verdict":"met"` before
     // the real field. The first occurrence fails the object-key guard below; the real one must still be seen.
-    const fieldPattern = new RegExp(`"${key}"\\s*:\\s*"?([A-Za-z_][A-Za-z_\\s-]*?)"?\\s*(?=,|}|$)`, "gi")
+    fieldPattern.lastIndex = 0 // shared `g` regex: reset state left by an earlier early return/call
     for (let field = fieldPattern.exec(text); field; field = fieldPattern.exec(text)) {
       // The quoted key must sit at an object key position, not inside a string value. A model can quote
       // `"verdict":"met"` in its reason (discussing another evaluation); without this guard the lenient pass
@@ -152,8 +163,8 @@ function lenientFields(text: string): { verdict: Verdict; reason: string } | und
       const verdict = normalizeVerdict(field[1])
       if (!verdict) return undefined
       let reason = ""
-      for (const reasonKey of REASON_KEYS) {
-        const match = new RegExp(`"${reasonKey}"\\s*:\\s*"([\\s\\S]*?)(?:"\\s*[,}]|$)`, "i").exec(text)
+      for (const reasonPattern of LENIENT_REASON_PATTERNS) {
+        const match = reasonPattern.exec(text)
         if (match?.[1] !== undefined) {
           reason = unescapeJsonText(match[1])
           break

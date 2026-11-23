@@ -182,6 +182,17 @@ next: none"}`
       reason: "(a) Clause-by-clause judgment with evidence ref\nclause=commit, status=satisfied\n(b) Gaps: none material.\nnext: none",
     })
   })
+  test("the lenient pass keeps no regex state across calls (precompiled patterns)", () => {
+    // Field patterns are precompiled with the `g` flag and reused. Each call must reset lastIndex:
+    // without it, an early-returning parse leaves lastIndex past the real field of the next verdict,
+    // so the next call silently loses its verdict. The two strings below exercise that exact sequence.
+    const first = `{"verdict":"met","reason":"line one\nline two with a long reason string here"}`
+    const second = `{"verdict":"not_met","reason":"second call with a different verdict"}`
+    expect(parseVerdict(first)?.verdict).toBe("met")
+    expect(parseVerdict(second)).toEqual({ verdict: "not_met", reason: "second call with a different verdict" })
+    expect(parseVerdict(first)?.verdict).toBe("met")
+    expect(parseVerdict(second)?.verdict).toBe("not_met")
+  })
   test("a verdict object with an unescaped quote in the reason parses", () => {
     const text = `{"verdict":"not_met","reason":"(a) Tests failed
 (b) Missing gate output for "bun run check"
