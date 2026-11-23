@@ -5871,8 +5871,19 @@
       "paths": "src/core/hud.ts,test/tui-hud.test.tsx,SPEC.md,docs/changelog.html,dist/tui.js",
       "branch": "wt/pill-evaluated-turn-count",
       "worktree": "worktree/wt-pill-evaluated-turn-count",
+      "status": "done",
+      "createdAt": "2026-11-23T04:04:45Z",
+      "submittedAt": "2026-11-23T04:13:45Z",
+      "mergedAt": "2026-11-23T04:16:08Z",
+      "mergedInto": "dev"
+    },
+    "entries-hotpath-fastpath": {
+      "agent": "loop-worker",
+      "paths": "src/core/entries.ts,test/entries.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/entries-hotpath-fastpath",
+      "worktree": "worktree/wt-entries-hotpath-fastpath",
       "status": "claimed",
-      "createdAt": "2026-11-23T04:04:45Z"
+      "createdAt": "2026-11-23T04:14:55Z"
     }
   },
   "mergeLock": null,
