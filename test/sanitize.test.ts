@@ -8,6 +8,21 @@ describe("stripReasoningControl", () => {
     expect(stripReasoningControl(stripReasoningControl(text))).toBe(text)
   })
 
+  test("tag-free fast path returns exactly the trimmed text (whitespace, unicode, empty)", () => {
+    // No reasoning tag can exist without '<', so the short-circuit must be indistinguishable from
+    // the full three-pass loop followed by trim(). Covers whitespace edges and non-ASCII content.
+    const cases = [
+      "",
+      "   ",
+      "\n\t plain text \n",
+      "unicode: café 日本語 🚀 — em dash",
+      "< not a tag (no closing angle) still has a <",
+    ]
+    for (const text of cases) {
+      if (text.indexOf("<") < 0) expect(stripReasoningControl(text)).toBe(text.trim())
+    }
+  })
+
   test("removes a complete namespaced paired block", () => {
     expect(stripReasoningControl("<ernie:think>reasoning here</ernie:think>objective: done")).toBe("objective: done")
   })
