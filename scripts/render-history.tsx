@@ -12,11 +12,11 @@
  * --mono prints every frame under reduced color: the smoke arm for the NO_COLOR / TERM=dumb
  * contract — glyphs demote to ASCII (verified by the smoke test) and no frame may regress.
  */
-import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import { positiveFinite as checkPositiveFinite } from "./positive-finite.ts"
+import { PALETTE } from "./render-theme.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 /** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
@@ -33,12 +33,12 @@ if (mono) process.env.NO_COLOR = "1"
 
 const theme: HistoryTheme = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
     },
   },
 }

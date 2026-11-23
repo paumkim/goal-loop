@@ -14,26 +14,26 @@
  * to drop under row pressure), and the impossible arm (rephrase or /goal clear). --mono prints
  * the same arms under reduced color (NO_COLOR set); glyphs demote to ASCII.
  */
-import { RGBA } from "@opentui/core"
 import { testRender } from "@opentui/solid"
 import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
+import { PALETTE } from "./render-theme.ts"
 
 const mono = process.argv.includes("--mono")
 if (mono) process.env.NO_COLOR = "1"
 const theme: HudCardTheme = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-      error: { base: RGBA.fromHex("#ff6c6c") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
+      error: { base: PALETTE.error },
     },
   },
-  border: { base: RGBA.fromHex("#3f3f3f") },
-  background: { raised: { high: RGBA.fromHex("#161616") } },
+  border: { base: PALETTE.border },
+  background: { raised: { high: PALETTE.raised } },
 }
 
 const now = 1_800_000_000_000

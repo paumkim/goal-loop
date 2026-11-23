@@ -21,23 +21,24 @@ import { HudCard, hudCardRows, type HudCardTheme } from "../src/hud-card.tsx"
 import { pillModel, type NeutralTheme } from "../src/core/hud.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 import { widthFlag } from "./width-flag.ts"
+import { PALETTE } from "./render-theme.ts"
 
 const terminal = widthFlag(process.argv.slice(2), 80)
 
 const theme: HudCardTheme & NeutralTheme<RGBA> = {
   text: {
-    base: RGBA.fromHex("#e8e8e8"),
-    muted: RGBA.fromHex("#a0a0a0"),
-    faint: RGBA.fromHex("#6f6f6f"),
+    base: PALETTE.base,
+    muted: PALETTE.muted,
+    faint: PALETTE.faint,
     feedback: {
-      info: { base: RGBA.fromHex("#6cb6ff") },
-      warning: { base: RGBA.fromHex("#e0af3c") },
-      error: { base: RGBA.fromHex("#ff6c6c") },
-      success: { base: RGBA.fromHex("#7ee787") },
+      info: { base: PALETTE.info },
+      warning: { base: PALETTE.warning },
+      error: { base: PALETTE.error },
+      success: { base: PALETTE.success },
     },
   },
-  border: { base: RGBA.fromHex("#3f3f3f") },
-  background: { raised: { high: RGBA.fromHex("#161616") } },
+  border: { base: PALETTE.border },
+  background: { raised: { high: PALETTE.raised } },
 }
 
 const now = 1_800_000_000_000
