@@ -68,27 +68,29 @@ export function pruneSnapshotEntries(
   keep: string | undefined,
   cap: number = ENTRY_CAP,
 ): Readonly<Record<string, GoalSnapshotCacheEntry>> {
+  const keys = Object.keys(entries)
+  // No eviction is possible at or under the cap. Return the original reference without copying — this
+  // is the steady state for every `applySnapshot` call in a normal session (at most a handful of live
+  // sessions against a cap of 64), and keeping the reference is what lets Solid skip a re-render.
+  if (keys.length <= cap) return entries
   let changed = false
   const out: Record<string, GoalSnapshotCacheEntry> = {}
   for (const [sessionID, entry] of Object.entries(entries)) {
     out[sessionID] = entry
   }
-  const keys = Object.keys(out)
-  if (keys.length > cap) {
-    const rank = (k: string): number => {
-      const g = out[k]!.goal
-      return g !== null && isLive(g.status) ? 1 : 0
-    }
-    // Non-live first (rank 0), oldest first; the cap never evicts a live goal and never drops `keep`.
-    const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a]!.receivedAt - out[b]!.receivedAt)
-    let overflow = keys.length - cap
-    for (const k of sorted) {
-      if (overflow <= 0) break
-      if (k === keep || rank(k) === 1) continue
-      delete out[k]
-      overflow--
-      changed = true
-    }
+  const rank = (k: string): number => {
+    const g = out[k]!.goal
+    return g !== null && isLive(g.status) ? 1 : 0
+  }
+  // Non-live first (rank 0), oldest first; the cap never evicts a live goal and never drops `keep`.
+  const sorted = keys.slice().sort((a, b) => rank(a) - rank(b) || out[a]!.receivedAt - out[b]!.receivedAt)
+  let overflow = keys.length - cap
+  for (const k of sorted) {
+    if (overflow <= 0) break
+    if (k === keep || rank(k) === 1) continue
+    delete out[k]
+    overflow--
+    changed = true
   }
   return changed ? out : entries
 }
@@ -100,13 +102,19 @@ export function dropSessions(
   keep?: string,
 ): Readonly<Record<string, GoalSnapshotCacheEntry>> {
   if (ids.length === 0) return entries
+  // One Set build replaces a linear scan of `ids` for every entry. Track the drop directly instead of
+  // re-counting both key sets — same result, no extra O(n) pass.
+  const drop = new Set(ids)
   const out: Record<string, GoalSnapshotCacheEntry> = {}
+  let removed = false
   for (const [sessionID, entry] of Object.entries(entries)) {
-    if (ids.includes(sessionID) && sessionID !== keep) continue
+    if (drop.has(sessionID) && sessionID !== keep) {
+      removed = true
+      continue
+    }
     out[sessionID] = entry
   }
-  if (Object.keys(out).length === Object.keys(entries).length) return entries
-  return out
+  return removed ? out : entries
 }
 
 /**
