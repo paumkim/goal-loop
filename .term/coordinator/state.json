@@ -5722,9 +5722,11 @@
       "paths": "src/core/hud.ts,test/tui-hud.test.tsx,dist/tui.js,SPEC.md,docs/changelog.html",
       "branch": "wt/pill-live-turn-counter",
       "worktree": "worktrees/wt-pill-live-turn-counter",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T02:34:28Z",
-      "submittedAt": "2026-11-23T02:44:50Z"
+      "submittedAt": "2026-11-23T02:44:50Z",
+      "mergedAt": "2026-11-23T02:57:46Z",
+      "mergedInto": "dev"
     },
     "lenient-verdict-regex": {
       "agent": "build",
@@ -5752,6 +5754,22 @@
       "submittedAt": "2026-11-23T02:50:03Z",
       "mergedAt": "2026-11-23T02:52:05Z",
       "mergedInto": "dev"
+    },
+    "unused-dep-cleanup": {
+      "agent": "build",
+      "paths": "package.json,bun.lock,SPEC.md,docs/changelog.html",
+      "branch": "wt/unused-dep-cleanup",
+      "worktree": "worktrees/wt-unused-dep-cleanup",
+      "status": "claimed",
+      "createdAt": "2026-11-23T02:53:20Z"
+    },
+    "normalize-condition-unify": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,src/core/failure-signature.ts,src/runtime/controller.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/normalize-condition-unify",
+      "worktree": "worktrees/wt-normalize-condition-unify",
+      "status": "claimed",
+      "createdAt": "2026-11-23T02:57:28Z"
     }
   },
   "mergeLock": null,
