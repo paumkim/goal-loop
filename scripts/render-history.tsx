@@ -17,6 +17,7 @@ import type { JSX } from "@opentui/solid"
 import { HistoryBlock, LoopSection, type HistoryTheme } from "../src/tui-history.tsx"
 import { positiveFinite as checkPositiveFinite } from "./positive-finite.ts"
 import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
 import type { GoalSnapshot, Verdict } from "../src/core/types.ts"
 
 /** [width, height, --flags…]: flags may appear in any slot; positionals must be positive finite numbers. */
@@ -28,8 +29,7 @@ const positiveFinite = (value: string | undefined, dflt: number, name: string): 
 const width = positiveFinite(positional[0], 112, "width")
 const height = positiveFinite(positional[1], 34, "height")
 const empty = flagArgs.includes("--empty")
-const mono = flagArgs.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag(flagArgs)
 
 const theme: HistoryTheme = {
   text: {

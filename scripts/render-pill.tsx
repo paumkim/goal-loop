@@ -18,9 +18,9 @@ import { pillModel, terminalPill, breathCrest, type NeutralTheme } from "../src/
 import type { GoalSnapshot } from "../src/core/types.ts"
 import { widthFlag } from "./width-flag.ts"
 import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
 
-const mono = process.argv.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag()
 const terminal = widthFlag(process.argv.slice(2), 150)
 
 const theme: NeutralTheme<RGBA> = {

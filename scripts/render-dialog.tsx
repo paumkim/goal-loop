@@ -22,6 +22,7 @@ import { DialogFooter, type HudCardTheme } from "../src/hud-card.tsx"
 import { goalGlyph } from "../src/core/format.ts"
 import { positiveFinite } from "./positive-finite.ts"
 import { PALETTE } from "./render-theme.ts"
+import { monoFlag } from "./render-fixtures.ts"
 import { motionDisabled } from "../src/core/hud.ts"
 import type { HistoryTheme } from "../src/tui-history.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
@@ -36,8 +37,7 @@ const width = positiveFiniteFlag("width", pileup ? 100 : 150)
 const pinned = process.argv.includes("--pinned")
 const copied = process.argv.includes("--copied")
 const achieved = process.argv.includes("--achieved")
-const mono = process.argv.includes("--mono")
-if (mono) process.env.NO_COLOR = "1"
+const mono = monoFlag()
 /** --bench=N: render N frames and print avg/min/max ms per frame (renderOnce + captureCharFrame, the same work a keystroke triggers). 0 = skip benching. */
 const bench = positiveFiniteFlag("bench", 0)
 const now = Date.now()
