@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2241 -->
+<!-- spec-check files=143 tests=2242 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10767,3 +10767,29 @@ New `test/truncate-cache.test.ts` compares cold and warm results against an inde
 reimplements the original algorithm with a fresh Segmenter and raw `string-width`, across custom
 ellipses, CJK, emoji, combining marks, zero/negative limits and ellipsis-wider-than-budget. Focused
 suites 173 pass / 0 fail. Typecheck clean. Marker `tests=2240 -> 2241`.
+
+
+## Workstream CLXIII — parse the verdict echo once; precompile its alias pattern (2026-11-22)
+
+Repo improvement pass, consistency + measured cleanup unit.
+
+`src/core/evaluator-agent.ts` had two drift risks in the verdict path. `echoedCondition` compiled its
+JSON-ish alias regex with `new RegExp(...)` on every fallback call while the sibling
+`AUTHORITATIVE_VERDICT_KEY` / `FOREIGN_VERDICT_PATTERNS` were already module-level constants; and
+`verdictFromNativeReport` called `echoedCondition` up to three times on the same body (guard,
+message, and again inside `conditionEchoMatches`), each a separate JSON.parse.
+
+Precompiled the alias pattern once as `ECHO_KEYS_PATTERN` (no `/g`, so repeated `.exec` is stateless),
+extracted the token-overlap logic into `echoMatches(echo, expected)` so `conditionEchoMatches` keeps
+its public signature, and made the verdict path parse the echo once and reuse it. The stale-condition
+error text is byte-identical.
+
+Measured before/after with the same harness (`/tmp/opencode/bench-echo.ts`, medians of 20 rounds):
+`verdictFromNativeReport` 13.38 ms -> 11.62 ms (~1.15x) over 8000 calls; isolated
+`echoedCondition` ~1.6 ms -> ~1.1-1.4 ms from the precompiled alias pattern. This is a small
+end-to-end win (the verdict path runs once per turn); the primary value is removing duplicated parsing.
+
+New regression test in `test/core.test.ts` pins the exact stale-condition error text (previously only
+matched by `/judged a stale condition/`), the JSON-ish alias-fallback path, and the unchanged
+no-expected-condition path. Focused suite 172 pass / 0 fail (was 171). Typecheck clean.
+Marker `tests=2241 -> 2242`.

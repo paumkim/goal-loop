@@ -77,6 +77,9 @@ export function findNativeReport(
   return undefined
 }
 
+/** Precompiled once: the JSON-ish fallback alias pattern used by `echoedCondition`. Stateless (no /g), so repeated `.exec` is safe. */
+const ECHO_KEYS_PATTERN = /"(?:condition|condition_echo|echo|goal)"\s*:\s*"((?:[^"\\]|\\.)*)"/i
+
 /**
  * Pull the echoed condition out of a verdict body. The host's request asks for a `condition` field; tolerate the
  * common aliases and a JSON-ish (strict parse failed) body so a well-behaved judge is not rejected on syntax.
@@ -91,7 +94,7 @@ export function echoedCondition(body: string): string | undefined {
       if (typeof v === "string" && v.trim()) return v.trim()
     }
   }
-  const match = new RegExp(`"(?:${keys.join("|")})"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`, "i").exec(body)
+  const match = ECHO_KEYS_PATTERN.exec(body)
   return match?.[1] ? match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"') : undefined
 }
 
@@ -127,6 +130,11 @@ function normalizeEcho(text: string): string {
 export function conditionEchoMatches(body: string, expected: string): boolean {
   const echo = echoedCondition(body)
   if (!echo) return false
+  return echoMatches(echo, expected)
+}
+
+/** Token-overlap match on two already-extracted echoes. Split out so a verdict can parse the echo once and reuse it. */
+function echoMatches(echo: string, expected: string): boolean {
   const a = normalizeEcho(echo)
   const b = normalizeEcho(expected)
   if (!a || !b) return false
@@ -156,10 +164,14 @@ export function verdictFromNativeReport(candidate: NativeReportCandidate, expect
   if (!AUTHORITATIVE_VERDICT_KEY.test(candidate.body)) {
     throw new Error(`unreadable verdict: evaluator subagent returned no authoritative verdict/met field (status/result are not verdicts): ${candidate.body.slice(0, 500)}`)
   }
-  if (expectedCondition !== undefined && echoedCondition(candidate.body) !== undefined && !conditionEchoMatches(candidate.body, expectedCondition)) {
+  // Parse the echo once. The old code called `echoedCondition` up to three times on the same body —
+  // three JSON.parse attempts per verdict — and the message used a separately re-parsed value. A single
+  // binding is behavior-identical (same message) and removes the redundant work.
+  const echoed = expectedCondition === undefined ? undefined : echoedCondition(candidate.body)
+  if (expectedCondition !== undefined && echoed !== undefined && !echoMatches(echoed, expectedCondition)) {
     throw new Error(
       `evaluator subagent judged a stale condition: expected ${JSON.stringify(expectedCondition.slice(0, 160))}, ` +
-      `report echoed ${JSON.stringify(echoedCondition(candidate.body)?.slice(0, 160) ?? "(missing)")}`,
+      `report echoed ${JSON.stringify(echoed.slice(0, 160))}`,
     )
   }
   const parsed = parseVerdict(candidate.body)
