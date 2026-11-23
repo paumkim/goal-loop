@@ -157,6 +157,149 @@ merge_lock_slug() {
   jq -r 'if (.mergeLock|type) == "object" then .mergeLock.slug // "" elif .mergeLock then .mergeLock else "" end' "$STATE_FILE" 2>/dev/null
 }
 
+# --- merge lock observability (read-only) -----------------------------------
+# do_merge_next records the holder under the existing flock as one line:
+#   slug=<slug> branch=<branch> pid=<pid> started=<ISO8601>
+# These helpers only READ that record and the state mirror. They never take the
+# exclusive lock, never write state, and never clear a lock — merge-status is safe
+# to call at any time, including from another agent's worktree while a merge runs.
+merge_holder_line() {
+  cat "$DATA_DIR/.merge-lock/holder" 2>/dev/null || cat "$DATA_DIR/.merge-lock-file" 2>/dev/null || true
+}
+
+merge_holder_field() {
+  printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | head -1
+}
+
+merge_holder_alive() {
+  case "${1:-}" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  kill -0 "$1" 2>/dev/null
+}
+
+# True when the existing merge-lock flock can be acquired non-blockingly.
+merge_lock_free() {
+  local lock_file="$DATA_DIR/.merge-lock-file"
+  exec 9<>"$lock_file" 2>/dev/null || return 1
+  if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then { exec 9>&-; } 2>/dev/null || true; return 1; fi
+    flock -u 9 2>/dev/null || true
+  fi
+  { exec 9>&-; } 2>/dev/null || true
+  return 0
+}
+
+# Emit the read-only merge-status JSON: mergeInProgress, holder, ageSeconds,
+# recommendation. A live holder means "wait"; a dead pid or a lock past the
+# 60-minute reclaim window means "stale, merge-next will reclaim it".
+merge_status_json() {
+  need_jq
+  local line slug pid started age=0 state_slug
+  line=$(merge_holder_line); line=${line%$'\n'}
+  slug=$(merge_holder_field "$line" slug)
+  pid=$(merge_holder_field "$line" pid)
+  started=$(merge_holder_field "$line" started)
+  state_slug=$(merge_lock_slug)
+  [ -z "$slug" ] && slug="$state_slug"
+  if [ -z "$started" ] && [ -n "$state_slug" ]; then
+    started=$(jq -r --arg s "$state_slug" '.mergeLock.startedAt // empty' "$STATE_FILE" 2>/dev/null || true)
+  fi
+  if [ -n "$started" ]; then
+    local epoch
+    epoch=$(iso_to_epoch "$started")
+    if [ "${epoch:-0}" -gt 0 ]; then
+      age=$(( $(now_epoch) - epoch ))
+      [ "$age" -lt 0 ] && age=0
+    fi
+  fi
+  if [ "$age" -eq 0 ] && [ -d "$DATA_DIR/.merge-lock" ]; then
+    local mtime
+    mtime=$(stat -c %Y "$DATA_DIR/.merge-lock" 2>/dev/null || printf '0')
+    if [ "${mtime:-0}" -gt 0 ]; then
+      age=$(( $(now_epoch) - mtime ))
+      [ "$age" -lt 0 ] && age=0
+    fi
+  fi
+
+  local rec held=false holder_json=null
+  if [ -n "$slug" ]; then
+    held=true
+    holder_json=$(jq -nc --arg s "$slug" '$s')
+    if [ -z "$pid" ]; then
+      rec="merge lock held by $slug (holder pid unknown, age ${age}s) — verify the merge is alive; await-merge can wait it out"
+    elif merge_holder_alive "$pid"; then
+      if [ "$age" -gt 3600 ]; then
+        rec="stale merge lock held by $slug (pid $pid alive, age ${age}s > 3600s) — merge-next will reclaim it; proceed with care"
+      else
+        rec="merge in progress by $slug (pid $pid, age ${age}s) — wait with await-merge before claim/submit/merge-next"
+      fi
+    else
+      rec="stale lock held by dead pid $pid ($slug, age ${age}s) — merge-next will reclaim it; safe to retry"
+    fi
+  else
+    rec="clear — no merge in progress; you may claim, submit, or merge-next"
+  fi
+  jq -nc --argjson mip "$held" --argjson holder "$holder_json" --argjson age "$age" --arg rec "$rec" \
+    '{mergeInProgress:$mip, holder:$holder, ageSeconds:$age, recommendation:$rec}'
+}
+
+do_merge_status() {
+  need_jq
+  ensure_state
+  read_config
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help)
+        printf 'usage: coordinator merge-status\n\n  Read-only view of the existing merge lock as JSON: mergeInProgress, holder, ageSeconds, recommendation.\n'
+        return 0 ;;
+      *) printf 'unknown merge-status option: %s\n' "$1" >&2; return 1 ;;
+    esac
+  done
+  merge_status_json
+}
+
+# Poll the existing merge lock (no new lock system) until no live merge holds it.
+# Prints a final merge-status JSON; exit 0 when clear, 1 on timeout/error.
+do_await_merge() {
+  need_jq
+  ensure_state
+  read_config
+  local timeout=300 deadline
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --timeout) timeout="${2:-}"; shift 2 ;;
+      --timeout=*) timeout="${1#*=}"; shift ;;
+      -h|--help)
+        printf 'usage: coordinator await-merge [--timeout SECONDS]\n\n  Poll the existing merge lock until it is free, then print merge-status JSON. Exit 1 on timeout.\n'
+        return 0 ;;
+      *) printf 'unknown await-merge option: %s\n' "$1" >&2; return 1 ;;
+    esac
+  done
+  case "$timeout" in ''|*[!0-9]*) printf 'error: --timeout must be a non-negative integer\n' >&2; return 1 ;; esac
+  deadline=$(( $(now_epoch) + timeout ))
+  while :; do
+    local status mip line pid
+    status=$(merge_status_json) || return 1
+    mip=$(printf '%s' "$status" | jq -r '.mergeInProgress')
+    if [ "$mip" = "false" ]; then printf '%s\n' "$status"; return 0; fi
+    # A stale/dead holder does not block: when the underlying flock is also free,
+    # the lock is safe to reclaim and await-merge returns immediately.
+    line=$(merge_holder_line); line=${line%$'\n'}
+    pid=$(merge_holder_field "$line" pid)
+    if [ -n "$pid" ] && ! merge_holder_alive "$pid" && merge_lock_free; then
+      printf '%s\n' "$status"
+      return 0
+    fi
+    if [ "$(now_epoch)" -ge "$deadline" ]; then
+      printf '%s\n' "$status"
+      printf 'error: timed out after %ss waiting for merge lock\n' "$timeout" >&2
+      return 1
+    fi
+    sleep 1
+  done
+}
+
 # Trim leading/trailing whitespace.
 trim() {
   printf '%s' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
@@ -816,17 +959,20 @@ do_merge_next() {
   need_jq
   ensure_state
   read_config
-  local review=0 target="" explicit_target=0
+  local review=0 target="" explicit_target=0 wait=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --help|-h)
-        printf 'usage: coordinator merge-next [<slug>|--target <slug>] [--review]\n'
+        printf 'usage: coordinator merge-next [<slug>|--target <slug>] [--review] [--wait]\n'
         printf '\n  --target <slug>  land a specific submitted lease (required to land someone else'"'"'s lease)\n'
         printf '  --review         stop before fast-forwarding dev: merged result stays on the\n'
         printf '                   merge-check-* branch, prints the exact command to finish\n'
+        printf '  --wait           await-merge first: poll the existing merge lock until it is free\n'
         return 0 ;;
       --review)
         review=1; shift ;;
+      --wait)
+        wait=1; shift ;;
       --target)
         target="${2:-}"; explicit_target=1; shift 2 ;;
       --target=*)
@@ -892,6 +1038,12 @@ do_merge_next() {
   fi
 
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
+
+  # Thin alias: --wait just drains the existing merge lock via await-merge before the
+  # normal merge-next path. The lock is still acquired below under the same flock.
+  if [ "$wait" -eq 1 ]; then
+    do_await_merge || exit 1
+  fi
 
   # acquire serial lock: flock (when available) plus a mkdir lock dir for visibility
   local lock_dir="$DATA_DIR/.merge-lock"
@@ -1640,16 +1792,18 @@ do_doctor() {
 }
 
 show_help() {
-  printf 'usage: coordinator <claim|heartbeat|submit|release|merge-next|merge-done|merge-abort|status|queue|doctor> [--help]\n'
+  printf 'usage: coordinator <claim|heartbeat|submit|release|merge-next|merge-done|merge-abort|merge-status|await-merge|status|queue|doctor> [--help]\n'
   printf '  claim <task> --agent <you> --paths <scope> [--force]   claim a wt/<slug> lease (existing lease and overlapping live paths need --force)\n'
   printf '  heartbeat                                           liveness check\n'
   printf '  submit [--force]                                    submit the current wt/<slug> claimed lease; commits are checked against the claimed paths (--force overrides, logged to the lease)\n'
   printf '  release <slug> [--force]                            release a claimed lease that will never be submitted (idle or abandoned): done, worktree removed, dirty bytes saved to a ref, a branch with commits kept\n'
-  printf '  merge-next [<slug>|--target <slug>] [--review]       merge a submitted lease into $DEV_BRANCH via a dedicated merge worktree; --target names a lease from the main repo, --review stops before the fast-forward\n'
+  printf '  merge-next [<slug>|--target <slug>] [--review] [--wait]  merge a submitted lease into $DEV_BRANCH via a dedicated merge worktree; --target names a lease from the main repo, --review stops before the fast-forward, --wait drains the merge lock first\n'
   printf '  merge-done <slug>                                   finish a --review merge after dev was fast-forwarded by hand\n'
   printf '  merge-abort <slug>                                  discard a --review merge (scratch branch deleted, lease stays submitted)\n'
   printf '  status [--json] [--all]                             submitted/done counts, or per-lease JSON for active leases (--all includes done) with summary/counts/dirty state\n'
   printf '  queue [--json]                                      submitted leases FIFO with position, wait time and ETA\n'
+  printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
+  printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
   printf '  doctor                                              health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock\n'
 }
 
@@ -1670,6 +1824,10 @@ main() {
       shift; do_merge_done "$@" ;;
     merge-abort)
       shift; do_merge_abort "$@" ;;
+    merge-status)
+      shift; do_merge_status "$@" ;;
+    await-merge)
+      shift; do_await_merge "$@" ;;
     status)
       shift; do_status "$@" ;;
     queue)

@@ -63,6 +63,23 @@ The only exempt dirt is `.term/coordinator/state.json`. Claim and submit leave i
 by design, and the merge flow restores it. Your uncommitted work never vanishes with a
 worktree.
 
+## Check merge status before claim / submit / merge-next
+
+`coordinator merge-status` is a read-only view of the **existing** merge lock — it never takes
+the write lock and never changes state. It prints JSON:
+
+```json
+{"mergeInProgress":false,"holder":null,"ageSeconds":0,"recommendation":"clear — no merge in progress; you may claim, submit, or merge-next"}
+```
+
+Before each of `claim`, `submit`, and `merge-next`, check it. When `mergeInProgress` is `true`,
+follow `recommendation`: wait with `coordinator await-merge [--timeout SECONDS]` (polls the same
+flock, prints the final status as JSON, exit 1 on timeout), or run `coordinator merge-next --wait`,
+a thin alias that calls `await-merge` before the normal merge path. A holder whose pid is dead or
+whose lock is older than the 60-minute reclaim window is reported as stale; the next `merge-next`
+reclaims it under that same flock. Do not build a parallel lock system: `merge-status` and
+`await-merge` only observe and wait on the lock `merge-next` already uses.
+
 ## Reading state during a peer's merge
 
 A merge stashes the exempt live dirt and resets `.term/coordinator/state.json` to the committed
@@ -71,8 +88,10 @@ During that window `coordinator status --json` and `coordinator queue` can trans
 lease that was just claimed or submitted, or report a lease back as `claimed` after its submit.
 That is the reset copy, not lost work. **Do not re-claim:** the live record is restored when the
 peer's merge completes, and a second claim creates a duplicate lease that forces other agents to
-rebase. Wait for the merge lock to clear (`coordinator status --json` shows `mergeLock: null`),
-then re-check. The same applies to workstream headings in `SPEC.md`: several sessions append at
+rebase. Wait for the merge lock to clear (`coordinator merge-status` reports
+`mergeInProgress: false`, or `coordinator await-merge` blocks until it does; `coordinator status
+--json` shows `mergeLock: null`), then re-check. The same applies to workstream headings in
+`SPEC.md`: several sessions append at
 once, so derive the label from your lease slug instead of guessing the next Roman numeral.
 
 ## Shared artifacts

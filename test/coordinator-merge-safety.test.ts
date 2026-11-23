@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { execFileSync, spawnSync } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -624,3 +624,136 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     expect(result.stdout).toContain("post-merge: health ok")
   })
 })
+
+// merge-status / await-merge are read-only observability over the SAME flock+holder that
+// merge-next uses. The helpers below simulate a real holder without starting a merge.
+const waitFor = async (predicate: () => boolean, ms = 4000): Promise<boolean> => {
+  const until = Date.now() + ms
+  while (Date.now() < until) {
+    if (predicate()) return true
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  return false
+}
+
+const runAsync = (args: string[], extraEnv?: Record<string, string>) =>
+  new Promise<{ status: number; stdout: string; stderr: string }>((resolve) => {
+    const child = spawn(SCRIPT, args, { cwd: dir, env: { ...GIT_ENV, ...(extraEnv ?? {}) } })
+    let out = ""
+    let err = ""
+    child.stdout?.setEncoding("utf8")
+    child.stderr?.setEncoding("utf8")
+    child.stdout?.on("data", (chunk) => { out += chunk })
+    child.stderr?.on("data", (chunk) => { err += chunk })
+    child.on("close", (code) => resolve({ status: code ?? 0, stdout: out, stderr: err }))
+  })
+
+const mergeStatus = () => {
+  const result = run(dir, ["merge-status"])
+  expect(result.status).toBe(0)
+  return JSON.parse(result.stdout)
+}
+
+/** Hold the existing merge-lock flock for `seconds`, writing a live holder while held. */
+const holdLock = (seconds: number) => {
+  const lockFile = join(dir, ".term", "coordinator", ".merge-lock-file")
+  const holder = join(dir, ".term", "coordinator", ".merge-lock", "holder")
+  mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+  return spawn("bash", [
+    "-c",
+    `exec 9<>${lockFile}; flock 9; printf 'slug=live-merge branch=wt/live-merge pid=%s started=%s\\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > ${holder}; sleep ${seconds}; rm -f ${holder}`,
+  ], { env: GIT_ENV, stdio: "ignore" })
+}
+
+describe("merge-status / await-merge / merge-next --wait (read-only merge lock view)", () => {
+  test("merge-status is JSON with the four documented fields and a clear recommendation when free", () => {
+    setup("true")
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(false)
+    expect(status.holder).toBeNull()
+    expect(status.ageSeconds).toBe(0)
+    expect(typeof status.recommendation).toBe("string")
+    expect(status.recommendation).toContain("no merge in progress")
+  })
+
+  test("concurrent readers agree while a live holder holds the existing flock; await waits, then clears", async () => {
+    setup("true")
+    const holder = holdLock(2)
+    try {
+      expect(await waitFor(() => existsSyncHolder(dir))).toBe(true)
+      const [a, b] = await Promise.all([runAsync(["merge-status"]), runAsync(["merge-status"])])
+      expect(a.status).toBe(0)
+      expect(b.status).toBe(0)
+      expect(JSON.parse(a.stdout)).toEqual(JSON.parse(b.stdout))
+      const live = JSON.parse(a.stdout)
+      expect(live.mergeInProgress).toBe(true)
+      expect(live.holder).toBe("live-merge")
+      expect(live.recommendation).toContain("await-merge")
+
+      // While held, await-merge times out and still prints the live status as JSON.
+      const waited = await runAsync(["await-merge", "--timeout", "0"])
+      expect(waited.status).toBe(1)
+      expect(JSON.parse(waited.stdout).mergeInProgress).toBe(true)
+      expect(waited.stderr).toContain("timed out")
+
+      // Once the holder releases the flock and removes its record, the same call succeeds.
+      await new Promise<void>((resolve) => holder.on("exit", () => resolve()))
+      const after = mergeStatus()
+      expect(after.mergeInProgress).toBe(false)
+      const done = await runAsync(["await-merge", "--timeout", "3"])
+      expect(done.status).toBe(0)
+      expect(JSON.parse(done.stdout).mergeInProgress).toBe(false)
+    } finally {
+      if (!holder.killed) holder.kill()
+    }
+  })
+
+  test("a dead holder is reported as stale and does not block await-merge", async () => {
+    setup("true")
+    mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+    const started = new Date(Date.now() - 10_000).toISOString()
+    writeFileSync(join(dir, ".term", "coordinator", ".merge-lock", "holder"),
+      `slug=dead-merge branch=wt/dead-merge pid=999999 started=${started}\n`)
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(true)
+    expect(status.holder).toBe("dead-merge")
+    expect(status.ageSeconds).toBeGreaterThanOrEqual(9)
+    expect(status.recommendation).toContain("dead pid")
+    expect(status.recommendation).toContain("999999")
+    // Dead pid + free flock: await-merge returns immediately rather than hanging.
+    const awaited = await runAsync(["await-merge", "--timeout", "0"])
+    expect(awaited.status).toBe(0)
+    expect(JSON.parse(awaited.stdout).mergeInProgress).toBe(true)
+  })
+
+  test("a holder past the 60-minute reclaim window is labelled stale", () => {
+    setup("true")
+    mkdirSync(join(dir, ".term", "coordinator", ".merge-lock"), { recursive: true })
+    const started = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    writeFileSync(join(dir, ".term", "coordinator", ".merge-lock", "holder"),
+      `slug=old-merge branch=wt/old-merge pid=${process.pid} started=${started}\n`)
+    const status = mergeStatus()
+    expect(status.mergeInProgress).toBe(true)
+    expect(status.holder).toBe("old-merge")
+    expect(status.ageSeconds).toBeGreaterThan(3600)
+    expect(status.recommendation).toContain("stale")
+    expect(status.recommendation).toContain("3600s")
+  })
+
+  test("merge-next --wait is a thin alias: it merges normally when the lock is free", () => {
+    setup("true")
+    const wt = claimCommitSubmit("waited", { "w.txt": "w\n" }, "2026-11-02T10:00:00+00:00")
+    const result = run(wt, ["merge-next", "--wait"])
+    expect(result.status).toBe(0)
+    expect(lease("waited").status).toBe("done")
+    expect(run(dir, ["merge-next", "--help"]).stdout).toContain("--wait")
+  })
+})
+
+function existsSyncHolder(root: string): boolean {
+  try {
+    return readFileSync(join(root, ".term", "coordinator", ".merge-lock", "holder"), "utf8").includes("live-merge")
+  } catch {
+    return false
+  }
+}
