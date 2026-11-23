@@ -904,9 +904,16 @@ export const carriesGoalGrammar = (messages: ReadonlyArray<unknown>): boolean =>
  * `context` hook only when the session has no live goal: a finished goal's kickoff/continuation text must
  * leave context entirely, so neither an ordinary request nor a post-compaction summary can re-establish it.
  * Same splice-back contract as {@link stripGoalNotes}.
+ *
+ * A `<goal-evaluation>` request is never goal grammar, even when the armed condition it quotes contains a
+ * literal `<goal>`/`<goal-continuation>` kickoff (users paste rendered directives into `/goal`). Without this
+ * exemption `isGoalInstructionMessage` matches that embedded tag, strips the judge's own prompt from its
+ * child session, and the judge answers not_met claiming no `<condition>` or `<parent-summary>` was supplied.
+ * The evaluation request is reaped separately by {@link stripGoalEvaluations}, so this exemption does not let
+ * stale rubrics ride a worker's context.
  */
 export const stripGoalContext = <T>(messages: ReadonlyArray<T>): T[] =>
-  messages.filter((m) => !isGoalNoteMessage(m) && !isGoalInstructionMessage(m))
+  messages.filter((m) => !isGoalNoteMessage(m) && (!isGoalInstructionMessage(m) || isGoalEvaluationMessage(m)))
 
 /**
  * While a goal is live, only the newest goal directive is state. Every older `<goal>` / `<goal-loop>` /
