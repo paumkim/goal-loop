@@ -1738,7 +1738,7 @@ do_doctor() {
     case "$1" in
       --help|-h)
         printf 'usage: coordinator doctor [--json]\n'
-        printf '\n  --json  emit one machine-readable object: {ok, failures, checks:[{level,message}]}\n'
+        printf '\n  --json  emit one machine-readable object: {ok, failures, checks:[{name,level,message}]}\n'
         return 0 ;;
       --json)
         as_json=1; shift ;;
@@ -1752,8 +1752,8 @@ do_doctor() {
   # buffers the same records into a single object so stdout stays machine-readable.
   local -a CHECKS=()
   emit_check() {
-    local level="$1" message="$2" json
-    json=$(jq -nc --arg level "$level" --arg message "$message" '{level:$level,message:$message}')
+    local name="$1" level="$2" message="$3" json
+    json=$(jq -nc --arg name "$name" --arg level "$level" --arg message "$message" '{name:$name,level:$level,message:$message}')
     CHECKS+=("$json")
     if [ "$as_json" -eq 0 ]; then
       case "$level" in
@@ -1763,20 +1763,20 @@ do_doctor() {
       esac
     fi
   }
-  say_ok()   { emit_check ok "$1"; }
-  say_warn() { emit_check warn "$1"; }
-  say_fail() { emit_check fail "$1"; fails=$((fails+1)); }
+  say_ok()   { emit_check "$1" ok "$2"; }
+  say_warn() { emit_check "$1" warn "$2"; }
+  say_fail() { emit_check "$1" fail "$2"; fails=$((fails+1)); }
 
   # 1. main checkout on dev
   local cur_main
   cur_main=$(git -C "$MAIN_ROOT" branch --show-current 2>/dev/null || printf '')
-  if [ "$cur_main" = "$DEV_BRANCH" ]; then say_ok "main checkout on $DEV_BRANCH"; else say_fail "main checkout on ${cur_main:-<detached>}, expected $DEV_BRANCH (recover: git -C $MAIN_ROOT checkout $DEV_BRANCH)"; fi
+  if [ "$cur_main" = "$DEV_BRANCH" ]; then say_ok "main-branch" "main checkout on $DEV_BRANCH"; else say_fail "main-branch" "main checkout on ${cur_main:-<detached>}, expected $DEV_BRANCH (recover: git -C $MAIN_ROOT checkout $DEV_BRANCH)"; fi
 
   # 2. main checkout tracked-clean (exempt: state.json)
   if git -C "$MAIN_ROOT" diff --quiet -- . ':(exclude).term/coordinator/state.json' && git -C "$MAIN_ROOT" diff --cached --quiet -- . ':(exclude).term/coordinator/state.json'; then
-    say_ok "main checkout tracked-clean"
+    say_ok "main-clean" "main checkout tracked-clean"
   else
-    say_fail "main checkout has uncommitted changes outside .term/coordinator/state.json"
+    say_fail "main-clean" "main checkout has uncommitted changes outside .term/coordinator/state.json"
   fi
 
   # 3. worktree inventory vs leases
@@ -1792,21 +1792,21 @@ do_doctor() {
     if [ "$lstatus" = "done" ]; then
       if [ -d "$wtabs" ]; then
         done_dangling=$((done_dangling+1))
-        say_fail "done lease $slug still has worktree $wtrel (leftover; inspect, then: git -C $MAIN_ROOT worktree remove $wtabs)"
+        say_fail "done-lease-worktree" "done lease $slug still has worktree $wtrel (leftover; inspect, then: git -C $MAIN_ROOT worktree remove $wtabs)"
       fi
     else
       if [ ! -d "$wtabs" ]; then
         live_missing=$((live_missing+1))
-        say_fail "live lease $slug ($lstatus) has no worktree at $wtrel"
+        say_fail "live-lease-worktree" "live lease $slug ($lstatus) has no worktree at $wtrel"
       else
         local un
         un=$(dirty_count "$wtabs")
-        [ "$un" != "0" ] && [ "$un" != "x" ] && say_warn "live lease $slug has $un uncommitted file(s) in $wtrel"
+        [ "$un" != "0" ] && [ "$un" != "x" ] && say_warn "live-lease-dirty" "live lease $slug has $un uncommitted file(s) in $wtrel"
       fi
     fi
   done
-  [ "$done_dangling" -eq 0 ] && say_ok "no done lease retains its worktree"
-  [ "$live_missing" -eq 0 ] && say_ok "all live leases have their worktrees"
+  [ "$done_dangling" -eq 0 ] && say_ok "done-lease-worktrees-clean" "no done lease retains its worktree"
+  [ "$live_missing" -eq 0 ] && say_ok "live-lease-worktrees-present" "all live leases have their worktrees"
 
   # 4. node_modules: dangling symlinks in any worktree
   local dangling=0
@@ -1815,20 +1815,20 @@ do_doctor() {
     local wt="${wtline#worktree }"
     if [ -L "$wt/node_modules" ] && [ ! -d "$wt/node_modules" ]; then
       dangling=$((dangling+1))
-      say_fail "dangling node_modules symlink in $wt"
+      say_fail "node-modules-symlink" "dangling node_modules symlink in $wt"
     fi
   done < <(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null)
-  [ "$dangling" -eq 0 ] && say_ok "no dangling node_modules symlinks"
+  [ "$dangling" -eq 0 ] && say_ok "node-modules-symlinks-clean" "no dangling node_modules symlinks"
 
   # 5. SPEC marker vs reality
   if [ -f "$MAIN_ROOT/scripts/spec-check.ts" ] && command -v bun >/dev/null 2>&1; then
     if (cd "$MAIN_ROOT" && bun scripts/spec-check.ts >/dev/null 2>&1); then
-      say_ok "SPEC.md spec-check marker matches reality"
+      say_ok "spec-marker" "SPEC.md spec-check marker matches reality"
     else
-      say_fail "SPEC.md spec-check marker does not match reality (run: bun scripts/spec-check.ts --write)"
+      say_fail "spec-marker" "SPEC.md spec-check marker does not match reality (run: bun scripts/spec-check.ts --write)"
     fi
   else
-    say_warn "scripts/spec-check.ts not found; marker check skipped"
+    say_warn "spec-marker-unavailable" "scripts/spec-check.ts not found; marker check skipped"
   fi
 
   # 6. merge lock health
@@ -1838,12 +1838,12 @@ do_doctor() {
     local scratch_exists
     scratch_exists=$(git -C "$MAIN_ROOT" branch --list "merge-check-${lock_slug}-*" | head -1)
     if [ -n "$scratch_exists" ]; then
-      say_warn "merge in progress (lock held by $lock_slug, scratch $scratch_exists) — if this is stale, it will be reclaimed on the next merge-next"
+      say_warn "merge-lock-active" "merge in progress (lock held by $lock_slug, scratch $scratch_exists) — if this is stale, it will be reclaimed on the next merge-next"
     else
-      say_fail "mergeLock held by $lock_slug but no merge-check-${lock_slug}-* branch exists; a merge died mid-flight (state: mergeLock). Set mergeLock to null via: jq '.mergeLock = null' $STATE_FILE > $STATE_FILE.tmp && mv $STATE_FILE.tmp $STATE_FILE"
+      say_fail "merge-lock-broken" "mergeLock held by $lock_slug but no merge-check-${lock_slug}-* branch exists; a merge died mid-flight (state: mergeLock). Set mergeLock to null via: jq '.mergeLock = null' $STATE_FILE > $STATE_FILE.tmp && mv $STATE_FILE.tmp $STATE_FILE"
     fi
   else
-    say_ok "no merge lock held"
+    say_ok "merge-lock-clear" "no merge lock held"
   fi
 
   if [ "$as_json" -eq 1 ]; then
@@ -1960,7 +1960,7 @@ show_help() {
   printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
   printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
   printf '  migrate-worktree-dir [--dry-run] [--with-live-leases]  move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
-  printf '  doctor [--json]                                     health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock; --json emits {ok,failures,checks}\n'
+  printf '  doctor [--json]                                     health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock; --json emits {ok,failures,checks:[{name,level,message}]}\n'
 }
 
 main() {
