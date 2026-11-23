@@ -6402,6 +6402,17 @@
       ],
       "mergedAt": "2026-11-23T13:57:18Z",
       "mergedInto": "dev"
+    },
+    "eod-cleanup-loop": {
+      "agent": "orchestrator",
+      "paths": "scripts/**,src/**,test/**,SPEC.md,docs/**,packages/coordinator/**",
+      "branch": "wt/eod-cleanup-loop",
+      "worktree": "worktree/wt-eod-cleanup-loop",
+      "status": "done",
+      "createdAt": "2026-11-23T14:26:16Z",
+      "submittedAt": "2026-11-23T14:29:46Z",
+      "mergedAt": "2026-11-23T14:32:05Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
