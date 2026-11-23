@@ -5817,10 +5817,33 @@ var scrollbarTrackOptions = (theme, mono) => {
 
 // src/core/entries.ts
 var stripVolatile = (key, value) => key === "elapsedMs" ? undefined : value;
+var CHEAP_KEYS = [
+  "version",
+  "id",
+  "sessionID",
+  "directory",
+  "condition",
+  "status",
+  "setAt",
+  "startedAt",
+  "turns",
+  "stall",
+  "retries",
+  "checkins",
+  "evaluating",
+  "waiting",
+  "queued"
+];
 var goalsEqual = (a, b) => {
   if (a === b)
     return true;
   if (!a || !b)
+    return false;
+  for (const key of CHEAP_KEYS) {
+    if (a[key] !== b[key])
+      return false;
+  }
+  if (a.history.length !== b.history.length)
     return false;
   return JSON.stringify(a, stripVolatile) === JSON.stringify(b, stripVolatile);
 };

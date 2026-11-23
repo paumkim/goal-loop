@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2276 -->
+<!-- spec-check files=143 tests=2278 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11179,3 +11179,19 @@ Legacy compatibility: an old config still selecting `worktrees`, or an old lease
 
 Verification: new `test/worktree-dir-rename.test.ts` (8 tests) greps shipped code/config/docs/scripts for stale `worktrees` defaults/paths and exercises the new dir, the one-time legacy warning, old-lease-path validity after a default flip, migration with git-record repair, refusal on active leases and `--dry-run`. Focused suites: 71 pass / 0 fail (new + three coordinator suites, 508 expect() calls) and 277 pass / 0 fail (bootstrap, git, core, plugin, package-integrity, 177943 expect() calls). `bash -n` clean; full `bun run check` green including spec-check, dist freshness, TUI load, docs freshness and invariant-sweep.
 
+
+## Workstream CXCII — scalar precheck in the snapshot equality gate (2026-11-23)
+
+`goalsEqual` in `src/core/entries.ts` serialized both goal snapshots on every `changed` event — two
+full `JSON.stringify` passes over up to 64 history entries. Live events almost always move a cheap
+top-level scalar (turns, status, condition, a verdict) or the history length; those cases are now
+decided by a 15-key precheck plus a length check before any serialization. `elapsedMs` is deliberately
+absent from the precheck because it is the only stripped field, so every rejected key is part of the
+original deep comparison — the precheck can only reject pairs the original also rejects.
+
+Measured (64-entry snapshot, 20000 calls, best of 100):
+new-turn case `1173.14 ms -> 1.03 ms` (~1138x); elapsed-only deep path `1192 -> 1183 ms` (unchanged
+within noise, as expected). Harnesses: `/tmp/opencode/bench-goalsequal-change.ts`,
+`/tmp/opencode/bench-goalsequal.ts`. Correctness: new differential test cross-checks all 9x9 variant
+pairs against the original implementation plus null/identity cases; focused suite 41 pass / 0 fail,
+147 expect() calls. `tsc --noEmit` clean. Marker +2 tests; no shipped-file change.
