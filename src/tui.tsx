@@ -27,6 +27,7 @@ import { sealedDossierCandidates,  attestSealedDossier, attestationReportMarkdow
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { userFacingError } from "./tui-error.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
@@ -43,6 +44,20 @@ type Entry = GoalSnapshotCacheEntry
 
 const TICK_MS = 15_000
 const ATTENTION_KINDS: ReadonlySet<string> = new Set(["achieved", "impossible", "failed", "paused"])
+
+/**
+ * Keep the full error — stack included — in the host log, while only `userFacingError()` text reaches
+ * the user. Previously the dialog toast and the render fallback PAINTED the raw stack; that leaked raw
+ * frames (and host paths) into the panel. Logging here preserves the diagnostic that was shown, and the
+ * try/catch keeps a broken console from taking the UI down.
+ */
+const logUiError = (where: string, error: unknown): void => {
+  try {
+    console.error(`goal-loop: ${where}`, error)
+  } catch {
+    // Logging must never take the UI down.
+  }
+}
 
 /** Elapsed wall time for display: the record's elapsed plus the idle time since the snapshot arrived (live goals only). */
 const elapsedOf = (g: GoalSnapshot, receivedAt: number | undefined, nowMs: number) =>
@@ -132,8 +147,9 @@ export default Plugin.define({
       try {
         showStatusDialogInner(sessionID, fallback)
       } catch (error) {
+        logUiError("status dialog failed", error)
         try {
-          context.ui.toast.show({ title: "goal plugin error (dialog)", message: String(error instanceof Error ? (error.stack ?? error) : error).slice(0, 900), variant: "error", duration: 30000 })
+          context.ui.toast.show({ title: "goal plugin error (dialog)", message: userFacingError(error), variant: "error", duration: 30000 })
         } catch {
           // Even the error toast must not take the plugin down.
         }
@@ -171,17 +187,20 @@ export default Plugin.define({
           // A render-frame exception in the dialog must land as an in-dialog fallback, never as the
           // host's "plugin crashed in dialog" banner — the session stays alive either way.
           <ErrorBoundary
-            fallback={(error) => (
-              <ClampedColumn>
-                <text attributes={TextAttributes.BOLD} fg={context.theme.text.feedback.warning.base}>
-                  goal detail failed to render
-                </text>
-                <text fg={context.theme.text.muted} wrapMode="word">
-                  {String(error instanceof Error ? (error.stack ?? error.message ?? error) : error).slice(0, 600)}
-                </text>
-                <text fg={context.theme.text.faint}>esc to close · your session is unaffected</text>
-              </ClampedColumn>
-            )}
+            fallback={(error) => {
+              logUiError("dialog render failed", error)
+              return (
+                <ClampedColumn>
+                  <text attributes={TextAttributes.BOLD} fg={context.theme.text.feedback.warning.base}>
+                    goal detail failed to render
+                  </text>
+                  <text fg={context.theme.text.muted} wrapMode="word">
+                    {userFacingError(error)}
+                  </text>
+                  <text fg={context.theme.text.faint}>esc to close · your session is unaffected</text>
+                </ClampedColumn>
+              )
+            }}
           >
           <ClampedColumn>
             <box flexDirection="row" justifyContent="space-between" gap={2}>
@@ -452,6 +471,21 @@ export default Plugin.define({
       } catch {
         // Never let a toast failure take the plugin down with it.
       }
+    }
+    /**
+     * One home for a failed-action toast: the full error goes to the host log (stack included), the
+     * toast body carries only plain-language text with the operation in its title. `detail` adds the
+     * target (a directory or file name) without dumping the thrown raw system message.
+     */
+    const toastError = (title: string, error: unknown, sessionID?: string, detail?: string) => {
+      logUiError(title, error)
+      safeToast({
+        title,
+        message: detail ? `${detail}: ${userFacingError(error)}` : userFacingError(error),
+        variant: "error",
+        duration: 5_000,
+        sessionID,
+      })
     }
     const onNotice = (notice: Notice) => {
       try {
@@ -741,7 +775,7 @@ export default Plugin.define({
           sessionID,
         })
       } catch (error) {
-        safeToast({ title: "copy failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("copy failed", error, sessionID)
       }
     }
     // The dossier-as-file path (`goal.dossier.export` palette command; the dialog's save row). One O_EXCL write into the host's cwd — never overwrites, suffixes on collision, the path comes back as a toast receipt; a failed write says so instead of failing silently.
@@ -751,7 +785,7 @@ export default Plugin.define({
         const result = exportLoopDossier(goal, Date.now(), process.cwd())
         safeToast({ title: "dossier exported", message: result.path, variant: "success", duration: 5_000, sessionID })
       } catch (error) {
-        safeToast({ title: "export failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("export failed", error, sessionID)
       }
     }
     // The record, on trial: sweep every sha the ledger quotes against the repository at the host's cwd, copy the Markdown verification report, toast the outcome. The dialog row paints the same counts through its in-place ack. Unknown is never folded into missing; a sweep that cannot probe (no git, not a repository) comes back all-unknown and says so.
@@ -773,7 +807,7 @@ export default Plugin.define({
         safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
         return verification
       } catch (error) {
-        safeToast({ title: "verify failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("verify failed", error, sessionID)
         return undefined
       }
     }
@@ -796,7 +830,7 @@ export default Plugin.define({
         safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
         return reach
       } catch (error) {
-        safeToast({ title: "reach check failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("reach check failed", error, sessionID)
         return undefined
       }
     }
@@ -819,7 +853,7 @@ export default Plugin.define({
         safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
         return sign
       } catch (error) {
-        safeToast({ title: "sign check failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("sign check failed", error, sessionID)
         return undefined
       }
     }
@@ -837,7 +871,7 @@ export default Plugin.define({
             }
           })
         } catch (error) {
-          safeToast({ title: "attest failed", message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
+          toastError("attest failed", error, sessionID, `cannot read ${directory}`)
           return
         }
         const newest = selectNewestSealedDossier(candidates)
@@ -849,7 +883,7 @@ export default Plugin.define({
         try {
           markdown = readFileSync(join(directory, newest), "utf8")
         } catch (error) {
-          safeToast({ title: "attest failed", message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`, variant: "error", duration: 5_000, sessionID })
+          toastError("attest failed", error, sessionID, `cannot read ${newest}`)
           return
         }
         const result = attestSealedDossier(markdown, directory)
@@ -873,7 +907,7 @@ export default Plugin.define({
         const variant = result.regressed > 0 || result.unknown > 0 ? "warning" : "success"
         safeToast({ title, message: copied ? summary : `${summary} · clipboard unavailable`, variant, duration: 6_000, sessionID })
       } catch (error) {
-        safeToast({ title: "attest failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("attest failed", error, sessionID)
       }
     }
     // The review, in one file: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write one O_EXCL file — the record's own bytes, then a combined appendix whose rows carry every answer git gave, per sha, with one verdict column. This is the artifact a reviewer opens cold; the standalone verify/reach/sign reports remain available one question at a time. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
@@ -886,7 +920,7 @@ export default Plugin.define({
         const variant = result.gaps > 0 || result.unknown > 0 ? "warning" : "success"
         safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
       } catch (error) {
-        safeToast({ title: "review failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("review failed", error, sessionID)
       }
     }
     // The spend story, one file: write one O_EXCL markdown spend report — one row per landed loop iteration (the harness's usage delta: cost, tokens in/out/reasoning, cache read/write, tool calls, sha), then totals over exactly the measured iterations, then an honesty footer. Partial measurement says so and never reads as $0.00; an unmeasured iteration renders —. This is the artifact for capacity retros and evaluator cost audits; the dossier remains the whole-record story.
@@ -899,7 +933,7 @@ export default Plugin.define({
         const variant = result.iterations === 0 || result.measured < result.iterations ? "warning" : "success"
         safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
       } catch (error) {
-        safeToast({ title: "spend report failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("spend report failed", error, sessionID)
       }
     }
     // The record, sealed: run all three sweeps (existence, ancestry, the seal) against the repository at the host's cwd and write the sealed dossier — the record's own bytes plus a freshly probed attestation appendix — as one O_EXCL file. Never overwrites; a failed write says so instead of failing silently. Gaps and unknowns toast a warning, never an error: the appendix says what git answered, and git's thresholds differ across machines and time — information is not accusation.
@@ -913,7 +947,7 @@ export default Plugin.define({
         safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
         return result
       } catch (error) {
-        safeToast({ title: "seal failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("seal failed", error, sessionID)
         return undefined
       }
     }
@@ -926,7 +960,7 @@ export default Plugin.define({
         const variant = result.artifacts === 0 || result.skipped > 0 ? "warning" : "success"
         safeToast({ title, message: `${result.path} · ${summary}`, variant, duration: 6_000, sessionID })
       } catch (error) {
-        safeToast({ title: "index failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+        toastError("index failed", error, sessionID)
       }
     }
     // The HUD's clear affordances are one stray hover-click away from erasing an armed loop and its
@@ -948,7 +982,7 @@ export default Plugin.define({
             // A confirmed wipe must never fail silently: report the rejection with the same
             // grammar as a failed copy, so the user learns the goal is still armed.
             const clearFailed = (error: unknown) =>
-              safeToast({ title: "clear failed", message: String(error instanceof Error ? error : error).slice(0, 200), variant: "error", duration: 5_000, sessionID })
+              toastError("clear failed", error, sessionID)
             try {
               void rpc.clear({ sessionID }, at(sessionID)).catch(clearFailed)
             } catch (error) {
