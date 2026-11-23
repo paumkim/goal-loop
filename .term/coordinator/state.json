@@ -6083,6 +6083,22 @@
       ],
       "mergedAt": "2026-11-23T06:56:17Z",
       "mergedInto": "dev"
+    },
+    "unicode-safe-text-helpers": {
+      "agent": "loop-worker",
+      "paths": "src/core/format.ts,test/core.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/unicode-safe-text-helpers",
+      "worktree": "worktree/wt-unicode-safe-text-helpers",
+      "status": "done",
+      "createdAt": "2026-11-23T07:06:01Z",
+      "submittedAt": "2026-11-23T07:15:39Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T07:15:39Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-23T07:17:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
