@@ -264,7 +264,7 @@
       "priority": 4,
       "impact": "low",
       "risk": "low",
-      "status": "deferred",
+      "status": "done",
       "finding": "src/core/wire.ts:266-269 documents narrowing the goal RPC result but sits above parseListGoalOutput; the real narrow, parseGetGoalOutput (line 285), has no doc of its own.",
       "improvement": "Move that comment block directly above parseGetGoalOutput; leave the list-parser comment in place. Comments only.",
       "evidence": [
@@ -283,7 +283,7 @@
       "priority": 4,
       "impact": "low",
       "risk": "low",
-      "status": "deferred",
+      "status": "done",
       "finding": "src/core/hud.ts:166-167 and :332-339 carry two adjacent doc blocks on pillModel and terminalPill, splitting each helper's contract across redundant comments.",
       "improvement": "Merge each pair into one block, keeping the budget paragraphs and the reduced-motion/glyph notes. Comments only; no exported name or signature changes.",
       "evidence": [
