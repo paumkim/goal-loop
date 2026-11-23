@@ -470,6 +470,26 @@ describe("format", () => {
   })
 })
 
+describe("diffUsage regression: non-finite host readings", () => {
+  test("NaN and Infinity readings yield a zero delta, never NaN", () => {
+    const d = diffUsage(
+      { ...EMPTY_USAGE, cost: Number.NaN, input: Number.POSITIVE_INFINITY, output: Number.NEGATIVE_INFINITY, reasoning: Number.NaN, cacheRead: Number.POSITIVE_INFINITY, cacheWrite: Number.NaN },
+      EMPTY_USAGE,
+    )
+    expect(d).toEqual(EMPTY_USAGE)
+  })
+  test("a non-finite baseline also yields a zero delta", () => {
+    const d = diffUsage({ ...EMPTY_USAGE, cost: 5 }, { ...EMPTY_USAGE, cost: Number.NaN })
+    expect(d.cost).toBe(0)
+  })
+  test("finite deltas are byte-identical to the old clamp", () => {
+    expect(diffUsage(
+      { ...EMPTY_USAGE, cost: 3.5, input: 100, output: 420, reasoning: 7, cacheRead: 9, cacheWrite: 11 },
+      { ...EMPTY_USAGE, cost: 1.5, input: 250, output: 20, reasoning: 2, cacheRead: 4, cacheWrite: 6 },
+    )).toEqual({ cost: 2, input: 0, output: 400, reasoning: 5, cacheRead: 5, cacheWrite: 5 })
+  })
+})
+
 describe("truncate", () => {
   test("an ASCII string at exactly the cap is returned unchanged", () => {
     expect(truncate("a".repeat(42), 42)).toBe("a".repeat(42))

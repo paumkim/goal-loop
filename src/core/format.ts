@@ -160,7 +160,10 @@ export function formatCost(usd: number): string {
 }
 
 export function diffUsage(current: UsageSnapshot, baseline: UsageSnapshot): UsageSnapshot {
-  const d = (a: number, b: number) => Math.max(0, a - b)
+  // Host usage reaches this delta via toUsage(), which fills only *missing* fields with 0 — a
+  // non-finite reading would otherwise become a NaN delta in the record and the spend ledger.
+  // Finite inputs are byte-identical to the old clamp.
+  const d = (a: number, b: number) => (Number.isFinite(a) && Number.isFinite(b) ? Math.max(0, a - b) : 0)
   return {
     cost: d(current.cost, baseline.cost),
     input: d(current.input, baseline.input),
