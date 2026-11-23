@@ -620,6 +620,7 @@ function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) 
 
 // src/core/dossier.ts
 var GAP = "\u2014";
+var recordStatusCell = (status, positive, negative) => status === positive ? "yes" : status === negative ? "no" : "unknown";
 var conditionCellOf = (condition) => {
   const flat = (condition ?? "").replace(/\s+/g, " ").trim();
   return flat.length > 200 ? `${flat.slice(0, 200)}\u2026` : flat || GAP;
@@ -1092,7 +1093,7 @@ function verifyRecord(goal, probe) {
   return { checks, unique: checks.length, mentions, present, missing, unknown };
 }
 var iterationList = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var statusCell = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
+var statusCell = (status) => recordStatusCell(status, "present", "missing");
 function verifyReportMarkdown(goal, verification, nowMs, directory) {
   const stamp = stampOf(nowMs);
   const conditionCell = conditionCellOf(goal.condition);
@@ -1182,7 +1183,7 @@ function reachRecord(goal, probe) {
   return { checks, unique: checks.length, mentions, ancestors, unreached, unknown };
 }
 var iterationList2 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var statusCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
+var statusCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
 function reachReportMarkdown(goal, reach, nowMs, directory) {
   const stamp = stampOf(nowMs);
   const conditionCell = conditionCellOf(goal.condition);
@@ -1273,7 +1274,7 @@ function signRecord(goal, probe) {
   return { checks, unique: checks.length, mentions, verified, unverified, unknown };
 }
 var iterationList3 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var statusCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var statusCell3 = (status) => recordStatusCell(status, "verified", "unverified");
 function signReportMarkdown(goal, sign, nowMs, directory) {
   const stamp = stampOf(nowMs);
   const conditionCell = conditionCellOf(goal.condition);
@@ -1326,9 +1327,9 @@ var sealedDossierName = (nowMs, attempt = 0) => {
   return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var iterationList4 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell2 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var verifyCell2 = (status) => recordStatusCell(status, "present", "missing");
+var reachCell = (status) => recordStatusCell(status, "ancestor", "unreached");
+var signCell = (status) => recordStatusCell(status, "verified", "unverified");
 var cleanShaCount = (verification, reach, sign) => {
   const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
   const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
@@ -1447,9 +1448,9 @@ var reviewName = (nowMs, attempt = 0) => {
   return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`;
 };
 var iterationList5 = (iterations) => iterations.map((v) => `v${v}`).join(", ");
-var verifyCell3 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell2 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell2 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var verifyCell3 = (status) => recordStatusCell(status, "present", "missing");
+var reachCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
+var signCell2 = (status) => recordStatusCell(status, "verified", "unverified");
 var reviewVerdict = (exists, onThisLine, underSeal) => {
   if (exists === "no" || onThisLine === "no" || underSeal === "no")
     return "gaps";
@@ -1878,9 +1879,9 @@ function parseAttestationAppendix(markdown) {
     return { kind: "unparsable" };
   return { kind: "sealed", stamp, directory, rows, gap, malformed };
 }
-var verifyCell4 = (status) => status === "present" ? "yes" : status === "missing" ? "no" : "unknown";
-var reachCell3 = (status) => status === "ancestor" ? "yes" : status === "unreached" ? "no" : "unknown";
-var signCell3 = (status) => status === "verified" ? "yes" : status === "unverified" ? "no" : "unknown";
+var verifyCell4 = (status) => recordStatusCell(status, "present", "missing");
+var reachCell3 = (status) => recordStatusCell(status, "ancestor", "unreached");
+var signCell3 = (status) => recordStatusCell(status, "verified", "unverified");
 var shasAsGoal = (rows) => ({
   loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
 });
