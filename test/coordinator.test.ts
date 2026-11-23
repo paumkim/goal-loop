@@ -388,6 +388,8 @@ describe("coordinator release", () => {
     expect(Array.isArray(parsed.checks)).toBe(true)
     expect(parsed.checks.length).toBeGreaterThan(0)
     for (const check of parsed.checks) {
+      expect(typeof check.name).toBe("string")
+      expect(check.name.length).toBeGreaterThan(0)
       expect(["ok", "warn", "fail"]).toContain(check.level)
       expect(typeof check.message).toBe("string")
       expect(check.message.length).toBeGreaterThan(0)
@@ -408,6 +410,7 @@ describe("coordinator release", () => {
     const fails = parsed.checks.filter((c: { level: string }) => c.level === "fail")
     expect(fails.length).toBe(parsed.failures)
     expect(fails.some((c: { message: string }) => c.message.includes("has no worktree"))).toBe(true)
+    expect(fails.some((c: { name: string }) => c.name === "live-lease-worktree")).toBe(true)
   })
 })
 
@@ -425,6 +428,6 @@ describe("coordinator help discoverability", () => {
     const help = run(dir, ["--help"])
     expect(help.status).toBe(0)
     expect(help.stdout).toContain("doctor [--json]")
-    expect(help.stdout).toContain("--json emits {ok,failures,checks}")
+    expect(help.stdout).toContain("--json emits {ok,failures,checks:[{name,level,message}]}")
   })
 })
