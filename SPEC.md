@@ -10848,3 +10848,37 @@ Focused suite 5 pass / 0 fail; `notes.test.ts` 23 pass / 0 fail (no regression).
 generation or verdict parsing.
 
 
+## Workstream CLXVII — memoize the telemetry reason normalizer (2026-11-22)
+
+Repo improvement pass, measured hot-path unit.
+
+`src/core/outcome-telemetry.ts · normalizeReason` runs six regex passes (URLs, hashes, durations,
+punctuation, whitespace) on every call. `summarizeOutcomeTelemetry` calls it for every not_met reason
+and every armed condition in the journal tail, where the same handful of themes and conditions recur
+across entries; each occurrence was re-normalized from scratch. Added a bounded 2048-entry memo keyed
+by the raw reason. Blanks are rejected before the key, and the cache is bounded so memory stays capped.
+The raw six-pass computation moved to `normalizeReasonUncached`; a hit is one lookup, and the function is
+pure so every output is unchanged.
+
+Measured with the same harness before/after (`/tmp/opencode/bench-normalize-reason.ts`, 100 cycles over
+a 135-reason journal tail, 20 rounds, median of 3 runs each): `5.94 ms -> 0.16 ms`, ~35x.
+
+New regression test in `test/outcome-telemetry.test.ts` compares cold and warm results against an
+independent reimplementation of the six passes (undefined, blank, URL/hash/duration, unicode, long
+input) and asserts a 20-entry repeated-reason summary still groups into one theme with count 20.
+Focused suites 189 pass / 0 fail. Typecheck clean.
+
+## Workstream CLXVIII — one bounded preview for every fail-closed verdict error (2026-11-22)
+
+Repo improvement pass, error-message consistency unit.
+
+`src/core/evaluator-agent.ts · verdictFromNativeReport` repeated the literal
+`candidate.body.slice(0, 500)` in four separate fail-closed error paths (error state, foreign rubric,
+no authoritative verdict, unreadable verdict) — one magic number with four copies, free to drift.
+Introduced one `MAX_BODY_PREVIEW = 500` constant and one `bodyPreview(body)` helper and routed all four
+paths through it. Every error message is byte-identical to before.
+
+New regression test in `test/core.test.ts` feeds a 700-char body through the error-state, foreign-rubric
+and no-authoritative-verdict paths and pins that each message contains exactly the first 500 chars and
+nothing beyond — so a future drift in any single path is caught. Focused suites 189 pass / 0 fail.
+Typecheck clean. Combined marker for both units `tests=2249 -> 2251` after rebase.
