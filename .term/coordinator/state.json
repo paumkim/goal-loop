@@ -5909,8 +5909,17 @@
       "paths": "src/core/format.ts,test/format-spend.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/format-spend-fastpath",
       "worktree": "worktree/wt-format-spend-fastpath",
-      "status": "claimed",
-      "createdAt": "2026-11-23T04:31:27Z"
+      "status": "done",
+      "createdAt": "2026-11-23T04:31:27Z",
+      "submittedAt": "2026-11-23T04:36:48Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T04:36:48Z",
+      "forcedScopeFiles": [
+        "dist/tui.js",
+        "test/core.test.ts"
+      ],
+      "mergedAt": "2026-11-23T04:44:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
