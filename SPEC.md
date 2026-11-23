@@ -226,6 +226,11 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- HUD counter finite guard (`hud-counter-finite-guard`, 2026-11-23): a corrupt/non-finite legacy `turns`
+  or `stall` counter painted `NaN`/`Infinity` in the pill and stall remedy. Both now route through the
+  shared finite-or-zero clamp; the verdict trail stays authoritative and finite inputs are unchanged.
+  Reproduced before/after; focused `tui-hud` suite 182 pass / 0 fail from `test/`; full check green,
+  marker re-counted, no shipped file added or removed.
 - `bun run check` — tsc, unit tests, compile (order: tsc first).
 - Manual: `opencode plugin add github:paumkim/opencode-goalv2#v1.1.0` (specifier updated at the BA rename; the `@el4cteo/opencode-goal` form predates it), then `/goal bun test passes` in a scratch repo and
   watch the prompt footer indicator and `/goal` status output.
@@ -506,7 +511,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2313 -->
+<!-- spec-check files=143 tests=2315 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
