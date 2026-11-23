@@ -87,7 +87,7 @@ function context(directory: string, options: Record<string, unknown> = {}) {
 }
 
 /**
- * The verdict JSON a harness-owned standalone judge child emits. Every current test arms "the parser is correct";
+ * The verdict JSON a harness-owned parent-linked judge child emits. Every current test arms "the parser is correct";
  * tests that need a different echo (or an unreadable body) pass `echo` / `body` explicitly.
  */
 function judgeVerdict(options: { verdict?: "met" | "not_met"; reason?: string; body?: string; echo?: string } = {}) {
@@ -1301,7 +1301,7 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("in the default mode the harness judge child's text is the verdict (standalone, no wake)", async () => {
+  test("in the default mode the harness judge child's text is the verdict (parent-linked child, no wake)", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory) // no options: evaluator mode defaults to session
     const created: any[] = []
@@ -1353,6 +1353,22 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     } finally {
       await dispose?.()
     }
+  })
+
+  test("evaluation spawns only parent-linked children — no legacy fresh-session routing", () => {
+    const root = join(import.meta.dir, "..")
+    const read = (path: string) => readFileSync(join(root, path), "utf8")
+    const host = read("src/index.ts")
+    const code = host.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
+    // The only two session creators (judge and arm-time planner) both pass parentID: sessionID; no evaluator path
+    // creates a standalone session, and no judge child is removed from the session list behind the worker's back.
+    expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
+    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(2)
+    expect(code).not.toContain("session.remove")
+    // The native-report ingestion helpers belonged to the removed worker-delegation path.
+    const agent = read("src/core/evaluator-agent.ts")
+    expect(agent).not.toContain("findNativeReport")
+    expect(agent).not.toContain("parseSubagentReport")
   })
 
   test("a foreign or unreadable judge child text throws a typed verdict error instead of ruling the goal met", async () => {
@@ -1494,7 +1510,7 @@ describe("a failed evaluator subagent keeps its provider classification (CXXXI)"
 })
 
 describe("the harness judge prompt carries a clean evidence contract (CXXXII)", () => {
-  test("only this turn's fresh tool evidence reaches the standalone judge rubric", async () => {
+  test("only this turn's fresh tool evidence reaches the parent-linked judge rubric", async () => {
     const directory = repository()
     const { ctx, calls, hooks, storage } = context(directory)
     let judgePrompt = ""
@@ -1564,7 +1580,7 @@ describe("the harness judge prompt carries a clean evidence contract (CXXXII)", 
   })
 })
 
-describe("standalone child prompts must wake their own execution (CXLII P0)", () => {
+describe("judge and planner child prompts must wake their own execution (CXLII P0)", () => {
   test("the judge child is prompted with { sessionID, text } and no resume opt-out before its verdict lands", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory, { model: "provider/model" })

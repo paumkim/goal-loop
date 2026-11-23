@@ -4,11 +4,12 @@ import { parseVerdict } from "./verdict.ts"
 /**
  * The evaluator as a first-class agent type shipped by the plugin.
  *
- * A verdict is produced by a real OpenCode child session of this agent, created by the harness with no `parentID`
- * so its completion never wakes the working parent. This module is the single source of truth for the agent's id,
- * its task label and its system prompt; the long evidence matrix / output contract stays in the per-verdict rubric
- * (core/prompts.ts), byte-identical. The `findNativeReport` / `parseSubagentReport` helpers remain for transcript
- * tooling and tests; the live verdict path passes the child's text straight to `verdictFromNativeReport`.
+ * A verdict is produced by one real OpenCode child session of this agent, created by the harness with the working
+ * session as its `parentID` — the same subagent-child shape as the arm-time planner. No fresh standalone session is
+ * spawned for evaluation. This module is the single source of truth for the agent's id, its task label and its
+ * system prompt; the long evidence matrix / output contract stays in the per-verdict rubric (core/prompts.ts),
+ * byte-identical. The child's own text goes straight to `verdictFromNativeReport`; the old native-report routing
+ * helpers were removed with the legacy worker-delegation path.
  */
 
 export const EVALUATOR_AGENT_ID = "evaluator"
@@ -25,54 +26,6 @@ interface NativeReportCandidate {
   readonly key: string
   readonly body: string
   readonly state: string
-}
-
-/**
- * Pick the newest unconsumed native evaluator report for a turn. Two guards keep a verdict tied to the turn that
- * produced it: plugin evaluator reports (delivered by the fallback `spawnEvaluator`) are excluded by their childID so a
- * previous turn's verdict is never replayed, and reports still `running` (the child has background work) are left
- * alone until the host delivers its final one. `consumed`/`pluginEvaluatorIDs` are owned by the caller so a duplicate
- * turn-end cannot re-arm from the same report.
- */
-export function findNativeReport(
-  messages: readonly unknown[],
-  consumed: ReadonlySet<string>,
-  pluginEvaluatorIDs: ReadonlySet<string>,
-  seenTurns: Map<string, number>,
-  turn: number,
-): NativeReportCandidate | undefined {
-  // Context is chronological (newest last). The controller's per-turn steer carries metadata.turn, so every
-  // native report delivered for an *earlier* turn sits before it — reject those instead of replaying a stale
-  // verdict when a prior read failed or the worker did not delegate this turn.
-  let start = 0
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i] as Record<string, unknown> | undefined
-    const md = m?.metadata as Record<string, unknown> | undefined
-    if (m?.type === "synthetic" && md?.source === "goal" && md?.turn === turn) {
-      start = i + 1
-      break
-    }
-  }
-  for (let i = messages.length - 1; i >= start; i--) {
-    const message = messages[i]
-    if (!message || typeof message !== "object") continue
-    const m = message as Record<string, unknown>
-    if (m.type !== "synthetic" || !isEvaluatorReport(m.metadata)) continue
-    const metadata = m.metadata as Record<string, unknown>
-    if (typeof metadata.childID === "string" && pluginEvaluatorIDs.has(metadata.childID)) continue
-    const key = String(m.id ?? (m.time as Record<string, unknown> | undefined)?.created ?? m.text)
-    // A report consumed in a different turn (e.g. after a goal switch) is stale even without a marker. Pin the
-    // turn only when a report is actually returned: a child first seen `running` must not be pinned, or a late
-    // completion arriving after the next turn's marker would be orphaned by this guard.
-    const known = seenTurns.get(key)
-    if (known !== undefined && known !== turn) continue
-    if (consumed.has(key)) continue
-    const report = parseSubagentReport(String(m.text ?? ""))
-    if (!report || report.state === "running") continue
-    seenTurns.set(key, turn)
-    return { key, body: report.body, state: report.state }
-  }
-  return undefined
 }
 
 /** Precompiled once: the JSON-ish fallback alias pattern used by `echoedCondition`. Stateless (no /g), so repeated `.exec` is safe. */
@@ -174,24 +127,6 @@ export function verdictFromNativeReport(candidate: NativeReportCandidate, expect
   const parsed = parseVerdict(candidate.body)
   if (parsed) return parsed
   throw new Error(`evaluator subagent returned an unreadable verdict: ${bodyPreview(candidate.body)}`)
-}
-
-/**
- * Extract the body of a native `<subagent …>body</subagent>` completion. Both the host's own reports and the
- * plugin's queued reports use this exact wrapper, so the verdict parser can stay agnostic about who produced it.
- */
-export function parseSubagentReport(text: string): { body: string; state: string; childID?: string } | undefined {
-  const open = /<subagent\b([^>]*)>/.exec(text)
-  if (!open) return undefined
-  const close = text.lastIndexOf("</subagent>")
-  if (close <= (open.index ?? 0)) return undefined
-  const attrs = open[1] ?? ""
-  const attr = (name: string) => new RegExp(`${name}="([^"]*)"`).exec(attrs)?.[1]
-  return {
-    body: text.slice((open.index ?? 0) + open[0].length, close).trim(),
-    state: attr("state") ?? "completed",
-    ...(attr("sessionID") ? { childID: attr("sessionID") } : {}),
-  }
 }
 
 /**

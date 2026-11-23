@@ -8,7 +8,8 @@ export const MARKER = "goal"
 
 /**
  * The worker never judges the verdict or delegates that judgment (delegating work to subagents is fine): the
- * harness runs a standalone evaluator child and only a `not_met` verdict wakes the worker with more work.
+ * harness runs one parent-linked evaluator subagent child (like the arm-time planner) and only a `not_met` verdict
+ * wakes the worker with more work.
  * Background subagents in flight defer that verdict instead of nudging the worker — ending the turn is safe
  * because the harness injects their reports back to wake it. Kept as one exported constant
  * and appended to every worker-facing prompt builder so the kickoff, loop/retry/checkin steers and the system
@@ -648,7 +649,7 @@ function facts(input: EvaluationFacts, policy: CommitPolicy) {
 }
 
 /**
- * The whole request the harness's standalone evaluator child gets. The harness builds the summary from the
+ * The whole request the harness's parent-linked evaluator child gets. The harness builds the summary from the
  * parent's current turn and passes it here; the worker never supplies it. Two inputs only: the original goal and
  * that summary. No raw transcript dump — in a long-lived session that carried prior verdicts about other
  * conditions and a small model judged those instead of the armed one.

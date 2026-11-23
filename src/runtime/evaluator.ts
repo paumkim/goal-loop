@@ -18,8 +18,9 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 
 interface EvaluatorDeps {
   /**
-   * The verdict from the harness's standalone `evaluator` child for this turn: it builds the rubric, runs the
-   * child and parses its text through the authoritative contract guard. No worker delegation, no parent wake.
+   * The verdict from the harness's parent-linked `evaluator` subagent child for this turn: it builds the rubric,
+   * runs the child under the working session and parses its text through the authoritative contract guard.
+   * No fresh standalone session, no worker delegation.
    */
   nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
@@ -96,16 +97,16 @@ export class Evaluator implements EvaluatorPort {
   }
 
   /**
-   * Judge a turn from the harness's standalone evaluator child only — no generation fallback (that auxiliary call
-   * hit the free-tier gate). An unreadable/foreign/failed verdict throws `EvaluatorVerdictError` so the controller
-   * pauses instead of re-arming the worker into a loop it cannot break; a turn with no verdict at all still fails
-   * closed to `not_met`, giving the worker one more chance. In opt-in `consensus: 2` mode a child `met` is not
-   * accepted until a second vote from the independent model also rules `met`; any disagreement or dead second vote
-   * fails closed to `not_met`.
+   * Judge a turn from the harness's parent-linked evaluator subagent child only — no legacy fresh-session
+   * generation path (that auxiliary call hit the free-tier gate). An unreadable/foreign/failed verdict throws
+   * `EvaluatorVerdictError` so the controller pauses instead of re-arming the worker into a loop it cannot break;
+   * a turn with no verdict at all still fails closed to `not_met`, giving the worker one more chance. In opt-in
+   * `consensus: 2` mode a child `met` is not accepted until a second vote from the independent model also rules
+   * `met`; any disagreement or dead second vote fails closed to `not_met`.
    */
   async evaluate(request: EvaluationRequest): Promise<EvaluationResult> {
     const signal = request.signal
-    // The harness's standalone judge child is the only per-turn evaluator. An auxiliary generate call hit the
+    // The harness's parent-linked judge child is the only per-turn evaluator. An auxiliary generate call hit the
     // account-level free-tier gate (429), so it is no longer a verdict path. An unreadable/foreign/failed verdict
     // throws so the controller pauses the goal (no usable verdict to act on); a quota error is rethrown so the
     // controller pauses on the same recoverable basis. Neither returns a `not_met` that would dispatch another
@@ -170,8 +171,9 @@ export class Evaluator implements EvaluatorPort {
 
   /**
    * Generation closure for a resolved evaluator model. Both pinned and inherited models go through the single
-   * `modelGenerate` port; the host spawns a fresh child session per call (a primary turn that passes the
-   * free-tier gate) and strips tools on that child. There is no affinity-bearing generation path anymore.
+   * `modelGenerate` port; the host spawns one parent-linked evaluator child per call (the same subagent shape as
+   * the planner, never a fresh standalone session) and strips tools on that child. There is no stateless
+   * affinity-bearing generation path anymore.
    */
   private evaluatorGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
     return (prompt, signal) => this.deps.modelGenerate(sessionID, choice.model, prompt, signal)
