@@ -90,41 +90,52 @@ describe("pillModel", () => {
     const pill = pillModel(loopedGoal(), 1000 * 60 * 12)
     expect(pill.text).toContain("loop · v3/5")
     expect(pill.text).toContain("●●")
-    // Active goal on its 5th turn: the record has 4 completed evaluations, the agent is running turn 5.
-    expect(pill.text).toContain("5 turns")
+    // The label counts completed evaluations on the verdict trail, not the turn currently being run.
+    expect(pill.text).toContain("4 turns evaluated")
     expect(pill.tone).toBe("armed")
   })
 
-  test("the live turn counter is the turn being run, and increments on every not_met re-dispatch", () => {
-    // Fresh arm: no evaluation yet, the agent is on turn 1.
+  test("the pill counts completed evaluations from the verdict trail, not the re-dispatch counter", () => {
+    // A fresh arm has nothing evaluated yet; there is no count to paint.
     const fresh = loopedGoal({ turns: 0, history: [] })
-    expect(currentTurnCount(fresh)).toBe(1)
-    expect(pillModel(fresh, 0).text).toContain("1 turn")
+    expect(currentTurnCount(fresh)).toBe(0)
+    expect(pillModel(fresh, 0).text).not.toContain("turn")
 
-    // The evaluator rules turn 1 not_met and re-dispatches turn 2. `turns` is still 1 until turn 2
-    // is evaluated, so the pill must read 2 here — matching the `goal · turn 2` continuation steer.
-    const afterFirst = loopedGoal({ turns: 1, history: [{ turn: 1, verdict: "not_met", reason: "not yet", at: now }] })
-    expect(currentTurnCount(afterFirst)).toBe(2)
-    expect(pillModel(afterFirst, 0).text).toContain("2 turns")
+    // Each landed verdict is one evaluated turn. `turns` may be one ahead while the next turn runs,
+    // but the trail is authoritative and moves exactly when a verdict lands.
+    const afterFirst = loopedGoal({ turns: 1, history: verdicts(["not_met"]) })
+    expect(currentTurnCount(afterFirst)).toBe(1)
+    expect(pillModel(afterFirst, 0).text).toContain("1 turn evaluated")
 
-    // Second not_met re-dispatch: the counter visibly moves again.
     const afterSecond = loopedGoal({ turns: 2, history: verdicts(["not_met", "not_met"]) })
-    expect(currentTurnCount(afterSecond)).toBe(3)
-    expect(pillModel(afterSecond, 0).text).toContain("3 turns")
+    expect(currentTurnCount(afterSecond)).toBe(2)
+    expect(pillModel(afterSecond, 0).text).toContain("2 turns evaluated")
   })
 
-  test("the counter keeps the evaluated count when a turn is in flight, paused, or terminal", () => {
-    // Evaluating turn 2: the agent has still run 2 turns; the verdict has not landed yet.
-    expect(currentTurnCount(loopedGoal({ turns: 1, evaluating: true }))).toBe(2)
-    expect(pillModel(loopedGoal({ turns: 1, evaluating: true }), 0).text).toContain("2 turns")
+  test("a re-armed goal shows the long verdict trail, not the stale one-turn counter", () => {
+    // Regression for the live pill reading "1 turn" while the detail card read "14x not_met in a row".
+    // A loop advance resets `turns` to 0 but keeps the verdict trail; a snapshot from that moment still
+    // holds all 14 evaluations, and that is the number the user needs at a glance.
+    const fourteen = verdicts(Array.from({ length: 14 }, (): Verdict => "not_met"))
+    const stuck = loopedGoal({ turns: 0, history: fourteen, loopIteration: 1, loopMaxLoops: 100 })
+    expect(currentTurnCount(stuck)).toBe(14)
+    const text = pillModel(stuck, 1000 * 60 * 4 * 43).text
+    expect(text).toContain("14 turns evaluated")
+    expect(text).not.toMatch(/ · 1 turn\b/)
+  })
 
-    // Paused: no next turn was dispatched, so the last evaluated turn is the honest count.
-    const paused = loopedGoal({ turns: 1, status: "paused" })
-    expect(currentTurnCount(paused)).toBe(1)
-    expect(pillModel(paused, 0).text).toContain("1 turn")
+  test("the evaluated count stays stable across an in-flight turn, pause, and terminal settle", () => {
+    // A turn in flight is not evaluated yet: one landed verdict stays one.
+    const inFlight = loopedGoal({ turns: 1, history: verdicts(["not_met"]), evaluating: true })
+    expect(currentTurnCount(inFlight)).toBe(1)
+    expect(pillModel(inFlight, 0).text).toContain("1 turn evaluated")
 
-    // The met verdict for turn 2 settles on the same number the live pill just showed — no backwards jump.
-    const done = loopedGoal({ turns: 2, status: "achieved" })
+    // Paused and terminal goals read the same trail — no backwards jump when the goal settles.
+    const paused = loopedGoal({ turns: 2, history: verdicts(["not_met", "not_met"]), status: "paused" })
+    expect(currentTurnCount(paused)).toBe(2)
+    expect(pillModel(paused, 0).text).toContain("2 turns evaluated")
+
+    const done = loopedGoal({ turns: 2, history: verdicts(["not_met", "met"]), status: "achieved" })
     expect(currentTurnCount(done)).toBe(2)
     expect(terminalPill(done, 0)!.text).toContain("2 turns")
   })
@@ -140,17 +151,18 @@ describe("pillModel", () => {
     const distress = loopedGoal({ loopIteration: 5, loopMaxLoops: 5, turns: 123, retries: 12, loopCompact: { requestedAt: now - 60_000, iteration: 3, misses: 4 } })
     const full = pillModel(distress, 1000 * 60 * 45)
     expect(stringWidth(full.text)).toBeLessThanOrEqual(Number.POSITIVE_INFINITY)
-    // 70 cells: retry is dropped; turns and compact survive.
-    const dropRetry = pillModel(distress, 1000 * 60 * 45, false, 70)
+    // 80 cells: retry is dropped; the evaluated count and compact survive.
+    const dropRetry = pillModel(distress, 1000 * 60 * 45, false, 80)
     expect(dropRetry.text).not.toContain("retry")
     expect(dropRetry.text).toContain("compact pending")
-    expect(stringWidth(dropRetry.text)).toBeLessThanOrEqual(70)
-    // 45 cells: retry and compact both go; turns survive.
-    const dropCompact = pillModel(distress, 1000 * 60 * 45, false, 45)
+    expect(dropRetry.text).toContain("turns evaluated")
+    expect(stringWidth(dropRetry.text)).toBeLessThanOrEqual(80)
+    // 55 cells: retry and compact both go; the evaluated count survives.
+    const dropCompact = pillModel(distress, 1000 * 60 * 45, false, 55)
     expect(dropCompact.text).not.toContain("compact")
     expect(dropCompact.text).not.toContain("retry")
-    expect(dropCompact.text).toContain("turns")
-    expect(stringWidth(dropCompact.text)).toBeLessThanOrEqual(45)
+    expect(dropCompact.text).toContain("turns evaluated")
+    expect(stringWidth(dropCompact.text)).toBeLessThanOrEqual(55)
     // 33 cells: turns go too; the state core + pips remain.
     const dropTurns = pillModel(distress, 1000 * 60 * 45, false, 33)
     expect(dropTurns.text).not.toContain("turns")
@@ -163,9 +175,9 @@ describe("pillModel", () => {
 
   test("a budget on a non-loop goal drops retry, then turns, before truncating the core", () => {
     const plain = loopedGoal({ loopEnabled: false, loopHistory: [], turns: 321, retries: 7 }) as unknown as GoalSnapshot
-    const dropRetry = pillModel(plain, 1000 * 60 * 41, false, 33)
+    const dropRetry = pillModel(plain, 1000 * 60 * 41, false, 40)
     expect(dropRetry.text).not.toContain("retry")
-    expect(dropRetry.text).toContain("turns")
+    expect(dropRetry.text).toContain("turns evaluated")
     const dropTurns = pillModel(plain, 1000 * 60 * 41, false, 25)
     expect(dropTurns.text).not.toContain("retry")
     expect(dropTurns.text).not.toContain("turns")
@@ -284,7 +296,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("the resting (reduced-motion) frame is itself legible — a working pill at rest reads goal active", () => {
     const text = pillModel(working(), 1000 * 60 * 41).text
-    expect(text).toBe("\u25CB goal active · 41m · 4 turns")
+    expect(text).toBe("\u25CB goal active · 41m · 3 turns evaluated")
   })
 
   test("waiting, paused and stuck paint static, distinct glyphs — never the wave, in any phase", () => {
@@ -310,7 +322,7 @@ describe("the breath — the ambient dot (workstream XII)", () => {
 
   test("an evaluating goal paints the full wave at rest — the crest face is ◎, and weight is the caller's lever", () => {
     const text = pillModel(working({ evaluating: true }), 1000 * 60 * 41, false, Number.POSITIVE_INFINITY, 2).text
-    expect(text.startsWith("\u25CE goal checking · 41m · 4 turns")).toBe(true)
+    expect(text.startsWith("\u25CE goal checking · 41m · 3 turns evaluated")).toBe(true)
   })
 })
 

@@ -179,6 +179,7 @@ var VERIFY_RUN_STATES = new Set(["executed", "artifact", "reused", "skipped"]);
 var COMPACT_MISS_CAP = 4;
 var MAX_LOOP_HISTORY_ENTRIES = 50;
 var completedIterationCount = (goal) => (goal.loopHistoryDropped ?? 0) + (goal.loopHistory?.length ?? 0);
+var totalVerdictCount = (goal) => (goal.historyDropped ?? 0) + (goal.history?.length ?? 0);
 var TERMINAL_RECORD_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // src/core/format.ts
@@ -2078,7 +2079,7 @@ var matchLabel = (count) => {
 // src/core/hud.ts
 var RETRY_HOT_THRESHOLD = 3;
 var isRetryStuck = (goal) => goal.retries >= RETRY_HOT_THRESHOLD;
-var currentTurnCount = (goal) => goal.status === "active" ? Math.max(1, goal.turns + 1) : goal.turns;
+var currentTurnCount = (goal) => Math.max(totalVerdictCount(goal), goal.turns);
 var isCompactHot = (goal) => {
   const pending = goal.loopCompact;
   return Boolean(pending && pending.landedAt === undefined && pending.misses >= 2);
@@ -2148,7 +2149,7 @@ var nextMenuIndex = (index, delta, rows) => {
 var pillModel = (goal, elapsed, ascii = false, budget = Number.POSITIVE_INFINITY, phase) => {
   const state = stateWord(goal);
   const count = currentTurnCount(goal);
-  const turns = count > 0 ? ` \xB7 ${count} turn${count === 1 ? "" : "s"}` : "";
+  const turns = count > 0 ? ` \xB7 ${count} turn${count === 1 ? "" : "s"} evaluated` : "";
   const retrying = isRetryStuck(goal) ? ` \xB7 retry ${goal.retries}` : "";
   const tone = goal.status === "paused" ? "paused" : isRetryStuck(goal) ? "retrying" : isCompactHot(goal) ? "hot" : goal.evaluating ? "evaluating" : goal.waiting ? "waiting" : "armed";
   const glyph = stateGlyph(goal, ascii, phase);
