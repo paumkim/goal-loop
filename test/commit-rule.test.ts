@@ -70,4 +70,17 @@ describe("commit rule sentences (byte-identical)", () => {
     expect(evaluateInSession("c", input, coordinator)).toContain(factsCoordinator)
     expect(evaluateIndependently("c", input, "digest", coordinator)).toContain(factsCoordinator)
   })
+
+  test("the coordinator judge rubric enforces claim-before-edit, not just commit-on-wt", () => {
+    const input = { turn: 2, elapsedMs: 90_000 }
+    for (const text of [evaluateInSession("c", input, coordinator), evaluateIndependently("c", input, "digest", coordinator)]) {
+      expect(text).toContain("Lease-first rule (coordinator)")
+      expect(text).toContain("coordinator claim <slug> --agent <you> --paths <scope>")
+      expect(text).toContain("BEFORE the first edit")
+      expect(text).toContain("must be redone inside a claimed worktree")
+      expect(text).toContain("Only the `coordinator` agent is exempt")
+    }
+    // A direct-git repo has no lease workflow, so it never receives the rule.
+    expect(evaluateInSession("c", input, direct)).not.toContain("Lease-first rule")
+  })
 })

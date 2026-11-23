@@ -226,6 +226,14 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Lease-first judge enforcement (`lease-first-judge-enforcement`, 2026-11-23): the coordinator judge rubric only
+  flagged a direct commit on the target branch, so an agent that edited files there without claiming a lease could
+  still collect a `met` verdict before it ever committed. A `Lease-first rule (coordinator)` now rides both judge
+  prompt builders: a normal agent must show a `coordinator claim` plus a `wt/<slug>` branch ahead of its first
+  edit, and direct-checkout edits without a prior claim are `not_met` with the work required to be redone inside a
+  claimed worktree. Only the `coordinator` agent is exempt; direct-git repos never receive the rule. Focused
+  `core`/`commit-rule`/`plugin` suites 250 pass / 0 fail; full `bun run check` green after artifact regeneration,
+  marker re-counted, no shipped file added or removed.
 - Coordinator claim on every activation (`coordinator-claim-always-on`, 2026-11-23): the claim-before-edit flow
   previously reached an agent only through the `/goal` kickoff directive and the config-gated system reminder —
   both require an armed goal. An agent active in a coordinator repo with no goal (or with the reminder off) could
@@ -532,7 +540,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2320 -->
+<!-- spec-check files=143 tests=2321 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

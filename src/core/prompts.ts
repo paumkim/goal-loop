@@ -601,6 +601,7 @@ function rubric(policy: CommitPolicy) {
       lines.push(
         ``,
         `Commit rule (coordinator): the finished work has to be committed on the agent's own \`wt/<slug>\` branch and submitted. Evidence is a commit hash on \`wt/<slug>\` plus a \`submit\` or \`merge-next\` output showing it merged into \`${policy.branch}\`. Uncommitted work, a \`wt/<slug>\` commit never submitted, or a direct commit on \`${policy.branch}\` by a normal agent means "not_met"; only a direct commit shown by the \`coordinator\` agent itself counts.`,
+        `Lease-first rule (coordinator): a normal agent must claim a lease (\`coordinator claim <slug> --agent <you> --paths <scope>\`) and enter its worktree BEFORE the first edit — a prompt reminder alone is not enough, the workflow has to be visible. Evidence is the \`claim\` output plus a \`git branch --show-current\` showing \`wt/<slug>\` (or a worktree directory) ahead of the edits. If a turn edited files in the target checkout (\`${policy.branch}\` / main) without a prior claim, verdict "not_met" and name it: the work must be redone inside a claimed worktree, not merely committed there. Only the \`coordinator\` agent is exempt.`,
       )
     } else {
       lines.push(
