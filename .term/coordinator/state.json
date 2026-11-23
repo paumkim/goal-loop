@@ -5937,8 +5937,17 @@
       "paths": "test/spec-role-split.test.ts",
       "branch": "wt/spec-role-split",
       "worktree": "worktree/wt-spec-role-split",
-      "status": "claimed",
-      "createdAt": "2026-11-23T05:02:44Z"
+      "status": "done",
+      "createdAt": "2026-11-23T05:02:44Z",
+      "submittedAt": "2026-11-23T05:12:35Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T05:12:35Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md",
+        "SPEC.md"
+      ],
+      "mergedAt": "2026-11-23T05:18:36Z",
+      "mergedInto": "dev"
     },
     "format-finite-guards": {
       "agent": "loop-worker",
