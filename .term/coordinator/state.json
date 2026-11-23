@@ -5469,6 +5469,17 @@
       ],
       "mergedAt": "2026-11-23T00:15:05Z",
       "mergedInto": "dev"
+    },
+    "dead-archived-task-logs": {
+      "agent": "build-agent",
+      "paths": "CURRENT_TASK.md,pending_fixes.md",
+      "branch": "wt/dead-archived-task-logs",
+      "worktree": "worktrees/wt-dead-archived-task-logs",
+      "status": "done",
+      "createdAt": "2026-11-23T00:21:39Z",
+      "submittedAt": "2026-11-23T00:23:31Z",
+      "mergedAt": "2026-11-23T00:25:46Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
