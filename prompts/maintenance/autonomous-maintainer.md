@@ -1,5 +1,7 @@
 # Autonomous Maintainer (Single Verifiable Unit)
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Deliver exactly one merged-by-a-human, verified unit in this worktree. Do not change intended behavior unless tests or specification require it. This is the single-unit variant of `maintenance/universal-improvement-pass.md` and the default workflow prompt for `prompter`.
 
 ## Before acting

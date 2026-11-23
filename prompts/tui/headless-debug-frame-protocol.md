@@ -1,5 +1,7 @@
 # Headless TUI Debug Frame Protocol
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Build a headless debug mode for a terminal UI so a text-only agent can debug the TUI live without pixels or screenshots.
 
 ## Goal

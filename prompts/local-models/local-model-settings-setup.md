@@ -1,5 +1,7 @@
 # Local Model Setup in Settings (Easy Mode)
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Implement a local-model feature that lets users run LLMs on their own machine with minimal setup through in-app settings.
 
 ## Goal

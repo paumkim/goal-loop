@@ -1,5 +1,7 @@
 # Implement a Feature
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Implement a requested feature end-to-end with small, verified changes.
 
 ## Before acting

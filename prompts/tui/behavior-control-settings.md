@@ -1,5 +1,7 @@
 # TUI Agent Behavior Control System
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Build a complete TUI-only agent behavior control system in the current repository. Users must be able to change how the parent and every subagent behave entirely through in-app settings (e.g. `/settings`) with no CLI flags, shell commands, or hidden config-file edits required.
 
 ## Before editing

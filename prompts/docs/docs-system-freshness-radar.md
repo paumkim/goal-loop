@@ -1,5 +1,7 @@
 # Build a Local Docs System with Freshness Radar
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Design and implement a local, human-facing documentation system for the current repository that is both a reader's guide and a maintainer freshness radar.
 
 ## Discovery first

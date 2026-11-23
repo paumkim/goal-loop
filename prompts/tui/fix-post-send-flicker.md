@@ -1,5 +1,7 @@
 # Fix TUI Post-Send Transcript Flicker
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Fix a TUI flicker/regression where sending a message causes the transcript to flash, jump, or reflow after the message lands.
 
 ## Reproduction

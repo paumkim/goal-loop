@@ -1,5 +1,7 @@
 # TUI Transcript Verbosity Consistency and Dead-Code Cleanup
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Audit and polish the TUI transcript with focus on verbosity-level consistency and removal of dead or silent-failure code.
 
 ## Scope

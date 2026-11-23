@@ -1,5 +1,7 @@
 # Error Handling Audit
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Find and fix error-handling defects: swallowed failures, missing handling,
 and inconsistent error vocabulary.
 

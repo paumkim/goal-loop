@@ -1,5 +1,7 @@
 # Dependency Security Audit
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Run the current repository's dependency audit, triage findings, and apply only
 safe, verified fixes.
 

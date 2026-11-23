@@ -1,5 +1,7 @@
 # Dependency Upgrade
 
+> **Leverage:** a few targeted edits can produce a large behavioral shift — e.g., changing 7 embedding rows reframed a whole system. Prefer precise minimal changes over broad rewrites.
+
 Upgrade one dependency safely, with a clean revert path if it does not work.
 
 ## Before acting
