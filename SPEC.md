@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2244 -->
+<!-- spec-check files=143 tests=2249 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -10820,3 +10820,31 @@ New case in `test/learning-log.test.ts`: an achieved record whose `lastVerify` h
 emits the terminal sha, matching the same record with no `lastVerify`. Focused suite 16 pass /
 0 fail (was 15); full suite **2244 pass / 0 fail**. Marker `files=143 tests=2244`. The
 `learning-log-dead-verify-condition` backlog item is marked done in this commit.
+
+
+## Workstream CLXVI — keep the judge's own request through goal-grammar stripping (2026-11-22)
+
+Evidence from the real judge sessions in opencode's store showed the `<goal-evaluation>` user request was
+stored intact in the judge child but absent from the model-bound context: judge reasoning described only
+the system prefix, AGENTS.md and environment, and the verdict complained that no `<condition>` or
+`<parent-summary>` was supplied. Every affected condition quoted a rendered `<goal>` kickoff that the user
+had pasted into `/goal`; every unaffected condition did not.
+
+Root cause: the `context` hook applies `stripGoalContext` to judge-child sessions (no live goal record).
+`isGoalInstructionMessage` matched the `<goal>`/`</goal>` embedded inside the request's `<condition>`, so
+the judge's own rubric was classified as a worker goal directive and deleted before `stripGoalEvaluations`
+could keep it as the live request. The exemption in `isGoalEvaluationMessage` existed but was never consulted
+by `stripGoalContext`.
+
+Fix: `stripGoalContext` now preserves any message `isGoalEvaluationMessage` recognizes. Evaluation requests
+are reaped separately by `stripGoalEvaluations` (keep-last for a live judge, drop-all for a finished worker),
+so stale rubrics still leave worker context. Genuine `<goal>` kickoffs are still stripped.
+
+Verification: new `test/evaluator-request-context.test.ts` pins a condition quoting a pasted kickoff and
+checks the full hook chain (`stripGoalContext` then `stripGoalEvaluations({keepLast:true})`) keeps the
+request with both tags; a genuine kickoff is still dropped and a finished worker still drops echoes.
+Focused suite 5 pass / 0 fail; `notes.test.ts` 23 pass / 0 fail (no regression). Marker
+`files=143 tests=2241 -> 2246` (new test file, `test/` outside packed files). No behavior change to
+generation or verdict parsing.
+
+
