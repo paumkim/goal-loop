@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-22T23:53:52Z",
+  "updatedAt": "2026-11-23T01:25:49Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -294,6 +294,27 @@
         "doubled-jsdoc",
         "hud-comment-cleanup",
         "merged-jsdoc"
+      ]
+    },
+    {
+      "id": "verdict-lenient-regex-precompile-rejected",
+      "title": "Precompiling lenient-verdict regexes: benchmarked, rejected (no win)",
+      "category": "speed",
+      "priority": 4,
+      "impact": "low",
+      "risk": "low",
+      "status": "done",
+      "finding": "src/core/verdict.ts · lenientFields constructs one verdict-field and one reason RegExp per call on the strict-JSON-failure repair path. Precompiling all patterns at module load was benchmarked and reverted: 2000 lenient parseVerdict calls, best of 20 rounds, 2.50 ms baseline vs 2.51 ms precompiled — no measurable win. The allocation is negligible next to the segment/replace work in the repair path.",
+      "improvement": "No code change. Keep the per-call RegExp construction; do not repeat this experiment without a hotter benchmark. Harness: /tmp/opencode/bench-lenient.ts (2000 calls, best of 20). A broken early variant that used ([sS]*?) instead of ([\\s\\S]*?) measured 2.34 ms — that was a correctness bug, not a speedup, and must not be cited as evidence.",
+      "evidence": [
+        "2026-11-23 benchmark: baseline 2.50 ms / 2000 calls; precompiled 2.51 ms / 2000 calls (best of 20); reverted, no commit shipped.",
+        "Focused suites verdict-intake + evaluator-agent-foreign: 7 pass / 0 fail after the change; tsc --noEmit clean.",
+        "Repo precedent: Workstream CLVII precompiled foreign-verdict patterns with a real 1.9x isolated win — that case was kept; this one was not."
+      ],
+      "dedupeKeys": [
+        "lenient-verdict-regex-precompile",
+        "verdict-regex-benchmark",
+        "regex-precompile-no-win"
       ]
     }
   ]
