@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2262 -->
+<!-- spec-check files=143 tests=2267 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11151,3 +11151,11 @@ test against an independent oracle across whitespace/Unicode/punctuation cases.
 Measured on 20000 repeated folds (best of 100): `6.95 ms -> 0.05 ms` (~139x on the hit path).
 Focused suites (failure-signature, controller, package-integrity) 139 pass / 0 fail, 840 expect()
 calls; `tsc --noEmit` clean. No shipped-file change; marker +1 test.
+## Workstream CLXXXIX — read-only merge lock observability (coordinator-merge-status) (2026-11-23)
+
+Extended the existing flock/mergeLock machinery (no parallel lock system). `packages/coordinator/bin/coordinator` gains three subcommands. `merge-status` is read-only: it reads the holder line that `do_merge_next` already writes under the merge flock (`.term/coordinator/.merge-lock/holder`, falling back to `.merge-lock-file` and the state mirror) and prints JSON `{mergeInProgress, holder, ageSeconds, recommendation}`. A live holder recommends waiting; a dead pid or a holder older than the 60-minute reclaim window is reported as stale and points at `merge-next`'s existing reclamation. `await-merge [--timeout SECONDS]` polls that same lock (default 300s), prints the final status JSON and exits 1 on timeout. `merge-next --wait` is a thin alias that drains the lock via `await-merge` before the unchanged merge path; the flock is still acquired by `do_merge_next` itself.
+
+AGENTS.md and docs/parallel-work.md now state the rule: check `coordinator merge-status` before `claim`, `submit`, and `merge-next`, and wait with `await-merge` (or `merge-next --wait`) while a merge is in progress.
+
+Verification: `test/coordinator-merge-safety.test.ts` gains five cases — free-lock JSON shape, two concurrent readers agreeing under a real flock holder plus await timeout/release, a dead pid reported stale and not blocking await, a holder past 3600s labelled stale, and `merge-next --wait` merging normally when free. Focused suites 63 pass / 0 fail across coordinator, coordinator-lease-races and coordinator-merge-safety (447 expect() calls); `bash -n` clean; full `bun run check` green including spec-check, dist freshness, TUI load, docs freshness and invariant-sweep.
+
