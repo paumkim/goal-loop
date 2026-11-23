@@ -402,8 +402,10 @@ test("matrix: a failing required check downgrades met to not_met with per-check 
   expect(v.checks[0]!.pass).toBe(true)
   expect(v.checks[1]!.pass).toBe(false)
   expect(v.checks[1]!.tail).toContain("1 fail")
-  expect(v.checks[1]!.nextAction).toBeTruthy()
-  expect(v.checks[1]!.scopeDecision).toBeTruthy()
+  expect(v.checks[1]!.scopeDecision).toBe("executed but not satisfied")
+  expect(v.checks[1]!.nextAction).toBe(
+    'Satisfy required verification check tests (tests) with a fresh scoped command: run "bun test targeted" at current HEAD and fix failures until exit 0.',
+  )
   expect(record.lastVerification?.missing).toEqual(["tests"])
 })
 
