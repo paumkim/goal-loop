@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { isInheritModelValue, parseModelRef, resolveConfig } from "../src/core/config.ts"
 import { classifyFailure, formatValue, isNotFoundError, type FailureClass } from "../src/core/errors.ts"
-import { diffUsage, elideAtWordBoundary, formatCost, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, truncate, wrapLines } from "../src/core/format.ts"
+import { diffUsage, elideAtWordBoundary, formatCost, formatDuration, formatDurationCoarse, formatSpend, formatStatus, formatTokens, outcomeStory, stripLoneSurrogates, truncate, wrapLines } from "../src/core/format.ts"
 import stringWidth from "string-width"
 import { parseGoalCommand, parseGoalLoopDirective } from "../src/core/parse.ts"
 import { PLANNED_CONDITION_MAX_CHARS, parsePlan, planGoalRequest } from "../src/core/planner.ts"
@@ -596,6 +596,31 @@ describe("elideAtWordBoundary", () => {
     expect(elideAtWordBoundary("hello world", 0)).toBe("")
     expect(elideAtWordBoundary("hello world", -5)).toBe("")
     expect(elideAtWordBoundary("hello world", 1)).toBe("…")
+  })
+})
+
+describe("lone-surrogate sanitization in the text helpers", () => {
+  test("stripLoneSurrogates drops unpaired halves, keeps valid pairs, and is an identity on clean text", () => {
+    expect(stripLoneSurrogates("plain text 漢 😀")).toBe("plain text 漢 😀") // same reference value
+    expect(stripLoneSurrogates("a\ud83db\ude00c😀d")).toBe("abc😀d")
+    expect(stripLoneSurrogates("\ud83d\ude00")).toBe("😀")
+    expect(stripLoneSurrogates("\ud83d")).toBe("")
+  })
+
+  test("truncate never renders wider than its cap on malformed input, and leaks no lone surrogate", () => {
+    // The fuzz shape that failed before the sanitizer: a lone high surrogate beside combining marks made
+    // the concatenated width (14) exceed the sum of per-grapheme widths used to fill the budget (13).
+    const text = "😀 \ńx\n\ud83d 漢😀́漢é\ude00́é😀\na😀漢"
+    const out = truncate(text, 13, "...")
+    expect(stringWidth(out)).toBeLessThanOrEqual(13)
+    expect(() => encodeURIComponent(out)).not.toThrow()
+  })
+
+  test("elideAtWordBoundary never emits a half surrogate from a malformed input", () => {
+    const text = "漢漢漢\ud83déé\ude00\ud83da  \n"
+    const out = elideAtWordBoundary(text, 6)
+    expect(out.length).toBeLessThanOrEqual(6)
+    expect(() => encodeURIComponent(out)).not.toThrow()
   })
 })
 

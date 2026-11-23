@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2310 -->
+<!-- spec-check files=143 tests=2313 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1356,21 +1356,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCII — scalar precheck in the snapshot equality gate (2026-11-23)
-
-`goalsEqual` in `src/core/entries.ts` serialized both goal snapshots on every `changed` event — two
-full `JSON.stringify` passes over up to 64 history entries. Live events almost always move a cheap
-top-level scalar (turns, status, condition, a verdict) or the history length; those cases are now
-decided by a 15-key precheck plus a length check before any serialization. `elapsedMs` is deliberately
-absent from the precheck because it is the only stripped field, so every rejected key is part of the
-original deep comparison — the precheck can only reject pairs the original also rejects.
-
-Measured (64-entry snapshot, 20000 calls, best of 100):
-new-turn case `1173.14 ms -> 1.03 ms` (~1138x); elapsed-only deep path `1192 -> 1183 ms` (unchanged
-within noise, as expected). Harnesses: `/tmp/opencode/bench-goalsequal-change.ts`,
-`/tmp/opencode/bench-goalsequal.ts`. Correctness: new differential test cross-checks all 9x9 variant
-pairs against the original implementation plus null/identity cases; focused suite 41 pass / 0 fail,
-147 expect() calls. `tsc --noEmit` clean. Marker +2 tests; no shipped-file change.
 ## Workstream CXCIII — physical worktree dir migration with live-lease compatibility (worktree-dir-physical-migrate) (2026-11-23)
 
 Completed the physical half of the `worktrees/` → `worktree/` rename on the shared checkout. `coordinator migrate-worktree-dir` now accepts `--with-live-leases`: when a live lease still points into `worktrees/`, the default remains a hard refusal (another session's worktree is never disturbed), but the explicit flag moves the directory anyway, leaves a `worktrees -> worktree` compatibility symlink, and skips rewriting those leases' records so their old paths keep resolving for their owner. The move also handles an already-existing destination (new-style leases claimed before the migration) and runs `git worktree repair` on every relocated worktree. Help text and docs/parallel-work.md / AGENTS.md describe both modes.
@@ -1581,6 +1566,21 @@ verdict surviving undowngraded; the existing fresh-goal downgrade pins in `test/
 Focused suite: 275 pass / 0 fail across controller and loop. Full `bun run check` green after artifact
 regeneration; marker unchanged at 2310 tests, no shipped file added or removed. Workstream CXCI rotated
 into the archive to keep the live recent window at 15.
+
+## Workstream CCVII — one sanitizer for malformed UTF-16 in both text helpers (unicode-safe-text-helpers) (2026-11-23)
+
+`truncate` and `elideAtWordBoundary` both promise never to emit a lone surrogate; `truncate` additionally
+promises never to render wider than its cap. A 20k-case fuzz with malformed astral halves found both
+contracts broken: a lone high surrogate beside combining marks made the concatenated width exceed the
+per-grapheme sum used to fill the budget (14 cells for a cap of 13), and the half surrogate leaked into
+the output that rides the next planner prompt. A single shared `stripLoneSurrogates` now removes unpaired
+halves at the source in both helpers, so every width/segment calculation sees well-formed text; clean
+input is returned unchanged and byte-identical.
+
+Verification: fuzz harness went from 6 violations to 0 on the same seeded shapes; new regressions in
+`test/core.test.ts` pin the sanitizer, the width cap, and marker-safe output. Focused suite 189 pass /
+0 fail, 177373 expect() calls. Full `bun run check` green after artifact regeneration; marker
+re-counted, no shipped file added or removed.
 
 ## Historical workstreams
 
