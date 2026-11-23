@@ -194,6 +194,7 @@ function memoizeBounded(fn, limit) {
     return result;
   };
 }
+var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
 var normalizeConditionText = memoizeBounded((value) => value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim(), 4096);
 var cellWidth = memoizeBounded((text) => stringWidth(text), 4096);
 var segmenter2 = new Intl.Segmenter("en", { granularity: "grapheme" });
@@ -348,14 +349,14 @@ var BAR_EMPTY_ASCII = "-";
 function renderBar(done, max, cells = BAR_CELLS, ascii = false) {
   const width = Math.max(1, Math.floor(cells));
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0;
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
+  const safeDone = nonNegative(done);
   const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round(safeDone / safeMax * width)));
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY;
   return { filled, text: filledGlyph.repeat(filled) + emptyGlyph.repeat(width - filled) };
 }
 function barCaption(current, max, done) {
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0;
+  const safeDone = nonNegative(done);
   const v = Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1;
   return typeof max === "number" && Number.isFinite(max) && max > 0 ? `v${v} of at most ${Math.floor(max)} \xB7 ${safeDone} complete` : `v${v} \xB7 ${safeDone} complete`;
 }
@@ -599,7 +600,7 @@ function contextSparkline(entries, ascii = false) {
 var CONTEXT_BAR_CELLS = 16;
 var CONTEXT_HOT_RATIO = 0.8;
 function contextMeter(size, capacity, cells = CONTEXT_BAR_CELLS, ascii = false) {
-  const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0;
+  const safeSize = nonNegative(size);
   const width = Math.max(1, Math.floor(cells));
   const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0;
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED;
@@ -2503,7 +2504,6 @@ var quoteSha = (sha) => {
   const trimmed = sha.trim();
   return trimmed.length > 0 ? trimmed.slice(0, 7) : undefined;
 };
-var nonNegative = (n) => Number.isFinite(n) ? Math.max(0, n) : 0;
 function iterationAttestation(entry, durationMs) {
   const turns = nonNegative(entry.turns);
   const tools = nonNegative(entry.toolCalls);

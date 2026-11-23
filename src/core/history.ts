@@ -2,6 +2,7 @@
  * Pure helpers behind the goal-history rendering in the TUI detail dialog (`src/tui-history.tsx`).
  * No I/O, no JSX, no theme — everything here is unit-tested in `test/history.test.ts`.
  */
+import { nonNegative } from "./format.ts"
 import type { LoopEntry, VerdictEntry } from "./types.ts"
 
 export const BAR_CELLS = 18
@@ -20,7 +21,7 @@ const BAR_EMPTY_ASCII = "-"
 export function renderBar(done: number, max: number | undefined, cells: number = BAR_CELLS, ascii: boolean = false): { filled: number; text: string } {
   const width = Math.max(1, Math.floor(cells))
   const safeMax = typeof max === "number" && Number.isFinite(max) && max > 0 ? max : 0
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
+  const safeDone = nonNegative(done)
   const filled = safeMax === 0 || safeDone <= 0 ? 0 : Math.min(width, Math.max(1, Math.round((safeDone / safeMax) * width)))
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED
   const emptyGlyph = ascii ? BAR_EMPTY_ASCII : BAR_EMPTY
@@ -29,7 +30,7 @@ export function renderBar(done: number, max: number | undefined, cells: number =
 
 /** Caption under/near the bar, e.g. `v3 of at most 5 · 2 complete`. */
 export function barCaption(current: number, max: number | undefined, done: number): string {
-  const safeDone = Number.isFinite(done) ? Math.max(0, done) : 0
+  const safeDone = nonNegative(done)
   const v = Number.isFinite(current) && current >= 1 ? Math.floor(current) : 1
   return typeof max === "number" && Number.isFinite(max) && max > 0
     ? `v${v} of at most ${Math.floor(max)} · ${safeDone} complete`
@@ -381,7 +382,7 @@ export function contextMeter(size: number, capacity: number | undefined, cells: 
   hot: boolean
   over: boolean
 } {
-  const safeSize = Number.isFinite(size) ? Math.max(0, size) : 0
+  const safeSize = nonNegative(size)
   const width = Math.max(1, Math.floor(cells))
   const hasCapacity = typeof capacity === "number" && Number.isFinite(capacity) && capacity > 0
   const filledGlyph = ascii ? BAR_FILLED_ASCII : BAR_FILLED
