@@ -11232,3 +11232,18 @@ terminal acknowledgment pill is unchanged — this is about the live one.
 Verification: focused `tui-hud` 180 pass / 0 fail, 22539 expect() calls, including a regression that pins
 the "0 turns / 14 not_met verdicts -> 14 turns evaluated" case. Full `bun run check` green with
 `files=143 tests=2281` (+1 test, not weakened).
+## Workstream CXCVI — copy-free steady state in the snapshot cache (2026-11-23)
+
+Follow-up to CXCII. `pruneSnapshotEntries` copied all entries into a fresh object on every call, then
+returned the original reference whenever no eviction happened — wasted work on every `applySnapshot`
+in a normal session, where the live-session count sits far under the 64 cap. It now checks the key
+count first and returns the original map immediately when eviction is impossible. `dropSessions`
+replaced a linear `ids.includes(sessionID)` per entry with one `Set`, and tracks the drop directly
+instead of re-counting both key sets.
+
+Measured (64-entry map, best of 200 unless noted):
+`pruneSnapshotEntries 3.80 -> 0.01 ms`; `applySnapshot(unchanged) 3.84 -> 0.10 ms`;
+`dropSessions (32 ids) 13.09 -> 5.13 ms`. Harnesses: `/tmp/opencode/bench-snapshot.ts`,
+`/tmp/opencode/bench-drop.ts`. New regression tests pin reference identity at/under the cap and
+`dropSessions`' keep/duplicate-id semantics. Focused suite 43 pass / 0 fail, 153 expect() calls;
+`tsc --noEmit` clean. Marker +2 tests; no shipped-file change.

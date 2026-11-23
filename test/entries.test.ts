@@ -55,6 +55,26 @@ describe("goalsEqual", () => {
   })
 })
 
+describe("snapshot-cache steady-state fast paths", () => {
+  test("pruneSnapshotEntries returns the original reference at or under the cap (no copy)", () => {
+    const many: Record<string, GoalSnapshotCacheEntry> = {}
+    for (let i = 0; i < 40; i++) many[`ses-${i}`] = entry("active", 1000 + i)
+    expect(pruneSnapshotEntries(many, undefined)).toBe(many)
+    expect(pruneSnapshotEntries(many, undefined, 40)).toBe(many)
+    // One over the cap does real work and may return a new object.
+    const over = { ...many, extra: entry("achieved", 1) }
+    expect(over).not.toBe(pruneSnapshotEntries(over, undefined, 40))
+  })
+
+  test("dropSessions with a Set lookup still honours keep and duplicate ids", () => {
+    const input = { a: entry("active"), b: entry("active"), c: entry("active"), d: entry("active") }
+    expect(Object.keys(dropSessions(input, ["b", "b", "c"], "c"))).toEqual(["a", "c", "d"])
+    // No matching ids returns the original reference.
+    expect(dropSessions(input, ["missing"], undefined)).toBe(input)
+    expect(dropSessions(input, [], undefined)).toBe(input)
+  })
+})
+
 describe("pruneSnapshotEntries", () => {
   test("null-valued entries are retained — the stale-chrome tick re-pulls them; only the cap evicts", () => {
     const out = pruneSnapshotEntries({ a: entry("achieved"), b: entry(null), c: entry(null, 2000) }, undefined)
