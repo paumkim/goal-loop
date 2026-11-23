@@ -1733,6 +1733,13 @@ function formatValue(value) {
   const json = JSON.stringify(value);
   return json === undefined ? String(value) : json;
 }
+function errorMessage(error) {
+  if (error instanceof Error)
+    return error.message;
+  if (typeof error === "object" && error !== null && "message" in error)
+    return String(error.message);
+  return String(error);
+}
 
 // src/core/dossier-index.ts
 var dossierIndexName = (nowMs, attempt = 0) => {
@@ -2043,6 +2050,30 @@ function selectNewestSealedDossier(entries) {
 // src/tui.tsx
 import { readFileSync as readFileSync3, readdirSync as readdirSync2, statSync } from "fs";
 import { join as join7 } from "path";
+
+// src/tui-error.ts
+var USER_ERROR_MAX_LENGTH = 200;
+var STACK_FRAME = /^\s*at\s+/;
+var ERROR_PREFIX = /^(?:[A-Za-z][A-Za-z0-9]*Error):\s*/;
+var NULLISH = new Set(["null", "undefined", "[object Object]"]);
+var SYSTEM_PHRASES = [
+  [/^ENOENT\b/, "file or directory not found"],
+  [/^EACCES\b/, "permission denied"],
+  [/^EPERM\b/, "operation not permitted"],
+  [/^ENOTDIR\b/, "path is not a directory"],
+  [/^EISDIR\b/, "path is a directory"],
+  [/^EEXIST\b/, "file already exists"]
+];
+function userFacingError(error, maxLength = USER_ERROR_MAX_LENGTH) {
+  const raw = errorMessage(error);
+  const plain = raw.split(`
+`).filter((line) => !STACK_FRAME.test(line)).join(" ").replace(ERROR_PREFIX, "").replace(/\s+/g, " ").trim();
+  const friendly = SYSTEM_PHRASES.find(([pattern]) => pattern.test(plain))?.[1] ?? plain;
+  if (!friendly || NULLISH.has(friendly))
+    return "an unexpected error occurred";
+  const width = Number.isFinite(maxLength) && maxLength > 1 ? Math.floor(maxLength) : USER_ERROR_MAX_LENGTH;
+  return friendly.length > width ? `${friendly.slice(0, width - 1)}\u2026` : friendly;
+}
 
 // src/status-dialog.tsx
 import { createElement as _$createElement3, setProp as _$setProp3, insertNode as _$insertNode2, createTextNode as _$createTextNode2, insert as _$insert3, effect as _$effect3, memo as _$memo3, createComponent as _$createComponent2, use as _$use } from "@opentui/solid";
@@ -6156,7 +6187,7 @@ var defaultSleep = (ms, signal) => new Promise((resolve) => {
   };
   signal.addEventListener("abort", onAbort, { once: true });
 });
-var errorMessage = (error) => error instanceof Error ? error.message : String(error);
+var errorMessage2 = (error) => error instanceof Error ? error.message : String(error);
 var pumpRpcEvent = async (options) => {
   const { name, signal, subscribe, handle, catchUp, log } = options;
   const sleep = options.sleep ?? defaultSleep;
@@ -6168,19 +6199,19 @@ var pumpRpcEvent = async (options) => {
         try {
           handle(event);
         } catch (error) {
-          log?.("rpc event handler failed", { name, error: errorMessage(error) });
+          log?.("rpc event handler failed", { name, error: errorMessage2(error) });
         }
       }
       log?.("rpc event stream ended", { name });
     } catch (error) {
-      log?.("rpc event stream dropped", { name, error: errorMessage(error) });
+      log?.("rpc event stream dropped", { name, error: errorMessage2(error) });
     }
     if (signal.aborted)
       return;
     try {
       catchUp?.();
     } catch (error) {
-      log?.("rpc catch-up failed", { name, error: errorMessage(error) });
+      log?.("rpc catch-up failed", { name, error: errorMessage2(error) });
     }
     await sleep(RPC_RESUBSCRIBE_DELAY_MS, signal);
   }
@@ -6479,6 +6510,11 @@ var dialogStatusCommands = (deps) => {
 // src/tui.tsx
 var TICK_MS = 15000;
 var ATTENTION_KINDS = new Set(["achieved", "impossible", "failed", "paused"]);
+var logUiError = (where, error) => {
+  try {
+    console.error(`goal-loop: ${where}`, error);
+  } catch {}
+};
 var elapsedOf = (g, receivedAt, nowMs) => g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - (receivedAt ?? nowMs)) : g.elapsedMs;
 var ClampedColumn = (props) => {
   const dimensions = useTerminalDimensions2();
@@ -6606,10 +6642,11 @@ var tui_default = Plugin.define({
       try {
         showStatusDialogInner(sessionID, fallback);
       } catch (error) {
+        logUiError("status dialog failed", error);
         try {
           context.ui.toast.show({
             title: "goal plugin error (dialog)",
-            message: String(error instanceof Error ? error.stack ?? error : error).slice(0, 900),
+            message: userFacingError(error),
             variant: "error",
             duration: 30000
           });
@@ -6638,35 +6675,38 @@ var tui_default = Plugin.define({
         return ` \xB7 v${iteration}${cap}`;
       };
       context.ui.dialog.show(() => _$createComponent4(ErrorBoundary, {
-        fallback: (error) => _$createComponent4(ClampedColumn, {
-          get children() {
-            return [(() => {
-              var _el$9 = _$createElement5("text");
-              _$insertNode4(_el$9, _$createTextNode4(`goal detail failed to render`));
-              _$effect5((_p$) => {
-                var _v$5 = TextAttributes5.BOLD, _v$6 = context.theme.text.feedback.warning.base;
-                _v$5 !== _p$.e && (_p$.e = _$setProp5(_el$9, "attributes", _v$5, _p$.e));
-                _v$6 !== _p$.t && (_p$.t = _$setProp5(_el$9, "fg", _v$6, _p$.t));
-                return _p$;
-              }, {
-                e: undefined,
-                t: undefined
-              });
-              return _el$9;
-            })(), (() => {
-              var _el$1 = _$createElement5("text");
-              _$setProp5(_el$1, "wrapMode", "word");
-              _$insert5(_el$1, () => String(error instanceof Error ? error.stack ?? error.message ?? error : error).slice(0, 600));
-              _$effect5((_$p) => _$setProp5(_el$1, "fg", context.theme.text.muted, _$p));
-              return _el$1;
-            })(), (() => {
-              var _el$10 = _$createElement5("text");
-              _$insertNode4(_el$10, _$createTextNode4(`esc to close \xB7 your session is unaffected`));
-              _$effect5((_$p) => _$setProp5(_el$10, "fg", context.theme.text.faint, _$p));
-              return _el$10;
-            })()];
-          }
-        }),
+        fallback: (error) => {
+          logUiError("dialog render failed", error);
+          return _$createComponent4(ClampedColumn, {
+            get children() {
+              return [(() => {
+                var _el$9 = _$createElement5("text");
+                _$insertNode4(_el$9, _$createTextNode4(`goal detail failed to render`));
+                _$effect5((_p$) => {
+                  var _v$5 = TextAttributes5.BOLD, _v$6 = context.theme.text.feedback.warning.base;
+                  _v$5 !== _p$.e && (_p$.e = _$setProp5(_el$9, "attributes", _v$5, _p$.e));
+                  _v$6 !== _p$.t && (_p$.t = _$setProp5(_el$9, "fg", _v$6, _p$.t));
+                  return _p$;
+                }, {
+                  e: undefined,
+                  t: undefined
+                });
+                return _el$9;
+              })(), (() => {
+                var _el$1 = _$createElement5("text");
+                _$setProp5(_el$1, "wrapMode", "word");
+                _$insert5(_el$1, () => userFacingError(error));
+                _$effect5((_$p) => _$setProp5(_el$1, "fg", context.theme.text.muted, _$p));
+                return _el$1;
+              })(), (() => {
+                var _el$10 = _$createElement5("text");
+                _$insertNode4(_el$10, _$createTextNode4(`esc to close \xB7 your session is unaffected`));
+                _$effect5((_$p) => _$setProp5(_el$10, "fg", context.theme.text.faint, _$p));
+                return _el$10;
+              })()];
+            }
+          });
+        },
         get children() {
           return _$createComponent4(ClampedColumn, {
             get children() {
@@ -6940,6 +6980,16 @@ var tui_default = Plugin.define({
         });
       } catch {}
     };
+    const toastError = (title, error, sessionID, detail) => {
+      logUiError(title, error);
+      safeToast({
+        title,
+        message: detail ? `${detail}: ${userFacingError(error)}` : userFacingError(error),
+        variant: "error",
+        duration: 5000,
+        sessionID
+      });
+    };
     const onNotice = (notice) => {
       try {
         onNoticeInner(notice);
@@ -7210,13 +7260,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "copy failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("copy failed", error, sessionID);
       }
     };
     const exportDossier = (sessionID, goal) => {
@@ -7232,13 +7276,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "export failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("export failed", error, sessionID);
       }
     };
     const verifyRecordAction = (sessionID, goal) => {
@@ -7266,13 +7304,7 @@ var tui_default = Plugin.define({
         });
         return verification;
       } catch (error) {
-        safeToast({
-          title: "verify failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("verify failed", error, sessionID);
         return;
       }
     };
@@ -7301,13 +7333,7 @@ var tui_default = Plugin.define({
         });
         return reach;
       } catch (error) {
-        safeToast({
-          title: "reach check failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("reach check failed", error, sessionID);
         return;
       }
     };
@@ -7336,13 +7362,7 @@ var tui_default = Plugin.define({
         });
         return sign;
       } catch (error) {
-        safeToast({
-          title: "sign check failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("sign check failed", error, sessionID);
         return;
       }
     };
@@ -7359,13 +7379,7 @@ var tui_default = Plugin.define({
             }
           });
         } catch (error) {
-          safeToast({
-            title: "attest failed",
-            message: `cannot read ${directory}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
+          toastError("attest failed", error, sessionID, `cannot read ${directory}`);
           return;
         }
         const newest = selectNewestSealedDossier(candidates);
@@ -7383,13 +7397,7 @@ var tui_default = Plugin.define({
         try {
           markdown = readFileSync3(join7(directory, newest), "utf8");
         } catch (error) {
-          safeToast({
-            title: "attest failed",
-            message: `cannot read ${newest}: ${String(error instanceof Error ? error : error).slice(0, 160)}`,
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
+          toastError("attest failed", error, sessionID, `cannot read ${newest}`);
           return;
         }
         const result = attestSealedDossier(markdown, directory);
@@ -7431,13 +7439,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "attest failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("attest failed", error, sessionID);
       }
     };
     const reviewRecordAction = (sessionID, goal) => {
@@ -7456,13 +7458,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "review failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("review failed", error, sessionID);
       }
     };
     const spendLedgerAction = (sessionID, goal) => {
@@ -7481,13 +7477,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "spend report failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("spend report failed", error, sessionID);
       }
     };
     const sealRecordAction = (sessionID, goal) => {
@@ -7507,13 +7497,7 @@ var tui_default = Plugin.define({
         });
         return result;
       } catch (error) {
-        safeToast({
-          title: "seal failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("seal failed", error, sessionID);
         return;
       }
     };
@@ -7531,13 +7515,7 @@ var tui_default = Plugin.define({
           sessionID
         });
       } catch (error) {
-        safeToast({
-          title: "index failed",
-          message: String(error instanceof Error ? error : error).slice(0, 200),
-          variant: "error",
-          duration: 5000,
-          sessionID
-        });
+        toastError("index failed", error, sessionID);
       }
     };
     const requestClearGoal = (sessionID) => {
@@ -7556,13 +7534,7 @@ var tui_default = Plugin.define({
         }).then((ok) => {
           if (ok !== true)
             return;
-          const clearFailed = (error) => safeToast({
-            title: "clear failed",
-            message: String(error instanceof Error ? error : error).slice(0, 200),
-            variant: "error",
-            duration: 5000,
-            sessionID
-          });
+          const clearFailed = (error) => toastError("clear failed", error, sessionID);
           try {
             rpc.clear({
               sessionID
