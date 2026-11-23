@@ -355,6 +355,7 @@ there.
 | CLXXXVIII | `one-canonical-condition-reason-fold` | one canonical condition/reason fold |
 | CLXXXIX | `coordinator-merge-status` | read-only merge lock observability |
 | CXC | `one-status-to-answer-cell-across-the-record` | one status-to-answer cell across the record family |
+| CXCI | `worktree-dir-rename` | worktrees/ to worktree/ everywhere |
 
 ## Workstream AC — compaction misses are counted once (A-1)
 
@@ -10188,5 +10189,13 @@ negative, `unknown`, empty and stray statuses. Focused suites (dossier + attest 
 the three record modules) 132 pass / 0 fail, 479 expect() calls; `tsc --noEmit` clean. This is a
 consolidation/taste change, not a speed change: the dossier build benchmark is flat within noise
 (`21.09 ms -> 22.38 ms / 50 builds`, best of 20). No shipped-file change; marker +1 test.
+
+## Workstream CXCI — worktrees/ to worktree/ everywhere (worktree-dir-rename) (2026-11-23)
+
+Renamed the coordinator worktree directory from `worktrees/` to `worktree/` across the whole repo in one lease. `packages/coordinator/bin/coordinator` now defaults `WORKTREE_DIR` to `worktree` (config fallback too) and all previously hardcoded merge-worktree paths (`merge_wt`, `merge_wt_rel`, the merge parent `mkdir`, the post-merge health exclusion and `merge-abort`) derive from `$WORKTREE_DIR`. `src/core/git.ts`, `src/core/workflow.ts`, `src/core/types.ts`, the checked-in `.term/coordinator/config.json`, `.gitignore`, `scripts/spec-check.ts`, all coordinator/bootstrap/git/core/plugin/package-integrity test fixtures, AGENTS.md, docs/parallel-work.md, docs/core/index/install.html, README.md, MAINTAINER.md, RELEASE-CHECKLIST.md, the coordinator README and the prompt templates use the new name.
+
+Legacy compatibility: an old config still selecting `worktrees`, or an old lease whose stored `worktree` path starts with `worktrees/`, is honoured (the lease path is preserved on submit) and emits one warning per repo (`.legacy-worktree-warned`). `coordinator migrate-worktree-dir [--dry-run]` moves the physical directory, runs `git worktree repair` on the relocated worktrees, atomically rewrites `config.json` and the lease paths under the state lock, clears the warning marker, and refuses while any active lease still points into `worktrees/` so another session's live worktree is never moved.
+
+Verification: new `test/worktree-dir-rename.test.ts` (8 tests) greps shipped code/config/docs/scripts for stale `worktrees` defaults/paths and exercises the new dir, the one-time legacy warning, old-lease-path validity after a default flip, migration with git-record repair, refusal on active leases and `--dry-run`. Focused suites: 71 pass / 0 fail (new + three coordinator suites, 508 expect() calls) and 277 pass / 0 fail (bootstrap, git, core, plugin, package-integrity, 177943 expect() calls). `bash -n` clean; full `bun run check` green including spec-check, dist freshness, TUI load, docs freshness and invariant-sweep.
 
 

@@ -782,7 +782,7 @@ describe("GoalController", () => {
     expect(second.controller.hasTerminalRecord(SID)).toBe(false)
   })
 
-  test("goals persist and restore with reset counters; finished goals are not restored", async () => {
+  test("an evaluated goal restores with its turn counter preserved; finished goals are not restored", async () => {
     const storage = new MemoryStorage()
     const first = harness({}, storage)
     await first.set("restore me")
@@ -792,7 +792,13 @@ describe("GoalController", () => {
     const second = harness({}, storage)
     expect(await second.controller.restore()).toBe(1)
     const goal = second.controller.get(SID)!
-    expect(goal).toMatchObject({ condition: "restore me", status: "active", turns: 0 })
+    // Renumbering a live goal to turn 1 on every reload re-tripped the zero-tool downgrade and produced
+    // the same canned "no evidence of work" not_met forever, even when the judge saw real evidence.
+    expect(goal).toMatchObject({ condition: "restore me", status: "active", turns: 1 })
+    second.verdicts.push(met("recovered with fresh evidence"))
+    await second.turn(0)
+    expect(second.controller.get(SID)?.verdict).toBe("met")
+    expect(second.controller.get(SID)?.reason).toContain("recovered with fresh evidence")
 
     second.controller.clear(SID)
     await second.store.flush()
