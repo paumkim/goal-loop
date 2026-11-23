@@ -237,7 +237,7 @@ function formatDuration(ms) {
   return `${s}s`;
 }
 function formatDurationCoarse(ms) {
-  const minutes = Math.floor(Math.max(0, ms) / 60000);
+  const minutes = Math.floor(nonNegative(ms) / 60000);
   if (minutes < 1)
     return "<1m";
   if (minutes < 60)

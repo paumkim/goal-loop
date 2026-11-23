@@ -129,7 +129,10 @@ export const outcomeStory = (input: { turns: number; elapsedMs: number; iteratio
 
 /** Minute-resolution duration for always-on indicators, so they re-render rarely. */
 export function formatDurationCoarse(ms: number): string {
-  const minutes = Math.floor(Math.max(0, ms) / 60_000)
+  // Clamp through `nonNegative` (finite or zero) like every other duration renderer: a non-finite clock
+  // would otherwise paint garbage ("NaNhNaNm"/"InfinityhNaNm") in always-on chrome. Finite inputs are
+  // unaffected — the clamp is the same Math.max(0, ms) as before.
+  const minutes = Math.floor(nonNegative(ms) / 60_000)
   if (minutes < 1) return "<1m"
   if (minutes < 60) return `${minutes}m`
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}m`

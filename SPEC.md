@@ -506,7 +506,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2286 -->
+<!-- spec-check files=143 tests=2287 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -11267,3 +11267,18 @@ Measured on 20000 calls with a cost + cached usage line (best of 100, paired run
 `/tmp/opencode/bench-misc.ts`. New regression pins the default result against an explicit
 `Number.MAX_SAFE_INTEGER` width across four spend shapes. Focused suite (core) 176 pass / 0 fail,
 177308 expect() calls; `tsc --noEmit` clean. Marker +1 test; no shipped-file change.
+
+## Workstream CXCIX — non-finite guard for the coarse duration renderer (format-coarse-nonfinite-guard) (2026-11-23)
+
+`formatDuration` clamps non-finite input to zero (Workstream LXXV regression), but `formatDurationCoarse`
+still did `Math.max(0, ms)` directly, so a NaN/Infinity clock painted `NaNhNaNm`/`InfinityhNaNm` in
+always-on chrome (HUD, pill, history rail, status dialog). The one call site that could see such a
+value (`attestation.ts`) already wrapped its input in `nonNegative()`, a sign the fragility was known
+at the boundary. The renderer now routes through that same `nonNegative` helper (finite or zero,
+never negative), which is the identical `Math.max(0, ms)` clamp for every finite input — behavior
+preserving on the whole valid domain, garbage-free on the invalid one.
+
+Verification: new regression in `test/core.test.ts` pins NaN, `+Infinity`, and `-Infinity` to `<1m`
+(the coarse rendering of a zero duration), mirroring the existing `formatDuration` non-finite pin.
+Focused suite: 178 pass / 0 fail, 177329 expect() calls. Full `bun run check` green after artifact
+regeneration; marker re-counted, no shipped file added or removed.
