@@ -11049,6 +11049,7 @@ and no test pin needs changing. Outputs are byte-identical: focused suites
 probed output unchanged (`normalize: "missing test output"`). Benchmark of mixed warm calls is
 unchanged at `0.05 ms / 2000 pairs` (best of 30) before and after. `tsc --noEmit` clean. Marker
 unchanged at `files=143 tests=2257` — no new tests.
+
 ## Workstream CLXXXII — drop an unused bootstrap workflow re-export (2026-11-23)
 
 Dead-export cleanup from a scan of every `export { ... } from` re-export block:
