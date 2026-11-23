@@ -9,12 +9,12 @@ The rules below are enforced by the binary, not by trust.
 ## The loop
 
 1. `coordinator claim <task> --agent <you> --paths <scope>` claims a lease and creates
-   `wt/<slug>` plus `worktrees/wt-<slug>`. `--paths` is a comma-separated scope:
+   `wt/<slug>` plus `worktree/wt-<slug>`. `--paths` is a comma-separated scope:
    `packages/coordinator/**`, `src/core/types.ts`, `test`, `.`. A `**` suffix matches the
    whole subtree; a bare path matches the file or the directory it names.
    Claiming an existing lease, or paths overlapping a live lease's scope, needs `--force`.
    Overlaps against already-merged (`done`) leases never block.
-2. Work in `worktrees/wt-<slug>` on branch `wt/<slug>`. Never work in the main checkout.
+2. Work in `worktree/wt-<slug>` on branch `wt/<slug>`. Never work in the main checkout.
    Never commit `dev` or `main` directly.
 3. Commit as you go. Commits are checked against your claimed paths at submit time.
    Files outside your claim fail `submit`. Override with `submit --force`; the override is
@@ -34,7 +34,7 @@ The rules below are enforced by the binary, not by trust.
 5. **The submitting agent runs `coordinator merge-next`** from the main repo when their lease is ready/next (unless a designated integrator/process is explicitly assigned). Do not wait on an unspecified other actor. Before running it: `queue/status --json` shows your lease submitted and next/unblocked; the worktree has no uncommitted changes and the branch tip contains all intended commits; the main checkout is acceptable for merge-next (exempt `.term/coordinator/state.json` dirt is fine — never hand-edit `dev`). Run the sanctioned path (`merge-next` trial-merge + gate), never `git merge`/commit to `dev` or `main`. "Done"/merged evidence comes from `merge-next` succeeding for that lease.
    `coordinator merge-next` merges the oldest submitted lease into `dev`:
    - builds `merge-check-<slug>-<ts>` from `dev` inside a dedicated
-     `worktrees/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
+     `worktree/wt-merge-check-<slug>-<ts>` worktree (never the main checkout),
    - re-counts the SPEC.md `<!-- spec-check files=N tests=N -->` marker on the merged tree
      itself (`bun scripts/spec-check.ts --write`), so nobody hand-bumps counters,
    - regenerates the changelog and page stamps on the merged tree
@@ -62,6 +62,18 @@ and prints recovery commands, e.g. `git stash apply refs/coordinator/saved/<slug
 The only exempt dirt is `.term/coordinator/state.json`. Claim and submit leave it dirty
 by design, and the merge flow restores it. Your uncommitted work never vanishes with a
 worktree.
+
+## Worktree directory: `worktree/` (legacy `worktrees/`)
+
+The default directory is `worktree/` — the coordinator's `WORKTREE_DIR` default, the
+`worktreeDir` value in `.term/coordinator/config.json`, and the scaffold/gitignore rule.
+Repos upgraded from `worktrees/` keep working: an old config value or an old lease `worktree`
+path is honoured and produces one warning per repo. `coordinator migrate-worktree-dir
+[--dry-run]` moves the physical directory to the configured dir, runs `git worktree repair`
+so git's linked-worktree records follow, rewrites `config.json` and every lease path, and
+clears the warning marker. It refuses while any active (`claimed`/`submitted`) lease still
+points into `worktrees/`, so it never moves another session's live worktree — re-run after
+those leases land. Both directory names stay gitignored until the move completes.
 
 ## Check merge status before claim / submit / merge-next
 
@@ -110,7 +122,7 @@ warns about shared-module semantic risk when two leases touch different files of
 
 The merge pipeline never force-lands a red tree. If your lease is the loser of a conflict:
 
-1. `git -C worktrees/wt-<slug> rebase dev`
+1. `git -C worktree/wt-<slug> rebase dev`
 2. resolve the conflict
 3. re-run the gate in your worktree (`bun run check`)
 4. `coordinator merge-next` again. Your lease is still submitted; no need to re-submit

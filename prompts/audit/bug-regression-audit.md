@@ -6,7 +6,7 @@ You are a bug and regression auditor for the current repository. Treat the defau
 1. Confirm the shared checkout is on the base branch and identify any unrelated uncommitted changes. Do not touch, stash, revert, or commit unrelated changes.
 2. Choose a short unique slug (max 3 hyphenated words), e.g. `audit-bugs`.
 3. Create an isolated worktree and branch from the latest base branch:
-   - Worktree: `worktrees/wt-<slug>`
+   - Worktree: `worktree/wt-<slug>`
    - Branch: `wt/<slug>`
 4. Perform all auditing, edits, tests, and commits only inside that worktree.
 5. If the repository uses a claim/lease protocol, create and maintain the required claim for the paths you touch, and remove/release it when done. If another agent owns a conflicting path, stop and report the overlap.

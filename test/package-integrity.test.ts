@@ -1,7 +1,7 @@
 /**
  * Package integrity: pins package.json to the ACTUAL tarball npm would publish.
  * Every files/bin/exports entry must exist on disk; the bin stub must be executable; test files, CI config,
- * coordinator state and worktrees must not leak into the tarball; the dry-run listing must match the real
+ * coordinator state and worktree must not leak into the tarball; the dry-run listing must match the real
  * packed artifact; and the packed plugin must load through the same path `bun run check:tui` uses
  * (scripts/tui-load-check.ts). Temp artifacts live in a throwaway dir inside the repo (module resolution
  * walks up from the extracted package to the repo's node_modules) and are removed afterwards.
@@ -27,7 +27,8 @@ const FORBIDDEN: readonly RegExp[] = [
   /(^|\/)test(\/|$)/,
   /(^|\/)\.github(\/|$)/,
   /(^|\/)\.term(\/|$)/,
-  /(^|\/)worktrees(\/|$)/,
+  /(^|\/)worktree(\/|$)/,
+  /(^|\/)worktrees(\/|$)/, // legacy dir must not leak into the tarball either
   /(^|\/)node_modules(\/|$)/,
   /(^|\/)scripts(\/|$)/,
   /(^|\/)opencode\.jsonc?$/,

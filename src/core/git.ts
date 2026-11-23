@@ -171,7 +171,7 @@ export function resolveCommitPolicy(request: CommitRequest, directory: string, c
         mode: "coordinator",
         reason: "coordinator mode forced by configuration",
         ...(coordinatorBin ? { coordinatorBin } : {}),
-        worktreeDir: "worktrees",
+        worktreeDir: "worktree",
       }
     }
   }
@@ -201,7 +201,7 @@ export function detectCoordinator(root: string, pluginBin?: string): Coordinator
   const detected = (hasConfig && hasState) || (binExists && (hasConfig || hasState))
   if (!detected) return undefined
   let devBranch: string | undefined
-  let worktreeDir = "worktrees"
+  let worktreeDir = "worktree"
   try {
     const raw = readFileSync(configPath, "utf8")
     const parsed = JSON.parse(raw) as Record<string, unknown>

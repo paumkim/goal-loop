@@ -24,7 +24,7 @@ No regular agent should write directly to the integration branch.
 ### Filesystem protocol (CLI-independent)
 Use repository-local files/state, for example:
 - Claim leases: `.tmp/claims/<task-id>.json` (or repo-equivalent)
-- Worktrees: `worktrees/wt-<slug>`
+- Worktrees: `worktree/wt-<slug>`
 - Audit branches: `wt/<slug>`
 - Coordinator-owned tracked metadata: a tracked directory such as `.term/coordinator/` or repo-equivalent
 
@@ -55,7 +55,7 @@ Rules:
 - Reject heartbeat/release from a non-owner agent.
 
 ### Worktree workflow
-- Provide helpers to create worktrees/branches (e.g. `git worktree add worktrees/wt-<slug> -b wt/<slug>`).
+- Provide helpers to create worktree/branches (e.g. `git worktree add worktree/wt-<slug> -b wt/<slug>`).
 - Agents work inside the worktree on the audit branch.
 - Integration runs in a clean integration worktree and merges one audit branch at a time under a coordinator lock.
 

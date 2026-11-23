@@ -1,6 +1,8 @@
 node_modules
 *.log
 .DS_Store
+worktree/
+# legacy: worktrees from before migrate-worktree-dir (old lease paths stay valid)
 worktrees/
 .term/coordinator/*.lock
 .term/coordinator/.claim-lock-file
@@ -9,7 +11,7 @@ worktrees/
 .term/coordinator/.merge-lock/
 .term/coordinator/.state-stash.*
 .term/coordinator/.state.*
-worktrees/wt-*
+worktree/wt-*
 .docs-watch-state.json
 .pkgtest-load/
 .package-integrity-test-*/

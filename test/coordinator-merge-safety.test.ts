@@ -37,7 +37,7 @@ const setup = (checkScript: string, extraConfig: Record<string, string> = {}) =>
   mkdirSync(join(dir, ".term", "coordinator"), { recursive: true })
   writeFileSync(
     join(dir, ".term/coordinator/config.json"),
-    JSON.stringify({ devBranch: "dev", worktreeDir: "worktrees", ...extraConfig }) + "\n",
+    JSON.stringify({ devBranch: "dev", worktreeDir: "worktree", ...extraConfig }) + "\n",
   )
   writeFileSync(join(dir, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}\n')
   git(dir, ["add", "-A"])
@@ -51,7 +51,7 @@ afterEach(() => {
 /** Claim, write files in the wt worktree, commit, submit. Returns the worktree path. */
 const claimCommitSubmit = (slug: string, files: Record<string, string>, date: string, paths = ".") => {
   expect(run(dir, ["claim", slug, "--agent", "t", "--paths", paths]).status).toBe(0)
-  const wt = join(dir, "worktrees", `wt-${slug}`)
+  const wt = join(dir, "worktree", `wt-${slug}`)
   for (const [rel, content] of Object.entries(files)) {
     const target = join(wt, rel)
     mkdirSync(join(target, ".."), { recursive: true })
@@ -113,7 +113,7 @@ describe("never destroy uncommitted work (requirement 1)", () => {
     const result = run(wtLease, ["merge-next"])
     expect(result.status).toBe(0)
     expect(savedRefs()).toEqual([])
-    expect(readdirSync(join(dir, "worktrees")).filter((f) => f === "wt-exempt")).toEqual([])
+    expect(readdirSync(join(dir, "worktree")).filter((f) => f === "wt-exempt")).toEqual([])
   })
 })
 
@@ -166,7 +166,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "scoped", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-scoped")
+    const wt = join(dir, "worktree", "wt-scoped")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "escaped.ts"), "not claimed\n")
@@ -183,7 +183,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "forced", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-forced")
+    const wt = join(dir, "worktree", "wt-forced")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "escaped.ts"), "not claimed\n")
@@ -200,7 +200,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true", { sharedPaths: "SPEC.md,docs/shared/" })
     const claim = run(dir, ["claim", "shared-user", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-shared-user")
+    const wt = join(dir, "worktree", "wt-shared-user")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     writeFileSync(join(wt, "SPEC.md"), "marker\n")
@@ -216,7 +216,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "changelog-touch", "--agent", "t", "--paths", "src/only.ts"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-changelog-touch")
+    const wt = join(dir, "worktree", "wt-changelog-touch")
     mkdirSync(join(wt, "src"), { recursive: true })
     writeFileSync(join(wt, "src", "only.ts"), "claimed\n")
     mkdirSync(join(wt, "docs"), { recursive: true })
@@ -231,7 +231,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "globbed", "--agent", "t", "--paths", "src/**"])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-globbed")
+    const wt = join(dir, "worktree", "wt-globbed")
     mkdirSync(join(wt, "src", "deep", "deeper"), { recursive: true })
     writeFileSync(join(wt, "src", "deep", "deeper", "file.ts"), "deep\n")
     git(wt, ["add", "-A"])
@@ -244,7 +244,7 @@ describe("lease-scoped paths, enforced at submit (requirement 3)", () => {
     setup("true")
     const claim = run(dir, ["claim", "warn-uncommitted", "--agent", "t", "--paths", "."])
     expect(claim.status).toBe(0)
-    const wt = join(dir, "worktrees", "wt-warn-uncommitted")
+    const wt = join(dir, "worktree", "wt-warn-uncommitted")
     writeFileSync(join(wt, "committed.txt"), "in\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "c"], "2026-11-02T10:00:00+00:00")
@@ -395,7 +395,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
   test("status --json includes per-lease worktree path, uncommitted count and merge flag", () => {
     setup("true")
     claimCommitSubmit("visible", { v: "y\n" }, "2026-11-02T10:00:00+00:00")
-    const wt = join(dir, "worktrees", "wt-visible")
+    const wt = join(dir, "worktree", "wt-visible")
     writeFileSync(join(wt, "loose.txt"), "loose\n")
     const result = run(dir, ["status", "--json"])
     expect(result.status).toBe(0)
@@ -408,7 +408,7 @@ describe("visibility: status, queue, doctor (requirement 7)", () => {
   test("status --json defaults to active leases + counts summary; --all includes done leases", () => {
     setup("true")
     claimCommitSubmit("historic", { h: "1\n" }, "2026-11-02T09:00:00+00:00", "h")
-    expect(run(join(dir, "worktrees", "wt-historic"), ["merge-next"]).status).toBe(0)
+    expect(run(join(dir, "worktree", "wt-historic"), ["merge-next"]).status).toBe(0)
     expect(lease("historic").status).toBe("done")
 
     const wt = claimCommitSubmit("active-lease", { a: "2\n" }, "2026-11-02T10:00:00+00:00", "a")
@@ -487,7 +487,7 @@ describe("scratch-branch cleanup (merge-next)", () => {
     const result = run(wtScratch, ["merge-next"])
     expect(result.status).toBe(0)
     expect(git(dir, ["branch", "--format=%(refname:short)", "--list", "merge-check-*"]).trim()).toBe("")
-    expect(readdirSync(join(dir, "worktrees")).filter((f) => f.startsWith("wt-merge-check-"))).toEqual([])
+    expect(readdirSync(join(dir, "worktree")).filter((f) => f.startsWith("wt-merge-check-"))).toEqual([])
   })
 })
 
@@ -502,14 +502,14 @@ describe("two agents, overlapping scopes, conflicting edits (requirement 8)", ()
 
     // agent A claims the shared scope and makes a green change
     expect(run(dir, ["claim", "agent-a", "--agent", "agent-a", "--paths", "src/**,SPEC.md"]).status).toBe(0)
-    const wtA = join(dir, "worktrees", "wt-agent-a")
+    const wtA = join(dir, "worktree", "wt-agent-a")
     writeFileSync(join(wtA, "src/shared.txt"), "good\nalpha\n")
     git(wtA, ["add", "-A"])
     git(wtA, ["commit", "-q", "-m", "alpha"], "2026-11-02T09:00:00+00:00")
 
     // agent B claims the same shared scope (forced: paths overlap) and makes a conflicting change
     expect(run(dir, ["claim", "agent-b", "--agent", "agent-b", "--paths", "src/**,SPEC.md", "--force"]).status).toBe(0)
-    const wtB = join(dir, "worktrees", "wt-agent-b")
+    const wtB = join(dir, "worktree", "wt-agent-b")
     writeFileSync(join(wtB, "src/shared.txt"), "good\nbeta\n")
     git(wtB, ["add", "-A"])
     git(wtB, ["commit", "-q", "-m", "beta"], "2026-11-02T10:00:00+00:00")
@@ -564,7 +564,7 @@ describe("two agents, overlapping scopes, conflicting edits (requirement 8)", ()
     expect(git(dir, ["rev-parse", "dev"]).trim()).toBe(devBefore)
     expect(lease("red-agent").status).toBe("submitted")
     // and a follow-up good merge lands after the red one is fixed on the branch
-    const wt = join(dir, "worktrees", "wt-red-agent")
+    const wt = join(dir, "worktree", "wt-red-agent")
     writeFileSync(join(wt, "src/red.txt"), "good\nfixed\n")
     git(wt, ["add", "-A"])
     git(wt, ["commit", "-q", "-m", "fix to green"], "2026-11-02T11:00:00+00:00")
@@ -587,7 +587,7 @@ describe("semantic and drift guards (Workstream CXIII)", () => {
     git(dir, ["add", "-A"])
     git(dir, ["commit", "-q", "--amend", "--no-edit"], "2026-11-01T10:00:00+00:00")
     claimCommitSubmit("sem-a", { "src/core/a.ts": "a\n" }, "2026-11-02T10:00:00+00:00", "src/core/a.ts")
-    const result = run(join(dir, "worktrees", "wt-sem-a"), ["merge-next"])
+    const result = run(join(dir, "worktree", "wt-sem-a"), ["merge-next"])
     expect(result.status).toBe(0)
     expect(result.stderr).toContain("SEMANTIC-RISK")
     expect(result.stderr).toContain("sem-b")

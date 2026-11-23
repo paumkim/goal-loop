@@ -438,7 +438,7 @@ describe("plugin setup", () => {
     try {
       expect(existsSync(join(directory, ".term/coordinator/config.json"))).toBe(true)
       expect(existsSync(join(directory, ".term/coordinator/state.json"))).toBe(true)
-      expect(existsSync(join(directory, "worktrees"))).toBe(true)
+      expect(existsSync(join(directory, "worktree"))).toBe(true)
       expect(existsSync(join(directory, ".term/goal-loop"))).toBe(true)
       expect(existsSync(join(directory, "SPEC.md"))).toBe(true)
       expect(existsSync(join(directory, "MAINTAINER.md"))).toBe(true)
@@ -465,10 +465,10 @@ describe("plugin setup", () => {
       expect(existsSync(join(root, ".term/coordinator/config.json"))).toBe(true)
       expect(existsSync(join(root, ".term/coordinator/state.json"))).toBe(true)
       expect(existsSync(join(root, ".term/goal-loop"))).toBe(true)
-      expect(existsSync(join(root, "worktrees"))).toBe(true)
-      // The launch subfolder must never receive its own .term or worktrees.
+      expect(existsSync(join(root, "worktree"))).toBe(true)
+      // The launch subfolder must never receive its own .term or worktree/.
       expect(existsSync(join(docs, ".term"))).toBe(false)
-      expect(existsSync(join(docs, "worktrees"))).toBe(false)
+      expect(existsSync(join(docs, "worktree"))).toBe(false)
       expect(existsSync(join(docs, "SPEC.md"))).toBe(false)
       // The commit rule still resolves the coordinator at the repo root, not the subfolder.
       const goal = calls.commands.find((command) => command.name === "goal")

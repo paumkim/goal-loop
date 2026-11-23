@@ -8,7 +8,7 @@ set -uo pipefail
 #   1. Uncommitted bytes are never destroyed. Any worktree removal first stashes the
 #      non-exempt dirt into a named ref (refs/coordinator/saved/<slug>-<ts>) and prints
 #      recovery commands. Only .term/coordinator/state.json dirt is exempt.
-#   2. Merge work happens in dedicated worktrees (worktrees/wt-merge-check-*), never in
+#   2. Merge work happens in dedicated worktrees (worktree/wt-merge-check-*), never in
 #      the main checkout. The main checkout must be on dev and tracked-clean at the
 #      start of a merge step and is fast-forwarded onto the verified scratch branch.
 #   3. Submit enforces the lease's claimed paths against the commits on the branch;
@@ -37,17 +37,17 @@ CONFIG_FILE="$DATA_DIR/config.json"
 STATE_FILE="$DATA_DIR/state.json"
 
 DEV_BRANCH="dev"
-WORKTREE_DIR="worktrees"
+WORKTREE_DIR="worktree"
 SHARED_PATHS_DEFAULT=".term/coordinator/state.json,docs/changelog.html"
 
 read_config() {
   DEV_BRANCH="dev"
-  WORKTREE_DIR="worktrees"
+  WORKTREE_DIR="worktree"
   SHARED_PATHS="$SHARED_PATHS_DEFAULT"
   if [ -f "$CONFIG_FILE" ]; then
     if command -v jq >/dev/null 2>&1; then
       DEV_BRANCH=$(jq -r '.devBranch // "dev"' "$CONFIG_FILE" 2>/dev/null || printf 'dev')
-      WORKTREE_DIR=$(jq -r '.worktreeDir // "worktrees"' "$CONFIG_FILE" 2>/dev/null || printf 'worktrees')
+      WORKTREE_DIR=$(jq -r '.worktreeDir // "worktree"' "$CONFIG_FILE" 2>/dev/null || printf 'worktree')
       SHARED_PATHS=$(jq -r '.sharedPaths // ".term/coordinator/state.json,docs/changelog.html"' "$CONFIG_FILE" 2>/dev/null || printf '%s' "$SHARED_PATHS_DEFAULT")
     else
       local v
@@ -59,9 +59,29 @@ read_config() {
       [ -n "$v" ] && SHARED_PATHS="$v"
     fi
     [ -z "$DEV_BRANCH" ] && DEV_BRANCH="dev"
-    [ -z "$WORKTREE_DIR" ] && WORKTREE_DIR="worktrees"
+    [ -z "$WORKTREE_DIR" ] && WORKTREE_DIR="worktree"
     [ -z "$SHARED_PATHS" ] && SHARED_PATHS="$SHARED_PATHS_DEFAULT"
   fi
+  # Legacy fallback: an old config (or an old lease path) still selects "worktrees".
+  # Honour it — old leases must stay valid — but warn once per repo about the migration.
+  warn_legacy_worktree_dir
+}
+
+LEGACY_WORKTREE_DIR="worktrees"
+LEGACY_WARN_FILE="$DATA_DIR/.legacy-worktree-warned"
+
+warn_legacy_worktree_dir() {
+  [ "${WORKTREE_DIR:-}" != "$LEGACY_WORKTREE_DIR" ] && return 0
+  [ -f "$LEGACY_WARN_FILE" ] && return 0
+  printf 'warning: config uses legacy worktree dir "%s"; it still works, but run "coordinator migrate-worktree-dir" to move to "worktree"\n' "$LEGACY_WORKTREE_DIR" >&2
+  printf '%s\n' "$(now_iso)" > "$LEGACY_WARN_FILE" 2>/dev/null || true
+}
+
+warn_legacy_lease_path() {
+  case "${1:-}" in
+    worktrees/*) warn_legacy_worktree_dir ;;
+    *) return 0 ;;
+  esac
 }
 
 need_jq() {
@@ -602,7 +622,7 @@ do_claim() {
     exit 1
   fi
 
-  # create worktree worktrees/wt-<slug>; idempotent but fail hard on error
+  # create worktree worktree/wt-<slug>; idempotent but fail hard on error
   mkdir -p "$MAIN_ROOT/$WORKTREE_DIR"
   local wt_path="$MAIN_ROOT/$worktree"
   if [ ! -d "$wt_path" ]; then
@@ -675,6 +695,7 @@ do_submit() {
   status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
   lease_branch=$(jq -r --arg s "$slug" '.leases[$s].branch // empty' "$STATE_FILE" 2>/dev/null || true)
   lease_worktree=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || true)
+  warn_legacy_lease_path "$lease_worktree"
   lease_agent=$(jq -r --arg s "$slug" '.leases[$s].agent // empty' "$STATE_FILE" 2>/dev/null || true)
   claimed_paths=$(jq -r --arg s "$slug" '.leases[$s].paths // ""' "$STATE_FILE" 2>/dev/null || printf '')
   if [ -z "$status" ]; then
@@ -736,6 +757,11 @@ do_submit() {
     printf 'warning: worktree has %s uncommitted file(s); they will NOT be merged. merge-next preserves them in refs/coordinator/saved/%s-<ts>\n' "$uncommitted" "$slug" >&2
   fi
 
+  # Keep the worktree path the lease actually lives at. When the default dir moved to
+  # "worktree", an old lease still checked out under "worktrees/" must not be rewritten
+  # to a path that does not exist — the legacy fallback keeps old lease paths valid.
+  local record_worktree="${cur_worktree_rel:-$expected_worktree}"
+
   # Final transition is atomic and re-validated under the lock.
   state_lock
   release_submit_lock() { state_unlock; trap - EXIT; }
@@ -743,16 +769,17 @@ do_submit() {
   status=$(jq -r --arg s "$slug" '.leases[$s].status // empty' "$STATE_FILE" 2>/dev/null || true)
   lease_branch=$(jq -r --arg s "$slug" '.leases[$s].branch // empty' "$STATE_FILE" 2>/dev/null || true)
   lease_worktree=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || true)
+  warn_legacy_lease_path "$lease_worktree"
   if [ "$status" != "claimed" ] || [ "$lease_branch" != "$branch" ] || { [ -n "$lease_worktree" ] && [ "$lease_worktree" != "$cur_worktree_rel" ] && [ "$lease_worktree" != "$expected_worktree" ]; }; then
     printf 'error: lease %s changed or does not match the current worktree; re-run submit\n' "$slug" >&2
     release_submit_lock
     exit 1
   fi
   if [ "${#violations[@]}" -gt 0 ]; then
-    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$expected_worktree" --arg ts "$ts" --argjson files "$files_json" \
+    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$record_worktree" --arg ts "$ts" --argjson files "$files_json" \
       '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts | .leases[$slug].branch = $branch | .leases[$slug].worktree = $worktree | .leases[$slug].forcedScope = true | .leases[$slug].forcedScopeAt = $ts | .leases[$slug].forcedScopeFiles = $files'
   else
-    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$expected_worktree" --arg ts "$ts" \
+    state_write_filter --arg slug "$slug" --arg branch "$branch" --arg worktree "$record_worktree" --arg ts "$ts" \
       '.leases[$slug].status = "submitted" | .leases[$slug].submittedAt = $ts | .leases[$slug].branch = $branch | .leases[$slug].worktree = $worktree'
   fi
   release_submit_lock
@@ -828,6 +855,7 @@ do_release() {
 
   branch=$(jq -r --arg s "$slug" '.leases[$s].branch // ("wt/" + $s)' "$STATE_FILE" 2>/dev/null || printf 'wt/%s' "$slug")
   wt_rel=$(jq -r --arg s "$slug" --arg d "$WORKTREE_DIR" '.leases[$s].worktree // ($d + "/wt-" + $s)' "$STATE_FILE" 2>/dev/null || printf '%s/wt-%s' "$WORKTREE_DIR" "$slug")
+  warn_legacy_lease_path "$wt_rel"
   wt_abs="$MAIN_ROOT/$wt_rel"
 
   local ahead=0 against
@@ -1114,8 +1142,8 @@ do_merge_next() {
   # Stash the dirt for the duration of the merge and restore it before the lease is recorded done
   # (or on any failure), so the submitted record is never lost.
   local scratch="merge-check-${slug}-${epoch}-$$"
-  local merge_wt="$MAIN_ROOT/worktrees/wt-${scratch}"
-  local merge_wt_rel="worktrees/wt-${scratch}"
+  local merge_wt="$MAIN_ROOT/$WORKTREE_DIR/wt-${scratch}"
+  local merge_wt_rel="$WORKTREE_DIR/wt-${scratch}"
 
   release_merge_lock() {
     restore_state_stash
@@ -1215,6 +1243,7 @@ do_merge_next() {
   # committing after submit — the branch we would merge is not the work it validated. Refuse, dev untouched.
   # Uncommitted bytes are NOT a failure: the existing saved-ref mechanism preserves them (see below); report them.
   wt_rel=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || printf '')
+  warn_legacy_lease_path "$wt_rel"
   [ -z "$wt_rel" ] && wt_rel="$WORKTREE_DIR/wt-$slug"
   wt_abs="$MAIN_ROOT/$wt_rel"
   if [ -d "$wt_abs" ]; then
@@ -1258,7 +1287,7 @@ do_merge_next() {
   if ! git -C "$MAIN_ROOT" branch "$scratch" "$DEV_BRANCH" >/dev/null 2>&1; then
     fail "cannot create scratch branch $scratch"
   fi
-  mkdir -p "$MAIN_ROOT/worktrees"
+  mkdir -p "$MAIN_ROOT/$WORKTREE_DIR"
   if ! git -C "$MAIN_ROOT" worktree add "$merge_wt" "$scratch" >/dev/null 2>&1; then
     fail "cannot create merge worktree $merge_wt" "git -C $MAIN_ROOT branch -D $scratch"
   fi
@@ -1411,7 +1440,7 @@ do_merge_next() {
   # merged result before the fast-forward; this checks that dev actually landed clean and the marker is present.
   # It reports problems but never undoes a successful merge.
   local health_dirty health_marker
-  health_dirty=$(git -C "$MAIN_ROOT" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -v ' \.term/coordinator/\.' | grep -v ' worktrees/' | grep -c . || true)
+  health_dirty=$(git -C "$MAIN_ROOT" status --porcelain 2>/dev/null | grep -v ' \.term/coordinator/state\.json$' | grep -v ' \.term/coordinator/\.' | grep -v -F " $WORKTREE_DIR/" | grep -c . || true)
   health_marker=$(grep -o 'spec-check files=[0-9]* tests=[0-9]*' "$MAIN_ROOT/SPEC.md" 2>/dev/null | head -1 || true)
   if [ "${health_dirty:-0}" = "0" ]; then
     printf 'post-merge: health ok (clean tracked tree; %s)\n' "${health_marker:-marker absent}"
@@ -1443,6 +1472,7 @@ finish_merged_lease() {
   # best-effort cleanup: remove the worktree and the wt branch so the repo does not fill with merged checkouts
   local wt_rel wt_abs
   wt_rel=$(jq -r --arg s "$slug" '.leases[$s].worktree // empty' "$STATE_FILE" 2>/dev/null || printf '')
+  warn_legacy_lease_path "$wt_rel"
   if [ -n "${wt_rel:-}" ]; then
     wt_abs="$MAIN_ROOT/$wt_rel"
     safe_remove_worktree "$wt_abs" "$slug" "merged lease" || true
@@ -1571,7 +1601,7 @@ do_merge_abort() {
   fi
   local scratch wt
   for scratch in $(git -C "$MAIN_ROOT" branch --format='%(refname:short)' --list "merge-check-${slug}-*"); do
-    wt="$MAIN_ROOT/worktrees/wt-${scratch}"
+    wt="$MAIN_ROOT/$WORKTREE_DIR/wt-${scratch}"
     if [ -d "$wt" ]; then safe_remove_worktree "$wt" "$scratch" "merge-abort" >/dev/null 2>&1 || true; fi
     git -C "$MAIN_ROOT" branch -D "$scratch" >/dev/null 2>&1 || true
     printf 'discarded %s\n' "$scratch"
@@ -1791,8 +1821,78 @@ do_doctor() {
   [ "$fails" -eq 0 ]
 }
 
+do_migrate_worktree_dir() {
+  need_jq
+  ensure_state
+  read_config
+  local legacy="worktrees" target="$WORKTREE_DIR" dry=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --dry-run) dry=1; shift ;;
+      -h|--help)
+        printf 'usage: coordinator migrate-worktree-dir [--dry-run]\n\n  Move the legacy worktrees/ directory to the configured worktree dir (default worktree/), repair git worktree records, and rewrite config/lease paths. Refuses while any live lease still uses the legacy dir.\n'
+        return 0 ;;
+      *) printf 'unknown migrate-worktree-dir option: %s\n' "$1" >&2; return 1 ;;
+    esac
+  done
+  if [ "$target" = "$legacy" ]; then
+    printf 'error: coordinator still selects legacy "%s"; set worktreeDir to "worktree" first\n' "$legacy" >&2
+    return 1
+  fi
+  local src="$MAIN_ROOT/$legacy" dst="$MAIN_ROOT/$target"
+  if [ ! -d "$src" ]; then
+    printf 'error: no legacy worktree dir at %s (nothing to migrate)\n' "$src" >&2
+    return 1
+  fi
+  if [ -e "$dst" ]; then
+    printf 'error: destination %s already exists\n' "$dst" >&2
+    return 1
+  fi
+  # Never move another session's live worktree: refuse while any active lease points there.
+  local blockers
+  blockers=$(jq -r --arg d "$legacy/" '.leases | to_entries[] | select(.value.status != "done") | select((.value.worktree // "") | startswith($d)) | .key' "$STATE_FILE" 2>/dev/null || true)
+  if [ -n "$blockers" ]; then
+    printf 'error: active leases still use %s/: %s\n' "$legacy" "$(printf '%s' "$blockers" | tr '\n' ' ')" >&2
+    printf 'recovery: let those leases merge/release, then re-run migrate-worktree-dir\n' >&2
+    return 1
+  fi
+  if [ "$dry" -eq 1 ]; then
+    printf 'dry-run: would move %s -> %s and rewrite config/lease paths\n' "$src" "$dst"
+    return 0
+  fi
+  if ! mv "$src" "$dst"; then
+    printf 'error: failed to move %s to %s\n' "$src" "$dst" >&2
+    return 1
+  fi
+  # git records the absolute path of each linked worktree; repair them after the move.
+  local -a repair=()
+  local wt
+  for wt in "$dst"/wt-*; do
+    [ -d "$wt" ] && repair+=("$wt")
+  done
+  if [ ${#repair[@]} -gt 0 ]; then
+    if ! git -C "$MAIN_ROOT" worktree repair "${repair[@]}" >/dev/null 2>&1; then
+      printf 'warning: git worktree repair failed; verify with: git -C %s worktree list\n' "$MAIN_ROOT" >&2
+    fi
+  fi
+  if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
+    local ctmp
+    ctmp=$(mktemp "$DATA_DIR/.config.XXXXXX") || ctmp=""
+    if [ -n "$ctmp" ] && jq --arg d "$target" '.worktreeDir = $d' "$CONFIG_FILE" > "$ctmp" 2>/dev/null; then
+      chmod 644 "$ctmp" 2>/dev/null || true
+      mv -f "$ctmp" "$CONFIG_FILE"
+    else
+      [ -n "$ctmp" ] && rm -f "$ctmp"
+    fi
+  fi
+  state_jq --arg old "$legacy/" --arg new "$target/" \
+    '.leases |= with_entries(if ((.value.worktree // "") | startswith($old)) then .value.worktree = ($new + (.value.worktree | ltrimstr($old))) else . end)'
+  rm -f "$LEGACY_WARN_FILE" 2>/dev/null || true
+  printf 'migrated worktree dir: %s -> %s\n' "$legacy" "$target"
+}
+
 show_help() {
-  printf 'usage: coordinator <claim|heartbeat|submit|release|merge-next|merge-done|merge-abort|merge-status|await-merge|status|queue|doctor> [--help]\n'
+  printf 'usage: coordinator <claim|heartbeat|submit|release|merge-next|merge-done|merge-abort|merge-status|await-merge|migrate-worktree-dir|status|queue|doctor> [--help]\n'
   printf '  claim <task> --agent <you> --paths <scope> [--force]   claim a wt/<slug> lease (existing lease and overlapping live paths need --force)\n'
   printf '  heartbeat                                           liveness check\n'
   printf '  submit [--force]                                    submit the current wt/<slug> claimed lease; commits are checked against the claimed paths (--force overrides, logged to the lease)\n'
@@ -1804,6 +1904,7 @@ show_help() {
   printf '  queue [--json]                                      submitted leases FIFO with position, wait time and ETA\n'
   printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
   printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
+  printf '  migrate-worktree-dir [--dry-run]                    move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
   printf '  doctor                                              health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock\n'
 }
 
@@ -1828,6 +1929,8 @@ main() {
       shift; do_merge_status "$@" ;;
     await-merge)
       shift; do_await_merge "$@" ;;
+    migrate-worktree-dir)
+      shift; do_migrate_worktree_dir "$@" ;;
     status)
       shift; do_status "$@" ;;
     queue)

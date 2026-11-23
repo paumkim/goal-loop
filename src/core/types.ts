@@ -33,7 +33,7 @@ export interface CommitPolicy {
   readonly mode?: CommitMode
   /** Absolute path to the coordinator wrapper; omitted when no binary can be located (never repo-relative). */
   readonly coordinatorBin?: string
-  /** Worktree directory, e.g. `worktrees`. */
+  /** Worktree directory, e.g. `worktree`. */
   readonly worktreeDir?: string
 }
 

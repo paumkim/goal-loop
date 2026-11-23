@@ -114,7 +114,7 @@ describe("resolveCommitPolicy", () => {
   test("a coordinator repo resolves to coordinator mode on auto", () => {
     const root = repo(["dev", "main"], "dev")
     mkdirSync(join(root, ".term", "coordinator"), { recursive: true })
-    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktrees"}')
+    writeFileSync(join(root, ".term/coordinator/config.json"), '{"devBranch":"dev","worktreeDir":"worktree"}')
     writeFileSync(join(root, ".term/coordinator/state.json"), '{"version":1,"leases":{},"mergeLock":null}')
     mkdirSync(join(root, "packages/coordinator/bin"), { recursive: true })
     writeFileSync(join(root, "packages/coordinator/bin/coordinator"), "#!/bin/sh\n")
@@ -124,7 +124,7 @@ describe("resolveCommitPolicy", () => {
     expect(policy.branch).toBe("dev")
     expect(policy.coordinatorBin?.endsWith("packages/coordinator/bin/coordinator")).toBe(true)
     expect(policy.coordinatorBin).toBe(join(root, "packages/coordinator/bin/coordinator"))
-    expect(policy.worktreeDir).toBe("worktrees")
+    expect(policy.worktreeDir).toBe("worktree")
   })
   test("detectCoordinator needs two markers", () => {
     const root = repo(["dev"], "dev")
