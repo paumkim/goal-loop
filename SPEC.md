@@ -226,6 +226,16 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Prompter crash-safety coverage (`prompter-journal-tests`, 2026-11-23): `src/prompter/state.ts` (`reduceJournal`
+  via `loadState`) and `src/prompter/apply.ts` (`recordOutcome`) had no tests despite owning the append-only
+  journal's torn-tail recovery and the `finishedAt` lifecycle. Added `test/prompter-state.test.ts` (missing file,
+  last-record-wins, torn tail, malformed/schema-invalid lines, `byStatus`) and `test/prompter-apply.test.ts`
+  (no finish time for `running`/`interrupted` before and after persistence, ISO finish time for terminal
+  records, zero-valued optional fields preserved, empty strings omitted). Also replaced two truthy-only
+  verification assertions in `test/verify.test.ts` with the exact `scopeDecision` and `nextAction` strings the
+  controller emits. No production behavior changed; focused suites green, marker re-counted 2339 -> 2345,
+  full check green.
+
 - Dead echo wrapper removal (`dead-condition-echo-wrapper`, 2026-11-23): `conditionEchoMatches` in
   `src/core/evaluator-agent.ts` was a two-line wrapper (`echoedCondition(body)` then `echoMatches`). A repo-wide
   sweep found only its definition, two exclusive tests and historical SPEC-workstreams notes — the production
@@ -603,7 +613,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2339 -->
+<!-- spec-check files=144 tests=2345 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
