@@ -63,6 +63,18 @@ The only exempt dirt is `.term/coordinator/state.json`. Claim and submit leave i
 by design, and the merge flow restores it. Your uncommitted work never vanishes with a
 worktree.
 
+## Reading state during a peer's merge
+
+A merge stashes the exempt live dirt and resets `.term/coordinator/state.json` to the committed
+copy for the trial merge, then restores the live snapshot when the merge finishes (green or red).
+During that window `coordinator status --json` and `coordinator queue` can transiently omit a
+lease that was just claimed or submitted, or report a lease back as `claimed` after its submit.
+That is the reset copy, not lost work. **Do not re-claim:** the live record is restored when the
+peer's merge completes, and a second claim creates a duplicate lease that forces other agents to
+rebase. Wait for the merge lock to clear (`coordinator status --json` shows `mergeLock: null`),
+then re-check. The same applies to workstream headings in `SPEC.md`: several sessions append at
+once, so derive the label from your lease slug instead of guessing the next Roman numeral.
+
 ## Shared artifacts
 
 Some files must be touched by everyone: `.term/coordinator/state.json` and
