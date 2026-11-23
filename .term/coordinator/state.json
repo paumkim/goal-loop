@@ -6318,9 +6318,11 @@
       "paths": "src/core/prompts.ts,test/core.test.ts,SPEC.md",
       "branch": "wt/delegate-verdict-reword",
       "worktree": "worktree/wt-delegate-verdict-reword",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-23T12:08:40Z",
-      "submittedAt": "2026-11-23T12:09:07Z"
+      "submittedAt": "2026-11-23T12:09:07Z",
+      "mergedAt": "2026-11-23T12:31:10Z",
+      "mergedInto": "dev"
     },
     "doctor-check-names": {
       "agent": "build",
