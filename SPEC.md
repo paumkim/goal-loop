@@ -226,6 +226,11 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Compaction landing docs (`compaction-landing-doc-truth`, 2026-11-23): `docs/runtime.html` described landing as
+  "evidence-based" and introduced the arm-time path with an orphaned "Or a >= 10% drop" fragment, contradicting
+  the shipped controller: `onCompactionLanded()` records an ended event unconditionally, and only the arm-time
+  settle uses the 0.9 `BOUNDARY_DROP_FACTOR`. Rewritten as two explicit paths with the same "never silent" claim.
+  Documentation content only, no behavior change, marker unchanged, focused compaction tests and full check green.
 - HUD counter finite guard (`hud-counter-finite-guard`, 2026-11-23): a corrupt/non-finite legacy `turns`
   or `stall` counter painted `NaN`/`Infinity` in the pill and stall remedy. Both now route through the
   shared finite-or-zero clamp; the verdict trail stays authoritative and finite inputs are unchanged.
