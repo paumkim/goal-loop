@@ -6110,6 +6110,17 @@
       "submittedAt": "2026-11-23T07:31:13Z",
       "mergedAt": "2026-11-23T07:43:45Z",
       "mergedInto": "dev"
+    },
+    "live-judge-completion": {
+      "agent": "loop-worker",
+      "paths": "src/core/evaluator-agent.ts,src/core/prompts.ts,test/core.test.ts,test/loop.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/live-judge-completion",
+      "worktree": "worktree/wt-live-judge-completion",
+      "status": "done",
+      "createdAt": "2026-11-23T07:44:05Z",
+      "submittedAt": "2026-11-23T07:49:12Z",
+      "mergedAt": "2026-11-23T07:51:22Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
