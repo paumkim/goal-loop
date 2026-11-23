@@ -124,7 +124,6 @@ export function ensureStartupScaffold(options: StartupScaffoldOptions): Workflow
 export {
   appendGitignoreRules,
   docsReadmeTemplate,
-  ensureCoordinatorWorkplaceLayout,
   ensureGoalRuntimeLayout,
   ensureWorkflowDocs,
   maintainerTemplate,

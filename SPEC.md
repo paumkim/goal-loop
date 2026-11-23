@@ -11049,3 +11049,14 @@ and no test pin needs changing. Outputs are byte-identical: focused suites
 probed output unchanged (`normalize: "missing test output"`). Benchmark of mixed warm calls is
 unchanged at `0.05 ms / 2000 pairs` (best of 30) before and after. `tsc --noEmit` clean. Marker
 unchanged at `files=143 tests=2257` — no new tests.
+## Workstream CLXXXII — drop an unused bootstrap workflow re-export (2026-11-23)
+
+Dead-export cleanup from a scan of every `export { ... } from` re-export block:
+`ensureCoordinatorWorkplaceLayout` was re-exported from `src/core/bootstrap.ts` even though no file
+imports that symbol from `bootstrap.ts` (the only importer of that name is `bootstrap.ts` itself,
+from `workflow.ts`). Removed the single re-export line; the function stays exported from its home
+module `src/core/workflow.ts` and its two internal call sites are unchanged. Evidence:
+`rg -n 'ensureCoordinatorWorkplaceLayout' src test scripts` → definition + internal uses only, no
+`import ... from bootstrap.ts`. `tsc --noEmit` clean; focused suite (bootstrap) 18 pass / 0 fail;
+full suite 2257 pass / 0 fail. No behavior or public runtime surface change. Marker unchanged at
+`files=143 tests=2257` — no new tests.
