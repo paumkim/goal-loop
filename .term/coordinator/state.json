@@ -5544,6 +5544,40 @@
       "worktree": "worktrees/wt-verdict-regex-precompile",
       "status": "claimed",
       "createdAt": "2026-11-23T01:03:22Z"
+    },
+    "verdict-pattern-precompile": {
+      "agent": "loop-worker",
+      "paths": "src/core/verdict.ts,test/verdict-intake.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/verdict-pattern-precompile",
+      "worktree": "worktrees/wt-verdict-pattern-precompile",
+      "status": "claimed",
+      "createdAt": "2026-11-23T01:08:31Z"
+    },
+    "verify-contract-trio": {
+      "agent": "build-agent",
+      "paths": "src/core/types.ts,src/core/config.ts,src/core/verify-matrix.ts,src/core/wire.ts,src/core/evaluator-agent.ts,test/verify-matrix-goal-declared.test.ts,test/core.test.ts",
+      "branch": "wt/verify-contract-trio",
+      "worktree": "worktrees/wt-verify-contract-trio",
+      "status": "submitted",
+      "createdAt": "2026-11-23T01:09:23Z",
+      "submittedAt": "2026-11-23T01:15:49Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T01:15:49Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "dist/tui.js"
+      ]
+    },
+    "fix-changelog-guidance": {
+      "agent": "loop-worker",
+      "paths": "AGENTS.md,docs/parallel-work.md",
+      "branch": "wt/fix-changelog-guidance",
+      "worktree": "worktrees/wt-fix-changelog-guidance",
+      "status": "done",
+      "createdAt": "2026-11-23T01:14:07Z",
+      "submittedAt": "2026-11-23T01:16:22Z",
+      "mergedAt": "2026-11-23T01:18:19Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
