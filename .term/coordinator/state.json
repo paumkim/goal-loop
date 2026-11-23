@@ -6258,6 +6258,17 @@
       "submittedAt": "2026-11-23T10:19:34Z",
       "mergedAt": "2026-11-23T10:21:44Z",
       "mergedInto": "dev"
+    },
+    "reset-context-in-place": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/",
+      "branch": "wt/reset-context-in-place",
+      "worktree": "worktree/wt-reset-context-in-place",
+      "status": "done",
+      "createdAt": "2026-11-23T10:35:43Z",
+      "submittedAt": "2026-11-23T10:46:07Z",
+      "mergedAt": "2026-11-23T10:48:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
