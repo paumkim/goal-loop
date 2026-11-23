@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { resolveConfig } from "../src/core/config.ts"
 import * as Prompt from "../src/core/prompts.ts"
 import type { CommitPolicy, GoalSnapshot, LoopEntry, Notice, UsageSnapshot } from "../src/core/types.ts"
-import { GoalController } from "../src/runtime/controller.ts"
+import { COMPACT_MISS_NOTICE, GoalController } from "../src/runtime/controller.ts"
 import type { BoundaryCompactResult } from "../src/runtime/compactor.ts"
 import type { BackgroundWork, Clock, EvaluationRequest, EvaluationResult, LoopSummaryRequest, NextGoalRequest, StoragePort } from "../src/runtime/ports.ts"
 import { GoalStore } from "../src/runtime/store.ts"
@@ -700,7 +700,7 @@ describe("/goal-loop", () => {
     expect(record.loopCompact).toMatchObject({ iteration: 4, misses: 2 })
     expect(h.compactCalls).toHaveLength(2)
     expect(h.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
-    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /did not land/i.test(n.message))).toBe(true)
+    expect(h.notices.some((n) => n.kind === "compact" && n.level === "warning" && /has not landed/i.test(n.message))).toBe(true)
   })
 
   test("a busy deferral counts as a miss but is never forced through", async () => {
@@ -927,15 +927,15 @@ describe("/goal-loop", () => {
     await arm() // miss 2: ONE warning (exact text), forced re-request
     expect(h4.compactCalls).toHaveLength(2)
     expect(h4.compactCalls[1]).toEqual({ sessionID: SID, opts: { force: true } })
-    const hostUnwilling = h4.notices.filter((n2) => n2.kind === "compact" && n2.level === "warning" && n2.message === "compaction did not land; loop is running hot; consider /compact manually")
+    const hostUnwilling = h4.notices.filter((n2) => n2.kind === "compact" && n2.level === "warning" && n2.message === COMPACT_MISS_NOTICE)
     expect(hostUnwilling).toHaveLength(1)
     await arm() // miss 3: trickle (3 % 3 === 0), no new warning
     expect(h4.compactCalls).toHaveLength(3)
     expect(h4.compactCalls[2]).toEqual({ sessionID: SID, opts: { force: true } })
-    expect(h4.notices.filter((n2) => n2.message === "compaction did not land; loop is running hot; consider /compact manually")).toHaveLength(1)
+    expect(h4.notices.filter((n2) => n2.message === COMPACT_MISS_NOTICE)).toHaveLength(1)
     await arm() // miss 4: backstop final warning, no request (4 % 3 !== 0)
     expect(h4.compactCalls).toHaveLength(3)
-    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing" && /trickle every 3rd arm/.test(n2.message))).toHaveLength(1)
+    expect(h4.notices.filter((n2) => n2.title === "Compaction not landing" && /after 4 armed iterations/.test(n2.message))).toHaveLength(1)
     await arm() // miss 5: silent, no request
     expect(h4.compactCalls).toHaveLength(3)
     await arm() // miss 6: trickle re-request — never permanent silence
@@ -2352,12 +2352,12 @@ describe("compaction landing detection + evaluator hardening — acceptance", ()
     h.nextGoals.push("v2 condition", "v3 condition")
     await h.turn(1) // request made; no landing observed yet
     await h.turn(1) // miss 1: silent count, no warning yet
-    expect(h.notices.filter((n) => n.message === "compaction did not land; loop is running hot; consider /compact manually")).toHaveLength(0)
+    expect(h.notices.filter((n) => n.message === COMPACT_MISS_NOTICE)).toHaveLength(0)
     h.verdicts.push(met("v3 done"))
     h.summaries.push("s3")
     h.nextGoals.push("v4 condition")
     await h.turn(1) // miss 2: the warning must fire now
-    const hostUnwilling = h.notices.filter((n) => n.kind === "compact" && n.level === "warning" && n.message === "compaction did not land; loop is running hot; consider /compact manually")
+    const hostUnwilling = h.notices.filter((n) => n.kind === "compact" && n.level === "warning" && n.message === COMPACT_MISS_NOTICE)
     expect(hostUnwilling).toHaveLength(1)
   })
 
