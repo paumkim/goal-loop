@@ -226,6 +226,15 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- Coordinator claim on every activation (`coordinator-claim-always-on`, 2026-11-23): the claim-before-edit flow
+  previously reached an agent only through the `/goal` kickoff directive and the config-gated system reminder —
+  both require an armed goal. An agent active in a coordinator repo with no goal (or with the reminder off) could
+  therefore edit on dev directly without ever seeing the lease/worktree rule. The context hook now injects the
+  one shared `coordinatorFlow` on every worker model request in a coordinator repo, independent of goal state or
+  config; judge and planner children are excluded because they never edit files. The system reminder no longer
+  repeats the same block when a live goal turns it on. Focused `plugin`/`core`/`commit-rule` suites 249 pass /
+  0 fail, with regressions pinning first-and-later activation, child exclusion, and the non-git no-op; full
+  `bun run check` green after artifact regeneration, marker re-counted, no shipped file added or removed.
 - Craft gap clearance (`craft-gap-clearance`, 2026-11-23): the README test badge still read 2228 against a
   2316-test marker; a user-facing loop-arm refusal exposed internal `Jaccard >= 0.6` thresholds; `shorten`
   in `src/prompter/driver.ts` duplicated `short` from `util.ts`; `isRecord` had three copies and
@@ -523,7 +532,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=143 tests=2317 -->
+<!-- spec-check files=143 tests=2320 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

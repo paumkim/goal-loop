@@ -17,7 +17,7 @@ import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/
 import { parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
-import { carriesGoalGrammar, compactGoalInstructions, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
+import { carriesGoalGrammar, compactGoalInstructions, coordinatorFlow, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
 import type { ModelRef, UsageSnapshot } from "./core/types.ts"
 import { createRpcHandlers } from "./rpc-handlers.ts"
 import { GoalRpc } from "./rpc.ts"
@@ -750,6 +750,19 @@ export default Plugin.define({
             sys.splice(i, 1)
           }
         }
+      }
+      // Standing activation rule: in a coordinator repo every worker request carries the claim-before-edit
+      // flow, not only requests that happen to have a live goal and the system reminder enabled. Without this,
+      // an agent can start editing on dev directly (no lease, no worktree) and never sees the rule until a goal
+      // is armed. Judge and planner children never edit files, so they keep their own prompts clean.
+      const standingPolicy = controller.commitForSession(event.sessionID)
+      if (
+        agentID !== EVALUATOR_AGENT_ID &&
+        agentID !== PLANNER_AGENT_ID &&
+        standingPolicy.required &&
+        standingPolicy.mode === "coordinator"
+      ) {
+        event.system.push({ type: "text", text: coordinatorFlow(standingPolicy) })
       }
       const live = controller.live(event.sessionID) !== undefined
       if (config.systemReminder) {
