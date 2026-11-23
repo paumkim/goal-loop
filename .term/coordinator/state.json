@@ -6143,6 +6143,30 @@
       "submittedAt": "2026-11-23T08:15:12Z",
       "mergedAt": "2026-11-23T08:19:18Z",
       "mergedInto": "dev"
+    },
+    "craft-gap-clearance": {
+      "agent": "orchestrator",
+      "paths": "src,SPEC.md,README.md,docs",
+      "branch": "wt/craft-gap-clearance",
+      "worktree": "worktree/wt-craft-gap-clearance",
+      "status": "done",
+      "createdAt": "2026-11-23T08:20:32Z",
+      "submittedAt": "2026-11-23T08:27:20Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-23T08:27:20Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-23T08:29:29Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-claim-always-on": {
+      "agent": "loop-worker",
+      "paths": "src/core/prompts.ts,src/index.ts,test/plugin.test.ts,test/commit-rule.test.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/coordinator-claim-always-on",
+      "worktree": "worktree/wt-coordinator-claim-always-on",
+      "status": "claimed",
+      "createdAt": "2026-11-23T08:27:38Z"
     }
   },
   "mergeLock": null,
