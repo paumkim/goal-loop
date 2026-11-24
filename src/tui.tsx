@@ -654,7 +654,7 @@ export default Plugin.define({
         // planner runs (or a late one after the arm event) resolves null or a stale terminal record;
         // reading that as the placeholder's completion is what flashed "loop complete", closed the
         // HUD and dropped the indicator. Keep the placeholder until the real arm snapshot lands.
-        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID)
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID, fromPull)
         // Same stale answer, delivered after arm: the cache now holds the real record, so identify it
         // by the planning window instead. Only pull-sourced answers are suppressed — a `changed`
         // event (including a user's `cleared`) is always authoritative.

@@ -368,28 +368,37 @@ describe("shouldKeepPlanningPlaceholder — the first-arm bar stays visible", ()
   const planning = (sessionID = "ses"): GoalSnapshot => ({ ...snap("active"), id: planningSnapshotId(sessionID), sessionID, queued: true })
 
   test("a null re-pull during planning is not the placeholder completing", () => {
-    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses")).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses", true)).toBe(true)
   })
 
   test("a stale terminal record from a previous goal is not the placeholder completing", () => {
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses")).toBe(true)
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses")).toBe(true)
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("failed"), "ses")).toBe(true)
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses")).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("failed"), "ses", true)).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses", true)).toBe(true)
   })
 
   test("the real arm snapshot replaces the placeholder — a live record is never swallowed", () => {
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("active"), "ses")).toBe(false)
-    expect(shouldKeepPlanningPlaceholder(planning(), snap("paused"), "ses")).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("active"), "ses", true)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("paused"), "ses", true)).toBe(false)
   })
 
   test("only the current session's placeholder is protected", () => {
-    expect(shouldKeepPlanningPlaceholder(planning("other"), null, "ses")).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning("other"), null, "ses", true)).toBe(false)
   })
 
   test("a real goal's live→terminal transition is untouched", () => {
-    expect(shouldKeepPlanningPlaceholder(snap("active"), snap("achieved"), "ses")).toBe(false)
-    expect(shouldKeepPlanningPlaceholder(snap("active"), null, "ses")).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(snap("active"), snap("achieved"), "ses", true)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(snap("active"), null, "ses", true)).toBe(false)
+  })
+
+  test("an authoritative terminal changed event replaces the placeholder (no phantom queued bar)", () => {
+    // arm()'s no-new-gap refusal emits a terminal achieved record straight to `changed` with a different
+    // id; no live snapshot follows in that path, so swallowing it strands the HUD/pill forever.
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses", false)).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses", false)).toBe(false)
   })
 })
 

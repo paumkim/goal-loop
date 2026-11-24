@@ -5937,7 +5937,7 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
-var shouldKeepPlanningPlaceholder = (previous, next, sessionID) => isPlanningSnapshot(previous, sessionID) && (next === null || !isLive(next.status));
+var shouldKeepPlanningPlaceholder = (previous, next, sessionID, fromPull) => isPlanningSnapshot(previous, sessionID) && fromPull && (next === null || !isLive(next.status));
 var PLANNING_PULL_GRACE_MS = 35000;
 var isStalePlanningPull = (planningAt, next, nowMs, graceMs = PLANNING_PULL_GRACE_MS) => planningAt !== undefined && nowMs - planningAt >= 0 && nowMs - planningAt < graceMs && (next === null || !isLive(next.status));
 function dropSessions(entries, ids, keep) {
@@ -7192,7 +7192,7 @@ var tui_default = Plugin.define({
           if (planningSeenAt.size > 64)
             planningSeenAt.clear();
         }
-        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID);
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID, fromPull);
         if (!planningInFlight && fromPull && isStalePlanningPull(planningSeenAt.get(sessionID), goal, Date.now()))
           planningInFlight = true;
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false;

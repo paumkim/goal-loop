@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-24T22:20:00Z",
+  "updatedAt": "2026-11-24T22:35:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -410,12 +410,13 @@
       "priority": 2,
       "impact": "high",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "src/core/entries.ts shouldKeepPlanningPlaceholder() returns true for ANY non-live next snapshot while the cached goal is a planning placeholder, and src/tui.tsx put() returns before setEntries on that flag. apply()'s no-new-gap refusal emits a terminal achieved record straight to `changed`; in that arm path no live snapshot ever follows, so the phantom queued HUD/pill never converges. The comment claiming `changed` events are never suppressed is only true for the isStalePlanningPull branch.",
       "improvement": "Gate shouldKeepPlanningPlaceholder on fromPull for terminal records, or let a terminal snapshot whose setAt postdates the placeholder replace it. Add a regression in test/entries.test.ts: an authoritative terminal snapshot with a different id must return false. Regenerate dist/tui.js with bun run compile.",
       "evidence": [
         "Read-only audit 2026-11-23 of commits 0acda52 / 83779c1 (TUI first-arm HUD fixes).",
-        "Deterministic trigger: prior completed condition C, /goal-loop with a near-duplicate of C, planner emits planning-<sid>, arm() no-new-gap gate commits terminal achieved and emits it; put() suppresses via planningInFlight and early-returns."
+        "Deterministic trigger: prior completed condition C, /goal-loop with a near-duplicate of C, planner emits planning-<sid>, arm() no-new-gap gate commits terminal achieved and emits it; put() suppresses via planningInFlight and early-returns.",
+        "Landed 2026-11-24 on wt/terminal-planning-placeholder-authority: shouldKeepPlanningPlaceholder now takes fromPull; authoritative `changed` terminal events replace the placeholder; regression in test/entries.test.ts; full check green (157 files, 2409 tests)."
       ],
       "dedupeKeys": [
         "planning-placeholder-terminal-authority",
@@ -425,7 +426,8 @@
       "related": [
         "hud-planning-grace",
         "hud-stays-visible"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:35:00Z"
     },
     {
       "id": "planning-placeholder-live-pull-eviction",
