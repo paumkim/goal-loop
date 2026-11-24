@@ -6595,6 +6595,17 @@
       "submittedAt": "2026-11-24T01:33:55Z",
       "mergedAt": "2026-11-24T01:36:10Z",
       "mergedInto": "dev"
+    },
+    "share-tui-status-command": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,dist/tui.js",
+      "branch": "wt/share-tui-status-command",
+      "worktree": "worktree/wt-share-tui-status-command",
+      "status": "done",
+      "createdAt": "2026-11-24T01:36:45Z",
+      "submittedAt": "2026-11-24T01:38:50Z",
+      "mergedAt": "2026-11-24T01:41:06Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
