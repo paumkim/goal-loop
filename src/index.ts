@@ -410,7 +410,8 @@ export default Plugin.define({
         // synthetic is durably admitted to the parent's inbox, so the parent sees the judge's context and is pulled
         // into a turn it never had to take. The terminal toast, HUD pill and durable record carry the visible,
         // non-waking outcome instead. Loop-step children remain parented to this child, so the host reports those
-        // where they belong. The verdict was already read from this child's own event stream.        // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
+        // where they belong. The verdict was already read from this child's own event stream.
+        // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
         if (failure !== undefined) throw asEvaluatorError(failure)
         return { text: verdict, id }
       } finally {
