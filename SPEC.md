@@ -1850,6 +1850,9 @@ verified with `bun run check`; no rendered string, error posture or runtime deci
 - Stale spec: the "Installed-binary divider rename" section described `src/core/opencode-labels.ts` and the
   `patch-host` CLI command, both removed by the provider-compaction plugin-only fix documented above. The section is
   deleted so SPEC.md matches the tree instead of advertising a patch path that no longer exists.
+- Doc accuracy: `docs/config.html` and `README.md` said `evaluator.mode` governs the opt-in `consensus: 2` second
+  vote. In `src/runtime/evaluator.ts` that vote is gated only on `consensus` and uses `evaluator.model`; `mode` is
+  consulted only for the `/goal-loop` summarize and next-condition steps. The two descriptions now say so.
 
 Verification: full `bun run check` green per unit; SPEC marker re-counted after the self-test removal.
 
