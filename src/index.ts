@@ -56,12 +56,16 @@ const COLD_REPLAY = { summary: "", native: { messages: [] } }
 const EVALUATION_SUMMARY_CHARS = 4_000
 
 /**
- * The verdict evaluator child created for each working session. After a met verdict the loop's summarizer and
- * next-goal planner are spawned as children of that evaluator session, so planning continues inside it instead of
- * starting another fresh child of the working session. Keyed by the working session id: the runtime already threads
- * that id through every loop call, so no controller or port contract changes.
+ * The one evaluator child session per working session. The child is created with the working session as its
+ * `parentID`, so OpenCode shows it as the goal's subagent instead of a new top-level session, and it is reused for
+ * every verdict and loop generation instead of being recreated each turn. Keyed by the working session id: the
+ * runtime already threads that id through every loop call, so no controller or port contract changes. Cleared on
+ * dispose so a plugin reload starts with fresh children.
  */
-const verdictChildBySession = new Map<string, string>()
+const evaluatorChildBySession = new Map<string, string>()
+
+/** The arm-time planner child: one parent-linked subagent per working session, reused on every arm. */
+const plannerChildBySession = new Map<string, string>()
 
 /**
  * The worker's reply can still be landing when the turn ends and the harness builds the judge prompt (a small model
@@ -312,13 +316,12 @@ export default Plugin.define({
       },
     }
 
-    // Judge child created by the harness for every verdict. It has no parent link: a parent-linked child makes the
-    // host deliver its own "↳ Evaluator finished" completion and wake the working parent unconditionally, which
-    // wastes a turn after a verdict the harness has already read. The verdict still comes from the child's own event
-    // stream and `Evaluator.evaluate` decides: `met` ends the goal (or arms the next loop iteration), `not_met` is
-    // the only path that dispatches a continuation steer. The child stays navigable (hung) after it finishes; no
-    // completion context is delivered into the working session. Tracked so the generate/context hooks can shape the
-    // judge's generation without touching worker sessions.
+    // The harness owns one evaluator subagent child per working session. It is created with the working session as
+    // its parentID, so OpenCode shows it as a subagent instead of a new top-level session, and it is reused for every
+    // verdict and loop generation. The verdict still comes from the child's own event stream and `Evaluator.evaluate`
+    // decides: `met` ends the goal (or arms the next loop iteration), `not_met` is the only path that dispatches a
+    // continuation steer. Tracked so the generate/context hooks can shape the child's generation without touching
+    // worker sessions. Any host completion report is stripped from model-bound context below.
     const evaluatorChildren = new Set<string>()
     /** Defensive strip for `<subagent>` completion reports attributed to a judge or arm-time planner child. The
      * verdict / planned condition comes from the child's event stream, never from a report, so a stray report must
@@ -334,27 +337,28 @@ export default Plugin.define({
     }
 
     /**
-     * One evaluator child generation. Verdict spawns (no explicit parent) record their child id for the working
-     * session so later loop-step generations can be parented to that evaluator child. Loop planner spawns pass the
-     * recorded id explicitly and are not recorded again. Always returns the child id with its text.
+     * One generation on the working session's evaluator subagent child. The child is created on first use with the
+     * working session as its parent, then prompted again on later turns and loop steps. No fresh top-level session
+     * is spawned for a verdict. Returns the reused child id with this generation's text.
      */
     const spawnEvaluator = async (
       sessionID: string,
       model: ModelRef,
       prompt: string,
       signal: AbortSignal,
-      parentID?: string,
     ): Promise<{ text: string; id: string }> => {
-      const { id } = await ctx.session.create({
-        location: ctx.location,
-        ...(parentID ? { parentID } : {}),
-        title: EVALUATOR_AGENT_TITLE,
-        agent: EVALUATOR_AGENT_ID,
-        model: model as any,
-      } as any)
-      // Judge affinity belongs to the goal-owning parent session. No descendant ever spawns a verdict, so a
-      // worker subagent cannot overwrite the parent's verdict child.
-      if (!parentID) verdictChildBySession.set(sessionID, id)
+      let id = evaluatorChildBySession.get(sessionID)
+      if (!id) {
+        const created = await ctx.session.create({
+          location: ctx.location,
+          parentID: sessionID,
+          title: EVALUATOR_AGENT_TITLE,
+          agent: EVALUATOR_AGENT_ID,
+          model: model as any,
+        } as any)
+        id = created.id
+        evaluatorChildBySession.set(sessionID, id)
+      }
       evaluatorChildren.add(id)
       const abort = new AbortController()
       let answer = ""
@@ -393,30 +397,34 @@ export default Plugin.define({
         // The signal must reach the host prompt: a child turn that ignores an external abort used to keep
         // `spawnEvaluator` parked after `done` had resolved, defeating the evaluator's timeout. No resume opt-out
         // here, exactly as for the planner child: the host only wakes a session's execution when `resume !== false`,
-        // so that flag left this fresh child admitted to the inbox but never running (no text deltas, no terminal
-        // event, 120s timeout). Race so any abort converges immediately; the text still comes from `done` (the
-        // child's text deltas), never from the host's completion report.
+        // so that flag left the child admitted to the inbox but never running (no text deltas, no terminal event,
+        // 120s timeout). The model rides with each prompt so a /model switch mid-goal reaches the reused child.
+        // Race so any abort converges immediately; the text still comes from `done` (the child's text deltas),
+        // never from the host's completion report.
         await Promise.race([
           ctx.session.prompt({
             sessionID: id,
             text: prompt,
+            model: model as any,
           } as any, { signal }).catch((error: unknown) => fail(error)),
           done.then(() => undefined),
         ])
         const verdict = await done
-        // The verdict child stays parentless and navigable (hung); the host delivers no completion and wakes nobody.
         // Do not admit a `<subagent>` completion into the working session: even queued with `resume: false`, a
-        // synthetic is durably admitted to the parent's inbox, so the parent sees the judge's context and is pulled
-        // into a turn it never had to take. The terminal toast, HUD pill and durable record carry the visible,
-        // non-waking outcome instead. Loop-step children remain parented to this child, so the host reports those
-        // where they belong. The verdict was already read from this child's own event stream.
-        // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
+        // synthetic is durably admitted to the parent's inbox, so the parent would see the judge's context and be
+        // pulled into a turn it never had to take. The terminal toast, HUD pill and durable record carry the visible
+        // outcome. The verdict was already read from this child's own event stream. Throw after the text is
+        // collected so callers can classify a quota error and pause instead of retrying.
         if (failure !== undefined) throw asEvaluatorError(failure)
         return { text: verdict, id }
       } finally {
         signal.removeEventListener("abort", onAbort)
         evaluatorChildren.delete(id)
-        // Judge children persist and stay navigable: no `session.remove` here.
+        // A failed or interrupted generation may have left the child in a bad state; drop it so the next generation
+        // starts from a clean subagent. Successful children stay in the map and are reused.
+        if ((failure !== undefined || signal.aborted) && evaluatorChildBySession.get(sessionID) === id) {
+          evaluatorChildBySession.delete(sessionID)
+        }
       }
     }
 
@@ -425,10 +433,11 @@ export default Plugin.define({
     const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
       stripGoalEvaluations((await ctx.session.context({ sessionID }, { signal })).filter((message) => !isPluginReport(message)))
 
-    // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in a
-    // parentless judge child on the session's current model, then pass the child's text through the same contract
-    // guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable text throws, so
-    // `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale verdict.
+    // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in the
+    // working session's reused evaluator subagent child on the session's current model, then pass the child's text
+    // through the same contract guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable
+    // text throws, so `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale
+    // verdict.
     const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
       // `sessionID` is always the goal-owning parent: descendant sessions never spawn a verdict (the harness
       // injects their reports back into the parent instead). The parent's reply is the evidence; the bundled
@@ -491,23 +500,26 @@ export default Plugin.define({
       const model = await sessionModel(sessionID, budget).catch(() => undefined)
       if (!model) return undefined
       emit.notice({ sessionID, kind: "set", level: "info", title: "goal-loop", message: "Distilling goal into a concise condition…" })
-      let id: string
-      try {
-        // No parent link: a parent-linked child makes the host deliver its own "↳ Goal planner finished"
-        // completion into the working transcript and wake the parent while planning is still running — and again
-        // later when the planner is slow — even though the planned condition is consumed internally from the
-        // child's event stream below. Parentless like the judge; the plugin emits a queued, non-waking report.
-        id = (await ctx.session.create({
-          location: ctx.location,
-          title: PLANNER_AGENT_TITLE,
-          agent: PLANNER_AGENT_ID,
-          model: model as any,
-        } as any)).id
-      } catch (error) {
-        log.warn("goal planner child could not be created", { error: String(error) })
-        return undefined
+      let id = plannerChildBySession.get(sessionID)
+      if (!id) {
+        try {
+          // The planner is a parent-linked subagent child of the goal session, not a new top-level session. Like the
+          // evaluator child it is reused on later arms; the plan is consumed from its own event stream below.
+          id = (await ctx.session.create({
+            location: ctx.location,
+            parentID: sessionID,
+            title: PLANNER_AGENT_TITLE,
+            agent: PLANNER_AGENT_ID,
+            model: model as any,
+          } as any)).id
+          plannerChildBySession.set(sessionID, id)
+        } catch (error) {
+          log.warn("goal planner child could not be created", { error: String(error) })
+          return undefined
+        }
       }
       plannerChildren.add(id)
+      let childFailed = false
       const abort = new AbortController()
       let answer = ""
       let finish!: () => void
@@ -523,7 +535,7 @@ export default Plugin.define({
               if (data.sessionID !== id) continue
               if (evt.type === "session.text.delta") answer += String(data.delta ?? "")
               if (evt.type === "session.execution.succeeded") { finish(); return }
-              if (evt.type === "session.execution.failed") { abort.abort(); finish(); return }
+              if (evt.type === "session.execution.failed") { childFailed = true; abort.abort(); finish(); return }
             }
           } catch {
             // Subscription closed (completion or abort); the text collected so far is the answer.
@@ -531,30 +543,33 @@ export default Plugin.define({
           finish()
         })()
         await Promise.race([
-          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw) } as any, { signal: budget }).catch(() => undefined),
+          ctx.session.prompt({ sessionID: id, text: planGoalRequest(raw), model: model as any } as any, { signal: budget }).catch(() => undefined),
           done.then(() => undefined),
         ])
         await done
-        // The planner child has no parent link, so the host delivers no completion and wakes nobody. Do not admit a
-        // `<subagent>` synthetic either: even queued with `resume: false`, a synthetic is durably admitted to the
-        // parent's inbox, so the parent sees the planner's context and is pulled into a turn it never had to take.
-        // The plan is consumed here from this child's own event stream; the planning notice, goal bar and durable
-        // record carry the visible outcome. The child stays navigable (hung) after it finishes.
+        // Do not admit a `<subagent>` synthetic: even queued with `resume: false`, a synthetic is durably admitted
+        // to the parent's inbox, so the parent sees the planner's context and is pulled into a turn it never had to
+        // take. The plan is consumed here from this child's own event stream; the planning notice, goal bar and
+        // durable record carry the visible outcome. The reused child stays navigable after it finishes.
         return parsePlan(answer)
       } catch (error) {
+        childFailed = true
         log.warn("goal planner failed", { error: String(error) })
         return undefined
       } finally {
         budget.removeEventListener("abort", onAbort)
         plannerChildren.delete(id)
+        if ((childFailed || budget.aborted) && plannerChildBySession.get(sessionID) === id) {
+          plannerChildBySession.delete(sessionID)
+        }
       }
     }
 
     const evaluator = new Evaluator(
       {
         nativeVerdict,
-        // Session mode is still a real child turn: the child has no parent conversation, so embed the parent
-        // digest in the prompt (the rubric says "conversation above"). Every judge path now clears the gate.
+        // Loop steps reuse the same evaluator subagent child. Its own context has no parent conversation, so embed
+        // the parent digest in the prompt (the rubric says "conversation above"). Every judge path clears the gate.
         sessionGenerate: async (sessionID, prompt, signal) => {
           const model = await sessionModel(sessionID, signal)
           if (!model) throw new Error("inherited evaluator model unavailable: session has no active model")
@@ -564,12 +579,11 @@ export default Plugin.define({
             model,
             `<conversation>\n${transcript}\n</conversation>\n\n${prompt}`,
             signal,
-            verdictChildBySession.get(sessionID),
           )
           return text
         },
         modelGenerate: async (sessionID, model, prompt, signal) => {
-          const { text } = await spawnEvaluator(sessionID, model, prompt, signal, verdictChildBySession.get(sessionID))
+          const { text } = await spawnEvaluator(sessionID, model, prompt, signal)
           return text
         },
         context: evaluatorContext,
@@ -962,6 +976,8 @@ export default Plugin.define({
 
     return async () => {
       lifetime.abort()
+      evaluatorChildBySession.clear()
+      plannerChildBySession.clear()
       for (const timer of updateTimers) clearTimeout(timer)
       updateTimers.clear()
       await restoring
