@@ -1378,6 +1378,14 @@ export class GoalController {
 
   private async evaluate(record: GoalRecord, runtime: Runtime, epoch: number, tools: number): Promise<void> {
     const { config, clock, session } = this.deps
+    // A check-in armed while the turn was deferred on background work must not survive into evaluation: when it
+    // fires mid-judge it sends a "still waiting" steer that wakes the parent before the verdict lands (and before
+    // the loop planner that follows it has armed the next iteration). Disarm it on every evaluation path — turn
+    // end, busy-check fallback, background drain, restore — so no stale wake timer outlives the deferral.
+    if (runtime.timer !== undefined) {
+      clock.clearTimeout(runtime.timer)
+      runtime.timer = undefined
+    }
     const sessionID = record.sessionID
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
@@ -2576,7 +2584,7 @@ export class GoalController {
 
   /** Background work is running: skip this evaluation and arm an idle check-in (30m, then x2 up to x4). */
   private defer(record: GoalRecord, runtime: Runtime, work: BackgroundWork, tools: number) {
-    const { config, clock } = this.deps
+    const { clock } = this.deps
     runtime.carriedToolCalls += tools
     runtime.iterationDeferred = true
     const firstDefer = runtime.deferredSince === undefined
@@ -2587,15 +2595,34 @@ export class GoalController {
       record.waitingSince = runtime.deferredSince
       void this.commit(record)
     }
+    this.armCheckin(record, runtime, work)
+  }
+
+  /**
+   * Arm the next idle check-in for a deferred turn. `defer()` uses it for the first check-in; `checkin()` re-arms
+   * through it while a judge/planner is still in flight, so the check waits for completion instead of firing
+   * prematurely on a long-running task. Falls back to `now` when the deferral has already been cleared.
+   */
+  private armCheckin(record: GoalRecord, runtime: Runtime, previous: BackgroundWork) {
+    const { config, clock } = this.deps
     if (config.checkinMinutes === 0 || record.checkins >= config.maxIdleCheckins) return
     const interval = config.checkinMinutes * 60_000 * Math.min(2 ** record.checkins, 4)
-    const due = (runtime.lastCheckinAt ?? runtime.deferredSince) + interval
-    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, work).catch((e) => this.deps.log.error("goal check-in failed", { error: errorMessage(e) })))
+    const due = (runtime.lastCheckinAt ?? runtime.deferredSince ?? clock.now()) + interval
+    this.schedule(runtime, Math.max(0, due - clock.now()), () => void this.checkin(record, runtime, previous).catch((e) => this.deps.log.error("goal check-in failed", { error: errorMessage(e) })))
   }
 
   private async checkin(record: GoalRecord, runtime: Runtime, previous: BackgroundWork) {
     const { config, clock, background } = this.deps
     if (this.goals.get(record.sessionID) !== record || record.status !== "active" || this.running.has(record.sessionID)) return
+    // A deferral's check-in must not wake the parent while the turn's judge/verifier (or the loop planner that
+    // follows a met verdict) is still running: the verdict's own continuation is about to deliver the result.
+    // No live deferral means the check is obsolete (evaluation already started) — drop it. Still deferred but
+    // evaluating means a straggler timer caught the judge mid-flight — re-arm so it waits for completion.
+    if (runtime.deferredSince === undefined && record.waitingSince === undefined) return
+    if (runtime.evaluating) {
+      this.armCheckin(record, runtime, previous)
+      return
+    }
     const epoch = runtime.epoch
     const work = await background.busy(record.sessionID).catch(() => previous)
     if (this.stale(record, runtime, epoch)) return
