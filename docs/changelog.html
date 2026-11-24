@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-24 00:40 UTC</code></td><td>fix(evaluator): keep judge completion out of the parent turn</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 00:28 UTC</code></td><td>fix(runtime): keep evaluator chip out of the parent's turn context</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 00:21 UTC</code></td><td>fix(runtime): stop arm-time planner completion from waking the parent</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 00:01 UTC</code></td><td>fix(runtime): judge subagent work on completion, attributed to the goal owner</td><td>commit</td></tr>
@@ -41,7 +42,6 @@
 <tr><td><code>2026-11-23 08:29 UTC</code></td><td>refactor(scripts): share one color palette across the five render fixtures</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 08:08 UTC</code></td><td>fix(index): plain-language text for update-check failure notice</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 07:53 UTC</code></td><td>fix(evaluator): remove legacy fresh-session routing</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 07:16 UTC</code></td><td>fix(evaluator): spawn the judge as a parent-linked child like the planner</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
