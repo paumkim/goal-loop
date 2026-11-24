@@ -6659,11 +6659,14 @@
     },
     "timer-wait-for-completion": {
       "agent": "orchestrator",
-      "paths": "src/runtime/controller.ts",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,test/loop.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
       "branch": "wt/timer-wait-for-completion",
       "worktree": "worktree/wt-timer-wait-for-completion",
-      "status": "claimed",
-      "createdAt": "2026-11-24T04:00:27Z"
+      "status": "done",
+      "createdAt": "2026-11-24T04:20:25Z",
+      "submittedAt": "2026-11-24T04:20:49Z",
+      "mergedAt": "2026-11-24T04:30:39Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
