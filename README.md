@@ -171,8 +171,8 @@ Full reference table: see [docs/config.html](https://paumkim.github.io/goal-loop
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `model` | — | Fallback model for `evaluator.model` |
-| `evaluator.model` | session model | Independent model that evaluates goal completion; set to `inherit` (aliases `session`/`parent`/`current`/`active`) to judge on the parent session's current model instead of a pinned one |
-| `evaluator.mode` | `auto` | Evaluator mode: `session`, `independent`, or `auto` |
+| `evaluator.model` | session model | Model for the opt-in `consensus: 2` second vote and `/goal-loop` summarize/next-condition steps — the per-turn verdict always runs on the session's own model. `inherit` (aliases `session`/`parent`/`current`/`active`) follows the parent session's current model instead of a pinned one |
+| `evaluator.mode` | `auto` | `session` / `independent` / `auto`, for the opt-in `consensus: 2` second vote and `/goal-loop` summarize/next-condition generation only — the per-turn verdict is always the worker's native `evaluator` subagent child |
 | `evaluator.maxTranscriptChars` | `20000` | Max transcript digest characters for evaluation |
 | `evaluator.maxOutputTokens` | `4096` | Max token budget for evaluator verdict |
 | `evaluator.timeoutMs` | `120000` | Evaluation call timeout in milliseconds |
