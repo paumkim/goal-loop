@@ -233,9 +233,15 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
   released the HUD and dropped the pill before `arm()` landed. `core/types.ts` now owns the
   `planning-<sessionID>` id contract (shared with `controller.showPlanning`), `core/entries.ts`
   exports the pure `shouldKeepPlanningPlaceholder` guard, and `put()` keeps the live placeholder in
-  cache until an authoritative live snapshot replaces it. A genuine live→terminal transition is
-  untouched; the 45s acknowledgment still governs real completions. `test/entries.test.ts` pins the
-  null / stale-terminal / real-arm / wrong-session cases; focused suites and full check green.
+  cache until an authoritative live snapshot replaces it. A re-pull's reply is composed before it is
+  delivered: one issued while the planner had no record can carry `null` or the previous goal's
+  terminal snapshot and land *after* the arm event, when the cache no longer identifies the
+  placeholder. `isStalePlanningPull` suppresses pull-sourced null/terminal answers for
+  `PLANNING_PULL_GRACE_MS` (35s) after the placeholder was seen; `changed` events — including a user's
+  `cleared` — are never suppressed, and a real completion re-converges on the next stale tick.
+  A genuine live→terminal transition is untouched; the 45s acknowledgment still governs real
+  completions. `test/entries.test.ts` pins the null / stale-terminal / real-arm / wrong-session /
+  late-pull / grace-expiry cases; focused suites and full check green.
 
 - Backtick-fence dedup (`dossier-fence-helper`, 2026-11-23): `inlineCode` and `fenceBlock` in
   `src/core/dossier.ts` each scanned the text for the longest backtick run to size their fence. Extracted
@@ -638,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2359 -->
+<!-- spec-check files=144 tests=2364 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

@@ -5931,6 +5931,8 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   return changed ? out : entries;
 }
 var shouldKeepPlanningPlaceholder = (previous, next, sessionID) => isPlanningSnapshot(previous, sessionID) && (next === null || !isLive(next.status));
+var PLANNING_PULL_GRACE_MS = 35000;
+var isStalePlanningPull = (planningAt, next, nowMs, graceMs = PLANNING_PULL_GRACE_MS) => planningAt !== undefined && nowMs - planningAt >= 0 && nowMs - planningAt < graceMs && (next === null || !isLive(next.status));
 function dropSessions(entries, ids, keep) {
   if (ids.length === 0)
     return entries;
@@ -6897,7 +6899,7 @@ var tui_default = Plugin.define({
       get: (sessionID) => rpc.get({
         sessionID
       }, at(sessionID)),
-      put: (sessionID, goal) => put(sessionID, goal)
+      put: (sessionID, goal) => put(sessionID, goal, true)
     });
     const goalMirror = createGoalMirror();
     const refreshFromStorage = async (sessionID) => {
@@ -6905,17 +6907,25 @@ var tui_default = Plugin.define({
         const goal = goalMirror.read(sessionID, context.location?.directory);
         if (goal === undefined)
           return false;
-        put(sessionID, goal);
+        put(sessionID, goal, true);
         return true;
       } catch {
         return false;
       }
     };
-    const put = (sessionID, goal) => {
+    const planningSeenAt = new Map;
+    const put = (sessionID, goal, fromPull = false) => {
       let planningInFlight = false;
       try {
         const previous = entries()[sessionID]?.goal;
+        if (isPlanningSnapshot(goal, sessionID)) {
+          planningSeenAt.set(sessionID, Date.now());
+          if (planningSeenAt.size > 64)
+            planningSeenAt.clear();
+        }
         planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID);
+        if (!planningInFlight && fromPull && isStalePlanningPull(planningSeenAt.get(sessionID), goal, Date.now()))
+          planningInFlight = true;
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false;
         const wasLive = previous != null && isLive(previous.status);
         const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status);
