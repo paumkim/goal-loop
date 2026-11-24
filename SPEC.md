@@ -1773,6 +1773,31 @@ runtime `plannerCreate.parentID === undefined` assertion; focused plugin suite 5
 invariant-sweep and spec-check all ok. Landed initially via `88bcbec` → merge `7c05365`; the no-report follow-up
 is included here.
 
+## Workstream concurrency-audit — provable races fixed in coordinator, runtime and plugin teardown (2026-11-24)
+
+Concurrency audit of the repo's three serialization regimes: the coordinator's flock + per-state mutex
+(`.state.lock`, fd 8; `.merge-lock-file`, fd 9), the runtime's per-session promise chain (`GoalStore.enqueue`)
+plus `Runtime.epoch` / identity guards, and the plugin wiring's fire-and-forget setup work. Findings that were
+purely timing-dependent without a reachable interleaving were left alone; the provable ones were fixed with the
+mechanism each subsystem already had.
+
+- `packages/coordinator/bin/coordinator`: first-time `ensure_state` now re-checks and installs under the existing
+  fd 8 state lock (two initializers can no longer clobber a lease written between check and rename). The merge
+  lock's stale predicate is shared with `merge-status` / `await-merge` (dead holder pid or 3600s age), so a crash
+  no longer blocks `merge-next` for the remaining 60-minute dir window; the stale `mergeLock` is now cleared under
+  the state lock instead of a best-effort subshell. The flock target is truncated rather than unlinked on release,
+  keeping one inode for the lock's lifetime. Holder publication uses `mktemp` + `mv`, so unlocked readers never
+  see a torn line. Two test hooks widen the critical sections deterministically.
+- `src/runtime/controller.ts`: `onExecutionSucceeded` sets `dropStragglerSucceeded` once the success is consumed,
+  so a duplicate `succeeded` with a distinct event id cannot bump the epoch again and supersede its own turn.
+  Cleared on the next `execution.started`, exactly like the failure / interrupt paths.
+- `src/index.ts`: setup keeps the in-flight `restore()` promise and teardown awaits it before `controller.dispose()`,
+  so restore cannot adopt goals or commit after disposal's flush.
+
+Regression tests: `test/coordinator-concurrency-audit.test.ts` pins all four coordinator interleavings (each
+fails before its fix), `test/controller.test.ts` pins the straggler drop, `test/plugin.test.ts` pins that no
+storage write lands after teardown. Full checks re-run green.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in

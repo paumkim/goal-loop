@@ -1807,3 +1807,50 @@ describe("/reset-context drops context in place", () => {
     }
   })
 })
+
+describe("restore cannot outlive plugin teardown", () => {
+  test("a restore still awaiting storage does not write after dispose", async () => {
+    const directory = repository()
+    const { ctx, storage } = context(directory)
+    const record = {
+      version: 1,
+      id: "goal_restored",
+      sessionID: "ses_1",
+      directory,
+      condition: "the parser is correct",
+      status: "active",
+      setAt: 1_000_000,
+      startedAt: 1_000_000,
+      turns: 1,
+      stall: 0,
+      retries: 0,
+      checkins: 0,
+      baseline: { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+      history: [],
+      pendingEvaluation: { phase: "evaluate", condition: "the parser is correct", turn: 1, tools: [] },
+    }
+    storage.set("goal/v1/ses_1", structuredClone(record))
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    ;(ctx.storage as any).scan = async () => {
+      await gate
+      return { entries: [{ key: "goal/v1/ses_1", value: structuredClone(record) }] }
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    let writes = 0
+    const originalSet = ctx.storage.set
+    ;(ctx.storage as any).set = async (key: string, value: unknown) => {
+      writes++
+      return originalSet(key, value)
+    }
+    // Teardown begins while restore is parked on the scan. Release the gate shortly afterwards:
+    // a correct disposer waits for restore and all writes land before it resolves.
+    const disposing = dispose()
+    setTimeout(() => release(), 20)
+    await disposing
+    const writesAtTeardown = writes
+    await new Promise((r) => setTimeout(r, 50))
+    // Without awaiting restore, adopt + resumePendingEvaluations commit after dispose's flush.
+    expect(writes).toBe(writesAtTeardown)
+  })
+})

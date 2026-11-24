@@ -1046,6 +1046,10 @@ export class GoalController {
       this.deps.log.info("goal evaluation straggler dropped", { sessionID, awaitingExecution: runtime.awaitingExecution, dropStragglerSucceeded: runtime.dropStragglerSucceeded })
       return
     }
+    // This success is consumed. A second `succeeded` for the same execution (distinct event id, so
+    // the router's dedupe cannot catch it) must not bump the epoch again and supersede this turn.
+    // The marker is cleared by the next execution.started, exactly like the failure/interrupt paths.
+    runtime.dropStragglerSucceeded = true
     const epoch = ++runtime.epoch
     const tools = runtime.toolCalls
     runtime.toolCalls = 0

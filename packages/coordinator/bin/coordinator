@@ -94,19 +94,27 @@ need_jq() {
 ensure_state() {
   mkdir -p "$DATA_DIR"
   if [ ! -f "$STATE_FILE" ]; then
-    local tmp
-    tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { printf 'error: mktemp failed\n' >&2; exit 1; }
-    printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$tmp" || {
-      rm -f "$tmp"
-      printf 'error: could not initialize %s (write failed)\n' "$STATE_FILE" >&2
-      exit 1
-    }
-    chmod 644 "$tmp" 2>/dev/null || true
-    mv "$tmp" "$STATE_FILE" || {
-      rm -f "$tmp"
-      printf 'error: could not initialize %s (rename failed)\n' "$STATE_FILE" >&2
-      exit 1
-    }
+    # The existence check and the install must be one critical section: two first-time callers otherwise
+    # both observe a missing file and the second mv clobbers a lease written between the two checks.
+    state_lock
+    if [ ! -f "$STATE_FILE" ]; then
+      local tmp
+      tmp=$(mktemp "$DATA_DIR/.state.XXXXXX") || { state_unlock; printf 'error: mktemp failed\n' >&2; exit 1; }
+      printf '{"version":1,"leases":{},"mergeLock":null}\n' > "$tmp" || {
+        rm -f "$tmp"; state_unlock
+        printf 'error: could not initialize %s (write failed)\n' "$STATE_FILE" >&2
+        exit 1
+      }
+      chmod 644 "$tmp" 2>/dev/null || true
+      # Test hook: widen the first-initialization window so a concurrent initializer can be reproduced deterministically.
+      if [ -n "${COORDINATOR_TEST_STATE_INIT_SLEEP:-}" ]; then sleep "$COORDINATOR_TEST_STATE_INIT_SLEEP"; fi
+      mv "$tmp" "$STATE_FILE" || {
+        rm -f "$tmp"; state_unlock
+        printf 'error: could not initialize %s (rename failed)\n' "$STATE_FILE" >&2
+        exit 1
+      }
+    fi
+    state_unlock
   fi
 }
 
@@ -196,6 +204,27 @@ merge_holder_alive() {
     ''|*[!0-9]*) return 1 ;;
   esac
   kill -0 "$1" 2>/dev/null
+}
+
+# One staleness predicate for every consumer: a holder is reclaimable when its pid is dead or its
+# recorded start is past the same 3600s window merge-status and await-merge use.
+merge_holder_stale() {
+  local line pid started epoch age
+  # Only the lock dir's holder is written by a merge under the flock. The lock-file record is a
+  # legacy fallback for readers; treating it as proof of a crashed merge would reclaim a lock that
+  # was never owned by a live merge process.
+  line=$(cat "$lock_dir/holder" 2>/dev/null || true); line=${line%$'\n'}
+  pid=$(merge_holder_field "$line" pid)
+  started=$(merge_holder_field "$line" started)
+  if [ -n "$pid" ] && ! merge_holder_alive "$pid"; then return 0; fi
+  if [ -n "$started" ]; then
+    epoch=$(iso_to_epoch "$started")
+    if [ "${epoch:-0}" -gt 0 ]; then
+      age=$(( $(now_epoch) - epoch ))
+      [ "$age" -gt 3600 ] && return 0
+    fi
+  fi
+  return 1
 }
 
 # True when the existing merge-lock flock can be acquired non-blockingly.
@@ -1092,8 +1121,10 @@ do_merge_next() {
     fi
   fi
   if ! mkdir "$lock_dir" 2>/dev/null; then
-    # stale lock handling: a lock dir older than 60 minutes is reclaimed — and we say exactly what we reclaimed
-    if [ -d "$lock_dir" ] && [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
+    # Stale lock handling: an old dir, a dead holder pid, or a holder past the shared reclaim window.
+    # The last two match merge-status/await-merge, which otherwise advertise "safe to retry" while
+    # merge-next refuses the lock for the remaining minutes.
+    if [ -d "$lock_dir" ] && { [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +60 2>/dev/null)" ] || merge_holder_stale; }; then
       local holder reclaimed_age
       holder=$(cat "$lock_dir/holder" 2>/dev/null || cat "$lock_file" 2>/dev/null || printf 'slug=? (no holder was recorded)')
       reclaimed_age=$(( ( $(now_epoch) - $(stat -c %Y "$lock_dir" 2>/dev/null || printf '0') ) / 60 ))
@@ -1106,19 +1137,11 @@ do_merge_next() {
         { exec 9>&-; } 2>/dev/null || true
         exit 1
       fi
-      # the stale holder died without releasing: clear its mergeLock so `doctor` stops failing forever
-      # (best-effort; never fail the reclaim over bookkeeping)
-      (
-        exec 8<>"$DATA_DIR/.state.lock" 2>/dev/null || exit 0
-        if command -v flock >/dev/null 2>&1; then flock 8 || exit 0; fi
-        _ml_tmp=$(mktemp "$DATA_DIR/.state.XXXXXX" 2>/dev/null) || exit 0
-        if jq '.mergeLock = null' "$STATE_FILE" > "$_ml_tmp" 2>/dev/null; then
-          chmod 644 "$_ml_tmp" 2>/dev/null || true
-          mv "$_ml_tmp" "$STATE_FILE"
-        else
-          rm -f "$_ml_tmp"
-        fi
-      ) || true
+      # The stale holder died without releasing: clear its mergeLock under the same state flock used
+      # by every other write, so `doctor` does not keep failing on a lock nobody holds.
+      state_lock
+      state_write_filter '.mergeLock = null'
+      state_unlock
       if ! mkdir "$lock_dir" 2>/dev/null; then
         printf 'error: merge lock held\n' >&2
         { exec 9>&-; } 2>/dev/null || true
@@ -1133,8 +1156,18 @@ do_merge_next() {
     fi
   fi
   # we own the lock now: record the holder inside the lock file and the lock dir
+  # Publish the holder by atomic rename: merge-status reads this file without a lock, so a truncate
+  # followed by a write would let it observe an empty or partial line.
+  local holder_tmp
+  holder_tmp=$(mktemp "$DATA_DIR/.holder.XXXXXX") || holder_tmp=""
+  if [ -n "$holder_tmp" ]; then
+    printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$holder_tmp" 2>/dev/null || true
+    # Test hook: widen the publication window to exercise unlocked readers deterministically.
+    if [ -n "${COORDINATOR_TEST_HOLDER_WRITE_SLEEP:-}" ]; then sleep "$COORDINATOR_TEST_HOLDER_WRITE_SLEEP"; fi
+    mv -f "$holder_tmp" "$lock_dir/holder" 2>/dev/null || rm -f "$holder_tmp"
+  fi
+  # The flock target must keep one inode for its whole lifetime; never unlink it on release.
   printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$lock_file" 2>/dev/null || true
-  printf 'slug=%s branch=%s pid=%s started=%s\n' "$slug" "$branch" "$$" "$started_iso" > "$lock_dir/holder" 2>/dev/null || true
 
   # A wt branch that records only .term/coordinator/state.json lease bookkeeping must merge cleanly
   # through the gate. The state file is exempt from the cleanliness check below (claim/submit leave it
@@ -1161,7 +1194,7 @@ do_merge_next() {
         fi
       )
     fi
-    rm -f "$lock_file" 2>/dev/null || true
+    : > "$lock_file" 2>/dev/null || true
     rm -f "$lock_dir/holder" 2>/dev/null || true
     rmdir "$lock_dir" 2>/dev/null || true
     if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi
@@ -1192,7 +1225,7 @@ do_merge_next() {
   if [ "$lease_status" != "submitted" ]; then
     state_write_filter '.mergeLock = null'
     state_unlock
-    rm -f "$lock_file" 2>/dev/null || true
+    : > "$lock_file" 2>/dev/null || true
     rm -f "$lock_dir/holder" 2>/dev/null || true
     rmdir "$lock_dir" 2>/dev/null || true
     if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; fi

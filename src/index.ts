@@ -953,7 +953,9 @@ export default Plugin.define({
       }
     })()
 
-    void controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
+    // Restore is started without blocking setup, but teardown must wait for it: otherwise it can adopt
+    // goals and commit through a controller that dispose() has already invalidated and flushed.
+    const restoring = controller.restore({ resume: !probe }).catch((error) => log.error("goal restore failed", { error: String(error) }))
     log.info("ready", {
       evaluator: config.evaluator.mode,
       model: config.evaluator.model ?? (config.evaluator.inheritModel ? "session (inherited)" : "session"),
@@ -963,6 +965,7 @@ export default Plugin.define({
       lifetime.abort()
       for (const timer of updateTimers) clearTimeout(timer)
       updateTimers.clear()
+      await restoring
       await controller.dispose()
     }
   },
