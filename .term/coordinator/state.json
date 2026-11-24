@@ -6705,6 +6705,44 @@
       "submittedAt": "2026-11-24T05:57:09Z",
       "mergedAt": "2026-11-24T06:06:17Z",
       "mergedInto": "dev"
+    },
+    "arm-planner-parentless": {
+      "agent": "hy4-flash-free",
+      "paths": "src/index.ts,test/plugin.test.ts,src/core/prompts.ts,SPEC.md",
+      "branch": "wt/arm-planner-parentless",
+      "worktree": "worktree/wt-arm-planner-parentless",
+      "status": "done",
+      "createdAt": "2026-11-24T06:15:46Z",
+      "releasedAt": "2026-11-24T06:16:58Z",
+      "releaseReason": "released"
+    },
+    "evaluator-completion-no-context": {
+      "agent": "build",
+      "paths": "src/index.ts,test/plugin.test.ts",
+      "branch": "wt/evaluator-completion-no-context",
+      "worktree": "worktree/wt-evaluator-completion-no-context",
+      "status": "submitted",
+      "createdAt": "2026-11-24T06:22:07Z",
+      "submittedAt": "2026-11-24T06:22:13Z"
+    },
+    "evaluator-report-no-parent-turn": {
+      "agent": "worker",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-report-no-parent-turn",
+      "worktree": "worktree/wt-evaluator-report-no-parent-turn",
+      "status": "claimed",
+      "createdAt": "2026-11-24T06:16:48Z"
+    },
+    "planner-parentless-completion": {
+      "agent": "orchestrator",
+      "paths": "src/index.ts,src/core/planner.ts,test/plugin.test.ts,test/core.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/planner-parentless-completion",
+      "worktree": "worktree/wt-planner-parentless-completion",
+      "status": "done",
+      "createdAt": "2026-11-24T06:17:26Z",
+      "submittedAt": "2026-11-24T06:22:08Z",
+      "mergedAt": "2026-11-24T06:24:33Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
