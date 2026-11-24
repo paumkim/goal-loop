@@ -69,7 +69,6 @@ import {
   writeSync,
   fsyncSync,
   closeSync,
-  chmodSync,
 } from "node:fs";
 import { join, resolve, dirname, isAbsolute, basename } from "node:path";
 import { homedir } from "node:os";
@@ -1128,105 +1127,6 @@ export function status(args, opts = {}) {
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
 
-// Host-label rename goal-loop owns. Duplicated here (instead of importing src/core/opencode-labels.ts)
-// because install.sh ships this CLI as a single dependency-free file; test/opencode-labels.test.ts
-// pins these constants to the core module so the two cannot drift.
-const HOST_LABEL_FILE = "packages/tui/src/routes/session/index.tsx";
-const LABEL_FROM = '? "Provider compaction"';
-const LABEL_TO = '? "Context Cleared"';
-// The installed binary is the code that actually renders the divider. Match the whole ternary so the
-// two error messages that also say "Provider compaction" stay untouched. Bun-compiled binaries store
-// string lengths, so the replacement is padded to the exact same byte count; a shorter string makes
-// the executable fall through to Bun's CLI instead of OpenCode's.
-const BINARY_LABEL_FROM = '?"Provider compaction":"Compaction"';
-const BINARY_LABEL_TO = '?"Context Cleared    ":"Compaction"';
-// The rendered TUI reads a second copy from the binary's length-prefixed string table. Swap that
-// standalone entry too, but never the two error messages that continue with " is not supported".
-const BINARY_STANDALONE_FROM = "Provider compaction";
-const BINARY_STANDALONE_TO = "Context Cleared    ";
-const BINARY_KEEP_SUFFIX = " is not supported";
-const INSTALLED_BINARY = join(".opencode", "bin", "opencode");
-
-/**
- * Positional path for either patch target. Direct calls pass [path, --flags]; runCli passes
- * ["patch-host", path, --flags]. Drop the command name so a bare call reaches the env/default path.
- */
-function patchTargetArg(args) {
-  const positional = args.filter((a) => !a.startsWith("--") && a !== "patch-host");
-  return positional[0];
-}
-
-/** Where the host TUI source lives: arg, env override, then the usual local clone. */
-function resolveHostLabelFile(args, opts) {
-  const arg = patchTargetArg(args);
-  if (arg) return resolve(arg);
-  const env = opts.env ?? process.env;
-  if (env.GOAL_LOOP_OPENCODE_TUI) return resolve(env.GOAL_LOOP_OPENCODE_TUI);
-  const home = opts.homedir ?? env.HOME ?? homedir();
-  return join(home, "Projects", "opencode", HOST_LABEL_FILE);
-}
-
-/** Where the running TUI lives: arg, env override, then the standard installed binary. */
-function resolveInstalledBinary(args, opts) {
-  const arg = patchTargetArg(args);
-  if (arg) return resolve(arg);
-  const env = opts.env ?? process.env;
-  if (env.GOAL_LOOP_OPENCODE_BIN) return resolve(env.GOAL_LOOP_OPENCODE_BIN);
-  const home = opts.homedir ?? env.HOME ?? homedir();
-  return join(home, INSTALLED_BINARY);
-}
-
-/**
- * Re-apply the "Context Cleared" rename to a local OpenCode checkout. Literal string swap, not a
- * line-number patch: upstream refactors move the line but keep the text. Backs up before writing and
- * is idempotent, so running it after every upstream update is safe.
- */
-export function patchHost(args, opts = {}) {
-  const dryRun = args.includes("--dry-run");
-  const binary = args.includes("--binary");
-  const file = binary ? resolveInstalledBinary(args, opts) : resolveHostLabelFile(args, opts);
-  const from = binary ? BINARY_LABEL_FROM : LABEL_FROM;
-  const to = binary ? BINARY_LABEL_TO : LABEL_TO;
-  const what = binary ? "installed OpenCode binary" : "host TUI source";
-  if (
-    binary &&
-    (Buffer.byteLength(from) !== Buffer.byteLength(to) ||
-      Buffer.byteLength(BINARY_STANDALONE_FROM) !== Buffer.byteLength(BINARY_STANDALONE_TO))
-  ) {
-    return { code: 1, stdout: "", stderr: `goal-loop: binary patch is not length-preserving; refusing to write\n` };
-  }
-  if (!existsSync(file)) {
-    return { code: 1, stdout: "", stderr: `goal-loop: no ${what} at ${file}\n` };
-  }
-  // latin1 maps each byte to one char, so splitting/rejoining a binary is byte-exact.
-  const before = binary ? readFileSync(file).toString("latin1") : readFileSync(file, "utf8");
-  const parts = before.split(from);
-  let after = parts.join(to);
-  let replacements = parts.length - 1;
-  if (binary) {
-    const guarded = new RegExp(`${BINARY_STANDALONE_FROM}(?!${BINARY_KEEP_SUFFIX})`, "g");
-    replacements += (after.match(guarded) ?? []).length;
-    after = after.replace(guarded, BINARY_STANDALONE_TO);
-  }
-  if (replacements === 0) {
-    if (before.includes(to)) {
-      return { code: 0, stdout: `already patched (${file}); nothing to do\n`, stderr: "" };
-    }
-    return { code: 1, stdout: "", stderr: `goal-loop: host label not found in ${file} (upstream moved it)\n` };
-  }
-  if (dryRun) {
-    return { code: 0, stdout: `dry-run: would replace "Provider compaction" with "Context Cleared" in ${file} (${replacements})\n`, stderr: "" };
-  }
-  const bak = backupFile(file, binary ? Buffer.from(before, "latin1") : before);
-  if (binary) chmodSync(bak, statSync(file).mode & 0o7777); // a restored binary must stay executable
-  writeFileAtomic(file, binary ? Buffer.from(after, "latin1") : after);
-  return {
-    code: 0,
-    stdout: `renamed "Provider compaction" to "Context Cleared" in ${file} (${replacements}; backup: ${bak}); ${binary ? "restart opencode to see it" : "rebuild opencode to see it"}\n`,
-    stderr: "",
-  };
-}
-
 export async function runCli(argv, opts = {}) {
   const args = [...argv];
   if (args.includes("--help") || args.includes("-h")) {
@@ -1235,16 +1135,16 @@ export async function runCli(argv, opts = {}) {
   if (args.includes("--version") || args.includes("-v")) {
     return { code: 0, stdout: `goal-loop ${VERSION}\n`, stderr: "" };
   }
-  const flags = new Set(["--global", "--project", "--dry-run", "--restore", "--self", "--check", "--binary"]);
+  const flags = new Set(["--global", "--project", "--dry-run", "--restore", "--self", "--check"]);
   const unknownFlag = args.find((a) => a.startsWith("--") && !flags.has(a));
   if (unknownFlag) return { code: 2, stdout: "", stderr: `goal-loop: unknown flag ${unknownFlag} (try: goal-loop --help)\n` };
   const positional = args.filter((a) => !a.startsWith("--"));
   const cmd = positional[0] ?? "install";
-  const wantsArg = cmd === "channel" || cmd === "updates" || cmd === "patch-host";
+  const wantsArg = cmd === "channel" || cmd === "updates";
   if (positional.length > (wantsArg ? 2 : 1)) {
     return { code: 2, stdout: "", stderr: `goal-loop: unexpected argument ${positional[wantsArg ? 2 : 1]} (try: goal-loop --help)\n` };
   }
-  if (!["install", "uninstall", "status", "update", "channel", "updates", "patch-host"].includes(cmd)) {
+  if (!["install", "uninstall", "status", "update", "channel", "updates"].includes(cmd)) {
     return { code: 2, stdout: "", stderr: `goal-loop: unknown command '${cmd}' (try: goal-loop --help)\n` };
   }
   if (args.includes("--restore") && cmd !== "uninstall") {
@@ -1262,7 +1162,6 @@ export async function runCli(argv, opts = {}) {
     if (cmd === "status") return status(args, opts);
     if (cmd === "update") return await update(args, opts);
     if (cmd === "channel") return await setChannel(args, opts);
-    if (cmd === "patch-host") return patchHost(args, opts);
     return setUpdates(args, opts);
   } catch (err) {
     if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: ${err.message}\n` };
@@ -1282,7 +1181,6 @@ function usage() {
     "  goal-loop update    [--check|--dry-run] [--global|--project]",
     "  goal-loop channel   <main|dev> [--dry-run] [--global|--project]",
     "  goal-loop updates   <auto|off> [--dry-run] [--global|--project]",
-    "  goal-loop patch-host [path] [--dry-run] [--binary]",
     "",
     "  main   newest stable release tag from GitHub (default)",
     "  dev    latest dev commit — fast, may break things",
@@ -1293,10 +1191,6 @@ function usage() {
     "  --dry-run   print what would change; write nothing",
     "  --restore   uninstall only: copy the pre-install .bak back over the config",
     "  --self      uninstall only: also delete the goal-loop CLI script itself",
-    "  patch-host  re-apply goal-loop's host-label renames after an upstream OpenCode update",
-    "              (path defaults to $GOAL_LOOP_OPENCODE_TUI or ~/Projects/opencode; backs up first)",
-    "  --binary    patch the installed binary's divider instead of the source checkout; path defaults",
-    "              to $GOAL_LOOP_OPENCODE_BIN or ~/.opencode/bin/opencode (backs up first)",
     "",
   ].join("\n");
 }

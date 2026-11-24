@@ -37,15 +37,18 @@ import { update as cliUpdate } from "../bin/goal-loop.mjs"
 const PLUGIN_ID = "goal-loop"
 
 /**
- * The native replay window installed by `/reset-context`. OpenCode's transcript builder replays a completed
- * compaction's `native.messages` *instead of* its summary (`to-llm-message.ts`, `case "compaction"`), and an empty
- * array replays as zero LLM messages. That makes the next request look like a cold session start — fresh system
- * prompt, no conversation messages — while the session ID, its metadata and its on-disk history survive.
+ * The cold window installed by `/reset-context`. OpenCode's transcript builder replays a completed compaction's
+ * `native.messages` *instead of* its summary (`to-llm-message.ts`, `case "compaction"`). An upstream host labels a
+ * completed compaction that carries `native.messages` "Provider compaction"; that is the unwanted divider, and it
+ * is hardcoded in the host TUI with no slot, theme token or config key to override. Patching the host source or the
+ * installed binary would fix the text but would write outside this repo and would not survive a reinstall, so the
+ * plugin avoids the trigger instead: no native window, an empty summary, and an empty kept range replay as an empty
+ * `<conversation-checkpoint>` — still a cold start, but the host renders its generic "Compaction" divider.
  *
- * An empty `summary` is kept as a fallback for hosts predating native replay: there the compaction message renders
- * as a `<conversation-checkpoint>` containing only empty text, still far smaller than a generated summary.
+ * `metadata.recent` is set explicitly because `SessionRecentText.kept()` reads it: an unset value could inherit a
+ * kept range from the compaction being replaced and pull old text back into the checkpoint.
  */
-const COLD_REPLAY = { summary: "", native: { messages: [] } }
+export const COLD_REPLAY = { summary: "", metadata: { recent: "" } }
 
 /**
  * Budget for the *native* evaluator child's evidence digest. Deliberately far below the generation judge's
@@ -773,8 +776,9 @@ export default Plugin.define({
       addCommand("goal-loop", LOOP_DESCRIPTION, true)
 
       // Same-session context reset. The host still performs a real compaction (so prior messages leave the model
-      // request), but the compaction hook below installs an empty native replay window. No new session is created,
-      // so the session ID, its files and its history on disk all survive; only the model-visible context is cleared.
+      // request), but the compaction hook below stores an empty checkpoint instead of a native replay window.
+      // No new session is created, so the session ID, its files and its history on disk all survive; only the
+      // model-visible context is cleared.
       editor.add({
         name: "reset-context",
         description: "Drop this session's context in place, keeping the same session ID",
@@ -800,8 +804,10 @@ export default Plugin.define({
     // ---- hooks
     // OpenCode's own compaction prompt always summarizes the conversation, so an instruction from the user to carry
     // nothing over cannot change its output. /reset-context marks the session; setting `result` here makes the host
-    // skip the summary model and store COLD_REPLAY instead. Its empty native window replays as zero messages, which
-    // is what makes the next turn look like a cold session start. Only a marked session is affected, once.
+    // skip the summary model and store COLD_REPLAY instead. Its empty checkpoint replays with no conversation, which
+    // is what makes the next turn look like a cold session start. No native window is installed: an upstream host
+    // labels a completed native compaction "Provider compaction", and that string is not overridable from a plugin.
+    // Only a marked session is affected, once.
     await ctx.session.hook("compaction", (event) => {
       if (!resetPending.delete(event.sessionID)) return
       event.result = COLD_REPLAY as typeof event.result

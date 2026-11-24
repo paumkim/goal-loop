@@ -1782,7 +1782,7 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
 })
 
 describe("/reset-context drops context in place", () => {
-  test("the command compacts the same session and the hook installs an empty native replay window", async () => {
+  test("the command compacts the same session and the hook installs an empty checkpoint", async () => {
     const { ctx, calls, hooks } = context(repository())
     const dispose = await (plugin as any).setup(ctx)
     try {
@@ -1794,9 +1794,11 @@ describe("/reset-context drops context in place", () => {
       expect(calls.compacts).toEqual(["ses_1"])
       const event: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(event)
-      // An empty native window replays as zero LLM messages: a cold-start context with the same session ID.
+      // An empty checkpoint replays with no conversation messages: a cold-start context with the same
+      // session ID, and no native window to trigger the upstream "Provider compaction" divider.
       expect(event.result?.summary).toBe("")
-      expect(event.result?.native).toEqual({ messages: [] })
+      expect(event.result?.native).toBeUndefined()
+      expect(event.result?.metadata).toEqual({ recent: "" })
       expect(calls.notices.some((notice: any) => notice.message.includes("no conversation history"))).toBe(true)
     } finally {
       await dispose?.()
@@ -1811,7 +1813,8 @@ describe("/reset-context drops context in place", () => {
       await command.execute({ sessionID: "ses_1", prompt: { text: "" }, delivery: "steer" })
       const first: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(first)
-      expect(first.result?.native).toEqual({ messages: [] })
+      expect(first.result?.native).toBeUndefined()
+      expect(first.result?.metadata).toEqual({ recent: "" })
       const second: any = { sessionID: "ses_1", result: undefined }
       await hooks.compaction!(second)
       expect(second.result).toBeUndefined()

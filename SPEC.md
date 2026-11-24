@@ -173,9 +173,7 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     commit rule, turn cap, stall guard, retries, restore-on-restart, `/goal-loop clear` and the
     `stop`/`off`/`reset`/`none`/`cancel` aliases). With no arguments it shows status. It activates the
     loop only after the evaluator returns `met` — never on `not_met`, stall, pause, interrupt, retry or
-    failure paths. `/goal` behavior for non-looped goals is unchanged. The clear aliases are honored on
-    the raw-prompt `/goal-loop[-N|=N]` path too (`src/index.ts` prompt hook): a line such as
-    `/goal-loop clear` ends the loop instead of arming a loop whose objective is "clear".
+    failure paths. `/goal` behavior for non-looped goals is unchanged.
 12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
     achieved iteration into a compact machine-consumable block via the evaluator
     (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
@@ -646,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2424 -->
+<!-- spec-check files=144 tests=2405 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -922,9 +920,7 @@ the current iteration.
     otherwise the now row is unchanged. The base text now wraps (`word`) instead of overflowing the
     rail's width, so the verdict suffix stays pinned after wrapping text.
 82. New pure helpers `localTime`, `currentIterationVerdict`, `turnsSinceVerdict` in
-    `src/core/history.ts`, unit-tested (`test/history.test.ts`). `currentIterationVerdict` reads the newest verdict
-    directly instead of scanning backwards through a loop that always breaks after one iteration; empty history,
-    window edges and the non-finite `endedAt` fallback are unchanged.
+    `src/core/history.ts`, unit-tested (`test/history.test.ts`).
 83. `scripts/render-history.tsx` frames (looped, paused, complete) show `at HH:MM` on rail rows and
     the `· last <glyph> … since` segment on the now row; the paused and complete frames verify both.
 
@@ -1536,6 +1532,28 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
+## Workstream CCIII — proactive strategy escalation replaces the repeated-failure pause (proactive-strategy-escalation) (2026-11-23)
+
+A `not_met` verdict whose failure signature repeated three times in a row paused the goal and handed
+control back to the user ("rotate strategy ... then send a message to resume"). That stop was the one
+guard that still froze an otherwise-armed goal, and it applied to plain goals and loops alike. It is now
+a proactive continuation: the goal stays `active`, the worker gets a `<goal-strategy-escalation>` steer
+that names the streak, the signature summary, the persisted diagnostic artifact, and one concrete
+rotated strategy. Rotation is derived from the streak length (`count - threshold`, mod four), so it
+needs no extra persisted state, survives restarts, is different every time, and works for every goal and
+every signature kind (verification, legacy-verify, reason). The first escalation of a streak emits one
+non-pausing notice; the diagnostic artifact is still written under `.term/goal-loop/diagnostics/` and
+its path is cited in the steer. `pauseCause: "repeated_failure"` and its HUD remedy are kept only for
+records persisted before this change.
+
+Verification: new pure rotation regression in `test/failure-signature.test.ts` uses an independent
+index oracle, checks a full cycle is distinct, and checks verification/reason signatures at the same
+count rotate identically; new prompt regressions in `test/core.test.ts` pin the wrapper, facts,
+artifact, escaping, and optional omissions; `test/controller.test.ts` now pins an active goal, a
+self-resuming `resume: true` steer, strategy rotation across five repeats, the cited diagnostic path,
+and no `paused` notice. Focused suite: 315 pass / 0 fail, 178043 expect() calls. Full `bun run check`
+green after artifact regeneration; marker re-counted, no shipped file added or removed.
+
 ## Workstream CCIV — one diagnostic artifact per failure streak (bounded-failure-diagnostics) (2026-11-23)
 
 CCIII made escalation proactive, which means it now fires on every not_met turn of a stuck streak instead
@@ -1773,34 +1791,31 @@ judge or flip the pill, and that the drain re-evaluates the same turn to `achiev
 busy-check retries with work still active and asserts the fallback cannot settle the goal. Focused controller
 suite 113 pass / 0 fail.
 
-## Host-label rename (context-cleared-label) — "Context Cleared" is a plugin-owned patch (2026-11-24)
+## Provider-compaction divider — a plugin-only fix (provider-compaction-self-contained, 2026-11-24)
 
-OpenCode's session TUI labels a completed native (provider) compaction "Provider compaction". goal-loop
-calls the same event "Context Cleared". The host exposes no slot, theme token or config key for that
-divider, so a slot claim cannot rename it and an edit to `~/Projects/opencode` disappears on the next
-upstream `git pull`. The rename therefore lives in this repo as data plus a re-applicable patch:
+The upstream host TUI renders a completed compaction carrying `native.messages` as
+`── Provider compaction ──`. There is no slot, theme token or config key for that divider, so a plugin
+cannot rename the text. Editing `~/Projects/opencode` or the installed binary would fix the string but
+would write outside this repo and would not survive a reinstall, so neither is an acceptable fix. The
+plugin therefore avoids the condition that produces the label.
 
-- `src/core/opencode-labels.ts`: `COMPACTION_DIVIDER_PATCH` (`packages/tui/src/routes/session/index.tsx`,
-  `? "Provider compaction"` → `? "Context Cleared"`) and a pure, idempotent `applyHostLabelPatch`.
-  `HOST_LABEL_PATCHES` is the list every host rename must go through.
-- `patches/context-cleared.patch`: the same swap as a unified diff, for review and `git apply`.
-- `bin/goal-loop.mjs`: `goal-loop patch-host [path] [--dry-run]` re-applies the swap to a local checkout
-  (default `$GOAL_LOOP_OPENCODE_TUI` or `~/Projects/opencode`), backing up the file first. The standalone
-  CLI carries the two strings itself because `install.sh` ships it as one dependency-free file;
-  `test/opencode-labels.test.ts` pins CLI constants to the core module so they cannot drift.
-- `package.json` ships `patches/`.
+- `src/index.ts`: `COLD_REPLAY` no longer installs `native: { messages: [] }` for `/reset-context` and
+  cold boundary compactions. It stores `{ summary: "", metadata: { recent: "" } }` instead. The host's
+  transcript builder takes the summary branch (`to-llm-message.ts`, `case "compaction"`) and replays an
+  empty `<conversation-checkpoint>`; no conversation messages reach the next request, so the reset is
+  still a cold start. `metadata.recent` is explicit because `SessionRecentText.kept()` reads it.
+- Because `native.messages` is absent, the upstream condition
+  `status === "completed" && native?.messages` is false and the divider shows the host's generic
+  `Compaction` label instead of `Provider compaction`. The installed binary and host checkout are not
+  touched: the plugin keeps working against an upstream OpenCode and across reinstalls.
+- The plugin ships no host-patch code or data: `src/core/opencode-labels.ts`,
+  `patches/context-cleared.patch`, `test/opencode-labels.test.ts` and the `patch-host` CLI command were
+  removed. `test/cold-replay.test.ts` pins the host condition, the checkpoint shape and the absence of
+  out-of-directory patch hooks.
 
-The swap is literal text, not a line number: upstream refactors move the line but keep the string. A
-missing string is a loud error, not a silent success; an already-patched file is a no-op. After an
-upstream update, run `goal-loop patch-host` (or `goal-loop patch-host --dry-run` to preview), then rebuild
-OpenCode to see the new label.
-
-Applied 2026-11-24: `goal-loop patch-host` renamed the divider in the live checkout
-`~/Projects/opencode/packages/tui/src/routes/session/index.tsx` (backup beside it), and the two UI
-strings embedded in the installed binary `~/.opencode/bin/opencode` were patched in place (backup
-`~/.opencode/bin/opencode.pre-context-cleared.bak`). The two error-message strings in the binary that
-also say "Provider compaction" were left alone — they describe the feature, not the divider. A running
-TUI keeps its old label until OpenCode restarts.
+Verified 2026-11-24: the installed binary stays upstream (`opencode v2.4.1`, one old divider literal,
+zero `Context Cleared` strings); `bun run check` passes; a live tmux TUI `/reset-context` no longer
+renders the `Provider compaction` divider.
 
 ## Workstream evaluator-parent-planner-target — the evaluator judges the goal-owning parent, not worker subagents (2026-11-24)
 
@@ -1820,38 +1835,6 @@ child any more.
 Verification: `test/controller.test.ts` pins that descendant completions spawn no verdict, no continuation steer and
 no history entry, and that the parent's turn is judged from the parent session alone; `test/plugin.test.ts` pins that
 verdict-child affinity is keyed to the parent and that no owner-routing plumbing remains. Full `bun run check` green.
-
-## Workstream evaluator-planner-subagent-child-reuse — evaluator and planner are reused parent-linked subagent children (2026-11-24)
-
-Two earlier workstreams (`evaluator-goal-achieved-planner` and `planner-parentless-completion`) removed the
-`parentID` from the harness-owned evaluator and arm-time planner children to avoid host completion wake-ups. That
-made both agents appear as new top-level sessions in OpenCode's session list — one `evaluator` per turn and one
-`Goal planner` per arm — instead of subagents nested under the goal session, and contradicted the original CCX/CCII
-subagent design (`sessions.create({ parentID, agent, model })`).
-
-Both children are now created with the working session as their `parentID` and reused: one evaluator subagent child
-serves every verdict and every loop summarizer / next-goal generation, and one planner subagent child serves every
-arm. The per-session child ids live in module maps cleared on plugin `dispose`; a failed or timed-out generation drops
-its child so the next one starts clean. The model rides with each prompt so a `/model` switch reaches the reused
-child. No synthetic completion report is admitted into the worker's transcript — the verdict and plan still come from
-each child's own event stream, and the existing report strip stays as a defensive guard. This supersedes the
-parentless sections of the two earlier workstreams; terminal visibility, verdict contract, verifier gate and loop
-semantics are unchanged.
-
-Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
-verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
-both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
-
-### Installed-binary divider rename (provider-compaction-running-label, 2026-11-24)
-
-The host source patch (`COMPACTION_DIVIDER_PATCH`) edits a build input only: the string a running TUI renders is
-compiled twice into the installed Bun executable. `src/core/opencode-labels.ts` now also owns
-`INSTALLED_BINARY_DIVIDER_PATCH`, a byte-length-preserving swap of the minified ternary and the standalone
-string-table entry so `goal-loop patch-host --binary` renames the divider in the binary that actually runs.
-Error messages that merely mention the feature keep their text; the install command still touches only config.
-
-Verification: `test/opencode-labels.test.ts` pins both patch fragments, their equal byte length, and that the
-error-message occurrences are left alone. Full `bun run check` green after artifact regeneration.
 
 ## Historical workstreams
 
