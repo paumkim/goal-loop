@@ -1369,12 +1369,12 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     // verdict child's id as the parent instead. No judge child is removed from the session list behind the worker.
     expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
     expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(0)
-    expect(code).toContain("verdictChildBySession.set(opts?.ownerSessionID ?? sessionID, id)")
+    expect(code).toContain("verdictChildBySession.set(sessionID, id)")
     expect(code).toContain("verdictChildBySession.get(sessionID)")
-    // Subagent completions are judged too: the owner session steers verdict affinity. No verdict admits a
-    // `<subagent>` completion into the working session — a queued synthetic is still durable input in the
-    // parent's inbox, which forced the parent to see the judge's context and take a turn.
-    expect(code).toContain("ownerSessionID: target")
+    // The judge belongs to the goal-owning parent only: no descendant completion spawns a verdict, so no
+    // child session needs owner routing and no verdict admits a `<subagent>` completion into the parent inbox.
+    expect(code).not.toContain("ownerSessionID")
+    expect(code).toContain("evaluatorContext(sessionID, signal)")
     const judgeBody = code.slice(code.indexOf("const spawnEvaluator ="), code.indexOf("const evaluatorContext ="))
     expect(judgeBody).not.toContain("session.synthetic")
     expect(judgeBody).not.toContain("Goal Achieved.")

@@ -32,10 +32,8 @@ export interface SessionPort {
 }
 
 export interface EvaluationRequest {
-  /** Session whose work is being judged. For a subagent verdict this is the child session. */
+  /** The goal-owning parent session whose work is being judged. Descendants never spawn a verdict. */
   readonly sessionID: string
-  /** Goal-owning session, when it differs from `sessionID`. The condition and terminal state belong to it. */
-  readonly ownerSessionID?: string
   readonly condition: string
   readonly turn: number
   readonly elapsedMs: number

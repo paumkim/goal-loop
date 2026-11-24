@@ -344,7 +344,6 @@ export default Plugin.define({
       prompt: string,
       signal: AbortSignal,
       parentID?: string,
-      opts?: { ownerSessionID?: string },
     ): Promise<{ text: string; id: string }> => {
       const { id } = await ctx.session.create({
         location: ctx.location,
@@ -353,9 +352,9 @@ export default Plugin.define({
         agent: EVALUATOR_AGENT_ID,
         model: model as any,
       } as any)
-      // Loop steps are keyed to the goal-owning session, never to a judged work unit, so a subagent verdict
-      // cannot overwrite the owner's verdict-child affinity.
-      if (!parentID) verdictChildBySession.set(opts?.ownerSessionID ?? sessionID, id)
+      // Judge affinity belongs to the goal-owning parent session. No descendant ever spawns a verdict, so a
+      // worker subagent cannot overwrite the parent's verdict child.
+      if (!parentID) verdictChildBySession.set(sessionID, id)
       evaluatorChildren.add(id)
       const abort = new AbortController()
       let answer = ""
@@ -430,13 +429,13 @@ export default Plugin.define({
     // parentless judge child on the session's current model, then pass the child's text through the same contract
     // guard a native `<subagent>` report used to pass. Foreign / echo-mismatch / unreadable text throws, so
     // `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale verdict.
-    const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number, ownerSessionID?: string) => {
-      // The goal's condition and terminal state belong to the owner; the evidence comes from `sessionID`, which
-      // is the descendant work unit when a subagent completion is judged.
-      const target = ownerSessionID ?? sessionID
-      const condition = controller.activeCondition(target)
+    const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
+      // `sessionID` is always the goal-owning parent: descendant sessions never spawn a verdict (the harness
+      // injects their reports back into the parent instead). The parent's reply is the evidence; the bundled
+      // Planner subagent's distilled condition and scope ride the request through `armedPlanScopes` below.
+      const condition = controller.activeCondition(sessionID)
       if (!condition) return undefined
-      const model = await sessionModel(target, signal)
+      const model = await sessionModel(sessionID, signal)
       if (!model) throw new Error("judge child model unavailable: session has no active model")
       const digest = (ctx: readonly unknown[]) =>
         renderParentSummary(ctx, { maxChars: EVALUATION_SUMMARY_CHARS, since: currentTurnStart(ctx) })
@@ -447,11 +446,11 @@ export default Plugin.define({
         await settle(EVALUATION_SETTLE_MS, signal)
         summary = digest(await evaluatorContext(sessionID, signal))
       }
-      const parent = controller.live(target)
+      const parent = controller.live(sessionID)
       const prompt = nativeEvaluationRequest({
         condition,
         summary,
-        ...(armedPlanScopes.has(target) ? { armPlanScope: armedPlanScopes.get(target)! } : {}),
+        ...(armedPlanScopes.has(sessionID) ? { armPlanScope: armedPlanScopes.get(sessionID)! } : {}),
         nonce: Math.random().toString(36).slice(2, 10),
         ...(parent?.loopEnabled
           ? {
@@ -464,7 +463,7 @@ export default Plugin.define({
             }
           : {}),
       })
-      const { text } = await spawnEvaluator(sessionID, model, prompt, signal, undefined, { ownerSessionID: target })
+      const { text } = await spawnEvaluator(sessionID, model, prompt, signal)
       return verdictFromNativeReport({ key: sessionID, body: text, state: "completed" }, condition)
     }
 
