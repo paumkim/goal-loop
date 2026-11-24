@@ -6834,9 +6834,11 @@
       "paths": "src/index.ts,src/runtime/**,packages/coordinator/bin/coordinator,test/**,SPEC.md",
       "branch": "wt/concurrency-audit",
       "worktree": "worktree/wt-concurrency-audit",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T07:31:20Z",
-      "submittedAt": "2026-11-24T07:31:21Z"
+      "submittedAt": "2026-11-24T07:31:21Z",
+      "mergedAt": "2026-11-24T08:50:11Z",
+      "mergedInto": "dev"
     },
     "test-quality-audit": {
       "agent": "build-primary",
@@ -6879,6 +6881,14 @@
       "submittedAt": "2026-11-24T08:22:33Z",
       "mergedAt": "2026-11-24T08:28:36Z",
       "mergedInto": "dev"
+    },
+    "no-achieved-while-subagents-active": {
+      "agent": "build-primary",
+      "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/no-achieved-while-subagents-active",
+      "worktree": "worktree/wt-no-achieved-while-subagents-active",
+      "status": "claimed",
+      "createdAt": "2026-11-24T08:48:07Z"
     }
   },
   "mergeLock": null,
