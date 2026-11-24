@@ -1352,7 +1352,8 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       // No `<subagent>` report is admitted to the working session: the parent must neither see the judge's context
       // nor be pulled into a new turn by a queued synthetic. The outcome stays visible as a non-waking toast.
       expect(reports).toHaveLength(0)
-      expect(calls.notices.some((notice: any) => notice.kind === "achieved")).toBe(true)    } finally {
+      expect(calls.notices.some((notice: any) => notice.kind === "achieved")).toBe(true)
+    } finally {
       await dispose?.()
     }
   })
