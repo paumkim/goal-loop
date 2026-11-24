@@ -162,6 +162,9 @@ function stringWidth(string, options = {}) {
 }
 
 // src/core/types.ts
+var PLANNING_SNAPSHOT_PREFIX = "planning-";
+var planningSnapshotId = (sessionID) => `${PLANNING_SNAPSHOT_PREFIX}${sessionID}`;
+var isPlanningSnapshot = (goal, sessionID) => goal?.id === planningSnapshotId(sessionID);
 var LIVE_STATUSES = new Set(["active", "paused"]);
 var isLive = (status) => LIVE_STATUSES.has(status);
 var VERIFY_CHECK_TYPES = new Set([
@@ -5927,6 +5930,7 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
   }
   return changed ? out : entries;
 }
+var shouldKeepPlanningPlaceholder = (previous, next, sessionID) => isPlanningSnapshot(previous, sessionID) && (next === null || !isLive(next.status));
 function dropSessions(entries, ids, keep) {
   if (ids.length === 0)
     return entries;
@@ -6908,13 +6912,15 @@ var tui_default = Plugin.define({
       }
     };
     const put = (sessionID, goal) => {
+      let planningInFlight = false;
       try {
         const previous = entries()[sessionID]?.goal;
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID);
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false;
         const wasLive = previous != null && isLive(previous.status);
         const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status);
         const gone = goal === null || goal === undefined || nowTerminal;
-        if (!unchanged && wasLive && gone) {
+        if (!planningInFlight && !unchanged && wasLive && gone) {
           releaseCompletion(sessionID);
           if (goal && goal.status !== "cleared")
             noteTerminal(sessionID, goal);
@@ -6926,6 +6932,8 @@ var tui_default = Plugin.define({
         if (!unchanged && goal && goal.loopCompact?.landedAt !== undefined && wasPending)
           noteLanding(sessionID);
       } catch {}
+      if (planningInFlight)
+        return;
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal);
       const mergedNow = Date.now();
       return setEntries((previous) => applySnapshot(previous, sessionID, mergedGoal, mergedNow, statusDialogSession()));
