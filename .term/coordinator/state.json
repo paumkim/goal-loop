@@ -6889,8 +6889,11 @@
       "paths": "src/runtime/controller.ts,test/controller.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/no-achieved-while-subagents-active",
       "worktree": "worktree/wt-no-achieved-while-subagents-active",
-      "status": "claimed",
-      "createdAt": "2026-11-24T08:48:07Z"
+      "status": "done",
+      "createdAt": "2026-11-24T08:48:07Z",
+      "submittedAt": "2026-11-24T08:55:22Z",
+      "mergedAt": "2026-11-24T09:04:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
