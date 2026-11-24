@@ -7000,6 +7000,32 @@
       ],
       "mergedAt": "2026-11-24T12:09:40Z",
       "mergedInto": "dev"
+    },
+    "provider-compaction-running-label": {
+      "agent": "build",
+      "paths": "src/core/opencode-labels.ts,bin/goal-loop.mjs,bin/goal-loop.d.mts,test/opencode-labels.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/provider-compaction-running-label",
+      "worktree": "worktree/wt-provider-compaction-running-label",
+      "status": "claimed",
+      "createdAt": "2026-11-24T12:28:12Z"
+    },
+    "evaluator-parent-planner-target": {
+      "agent": "Hy4-flash-Free",
+      "paths": "src/runtime/controller.ts,src/index.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/evaluator-parent-planner-target",
+      "worktree": "worktree/wt-evaluator-parent-planner-target",
+      "status": "done",
+      "createdAt": "2026-11-24T12:32:56Z",
+      "submittedAt": "2026-11-24T12:48:52Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T12:48:52Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md",
+        "src/runtime/evaluator.ts",
+        "src/runtime/ports.ts"
+      ],
+      "mergedAt": "2026-11-24T12:53:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
