@@ -6700,9 +6700,11 @@
       "paths": "src/index.ts,src/runtime/background.ts,src/runtime/controller.ts,src/runtime/evaluator.ts,src/runtime/ports.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
       "branch": "wt/evaluator-subagent-trigger-impl",
       "worktree": "worktree/wt-evaluator-subagent-trigger-impl",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T05:56:55Z",
-      "submittedAt": "2026-11-24T05:57:09Z"
+      "submittedAt": "2026-11-24T05:57:09Z",
+      "mergedAt": "2026-11-24T06:06:17Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
