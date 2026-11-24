@@ -4,9 +4,11 @@
  * OpenCode renders a divider labelled "Provider compaction" when a native (provider) compaction
  * finishes. goal-loop calls that event "Context Cleared" everywhere it speaks to the user. The host
  * TUI has no plugin slot, theme token, or config key for this string, so the rename cannot live in a
- * slot claim: it has to be a patch on the host source. Keeping the patch here — in the plugin repo —
- * means an upstream `git pull` in the OpenCode checkout can overwrite the host file without losing
- * the change: `goal-loop patch-host` re-applies it from this data.
+ * slot claim: it has to be a patch on the host. The checkout is only a build input — the string that
+ * reaches the user is compiled into the installed binary — so goal-loop owns both renames here. An
+ * upstream `git pull` or binary update can overwrite either file without losing the change:
+ * `goal-loop patch-host` re-applies the source rename and `goal-loop patch-host --binary` the one in
+ * the running binary.
  *
  * The patch is deliberately a literal string swap, not a line-number diff. Upstream refactors move
  * the line; they do not rename the string. A missing fragment is reported as "already patched"
@@ -27,8 +29,54 @@ export const COMPACTION_DIVIDER_PATCH: HostLabelPatch = {
   to: '? "Context Cleared"',
 }
 
+/**
+ * The same divider inside the installed OpenCode binary — the code that actually renders the TUI.
+ * `COMPACTION_DIVIDER_PATCH` above edits the source checkout, which is only a build input: renaming
+ * it leaves the shipped binary's string untouched, so a running TUI still says "Provider compaction".
+ * The match is the whole ternary, not the bare label: the binary also carries two error messages
+ * that say "Provider compaction" and those describe the feature, not the divider.
+ *
+ * The replacement pads the label with four trailing spaces so it has exactly the same byte length as
+ * the original. The installed binary is a Bun-compiled executable with length-prefixed string data;
+ * a shorter replacement shifts every following offset and makes the executable fall through to Bun's
+ * own CLI instead of OpenCode's. Keep the two fragments equal-length.
+ */
+export const INSTALLED_BINARY_DIVIDER_PATCH: HostLabelPatch = {
+  file: "bin/opencode",
+  from: '?"Provider compaction":"Compaction"',
+  to: '?"Context Cleared    ":"Compaction"',
+}
+
+/**
+ * The second copy of the divider label: a standalone, length-prefixed entry in the binary's string
+ * table. The rendered TUI reads this entry even when the minified ternary above has been renamed.
+ * Only standalone occurrences are swapped — the two error messages that continue with
+ * " is not supported" describe the feature and must stay byte-identical.
+ */
+export const INSTALLED_BINARY_LABEL_PATCH: HostLabelPatch = {
+  file: "bin/opencode",
+  from: "Provider compaction",
+  to: "Context Cleared    ",
+}
+export const INSTALLED_BINARY_LABEL_KEEP_SUFFIX = " is not supported"
+
+/** Apply both binary copies of the rename. `source` is latin1-decoded bytes so lengths stay exact. */
+export function applyInstalledBinaryLabelPatch(source: string): { text: string; replacements: number } {
+  const code = applyHostLabelPatch(source, INSTALLED_BINARY_DIVIDER_PATCH)
+  const guarded = new RegExp(`${INSTALLED_BINARY_LABEL_PATCH.from}(?!${INSTALLED_BINARY_LABEL_KEEP_SUFFIX})`, "g")
+  const standalone = (code.text.match(guarded) ?? []).length
+  return {
+    text: code.text.replace(guarded, INSTALLED_BINARY_LABEL_PATCH.to),
+    replacements: code.replacements + standalone,
+  }
+}
+
 /** Every host-label rename goal-loop maintains. Add new ones here, never as ad-hoc edits. */
-export const HOST_LABEL_PATCHES: readonly HostLabelPatch[] = Object.freeze([COMPACTION_DIVIDER_PATCH])
+export const HOST_LABEL_PATCHES: readonly HostLabelPatch[] = Object.freeze([
+  COMPACTION_DIVIDER_PATCH,
+  INSTALLED_BINARY_DIVIDER_PATCH,
+  INSTALLED_BINARY_LABEL_PATCH,
+])
 
 export interface HostLabelPatchResult {
   readonly text: string
