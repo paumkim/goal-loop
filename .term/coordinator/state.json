@@ -7006,8 +7006,9 @@
       "paths": "src/core/opencode-labels.ts,bin/goal-loop.mjs,bin/goal-loop.d.mts,test/opencode-labels.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/provider-compaction-running-label",
       "worktree": "worktree/wt-provider-compaction-running-label",
-      "status": "claimed",
-      "createdAt": "2026-11-24T12:28:12Z"
+      "status": "submitted",
+      "createdAt": "2026-11-24T12:28:12Z",
+      "submittedAt": "2026-11-24T13:04:42Z"
     },
     "evaluator-parent-planner-target": {
       "agent": "Hy4-flash-Free",
@@ -7025,6 +7026,52 @@
         "src/runtime/ports.ts"
       ],
       "mergedAt": "2026-11-24T12:53:25Z",
+      "mergedInto": "dev"
+    },
+    "provider-compaction-self-contained": {
+      "agent": "build",
+      "paths": "src/index.ts,bin/goal-loop.mjs,src/core/opencode-labels.ts,test/opencode-labels.test.ts,patches/context-cleared.patch,SPEC.md,docs/changelog.html,package.json",
+      "branch": "wt/provider-compaction-self-contained",
+      "worktree": "worktree/wt-provider-compaction-self-contained",
+      "status": "submitted",
+      "createdAt": "2026-11-24T13:21:14Z",
+      "submittedAt": "2026-11-24T13:58:29Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T13:58:29Z",
+      "forcedScopeFiles": [
+        "bin/goal-loop.d.mts",
+        "test/cold-replay.test.ts",
+        "test/package-integrity.test.ts",
+        "test/plugin.test.ts"
+      ]
+    },
+    "pill-icon-background-activity": {
+      "agent": "orchestrator",
+      "paths": "src/tui.tsx,test/intent-icons.test.ts,dist/tui.js,dist/tui.d.ts",
+      "branch": "wt/pill-icon-background-activity",
+      "worktree": "worktree/wt-pill-icon-background-activity",
+      "status": "submitted",
+      "createdAt": "2026-11-24T14:03:11Z",
+      "submittedAt": "2026-11-24T14:12:16Z"
+    },
+    "compaction-label-verified": {
+      "agent": "build",
+      "paths": "src/index.ts,bin/goal-loop.mjs,bin/goal-loop.d.mts,src/core/opencode-labels.ts,test/opencode-labels.test.ts,test/cold-replay.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,patches/context-cleared.patch,SPEC.md,docs/changelog.html,package.json",
+      "branch": "wt/compaction-label-verified",
+      "worktree": "worktree/wt-compaction-label-verified",
+      "status": "submitted",
+      "createdAt": "2026-11-24T14:08:22Z",
+      "submittedAt": "2026-11-24T14:11:40Z"
+    },
+    "review-recent-changes-bugs": {
+      "agent": "Hy4-flash-Free",
+      "paths": "SPEC.md,test/package-integrity.test.ts,prompts/README.md,prompts/action",
+      "branch": "wt/review-recent-changes-bugs",
+      "worktree": "worktree/wt-review-recent-changes-bugs",
+      "status": "done",
+      "createdAt": "2026-11-24T14:27:57Z",
+      "submittedAt": "2026-11-24T14:30:37Z",
+      "mergedAt": "2026-11-24T14:36:10Z",
       "mergedInto": "dev"
     }
   },
