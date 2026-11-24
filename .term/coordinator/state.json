@@ -7162,6 +7162,25 @@
       "submittedAt": "2026-11-24T16:37:42Z",
       "mergedAt": "2026-11-24T16:53:48Z",
       "mergedInto": "dev"
+    },
+    "clarity-consistency-performance": {
+      "agent": "build",
+      "paths": "src,test,docs,dist,SPEC.md,README.md",
+      "branch": "wt/clarity-consistency-performance",
+      "worktree": "worktree/wt-clarity-consistency-performance",
+      "status": "done",
+      "createdAt": "2026-11-24T21:48:53Z",
+      "submittedAt": "2026-11-24T22:20:03Z",
+      "mergedAt": "2026-11-24T22:22:51Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-empty-request-abstain": {
+      "agent": "opencode",
+      "paths": "src,test,docs,SPEC.md,README.md",
+      "branch": "wt/evaluator-empty-request-abstain",
+      "worktree": "worktree/wt-evaluator-empty-request-abstain",
+      "status": "claimed",
+      "createdAt": "2026-11-24T22:15:54Z"
     }
   },
   "mergeLock": null,
