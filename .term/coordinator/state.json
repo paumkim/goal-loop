@@ -6518,6 +6518,17 @@
       ],
       "mergedAt": "2026-11-24T01:02:14Z",
       "mergedInto": "dev"
+    },
+    "correct-retry-cap-docs": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs/index.html,docs/install.html,docs/runtime.html",
+      "branch": "wt/correct-retry-cap-docs",
+      "worktree": "worktree/wt-correct-retry-cap-docs",
+      "status": "done",
+      "createdAt": "2026-11-24T01:02:58Z",
+      "submittedAt": "2026-11-24T01:05:30Z",
+      "mergedAt": "2026-11-24T01:07:45Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
