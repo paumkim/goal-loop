@@ -366,6 +366,8 @@ there.
 | CXCIV | `one-finite-or-zero-clamp-for-the-chrome-renderers` | one finite-or-zero clamp for the chrome renderers |
 | CC | `format-finite-guards` | non-finite guards in the token/cost formatters |
 
+| evaluator-subagent-trigger-impl | `evaluator-subagent-trigger-impl` | judge descendant work units on completion |
+
 ## Workstream AC — compaction misses are counted once (A-1)
 
 Fix for the double-count found in the Phase 1 audit: a no-op compaction reported via
@@ -10326,3 +10328,32 @@ Verification: new regression in `test/core.test.ts` pins NaN and both infinities
 formatters, plus a finite-value oracle across the token/cost ladders. Focused suite 180 pass / 0 fail,
 177343 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
 shipped file added or removed.
+
+## Workstream evaluator-subagent-trigger-impl — judge descendant work units on completion (2026-11-24)
+
+The verdict was owned by exactly one session: the one that armed the goal. Every event handler looks up
+`this.goals.get(sessionID)`, and `onExecutionSucceeded` returned early for a session with no goal record
+(`controller.ts:1002-1005`). A regular subagent's completion therefore never triggered an evaluation. It was only
+counted as background work by `BackgroundTracker.busy()` (`background.ts:60-67`), which made the controller defer
+the parent's verdict (`controller.ts:1043`) until `onBackgroundDrained()` (`:2654-2680`) saw every descendant finish.
+The judge child was created only inside that parent evaluation and its visible completion was attributed to the
+parent — the "General finished → Evaluator finished" order in the screenshot.
+
+Evaluation is now **goal-scoped and work-unit-triggered**. `BackgroundTracker.ancestorsOf()` walks the event-fed
+parent links (same `MAX_DEPTH` cap as `descendsFrom`), and `GoalController.goalOwnerFor()` resolves a session to its
+nearest ancestor with a live goal. When a descendant's `session.execution.succeeded` arrives with no goal of its own,
+`onExecutionSucceeded` calls `evaluateWorkUnit()` instead of returning. That sidecar judges the descendant's own
+transcript against the owner's immutable condition, using its **own abort controller** so the harness waking the
+parent with the injected subagent report (`onExecutionStarted` → `invalidate`) cannot cancel an in-flight verdict.
+One verdict per `(work unit, goal turn)` is enforced with a judged-key set. Terminal authority stays with the owner:
+a child `met` is recorded in the verdict trail with a `source` field as evidence, a child `not_met` steers only that
+work unit, and neither ends the goal. The verdict child remains parentless and its completion remains queued and
+non-waking; a work-unit report keeps the evaluator label instead of the "Goal Achieved." chip. The owner's drain path
+is unchanged, so a `met` still passes the verifier matrix and loop advance exactly as before.
+
+Verification: `test/controller.test.ts` pins ancestor resolution, child completion triggering a verdict attributed
+to the owner, child `met` not ending the goal, child `not_met` steering once per turn (a replayed completion is
+ignored), and a parent wake not aborting the in-flight verdict; `test/plugin.test.ts` pins the owner-keyed verdict
+affinity and the work-unit report label. Focused controller/plugin suites 169 pass / 0 fail; full suite 2,372 pass /
+0 fail across 105 files (29 snapshots), `tsc --noEmit` clean. `bun run check` green after artifact regeneration and
+marker re-count; no gate weakened and no shipped file added or removed.
