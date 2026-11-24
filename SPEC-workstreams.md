@@ -26,6 +26,7 @@ there.
 | CXCVI | `copy-free-steady-state-in-the-snapshot-cache` | copy-free steady state in the snapshot cache |
 | CXCVII | `a-bounded-objective-completion-condition-for-the-loop` | a bounded, objective completion condition for the loop |
 | CXCVIII | `skip-the-width-loop-for-unbounded-spend-lines` | skip the width loop for unbounded spend lines |
+| CXCIX | `format-coarse-nonfinite-guard` | non-finite guard for the coarse duration renderer |
 | AC | `compaction-misses-are-counted-once` | compaction misses are counted once |
 | AD | `one-label-constant-for-the-goal-surfaces` | one LABEL constant for the goal surfaces |
 | AE | `formattokens-rounds-at-the-unit-boundary` | formatTokens rounds at the unit boundary |
@@ -10294,3 +10295,18 @@ Measured on 20000 calls with a cost + cached usage line (best of 100, paired run
 `/tmp/opencode/bench-misc.ts`. New regression pins the default result against an explicit
 `Number.MAX_SAFE_INTEGER` width across four spend shapes. Focused suite (core) 176 pass / 0 fail,
 177308 expect() calls; `tsc --noEmit` clean. Marker +1 test; no shipped-file change.
+
+## Workstream CXCIX — non-finite guard for the coarse duration renderer (format-coarse-nonfinite-guard) (2026-11-23)
+
+`formatDuration` clamps non-finite input to zero (Workstream LXXV regression), but `formatDurationCoarse`
+still did `Math.max(0, ms)` directly, so a NaN/Infinity clock painted `NaNhNaNm`/`InfinityhNaNm` in
+always-on chrome (HUD, pill, history rail, status dialog). The one call site that could see such a
+value (`attestation.ts`) already wrapped its input in `nonNegative()`, a sign the fragility was known
+at the boundary. The renderer now routes through that same `nonNegative` helper (finite or zero,
+never negative), which is the identical `Math.max(0, ms)` clamp for every finite input — behavior
+preserving on the whole valid domain, garbage-free on the invalid one.
+
+Verification: new regression in `test/core.test.ts` pins NaN, `+Infinity`, and `-Infinity` to `<1m`
+(the coarse rendering of a zero duration), mirroring the existing `formatDuration` non-finite pin.
+Focused suite: 178 pass / 0 fail, 177329 expect() calls. Full `bun run check` green after artifact
+regeneration; marker re-counted, no shipped file added or removed.

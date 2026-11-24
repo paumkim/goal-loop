@@ -4,9 +4,10 @@ import { parseVerdict } from "./verdict.ts"
 /**
  * The evaluator as a first-class agent type shipped by the plugin.
  *
- * A verdict is produced by one real OpenCode child session of this agent, created by the harness with the working
- * session as its `parentID` — the same subagent-child shape as the arm-time planner. No fresh standalone session is
- * spawned for evaluation. This module is the single source of truth for the agent's id, its task label and its
+ * A verdict is produced by one real OpenCode child session of this agent, created by the harness without a working-
+ * session parent so the host cannot deliver a completion that wakes the parent. The plugin emits its own queued,
+ * non-waking completion report instead, and loop planner children reuse the verdict child as their parent. No fresh
+ * standalone session is spawned for evaluation. This module is the single source of truth for the agent's id, its task label and its
  * system prompt; the long evidence matrix / output contract stays in the per-verdict rubric (core/prompts.ts),
  * byte-identical. The child's own text goes straight to `verdictFromNativeReport`; the old native-report routing
  * helpers were removed with the legacy worker-delegation path.
