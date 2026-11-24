@@ -230,6 +230,20 @@ export function createVerifier() {
   }
 }
 
+/**
+ * Return a planner scope only when it was distilled for the condition being judged.
+ *
+ * A goal can be armed without a fresh plan (planner quota/timeout, /goal clear followed by /goal, a raw
+ * /goal-loop directive). The previous goal's scope must not leak into the new goal's evaluation request,
+ * so the stored plan is paired with the condition it belongs to.
+ */
+export function planScopeFor(
+  stored: { condition: string; scope: "trivial" | "code" } | undefined,
+  condition: string,
+): "trivial" | "code" | undefined {
+  return stored?.condition === condition ? stored.scope : undefined
+}
+
 export default Plugin.define({
   id: PLUGIN_ID,
   async setup(ctx) {
@@ -456,10 +470,11 @@ export default Plugin.define({
         summary = digest(await evaluatorContext(sessionID, signal))
       }
       const parent = controller.live(sessionID)
+      const planScope = planScopeFor(armedPlanScopes.get(sessionID), condition)
       const prompt = nativeEvaluationRequest({
         condition,
         summary,
-        ...(armedPlanScopes.has(sessionID) ? { armPlanScope: armedPlanScopes.get(sessionID)! } : {}),
+        ...(planScope ? { armPlanScope: planScope } : {}),
         nonce: Math.random().toString(36).slice(2, 10),
         ...(parent?.loopEnabled
           ? {
@@ -486,9 +501,10 @@ export default Plugin.define({
     // concise condition. The worker and the evaluator both read the stored result, so they cannot drift. Failure,
     // quota or timeout falls back to the raw text with a minimal directive — never the old heuristic essays.
     const plannerChildren = new Set<string>()
-    // The arm-time planner's scope rides into the first evaluation prompt (no new persisted field): a fresh arm
-    // overwrites it, so the evaluator always sees the scope of the condition it is actually scoring.
-    const armedPlanScopes = new Map<string, "trivial" | "code">()
+    // The arm-time planner's scope rides into the first evaluation prompt (no new persisted field). A failed
+    // planner leaves no new plan, so an old entry must never be applied to the next goal: the stored condition
+    // has to match the condition actually being judged. See planScopeFor.
+    const armedPlanScopes = new Map<string, { condition: string; scope: "trivial" | "code" }>()
     const PLAN_TIMEOUT_MS = 30_000
     const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
       // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
@@ -739,7 +755,8 @@ export default Plugin.define({
             // Status / clear / invalid are commands, not goals — never send them to the planner.
             const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
             const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
-            if (planned) armedPlanScopes.set(sessionID, planned.scope)
+            if (planned) armedPlanScopes.set(sessionID, { condition: planned.condition, scope: planned.scope })
+            else armedPlanScopes.delete(sessionID)
             await controller.command({
               sessionID,
               text: planned?.condition ?? raw,
@@ -830,8 +847,9 @@ export default Plugin.define({
         // command path would have delivered, with the directive token and the count removed from the objective.
         const originalPrompt = event.prompt.text
         const planned = await planGoal(event.sessionID, objective)
-        if (planned) armedPlanScopes.set(event.sessionID, planned.scope)
         const condition = planned?.condition ?? objective
+        if (planned) armedPlanScopes.set(event.sessionID, { condition, scope: planned.scope })
+        else armedPlanScopes.delete(event.sessionID)
         event.prompt.text = directivePrompt(condition, controller.commitForSession(event.sessionID), { iteration: 1, maxLoops, objective: condition, history: [] }, true)
         const armed = await controller.armFromPrompt({
           sessionID: event.sessionID,
