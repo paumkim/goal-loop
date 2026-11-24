@@ -6501,6 +6501,23 @@
       "submittedAt": "2026-11-23T15:59:02Z",
       "mergedAt": "2026-11-23T16:01:17Z",
       "mergedInto": "dev"
+    },
+    "unify-exporter-artifact-name": {
+      "agent": "orchestrator",
+      "paths": "src/core/dossier.ts,src/core/dossier-export.ts,src/core/dossier-seal.ts,src/core/spend-ledger.ts,src/core/dossier-index.ts,src/core/dossier-review.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/unify-exporter-artifact-name",
+      "worktree": "worktree/wt-unify-exporter-artifact-name",
+      "status": "done",
+      "createdAt": "2026-11-24T00:52:05Z",
+      "submittedAt": "2026-11-24T00:59:45Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T00:59:45Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md",
+        "dist/tui.js"
+      ],
+      "mergedAt": "2026-11-24T01:02:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
