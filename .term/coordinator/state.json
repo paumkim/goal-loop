@@ -6826,6 +6826,35 @@
       "submittedAt": "2026-11-24T07:00:36Z",
       "mergedAt": "2026-11-24T07:05:48Z",
       "mergedInto": "dev"
+    },
+    "concurrency-audit": {
+      "agent": "hy4-flash-free",
+      "paths": "src/index.ts,src/runtime/**,packages/coordinator/bin/coordinator,test/**,SPEC.md",
+      "branch": "wt/concurrency-audit",
+      "worktree": "worktree/wt-concurrency-audit",
+      "status": "submitted",
+      "createdAt": "2026-11-24T07:31:20Z",
+      "submittedAt": "2026-11-24T07:31:21Z"
+    },
+    "test-quality-audit": {
+      "agent": "build-primary",
+      "paths": "test/**",
+      "branch": "wt/test-quality-audit",
+      "worktree": "worktree/wt-test-quality-audit",
+      "status": "submitted",
+      "createdAt": "2026-11-24T07:55:53Z",
+      "submittedAt": "2026-11-24T08:03:03Z"
+    },
+    "pin-weak-assertions": {
+      "agent": "hy4-flash-free",
+      "paths": "test/prompter-config.test.ts,test/entries.test.ts,test/dossier-export.test.ts,test/plugin.test.ts,test/coordinator-lease-races.test.ts,test/improvement-backlog.test.ts,test/verify.test.ts,test/prompter-git.test.ts,test/learning-log.test.ts",
+      "branch": "wt/pin-weak-assertions",
+      "worktree": "worktree/wt-pin-weak-assertions",
+      "status": "done",
+      "createdAt": "2026-11-24T07:58:24Z",
+      "submittedAt": "2026-11-24T08:02:41Z",
+      "mergedAt": "2026-11-24T08:07:18Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
