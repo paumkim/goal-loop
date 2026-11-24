@@ -6634,6 +6634,17 @@
       ],
       "mergedAt": "2026-11-24T02:46:49Z",
       "mergedInto": "dev"
+    },
+    "hud-planning-grace": {
+      "agent": "build",
+      "paths": "src/tui.tsx,src/core/entries.ts,src/core/types.ts,dist/tui.js,test/,docs/,SPEC.md",
+      "branch": "wt/hud-planning-grace",
+      "worktree": "worktree/wt-hud-planning-grace",
+      "status": "done",
+      "createdAt": "2026-11-24T02:48:03Z",
+      "submittedAt": "2026-11-24T02:52:54Z",
+      "mergedAt": "2026-11-24T02:55:20Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
