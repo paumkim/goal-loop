@@ -7119,14 +7119,16 @@
       "paths": "src/core/history.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/simplify-current-iteration-verdict",
       "worktree": "worktree/wt-simplify-current-iteration-verdict",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T15:42:14Z",
       "submittedAt": "2026-11-24T15:49:49Z",
       "forcedScope": true,
       "forcedScopeAt": "2026-11-24T15:49:49Z",
       "forcedScopeFiles": [
         "dist/tui.js"
-      ]
+      ],
+      "mergedAt": "2026-11-24T16:46:27Z",
+      "mergedInto": "dev"
     },
     "simplify-isdatapath-dead-guard": {
       "agent": "orchestrator",
