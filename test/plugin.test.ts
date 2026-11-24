@@ -1435,6 +1435,11 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       expect(created[0].parentID).toBeUndefined()
       expect(created[1].parentID).toBe("ses_judge")
       expect(created[2].parentID).toBe("ses_judge")
+      // Only the verdict emits a completion report into the working session. Loop-step children are parented to the
+      // evaluator session, whose host report belongs there — duplicating it in the worker would be wasted noise.
+      const completionReports = calls.prompts.filter((p: any) => p.metadata?.source === "subagent")
+      expect(completionReports).toHaveLength(1)
+      expect(completionReports[0].description).toBe("Goal Achieved.")
       await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.loopHistory?.length === 1, 3_000)
     } finally {
       await dispose?.()

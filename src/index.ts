@@ -399,23 +399,26 @@ export default Plugin.define({
           done.then(() => undefined),
         ])
         const verdict = await done
-        // The child has no parent link, so the host delivers no completion and wakes nobody. Emit the visible
-        // completion ourselves: queued and non-waking, with a "Goal Achieved." chip for a met verdict and the
-        // evaluator label for every other outcome. The verdict already came from this child's event stream, so a
-        // delivery failure is only a lost visual and must never block it. `isJudgeReport` keeps this text out of
-        // model context (SPEC-workstreams.md CXLI).
-        const description = parseVerdict(verdict)?.verdict === "met" ? "Goal Achieved." : EVALUATOR_AGENT_TITLE
-        try {
-          await session.synthetic({
-            sessionID,
-            description,
-            text: `<subagent sessionID="${id}" state="completed" description="${description}">\n${verdict}\n</subagent>`,
-            metadata: { source: "subagent", childID: id, agent: EVALUATOR_AGENT_ID, state: "completed" },
-            delivery: "queue",
-            resume: false,
-          })
-        } catch (error) {
-          log.warn("evaluator subagent report could not be delivered", { error: String(error) })
+        // Verdict children have no parent link, so the host delivers no completion and wakes nobody. Emit the
+        // visible completion ourselves: queued and non-waking, with a "Goal Achieved." chip for a met verdict and
+        // the evaluator label for every other outcome. Loop-step children are parented to the verdict child, so the
+        // host reports those to the evaluator session — emitting one here too would duplicate noise in the worker.
+        // The verdict already came from this child's event stream, so a delivery failure is only a lost visual and
+        // must never block it. `isJudgeReport` keeps this text out of model context (SPEC-workstreams.md CXLI).
+        if (!parentID) {
+          const description = parseVerdict(verdict)?.verdict === "met" ? "Goal Achieved." : EVALUATOR_AGENT_TITLE
+          try {
+            await session.synthetic({
+              sessionID,
+              description,
+              text: `<subagent sessionID="${id}" state="completed" description="${description}">\n${verdict}\n</subagent>`,
+              metadata: { source: "subagent", childID: id, agent: EVALUATOR_AGENT_ID, state: "completed" },
+              delivery: "queue",
+              resume: false,
+            })
+          } catch (error) {
+            log.warn("evaluator subagent report could not be delivered", { error: String(error) })
+          }
         }
         // Throw after the text is collected so callers can classify a quota error and pause instead of retrying.
         if (failure !== undefined) throw asEvaluatorError(failure)
