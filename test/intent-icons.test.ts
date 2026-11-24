@@ -5,11 +5,11 @@
  */
 import { describe, expect, test } from "bun:test"
 import stringWidth from "string-width"
-import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, applyIntentSignal, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
+import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, activityBadgeCells, activityWord, applyIntentSignal, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
 import { pillModel } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
-const INTENTS: readonly AgentIntent[] = ["thinking", "reading", "writing", "executing", "web", "memory", "waiting", "done", "error"]
+const INTENTS: readonly AgentIntent[] = ["thinking", "reading", "writing", "executing", "web", "memory", "waiting", "done", "error", "delegating"]
 
 const goal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => ({
   version: 1,
@@ -34,7 +34,7 @@ const goal = (overrides: Partial<GoalSnapshot> = {}): GoalSnapshot => ({
 })
 
 describe("AGENT_ICONS", () => {
-  test("the nine nerd glyphs are the exact codepoints from the design", () => {
+  test("the nine design glyphs plus the delegation glyph are exact one-cell codepoints", () => {
     const codepoints: Record<AgentIntent, string> = {
       thinking: "f06a9",
       reading: "f021e",
@@ -45,6 +45,7 @@ describe("AGENT_ICONS", () => {
       waiting: "f03e4",
       done: "f012c",
       error: "f0156",
+      delegating: "f0c0",
     }
     for (const intent of INTENTS) {
       const glyph = AGENT_ICONS[intent].nerd
@@ -67,8 +68,17 @@ describe("AGENT_ICONS", () => {
     expect(AGENT_ICONS.thinking.ascii).toBe("*") // same face as the breath's ascii arm
   })
 
-  test("every intent carries a label", () => {
-    for (const intent of INTENTS) expect(AGENT_ICONS[intent].label.length).toBeGreaterThan(0)
+  test("every intent carries a label that paints as its budgeted activity word", () => {
+    for (const intent of INTENTS) {
+      expect(AGENT_ICONS[intent].label.length).toBeGreaterThan(0)
+      // The word is the lowercased label so the glyph and the word can never drift, and the badge
+      // reserves exactly that word plus its two padding spaces from the pill's cell budget.
+      expect(activityWord(intent)).toBe(AGENT_ICONS[intent].label.toLowerCase())
+      expect(activityBadgeCells(intent)).toBe(stringWidth(` ${activityWord(intent)} `))
+    }
+    // Background delegation must read as a word, never as a silent thinking face.
+    expect(activityWord(resolveToolIntent("task"))).toBe("delegating")
+    expect(activityWord(resolveToolIntent("subagent"))).toBe("delegating")
   })
 })
 
@@ -80,12 +90,14 @@ describe("resolveToolIntent", () => {
       ["bash", "executing"], ["exec", "executing"], ["shell", "executing"], ["test", "executing"],
       ["webfetch", "web"], ["websearch", "web"], ["fetch", "web"], ["curl", "web"],
       ["memory", "memory"], ["compact", "memory"], ["history", "memory"], ["rag", "memory"],
+      ["task", "delegating"], ["subagent", "delegating"], ["delegate", "delegating"],
+      ["spawn", "delegating"], ["agent", "delegating"],
     ]
     for (const [tool, intent] of cases) expect(resolveToolIntent(tool)).toBe(intent)
   })
 
   test("unknown and malformed names think rather than throwing or painting a wrong icon", () => {
-    for (const tool of ["task", "subagent", "todo", "unknown", "", "   "]) expect(resolveToolIntent(tool)).toBe("thinking")
+    for (const tool of ["todo", "unknown", "", "   "]) expect(resolveToolIntent(tool)).toBe("thinking")
     expect(resolveToolIntent(undefined as unknown as string)).toBe("thinking")
   })
 
@@ -129,6 +141,7 @@ describe("intentAccent", () => {
     expect(intentAccent("writing")).toBe("warning")
     expect(intentAccent("executing")).toBe("warning")
     expect(intentAccent("waiting")).toBe("warning")
+    expect(intentAccent("delegating")).toBe("info")
     expect(intentAccent("done")).toBe("success")
     expect(intentAccent("error")).toBe("error")
     expect(intentAccent("thinking")).toBe("muted")
