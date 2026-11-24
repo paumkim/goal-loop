@@ -69,8 +69,7 @@ export function parseGoalDeclaredChecks(condition: string): GoalDeclaredParseRes
       malformed.push({ malformed: true, raw: trimmed, reason: error instanceof Error ? error.message : String(error), index })
     }
   }
-  // also support multiple directives on same line separated? unlikely, but scan all "verify:" occurrences not at line start inside text
-  // (kept simple/deterministic: line-oriented above)
+  // Parsing is strictly line-oriented: one `verify:` directive per line, with an optional leading backtick.
   return { checks, malformed }
 }
 
@@ -193,7 +192,7 @@ export function resolveVerifyChecks(opts: {
   const seen = new Set<string>()
   const push = (check: VerifyCheckConfig & { source: VerifyCheckSource; evidence?: VerifyEvidenceMode; artifactPatterns?: readonly string[] }) => {
     const id = check.id
-    if (seen.has(id)) return // deterministic: first wins (configured/legacy before goal-declared duplicates?) keep configured precedence
+    if (seen.has(id)) return // deterministic: first wins, so configured/legacy entries keep precedence over goal-declared duplicates
     seen.add(id)
     out.push({
       id,
