@@ -1510,6 +1510,9 @@ where its contract is defined in the current tree:
 - `test/spec-intro-glyphs.test.ts:15` reads the intro above and pins the shipped glyphs and menu wording.
 - `test/spec-role-split.test.ts:24` caps this file at 2,000 lines and keeps each workstream heading in
   exactly one of the two SPEC files.
+- `src/core/verify-matrix.ts · parseGoalDeclaredChecks` reads `verify:` directives strictly one per line
+  (an optional leading backtick is the only inline tolerance); duplicate ids keep the first entry, so
+  configured/legacy checks win over goal-declared repeats.
 
 ## Recent workstreams
 
