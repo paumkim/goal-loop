@@ -6977,9 +6977,11 @@
       "paths": "src/tui.tsx,test/intent-icons.test.ts,dist/tui.js,dist/tui.d.ts",
       "branch": "wt/pill-icon-live-activity",
       "worktree": "worktree/wt-pill-icon-live-activity",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T10:52:52Z",
-      "submittedAt": "2026-11-24T11:00:42Z"
+      "submittedAt": "2026-11-24T11:00:42Z",
+      "mergedAt": "2026-11-24T11:35:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
