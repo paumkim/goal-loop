@@ -1677,23 +1677,6 @@ The `DELEGATE_VERDICT` closing block in `src/core/prompts.ts` said "do not deleg
 
 Verification: focused `core`/`opencode-cli`/`commit-rule` suites green; full suite 2,325 pass / 0 fail with dist, TUI, docs-freshness and spec-check green.
 
-## Workstream CCX — evaluation spawns only parent-linked children (evaluator-child-session-parity) (2026-11-23)
-
-The screenshot of OpenCode's session search showed a long list of `evaluator` sessions: judging a goal had been
-spawning a fresh standalone session for each verdict. The live spawn is now the same parent-linked subagent child as
-the arm-time planner (`ctx.session.create({ parentID: sessionID, agent, model })`), so a verdict is accounted under
-the working session. This workstream removes the routing left over from the older worker-delegation design: the
-`findNativeReport` / `parseSubagentReport` helpers (which ingested native `<subagent>` verdict reports when the
-worker delegated the judgment) are deleted from `src/core/evaluator-agent.ts` with their unit tests, and the remaining
-"standalone / no parentID" comments in the evaluator agent, worker prompts, runtime and host wiring now state the
-parent-linked child shape. No verdict, retry, consensus or loop behavior changed.
-
-Verification: a source-guard regression in `test/plugin.test.ts` pins that the only two `ctx.session.create` calls
-(judge and planner) both carry `parentID: sessionID` and that no `session.remove` path exists; the existing plugin
-test still asserts exactly one judge child with the parent link. Focused `core`/`plugin` suites 243 pass / 0 fail.
-Full `bun run check` green after artifact regeneration; marker re-counted for four fewer tests, no shipped file
-added or removed.
-
 ## Workstream CCXI — one artifact-name builder for every dossier exporter (unify-exporter-artifact-name) (2026-11-23)
 
 Five dossier-family exporters each rebuilt the same `goal-<stem>-<compact UTC stamp>[-<attempt+1>].md` name
