@@ -109,6 +109,27 @@ export const shouldKeepPlanningPlaceholder = (
   sessionID: string,
 ): boolean => isPlanningSnapshot(previous, sessionID) && (next === null || !isLive(next.status))
 
+/**
+ * A re-pull's reply is composed on the server when the request is handled, but delivered to `put()`
+ * later. Started while the planner still had no record, it can carry `null` or the previous goal's
+ * terminal snapshot and land AFTER the real arm event replaced the placeholder — the cache no longer
+ * identifies the placeholder, yet the answer is just as stale. Suppress only pull-sourced
+ * null/terminal answers inside this short window; `changed` events (including a user's `cleared`)
+ * are never suppressed, and a genuinely completed goal is re-pulled again on the next stale tick.
+ */
+export const PLANNING_PULL_GRACE_MS = 35_000
+
+export const isStalePlanningPull = (
+  planningAt: number | undefined,
+  next: GoalSnapshot | null,
+  nowMs: number,
+  graceMs: number = PLANNING_PULL_GRACE_MS,
+): boolean =>
+  planningAt !== undefined &&
+  nowMs - planningAt >= 0 &&
+  nowMs - planningAt < graceMs &&
+  (next === null || !isLive(next.status))
+
 /** Drops the given session entries outright (end-of-life terminal records); `keep` is never dropped. */
 export function dropSessions(
   entries: Readonly<Record<string, GoalSnapshotCacheEntry>>,

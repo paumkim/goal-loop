@@ -26,13 +26,13 @@ import { exportDossierIndex, dossierIndexSummaryLine } from "./core/dossier-inde
 import { sealedDossierCandidates,  attestSealedDossier, attestationReportMarkdown, attestSummaryLine, selectNewestSealedDossier } from "./core/dossier-attest.ts"
 import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
-import { isLive, type GoalSnapshot, type Notice } from "./core/types.ts"
+import { isLive, isPlanningSnapshot, type GoalSnapshot, type Notice } from "./core/types.ts"
 import { userFacingError } from "./tui-error.ts"
 import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./status-dialog.tsx"
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, shouldKeepPlanningPlaceholder, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, shouldKeepPlanningPlaceholder, isStalePlanningPull, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
 import { createGoalMirror } from "./core/mirror.ts"
@@ -369,7 +369,7 @@ export default Plugin.define({
      */
     const refresh = makeGoalRefresh({
       get: (sessionID) => rpc.get({ sessionID }, at(sessionID)),
-      put: (sessionID, goal) => put(sessionID, goal),
+      put: (sessionID, goal) => put(sessionID, goal, true),
     })
 
     const goalMirror = createGoalMirror()
@@ -385,24 +385,37 @@ export default Plugin.define({
       try {
         const goal = goalMirror.read(sessionID, context.location?.directory)
         if (goal === undefined) return false
-        put(sessionID, goal)
+        put(sessionID, goal, true)
         return true
       } catch {
         return false
       }
     }
 
-    const put = (sessionID: string, goal: GoalSnapshot | null) => {
+    // When a planning placeholder was last seen per session. A re-pull's answer can be composed while
+    // the planner still had no record and delivered after the arm event; this grace window keeps that
+    // stale answer from being read as the freshly armed goal's completion. TUI-local, like the pin.
+    const planningSeenAt = new Map<string, number>()
+
+    const put = (sessionID: string, goal: GoalSnapshot | null, fromPull = false) => {
       // Completion-moment detection runs before the entries update: a live→terminal transition
       // arms the acknowledgment pill, a fresh live goal disarms any stale one. Best-effort.
       let planningInFlight = false
       try {
         const previous = entries()[sessionID]?.goal
+        if (isPlanningSnapshot(goal, sessionID)) {
+          planningSeenAt.set(sessionID, Date.now())
+          if (planningSeenAt.size > 64) planningSeenAt.clear()
+        }
         // The arm-time planner's bar is a live placeholder with no server record. A re-pull while the
         // planner runs (or a late one after the arm event) resolves null or a stale terminal record;
         // reading that as the placeholder's completion is what flashed "loop complete", closed the
         // HUD and dropped the indicator. Keep the placeholder until the real arm snapshot lands.
         planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID)
+        // Same stale answer, delivered after arm: the cache now holds the real record, so identify it
+        // by the planning window instead. Only pull-sourced answers are suppressed — a `changed`
+        // event (including a user's `cleared`) is always authoritative.
+        if (!planningInFlight && fromPull && isStalePlanningPull(planningSeenAt.get(sessionID), goal, Date.now())) planningInFlight = true
         // An identical snapshot changes nothing — skip re-arming so the ack window stays 45s from the transition.
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false
         const wasLive = previous != null && isLive(previous.status)

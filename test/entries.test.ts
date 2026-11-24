@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, shouldKeepPlanningPlaceholder, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, shouldKeepPlanningPlaceholder, isStalePlanningPull, PLANNING_PULL_GRACE_MS, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
 import { planningSnapshotId, type GoalSnapshot, type GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
@@ -390,5 +390,34 @@ describe("shouldKeepPlanningPlaceholder — the first-arm bar stays visible", ()
   test("a real goal's live→terminal transition is untouched", () => {
     expect(shouldKeepPlanningPlaceholder(snap("active"), snap("achieved"), "ses")).toBe(false)
     expect(shouldKeepPlanningPlaceholder(snap("active"), null, "ses")).toBe(false)
+  })
+})
+
+describe("isStalePlanningPull — a late answer cannot read as the new goal's completion", () => {
+  const at = 10_000
+
+  test("a null or stale-terminal answer composed during the planning window is suppressed", () => {
+    expect(isStalePlanningPull(at, null, at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, snap("achieved"), at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, snap("impossible"), at + 1000)).toBe(true)
+  })
+
+  test("a live answer (the arm landed before the reply was composed) flows through", () => {
+    expect(isStalePlanningPull(at, snap("active"), at + 1000)).toBe(false)
+    expect(isStalePlanningPull(at, snap("paused"), at + 1000)).toBe(false)
+  })
+
+  test("no planning placeholder was ever seen — nothing to suppress", () => {
+    expect(isStalePlanningPull(undefined, null, at)).toBe(false)
+    expect(isStalePlanningPull(undefined, snap("achieved"), at)).toBe(false)
+  })
+
+  test("the window expires at PLANNING_PULL_GRACE_MS, so a real terminal re-pull still converges", () => {
+    expect(isStalePlanningPull(at, snap("achieved"), at + PLANNING_PULL_GRACE_MS - 1)).toBe(true)
+    expect(isStalePlanningPull(at, snap("achieved"), at + PLANNING_PULL_GRACE_MS)).toBe(false)
+  })
+
+  test("a clock that went backwards never extends the window", () => {
+    expect(isStalePlanningPull(at, snap("achieved"), at - 1)).toBe(false)
   })
 })
