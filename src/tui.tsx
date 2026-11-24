@@ -78,6 +78,104 @@ const ClampedColumn = (props: { children?: JSX.Element }) => {
   )
 }
 
+/**
+ * Live activity icons for the ambient pill — pure data, no I/O, no theme, no host types, so the mapping
+ * is unit-testable headlessly. Kept in the shipped TUI entry (rather than a new src/ file) because the
+ * package-count gate pins the tarball's file list, and the compiled TUI bundles this entry anyway.
+ *
+ * Two arms, mirroring the HUD's other glyph families:
+ *   - `nerd` is the Nerd Font glyph (Unicode Private Use Area). It needs a patched font to render; without
+ *     one the host paints tofu. The caller chooses this arm; nothing auto-detects fonts.
+ *   - `ascii` is the portable arm, used under reduced color (NO_COLOR / TERM=dumb): strictly ASCII so it
+ *     survives every terminal, with done/error demoted to `+` / `x` like the HUD's terminal acknowledgments.
+ *
+ * The original snippet carried a raw `\x1b[38;5;N m` per intent. Those codes are deliberately absent:
+ * goal-loop paints through host theme tokens and drops every chromatic accent under NO_COLOR, so raw ANSI
+ * would break theming. `intentAccent` returns a theme-token *key* instead; the renderer resolves it.
+ */
+
+export type AgentIntent =
+  | "thinking"
+  | "reading"
+  | "writing"
+  | "executing"
+  | "web"
+  | "memory"
+  | "waiting"
+  | "done"
+  | "error"
+
+export interface IntentVisual {
+  readonly nerd: string
+  readonly ascii: string
+  readonly label: string
+}
+
+/** One intent per row; the nerd codepoints are the exact glyphs from the design snippet. */
+export const AGENT_ICONS: Record<AgentIntent, IntentVisual> = {
+  thinking:  { nerd: "\udb81\udea9", ascii: "*", label: "Thinking" },
+  reading:   { nerd: "\udb80\ude1e", ascii: "?", label: "Reading" },
+  writing:   { nerd: "\udb80\udfeb", ascii: "~", label: "Editing" },
+  executing: { nerd: "\uf489",       ascii: "$", label: "Running" },
+  web:       { nerd: "\udb81\udd9f", ascii: "@", label: "Fetching" },
+  memory:    { nerd: "\udb80\udeda", ascii: "#", label: "Context" },
+  waiting:   { nerd: "\udb80\udfe4", ascii: "!", label: "Approval" },
+  done:      { nerd: "\udb80\udd2c", ascii: "+", label: "Done" },
+  error:     { nerd: "\udb80\udd56", ascii: "x", label: "Failed" },
+} as const
+
+/** Tool-name → intent. Order matters: the first matching family wins. Case-insensitive; unknown names think. */
+const READ = /read|grep|find|ls|cat|glob|inspect/
+const WRITE = /write|edit|patch|replace|create|delete/
+const EXEC = /bash|exec|run|shell|test|build/
+const WEB = /web|search|fetch|curl|http|scrape/
+const MEMORY = /memory|rag|embed|compact|history/
+
+export const resolveToolIntent = (toolName: string): AgentIntent => {
+  const name = typeof toolName === "string" ? toolName.toLowerCase() : ""
+  if (READ.test(name)) return "reading"
+  if (WRITE.test(name)) return "writing"
+  if (EXEC.test(name)) return "executing"
+  if (WEB.test(name)) return "web"
+  if (MEMORY.test(name)) return "memory"
+  return "thinking"
+}
+
+/** The leading cell for an intent. Unknown intents fall back to thinking rather than painting nothing. */
+export const intentGlyph = (intent: AgentIntent, ascii: boolean = false): string =>
+  (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking)[ascii ? "ascii" : "nerd"]
+
+/**
+ * Split a rendered pill line into its leading cell and the remainder, substituting an intent glyph for
+ * the cell the HUD painted. All HUD glyphs are BMP (one UTF-16 unit) and every nerd glyph is one PUA cell,
+ * so `slice(1)` never splits a surrogate pair and the caret/pinned-condition budget math is unchanged.
+ */
+export const withIntentGlyph = (text: string, intent: AgentIntent, ascii: boolean = false): { readonly glyph: string; readonly rest: string } => ({
+  glyph: intentGlyph(intent, ascii),
+  rest: text.slice(1),
+})
+
+/** Theme-token key for the glyph's accent. The renderer resolves the key; no raw color escapes this module. */
+export const intentAccent = (intent: AgentIntent): "muted" | "info" | "warning" | "error" | "success" => {
+  switch (intent) {
+    case "reading":
+    case "web": return "info"
+    case "writing":
+    case "executing":
+    case "waiting": return "warning"
+    case "done": return "success"
+    case "error": return "error"
+    default: return "muted"
+  }
+}
+
+/**
+ * How long a tool's intent rides the pill after its last event before the glyph falls back to the breath.
+ * Long enough to read a fast burst of tool calls as a sequence of live intents; short enough that an idle
+ * turn reads as thinking again instead of freezing on the last tool it happened to call.
+ */
+export const INTENT_TTL_MS = 4_000
+
 export default Plugin.define({
   id: "goal-loop.tui",
   setup(context) {
@@ -90,6 +188,37 @@ export default Plugin.define({
     // dialog opens and whenever any goal `changed` event lands while it is open; the host owns session
     // switching, so the block carries no actions.
     const [others, setOthers] = createSignal<readonly GoalSnapshot[]>([])
+    // Live tool intent, keyed by session — the icon that rides the ambient pill's leading cell. This is
+    // view-local like the pin registry: no server state, no RPC, no mirror write. The host tool events are
+    // the only source of truth (`session.tool.called` has no tool name; `session.tool.input.started` does).
+    // A per-session timer expires the icon back to the breath when the agent goes quiet, so a stale "editing"
+    // never freezes on the pill after the turn has moved on. Parallel tools in other sessions keep their own.
+    const [intents, setIntents] = createSignal<Readonly<Record<string, AgentIntent>>>({})
+    const intentTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const noteIntent = (sessionID: string | undefined, intent: AgentIntent): void => {
+      if (!sessionID) return
+      setIntents((previous) => (previous[sessionID] === intent ? previous : { ...previous, [sessionID]: intent }))
+      const pending = intentTimers.get(sessionID)
+      if (pending !== undefined) clearTimeout(pending)
+      intentTimers.set(sessionID, setTimeout(() => {
+        intentTimers.delete(sessionID)
+        setIntents((previous) => {
+          if (!(sessionID in previous)) return previous
+          const next = { ...previous }
+          delete next[sessionID]
+          return next
+        })
+      }, INTENT_TTL_MS))
+    }
+    const toolEventDisposers: Array<() => void> = []
+    toolEventDisposers.push(
+      context.data.on("session.tool.input.started", (event) => noteIntent(event.data.sessionID, resolveToolIntent(event.data.name))),
+      context.data.on("session.tool.failed", (event) => noteIntent(event.data.sessionID, "error")),
+      // Permission prompts are the one approval-shaped intent: the agent is blocked on a human, not working.
+      context.data.on("permission.asked", (event) => noteIntent(event.data.sessionID, "waiting")),
+      context.data.on("session.execution.started", (event) => noteIntent(event.data.sessionID, "thinking")),
+      context.data.on("session.execution.succeeded", (event) => noteIntent(event.data.sessionID, "done")),
+    )
     const sessionLabel = (sessionID: string): string => {
       try {
         return context.data.session.get(sessionID)?.title ?? sessionID
@@ -1096,6 +1225,36 @@ export default Plugin.define({
           // truncated to whatever cells remain after the state prefix.
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base
         }
+        // A live tool intent replaces ONLY the pill's leading cell. The breath wave underneath is still what
+        // pillModel paints, so the ring, the waiting ring, the stuck dot and the terminal acknowledgments keep
+        // their documented grammar — state outranks activity. The override is suppressed on anything but a
+        // working, live goal: a paused/waiting/queued/stuck/terminal pill must never borrow a tool's icon.
+        const activeIntent = (): AgentIntent | undefined => {
+          const intent = props.sessionID ? intents()[props.sessionID] : undefined
+          if (!intent) return undefined
+          const g = goal()
+          if (!g || g.status !== "active" || isRetryStuck(g) || g.waiting === true || g.queued === true) return undefined
+          return intent
+        }
+        // Split the single leading cell from the rest of the line so the icon can carry its own accent color.
+        // withIntentGlyph owns the swap contract; without a live intent the HUD's own glyph stays untouched.
+        const pillCells = (): { readonly glyph: string; readonly rest: string } => {
+          const text = pillText()
+          const override = activeIntent()
+          if (!override) return { glyph: text.slice(0, 1), rest: text.slice(1) }
+          return withIntentGlyph(text, override, motionDisabled(process.env))
+        }
+        const glyphColor = (): ColorInput => {
+          const intent = activeIntent()
+          if (!intent || motionDisabled(process.env)) return color()
+          switch (intentAccent(intent)) {
+            case "info": return context.theme.text.feedback.info.base
+            case "warning": return context.theme.text.feedback.warning.base
+            case "success": return context.theme.text.feedback.success?.base ?? context.theme.text.feedback.info.base
+            case "error": return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base
+            default: return context.theme.text.muted
+          }
+        }
         // The breath: the ring swells through `◦ ○ ◎ ○` on a 2.4s cycle (crest = ◎) — presence, not animation.
         // It runs while the loop is genuinely alive (working, or a transient window: evaluating, hot
         // compaction, the just-achieved flash, the landing acknowledgment) and never otherwise —
@@ -1215,8 +1374,11 @@ export default Plugin.define({
                 } catch {}
               }}
             >
+              <text fg={glyphColor()} wrapMode="none" flexShrink={0} attributes={pillAttrs()}>
+                {pillCells().glyph}
+              </text>
               <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
-                {pillText()}
+                {pillCells().rest}
               </text>
               <text fg={context.theme.text.faint} wrapMode="none" flexShrink={0}>{cardFor() ? " ▾" : " ▴"}</text>
             </box>
@@ -1636,6 +1798,9 @@ export default Plugin.define({
     return () => {
       clearInterval(timer)
       pumpController.abort()
+      for (const dispose of toolEventDisposers) dispose()
+      for (const pending of intentTimers.values()) clearTimeout(pending)
+      intentTimers.clear()
       if (statusCopiedTimer) clearTimeout(statusCopiedTimer)
       for (const pending of terminalTimers) clearTimeout(pending)
       terminalTimers.clear()

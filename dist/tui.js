@@ -6527,6 +6527,95 @@ var ClampedColumn = (props) => {
     return _el$;
   })();
 };
+var AGENT_ICONS = {
+  thinking: {
+    nerd: "\uDB81\uDEA9",
+    ascii: "*",
+    label: "Thinking"
+  },
+  reading: {
+    nerd: "\uDB80\uDE1E",
+    ascii: "?",
+    label: "Reading"
+  },
+  writing: {
+    nerd: "\uDB80\uDFEB",
+    ascii: "~",
+    label: "Editing"
+  },
+  executing: {
+    nerd: "\uF489",
+    ascii: "$",
+    label: "Running"
+  },
+  web: {
+    nerd: "\uDB81\uDD9F",
+    ascii: "@",
+    label: "Fetching"
+  },
+  memory: {
+    nerd: "\uDB80\uDEDA",
+    ascii: "#",
+    label: "Context"
+  },
+  waiting: {
+    nerd: "\uDB80\uDFE4",
+    ascii: "!",
+    label: "Approval"
+  },
+  done: {
+    nerd: "\uDB80\uDD2C",
+    ascii: "+",
+    label: "Done"
+  },
+  error: {
+    nerd: "\uDB80\uDD56",
+    ascii: "x",
+    label: "Failed"
+  }
+};
+var READ = /read|grep|find|ls|cat|glob|inspect/;
+var WRITE = /write|edit|patch|replace|create|delete/;
+var EXEC = /bash|exec|run|shell|test|build/;
+var WEB = /web|search|fetch|curl|http|scrape/;
+var MEMORY = /memory|rag|embed|compact|history/;
+var resolveToolIntent = (toolName) => {
+  const name = typeof toolName === "string" ? toolName.toLowerCase() : "";
+  if (READ.test(name))
+    return "reading";
+  if (WRITE.test(name))
+    return "writing";
+  if (EXEC.test(name))
+    return "executing";
+  if (WEB.test(name))
+    return "web";
+  if (MEMORY.test(name))
+    return "memory";
+  return "thinking";
+};
+var intentGlyph = (intent, ascii = false) => (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking)[ascii ? "ascii" : "nerd"];
+var withIntentGlyph = (text, intent, ascii = false) => ({
+  glyph: intentGlyph(intent, ascii),
+  rest: text.slice(1)
+});
+var intentAccent = (intent) => {
+  switch (intent) {
+    case "reading":
+    case "web":
+      return "info";
+    case "writing":
+    case "executing":
+    case "waiting":
+      return "warning";
+    case "done":
+      return "success";
+    case "error":
+      return "error";
+    default:
+      return "muted";
+  }
+};
+var INTENT_TTL_MS = 4000;
 var tui_default = Plugin.define({
   id: "goal-loop.tui",
   setup(context) {
@@ -6535,6 +6624,33 @@ var tui_default = Plugin.define({
     const [now, setNow] = createSignal4(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
     const [others, setOthers] = createSignal4([]);
+    const [intents, setIntents] = createSignal4({});
+    const intentTimers = new Map;
+    const noteIntent = (sessionID, intent) => {
+      if (!sessionID)
+        return;
+      setIntents((previous) => previous[sessionID] === intent ? previous : {
+        ...previous,
+        [sessionID]: intent
+      });
+      const pending = intentTimers.get(sessionID);
+      if (pending !== undefined)
+        clearTimeout(pending);
+      intentTimers.set(sessionID, setTimeout(() => {
+        intentTimers.delete(sessionID);
+        setIntents((previous) => {
+          if (!(sessionID in previous))
+            return previous;
+          const next = {
+            ...previous
+          };
+          delete next[sessionID];
+          return next;
+        });
+      }, INTENT_TTL_MS));
+    };
+    const toolEventDisposers = [];
+    toolEventDisposers.push(context.data.on("session.tool.input.started", (event) => noteIntent(event.data.sessionID, resolveToolIntent(event.data.name))), context.data.on("session.tool.failed", (event) => noteIntent(event.data.sessionID, "error")), context.data.on("permission.asked", (event) => noteIntent(event.data.sessionID, "waiting")), context.data.on("session.execution.started", (event) => noteIntent(event.data.sessionID, "thinking")), context.data.on("session.execution.succeeded", (event) => noteIntent(event.data.sessionID, "done")));
     const sessionLabel = (sessionID) => {
       try {
         return context.data.session.get(sessionID)?.title ?? sessionID;
@@ -7617,6 +7733,42 @@ var tui_default = Plugin.define({
           const g = goal();
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
+        const activeIntent = () => {
+          const intent = props.sessionID ? intents()[props.sessionID] : undefined;
+          if (!intent)
+            return;
+          const g = goal();
+          if (!g || g.status !== "active" || isRetryStuck(g) || g.waiting === true || g.queued === true)
+            return;
+          return intent;
+        };
+        const pillCells = () => {
+          const text = pillText();
+          const override = activeIntent();
+          if (!override)
+            return {
+              glyph: text.slice(0, 1),
+              rest: text.slice(1)
+            };
+          return withIntentGlyph(text, override, motionDisabled(process.env));
+        };
+        const glyphColor = () => {
+          const intent = activeIntent();
+          if (!intent || motionDisabled(process.env))
+            return color();
+          switch (intentAccent(intent)) {
+            case "info":
+              return context.theme.text.feedback.info.base;
+            case "warning":
+              return context.theme.text.feedback.warning.base;
+            case "success":
+              return context.theme.text.feedback.success?.base ?? context.theme.text.feedback.info.base;
+            case "error":
+              return context.theme.text.feedback.error?.base ?? context.theme.text.feedback.warning.base;
+            default:
+              return context.theme.text.muted;
+          }
+        };
         const workingNow = () => {
           const g = goal();
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g);
@@ -7704,9 +7856,10 @@ var tui_default = Plugin.define({
               },
               get children() {
                 return [(() => {
-                  var _el$12 = _$createElement5("box"), _el$13 = _$createElement5("text"), _el$14 = _$createElement5("text");
+                  var _el$12 = _$createElement5("box"), _el$13 = _$createElement5("text"), _el$14 = _$createElement5("text"), _el$15 = _$createElement5("text");
                   _$insertNode4(_el$12, _el$13);
                   _$insertNode4(_el$12, _el$14);
+                  _$insertNode4(_el$12, _el$15);
                   _$setProp5(_el$12, "position", "absolute");
                   _$setProp5(_el$12, "top", -1);
                   _$setProp5(_el$12, "left", 0);
@@ -7726,20 +7879,27 @@ var tui_default = Plugin.define({
                     } catch {}
                   });
                   _$setProp5(_el$13, "wrapMode", "none");
-                  _$insert5(_el$13, pillText);
+                  _$setProp5(_el$13, "flexShrink", 0);
+                  _$insert5(_el$13, () => pillCells().glyph);
                   _$setProp5(_el$14, "wrapMode", "none");
-                  _$setProp5(_el$14, "flexShrink", 0);
-                  _$insert5(_el$14, () => cardFor() ? " \u25BE" : " \u25B4");
+                  _$insert5(_el$14, () => pillCells().rest);
+                  _$setProp5(_el$15, "wrapMode", "none");
+                  _$setProp5(_el$15, "flexShrink", 0);
+                  _$insert5(_el$15, () => cardFor() ? " \u25BE" : " \u25B4");
                   _$effect5((_p$) => {
-                    var _v$7 = color(), _v$8 = pillAttrs(), _v$9 = context.theme.text.faint;
+                    var _v$7 = glyphColor(), _v$8 = pillAttrs(), _v$9 = color(), _v$0 = pillAttrs(), _v$1 = context.theme.text.faint;
                     _v$7 !== _p$.e && (_p$.e = _$setProp5(_el$13, "fg", _v$7, _p$.e));
                     _v$8 !== _p$.t && (_p$.t = _$setProp5(_el$13, "attributes", _v$8, _p$.t));
                     _v$9 !== _p$.a && (_p$.a = _$setProp5(_el$14, "fg", _v$9, _p$.a));
+                    _v$0 !== _p$.o && (_p$.o = _$setProp5(_el$14, "attributes", _v$0, _p$.o));
+                    _v$1 !== _p$.i && (_p$.i = _$setProp5(_el$15, "fg", _v$1, _p$.i));
                     return _p$;
                   }, {
                     e: undefined,
                     t: undefined,
-                    a: undefined
+                    a: undefined,
+                    o: undefined,
+                    i: undefined
                   });
                   return _el$12;
                 })(), _$createComponent4(Show4, {
@@ -7747,7 +7907,7 @@ var tui_default = Plugin.define({
                     return cardFor();
                   },
                   children: (g) => (() => {
-                    var _el$16 = _$createElement5("box");
+                    var _el$17 = _$createElement5("box");
                     _$use2((el) => {
                       el.onSizeChange = () => {
                         const w = el.width;
@@ -7757,12 +7917,12 @@ var tui_default = Plugin.define({
                       const w = el.width;
                       if (w > 0)
                         setMountWidth(w);
-                    }, _el$16);
-                    _$setProp5(_el$16, "position", "absolute");
-                    _$setProp5(_el$16, "left", 0);
-                    _$setProp5(_el$16, "right", 0);
-                    _$setProp5(_el$16, "zIndex", 10);
-                    _$insert5(_el$16, _$createComponent4(Show4, {
+                    }, _el$17);
+                    _$setProp5(_el$17, "position", "absolute");
+                    _$setProp5(_el$17, "left", 0);
+                    _$setProp5(_el$17, "right", 0);
+                    _$setProp5(_el$17, "zIndex", 10);
+                    _$insert5(_el$17, _$createComponent4(Show4, {
                       get when() {
                         return mountWidth() !== undefined;
                       },
@@ -7827,15 +7987,15 @@ var tui_default = Plugin.define({
                       }
                     }));
                     _$effect5((_p$) => {
-                      var _v$0 = -(1 + cardRows()), _v$1 = cardRows();
-                      _v$0 !== _p$.e && (_p$.e = _$setProp5(_el$16, "top", _v$0, _p$.e));
-                      _v$1 !== _p$.t && (_p$.t = _$setProp5(_el$16, "height", _v$1, _p$.t));
+                      var _v$10 = -(1 + cardRows()), _v$11 = cardRows();
+                      _v$10 !== _p$.e && (_p$.e = _$setProp5(_el$17, "top", _v$10, _p$.e));
+                      _v$11 !== _p$.t && (_p$.t = _$setProp5(_el$17, "height", _v$11, _p$.t));
                       return _p$;
                     }, {
                       e: undefined,
                       t: undefined
                     });
-                    return _el$16;
+                    return _el$17;
                   })()
                 })];
               }
@@ -8178,6 +8338,11 @@ var tui_default = Plugin.define({
     return () => {
       clearInterval(timer);
       pumpController.abort();
+      for (const dispose of toolEventDisposers)
+        dispose();
+      for (const pending of intentTimers.values())
+        clearTimeout(pending);
+      intentTimers.clear();
       if (statusCopiedTimer)
         clearTimeout(statusCopiedTimer);
       for (const pending of terminalTimers)
@@ -8193,5 +8358,11 @@ var tui_default = Plugin.define({
   }
 });
 export {
-  tui_default as default
+  AGENT_ICONS,
+  INTENT_TTL_MS,
+  tui_default as default,
+  intentAccent,
+  intentGlyph,
+  resolveToolIntent,
+  withIntentGlyph
 };
