@@ -24,6 +24,11 @@ describe("cold replay avoids the provider-compaction divider", () => {
     // The condition read out of the installed upstream binary.
     const providerCompaction = message.status === "completed" && Boolean(message.native?.messages)
     expect(providerCompaction).toBe(false)
+
+    // Replicate the host's exact divider expression and assert what the TUI renders.
+    const divider = providerCompaction ? "Provider compaction" : "Compaction"
+    expect(divider).toBe("Compaction")
+    expect(divider).not.toContain("Provider compaction")
   })
 
   test("replays as an empty checkpoint, not a native window", () => {
