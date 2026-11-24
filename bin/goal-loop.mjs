@@ -1136,9 +1136,11 @@ const LABEL_TO = '? "Context Cleared"';
 
 /** Where the host TUI source lives: arg, env override, then the usual local clone. */
 function resolveHostLabelFile(args, opts) {
-  const positional = args.filter((a) => !a.startsWith("--"));
-  // Direct calls pass just [path, --flags]; runCli passes ["patch-host", path, --flags].
-  const arg = positional.length > 1 ? positional[1] : positional[0];
+  // Direct calls pass [path, --flags]; runCli passes ["patch-host", path, --flags]. Drop the command
+  // name so a bare `goal-loop patch-host` reaches the env/default path instead of treating "patch-host"
+  // as a file.
+  const positional = args.filter((a) => !a.startsWith("--") && a !== "patch-host");
+  const arg = positional[0];
   if (arg) return resolve(arg);
   const env = opts.env ?? process.env;
   if (env.GOAL_LOOP_OPENCODE_TUI) return resolve(env.GOAL_LOOP_OPENCODE_TUI);

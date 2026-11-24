@@ -6,7 +6,7 @@
  * TUI has no plugin slot, theme token, or config key for this string, so the rename cannot live in a
  * slot claim: it has to be a patch on the host source. Keeping the patch here — in the plugin repo —
  * means an upstream `git pull` in the OpenCode checkout can overwrite the host file without losing
- * the change: `goal-loop patch-host` (and `goal-loop install`) re-apply it from this data.
+ * the change: `goal-loop patch-host` re-applies it from this data.
  *
  * The patch is deliberately a literal string swap, not a line-number diff. Upstream refactors move
  * the line; they do not rename the string. A missing fragment is reported as "already patched"

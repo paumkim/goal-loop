@@ -159,4 +159,23 @@ describe("standalone CLI patch-host", () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  test("runCli without a path uses the env override, not the command name", async () => {
+    const { dir, file } = makeFile()
+    try {
+      const env = { GOAL_LOOP_OPENCODE_TUI: file }
+      const dry = await runCli(["patch-host", "--dry-run"], { env, cwd: dir })
+      expect(dry.code).toBe(0)
+      expect(dry.stdout).toContain(file)
+      expect(dry.stdout).toContain("dry-run")
+      expect(readFileSync(file, "utf8")).toBe(SOURCE)
+
+      const applied = await runCli(["patch-host"], { env, cwd: dir })
+      expect(applied.code).toBe(0)
+      expect(applied.stdout).toContain("Context Cleared")
+      expect(readFileSync(file, "utf8")).toContain('? "Context Cleared"')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })
