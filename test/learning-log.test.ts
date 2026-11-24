@@ -391,7 +391,12 @@ describe("learning-log runtime emission", () => {
     const text = await readFile(join(dir, ".term/goal-loop/learnings.jsonl"), "utf8")
     const rows = text.trim().split("\n").map((l) => JSON.parse(l))
     const cleared = rows.find((r) => r.kind === "goal_terminal" && r.status === "cleared")
-    expect(cleared).toBeTruthy()
+    expect(cleared).toMatchObject({
+      kind: "goal_terminal",
+      status: "cleared",
+      condition: "ship feature",
+      sessionID: "ses_test",
+    })
     expect(cleared.lesson).toContain("Cleared")
   })
 

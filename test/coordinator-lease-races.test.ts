@@ -69,8 +69,13 @@ describe("coordinator lease race fixes", () => {
     for (const c of codes) expect(c).toBe(0)
     const state = JSON.parse(readFileSync(join(dir, ".term/coordinator/state.json"), "utf8"))
     for (let i = 0; i < N; i++) {
-      expect(state.leases[`slug-${i}`]).toBeTruthy()
-      expect(state.leases[`slug-${i}`].status).toBe("claimed")
+      expect(state.leases[`slug-${i}`]).toMatchObject({
+        agent: `a${i}`,
+        paths: `p${i}/**`,
+        branch: `wt/slug-${i}`,
+        worktree: `worktree/wt-slug-${i}`,
+        status: "claimed",
+      })
     }
   })
 

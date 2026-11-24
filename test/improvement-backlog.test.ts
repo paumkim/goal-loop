@@ -101,8 +101,7 @@ describe("findBacklogDedupeMatches", () => {
       item({ id: "b", dedupeKeys: ["verification__matrix"] }),
       item({ id: "c", dedupeKeys: ["other"] }),
     ])
-    expect(matches.length).toBeGreaterThan(0)
-    expect(matches.some((m) => m.left === "a" && m.right === "b")).toBe(true)
+    expect(matches).toEqual([{ left: "a", right: "b", reason: "dedupeKey", key: "verification-matrix" }])
   })
 
   test("returns no matches for distinct keys", () => {

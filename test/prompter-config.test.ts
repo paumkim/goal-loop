@@ -8,9 +8,9 @@ import { envOverrides, isRepoAllowed, loadConfig, mergeConfig, normalize } from 
 describe("config", () => {
   test("defaults are the review-gated, capped baseline", () => {
     expect(DEFAULT_CONFIG.maxTasksPerTick).toBe(1)
-    expect(DEFAULT_CONFIG.maxSpendUsd).toBeGreaterThan(0)
+    expect(DEFAULT_CONFIG.maxSpendUsd).toBe(2)
     expect(DEFAULT_CONFIG.requireCleanTree).toBe(true)
-    expect(DEFAULT_CONFIG.prompts.length).toBeGreaterThan(0)
+    expect(DEFAULT_CONFIG.prompts).toEqual(["maintenance/autonomous-maintainer.md"])
   })
 
   test("mergeConfig applies partial overrides and clamps ranges", () => {

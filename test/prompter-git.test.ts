@@ -44,7 +44,7 @@ describe("git helpers", () => {
     run(worktree, ["add", "feature.txt"])
     run(worktree, ["commit", "-q", "-m", "feat: add feature"])
     const commit = tipAheadOf(repo, "dev", branch)
-    expect(commit).toBeTruthy()
+    expect(commit).toMatch(/^[0-9a-f]{40}$/)
     expect(aheadCount(repo, "dev", branch)).toBe(1)
     expect(isAncestor(repo, commit!, "dev")).toBe(false)
 

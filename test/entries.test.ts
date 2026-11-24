@@ -124,7 +124,7 @@ describe("pruneSnapshotEntries", () => {
   })
 
   test("default cap is the exported ENTRY_CAP", () => {
-    expect(ENTRY_CAP).toBeGreaterThan(0)
+    expect(ENTRY_CAP).toBe(64)
   })
 })
 
