@@ -15,7 +15,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, fileStampOf } from "./dossier.ts"
+import { artifactName, buildLoopDossier } from "./dossier.ts"
 import type { GoalSnapshot } from "./types.ts"
 
 /** Retries granted to the `-n` filename suffix before the export gives up. The stem is 1 second wide; 100 collisions means the caller should look around. */
@@ -26,10 +26,7 @@ export const MAX_EXPORT_ATTEMPTS = 100
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
-export const dossierExportName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const dossierExportName = (nowMs: number, attempt = 0): string => artifactName("dossier", nowMs, attempt)
 
 interface DossierExportResult {
   /** Absolute path of the written file. */

@@ -29,7 +29,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, stampOf, fileStampOf , recordStatusCell, iterationList } from "./dossier.ts"
+import { artifactName, buildLoopDossier, stampOf, recordStatusCell, iterationList } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import {
   gitCatFileProbe,
@@ -66,10 +66,7 @@ interface SealedDossier {
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  * Never collides with the plain export's stem (`goal-dossier-<stamp>.md`).
  */
-export const sealedDossierName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const sealedDossierName = (nowMs: number, attempt = 0): string => artifactName("dossier-sealed", nowMs, attempt)
 
 const verifyCell = (status: string): string => recordStatusCell(status, "present", "missing")
 const reachCell = (status: string): string => recordStatusCell(status, "ancestor", "unreached")

@@ -39,7 +39,7 @@
 import { createHash } from "node:crypto"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { isoOf, inlineCode, fileStampOf } from "./dossier.ts"
+import { artifactName, inlineCode, isoOf } from "./dossier.ts"
 import { MAX_EXPORT_ATTEMPTS } from "./dossier-export.ts"
 import { formatValue } from "./errors.ts"
 
@@ -48,10 +48,7 @@ import { formatValue } from "./errors.ts"
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
-export const dossierIndexName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const dossierIndexName = (nowMs: number, attempt = 0): string => artifactName("dossier-index", nowMs, attempt)
 
 type DossierArtifactKind = "dossier" | "review" | "sealed" | "spend ledger" | "index"
 

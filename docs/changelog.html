@@ -100,3 +100,5 @@
 <!-- behavior-change: dead-export cleanup — the retired note() formatter/TERMINAL_NOTE_TAG and the test-only NO_COMMIT commit-policy export are removed from src/core; note grammar matching is unchanged (the context hook still matches the literal tags), and the prompt assertions now use local fixtures. No runtime behavior or shipped file changed. -->
 
 <!-- behavior-change: dossier fence sizing shares one longest-backtick-run helper; inline and block fence output is unchanged, and the no-backtick/short-run edges are now pinned by tests. -->
+
+<!-- behavior-change: CCXI unify-exporter-artifact-name — one artifactName(stem, nowMs, attempt) in src/core/dossier.ts now builds every dossier-family file name; the export/sealed/review/index/spend-ledger helpers are thin wrappers. The compact UTC stamp, honest-epoch fallback and -2/-3 collision suffix are byte-identical to before. No shipped file added or removed, no gate changed. -->

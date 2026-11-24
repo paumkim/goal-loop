@@ -678,6 +678,10 @@ var fileStampOf = (ms) => {
   const valid = Number.isFinite(date.getTime()) ? date : new Date(0);
   return `${valid.getUTCFullYear()}${pad2(valid.getUTCMonth() + 1)}${pad2(valid.getUTCDate())}` + `-${pad2(valid.getUTCHours())}${pad2(valid.getUTCMinutes())}${pad2(valid.getUTCSeconds())}`;
 };
+var artifactName = (stem, nowMs, attempt = 0) => {
+  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
+  return `goal-${stem}-${fileStampOf(nowMs)}${suffix}.md`;
+};
 var shortSha = (sha) => {
   if (!sha)
     return GAP;
@@ -1048,10 +1052,7 @@ function buildLoopDossier(goal, nowMs) {
 import { writeFileSync } from "fs";
 import { join, resolve } from "path";
 var MAX_EXPORT_ATTEMPTS = 100;
-var dossierExportName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-${fileStampOf(nowMs)}${suffix}.md`;
-};
+var dossierExportName = (nowMs, attempt = 0) => artifactName("dossier", nowMs, attempt);
 function exportLoopDossier(goal, nowMs, dir) {
   const content = buildLoopDossier(goal, nowMs);
   const targetDir = resolve(dir);
@@ -1357,10 +1358,7 @@ function signAckSegment(sign, ascii) {
 // src/core/dossier-seal.ts
 import { writeFileSync as writeFileSync2 } from "fs";
 import { join as join2, resolve as resolve2 } from "path";
-var sealedDossierName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-sealed-${fileStampOf(nowMs)}${suffix}.md`;
-};
+var sealedDossierName = (nowMs, attempt = 0) => artifactName("dossier-sealed", nowMs, attempt);
 var verifyCell2 = (status) => recordStatusCell(status, "present", "missing");
 var reachCell = (status) => recordStatusCell(status, "ancestor", "unreached");
 var signCell = (status) => recordStatusCell(status, "verified", "unverified");
@@ -1477,10 +1475,7 @@ function sealAckSegment(seal, ascii) {
 // src/core/dossier-review.ts
 import { writeFileSync as writeFileSync3 } from "fs";
 import { join as join3, resolve as resolve3 } from "path";
-var reviewName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`;
-};
+var reviewName = (nowMs, attempt = 0) => artifactName("dossier-review", nowMs, attempt);
 var verifyCell3 = (status) => recordStatusCell(status, "present", "missing");
 var reachCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
 var signCell2 = (status) => recordStatusCell(status, "verified", "unverified");
@@ -1582,10 +1577,7 @@ function reviewSummaryLine(review) {
 // src/core/spend-ledger.ts
 import { writeFileSync as writeFileSync4 } from "fs";
 import { join as join4, resolve as resolve4 } from "path";
-var spendLedgerName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-spend-ledger-${fileStampOf(nowMs)}${suffix}.md`;
-};
+var spendLedgerName = (nowMs, attempt = 0) => artifactName("spend-ledger", nowMs, attempt);
 var measuredSpend = (entry) => {
   const spend = entry.spend;
   if (!spend)
@@ -1743,10 +1735,7 @@ function errorMessage(error) {
 }
 
 // src/core/dossier-index.ts
-var dossierIndexName = (nowMs, attempt = 0) => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : "";
-  return `goal-dossier-index-${fileStampOf(nowMs)}${suffix}.md`;
-};
+var dossierIndexName = (nowMs, attempt = 0) => artifactName("dossier-index", nowMs, attempt);
 var STAMP = String.raw`\d{8}-\d{6}(?:-[1-9]\d*)?`;
 var KIND_PATTERNS = [
   ["dossier", new RegExp(`^goal-dossier-${STAMP}\\.md$`)],

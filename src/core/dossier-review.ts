@@ -23,7 +23,7 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { buildLoopDossier, shortSha, stampOf, fileStampOf , recordStatusCell, iterationList } from "./dossier.ts"
+import { artifactName, buildLoopDossier, recordStatusCell, iterationList, shortSha, stampOf } from "./dossier.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -89,10 +89,7 @@ interface ReviewedRecord {
  * Deterministic: the same (nowMs, attempt) always yields the same name. A non-finite or
  * unrepresentable clock stamps the epoch rather than throwing — the name stays honest.
  */
-export const reviewName = (nowMs: number, attempt = 0): string => {
-  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
-  return `goal-dossier-review-${fileStampOf(nowMs)}${suffix}.md`
-}
+export const reviewName = (nowMs: number, attempt = 0): string => artifactName("dossier-review", nowMs, attempt)
 
 const verifyCell = (status: string): ReviewAnswer => recordStatusCell(status, "present", "missing")
 const reachCell = (status: string): ReviewAnswer => recordStatusCell(status, "ancestor", "unreached")
