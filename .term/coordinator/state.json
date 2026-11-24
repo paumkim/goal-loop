@@ -6863,9 +6863,11 @@
       "paths": "src/intent-icons.ts,src/tui.tsx,dist/tui.js,dist/tui.d.ts,test/intent-icons.test.ts",
       "branch": "wt/live-intent-icons",
       "worktree": "worktree/wt-live-intent-icons",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T08:14:40Z",
-      "submittedAt": "2026-11-24T08:24:34Z"
+      "submittedAt": "2026-11-24T08:24:34Z",
+      "mergedAt": "2026-11-24T08:36:08Z",
+      "mergedInto": "dev"
     },
     "pin-live-goal-values": {
       "agent": "hy4-flash-free",
