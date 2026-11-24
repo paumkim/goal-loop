@@ -6801,20 +6801,28 @@
       "paths": "src/index.ts,test/plugin.test.ts",
       "branch": "wt/judge-report-comment-cleanup",
       "worktree": "worktree/wt-judge-report-comment-cleanup",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T06:47:54Z",
-      "submittedAt": "2026-11-24T06:50:15Z"
+      "submittedAt": "2026-11-24T06:51:19Z",
+      "mergedAt": "2026-11-24T06:58:34Z",
+      "mergedInto": "dev"
     },
     "coord-state-bookkeeping": {
       "agent": "hy4-flash-free",
       "paths": ".term/coordinator/state.json",
       "branch": "wt/coord-state-bookkeeping",
       "worktree": "worktree/wt-coord-state-bookkeeping",
-      "status": "done",
+      "status": "submitted",
       "createdAt": "2026-11-24T06:50:53Z",
-      "submittedAt": "2026-11-24T06:53:52Z",
-      "mergedAt": "2026-11-24T06:53:52Z",
-      "mergedInto": "dev"
+      "submittedAt": "2026-11-24T06:51:04Z"
+    },
+    "planner-no-parent-report": {
+      "agent": "orchestrator",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md",
+      "branch": "wt/planner-no-parent-report",
+      "worktree": "worktree/wt-planner-no-parent-report",
+      "status": "claimed",
+      "createdAt": "2026-11-24T06:57:16Z"
     }
   },
   "mergeLock": null,
