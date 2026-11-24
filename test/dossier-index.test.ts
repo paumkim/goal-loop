@@ -126,7 +126,15 @@ describe("buildDossierIndex", () => {
       entry("goal-spend-ledger-20261116-172233.md", "spend ledger"),
       entry("goal-dossier-review-20261116-172300.md", "review", 10, "0".repeat(64)),
     ]
-    expect(buildDossierIndex(entries, now).markdown).toBe(buildDossierIndex(entries, now).markdown)
+    const first = buildDossierIndex(entries, now).markdown
+    const second = buildDossierIndex(entries, now).markdown
+    expect(second).toBe(first)
+    // Determinism alone proves nothing: pin the inventory so a dropped row, wrong digest or invented
+    // byte count fails even when both calls agree on the same wrong bytes.
+    expect(first).toContain("# Goal dossier index")
+    expect(first).toContain("## Artifacts (2 files, " + (contentBytes + 10) + " bytes)")
+    expect(first).toContain(`| \`goal-spend-ledger-20261116-172233.md\` | spend ledger | ${contentBytes} | ${contentSha} |`)
+    expect(first).toContain(`| \`goal-dossier-review-20261116-172300.md\` | review | 10 | ${"0".repeat(64)} |`)
   })
 
   test("the document inventories, never verifies, and leaks no directory path", () => {

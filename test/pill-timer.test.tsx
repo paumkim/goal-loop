@@ -255,12 +255,11 @@ const looped = (sessionID: string, iteration: number, startedAt: number): GoalSn
   evaluating: false, waiting: false,
 })
 
-// Same formula the TUI uses (src/tui.tsx · elapsedOf): snapshot elapsed + idle extrapolation, live only.
-const elapsedOf = (g: GoalSnapshot, receivedAt: number, nowMs: number) =>
-  g.status === "active" ? g.elapsedMs + Math.max(0, nowMs - receivedAt) : g.elapsedMs
-
-/** The ambient pill line for one session, exactly the segments tui.tsx composes (the breath dot leads, no caret). */
-const pillLine = (g: GoalSnapshot) => pillModel(g, elapsedOf(g, NOW, NOW), false).text
+// The pill model takes an already-computed elapsed value. src/tui.tsx's private `elapsedOf` is not
+// exported (its idle extrapolation is pinned by the controller tests); reimplementing it here would
+// only validate a copy of that arithmetic. These fixtures are live with receivedAt === nowMs, so the
+// value handed to pillModel is exactly the record's own elapsedMs.
+const pillLine = (g: GoalSnapshot) => pillModel(g, g.elapsedMs, false).text
 
 const renderPills = async (lineA: string, lineB: string): Promise<string> => {
   const node = (): JSX.Element => (

@@ -103,8 +103,8 @@ const staleSession = (): GoalSnapshot => ({
 })
 
 const records = [
-  { name: "Extract opencode v2.3.0 session (fresh loop, landed compaction)", make: extractSession, marker: "active" },
-  { name: "Coordinator stale works session (achieved, met)", make: staleSession, marker: "achieved" },
+  { name: "Extract opencode v2.3.0 session (fresh loop, landed compaction)", make: extractSession, marker: "active", ledger: "v1 of at most 5", dossier: "Goal loop dossier" },
+  { name: "Coordinator stale works session (achieved, met)", make: staleSession, marker: "achieved", ledger: "last met (turn 1)", dossier: "Goal dossier" },
 ] as const
 
 const render = async (node: () => JSX.Element, width = 112, height = 40): Promise<string> => {
@@ -116,20 +116,27 @@ const render = async (node: () => JSX.Element, width = 112, height = 40): Promis
 }
 
 describe("dialog crash records — the two real persisted records render every tab", () => {
-  for (const { name, make, marker } of records) {
+  for (const { name, make, marker, ledger, dossier } of records) {
     test(`${name}: overview tab renders without throwing`, async () => {
       const frame = await render(() => <StatusDialogBody goal={make()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 6} nowMs={() => now} />)
       expect(frame).toContain(marker)
+      expect(frame).not.toContain("the whole record as markdown") // the dossier branch did not bleed in
     })
 
     test(`${name}: ledger tab renders without throwing`, async () => {
       const frame = await render(() => <StatusDialogBody goal={make()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 6} nowMs={() => now} view={() => "ledger"} />)
-      expect(frame.length).toBeGreaterThan(0)
+      // Not just a non-empty frame: the focus view must paint this record's own history/loop row,
+      // and must not have fallen through to the dossier branch.
+      expect(frame).toContain(ledger)
+      expect(frame).not.toContain("the whole record as markdown")
     })
 
     test(`${name}: dossier tab renders without throwing`, async () => {
       const frame = await render(() => <StatusDialogBody goal={make()} fallback="fb" theme={theme} elapsedMs={() => 1000 * 60 * 6} nowMs={() => now} view={() => "dossier"} onCopyDossierSection={() => {}} />)
-      expect(frame.length).toBeGreaterThan(0)
+      // The dossier branch must paint its copy affordance and the record's own title — an empty or
+      // overview-shaped frame would have passed the old `frame.length > 0` assertion.
+      expect(frame).toContain("the whole record as markdown")
+      expect(frame).toContain(dossier)
     })
   }
 })

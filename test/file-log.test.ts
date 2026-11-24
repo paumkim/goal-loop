@@ -110,7 +110,11 @@ describe("withFileSink", () => {
     const { logger } = recordingLogger()
     withFileSink(logger, file).info("big", { blob: "y".repeat(100_000) })
     expect(statSync(file).size).toBeGreaterThan(100_000)
-    const line = readFileSync(file, "utf8").trim()
-    expect(() => JSON.parse(line)).not.toThrow()
+    const lines = readFileSync(file, "utf8").trim().split("\n")
+    expect(lines).toHaveLength(1) // the 100k payload never cracked the JSONL record into extra lines
+    const parsed = JSON.parse(lines[0]!) as { level: string; message: string; data: { blob: string } }
+    expect(parsed.level).toBe("info")
+    expect(parsed.message).toBe("big")
+    expect(parsed.data.blob).toBe("y".repeat(100_000))
   })
 })

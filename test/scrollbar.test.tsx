@@ -187,7 +187,10 @@ describe("scrollbarTrackOptions (the host palette shape)", () => {
     ), { width: 48, height: 10 })
     await setup.renderOnce()
     expect(sb).toBeDefined()
-    expect(setup.captureCharFrame().length).toBeGreaterThan(0)
+    // Prove the nested palette actually reached the track: a blank/flat frame also has length > 0.
+    const cells = collectColumn(setup.captureSpans(), 47, 8)
+    expect(cells.length).toBe(8)
+    for (const cell of cells) expect(cell.bg.equals(hostTheme.background!.raised!.high!)).toBe(true)
     await setup.renderer.destroy()
   })
 })

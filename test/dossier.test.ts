@@ -131,7 +131,15 @@ describe("buildLoopDossier", () => {
   })
 
   test("is deterministic — identical input renders a byte-identical document", () => {
-    expect(buildLoopDossier(loopedGoal(), now)).toBe(buildLoopDossier(loopedGoal(), now))
+    const first = buildLoopDossier(loopedGoal(), now)
+    const second = buildLoopDossier(loopedGoal(), now)
+    expect(second).toBe(first)
+    // Determinism must not mean "deterministically wrong": pin the document itself so a regression
+    // that drops a section, a row or a tally fails this test even though both calls still agree.
+    expect(first).toContain("# Goal loop dossier")
+    expect(first).toContain("### Iteration v1 — met")
+    expect(first).toContain("| 1 | not_met | 9 | abc1234 | $0.21 | — |")
+    expect(first).toContain("Tallies: met 1 · not_met 1 · impossible 0")
   })
 
   test("omits the session id from the document", () => {

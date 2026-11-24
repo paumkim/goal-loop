@@ -115,7 +115,11 @@ describe("failureSignatureOf", () => {
           },
         }),
       )
-    expect(make()?.key).toBe(make()?.key)
+    const sig = make()
+    expect(sig?.kind).toBe("verification")
+    // Pin the signature bytes, not just two identical calls: the check id/type/exit code/scoping and
+    // the missing list must all be encoded, or escalation could silently stop recognizing this failure.
+    expect(sig?.key).toBe("verify:build|build|2|f|r|s|x#missing:build#coverage:")
   })
 
   test("different failing verification checks yield different signatures", () => {
@@ -288,7 +292,7 @@ describe("failure escalation helpers", () => {
       const outcome = strategyForRepeat(detectedFor(count, "reason"))
       expect(outcome.index).toBe(expectedIndex(count))
       expect(outcome.strategy).toBe(STRATEGY_ROTATION[expectedIndex(count)]!)
-      expect(outcome.strategy.length).toBeGreaterThan(0)
+      expect(outcome.strategy.trim()).toBe(outcome.strategy) // the steer is one clean line, not padded
       strategies.add(outcome.strategy)
     }
     // A full cycle offers distinct approaches, then repeats — never the same steer twice in a row.
