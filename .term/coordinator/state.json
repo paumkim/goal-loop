@@ -6982,6 +6982,24 @@
       "submittedAt": "2026-11-24T11:00:42Z",
       "mergedAt": "2026-11-24T11:35:26Z",
       "mergedInto": "dev"
+    },
+    "review-latest-commits-bugs": {
+      "agent": "opencode",
+      "paths": "src/core/opencode-labels.ts",
+      "branch": "wt/review-latest-commits-bugs",
+      "worktree": "worktree/wt-review-latest-commits-bugs",
+      "status": "done",
+      "createdAt": "2026-11-24T11:58:32Z",
+      "submittedAt": "2026-11-24T12:05:49Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T12:05:49Z",
+      "forcedScopeFiles": [
+        "SPEC.md",
+        "bin/goal-loop.mjs",
+        "test/opencode-labels.test.ts"
+      ],
+      "mergedAt": "2026-11-24T12:09:40Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
