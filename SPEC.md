@@ -920,7 +920,9 @@ the current iteration.
     otherwise the now row is unchanged. The base text now wraps (`word`) instead of overflowing the
     rail's width, so the verdict suffix stays pinned after wrapping text.
 82. New pure helpers `localTime`, `currentIterationVerdict`, `turnsSinceVerdict` in
-    `src/core/history.ts`, unit-tested (`test/history.test.ts`).
+    `src/core/history.ts`, unit-tested (`test/history.test.ts`). `currentIterationVerdict` reads the newest verdict
+    directly instead of scanning backwards through a loop that always breaks after one iteration; empty history,
+    window edges and the non-finite `endedAt` fallback are unchanged.
 83. `scripts/render-history.tsx` frames (looped, paused, complete) show `at HH:MM` on rail rows and
     the `· last <glyph> … since` segment on the now row; the paused and complete frames verify both.
 

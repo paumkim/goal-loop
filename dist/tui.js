@@ -583,13 +583,10 @@ function localTime(ms) {
 function currentIterationVerdict(history, entries, setAt) {
   const last = entries.length > 0 ? entries[entries.length - 1] : undefined;
   const from = last && Number.isFinite(last.endedAt) ? last.endedAt : setAt;
-  for (let index = history.length - 1;index >= 0; index -= 1) {
-    const entry = history[index];
-    if (entry.at > from)
-      return entry;
-    break;
-  }
-  return;
+  if (history.length === 0)
+    return;
+  const entry = history[history.length - 1];
+  return entry.at > from ? entry : undefined;
 }
 function turnsSinceVerdict(turns, verdictTurn) {
   if (!Number.isFinite(turns) || !Number.isFinite(verdictTurn))
