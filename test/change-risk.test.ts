@@ -191,7 +191,7 @@ describe("controller strict-gate notice for high-risk tiers", () => {
       const controller = makeController(dir, notices)
       await controller.set({ sessionID: "ses_risk", condition: "do work", delivery: "none" } as any)
       const strict = notices.filter((n) => n.title === STRICT_GATE_NOTICE_TITLE)
-      expect(strict.length).toBeGreaterThan(0)
+      expect(strict).toHaveLength(1)
       expect(strict[0]!.kind).toBe("set")
       expect(strict[0]!.level).toBe("warning")
       expect(strict[0]!.message).toContain("High-risk sensitive surfaces detected")

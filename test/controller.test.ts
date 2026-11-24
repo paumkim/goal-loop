@@ -1235,7 +1235,7 @@ describe("context meter snapshot fields", () => {
     h.verdicts.push(notMet("keep going"))
     await h.turn()
     const withFigures = h.changes.filter((c) => c?.contextSize === 432_100)
-    expect(withFigures.length).toBeGreaterThan(0)
+    expect(withFigures).toHaveLength(4) // the per-turn refresh carries the figure on every changed event
     expect(withFigures[0]?.spend?.cost).toBe(6) // 7 vs the arm-time baseline of 1
   })
 

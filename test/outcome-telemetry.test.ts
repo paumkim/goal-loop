@@ -229,7 +229,7 @@ describe("summarizeOutcomeTelemetry", () => {
     const s = summarizeOutcomeTelemetry([t, so, base({ condition: "make tests pass" }), base({ condition: "Make tests pass!" })])
     expect(s.terminalCounts.achieved).toBe(1)
     expect(s.recurringConditions.length).toBe(1)
-    expect(s.recurringConditions[0]?.count).toBeGreaterThan(1)
+    expect(s.recurringConditions[0]?.count).toBe(4) // all four entries carry the same normalized condition
     expect(s.recurringConditions[0]?.condition).toContain("make tests pass")
   })
 

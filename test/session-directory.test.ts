@@ -294,8 +294,7 @@ describe("a goal follows the session that armed it across directory moves", () =
     h.verdicts.push(met())
     await h.turn()
 
-    expect(h.verifyCalls.length).toBeGreaterThan(0)
-    expect(h.verifyCalls.every((call) => call.cwd === NEW_DIR)).toBe(true)
+    expect(h.verifyCalls).toEqual([expect.objectContaining({ cwd: NEW_DIR })])
   })
 
   test("read surfaces follow the move; a reload in the new directory restores the goal", async () => {

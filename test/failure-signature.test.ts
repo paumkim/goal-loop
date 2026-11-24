@@ -292,7 +292,7 @@ describe("failure escalation helpers", () => {
       const outcome = strategyForRepeat(detectedFor(count, "reason"))
       expect(outcome.index).toBe(expectedIndex(count))
       expect(outcome.strategy).toBe(STRATEGY_ROTATION[expectedIndex(count)]!)
-      expect(outcome.strategy.length).toBeGreaterThan(0)
+      expect(outcome.strategy.trim()).toBe(outcome.strategy) // the steer is one clean line, not padded
       strategies.add(outcome.strategy)
     }
     // A full cycle offers distinct approaches, then repeats — never the same steer twice in a row.
