@@ -6927,6 +6927,17 @@
       "submittedAt": "2026-11-24T09:50:55Z",
       "mergedAt": "2026-11-24T09:53:24Z",
       "mergedInto": "dev"
+    },
+    "dedupe-opencode-client": {
+      "agent": "build",
+      "paths": "package.json,bun.lock",
+      "branch": "wt/dedupe-opencode-client",
+      "worktree": "worktree/wt-dedupe-opencode-client",
+      "status": "done",
+      "createdAt": "2026-11-24T09:53:43Z",
+      "submittedAt": "2026-11-24T09:55:53Z",
+      "mergedAt": "2026-11-24T09:58:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
