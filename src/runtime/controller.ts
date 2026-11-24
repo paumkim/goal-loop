@@ -147,6 +147,16 @@ interface Runtime {
   figures?: { readonly spend?: UsageSnapshot; readonly contextSize?: number }
   /** Reuse cache for identical fresh verification-command results within the same evaluated turn/HEAD. */
   verifyCache?: { head?: string; turn: number; results: Map<string, import("../core/types.ts").VerifyCheckEvidence> }
+  /** Sidecar judge generations for descendant work units, keyed by work-unit session id. They run beside — not
+   *  instead of — the owner's turn evaluation, so a parent wake must not abort them (see `onExecutionStarted`). */
+  workUnitAborts?: Map<string, AbortController>
+  /** `(work-unit session, goal turn)` keys already judged, so a completion cannot produce two verdicts. */
+  workUnitJudged?: Set<string>
+}
+
+/** A verdict entry that records which descendant session produced the evidence. */
+interface WorkUnitVerdictEntry extends VerdictEntry {
+  readonly source: string
 }
 
 const RETRY_BASE_MS = 15_000
@@ -443,6 +453,22 @@ export class GoalController {
   activeCondition(sessionID: string): string | undefined {
     const record = this.goals.get(sessionID)
     return record?.status === "active" ? record.condition : undefined
+  }
+
+  /**
+   * Goal that owns a session's work. A session with its own record owns itself; a descendant resolves to its
+   * nearest ancestor with a live goal via the event-fed parent links. Used to attribute a subagent's verdict
+   * to the goal it serves instead of treating the child as an independent, unjudged session.
+   */
+  private async goalOwnerFor(sessionID: string): Promise<GoalRecord | undefined> {
+    const own = this.goals.get(sessionID)
+    if (own) return own.status === "active" ? own : undefined
+    const ancestors = await this.deps.background.ancestorsOf?.(sessionID).catch(() => []) ?? []
+    for (const ancestor of ancestors) {
+      const record = this.goals.get(ancestor)
+      if (record?.status === "active") return record
+    }
+    return undefined
   }
 
   /** Builds a snapshot from a record the caller already holds. Freshness is the record's; runtime may be undefined (a foreign-snapshot read serves no runtime truth). */
@@ -1002,7 +1028,12 @@ export class GoalController {
   async onExecutionSucceeded(sessionID: string): Promise<void> {
     this.running.delete(sessionID)
     const record = this.goals.get(sessionID)
-    if (!record || record.status !== "active") return
+    if (!record || record.status !== "active") {
+      // A descendant session has no goal of its own. Its completion is a work unit of the nearest
+      // ancestor goal: judge it now, instead of letting it only gate the parent's deferred verdict.
+      if (!record) void this.evaluateWorkUnit(sessionID)
+      return
+    }
     const runtime = this.runtime(sessionID)
     // The main session went quiet: if a background deferral is still pending, the pill flips straight back
     // to `waiting` on this event — it no longer rides a check-in or the 15s mirror tick. A succeeded means
@@ -1375,6 +1406,65 @@ export class GoalController {
   }
 
   // ---------------------------------------------------------------- turn evaluation
+
+  /**
+   * Judge a completed descendant session as a work unit of its owning goal. This is a sidecar to the owner's
+   * turn evaluation: it uses its own abort controller so the harness waking the parent with the injected
+   * subagent report cannot cancel it, and it never ends the goal — a `met` is recorded as evidence, a `not_met`
+   * steers only the work unit. One verdict per (work unit, goal turn).
+   */
+  private async evaluateWorkUnit(workUnitID: string): Promise<void> {
+    const record = await this.goalOwnerFor(workUnitID)
+    if (!record || this.disposed) return
+    const turn = record.turns + 1
+    const key = `${workUnitID}#${turn}`
+    const runtime = this.runtime(record.sessionID)
+    runtime.workUnitJudged ??= new Set()
+    if (runtime.workUnitJudged.has(key)) return
+    runtime.workUnitJudged.add(key)
+    const abort = new AbortController()
+    runtime.workUnitAborts ??= new Map()
+    runtime.workUnitAborts.set(workUnitID, abort)
+    try {
+      const result = await this.deps.evaluator.evaluate({
+        sessionID: workUnitID,
+        ownerSessionID: record.sessionID,
+        condition: record.condition,
+        turn,
+        elapsedMs: this.deps.clock.now() - record.startedAt,
+        commit: this.commitForSession(record.sessionID),
+        signal: abort.signal,
+      })
+      if (this.disposed || this.goals.get(record.sessionID) !== record || record.status !== "active") return
+      const entry: WorkUnitVerdictEntry = {
+        turn,
+        verdict: result.verdict,
+        reason: result.reason,
+        at: this.deps.clock.now(),
+        toolCalls: 0,
+        source: workUnitID,
+      }
+      record.history.push(entry)
+      record.history = boundVerdictHistory(record.history).retained
+      this.commit(record)
+      // Terminal authority stays with the owner's turn evaluation: a child `met` is evidence, never a goal end.
+      // Only a `not_met` sends the work unit back with the judge's reason.
+      if (result.verdict === "not_met" && !this.running.has(workUnitID) && !abort.signal.aborted) {
+        await this.deps.session.synthetic({
+          sessionID: workUnitID,
+          text: Prompt.continuation({ condition: record.condition, turn: turn + 1, reason: result.reason, learnings: this.recentLearningsForPrompt(record) }, this.commitForSession(record.sessionID)),
+          description: `goal · subagent ${workUnitID} · turn ${turn + 1}`,
+          metadata: { source: Prompt.MARKER, goal: record.id, turn: turn + 1, workUnit: workUnitID },
+          delivery: "steer",
+          resume: true,
+        })
+      }
+    } catch (error) {
+      if (!abort.signal.aborted) this.deps.log.warn("subagent work-unit evaluation failed", { sessionID: workUnitID, owner: record.sessionID, error: errorMessage(error) })
+    } finally {
+      if (runtime.workUnitAborts?.get(workUnitID) === abort) runtime.workUnitAborts.delete(workUnitID)
+    }
+  }
 
   private async evaluate(record: GoalRecord, runtime: Runtime, epoch: number, tools: number): Promise<void> {
     const { config, clock, session } = this.deps

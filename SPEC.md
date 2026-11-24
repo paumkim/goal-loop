@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2368 -->
+<!-- spec-check files=144 tests=2372 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1532,20 +1532,34 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CC — non-finite guards in the token/cost formatters (format-finite-guards) (2026-11-23)
+## Workstream evaluator-subagent-trigger-impl — judge descendant work units on completion (2026-11-24)
 
-Follow-up to CXCIX. `formatDuration` and the coarse renderer now treat a non-finite clock as zero,
-and the dossier/attestation call sites already guard `Number.isFinite` before formatting spend and
-context metrics — but `formatTokens`/`formatCost` themselves did not, and the TUI passes raw snapshot
-values (`contextSize`, `compactAtTokens`, `estimatedTokens`, peak) without a guard. A NaN or Infinity
-metric therefore painted `NaNM`/`InfinityM`/`$NaN` in always-on chrome. Both formatters now guard
-non-finite once at the source, so every surface agrees; negative cost still maps to `$0` and every
-finite input is byte-identical to the old formatting.
+The verdict was owned by exactly one session: the one that armed the goal. Every event handler looks up
+`this.goals.get(sessionID)`, and `onExecutionSucceeded` returned early for a session with no goal record
+(`controller.ts:1002-1005`). A regular subagent's completion therefore never triggered an evaluation. It was only
+counted as background work by `BackgroundTracker.busy()` (`background.ts:60-67`), which made the controller defer
+the parent's verdict (`controller.ts:1043`) until `onBackgroundDrained()` (`:2654-2680`) saw every descendant finish.
+The judge child was created only inside that parent evaluation and its visible completion was attributed to the
+parent — the "General finished → Evaluator finished" order in the screenshot.
 
-Verification: new regression in `test/core.test.ts` pins NaN and both infinities to `0`/`$0` for both
-formatters, plus a finite-value oracle across the token/cost ladders. Focused suite 180 pass / 0 fail,
-177343 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
-shipped file added or removed.
+Evaluation is now **goal-scoped and work-unit-triggered**. `BackgroundTracker.ancestorsOf()` walks the event-fed
+parent links (same `MAX_DEPTH` cap as `descendsFrom`), and `GoalController.goalOwnerFor()` resolves a session to its
+nearest ancestor with a live goal. When a descendant's `session.execution.succeeded` arrives with no goal of its own,
+`onExecutionSucceeded` calls `evaluateWorkUnit()` instead of returning. That sidecar judges the descendant's own
+transcript against the owner's immutable condition, using its **own abort controller** so the harness waking the
+parent with the injected subagent report (`onExecutionStarted` → `invalidate`) cannot cancel an in-flight verdict.
+One verdict per `(work unit, goal turn)` is enforced with a judged-key set. Terminal authority stays with the owner:
+a child `met` is recorded in the verdict trail with a `source` field as evidence, a child `not_met` steers only that
+work unit, and neither ends the goal. The verdict child remains parentless and its completion remains queued and
+non-waking; a work-unit report keeps the evaluator label instead of the "Goal Achieved." chip. The owner's drain path
+is unchanged, so a `met` still passes the verifier matrix and loop advance exactly as before.
+
+Verification: `test/controller.test.ts` pins ancestor resolution, child completion triggering a verdict attributed
+to the owner, child `met` not ending the goal, child `not_met` steering once per turn (a replayed completion is
+ignored), and a parent wake not aborting the in-flight verdict; `test/plugin.test.ts` pins the owner-keyed verdict
+affinity and the work-unit report label. Focused controller/plugin suites 169 pass / 0 fail; full suite 2,372 pass /
+0 fail across 105 files (29 snapshots), `tsc --noEmit` clean. `bun run check` green after artifact regeneration and
+marker re-count; no gate weakened and no shipped file added or removed.
 
 ## Workstream CCI — non-finite guard on the usage delta (diff-usage-finite-guard) (2026-11-23)
 

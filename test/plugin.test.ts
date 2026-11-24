@@ -1376,8 +1376,12 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     // child is removed from the session list behind the worker's back.
     expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
     expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(1)
-    expect(code).toContain("verdictChildBySession.set(sessionID, id)")
+    expect(code).toContain("verdictChildBySession.set(opts?.ownerSessionID ?? sessionID, id)")
     expect(code).toContain("verdictChildBySession.get(sessionID)")
+    // Subagent completions are judged too: the owner session steers verdict affinity, and a work-unit verdict
+    // never masquerades as the goal's "Goal Achieved." completion.
+    expect(code).toContain("ownerSessionID: target")
+    expect(code).toContain("reportLabel: EVALUATOR_AGENT_TITLE")
     expect(code).not.toContain("session.remove")
     // The native-report ingestion helpers belonged to the removed worker-delegation path.
     const agent = read("src/core/evaluator-agent.ts")

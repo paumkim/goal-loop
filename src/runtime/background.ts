@@ -57,6 +57,19 @@ export class BackgroundTracker implements BackgroundPort {
     this.shells.delete(id)
   }
 
+  /** Ancestor session ids, nearest first. Cached links are immutable; depth is capped like `descendsFrom`. */
+  async ancestorsOf(sessionID: string): Promise<readonly string[]> {
+    const ancestors: string[] = []
+    let current: string | undefined = sessionID
+    for (let depth = 0; current && depth < MAX_DEPTH; depth++) {
+      const parent = await this.parent(current)
+      if (!parent) break
+      ancestors.push(parent)
+      current = parent
+    }
+    return ancestors
+  }
+
   async busy(sessionID: string): Promise<BackgroundWork> {
     let shells = 0
     for (const owner of this.shells.values()) if (owner === sessionID) shells++

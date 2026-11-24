@@ -81,6 +81,7 @@ function harness(
   const notices: Notice[] = []
   const changes: Array<GoalSnapshot | null> = []
   let work: BackgroundWork = { subagents: 0, shells: 0 }
+  let ancestors: readonly string[] = []
   let busyError: Error | undefined
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
   let usageFn: (() => Promise<UsageSnapshot | undefined>) | undefined
@@ -120,7 +121,7 @@ function harness(
         return typeof next === "function" ? next() : next
       },
     },
-    background: { busy: async () => { if (busyError) throw busyError; return work } },
+    background: { busy: async () => { if (busyError) throw busyError; return work }, ancestorsOf: async () => ancestors },
     emitter: { changed: (_, goal) => void changes.push(goal), notice: (n) => void notices.push(n) },
   })
   /** Simulates one complete agent turn. */
@@ -143,6 +144,7 @@ function harness(
     logs,
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
+    setAncestors: (ids: readonly string[]) => void (ancestors = ids),
     setBusyError: (e: Error | undefined) => void (busyError = e),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
     setUsageFn: (fn: (() => Promise<UsageSnapshot | undefined>) | undefined) => void (usageFn = fn),
@@ -1061,6 +1063,67 @@ describe("event router", () => {
     const background = new BackgroundTracker({ parentOf: async (id) => parents[id] })
     background.executionStarted("grandchild")
     expect((await background.busy(SID)).subagents).toBe(1)
+  })
+})
+
+describe("subagent work-unit evaluation", () => {
+  test("a descendant completion triggers a verdict attributed to the goal owner, without ending the goal", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.setAncestors([SID])
+    h.verdicts.push(met("child finished its part"))
+    await h.controller.onExecutionSucceeded("child_1")
+    await flush()
+    expect(h.requests).toHaveLength(1)
+    expect(h.requests.at(0)?.sessionID).toBe("child_1")
+    expect(h.requests.at(0)?.ownerSessionID).toBe(SID)
+    expect(h.requests.at(0)?.condition).toBe("all tests pass")
+    const record = h.controller.get(SID)
+    expect(record?.history.some((entry) => (entry as { source?: string }).source === "child_1")).toBe(true)
+    expect(record?.status).toBe("active")
+    // Terminal authority stays with the owner: a child met dispatches no continuation to the parent.
+    expect(h.calls.synthetic).toHaveLength(0)
+  })
+
+  test("a descendant not_met steers only the work unit, once per turn", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.setAncestors([SID])
+    h.verdicts.push(notMet("child still failing"))
+    await h.controller.onExecutionSucceeded("child_2")
+    await flush()
+    expect(h.calls.synthetic.some((input) => input.sessionID === "child_2" && input.delivery === "steer")).toBe(true)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    // A replayed completion for the same work unit and turn must not judge twice.
+    h.verdicts.push(met())
+    await h.controller.onExecutionSucceeded("child_2")
+    await flush()
+    expect(h.requests).toHaveLength(1)
+  })
+
+  test("the harness waking the parent does not abort an in-flight work-unit verdict", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.setAncestors([SID])
+    let release!: (result: EvaluationResult) => void
+    h.verdicts.push(() => new Promise<EvaluationResult>((resolve) => { release = resolve }))
+    const judging = h.controller.onExecutionSucceeded("child_3")
+    await flush()
+    // The injected subagent report wakes the parent while the judge is still running.
+    h.controller.onExecutionStarted(SID)
+    release(met("child verdict landed after wake"))
+    await judging
+    await flush()
+    expect(h.controller.get(SID)?.history.some((entry) => (entry as { source?: string }).source === "child_3")).toBe(true)
+  })
+
+  test("a session with no goal-bearing ancestor is not judged", async () => {
+    const h = harness()
+    await h.set("all tests pass")
+    h.setAncestors([])
+    await h.controller.onExecutionSucceeded("orphan")
+    await flush()
+    expect(h.requests).toHaveLength(0)
   })
 })
 
