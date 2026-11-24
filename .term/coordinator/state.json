@@ -7035,7 +7035,7 @@
       "paths": "src/index.ts,bin/goal-loop.mjs,src/core/opencode-labels.ts,test/opencode-labels.test.ts,patches/context-cleared.patch,SPEC.md,docs/changelog.html,package.json",
       "branch": "wt/provider-compaction-self-contained",
       "worktree": "worktree/wt-provider-compaction-self-contained",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T13:21:14Z",
       "submittedAt": "2026-11-24T13:58:29Z",
       "forcedScope": true,
@@ -7045,7 +7045,9 @@
         "test/cold-replay.test.ts",
         "test/package-integrity.test.ts",
         "test/plugin.test.ts"
-      ]
+      ],
+      "mergedAt": "2026-11-24T21:37:11Z",
+      "mergedInto": "dev"
     },
     "pill-icon-background-activity": {
       "agent": "orchestrator",
