@@ -1758,18 +1758,20 @@ lands. This supersedes CCX's parent-link claim for both children: the judge beca
 evaluator-goal-achieved-planner workstream, and the planner is now parentless too.
 
 `planGoal` now creates the planner child with no parent link and consumes the planned condition from the child's
-own event stream. The plugin emits the visible completion itself as one queued, non-waking `<subagent>` synthetic
-report (`resume: false`, metadata `source: "subagent"` / `childID` / `agent: "planner"` / `state: "completed"`),
-best-effort and only when the child produced text. `isJudgeReport` is generalized to `isPluginReport` so both
-judge and planner reports are stripped from model-bound context and the evaluator's transcript digest — the
-planner's raw JSON must never become worker evidence or a verdict cue. No retry, timeout, arming or scope
-behavior changed.
+own event stream. No `<subagent>` completion is admitted into the working session: an earlier revision emitted a
+queued, non-waking synthetic report, but a queued synthetic is durably admitted to the parent's inbox even with
+`resume: false`, so the parent saw the planner's context and was pulled into a turn it never had to take. The
+planning notice, goal bar and durable record carry the visible outcome instead; the child stays navigable (hung).
+`isJudgeReport` was generalized to `isPluginReport` as a defensive strip so a stray judge or planner report can
+never teach the worker its own verdict or turn the planner's raw JSON into evidence (SPEC-workstreams.md CXLI).
+No retry, timeout, arming or scope behavior changed.
 
-Verification: plugin tests pin the parentless planner create, the queued non-waking report, the source guard
-(`parentID: sessionID` count 0) and the runtime `plannerCreate.parentID === undefined` assertion; focused plugin
-suite 58 pass / 0 fail. Full `bun run check` green at dev HEAD `93b8310`: 2372 pass / 0 fail across 105 files,
-dist freshness, TUI load, docs freshness, invariant-sweep and spec-check all ok. Landed via `88bcbec` → merge
-`7c05365`.
+Verification: plugin tests pin the parentless planner create, the absence of any synthetic report for the planner,
+the source guard (`parentID: sessionID` count 0 and no `delivery: "queue"` / `resume: false` emission) and the
+runtime `plannerCreate.parentID === undefined` assertion; focused plugin suite 58 pass / 0 fail. Full
+`bun run check` green: 2372 pass / 0 fail across 105 files, dist freshness, TUI load, docs freshness,
+invariant-sweep and spec-check all ok. Landed initially via `88bcbec` → merge `7c05365`; the no-report follow-up
+is included here.
 
 ## Historical workstreams
 

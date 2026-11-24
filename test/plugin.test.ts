@@ -1379,11 +1379,10 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     expect(judgeBody).not.toContain("session.synthetic")
     expect(judgeBody).not.toContain("Goal Achieved.")
     expect(code).not.toContain("session.remove")
-    // The only plugin-emitted completion is the arm-time planner's; it is queued and non-waking.
-    expect(code.match(/delivery: "queue"/g) ?? []).toHaveLength(1)
-    expect(code.match(/resume: false/g) ?? []).toHaveLength(1)
-    expect(code).toContain('agent: PLANNER_AGENT_ID, state: "completed"')
-    expect(code).toContain("description: PLANNER_AGENT_TITLE")
+    // Neither the judge nor the planner admits a completion into the working session. A queued synthetic is
+    // durable parent-inbox input even with `resume: false`, so neither path emits one.
+    expect(code.match(/delivery: "queue"/g) ?? []).toHaveLength(0)
+    expect(code.match(/resume: false/g) ?? []).toHaveLength(0)
     expect(code).toContain("isEvaluatorReport(m.metadata)) return true")
     expect(code).toContain("md.agent.toLowerCase() === PLANNER_AGENT_ID")
     // The native-report ingestion helpers belonged to the removed worker-delegation path.
@@ -1750,17 +1749,10 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
         const plannerCreate = created.find((input: any) => input.agent === PLANNER_AGENT_ID)
         expect(plannerCreate).toBeDefined()
         expect(plannerCreate.parentID).toBeUndefined()
-        // The visible completion is the plugin's own queued, non-waking report — never a host wake.
-        const plannerReport = calls.prompts.find((p: any) => p.metadata?.agent === PLANNER_AGENT_ID)
-        expect(plannerReport).toBeDefined()
-        expect(plannerReport).toMatchObject({
-          sessionID: "ses_1",
-          description: "Goal planner",
-          delivery: "queue",
-          resume: false,
-          metadata: { source: "subagent", childID: "ses_planner", state: "completed" },
-        })
-        expect(plannerReport.text).toContain('state="completed" description="Goal planner"')
+        // No completion is admitted to the working session: not a host delivery, and not a queued synthetic
+        // either (a queued synthetic is durable parent-inbox input even with `resume: false`).
+        expect(calls.prompts.some((p: any) => p.metadata?.agent === PLANNER_AGENT_ID)).toBe(false)
+        expect(calls.prompts.some((p: any) => p.type === "synthetic" || p.metadata?.source === "subagent")).toBe(false)
         // The planned condition, not the raw body, reached the worker and the judge.
         expect((storage.get("goal/v1/ses_1") as any)?.condition).toBe("the parser is correct")
       } finally {

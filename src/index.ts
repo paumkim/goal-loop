@@ -320,10 +320,10 @@ export default Plugin.define({
     // completion context is delivered into the working session. Tracked so the generate/context hooks can shape the
     // judge's generation without touching worker sessions.
     const evaluatorChildren = new Set<string>()
-    /** Strip `<subagent>` completion reports attributed to a judge or arm-time planner child. The verdict / planned
-     * condition comes from the child's event stream, never from a report, so a report must not teach the worker its
-     * own verdict or treat the planner's raw JSON as evidence (SPEC-workstreams.md CXLI). No judge report is emitted
-     * into the working session now; the planner's queued, non-waking report still needs this strip. */
+    /** Defensive strip for `<subagent>` completion reports attributed to a judge or arm-time planner child. The
+     * verdict / planned condition comes from the child's event stream, never from a report, so a stray report must
+     * not teach the worker its own verdict or treat the planner's raw JSON as evidence (SPEC-workstreams.md CXLI).
+     * Neither child admits a report into the working session now; this guard keeps a foreign/legacy one inert. */
     const isPluginReport = (message: unknown) => {
       if (!message || typeof message !== "object") return false
       const m = message as Record<string, unknown>
@@ -536,26 +536,12 @@ export default Plugin.define({
           done.then(() => undefined),
         ])
         await done
-        const planned = parsePlan(answer)
-        // The child has no parent link, so the host delivers no completion and wakes nobody. Emit the visible
-        // completion ourselves: queued and non-waking, best-effort. The plan came from this child's event stream,
-        // so a delivery failure is only a lost visual and must never block arming. `isPluginReport` keeps this
-        // text out of model context; a failed/empty plan still gets a plain completion chip when there is text.
-        if (answer.trim()) {
-          try {
-            await session.synthetic({
-              sessionID,
-              description: PLANNER_AGENT_TITLE,
-              text: `<subagent sessionID="${id}" state="completed" description="${PLANNER_AGENT_TITLE}">\n${answer}\n</subagent>`,
-              metadata: { source: "subagent", childID: id, agent: PLANNER_AGENT_ID, state: "completed" },
-              delivery: "queue",
-              resume: false,
-            })
-          } catch (error) {
-            log.warn("goal planner subagent report could not be delivered", { error: String(error) })
-          }
-        }
-        return planned
+        // The planner child has no parent link, so the host delivers no completion and wakes nobody. Do not admit a
+        // `<subagent>` synthetic either: even queued with `resume: false`, a synthetic is durably admitted to the
+        // parent's inbox, so the parent sees the planner's context and is pulled into a turn it never had to take.
+        // The plan is consumed here from this child's own event stream; the planning notice, goal bar and durable
+        // record carry the visible outcome. The child stays navigable (hung) after it finishes.
+        return parsePlan(answer)
       } catch (error) {
         log.warn("goal planner failed", { error: String(error) })
         return undefined
