@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=146 tests=2416 -->
+<!-- spec-check files=146 tests=2415 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1532,21 +1532,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CCII — unique outline ids when a heading slug is a generated suffix (outline-id-collision-guard) (2026-11-23)
-
-`dossierOutline` de-duplicated heading ids with a per-base counter: the second "Custom" became
-`custom-2`. A document that also had a real `## Custom-2` heading therefore produced two entries with
-the same id, and both chips acknowledged together (`section:custom-2`) because the status dialog
-keys acknowledgment off that id. IDs are now allocated against the set of ids actually taken — the
-smallest free `-n` suffix — so a slug-shaped heading cannot steal another section's id.
-
-Reproduced on the parent code: `["Custom", "Custom-2", "Custom"]` yielded
-`["custom", "custom-2", "custom-2"]`; after the fix it yields `["custom", "custom-2", "custom-3"]`.
-Every non-colliding document is byte-identical (the existing `Custom ×3` → `custom, custom-2,
-custom-3` pin still holds). Verification: new regression in `test/dossier-outline.test.ts`; focused
-suite 17 pass / 0 fail, 57 expect() calls. Full `bun run check` green after artifact regeneration;
-marker re-counted, no shipped file added or removed.
-
 ## Workstream CCIII — proactive strategy escalation replaces the repeated-failure pause (proactive-strategy-escalation) (2026-11-23)
 
 A `not_met` verdict whose failure signature repeated three times in a row paused the goal and handed
@@ -1834,6 +1819,25 @@ strings embedded in the installed binary `~/.opencode/bin/opencode` were patched
 `~/.opencode/bin/opencode.pre-context-cleared.bak`). The two error-message strings in the binary that
 also say "Provider compaction" were left alone — they describe the feature, not the divider. A running
 TUI keeps its old label until OpenCode restarts.
+
+## Workstream evaluator-parent-planner-target — the evaluator judges the goal-owning parent, not worker subagents (2026-11-24)
+
+With `/goal` or `/goal-loop` active, every descendant `session.execution.succeeded` that had no goal record of its
+own triggered `evaluateWorkUnit`, which spawned a verdict against the child transcript and, on `not_met`, injected a
+`goal · subagent … · turn N` continuation steer. Worker subagents (Explore, general, and so on) were therefore judged
+and re-steered regardless of the armed goal, which stole turns from the parent and moved the goal pill onto the child.
+The bundled Planner subagent is the only subagent goal-loop itself spawns; its distilled condition and scope reach the
+rubric through `armedPlanScopes`, not through a verdict.
+
+`onExecutionSucceeded` now returns for any session without an active goal of its own. A subagent's completion ends only
+its own execution; the harness injects its report back into the parent, whose turn is then judged from the parent's
+transcript. The work-unit plumbing (`evaluateWorkUnit`, `goalOwnerFor`, `WorkUnitVerdictEntry`, `workUnitAborts`,
+`workUnitJudged`, `EvaluationRequest.ownerSessionID`) is removed, so no child session can own a verdict or a verdict
+child any more.
+
+Verification: `test/controller.test.ts` pins that descendant completions spawn no verdict, no continuation steer and
+no history entry, and that the parent's turn is judged from the parent session alone; `test/plugin.test.ts` pins that
+verdict-child affinity is keyed to the parent and that no owner-routing plumbing remains. Full `bun run check` green.
 
 ## Historical workstreams
 

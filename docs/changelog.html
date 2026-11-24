@@ -60,6 +60,7 @@
 <!-- behavior-change: CIII cache ensured directory for goal-mirror writes -->
 <!-- behavior-change: context-cleared-label — plugin-owned host-label patch renames "Provider compaction" to "Context Cleared" -->
 <!-- behavior-change: review-latest-commits-bugs — patch-host resolves env/default host path when no explicit path is given; host-label patch doc no longer claims install re-applies it -->
+<!-- behavior-change: evaluator-parent-planner-target — the evaluator judges the goal-owning parent (plus goal-loop's bundled Planner's distilled condition), never worker subagents; descendant completions no longer spawn verdicts or goal · subagent continuation steers -->
 
 <!-- workstream context-cleared-label: src/core/opencode-labels.ts owns the host-label rename; bin/goal-loop.mjs re-applies it with `goal-loop patch-host`; patches/context-cleared.patch is the reviewable diff; package.json ships patches/ -->
 <!-- behavior-change: CIV unify Windows drive-path-on-POSIX guard helper -->
