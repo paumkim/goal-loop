@@ -320,14 +320,18 @@ export default Plugin.define({
     // ends the goal (or arms the next loop iteration), `not_met` is the only path that dispatches a continuation
     // steer. Tracked so the generate/context hooks can shape the judge's generation without touching worker sessions.
     const evaluatorChildren = new Set<string>()
-    /** Plugin-emitted `<subagent>` completion report for a judge child. The verdict comes from the child's event
-     * stream, never from this report, so it is stripped from model-bound context: the parent must not narrate or
-     * re-judge its own verdict (SPEC-workstreams.md CXLI). Its `delivery: "queue"` / `resume: false` shape keeps it
-     * from waking anyone; it exists only for the visible completion. */
-    const isJudgeReport = (message: unknown) => {
+    /** Plugin-emitted `<subagent>` completion report for a judge or arm-time planner child. The verdict / planned
+     * condition comes from the child's event stream, never from this report, so it is stripped from model-bound
+     * context: the parent must not narrate or re-judge its own verdict (SPEC-workstreams.md CXLI), nor treat the
+     * planner's raw JSON as worker evidence. Both reports are queued with no wake; they exist only for the visible
+     * completion. */
+    const isPluginReport = (message: unknown) => {
       if (!message || typeof message !== "object") return false
       const m = message as Record<string, unknown>
-      return m.type === "synthetic" && isEvaluatorReport(m.metadata)
+      if (m.type !== "synthetic") return false
+      if (isEvaluatorReport(m.metadata)) return true
+      const md = m.metadata as Record<string, unknown> | undefined
+      return md?.source === "subagent" && typeof md.agent === "string" && md.agent.toLowerCase() === PLANNER_AGENT_ID
     }
 
     /**
@@ -407,7 +411,7 @@ export default Plugin.define({
         // the evaluator label for every other outcome. Loop-step children are parented to the verdict child, so the
         // host reports those to the evaluator session — emitting one here too would duplicate noise in the worker.
         // The verdict already came from this child's event stream, so a delivery failure is only a lost visual and
-        // must never block it. `isJudgeReport` keeps this text out of model context (SPEC-workstreams.md CXLI).
+        // must never block it. `isPluginReport` keeps this text out of model context (SPEC-workstreams.md CXLI).
         if (!parentID) {
           const description = opts?.reportLabel ?? (parseVerdict(verdict)?.verdict === "met" ? "Goal Achieved." : EVALUATOR_AGENT_TITLE)
           try {
@@ -436,7 +440,7 @@ export default Plugin.define({
     // Evaluator self-talk is not evidence: strip every <goal-evaluation> prompt and any judge completion report
     // from the transcript digest, so a child's completion cannot be scored as the parent's own work.
     const evaluatorContext = async (sessionID: string, signal: AbortSignal) =>
-      stripGoalEvaluations((await ctx.session.context({ sessionID }, { signal })).filter((message) => !isJudgeReport(message)))
+      stripGoalEvaluations((await ctx.session.context({ sessionID }, { signal })).filter((message) => !isPluginReport(message)))
 
     // The harness judges every turn itself: build the authoritative rubric from this turn's work, run it in a
     // parentless judge child on the session's current model, then pass the child's text through the same contract
@@ -510,9 +514,12 @@ export default Plugin.define({
       emit.notice({ sessionID, kind: "set", level: "info", title: "goal-loop", message: "Distilling goal into a concise condition…" })
       let id: string
       try {
+        // No parent link: a parent-linked child makes the host deliver its own "↳ Goal planner finished"
+        // completion into the working transcript and wake the parent while planning is still running — and again
+        // later when the planner is slow — even though the planned condition is consumed internally from the
+        // child's event stream below. Parentless like the judge; the plugin emits a queued, non-waking report.
         id = (await ctx.session.create({
           location: ctx.location,
-          parentID: sessionID,
           title: PLANNER_AGENT_TITLE,
           agent: PLANNER_AGENT_ID,
           model: model as any,
@@ -549,7 +556,26 @@ export default Plugin.define({
           done.then(() => undefined),
         ])
         await done
-        return parsePlan(answer)
+        const planned = parsePlan(answer)
+        // The child has no parent link, so the host delivers no completion and wakes nobody. Emit the visible
+        // completion ourselves: queued and non-waking, best-effort. The plan came from this child's event stream,
+        // so a delivery failure is only a lost visual and must never block arming. `isPluginReport` keeps this
+        // text out of model context; a failed/empty plan still gets a plain completion chip when there is text.
+        if (answer.trim()) {
+          try {
+            await session.synthetic({
+              sessionID,
+              description: PLANNER_AGENT_TITLE,
+              text: `<subagent sessionID="${id}" state="completed" description="${PLANNER_AGENT_TITLE}">\n${answer}\n</subagent>`,
+              metadata: { source: "subagent", childID: id, agent: PLANNER_AGENT_ID, state: "completed" },
+              delivery: "queue",
+              resume: false,
+            })
+          } catch (error) {
+            log.warn("goal planner subagent report could not be delivered", { error: String(error) })
+          }
+        }
+        return planned
       } catch (error) {
         log.warn("goal planner failed", { error: String(error) })
         return undefined
@@ -917,7 +943,7 @@ export default Plugin.define({
         // The judge's verdict is read from its own event stream. The completion report is emitted by the plugin
         // as a queued, non-waking message, but never let it teach the worker the verdict it was supposed to earn
         // on its own (SPEC-workstreams.md CXLI position inversion).
-        kept = kept.filter((message) => !isJudgeReport(message))
+        kept = kept.filter((message) => !isPluginReport(message))
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
           // last message must have role=user."), and after a landing compaction the trailing turn can be
@@ -927,7 +953,7 @@ export default Plugin.define({
           const trailing = original[original.length - 1]
           // Never undo the use-and-forget strip by re-adding a trailing evaluation prompt merely to
           // satisfy the trailing-user repair — a working turn's trailing turn is its steer, not self-talk.
-          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) && !isJudgeReport(trailing) ? trailing : undefined
+          const repairable = trailing !== undefined && !isGoalEvaluationMessage(trailing) && !isPluginReport(trailing) ? trailing : undefined
           const last = kept[kept.length - 1]
           const repaired = last?.role === "user" || repairable === undefined || last === repairable ? kept : [...kept, repairable]
           original.splice(0, original.length, ...repaired)
