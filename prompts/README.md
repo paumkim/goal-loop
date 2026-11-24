@@ -11,6 +11,7 @@ Focused, copy-paste prompts for common development workflows.
 4. Do not run from the wrong directory: prompts assume the current working directory is the target repository unless stated otherwise.
 
 ## Organization
+- `action/` — hands-on execution: boot, build, generate, wire up, and verify real artifacts
 - `audit/` — codebase audits, regression hunting, and review passes
 - `coordinator/` — claim/submit/merge coordinator workflows
 - `development/` — daily development workflows: implementation, debugging, review, refactors, upgrades, and orientation
@@ -22,6 +23,23 @@ Focused, copy-paste prompts for common development workflows.
 - `project/` — bootstrap and project-lifecycle setup
 - `release/` — verification, promotion, landing, and rebuild flows
 - `tui/` — terminal UI fixes, polish, features, and debugging
+
+## Action prompts
+
+Index of `prompts/action/`. Copy a file's full contents and paste it as your instruction. These prompts make the agent do concrete work — run, build, generate, wire up, and verify — not just analyze.
+
+- `add-cli-command.md` — use to add a CLI command or subcommand end-to-end with help, tests, and a real invocation.
+- `add-end-to-end-test.md` — use to write and run an E2E test that drives the real app through a user-facing flow.
+- `apply-database-migration.md` — use to author, apply, and roll back a schema migration against a local database.
+- `automate-repetitive-task.md` — use to turn a repeated manual task into a documented, verified command.
+- `boot-and-smoke-test-app.md` — use to take a clean checkout to a running app and prove it responds to a real request.
+- `build-release-artifact.md` — use to build the real distributable and smoke-test the artifact itself, not the dev server.
+- `containerize-app.md` — use to add a container build and prove the image serves a real request.
+- `generate-api-client.md` — use to regenerate an API client/SDK/types from the repo's spec and verify it matches the contract.
+- `generate-reference-docs.md` — use to generate reference docs from code/annotations and verify freshness.
+- `seed-local-data.md` — use to create deterministic local seed data and prove two runs are identical.
+- `set-up-ci-check.md` — use to add a CI job that enforces a real check, verified locally before handoff.
+- `wire-feature-flag.md` — use to add a feature flag with a safe default, code guards, and tests for both states.
 
 ## Audit prompts
 
