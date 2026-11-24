@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-23T22:00:00Z",
+  "updatedAt": "2026-11-24T22:20:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -304,12 +304,12 @@
       "impact": "low",
       "risk": "low",
       "status": "done",
-      "finding": "src/core/verdict.ts · lenientFields constructs one verdict-field and one reason RegExp per call on the strict-JSON-failure repair path. Precompiling all patterns at module load was benchmarked and reverted: 2000 lenient parseVerdict calls, best of 20 rounds, 2.50 ms baseline vs 2.51 ms precompiled — no measurable win. The allocation is negligible next to the segment/replace work in the repair path.",
-      "improvement": "No code change. Keep the per-call RegExp construction; do not repeat this experiment without a hotter benchmark. Harness: /tmp/opencode/bench-lenient.ts (2000 calls, best of 20). A broken early variant that used ([sS]*?) instead of ([\\s\\S]*?) measured 2.34 ms — that was a correctness bug, not a speedup, and must not be cited as evidence.",
+      "finding": "src/core/verdict.ts \u00b7 lenientFields constructs one verdict-field and one reason RegExp per call on the strict-JSON-failure repair path. Precompiling all patterns at module load was benchmarked and reverted: 2000 lenient parseVerdict calls, best of 20 rounds, 2.50 ms baseline vs 2.51 ms precompiled \u2014 no measurable win. The allocation is negligible next to the segment/replace work in the repair path.",
+      "improvement": "No code change. Keep the per-call RegExp construction; do not repeat this experiment without a hotter benchmark. Harness: /tmp/opencode/bench-lenient.ts (2000 calls, best of 20). A broken early variant that used ([sS]*?) instead of ([\\s\\S]*?) measured 2.34 ms \u2014 that was a correctness bug, not a speedup, and must not be cited as evidence.",
       "evidence": [
         "2026-11-23 benchmark: baseline 2.50 ms / 2000 calls; precompiled 2.51 ms / 2000 calls (best of 20); reverted, no commit shipped.",
         "Focused suites verdict-intake + evaluator-agent-foreign: 7 pass / 0 fail after the change; tsc --noEmit clean.",
-        "Repo precedent: Workstream CLVII precompiled foreign-verdict patterns with a real 1.9x isolated win — that case was kept; this one was not."
+        "Repo precedent: Workstream CLVII precompiled foreign-verdict patterns with a real 1.9x isolated win \u2014 that case was kept; this one was not."
       ],
       "dedupeKeys": [
         "lenient-verdict-regex-precompile",
@@ -324,19 +324,21 @@
       "priority": 2,
       "impact": "medium",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "src/core/verify-record.ts, reach-record.ts and sign-record.ts mirror each other function-for-function: the *Probe type, the *Record map/catch/count sweep, statusCell, the report markdown/summary/ack segments and the *Outcome Pick shapes. dossier-seal.ts:74-76 and dossier-review.ts:97-99 repeat the same three verify/reach/sign cell helpers.",
       "improvement": "Extract one generic sweep/report helper parameterized by the labels and the three honest-report strings; keep every exported wrapper name and every rendered report byte identical. Counting and ack logic is already pinned by test/verify-record.test.ts, test/reach-record.test.ts and test/sign-record.test.ts.",
       "evidence": [
         "Explore audit 2026-11-23 (core/runtime surface): the three modules were compared line by line and are function-for-function twins.",
         "test/verify-record.test.ts, test/reach-record.test.ts, test/sign-record.test.ts pin each report string and the counting behavior.",
-        "Repo precedent: recent wt/ leases repeatedly applied this exact pattern (share task-status constants, share in_review guard, share artifactName)."
+        "Repo precedent: recent wt/ leases repeatedly applied this exact pattern (share task-status constants, share in_review guard, share artifactName).",
+        "Landed 2026-11-24 on wt/clarity-consistency-performance: shared sweep/report/summary/ack/cell core in src/core/record-attestation.ts; 237 byte-comparisons matched; full check green (157 files, 2408 tests)."
       ],
       "dedupeKeys": [
         "attestation-recorder-twins",
         "verify-reach-sign-unify",
         "record-attestation-dedup"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:20:00Z"
     },
     {
       "id": "unify-tui-motion-predicates",
@@ -345,17 +347,19 @@
       "priority": 3,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "src/tui.tsx animated() and transientNow() both build pillMotionNeeded with the same four flags (evaluating, hot, flashing, landing); animated() only adds working. The shared object is constructed twice.",
       "improvement": "Build one transientFlags() object and spread it into both pillMotionNeeded calls, keeping the shared flags computed identically and the working flag local to animated(). Regenerate dist/tui.js with bun run compile; render tests cover the pill.",
       "evidence": [
-        "Explore audit 2026-11-23 (scripts/bin/prompter + TUI surface): both call sites were read and confirmed identical apart from working."
+        "Explore audit 2026-11-23 (scripts/bin/prompter + TUI surface): both call sites were read and confirmed identical apart from working.",
+        "Landed 2026-11-24 on wt/clarity-consistency-performance: motionFlags() feeds breath and crest predicates; dist/tui.js regenerated; full check green."
       ],
       "dedupeKeys": [
         "tui-motion-flags",
         "animated-transient-twins",
         "pill-motion-dedup"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:20:00Z"
     },
     {
       "id": "unify-tui-dossier-command-prologues",
@@ -364,17 +368,19 @@
       "priority": 3,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "Seven palette handlers (goal.dossier.export/verify/reach/sign/seal/review/spend in src/tui.tsx:1483-1577) repeat the same two-line session/goal lookup inside try {} catch {}.",
       "improvement": "Introduce one runForGoal(action) helper that performs the lookup and owns the catch posture, and have the seven handlers pass only their terminal action. Regenerate dist/tui.js with bun run compile.",
       "evidence": [
-        "Explore audit 2026-11-23: twelve currentSession() assignment sites were counted; seven share this exact prologue."
+        "Explore audit 2026-11-23: twelve currentSession() assignment sites were counted; seven share this exact prologue.",
+        "Landed 2026-11-24 on wt/clarity-consistency-performance: runDossierAction() owns the lookup and empty catch for all seven palette commands; dist/tui.js regenerated; full check green."
       ],
       "dedupeKeys": [
         "tui-dossier-prologue",
         "palette-command-twins",
         "run-for-goal"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:20:00Z"
     },
     {
       "id": "remove-dead-completed-condition-count",
@@ -383,17 +389,19 @@
       "priority": 4,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "src/core/types.ts:246 completedConditionCount has no production caller; only its definition, a doc reference at types.ts:442 and test/completed-condition-ledger.test.ts use it. Production paths use boundCompletedConditions plus .length (controller.ts:726,2168).",
       "improvement": "Delete the export and its self-test, and fix the doc reference. Pure subtraction; no runtime behavior changes.",
       "evidence": [
-        "Explore audit 2026-11-23 (core/runtime surface): repo-wide grep found no src/ caller."
+        "Explore audit 2026-11-23 (core/runtime surface): repo-wide grep found no src/ caller.",
+        "Landed 2026-11-24 on wt/clarity-consistency-performance: export and self-test removed, doc reference fixed; full check green (157 files, 2408 tests)."
       ],
       "dedupeKeys": [
         "completed-condition-count-dead",
         "unused-export-cleanup",
         "condition-ledger-subtract"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:20:00Z"
     },
     {
       "id": "planning-placeholder-swallows-terminal-authority",
@@ -449,18 +457,20 @@
       "priority": 4,
       "impact": "low",
       "risk": "low",
-      "status": "open",
+      "status": "done",
       "finding": "docs/config.html and README.md say evaluator.mode governs only the opt-in consensus:2 second vote and /goal-loop summarize/next-condition generation. src/runtime/evaluator.ts gates the second vote solely on config.consensus===2 && verdict==='met' and resolves evaluator.model unconditionally; mode is consulted only for loop steps (evaluator.ts:204,226). A user setting mode:'session' still gets a second-vote generation child, which can hit a free-tier gate.",
       "improvement": "Drop 'consensus:2 second vote' from the mode description in docs/config.html and README.md; state that the second vote is governed by consensus and evaluator.model, and keep the accurate summarize/next-condition clause. No code change.",
       "evidence": [
         "Read-only audit 2026-11-23 of commit 99558a2 (evaluator.model/mode wording).",
-        "src/runtime/evaluator.ts:128-135 (second vote) vs :204,:226 (mode-gated loop steps)."
+        "src/runtime/evaluator.ts:128-135 (second vote) vs :204,:226 (mode-gated loop steps).",
+        "Landed 2026-11-24 on wt/clarity-consistency-performance: docs/config.html and README.md now attribute the second vote to consensus + evaluator.model; no code change."
       ],
       "dedupeKeys": [
         "evaluator-mode-consensus-docs",
         "second-vote-mode-wording"
       ],
-      "related": []
+      "related": [],
+      "updatedAt": "2026-11-24T22:20:00Z"
     }
   ]
 }
