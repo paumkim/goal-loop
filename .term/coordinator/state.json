@@ -7179,9 +7179,11 @@
       "paths": "src,test,docs,SPEC.md,README.md",
       "branch": "wt/evaluator-empty-request-abstain",
       "worktree": "worktree/wt-evaluator-empty-request-abstain",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T22:15:54Z",
-      "submittedAt": "2026-11-24T22:37:41Z"
+      "submittedAt": "2026-11-24T22:37:41Z",
+      "mergedAt": "2026-11-24T23:38:23Z",
+      "mergedInto": "dev"
     },
     "terminal-planning-placeholder-authority": {
       "agent": "build",
