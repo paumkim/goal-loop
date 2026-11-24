@@ -5939,7 +5939,7 @@ function pruneSnapshotEntries(entries, keep, cap = ENTRY_CAP) {
 }
 var shouldKeepPlanningPlaceholder = (previous, next, sessionID, fromPull) => isPlanningSnapshot(previous, sessionID) && fromPull && (next === null || !isLive(next.status));
 var PLANNING_PULL_GRACE_MS = 35000;
-var isStalePlanningPull = (planningAt, next, nowMs, graceMs = PLANNING_PULL_GRACE_MS) => planningAt !== undefined && nowMs - planningAt >= 0 && nowMs - planningAt < graceMs && (next === null || !isLive(next.status));
+var isStalePlanningPull = (planningAt, next, nowMs, graceMs = PLANNING_PULL_GRACE_MS) => planningAt !== undefined && nowMs - planningAt >= 0 && nowMs - planningAt < graceMs && (next === null || !isLive(next.status) || next.setAt < planningAt);
 function dropSessions(entries, ids, keep) {
   if (ids.length === 0)
     return entries;

@@ -411,9 +411,14 @@ describe("isStalePlanningPull — a late answer cannot read as the new goal's co
     expect(isStalePlanningPull(at, snap("impossible"), at + 1000)).toBe(true)
   })
 
-  test("a live answer (the arm landed before the reply was composed) flows through", () => {
-    expect(isStalePlanningPull(at, snap("active"), at + 1000)).toBe(false)
-    expect(isStalePlanningPull(at, snap("paused"), at + 1000)).toBe(false)
+  test("a live answer stamped after the placeholder (the real arm) flows through", () => {
+    expect(isStalePlanningPull(at, { ...snap("active"), setAt: at + 500 }, at + 1000)).toBe(false)
+    expect(isStalePlanningPull(at, { ...snap("paused"), setAt: at + 500 }, at + 1000)).toBe(false)
+  })
+
+  test("a late pull of the pre-planning live goal is suppressed so it cannot evict the first-arm bar", () => {
+    expect(isStalePlanningPull(at, { ...snap("active"), setAt: at - 1 }, at + 1000)).toBe(true)
+    expect(isStalePlanningPull(at, { ...snap("paused"), setAt: at - 1 }, at + 1000)).toBe(true)
   })
 
   test("no planning placeholder was ever seen — nothing to suppress", () => {

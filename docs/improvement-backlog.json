@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-24T22:35:00Z",
+  "updatedAt": "2026-11-24T22:42:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -436,12 +436,13 @@
       "priority": 3,
       "impact": "medium",
       "risk": "medium",
-      "status": "open",
+      "status": "done",
       "finding": "isStalePlanningPull() only suppresses null/terminal answers. A pull composed while goal A was still live, delivered after showPlanning() cached the placeholder, resolves to live A; both guards return false and applySnapshot() stores A. The first-arm bar disappears until the real arm lands. planningSeenAt is also never cleared on arm/completion, though after 35s it only delays convergence.",
       "improvement": "Distinguish a pull issued before the arm from the real arm snapshot (mark the pull request time, or compare setAt against placeholder arrival) and suppress live answers from the pre-planning window. Add a regression in test/entries.test.ts asserting a late pre-planning live snapshot is suppressed.",
       "evidence": [
         "Read-only audit 2026-11-23 of commits 0acda52 / 83779c1 (TUI first-arm HUD fixes).",
-        "Test: isStalePlanningPull(at, liveA, at+1000) currently returns false; expected true for a pull composed during the planning window."
+        "Test: isStalePlanningPull(at, liveA, at+1000) currently returns false; expected true for a pull composed during the planning window.",
+        "Landed 2026-11-24 on wt/terminal-planning-placeholder-authority: isStalePlanningPull also suppresses live snapshots stamped before the placeholder; regression pins both sides; full check green."
       ],
       "dedupeKeys": [
         "planning-placeholder-live-pull",
@@ -450,7 +451,8 @@
       ],
       "related": [
         "planning-placeholder-swallows-terminal-authority"
-      ]
+      ],
+      "updatedAt": "2026-11-24T22:42:00Z"
     },
     {
       "id": "evaluator-mode-consensus-doc-mismatch",

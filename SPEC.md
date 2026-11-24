@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=157 tests=2409 -->
+<!-- spec-check files=157 tests=2410 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1885,6 +1885,17 @@ still lets a genuine live arm through.
 Verification: `test/entries.test.ts` adds a regression asserting that a terminal snapshot with a different id is
 not kept when `fromPull` is false, while all ten pull-sourced cases keep their original expectations; focused suite
 54 pass / 0 fail. `dist/tui.js` regenerated from `src/tui.tsx`.
+
+### A late pre-planning pull cannot evict the placeholder (planning-placeholder-live-pull-eviction, 2026-11-24)
+
+`isStalePlanningPull()` used to suppress only null and terminal answers. A pull composed while the previous goal
+was still live could arrive after the placeholder was cached and replace it with that older live record; the
+first-arm bar then disappeared until the real arm landed. The guard now also suppresses a live answer whose
+`setAt` predates the placeholder, while a live snapshot stamped after it (the real arm) still flows through. The
+35-second grace window, `changed`-event authority and stale-tick reconvergence are unchanged.
+
+Verification: `test/entries.test.ts` pins both sides — a post-placeholder live snapshot is admitted, a
+pre-placeholder one is suppressed; the focused suite is green and `dist/tui.js` is regenerated.
 
 ## Historical workstreams
 
