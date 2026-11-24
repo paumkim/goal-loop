@@ -1393,10 +1393,18 @@ export default Plugin.define({
           const g = goal()
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g)
         }
-        const animated = () => {
+        // The four transient flags are shared by the breath predicate and the crest predicate; only the
+        // breath adds plain working. One helper keeps their reactive reads and their OR inputs identical.
+        const motionFlags = () => {
           const g = goal()
-          return pillMotionNeeded({ working: workingNow(), evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
+          return {
+            evaluating: g?.evaluating === true,
+            hot: g !== undefined && isCompactHot(g),
+            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
+            landing: landingNow(),
+          }
         }
+        const animated = () => pillMotionNeeded({ ...motionFlags(), working: workingNow() })
         createEffect(() => {
           // The pill is always painted while showing() (it is the accordion's persistent stripe, see
           // the mount below), so the breath advances whenever the loop is alive — open or closed.
@@ -1409,10 +1417,7 @@ export default Plugin.define({
         })
         // The crest beat belongs to the transients, never to plain working: an evaluating / hot /
         // flash / landing goal flexes at the top of the breath; an armed-and-working loop does not.
-        const transientNow = () => {
-          const g = goal()
-          return pillMotionNeeded({ evaluating: g?.evaluating === true, hot: g !== undefined && isCompactHot(g), flashing: props.sessionID !== undefined && flashing().has(props.sessionID), landing: landingNow() })
-        }
+        const transientNow = () => pillMotionNeeded(motionFlags())
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes.BOLD : 0
           const g = goal()
@@ -1679,6 +1684,16 @@ export default Plugin.define({
       if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
     }
 
+    // The dossier palette commands all resolve the same live/queued goal and swallow every failure;
+    // only the terminal action differs. Keep that lookup-and-ignore posture in one place.
+    const runDossierAction = (action: (sessionID: string | undefined, goal: GoalSnapshot | null | undefined) => unknown): void => {
+      try {
+        const sessionID = currentSession()
+        const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
+        action(sessionID, goal)
+      } catch {}
+    }
+
     context.keymap.layer(() => ({
       mode: "global",
       commands: [
@@ -1795,13 +1810,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              exportDossier(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(exportDossier),
         },
         {
           id: "goal.dossier.verify",
@@ -1809,13 +1818,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              verifyRecordAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(verifyRecordAction),
         },
         {
           id: "goal.dossier.reach",
@@ -1823,13 +1826,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              reachRecordAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(reachRecordAction),
         },
         {
           id: "goal.dossier.sign",
@@ -1837,13 +1834,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              signRecordAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(signRecordAction),
         },
         {
           id: "goal.dossier.seal",
@@ -1851,13 +1842,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              sealRecordAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(sealRecordAction),
         },
         {
           id: "goal.dossier.attest",
@@ -1877,13 +1862,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              reviewRecordAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(reviewRecordAction),
         },
         {
           id: "goal.dossier.spend",
@@ -1891,13 +1870,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            try {
-              const sessionID = currentSession()
-              const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal
-              spendLedgerAction(sessionID, goal)
-            } catch {}
-          },
+          run: () => runDossierAction(spendLedgerAction),
         },
         {
           id: "goal.dossier.index",

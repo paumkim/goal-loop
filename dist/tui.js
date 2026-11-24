@@ -7924,16 +7924,19 @@ var tui_default = Plugin.define({
           const g = goal();
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g);
         };
-        const animated = () => {
+        const motionFlags = () => {
           const g = goal();
-          return pillMotionNeeded({
-            working: workingNow(),
+          return {
             evaluating: g?.evaluating === true,
             hot: g !== undefined && isCompactHot(g),
             flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
             landing: landingNow()
-          });
+          };
         };
+        const animated = () => pillMotionNeeded({
+          ...motionFlags(),
+          working: workingNow()
+        });
         createEffect2(() => {
           if (animated() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
@@ -7942,15 +7945,7 @@ var tui_default = Plugin.define({
           }
           setBreathPhase(0);
         });
-        const transientNow = () => {
-          const g = goal();
-          return pillMotionNeeded({
-            evaluating: g?.evaluating === true,
-            hot: g !== undefined && isCompactHot(g),
-            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
-            landing: landingNow()
-          });
-        };
+        const transientNow = () => pillMotionNeeded(motionFlags());
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes5.BOLD : 0;
           const g = goal();
@@ -8259,6 +8254,13 @@ var tui_default = Plugin.define({
           sessionID
         }, at(sessionID)).catch(() => {});
     };
+    const runDossierAction = (action) => {
+      try {
+        const sessionID = currentSession();
+        const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+        action(sessionID, goal);
+      } catch {}
+    };
     context.keymap.layer(() => ({
       mode: "global",
       commands: [{
@@ -8371,65 +8373,35 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            exportDossier(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(exportDossier)
       }, {
         id: "goal.dossier.verify",
         title: "Goal: verify the record (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            verifyRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(verifyRecordAction)
       }, {
         id: "goal.dossier.reach",
         title: "Goal: verify the record reaches HEAD (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reachRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(reachRecordAction)
       }, {
         id: "goal.dossier.sign",
         title: "Goal: verify the record's signatures (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            signRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(signRecordAction)
       }, {
         id: "goal.dossier.seal",
         title: "Goal: seal the dossier with a fresh attestation (file)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            sealRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(sealRecordAction)
       }, {
         id: "goal.dossier.attest",
         title: "Goal: attest a sealed dossier against HEAD (drift report)",
@@ -8447,26 +8419,14 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reviewRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(reviewRecordAction)
       }, {
         id: "goal.dossier.spend",
         title: "Goal: export the spend ledger (markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            spendLedgerAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(spendLedgerAction)
       }, {
         id: "goal.dossier.index",
         title: "Goal: index the exported dossier artifacts (markdown)",

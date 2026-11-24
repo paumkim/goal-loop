@@ -1853,6 +1853,10 @@ verified with `bun run check`; no rendered string, error posture or runtime deci
 - Doc accuracy: `docs/config.html` and `README.md` said `evaluator.mode` governs the opt-in `consensus: 2` second
   vote. In `src/runtime/evaluator.ts` that vote is gated only on `consensus` and uses `evaluator.model`; `mode` is
   consulted only for the `/goal-loop` summarize and next-condition steps. The two descriptions now say so.
+- TUI duplication: `motionFlags()` now supplies the four shared transient pill flags to both the breath and crest
+  predicates (plain `working` stays local to the breath), and `runDossierAction()` owns the identical session/goal
+  lookup plus empty-catch posture of the seven dossier palette commands. Rendered output and error handling are
+  unchanged; `dist/tui.js` is regenerated from `src/tui.tsx`.
 
 Verification: full `bun run check` green per unit; SPEC marker re-counted after the self-test removal.
 
