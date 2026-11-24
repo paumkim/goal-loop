@@ -25,7 +25,7 @@ or discarding anyone's work.
 3. **Stale branches:** list local branches already merged into the current
    integration branch (`git branch --merged`). Report deletion candidates;
    delete only branches you can prove are fully merged and are authorized to remove.
-4. **Worktrees:** list worktrees; flag ones whose branch is gone or whose directory
+4. **Worktree:** list worktree checkouts; flag ones whose branch is gone or whose directory
    is missing. Never remove a worktree that still holds uncommitted bytes.
 5. **Stashes:** list stashes with age; report stale ones. Never drop a stash
    without authorization.
@@ -41,5 +41,5 @@ or discarding anyone's work.
 ## Verify
 - Re-run the before-acting commands and show the delta.
 - Show `git status --short`, `git diff --stat`, and `git worktree list`.
-- Report a short tally: artifacts ignored, branches/stashes/worktrees flagged,
+- Report a short tally: artifacts ignored, branches/stashes/worktree flagged,
   and every action that was only proposed, not taken.

@@ -8,7 +8,7 @@ set -uo pipefail
 #   1. Uncommitted bytes are never destroyed. Any worktree removal first stashes the
 #      non-exempt dirt into a named ref (refs/coordinator/saved/<slug>-<ts>) and prints
 #      recovery commands. Only .term/coordinator/state.json dirt is exempt.
-#   2. Merge work happens in dedicated worktrees (worktree/wt-merge-check-*), never in
+#   2. Merge work happens in a dedicated worktree (worktree/wt-merge-check-*), never in
 #      the main checkout. The main checkout must be on dev and tracked-clean at the
 #      start of a merge step and is fast-forwarded onto the verified scratch branch.
 #   3. Submit enforces the lease's claimed paths against the commits on the branch;
@@ -1838,8 +1838,8 @@ do_doctor() {
       fi
     fi
   done
-  [ "$done_dangling" -eq 0 ] && say_ok "done-lease-worktrees-clean" "no done lease retains its worktree"
-  [ "$live_missing" -eq 0 ] && say_ok "live-lease-worktrees-present" "all live leases have their worktrees"
+  [ "$done_dangling" -eq 0 ] && say_ok "done-lease-worktree-clean" "no done lease retains its worktree"
+  [ "$live_missing" -eq 0 ] && say_ok "live-lease-worktree-present" "all live leases have their worktree"
 
   # 4. node_modules: dangling symlinks in any worktree
   local dangling=0
@@ -1993,7 +1993,7 @@ show_help() {
   printf '  merge-status                                        read-only merge lock view as JSON: mergeInProgress, holder, ageSeconds, recommendation\n'
   printf '  await-merge [--timeout SECONDS]                     poll the existing merge lock until free, then print merge-status JSON (exit 1 on timeout)\n'
   printf '  migrate-worktree-dir [--dry-run] [--with-live-leases]  move legacy worktrees/ to worktree/, repair git records and rewrite config/lease paths\n'
-  printf '  doctor [--json]                                     health checks: main checkout, worktrees, node_modules, SPEC marker, merge lock; --json emits {ok,failures,checks:[{name,level,message}]}\n'
+  printf '  doctor [--json]                                     health checks: main checkout, worktree, node_modules, SPEC marker, merge lock; --json emits {ok,failures,checks:[{name,level,message}]}\n'
 }
 
 main() {

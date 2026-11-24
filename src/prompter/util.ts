@@ -18,7 +18,7 @@ const repoHash = (repo: string): string => sha256(path.resolve(repo)).slice(0, 1
 
 export const statePath = (repo: string): string => path.join(prompterHome(), "state", `${repoHash(repo)}.jsonl`)
 
-export const worktreeRoot = (repo: string): string => path.join(prompterHome(), "worktrees", repoHash(repo))
+export const worktreeRoot = (repo: string): string => path.join(prompterHome(), "worktree", repoHash(repo))
 
 export const logPath = (repo: string): string => path.join(prompterHome(), "log", `${repoHash(repo)}.log`)
 

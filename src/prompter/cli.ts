@@ -28,7 +28,7 @@ Usage:
   prompter reject <id> [reason]        abandon a reviewed task
   prompter stop                        write the global kill switch
   prompter resume                      remove the global kill switch
-  prompter cleanup [repo]              remove stale worktrees/branches of finished tasks`
+  prompter cleanup [repo]              remove stale worktree/branches of finished tasks`
 
 interface Parsed {
   readonly command: string
@@ -53,7 +53,7 @@ const parseArgs = (argv: string[]): Parsed => {
 const resolveRepo = (parsed: Parsed): string => path.resolve(parsed.repoFlag ?? parsed.positional.at(-1) ?? process.cwd())
 
 const ensureHome = (): void => {
-  for (const dir of [prompterHome(), path.join(prompterHome(), "state"), path.join(prompterHome(), "worktrees"), path.join(prompterHome(), "log")]) {
+  for (const dir of [prompterHome(), path.join(prompterHome(), "state"), path.join(prompterHome(), "worktree"), path.join(prompterHome(), "log")]) {
     mkdirSync(dir, { recursive: true })
   }
 }

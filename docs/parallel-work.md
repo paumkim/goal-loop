@@ -78,7 +78,7 @@ those leases land. Both directory names stay gitignored until the move completes
 When a live lease cannot be waited for, `coordinator migrate-worktree-dir --with-live-leases`
 performs the same move but leaves a `worktrees -> worktree` compatibility symlink and does not
 rewrite the blocked leases' records: their old paths keep resolving exactly as before, while
-new worktrees and git's repaired records use `worktree/`. The symlink is temporary — remove it
+new worktree checkouts and git's repaired records use `worktree/`. The symlink is temporary — remove it
 once those leases land.
 
 ## Check merge status before claim / submit / merge-next
@@ -138,7 +138,7 @@ and the exact recovery. Fix the branch, then re-run `merge-next`. If you only ne
 marker re-counted, run `bun scripts/spec-check.ts --write` and commit the result.
 
 If a merge died mid-flight, `coordinator doctor` tells you: main-checkout state, dangling
-worktrees, dangling `node_modules` symlinks, SPEC marker vs reality, merge-lock health.
+worktree, dangling `node_modules` symlinks, SPEC marker vs reality, merge-lock health.
 Exit code 1 means at least one check failed; the output says what and how to fix it.
 
 ## Field gotchas (audited against the binary, 2026-11-21)

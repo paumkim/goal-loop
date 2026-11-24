@@ -145,7 +145,7 @@ function main(): void {
     probeErrors.push(`npm pack --dry-run --json failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // tests: run bun test from inside test/ so a repo carrying opencode worktrees under worktree/
+  // tests: run bun test from inside test/ so a repo carrying opencode worktree forks under worktree/
   // cannot double-count the suite; the reporter summary goes to stderr, not stdout; merge both.
   // A bun that fails to start is reported as such, not as "a test failed".
   const run = spawnSync("bun", ["test"], { cwd: join(ROOT, "test"), encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });

@@ -15,7 +15,7 @@ Repo-specific specialization of `maintenance/universal-improvement-pass.md`; the
 2. Remove bloat, then unify patterns, then optimize — in small, independently mergeable units.
 3. For performance work show before/after evidence; never claim "feels faster".
 4. Guardrails: no public API/behavior change without spec + tests; add regression tests for risky changes; preserve load-bearing guards (epoch/abort/verify/probe); never skip, weaken, or delete tests.
-5. Follow the repo workflow (claims/worktrees, submit/merge, clean tree, generated-file sync) and run required checks per unit and after integration.
+5. Follow the repo workflow (claims/worktree, submit/merge, clean tree, generated-file sync) and run required checks per unit and after integration.
 
 ## Output
 Per unit: scope/slug/paths, changes (`file:line`), deletions, before/after evidence, check/merge result. Final: files removed, LOC delta, artifact/test-count deltas, pasted check output.

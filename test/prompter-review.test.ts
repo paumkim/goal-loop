@@ -34,7 +34,7 @@ const task = (repo: string, sha: string, status: TaskStatus = "in_review"): Task
   status,
   repo,
   branch: "autonomy/t1",
-  worktree: path.join(repo, "worktrees", "t1"),
+  worktree: path.join(repo, "worktree", "t1"),
   commit: sha,
   requestedAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",

@@ -22,7 +22,7 @@ Give your AI coding agent a concrete finish line. It works turn after turn until
 | --- | --- |
 | ❌ Stops prematurely when it "thinks" it is done | ✅ Loops autonomously until the finish line is proven |
 | ❌ Hallucinates that tests pass without running them | ✅ Evaluator requires fresh command output at current git HEAD |
-| ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or isolated worktrees before `met` |
+| ❌ Leaves messy, uncommitted code changes | ✅ Enforces clean commits or an isolated worktree before `met` |
 | ❌ Fails on network drops or rate limits | ✅ Retries transients with capped backoff (3 consecutive failures by default; `maxRetries: 0` for unlimited) and waits out rate limits — never loses state |
 | ❌ Context fills up and model quality degrades | ✅ Auto-compacts context at each loop iteration boundary |
 
@@ -222,7 +222,7 @@ Full offline-first, dependency-free documentation lives in [`docs/`](docs/) and 
 - ⚙️ **[Configuration Reference](https://paumkim.github.io/goal-loop/config.html)**: Exhaustive reference for every option, default, and environment variable.
 - 🏗️ **[Architecture & State Machine](https://paumkim.github.io/goal-loop/architecture.html)**: Ports, event flow, and state transitions.
 - 🔄 **[Runtime & Auto-Compaction](https://paumkim.github.io/goal-loop/runtime.html)**: Compaction algorithms, retry backoff, and storage pruning.
-- 🔀 **[Coordinator & Parallel Worktrees](docs/parallel-work.md)**: Multi-agent coordination with `wt/<slug>` worktrees and `merge-next`.
+- 🔀 **[Coordinator & Parallel Worktree](docs/parallel-work.md)**: Multi-agent coordination with `wt/<slug>` worktree and `merge-next`.
 - 📋 **[Fresh Session Promotion Checklist](https://paumkim.github.io/goal-loop/runtime.html#freshsession)**: Safe operational rules for continuing long loops.
 
 ---

@@ -5,7 +5,7 @@ export type TaskStatus = (typeof TASK_STATUSES)[number]
 /** Statuses that still own a backlog line or block task selection. */
 export const ACTIVE_TASK_STATUSES: ReadonlySet<string> = new Set(["running", "in_review"])
 
-/** Finished statuses whose worktrees and branches `prompter cleanup` removes. */
+/** Finished statuses whose worktree and branches `prompter cleanup` removes. */
 export const FINISHED_TASK_STATUSES: readonly TaskStatus[] = TASK_STATUSES.filter((s) => !ACTIVE_TASK_STATUSES.has(s))
 
 /** Append-only state record. The last record for an id is the current state. */

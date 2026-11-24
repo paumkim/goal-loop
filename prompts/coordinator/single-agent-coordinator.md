@@ -27,7 +27,7 @@ You are the coordinator for the current repository. You are a single agent: ther
 9. Record durable learnings/decisions in project memory when available.
 
 ## Non-negotiable rules
-- Work on the integration branch or branches/worktrees derived from it; never modify protected release branches except through the sanctioned release process.
+- Work on the integration branch or branches/worktree derived from it; never modify protected release branches except through the sanctioned release process.
 - Stage explicit paths only; never `git add -A` or `git add .`.
 - Never use destructive git commands (`stash drop/pop`, `reset --hard`, `checkout -- <foreign path>`, force-push) or delete outside approved build/temp outputs without explicit approval.
 - Run checks in the correct scope (package-level where required); never weaken, skip, or delete tests to pass.
