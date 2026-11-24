@@ -12,8 +12,15 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
-<tr><td><code>2026-11-24 08:08 UTC</code></td><td>test(verifier): assert the rendered compaction label is not Provider compaction</td><td>commit</td></tr>
-<tr><td><code>2026-11-24 08:08 UTC</code></td><td>fix(tui): avoid the provider-compaction divider without leaving the repo</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 15:26 UTC</code></td><td>test(verifier): assert the rendered compaction label is not Provider compaction</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 15:26 UTC</code></td><td>fix(tui): avoid the provider-compaction divider without leaving the repo</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 11:10 UTC</code></td><td>feat(tui): spell out pill activity and show background delegation</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 11:04 UTC</code></td><td>Add repeatable cache-clear tool for fresh-source plugin runs</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 10:55 UTC</code></td><td>fix(tui): rename the compaction divider in the running binary</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 10:49 UTC</code></td><td>fix(goal-loop): treat raw /goal-loop clear aliases as commands, not goals</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 10:40 UTC</code></td><td>refactor(history): read newest verdict directly instead of a one-shot loop</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 09:44 UTC</code></td><td>fix(evaluator): bind planner scope to its own condition</td><td>commit</td></tr>
+<tr><td><code>2026-11-24 09:09 UTC</code></td><td>fix(evaluator): run evaluator and planner as reused parent-linked subagent children</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 06:48 UTC</code></td><td>fix(evaluator): judge the goal-owning parent, never worker subagents</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 06:05 UTC</code></td><td>fix(cli): honor patch-host default path when no path argument is given</td><td>commit</td></tr>
 <tr><td><code>2026-11-24 05:28 UTC</code></td><td>feat(tui): drive pill icons from the live tool lifecycle</td><td>commit</td></tr>
@@ -35,17 +42,10 @@
 <tr><td><code>2026-11-23 23:19 UTC</code></td><td>fix(runtime): report Goal Achieved. without waking parent; continue loop planning in evaluator child</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 22:25 UTC</code></td><td>fix(runtime): a deferred check-in can no longer wake the parent mid-judge</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 22:07 UTC</code></td><td>fix(verify-matrix): parse one-line fenced goal verify directives cleanly</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 20:52 UTC</code></td><td>fix(tui): guard late re-pulls from blinking out the first-arm HUD</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 20:43 UTC</code></td><td>fix(tui): keep the first-arm HUD visible through the planner window</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 19:48 UTC</code></td><td>docs(backlog): record remaining craft gaps for next iterations</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 19:38 UTC</code></td><td>refactor(tui): share the palette status request helper</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 19:33 UTC</code></td><td>refactor(prompter): share parseModel instead of a local model parser</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 19:29 UTC</code></td><td>docs: align install env-var list and qualify env override claim</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 19:24 UTC</code></td><td>docs(core): sharpen verify-matrix directive parsing comments</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-24 08:08 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-24 15:26 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->

@@ -173,7 +173,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     commit rule, turn cap, stall guard, retries, restore-on-restart, `/goal-loop clear` and the
     `stop`/`off`/`reset`/`none`/`cancel` aliases). With no arguments it shows status. It activates the
     loop only after the evaluator returns `met` — never on `not_met`, stall, pause, interrupt, retry or
-    failure paths. `/goal` behavior for non-looped goals is unchanged.
+    failure paths. `/goal` behavior for non-looped goals is unchanged. The clear aliases are honored on
+    the raw-prompt `/goal-loop[-N|=N]` path too (`src/index.ts` prompt hook): a line such as
+    `/goal-loop clear` ends the loop instead of arming a loop whose objective is "clear".
 12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
     achieved iteration into a compact machine-consumable block via the evaluator
     (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
@@ -644,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2405 -->
+<!-- spec-check files=156 tests=2410 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -920,7 +922,9 @@ the current iteration.
     otherwise the now row is unchanged. The base text now wraps (`word`) instead of overflowing the
     rail's width, so the verdict suffix stays pinned after wrapping text.
 82. New pure helpers `localTime`, `currentIterationVerdict`, `turnsSinceVerdict` in
-    `src/core/history.ts`, unit-tested (`test/history.test.ts`).
+    `src/core/history.ts`, unit-tested (`test/history.test.ts`). `currentIterationVerdict` reads the newest verdict
+    directly instead of scanning backwards through a loop that always breaks after one iteration; empty history,
+    window edges and the non-finite `endedAt` fallback are unchanged.
 83. `scripts/render-history.tsx` frames (looped, paused, complete) show `at HH:MM` on rail rows and
     the `· last <glyph> … since` segment on the now row; the paused and complete frames verify both.
 
@@ -1532,28 +1536,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CCIII — proactive strategy escalation replaces the repeated-failure pause (proactive-strategy-escalation) (2026-11-23)
-
-A `not_met` verdict whose failure signature repeated three times in a row paused the goal and handed
-control back to the user ("rotate strategy ... then send a message to resume"). That stop was the one
-guard that still froze an otherwise-armed goal, and it applied to plain goals and loops alike. It is now
-a proactive continuation: the goal stays `active`, the worker gets a `<goal-strategy-escalation>` steer
-that names the streak, the signature summary, the persisted diagnostic artifact, and one concrete
-rotated strategy. Rotation is derived from the streak length (`count - threshold`, mod four), so it
-needs no extra persisted state, survives restarts, is different every time, and works for every goal and
-every signature kind (verification, legacy-verify, reason). The first escalation of a streak emits one
-non-pausing notice; the diagnostic artifact is still written under `.term/goal-loop/diagnostics/` and
-its path is cited in the steer. `pauseCause: "repeated_failure"` and its HUD remedy are kept only for
-records persisted before this change.
-
-Verification: new pure rotation regression in `test/failure-signature.test.ts` uses an independent
-index oracle, checks a full cycle is distinct, and checks verification/reason signatures at the same
-count rotate identically; new prompt regressions in `test/core.test.ts` pin the wrapper, facts,
-artifact, escaping, and optional omissions; `test/controller.test.ts` now pins an active goal, a
-self-resuming `resume: true` steer, strategy rotation across five repeats, the cited diagnostic path,
-and no `paused` notice. Focused suite: 315 pass / 0 fail, 178043 expect() calls. Full `bun run check`
-green after artifact regeneration; marker re-counted, no shipped file added or removed.
-
 ## Workstream CCIV — one diagnostic artifact per failure streak (bounded-failure-diagnostics) (2026-11-23)
 
 CCIII made escalation proactive, which means it now fires on every not_met turn of a stuck streak instead
@@ -1835,6 +1817,38 @@ child any more.
 Verification: `test/controller.test.ts` pins that descendant completions spawn no verdict, no continuation steer and
 no history entry, and that the parent's turn is judged from the parent session alone; `test/plugin.test.ts` pins that
 verdict-child affinity is keyed to the parent and that no owner-routing plumbing remains. Full `bun run check` green.
+
+## Workstream evaluator-planner-subagent-child-reuse — evaluator and planner are reused parent-linked subagent children (2026-11-24)
+
+Two earlier workstreams (`evaluator-goal-achieved-planner` and `planner-parentless-completion`) removed the
+`parentID` from the harness-owned evaluator and arm-time planner children to avoid host completion wake-ups. That
+made both agents appear as new top-level sessions in OpenCode's session list — one `evaluator` per turn and one
+`Goal planner` per arm — instead of subagents nested under the goal session, and contradicted the original CCX/CCII
+subagent design (`sessions.create({ parentID, agent, model })`).
+
+Both children are now created with the working session as their `parentID` and reused: one evaluator subagent child
+serves every verdict and every loop summarizer / next-goal generation, and one planner subagent child serves every
+arm. The per-session child ids live in module maps cleared on plugin `dispose`; a failed or timed-out generation drops
+its child so the next one starts clean. The model rides with each prompt so a `/model` switch reaches the reused
+child. No synthetic completion report is admitted into the worker's transcript — the verdict and plan still come from
+each child's own event stream, and the existing report strip stays as a defensive guard. This supersedes the
+parentless sections of the two earlier workstreams; terminal visibility, verdict contract, verifier gate and loop
+semantics are unchanged.
+
+Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
+verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
+both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
+
+### Installed-binary divider rename (provider-compaction-running-label, 2026-11-24)
+
+The host source patch (`COMPACTION_DIVIDER_PATCH`) edits a build input only: the string a running TUI renders is
+compiled twice into the installed Bun executable. `src/core/opencode-labels.ts` now also owns
+`INSTALLED_BINARY_DIVIDER_PATCH`, a byte-length-preserving swap of the minified ternary and the standalone
+string-table entry so `goal-loop patch-host --binary` renames the divider in the binary that actually runs.
+Error messages that merely mention the feature keep their text; the install command still touches only config.
+
+Verification: `test/opencode-labels.test.ts` pins both patch fragments, their equal byte length, and that the
+error-message occurrences are left alone. Full `bun run check` green after artifact regeneration.
 
 ## Historical workstreams
 
