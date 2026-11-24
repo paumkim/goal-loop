@@ -6780,8 +6780,10 @@
       "paths": "SPEC.md,SPEC-workstreams.md",
       "branch": "wt/spec-rotate-ccx-archive",
       "worktree": "worktree/wt-spec-rotate-ccx-archive",
-      "status": "claimed",
-      "createdAt": "2026-11-24T06:41:54Z"
+      "status": "done",
+      "createdAt": "2026-11-24T06:41:54Z",
+      "releasedAt": "2026-11-24T06:50:25Z",
+      "releaseReason": "released"
     },
     "spec-ccx-archive-rotate2": {
       "agent": "hy4-flash-free",
@@ -6799,8 +6801,17 @@
       "paths": "src/index.ts,test/plugin.test.ts",
       "branch": "wt/judge-report-comment-cleanup",
       "worktree": "worktree/wt-judge-report-comment-cleanup",
+      "status": "submitted",
+      "createdAt": "2026-11-24T06:47:54Z",
+      "submittedAt": "2026-11-24T06:50:15Z"
+    },
+    "coord-state-bookkeeping": {
+      "agent": "hy4-flash-free",
+      "paths": ".term/coordinator/state.json",
+      "branch": "wt/coord-state-bookkeeping",
+      "worktree": "worktree/wt-coord-state-bookkeeping",
       "status": "claimed",
-      "createdAt": "2026-11-24T06:47:54Z"
+      "createdAt": "2026-11-24T06:50:53Z"
     }
   },
   "mergeLock": null,
