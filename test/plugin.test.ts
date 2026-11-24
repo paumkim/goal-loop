@@ -1029,7 +1029,7 @@ describe("the generate hook makes evaluator replies text-only (empty-verdict roo
       const during = buildEvent()
       hooks.generate!(during)
       expect(Object.keys(during.tools)).toEqual([]) // no tool call can produce an empty text verdict
-      expect(during.options.maxTokens).toBeGreaterThan(0)
+      expect(during.options.maxTokens).toBe(4096)
 
       // A user prompt admitted mid-evaluation is a working turn, not a judge: it keeps its tools and budget.
       const parent = buildEvent("ses_1")
@@ -1180,7 +1180,7 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       expect(evaluator.description).toContain("/goal condition")
       expect(evaluator.mode).toBe("subagent")
       expect(evaluator.hidden).toBe(false)
-      expect(evaluator.color).toBeTruthy()
+      expect(evaluator.color).toBe("#A78BFA")
       expect(evaluator.system).toBe(EVALUATOR_SYSTEM_PROMPT)
       expect(evaluator.system).toContain("You are the Evaluator")
       expect(evaluator.permissions).toEqual([{ action: "*", resource: "*", effect: "deny" }])

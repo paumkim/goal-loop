@@ -106,7 +106,6 @@ describe("exportLoopDossier", () => {
   })
 
   test("the attempt ceiling is a real number of names, not a hang — MAX_EXPORT_ATTEMPTS candidates then throw", () => {
-    expect(MAX_EXPORT_ATTEMPTS).toBeGreaterThan(1)
-    expect(MAX_EXPORT_ATTEMPTS).toBeLessThanOrEqual(1000)
+    expect(MAX_EXPORT_ATTEMPTS).toBe(100)
   })
 })

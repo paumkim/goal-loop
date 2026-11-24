@@ -572,7 +572,7 @@ test("config: verifyChecks and verifyProfile resolve; legacy verifyCommand synth
     const check = record.history.at(-1)!.verification!.checks.find((c) => c.id === "lint")!
     expect(check.pass).toBe(false)
     expect(check.executionMode).toBe("artifact")
-    expect(check.artifactMissing?.length).toBeGreaterThan(0)
+    expect(check.artifactMissing).toEqual(["lint ok", "0 problems"])
     expect(check.nextAction).toMatch(/fresh scoped transcript|artifact/i)
   })
 
