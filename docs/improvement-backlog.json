@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-23T01:25:49Z",
+  "updatedAt": "2026-11-24T01:46:13Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -315,6 +315,84 @@
         "lenient-verdict-regex-precompile",
         "verdict-regex-benchmark",
         "regex-precompile-no-win"
+      ]
+    },
+    {
+      "id": "unify-attestation-recorders",
+      "title": "Unify the three twin record-attestation modules",
+      "category": "refactor",
+      "priority": 2,
+      "impact": "medium",
+      "risk": "medium",
+      "status": "open",
+      "finding": "src/core/verify-record.ts, reach-record.ts and sign-record.ts mirror each other function-for-function: the *Probe type, the *Record map/catch/count sweep, statusCell, the report markdown/summary/ack segments and the *Outcome Pick shapes. dossier-seal.ts:74-76 and dossier-review.ts:97-99 repeat the same three verify/reach/sign cell helpers.",
+      "improvement": "Extract one generic sweep/report helper parameterized by the labels and the three honest-report strings; keep every exported wrapper name and every rendered report byte identical. Counting and ack logic is already pinned by test/verify-record.test.ts, test/reach-record.test.ts and test/sign-record.test.ts.",
+      "evidence": [
+        "Explore audit 2026-11-23 (core/runtime surface): the three modules were compared line by line and are function-for-function twins.",
+        "test/verify-record.test.ts, test/reach-record.test.ts, test/sign-record.test.ts pin each report string and the counting behavior.",
+        "Repo precedent: recent wt/ leases repeatedly applied this exact pattern (share task-status constants, share in_review guard, share artifactName)."
+      ],
+      "dedupeKeys": [
+        "attestation-recorder-twins",
+        "verify-reach-sign-unify",
+        "record-attestation-dedup"
+      ]
+    },
+    {
+      "id": "unify-tui-motion-predicates",
+      "title": "Share the transient motion flags in the TUI pill",
+      "category": "refactor",
+      "priority": 3,
+      "impact": "low",
+      "risk": "low",
+      "status": "open",
+      "finding": "src/tui.tsx animated() and transientNow() both build pillMotionNeeded with the same four flags (evaluating, hot, flashing, landing); animated() only adds working. The shared object is constructed twice.",
+      "improvement": "Build one transientFlags() object and spread it into both pillMotionNeeded calls, keeping the shared flags computed identically and the working flag local to animated(). Regenerate dist/tui.js with bun run compile; render tests cover the pill.",
+      "evidence": [
+        "Explore audit 2026-11-23 (scripts/bin/prompter + TUI surface): both call sites were read and confirmed identical apart from working."
+      ],
+      "dedupeKeys": [
+        "tui-motion-flags",
+        "animated-transient-twins",
+        "pill-motion-dedup"
+      ]
+    },
+    {
+      "id": "unify-tui-dossier-command-prologues",
+      "title": "Share the palette dossier command prologue",
+      "category": "refactor",
+      "priority": 3,
+      "impact": "low",
+      "risk": "low",
+      "status": "open",
+      "finding": "Seven palette handlers (goal.dossier.export/verify/reach/sign/seal/review/spend in src/tui.tsx:1483-1577) repeat the same two-line session/goal lookup inside try {} catch {}.",
+      "improvement": "Introduce one runForGoal(action) helper that performs the lookup and owns the catch posture, and have the seven handlers pass only their terminal action. Regenerate dist/tui.js with bun run compile.",
+      "evidence": [
+        "Explore audit 2026-11-23: twelve currentSession() assignment sites were counted; seven share this exact prologue."
+      ],
+      "dedupeKeys": [
+        "tui-dossier-prologue",
+        "palette-command-twins",
+        "run-for-goal"
+      ]
+    },
+    {
+      "id": "remove-dead-completed-condition-count",
+      "title": "Remove the unused completedConditionCount export",
+      "category": "refactor",
+      "priority": 4,
+      "impact": "low",
+      "risk": "low",
+      "status": "open",
+      "finding": "src/core/types.ts:246 completedConditionCount has no production caller; only its definition, a doc reference at types.ts:442 and test/completed-condition-ledger.test.ts use it. Production paths use boundCompletedConditions plus .length (controller.ts:726,2168).",
+      "improvement": "Delete the export and its self-test, and fix the doc reference. Pure subtraction; no runtime behavior changes.",
+      "evidence": [
+        "Explore audit 2026-11-23 (core/runtime surface): repo-wide grep found no src/ caller."
+      ],
+      "dedupeKeys": [
+        "completed-condition-count-dead",
+        "unused-export-cleanup",
+        "condition-ledger-subtract"
       ]
     }
   ]
