@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2364 -->
+<!-- spec-check files=144 tests=2365 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
@@ -1533,13 +1533,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCVII — a bounded, objective completion condition for the loop (2026-11-23)
-
-The loop never terminated: the planner's `LOOP_COMPLETE` clause asked whether "nothing meaningful remains to improve toward the objective" and "every meaningful improvement ... is already complete", and the evaluator's `next: none` clause asked whether the verdict was met "with no gap". None of those has a terminal definition — there is always another conceivable polish/speed/taste tweak — so a fully green build (all objective gates passing) still produced a `next:` action, which the planner carried forward as a fresh condition and re-armed the loop.
-
-`src/core/prompts.ts` now defines `COMPLETION_CONDITION` once and embeds it in both `OUTPUT` (evaluator) and `NEXT_GOAL_ASK` (planner). Completion is a finite four-item checklist, each item checkable from fresh visible output at current HEAD: (1) every required check and verifier command passes with exit 0 and zero failures; (2) the tracked tree is clean (`git status --short` shows no uncommitted source changes); (3) no active or submitted lease requires work ABSENT at HEAD and the merge queue has no pending entry; (4) the latest met verdict's `next:` pointer names no concrete gap whose required work is ABSENT at HEAD. If any item is unproven or fails, the loop is not complete and the planner arms the highest-priority unmet item; speculative polish/speed/taste preferences are not gaps and never justify re-arming. "No gap" now means exactly those four checks pass, not that the repository is perfect. The old subjective clauses are removed from both prompts; the structured `next:` form and the `next: none` token are unchanged, so verdict parsing and the forward-pointer/novelty gates stay compatible. This mirrors the bounded `<condition>` block the `/goal` path already uses. No controller, verdict-parsing, or API change.
-
-Verification: focused `core`/`loop`/`evaluator` 399 pass / 0 fail, 178303 expect() calls, including two regressions that pin the bounded checklist in both evaluator judges and both planner paths and forbid the removed wording. Full `bun run check` green with `files=143 tests=2283` (+2 tests, none weakened).
 ## Workstream CXCVIII — skip the width loop for unbounded spend lines (2026-11-23)
 
 `formatSpend` measured every rendered line with `cellWidth` inside the degradation loop even at its
@@ -1756,6 +1749,20 @@ removed and no gate changed.
 
 Verification: typecheck clean; focused dossier/spend-ledger suites green (107 pass / 0 fail); full
 `bun run check` green after artifact regeneration; marker unchanged, no shipped file added or removed.
+
+## Workstream CCXII — fenced goal-declared verify directives parse cleanly (fenced-verify-directive-fix) (2026-11-23)
+
+`parseGoalDeclaredChecks` advertised inline/fenced one-line `verify:` directives, but its greedy body capture
+swallowed the closing backtick of a fenced line. The stray tick either corrupted the last token's value
+(`id=tc` became `"tc`"`), or made `tokenize` reject a trailing quoted value (`unexpected token near "\`"`), which
+marked the declaration malformed and silently dropped the required check. The parser now strips one leading and
+one trailing backtick before matching, so a fenced one-liner yields the same check as its bare form while the
+malformed report still carries the original raw line. No other parsing rule, check type or gate changed.
+
+Verification: a regression in `test/verify-matrix-goal-declared.test.ts` pins a fenced `id=tc` directive parsing
+to id `"tc"` and a fenced `evidence=either artifacts=...` directive parsing with its patterns intact; the
+pre-fix code fails it (one corrupted id, one malformed). Full `bun run check` green after regeneration; marker
+re-counted for one added test, no shipped file added or removed.
 
 ## Historical workstreams
 

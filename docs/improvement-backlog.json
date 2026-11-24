@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-24T01:46:13Z",
+  "updatedAt": "2026-11-23T22:00:00Z",
   "description": "Persistent prioritized improvement backlog for goal-loop autonomous improvement loops. Items are de-duplicated by id and dedupeKeys; planners should select the highest-priority unblocked open item not already satisfied by completed conditions/history.",
   "items": [
     {
@@ -394,6 +394,73 @@
         "unused-export-cleanup",
         "condition-ledger-subtract"
       ]
+    },
+    {
+      "id": "planning-placeholder-swallows-terminal-authority",
+      "title": "Authoritative terminal changed events must replace the planning placeholder",
+      "category": "correctness",
+      "priority": 2,
+      "impact": "high",
+      "risk": "medium",
+      "status": "open",
+      "finding": "src/core/entries.ts shouldKeepPlanningPlaceholder() returns true for ANY non-live next snapshot while the cached goal is a planning placeholder, and src/tui.tsx put() returns before setEntries on that flag. apply()'s no-new-gap refusal emits a terminal achieved record straight to `changed`; in that arm path no live snapshot ever follows, so the phantom queued HUD/pill never converges. The comment claiming `changed` events are never suppressed is only true for the isStalePlanningPull branch.",
+      "improvement": "Gate shouldKeepPlanningPlaceholder on fromPull for terminal records, or let a terminal snapshot whose setAt postdates the placeholder replace it. Add a regression in test/entries.test.ts: an authoritative terminal snapshot with a different id must return false. Regenerate dist/tui.js with bun run compile.",
+      "evidence": [
+        "Read-only audit 2026-11-23 of commits 0acda52 / 83779c1 (TUI first-arm HUD fixes).",
+        "Deterministic trigger: prior completed condition C, /goal-loop with a near-duplicate of C, planner emits planning-<sid>, arm() no-new-gap gate commits terminal achieved and emits it; put() suppresses via planningInFlight and early-returns."
+      ],
+      "dedupeKeys": [
+        "planning-placeholder-terminal-authority",
+        "hud-phantom-planning-bar",
+        "no-new-gap-refusal-hud"
+      ],
+      "related": [
+        "hud-planning-grace",
+        "hud-stays-visible"
+      ]
+    },
+    {
+      "id": "planning-placeholder-live-pull-eviction",
+      "title": "A late pull of the pre-planning live goal must not evict the placeholder",
+      "category": "correctness",
+      "priority": 3,
+      "impact": "medium",
+      "risk": "medium",
+      "status": "open",
+      "finding": "isStalePlanningPull() only suppresses null/terminal answers. A pull composed while goal A was still live, delivered after showPlanning() cached the placeholder, resolves to live A; both guards return false and applySnapshot() stores A. The first-arm bar disappears until the real arm lands. planningSeenAt is also never cleared on arm/completion, though after 35s it only delays convergence.",
+      "improvement": "Distinguish a pull issued before the arm from the real arm snapshot (mark the pull request time, or compare setAt against placeholder arrival) and suppress live answers from the pre-planning window. Add a regression in test/entries.test.ts asserting a late pre-planning live snapshot is suppressed.",
+      "evidence": [
+        "Read-only audit 2026-11-23 of commits 0acda52 / 83779c1 (TUI first-arm HUD fixes).",
+        "Test: isStalePlanningPull(at, liveA, at+1000) currently returns false; expected true for a pull composed during the planning window."
+      ],
+      "dedupeKeys": [
+        "planning-placeholder-live-pull",
+        "late-pull-eviction",
+        "first-arm-bar-flicker"
+      ],
+      "related": [
+        "planning-placeholder-swallows-terminal-authority"
+      ]
+    },
+    {
+      "id": "evaluator-mode-consensus-doc-mismatch",
+      "title": "Docs overstate evaluator.mode's control of the consensus second vote",
+      "category": "docs",
+      "priority": 4,
+      "impact": "low",
+      "risk": "low",
+      "status": "open",
+      "finding": "docs/config.html and README.md say evaluator.mode governs only the opt-in consensus:2 second vote and /goal-loop summarize/next-condition generation. src/runtime/evaluator.ts gates the second vote solely on config.consensus===2 && verdict==='met' and resolves evaluator.model unconditionally; mode is consulted only for loop steps (evaluator.ts:204,226). A user setting mode:'session' still gets a second-vote generation child, which can hit a free-tier gate.",
+      "improvement": "Drop 'consensus:2 second vote' from the mode description in docs/config.html and README.md; state that the second vote is governed by consensus and evaluator.model, and keep the accurate summarize/next-condition clause. No code change.",
+      "evidence": [
+        "Read-only audit 2026-11-23 of commit 99558a2 (evaluator.model/mode wording).",
+        "src/runtime/evaluator.ts:128-135 (second vote) vs :204,:226 (mode-gated loop steps)."
+      ],
+      "dedupeKeys": [
+        "evaluator-mode-consensus-docs",
+        "second-vote-mode-wording"
+      ],
+      "related": []
     }
   ]
 }

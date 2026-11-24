@@ -57,8 +57,12 @@ export function parseGoalDeclaredChecks(condition: string): GoalDeclaredParseRes
   let index = 0
   for (const line of lines) {
     const trimmed = line.trim()
-    // support inline/fenced-ish lines beginning with verify:
-    const m = /^`?verify\s*:\s*(.+)`?$/.exec(trimmed)
+    // Support inline/fenced-ish lines beginning with `verify:`. Strip one leading and one trailing
+    // backtick BEFORE the body capture: leaving the closing tick in the body either bakes it into the
+    // last token's value (`id=tc` -> "tc`") or makes tokenize reject a trailing quoted value, silently
+    // dropping a required check. The raw line is kept for malformed reports.
+    const unfenced = (trimmed.startsWith("`") ? trimmed.slice(1) : trimmed).replace(/`$/, "")
+    const m = /^verify\s*:\s*(.+)$/.exec(unfenced)
     if (!m) continue
     index++
     const body = m[1] ?? ""

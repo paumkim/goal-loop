@@ -35,6 +35,20 @@ describe("goal-declared verify directive parsing", () => {
     expect(resolved.checks.every((c) => c.source === "goal-declared")).toBe(true)
   })
 
+  test("a one-line fenced verify directive parses cleanly with an uncorrupted id and command", () => {
+    const condition = [
+      "Fix it.",
+      '`verify: type=tests cmd="bun test" id=tc`',
+      '`verify: type=lint cmd="bun run lint" evidence=either artifacts="lint ok||0 problems"`',
+    ].join("\n")
+    const parsed = parseGoalDeclaredChecks(condition)
+    expect(parsed.malformed).toHaveLength(0)
+    expect(parsed.checks.map((c) => ({ id: c.id, type: c.type, command: c.command, artifacts: c.artifactPatterns }))).toEqual([
+      { id: "tc", type: "tests", command: "bun test", artifacts: undefined },
+      { id: "goal-declared-lint-2", type: "lint", command: "bun run lint", artifacts: ["lint ok", "0 problems"] },
+    ])
+  })
+
   test("ignores and flags malformed declarations safely without throwing", () => {
     const condition = [
       'verify: type=tests cmd=bun test', // unquoted cmd
