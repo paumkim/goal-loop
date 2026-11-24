@@ -6863,8 +6863,20 @@
       "paths": "src/intent-icons.ts,src/tui.tsx,dist/tui.js,dist/tui.d.ts,test/intent-icons.test.ts",
       "branch": "wt/live-intent-icons",
       "worktree": "worktree/wt-live-intent-icons",
-      "status": "claimed",
-      "createdAt": "2026-11-24T08:14:40Z"
+      "status": "submitted",
+      "createdAt": "2026-11-24T08:14:40Z",
+      "submittedAt": "2026-11-24T08:24:34Z"
+    },
+    "pin-live-goal-values": {
+      "agent": "hy4-flash-free",
+      "paths": "test/entries.test.ts",
+      "branch": "wt/pin-live-goal-values",
+      "worktree": "worktree/wt-pin-live-goal-values",
+      "status": "done",
+      "createdAt": "2026-11-24T08:18:42Z",
+      "submittedAt": "2026-11-24T08:22:33Z",
+      "mergedAt": "2026-11-24T08:28:36Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
