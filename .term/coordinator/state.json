@@ -6683,6 +6683,26 @@
       ],
       "mergedAt": "2026-11-24T05:30:37Z",
       "mergedInto": "dev"
+    },
+    "evaluator-subagent-trigger-plan": {
+      "agent": "build",
+      "paths": "docs/evaluator-subagent-trigger-plan.md",
+      "branch": "wt/evaluator-subagent-trigger-plan",
+      "worktree": "worktree/wt-evaluator-subagent-trigger-plan",
+      "status": "done",
+      "createdAt": "2026-11-24T05:32:14Z",
+      "submittedAt": "2026-11-24T05:33:59Z",
+      "mergedAt": "2026-11-24T05:59:32Z",
+      "mergedInto": "dev"
+    },
+    "evaluator-subagent-trigger-impl": {
+      "agent": "build",
+      "paths": "src/index.ts,src/runtime/background.ts,src/runtime/controller.ts,src/runtime/evaluator.ts,src/runtime/ports.ts,test/controller.test.ts,test/plugin.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/evaluator-subagent-trigger-impl",
+      "worktree": "worktree/wt-evaluator-subagent-trigger-impl",
+      "status": "submitted",
+      "createdAt": "2026-11-24T05:56:55Z",
+      "submittedAt": "2026-11-24T05:57:09Z"
     }
   },
   "mergeLock": null,
