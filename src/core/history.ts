@@ -286,12 +286,9 @@ export function currentIterationVerdict(history: readonly VerdictEntry[], entrie
   const last = entries.length > 0 ? entries[entries.length - 1] : undefined
   // A non-finite `endedAt` on the last entry cannot open the window; fall back to the record's set time.
   const from = last && Number.isFinite(last.endedAt) ? last.endedAt : setAt
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    const entry = history[index]!
-    if (entry.at > from) return entry
-    break
-  }
-  return undefined
+  if (history.length === 0) return undefined
+  const entry = history[history.length - 1]!
+  return entry.at > from ? entry : undefined
 }
 
 /** Evaluated turns after the given verdict's turn (same per-iteration counter). Clamps to >= 0. */

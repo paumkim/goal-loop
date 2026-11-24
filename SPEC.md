@@ -1838,6 +1838,17 @@ Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as pare
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
 
+## Workstream simplify-current-iteration-verdict — collapse the dead scan in currentIterationVerdict (2026-11-24)
+
+`currentIterationVerdict` (`src/core/history.ts`) scanned `history` backwards but broke unconditionally after its
+first iteration, so only the newest verdict was ever examined. The scan is now a direct read of that element plus
+one `at > from` comparison. Empty history still yields `undefined`, a verdict inside `(last endedAt | setAt, ∞)`
+still wins, and an out-of-window or malformed last element behaves exactly as before (including the property-access
+error). Signature, tests and callers are unchanged.
+
+Verification: `test/history.test.ts` covers the window edge, empty history, the non-finite `endedAt` fallback and
+the newer-verdict case; focused suite and full typecheck green.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in
