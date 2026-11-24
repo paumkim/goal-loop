@@ -2,7 +2,7 @@
  * Headless render of the full `/goal` detail dialog (clamped column + host-chrome layout + scrollbox +
  * StatusDialogBody). Not shipped (scripts/ is not in package.json `files`).
  *
- *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--pinned] [--copied] [--achieved] [--pileup]
+ *   bun --preload @opentui/solid/preload scripts/render-dialog.tsx [--buggy] [--width=N] [--height=N] [--pinned] [--copied] [--achieved] [--pileup] [--mono] [--bench=N]
  *
  * --buggy reproduces the pre-fix configuration (shared scrollbarOptions visible: true, forced horizontal track);
  * the default prints the fixed configuration (auto scrollbar visibility, scrollX off, 3-cell body gutter).
@@ -12,6 +12,8 @@
  * button acknowledged, --mono prints under reduced color (NO_COLOR set) with ASCII glyphs.
  * --pileup renders a stress frame: a massive goal (long condition/reason/objective) with many live goals in
  * elsewhere (expanded) so alignment and consistency under pile-up can be eyeballed headlessly.
+ * --height pins the frame height (default 46, 80 under --pileup), so tall-frame scrollbox layout can be
+ * inspected headlessly. --bench=N renders N frames and prints avg/min/max ms per frame; 0 (default) skips it.
  * The footer is the real DialogFooter, never a hand-painted line. Both arms paint the verify section
  * (the last evaluator.verifyCommand gate's own output — the dialog's proof panel).
  */
