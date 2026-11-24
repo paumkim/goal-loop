@@ -411,14 +411,18 @@ export default Plugin.define({
         // the evaluator label for every other outcome. Loop-step children are parented to the verdict child, so the
         // host reports those to the evaluator session — emitting one here too would duplicate noise in the worker.
         // The verdict already came from this child's event stream, so a delivery failure is only a lost visual and
-        // must never block it. `isPluginReport` keeps this text out of model context (SPEC-workstreams.md CXLI).
+        // must never block it. The synthetic message carries NO text on purpose: the host promotes queued input
+        // into the session's next turn, so including the verdict here delivered the evaluator's completion into
+        // the parent's model context and forced a wasted "Evaluator finished" turn. Description + metadata still
+        // render the visible, navigable chip; nothing model-bound rides with it (SPEC-workstreams.md CXLI).
+        // `isPluginReport` keeps plugin completion reports out of the evaluator's own digest.
         if (!parentID) {
           const description = opts?.reportLabel ?? (parseVerdict(verdict)?.verdict === "met" ? "Goal Achieved." : EVALUATOR_AGENT_TITLE)
           try {
             await session.synthetic({
               sessionID,
               description,
-              text: `<subagent sessionID="${id}" state="completed" description="${description}">\n${verdict}\n</subagent>`,
+              text: "",
               metadata: { source: "subagent", childID: id, agent: EVALUATOR_AGENT_ID, state: "completed" },
               delivery: "queue",
               resume: false,

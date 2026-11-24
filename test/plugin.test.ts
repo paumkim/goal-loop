@@ -1096,7 +1096,8 @@ describe("the judge child converges when the host prompt ignores its abort signa
       await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.status === "paused", 3_000)
       expect(promptSignal).toBeInstanceOf(AbortSignal)
       // The verdict is read from the child's own event stream. The child has no parent link, so the plugin emits
-      // exactly one queued, non-waking completion report itself; the context hook keeps it out of model context.
+      // exactly one queued, non-waking completion chip itself. Its text is empty: the host promotes queued input
+      // into the session's next turn, so a verdict body here would force the parent to see and answer it.
       expect(reports).toHaveLength(1)
       expect(reports[0]).toMatchObject({
         sessionID: "ses_1",
@@ -1105,7 +1106,7 @@ describe("the judge child converges when the host prompt ignores its abort signa
         resume: false,
         metadata: { source: "subagent", childID: "ses_judge", agent: EVALUATOR_AGENT_ID, state: "completed" },
       })
-      expect(reports[0].text).toContain('<subagent sessionID="ses_judge" state="completed"')
+      expect(reports[0].text).toBe("")
       // Judge children persist and stay navigable — no `session.remove` on verdict.
       expect(removed).toBe(false)
     } finally {
@@ -1357,10 +1358,14 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       expect(judgePrompt).toContain("<condition>the parser is correct</condition>")
       expect(judgePrompt).toContain("<parent-summary>")
       expect(judgePrompt).toContain("fresh evidence: DONE.txt contains exactly ok")
-      // A met verdict gets a queued "Goal Achieved." completion chip; it never carries a wake.
+      // A met verdict gets a queued "Goal Achieved." completion chip; it never carries a wake and it
+      // never delivers the verdict into the parent's turn. The host promotes queued input into the next
+      // model request, so any text here would force the parent to see "Evaluator finished" and reply.
       expect(reports).toHaveLength(1)
       expect(reports[0]).toMatchObject({ sessionID: "ses_1", description: "Goal Achieved.", delivery: "queue", resume: false })
-      expect(reports[0].text).toContain('state="completed" description="Goal Achieved."')
+      expect(reports[0].text).toBe("")
+      expect(reports[0].metadata).toMatchObject({ source: "subagent", childID: "ses_judge", agent: EVALUATOR_AGENT_ID, state: "completed" })
+      expect(JSON.stringify(reports[0])).not.toContain("harness judge verdict")
     } finally {
       await dispose?.()
     }
@@ -1383,6 +1388,9 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     // never masquerades as the goal's "Goal Achieved." completion.
     expect(code).toContain("ownerSessionID: target")
     expect(code).toContain("reportLabel: EVALUATOR_AGENT_TITLE")
+    // The visible completion is a bare chip: no verdict text is admitted into the parent session's
+    // inbox (where it would be promoted into the next turn and force a wasted parent reply).
+    expect(code).toContain('text: ""')
     expect(code).not.toContain("session.remove")
     // Both plugin-emitted completions are queued and non-waking, and neither may ride model-bound context.
     expect(code.match(/delivery: "queue"/g) ?? []).toHaveLength(2)
