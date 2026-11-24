@@ -6821,8 +6821,11 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md",
       "branch": "wt/planner-no-parent-report",
       "worktree": "worktree/wt-planner-no-parent-report",
-      "status": "claimed",
-      "createdAt": "2026-11-24T06:57:16Z"
+      "status": "done",
+      "createdAt": "2026-11-24T06:57:16Z",
+      "submittedAt": "2026-11-24T07:00:36Z",
+      "mergedAt": "2026-11-24T07:05:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
