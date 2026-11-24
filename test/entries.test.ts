@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
-import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
-import type { GoalSnapshot, GoalStatus } from "../src/core/types.ts"
+import { ENTRY_CAP, bumpReceivedAt, goalsEqual, preserveCarriedFields, pruneSnapshotEntries, terminalStampOf, dropSessions, shouldKeepPlanningPlaceholder, type GoalSnapshotCacheEntry } from "../src/core/entries.ts"
+import { planningSnapshotId, type GoalSnapshot, type GoalStatus } from "../src/core/types.ts"
 
 const snap = (status: GoalStatus): GoalSnapshot =>
   ({ version: 1, status, sessionID: "ses", condition: "c", setAt: 0, startedAt: 0, turns: 0, stall: 0, retries: 0, checkins: 0, baseline: { cost: 0, input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }, history: [], elapsedMs: 0 }) as unknown as GoalSnapshot
@@ -361,5 +361,34 @@ describe("dropSessions", () => {
     const input = { a: entryWith(5000) }
     expect(dropSessions(input, [])).toBe(input)
     expect(dropSessions(input, ["zzz"])).toBe(input)
+  })
+})
+
+describe("shouldKeepPlanningPlaceholder — the first-arm bar stays visible", () => {
+  const planning = (sessionID = "ses"): GoalSnapshot => ({ ...snap("active"), id: planningSnapshotId(sessionID), sessionID, queued: true })
+
+  test("a null re-pull during planning is not the placeholder completing", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), null, "ses")).toBe(true)
+  })
+
+  test("a stale terminal record from a previous goal is not the placeholder completing", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("achieved"), "ses")).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("impossible"), "ses")).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("failed"), "ses")).toBe(true)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("cleared"), "ses")).toBe(true)
+  })
+
+  test("the real arm snapshot replaces the placeholder — a live record is never swallowed", () => {
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("active"), "ses")).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(planning(), snap("paused"), "ses")).toBe(false)
+  })
+
+  test("only the current session's placeholder is protected", () => {
+    expect(shouldKeepPlanningPlaceholder(planning("other"), null, "ses")).toBe(false)
+  })
+
+  test("a real goal's live→terminal transition is untouched", () => {
+    expect(shouldKeepPlanningPlaceholder(snap("active"), snap("achieved"), "ses")).toBe(false)
+    expect(shouldKeepPlanningPlaceholder(snap("active"), null, "ses")).toBe(false)
   })
 })

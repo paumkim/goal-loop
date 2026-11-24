@@ -8,7 +8,7 @@
  * observed terminal stamp) so the tick can re-pull them inside a short window — a record cleared in
  * another process right after terminal converges instead of painting phantom chrome forever.
  */
-import { isLive, type GoalSnapshot } from "./types.ts"
+import { isLive, isPlanningSnapshot, type GoalSnapshot } from "./types.ts"
 
 /**
  * Elapsed wall time is recomputed from `now - startedAt` by every server snapshot, so two pulls of an
@@ -94,6 +94,20 @@ export function pruneSnapshotEntries(
   }
   return changed ? out : entries
 }
+
+/**
+ * A planning placeholder is live in the TUI cache but has no persisted record: every re-pull in the
+ * planning window resolves `null` ("no record yet") or a stale terminal record left by a previous
+ * goal in the same session. Neither is the placeholder completing. Treating either as live→terminal
+ * used to arm the "loop complete" acknowledgment, close the HUD and blink the indicator out before
+ * `arm()`'s authoritative snapshot arrived. Keep the placeholder until a real live snapshot (a
+ * different record id) replaces it. The guard is id-based so a genuine arm is never swallowed.
+ */
+export const shouldKeepPlanningPlaceholder = (
+  previous: GoalSnapshot | null | undefined,
+  next: GoalSnapshot | null,
+  sessionID: string,
+): boolean => isPlanningSnapshot(previous, sessionID) && (next === null || !isLive(next.status))
 
 /** Drops the given session entries outright (end-of-life terminal records); `keep` is never dropped. */
 export function dropSessions(

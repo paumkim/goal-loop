@@ -226,6 +226,17 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
 
 ## Verification
 
+- First-arm HUD stays visible (`hud-stays-visible`, 2026-11-24): the transient snapshot from
+  `controller.showPlanning` is live in the TUI cache but has no server record, so a re-pull in the
+  planning window resolves `null` or a stale terminal record from a previous goal. `tui.tsx · put()`
+  read that as the placeholder's live→terminal completion, armed the "loop complete" acknowledgment,
+  released the HUD and dropped the pill before `arm()` landed. `core/types.ts` now owns the
+  `planning-<sessionID>` id contract (shared with `controller.showPlanning`), `core/entries.ts`
+  exports the pure `shouldKeepPlanningPlaceholder` guard, and `put()` keeps the live placeholder in
+  cache until an authoritative live snapshot replaces it. A genuine live→terminal transition is
+  untouched; the 45s acknowledgment still governs real completions. `test/entries.test.ts` pins the
+  null / stale-terminal / real-arm / wrong-session cases; focused suites and full check green.
+
 - Backtick-fence dedup (`dossier-fence-helper`, 2026-11-23): `inlineCode` and `fenceBlock` in
   `src/core/dossier.ts` each scanned the text for the longest backtick run to size their fence. Extracted
   one `longestBacktickRun(text, min)` helper (floor 0 for inline code, 2 for blocks) and kept the two
@@ -627,7 +638,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2354 -->
+<!-- spec-check files=144 tests=2359 -->
 
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default

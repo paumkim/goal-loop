@@ -32,7 +32,7 @@ import { StatusDialogBody, foreignLiveRows, FOREIGN_ROWS_VISIBLE } from "./statu
 import { HudCard, hudCardRows, pinBudget, DialogFooter, type HudCardTheme } from "./hud-card.tsx"
 import { scrollbarTrackOptions, type HostScrollbarTheme } from "./core/scrollbar.ts"
 import { pillModel, pinSuffix, motionDisabled, terminalPill, hudArmEnabled, staleUnprovenSessionIDs, staleRecentlyTerminalSessionIDs, expiredTerminalSessionIDs, TERMINAL_ACK_MS, ACK_FLASH_MS, LANDING_ACK_MS, landingSuffix, isCompactHot, pillMotionNeeded, breathCrest, BREATH_PHASE_MS, isRetryStuck, achievedAckAccentColor, contextMenuRows, nextMenuIndex, CONTEXT_MENU_COPY_CONDITION, CONTEXT_MENU_COPY_REASON, CONTEXT_MENU_COPY_SUMMARY, CONTEXT_MENU_COPY_DOSSIER, CONTEXT_MENU_SAVE_DOSSIER, CONTEXT_MENU_CLEAR, type NeutralTheme } from "./core/hud.ts"
-import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, type GoalSnapshotCacheEntry } from "./core/entries.ts"
+import { preserveCarriedFields, applySnapshot, goalsEqual, dropSessions, shouldKeepPlanningPlaceholder, type GoalSnapshotCacheEntry } from "./core/entries.ts"
 import { makeGoalRefresh } from "./core/repull.ts"
 import { pumpRpcEvent } from "./core/rpc-pump.ts"
 import { createGoalMirror } from "./core/mirror.ts"
@@ -395,14 +395,20 @@ export default Plugin.define({
     const put = (sessionID: string, goal: GoalSnapshot | null) => {
       // Completion-moment detection runs before the entries update: a live→terminal transition
       // arms the acknowledgment pill, a fresh live goal disarms any stale one. Best-effort.
+      let planningInFlight = false
       try {
         const previous = entries()[sessionID]?.goal
+        // The arm-time planner's bar is a live placeholder with no server record. A re-pull while the
+        // planner runs (or a late one after the arm event) resolves null or a stale terminal record;
+        // reading that as the placeholder's completion is what flashed "loop complete", closed the
+        // HUD and dropped the indicator. Keep the placeholder until the real arm snapshot lands.
+        planningInFlight = shouldKeepPlanningPlaceholder(previous, goal, sessionID)
         // An identical snapshot changes nothing — skip re-arming so the ack window stays 45s from the transition.
         const unchanged = previous && goal ? goalsEqual(previous, goal) : false
         const wasLive = previous != null && isLive(previous.status)
         const nowTerminal = goal !== null && goal !== undefined && !isLive(goal.status)
         const gone = goal === null || goal === undefined || nowTerminal
-        if (!unchanged && wasLive && gone) {
+        if (!planningInFlight && !unchanged && wasLive && gone) {
           // Every live→terminal (or cleared) intake releases the HUD arm, the context menu and the pin —
           // whether or not an acknowledgment pill arms. Nothing from the finished goal sticks around to
           // swallow Esc, re-open the card or re-pin its condition onto the next arm in this session.
@@ -421,6 +427,9 @@ export default Plugin.define({
       } catch {
         // The acknowledgment is chrome; a failed probe must not break snapshot intake.
       }
+      // Keep the live bar painted: a null/stale re-pull must not replace the placeholder in the cache
+      // or the pill unmounts. The real arm snapshot has a different id and flows through normally.
+      if (planningInFlight) return
       // The `get` RPC pull carries the context estimate and spend; `changed` events usually do not — carry both forward.
       const mergedGoal = preserveCarriedFields(entries()[sessionID]?.goal, goal)
       const mergedNow = Date.now()

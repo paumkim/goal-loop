@@ -18,7 +18,7 @@ import {
   type GoalSnapshot,
   type GoalStatus,
   type LoopEntry,
-  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions, completedIterationCount,
+  COMPACT_MISS_CAP, boundLoopHistory, boundVerdictHistory, boundCompletedConditions, completedIterationCount, planningSnapshotId,
   type LoopCompactState,
   type Notice,
   type NoticeKind,
@@ -834,7 +834,7 @@ export class GoalController {
     const now = this.deps.clock.now()
     const snapshot: GoalSnapshot = {
       version: 1,
-      id: `planning-${sessionID}`,
+      id: planningSnapshotId(sessionID),
       sessionID,
       directory: this.directoryFor(sessionID),
       condition,

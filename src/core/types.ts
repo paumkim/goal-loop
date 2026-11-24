@@ -1,6 +1,16 @@
 /** Lifecycle of a goal. `active` and `paused` are live; the rest are terminal. */
 export type GoalStatus = "active" | "paused" | "achieved" | "impossible" | "cleared" | "failed"
 
+/**
+ * Id prefix for the transient, non-persisted snapshot the controller paints while the arm-time
+ * planner distils a raw `/goal` body. The TUI keeps that placeholder live until the real `arm()`
+ * commit replaces it; the prefix is the only signal that a cached snapshot is a placeholder.
+ */
+export const PLANNING_SNAPSHOT_PREFIX = "planning-"
+export const planningSnapshotId = (sessionID: string): string => `${PLANNING_SNAPSHOT_PREFIX}${sessionID}`
+export const isPlanningSnapshot = (goal: GoalSnapshot | null | undefined, sessionID: string): boolean =>
+  goal?.id === planningSnapshotId(sessionID)
+
 export type Verdict = "met" | "not_met" | "impossible"
 
 /** What the user asked for: finished work has to be committed before the goal counts as met. */
