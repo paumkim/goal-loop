@@ -377,6 +377,26 @@ describe("the /goal-loop-<N> directive in a plain prompt", () => {
     }
   })
 
+  test("/goal-loop clear clears instead of arming a loop whose objective is 'clear'", async () => {
+    const directory = repository()
+    const { ctx, hooks, storage, calls } = context(directory)
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      // The registered-command path classifies clear aliases via parseGoalCommand. A raw directive line must
+      // classify them the same way; otherwise `/goal-loop clear` armed a bogus "clear" loop.
+      for (const text of ["/goal-loop clear", "/goal-loop-3 stop", "/goal-loop=2 cancel"]) {
+        storage.clear()
+        const event = promptEvent(text)
+        await hooks.prompt!(event)
+        expect(storage.get("goal/v1/ses_1")).toBeUndefined()
+        expect(event.prompt.text).not.toContain("/goal-loop")
+        expect(calls.notices.some((n: any) => n.title === "No goal set" || n.title === "Goal cleared")).toBe(true)
+      }
+    } finally {
+      await dispose?.()
+    }
+  })
+
   test("update.mode off restores the status-only bare directive", async () => {
     const directory = repository()
     const { ctx, hooks, storage, calls } = context(directory, { update: { channel: "dev", mode: "off" } })

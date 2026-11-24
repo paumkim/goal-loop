@@ -14,7 +14,7 @@ import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin
 import { resolveConfig } from "./core/config.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, isEvaluatorReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
-import { parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
+import { CLEAR_ALIASES, parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
 import { PLANNER_AGENT_ID, PLANNER_AGENT_TITLE, PLANNER_SYSTEM_PROMPT, parsePlan, planGoalRequest, type PlannedGoal } from "./core/planner.ts"
 import { currentTurnStart, renderParentSummary, renderTranscript } from "./core/transcript.ts"
 import { carriesGoalGrammar, compactGoalInstructions, coordinatorFlow, directive as directivePrompt, nativeEvaluationRequest, systemReminder, stripGoalNotes, stripGoalContext, stripGoalEvaluations, isGoalEvaluationMessage, TERMINAL_REMINDER } from "./core/prompts.ts"
@@ -820,6 +820,15 @@ export default Plugin.define({
       const goalLoop = parseGoalLoopDirective(text)
       if (goalLoop) {
         const objective = goalLoop.objective
+        // A registered-command invocation classifies `clear|stop|...` through parseGoalCommand, but a raw
+        // `/goal-loop[-N] clear` line reaches this hook directly. Without the same guard it armed a loop whose
+        // objective was "clear" instead of ending the loop (docs/install.html).
+        if (CLEAR_ALIASES.has(objective.toLowerCase())) {
+          controller.clear(event.sessionID)
+          controller.onUserPrompt(event.sessionID)
+          event.prompt.text = "The goal loop was cleared; acknowledge briefly and do not set a new goal."
+          return
+        }
         // The raw-prompt path bypasses parseGoalCommand, so enforce the configured condition limit here too.
         // Count code points, not UTF-16 units, matching parseGoalCommand: astral characters must not count double.
         if (

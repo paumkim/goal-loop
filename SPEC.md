@@ -173,7 +173,9 @@ This file is the acceptance spec for the plugin as it ships today. The how and w
     commit rule, turn cap, stall guard, retries, restore-on-restart, `/goal-loop clear` and the
     `stop`/`off`/`reset`/`none`/`cancel` aliases). With no arguments it shows status. It activates the
     loop only after the evaluator returns `met` — never on `not_met`, stall, pause, interrupt, retry or
-    failure paths. `/goal` behavior for non-looped goals is unchanged.
+    failure paths. `/goal` behavior for non-looped goals is unchanged. The clear aliases are honored on
+    the raw-prompt `/goal-loop[-N|=N]` path too (`src/index.ts` prompt hook): a line such as
+    `/goal-loop clear` ends the loop instead of arming a loop whose objective is "clear".
 12. On the turn where the evaluator returns `met` for a looped goal, the controller: (a) summarizes the
     achieved iteration into a compact machine-consumable block via the evaluator
     (`maxLoopSummaryTokens`, default 400, env `OPENCODE_GOAL_MAX_LOOP_SUMMARY_TOKENS`, hard-capped at
@@ -644,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2419 -->
+<!-- spec-check files=158 tests=2420 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
