@@ -1842,6 +1842,17 @@ Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as pare
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
 
+## Workstream provider-compaction-running-label — rename the compaction divider in the installed binary (2026-11-24)
+
+The host source patch (`COMPACTION_DIVIDER_PATCH`) edits a build input only: the string a running TUI renders is
+compiled twice into the installed Bun executable. `src/core/opencode-labels.ts` now also owns
+`INSTALLED_BINARY_DIVIDER_PATCH`, a byte-length-preserving swap of the minified ternary and the standalone
+string-table entry so `goal-loop patch-host --binary` renames the divider in the binary that actually runs.
+Error messages that merely mention the feature keep their text; the install command still touches only config.
+
+Verification: `test/opencode-labels.test.ts` pins both patch fragments, their equal byte length, and that the
+error-message occurrences are left alone. Full `bun run check` green after artifact regeneration.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in
