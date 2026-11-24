@@ -1127,6 +1127,57 @@ export function status(args, opts = {}) {
   return { code: 0, stdout: out.join("\n") + "\n", stderr: "" };
 }
 
+// Host-label rename goal-loop owns. Duplicated here (instead of importing src/core/opencode-labels.ts)
+// because install.sh ships this CLI as a single dependency-free file; test/opencode-labels.test.ts
+// pins these constants to the core module so the two cannot drift.
+const HOST_LABEL_FILE = "packages/tui/src/routes/session/index.tsx";
+const LABEL_FROM = '? "Provider compaction"';
+const LABEL_TO = '? "Context Cleared"';
+
+/** Where the host TUI source lives: arg, env override, then the usual local clone. */
+function resolveHostLabelFile(args, opts) {
+  const positional = args.filter((a) => !a.startsWith("--"));
+  // Direct calls pass just [path, --flags]; runCli passes ["patch-host", path, --flags].
+  const arg = positional.length > 1 ? positional[1] : positional[0];
+  if (arg) return resolve(arg);
+  const env = opts.env ?? process.env;
+  if (env.GOAL_LOOP_OPENCODE_TUI) return resolve(env.GOAL_LOOP_OPENCODE_TUI);
+  const home = opts.homedir ?? env.HOME ?? homedir();
+  return join(home, "Projects", "opencode", HOST_LABEL_FILE);
+}
+
+/**
+ * Re-apply the "Context Cleared" rename to a local OpenCode checkout. Literal string swap, not a
+ * line-number patch: upstream refactors move the line but keep the text. Backs up before writing and
+ * is idempotent, so running it after every upstream update is safe.
+ */
+export function patchHost(args, opts = {}) {
+  const dryRun = args.includes("--dry-run");
+  const file = resolveHostLabelFile(args, opts);
+  if (!existsSync(file)) {
+    return { code: 1, stdout: "", stderr: `goal-loop: no host TUI source at ${file}\n` };
+  }
+  const before = readFileSync(file, "utf8");
+  const parts = before.split(LABEL_FROM);
+  const replacements = parts.length - 1;
+  if (replacements === 0) {
+    if (before.includes(LABEL_TO)) {
+      return { code: 0, stdout: `already patched (${file}); nothing to do\n`, stderr: "" };
+    }
+    return { code: 1, stdout: "", stderr: `goal-loop: host label not found in ${file} (upstream moved it)\n` };
+  }
+  if (dryRun) {
+    return { code: 0, stdout: `dry-run: would replace "Provider compaction" with "Context Cleared" in ${file} (${replacements})\n`, stderr: "" };
+  }
+  const bak = backupFile(file, before);
+  writeFileAtomic(file, parts.join(LABEL_TO));
+  return {
+    code: 0,
+    stdout: `renamed "Provider compaction" to "Context Cleared" in ${file} (${replacements}; backup: ${bak}); rebuild opencode to see it\n`,
+    stderr: "",
+  };
+}
+
 export async function runCli(argv, opts = {}) {
   const args = [...argv];
   if (args.includes("--help") || args.includes("-h")) {
@@ -1140,11 +1191,11 @@ export async function runCli(argv, opts = {}) {
   if (unknownFlag) return { code: 2, stdout: "", stderr: `goal-loop: unknown flag ${unknownFlag} (try: goal-loop --help)\n` };
   const positional = args.filter((a) => !a.startsWith("--"));
   const cmd = positional[0] ?? "install";
-  const wantsArg = cmd === "channel" || cmd === "updates";
+  const wantsArg = cmd === "channel" || cmd === "updates" || cmd === "patch-host";
   if (positional.length > (wantsArg ? 2 : 1)) {
     return { code: 2, stdout: "", stderr: `goal-loop: unexpected argument ${positional[wantsArg ? 2 : 1]} (try: goal-loop --help)\n` };
   }
-  if (!["install", "uninstall", "status", "update", "channel", "updates"].includes(cmd)) {
+  if (!["install", "uninstall", "status", "update", "channel", "updates", "patch-host"].includes(cmd)) {
     return { code: 2, stdout: "", stderr: `goal-loop: unknown command '${cmd}' (try: goal-loop --help)\n` };
   }
   if (args.includes("--restore") && cmd !== "uninstall") {
@@ -1162,6 +1213,7 @@ export async function runCli(argv, opts = {}) {
     if (cmd === "status") return status(args, opts);
     if (cmd === "update") return await update(args, opts);
     if (cmd === "channel") return await setChannel(args, opts);
+    if (cmd === "patch-host") return patchHost(args, opts);
     return setUpdates(args, opts);
   } catch (err) {
     if (err instanceof CliError) return { code: 1, stdout: "", stderr: `goal-loop: ${err.message}\n` };
@@ -1181,6 +1233,7 @@ function usage() {
     "  goal-loop update    [--check|--dry-run] [--global|--project]",
     "  goal-loop channel   <main|dev> [--dry-run] [--global|--project]",
     "  goal-loop updates   <auto|off> [--dry-run] [--global|--project]",
+    "  goal-loop patch-host [path] [--dry-run]",
     "",
     "  main   newest stable release tag from GitHub (default)",
     "  dev    latest dev commit — fast, may break things",
@@ -1191,6 +1244,8 @@ function usage() {
     "  --dry-run   print what would change; write nothing",
     "  --restore   uninstall only: copy the pre-install .bak back over the config",
     "  --self      uninstall only: also delete the goal-loop CLI script itself",
+    "  patch-host  re-apply goal-loop's host-label renames after an upstream OpenCode update",
+    "              (path defaults to $GOAL_LOOP_OPENCODE_TUI or ~/Projects/opencode; backs up first)",
     "",
   ].join("\n");
 }

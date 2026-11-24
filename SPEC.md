@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2393 -->
+<!-- spec-check files=146 tests=2407 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1805,6 +1805,35 @@ Verification: `test/controller.test.ts` pins that a `met` seen while two subagen
 judge or flip the pill, and that the drain re-evaluates the same turn to `achieved`; a second test exhausts the
 busy-check retries with work still active and asserts the fallback cannot settle the goal. Focused controller
 suite 113 pass / 0 fail.
+
+## Host-label rename (context-cleared-label) — "Context Cleared" is a plugin-owned patch (2026-11-24)
+
+OpenCode's session TUI labels a completed native (provider) compaction "Provider compaction". goal-loop
+calls the same event "Context Cleared". The host exposes no slot, theme token or config key for that
+divider, so a slot claim cannot rename it and an edit to `~/Projects/opencode` disappears on the next
+upstream `git pull`. The rename therefore lives in this repo as data plus a re-applicable patch:
+
+- `src/core/opencode-labels.ts`: `COMPACTION_DIVIDER_PATCH` (`packages/tui/src/routes/session/index.tsx`,
+  `? "Provider compaction"` → `? "Context Cleared"`) and a pure, idempotent `applyHostLabelPatch`.
+  `HOST_LABEL_PATCHES` is the list every host rename must go through.
+- `patches/context-cleared.patch`: the same swap as a unified diff, for review and `git apply`.
+- `bin/goal-loop.mjs`: `goal-loop patch-host [path] [--dry-run]` re-applies the swap to a local checkout
+  (default `$GOAL_LOOP_OPENCODE_TUI` or `~/Projects/opencode`), backing up the file first. The standalone
+  CLI carries the two strings itself because `install.sh` ships it as one dependency-free file;
+  `test/opencode-labels.test.ts` pins CLI constants to the core module so they cannot drift.
+- `package.json` ships `patches/`.
+
+The swap is literal text, not a line number: upstream refactors move the line but keep the string. A
+missing string is a loud error, not a silent success; an already-patched file is a no-op. After an
+upstream update, run `goal-loop patch-host` (or `goal-loop patch-host --dry-run` to preview), then rebuild
+OpenCode to see the new label.
+
+Applied 2026-11-24: `goal-loop patch-host` renamed the divider in the live checkout
+`~/Projects/opencode/packages/tui/src/routes/session/index.tsx` (backup beside it), and the two UI
+strings embedded in the installed binary `~/.opencode/bin/opencode` were patched in place (backup
+`~/.opencode/bin/opencode.pre-context-cleared.bak`). The two error-message strings in the binary that
+also say "Provider compaction" were left alone — they describe the feature, not the divider. A running
+TUI keeps its old label until OpenCode restarts.
 
 ## Historical workstreams
 

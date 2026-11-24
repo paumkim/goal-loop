@@ -41,6 +41,7 @@
     "rpc.ts",
     "src",
     "bin",
+    "patches",
     "dist",
     "packages/coordinator/bin/coordinator",
     "packages/coordinator/README.md",
