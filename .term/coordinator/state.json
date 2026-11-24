@@ -6529,6 +6529,17 @@
       "submittedAt": "2026-11-24T01:05:30Z",
       "mergedAt": "2026-11-24T01:07:45Z",
       "mergedInto": "dev"
+    },
+    "align-evaluator-model-docs": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs/core.html",
+      "branch": "wt/align-evaluator-model-docs",
+      "worktree": "worktree/wt-align-evaluator-model-docs",
+      "status": "done",
+      "createdAt": "2026-11-24T01:08:12Z",
+      "submittedAt": "2026-11-24T01:10:08Z",
+      "mergedAt": "2026-11-24T01:12:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
