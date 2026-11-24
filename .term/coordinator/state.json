@@ -6788,8 +6788,19 @@
       "paths": "SPEC.md,SPEC-workstreams.md",
       "branch": "wt/spec-ccx-archive-rotate2",
       "worktree": "worktree/wt-spec-ccx-archive-rotate2",
+      "status": "done",
+      "createdAt": "2026-11-24T06:44:13Z",
+      "submittedAt": "2026-11-24T06:45:58Z",
+      "mergedAt": "2026-11-24T06:50:04Z",
+      "mergedInto": "dev"
+    },
+    "judge-report-comment-cleanup": {
+      "agent": "worker",
+      "paths": "src/index.ts,test/plugin.test.ts",
+      "branch": "wt/judge-report-comment-cleanup",
+      "worktree": "worktree/wt-judge-report-comment-cleanup",
       "status": "claimed",
-      "createdAt": "2026-11-24T06:44:13Z"
+      "createdAt": "2026-11-24T06:47:54Z"
     }
   },
   "mergeLock": null,
