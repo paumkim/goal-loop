@@ -7102,6 +7102,50 @@
       "submittedAt": "2026-11-24T15:10:16Z",
       "mergedAt": "2026-11-24T15:13:09Z",
       "mergedInto": "dev"
+    },
+    "session-history-failed-work-audit": {
+      "agent": "opencode",
+      "paths": "src/index.ts,test/plan-scope.test.ts,test/dist-tracked.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/session-history-failed-work-audit",
+      "worktree": "worktree/wt-session-history-failed-work-audit",
+      "status": "done",
+      "createdAt": "2026-11-24T15:40:00Z",
+      "submittedAt": "2026-11-24T15:44:14Z",
+      "mergedAt": "2026-11-24T16:40:26Z",
+      "mergedInto": "dev"
+    },
+    "simplify-current-iteration-verdict": {
+      "agent": "orchestrator",
+      "paths": "src/core/history.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/simplify-current-iteration-verdict",
+      "worktree": "worktree/wt-simplify-current-iteration-verdict",
+      "status": "submitted",
+      "createdAt": "2026-11-24T15:42:14Z",
+      "submittedAt": "2026-11-24T15:49:49Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T15:49:49Z",
+      "forcedScopeFiles": [
+        "dist/tui.js"
+      ]
+    },
+    "simplify-isdatapath-dead-guard": {
+      "agent": "orchestrator",
+      "paths": "src/core/change-risk.ts,SPEC.md,docs/changelog.html,dist/tui.js",
+      "branch": "wt/simplify-isdatapath-dead-guard",
+      "worktree": "worktree/wt-simplify-isdatapath-dead-guard",
+      "status": "done",
+      "createdAt": "2026-11-24T15:53:17Z",
+      "releasedAt": "2026-11-24T15:53:32Z",
+      "releaseReason": "released"
+    },
+    "goal-loop-n-directive-fix": {
+      "agent": "main",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
+      "branch": "wt/goal-loop-n-directive-fix",
+      "worktree": "worktree/wt-goal-loop-n-directive-fix",
+      "status": "submitted",
+      "createdAt": "2026-11-24T16:27:43Z",
+      "submittedAt": "2026-11-24T16:37:42Z"
     }
   },
   "mergeLock": null,
