@@ -6905,6 +6905,17 @@
       "submittedAt": "2026-11-24T09:13:31Z",
       "mergedAt": "2026-11-24T09:16:14Z",
       "mergedInto": "dev"
+    },
+    "dedupe-google-logging-utils": {
+      "agent": "build",
+      "paths": "package.json,bun.lock",
+      "branch": "wt/dedupe-google-logging-utils",
+      "worktree": "worktree/wt-dedupe-google-logging-utils",
+      "status": "done",
+      "createdAt": "2026-11-24T09:42:35Z",
+      "submittedAt": "2026-11-24T09:45:40Z",
+      "mergedAt": "2026-11-24T09:48:26Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
