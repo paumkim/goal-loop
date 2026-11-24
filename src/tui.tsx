@@ -104,6 +104,7 @@ export type AgentIntent =
   | "waiting"
   | "done"
   | "error"
+  | "delegating"
 
 export interface IntentVisual {
   readonly nerd: string
@@ -122,6 +123,10 @@ export const AGENT_ICONS: Record<AgentIntent, IntentVisual> = {
   waiting:   { nerd: "\udb80\udfe4", ascii: "!", label: "Approval" },
   done:      { nerd: "\udb80\udd2c", ascii: "+", label: "Done" },
   error:     { nerd: "\udb80\udd56", ascii: "x", label: "Failed" },
+  // The parent handing work to a background subagent/shell. `task` is the host's tool name for a
+  // delegated child; showing it as "thinking" hid the one activity that most changes what the user
+  // should expect (the parent will go quiet while the child runs, and the verdict is deferred).
+  delegating: { nerd: "\uf0c0",       ascii: "&", label: "Delegating" },
 } as const
 
 /** Tool-name → intent. Order matters: the first matching family wins. Case-insensitive; unknown names think. */
@@ -130,9 +135,11 @@ const WRITE = /write|edit|patch|replace|create|delete/
 const EXEC = /bash|exec|run|shell|test|build/
 const WEB = /web|search|fetch|curl|http|scrape/
 const MEMORY = /memory|rag|embed|compact|history/
+const DELEGATE = /task|subagent|delegate|spawn|agent/
 
 export const resolveToolIntent = (toolName: string): AgentIntent => {
   const name = typeof toolName === "string" ? toolName.toLowerCase() : ""
+  if (DELEGATE.test(name)) return "delegating"
   if (READ.test(name)) return "reading"
   if (WRITE.test(name)) return "writing"
   if (EXEC.test(name)) return "executing"
@@ -155,11 +162,24 @@ export const withIntentGlyph = (text: string, intent: AgentIntent, ascii: boolea
   rest: text.slice(1),
 })
 
+/**
+ * The readable activity word that rides the pill beside its leading icon. Derived from the icon's own
+ * label so the glyph and the word can never drift apart; the label is the one place a human can tell
+ * "reading" from "thinking" when the font is plain ASCII and color is off.
+ */
+export const activityWord = (intent: AgentIntent): string =>
+  (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking).label.toLowerCase()
+
+/** Cells the activity word claims from the pill budget: the word plus its leading and trailing spaces. */
+export const activityBadgeCells = (intent: AgentIntent): number =>
+  cellWidth(` ${activityWord(intent)} `)
+
 /** Theme-token key for the glyph's accent. The renderer resolves the key; no raw color escapes this module. */
 export const intentAccent = (intent: AgentIntent): "muted" | "info" | "warning" | "error" | "success" => {
   switch (intent) {
     case "reading":
-    case "web": return "info"
+    case "web":
+    case "delegating": return "info"
     case "writing":
     case "executing":
     case "waiting": return "warning"
@@ -1294,7 +1314,13 @@ export default Plugin.define({
           // Walks the degradation ladder (retry → compact → turns → pips) before truncating the core,
           // so an 80-column floor never clips the state the pill exists to show.
           const landingSfx = () => landingSuffix(motionDisabled(process.env))
-          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2) // -1: the 1-cell right margin; -2: the caret cell rides the same row
+          // A live activity word shares the same row as the state text, so it must come out of the
+          // same budget: the state degrades through its existing ladder instead of clipping the word.
+          const badgeCells = () => {
+            const intent = activeIntent()
+            return intent ? activityBadgeCells(intent) : 0
+          }
+          const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells()) // -1: the 1-cell right margin; -2: the caret cell rides the same row
           if (g) return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined)
             const t = terminal()
             // The acknowledgment renders the frozen final elapsed; the goal is over, no extrapolation.
@@ -1337,6 +1363,13 @@ export default Plugin.define({
           const override = activeIntent()
           if (!override) return { glyph: text.slice(0, 1), rest: text.slice(1) }
           return withIntentGlyph(text, override, motionDisabled(process.env))
+        }
+        // The glyph alone is cryptic (a PUA codepoint without a patched font, or a bare ASCII mark under
+        // NO_COLOR), so the same colored cell spells the activity out in words. The word is budgeted above;
+        // the state text keeps its own neutral color and documented degradation ladder.
+        const activityWordText = (): string => {
+          const intent = activeIntent()
+          return intent ? ` ${activityWord(intent)} ` : ""
         }
         const glyphColor = (): ColorInput => {
           const intent = activeIntent()
@@ -1469,7 +1502,7 @@ export default Plugin.define({
               }}
             >
               <text fg={glyphColor()} wrapMode="none" flexShrink={0} attributes={pillAttrs()}>
-                {pillCells().glyph}
+                {pillCells().glyph}{activityWordText()}
               </text>
               <text fg={color()} wrapMode="none" attributes={pillAttrs()}>
                 {pillCells().rest}

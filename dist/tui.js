@@ -6569,6 +6569,11 @@ var AGENT_ICONS = {
     nerd: "\uDB80\uDD56",
     ascii: "x",
     label: "Failed"
+  },
+  delegating: {
+    nerd: "\uF0C0",
+    ascii: "&",
+    label: "Delegating"
   }
 };
 var READ = /read|grep|find|ls|cat|glob|inspect/;
@@ -6576,8 +6581,11 @@ var WRITE = /write|edit|patch|replace|create|delete/;
 var EXEC = /bash|exec|run|shell|test|build/;
 var WEB = /web|search|fetch|curl|http|scrape/;
 var MEMORY = /memory|rag|embed|compact|history/;
+var DELEGATE = /task|subagent|delegate|spawn|agent/;
 var resolveToolIntent = (toolName) => {
   const name = typeof toolName === "string" ? toolName.toLowerCase() : "";
+  if (DELEGATE.test(name))
+    return "delegating";
   if (READ.test(name))
     return "reading";
   if (WRITE.test(name))
@@ -6595,10 +6603,13 @@ var withIntentGlyph = (text, intent, ascii = false) => ({
   glyph: intentGlyph(intent, ascii),
   rest: text.slice(1)
 });
+var activityWord = (intent) => (AGENT_ICONS[intent] ?? AGENT_ICONS.thinking).label.toLowerCase();
+var activityBadgeCells = (intent) => cellWidth(` ${activityWord(intent)} `);
 var intentAccent = (intent) => {
   switch (intent) {
     case "reading":
     case "web":
+    case "delegating":
       return "info";
     case "writing":
     case "executing":
@@ -7843,7 +7854,11 @@ var tui_default = Plugin.define({
           try {
             const g = goal();
             const landingSfx = () => landingSuffix(motionDisabled(process.env));
-            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2);
+            const badgeCells = () => {
+              const intent = activeIntent();
+              return intent ? activityBadgeCells(intent) : 0;
+            };
+            const budget = Math.max(8, mountWidthOr() - 1 - (landingNow() ? cellWidth(landingSfx()) : 0) - 2 - badgeCells());
             if (g)
               return pillModel(g, elapsed(), motionDisabled(process.env), budget, motionOk ? breathPhase() : undefined);
             const t = terminal();
@@ -7883,6 +7898,10 @@ var tui_default = Plugin.define({
               rest: text.slice(1)
             };
           return withIntentGlyph(text, override, motionDisabled(process.env));
+        };
+        const activityWordText = () => {
+          const intent = activeIntent();
+          return intent ? ` ${activityWord(intent)} ` : "";
         };
         const glyphColor = () => {
           const intent = activeIntent();
@@ -8012,7 +8031,8 @@ var tui_default = Plugin.define({
                   });
                   _$setProp5(_el$13, "wrapMode", "none");
                   _$setProp5(_el$13, "flexShrink", 0);
-                  _$insert5(_el$13, () => pillCells().glyph);
+                  _$insert5(_el$13, () => pillCells().glyph, null);
+                  _$insert5(_el$13, activityWordText, null);
                   _$setProp5(_el$14, "wrapMode", "none");
                   _$insert5(_el$14, () => pillCells().rest);
                   _$setProp5(_el$15, "wrapMode", "none");
@@ -8493,6 +8513,8 @@ export {
   AGENT_ICONS,
   INTENT_TTL_MS,
   NO_ACTIVITY,
+  activityBadgeCells,
+  activityWord,
   applyIntentSignal,
   tui_default as default,
   intentAccent,
