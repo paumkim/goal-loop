@@ -170,6 +170,91 @@ export const intentAccent = (intent: AgentIntent): "muted" | "info" | "warning" 
 }
 
 /**
+ * A host event reduced to the one thing the pill cares about: which activity is happening right now.
+ * The TUI layer translates the typed event stream into these signals; the fold below stays pure so the
+ * lifecycle — including long-running tools and parallel calls — is testable without a host or a timer.
+ */
+export type IntentSignal =
+  | { readonly type: "tool-input"; readonly sessionID: string; readonly callID: string; readonly name: string }
+  | { readonly type: "tool-progress"; readonly sessionID: string; readonly callID: string }
+  | { readonly type: "tool-success" | "tool-failed"; readonly sessionID: string; readonly callID: string }
+  | { readonly type: "permission-asked" | "permission-replied"; readonly sessionID: string }
+  | { readonly type: "execution-started" | "execution-succeeded" | "execution-failed" | "execution-interrupted"; readonly sessionID: string }
+
+/** Per-session live activity: running tools keyed by call id, plus one transient approval/outcome notice. */
+export interface ToolActivity {
+  readonly calls: Readonly<Record<string, AgentIntent>>
+  readonly notice: AgentIntent | undefined
+}
+
+export const NO_ACTIVITY: ToolActivity = { calls: {}, notice: undefined }
+export type ActivityMap = Readonly<Record<string, ToolActivity>>
+
+/**
+ * Fold one signal into the activity map. Insertion order is meaningful: `Object.keys` yields the calls in
+ * the order they started, so the newest still-running tool wins on the pill. Completion events remove that
+ * call, which lets the icon fall back to the next running tool — or to the breath when none is left.
+ */
+export const applyIntentSignal = (map: ActivityMap, signal: IntentSignal): ActivityMap => {
+  const current = map[signal.sessionID] ?? NO_ACTIVITY
+  let next: ToolActivity
+  switch (signal.type) {
+    case "tool-input":
+      next = { calls: { ...current.calls, [signal.callID]: resolveToolIntent(signal.name) }, notice: undefined }
+      break
+    case "tool-progress":
+      // A progress beat means the tool is still doing work. If the TUI mounted mid-call we never saw its
+      // name, but "executing" is a truthful fallback for an in-flight tool of unknown family.
+      next = signal.callID in current.calls
+        ? current
+        : { calls: { ...current.calls, [signal.callID]: "executing" }, notice: current.notice }
+      break
+    case "tool-success": {
+      if (!(signal.callID in current.calls)) { next = current; break }
+      const calls = { ...current.calls }
+      delete calls[signal.callID]
+      next = { calls, notice: current.notice }
+      break
+    }
+    case "tool-failed": {
+      const calls = { ...current.calls }
+      delete calls[signal.callID]
+      next = { calls, notice: "error" }
+      break
+    }
+    case "permission-asked":
+      next = { calls: current.calls, notice: "waiting" }
+      break
+    case "permission-replied":
+      next = current.notice === "waiting" ? { calls: current.calls, notice: undefined } : current
+      break
+    case "execution-started":
+      next = { calls: {}, notice: "thinking" }
+      break
+    case "execution-succeeded":
+      next = { calls: {}, notice: "done" }
+      break
+    case "execution-failed":
+      next = { calls: {}, notice: "error" }
+      break
+    case "execution-interrupted":
+      next = NO_ACTIVITY
+      break
+  }
+  if (next === current) return map
+  return { ...map, [signal.sessionID]: next }
+}
+
+/** The icon to paint: an explicit notice (approval/outcome) outranks the newest still-running tool. */
+export const intentForActivity = (activity: ToolActivity | undefined): AgentIntent | undefined => {
+  if (!activity) return undefined
+  if (activity.notice) return activity.notice
+  const ids = Object.keys(activity.calls)
+  const newest = ids[ids.length - 1]
+  return newest === undefined ? undefined : activity.calls[newest]
+}
+
+/**
  * How long a tool's intent rides the pill after its last event before the glyph falls back to the breath.
  * Long enough to read a fast burst of tool calls as a sequence of live intents; short enough that an idle
  * turn reads as thinking again instead of freezing on the last tool it happened to call.
@@ -188,36 +273,45 @@ export default Plugin.define({
     // dialog opens and whenever any goal `changed` event lands while it is open; the host owns session
     // switching, so the block carries no actions.
     const [others, setOthers] = createSignal<readonly GoalSnapshot[]>([])
-    // Live tool intent, keyed by session — the icon that rides the ambient pill's leading cell. This is
-    // view-local like the pin registry: no server state, no RPC, no mirror write. The host tool events are
-    // the only source of truth (`session.tool.called` has no tool name; `session.tool.input.started` does).
-    // A per-session timer expires the icon back to the breath when the agent goes quiet, so a stale "editing"
-    // never freezes on the pill after the turn has moved on. Parallel tools in other sessions keep their own.
-    const [intents, setIntents] = createSignal<Readonly<Record<string, AgentIntent>>>({})
+    // Live tool activity, keyed by session — the icon that rides the ambient pill's leading cell. This is
+    // view-local like the pin registry: no server state, no RPC, no mirror write. The host's typed event
+    // stream is the only source of truth (`session.tool.called` has no tool name; `session.tool.input.started`
+    // does), and every signal is folded through the pure reducer above. A per-session timer expires the icon
+    // back to the breath when the agent goes quiet, so a stale "editing" never freezes on the pill after the
+    // turn has moved on; progress beats refresh it so a long-running tool keeps its icon while it runs.
+    const [activity, setActivity] = createSignal<ActivityMap>({})
     const intentTimers = new Map<string, ReturnType<typeof setTimeout>>()
-    const noteIntent = (sessionID: string | undefined, intent: AgentIntent): void => {
-      if (!sessionID) return
-      setIntents((previous) => (previous[sessionID] === intent ? previous : { ...previous, [sessionID]: intent }))
-      const pending = intentTimers.get(sessionID)
+    const noteSignal = (signal: IntentSignal): void => {
+      const sid = signal.sessionID
+      if (!sid) return
+      setActivity((previous) => applyIntentSignal(previous, signal))
+      const pending = intentTimers.get(sid)
       if (pending !== undefined) clearTimeout(pending)
-      intentTimers.set(sessionID, setTimeout(() => {
-        intentTimers.delete(sessionID)
-        setIntents((previous) => {
-          if (!(sessionID in previous)) return previous
+      intentTimers.set(sid, setTimeout(() => {
+        intentTimers.delete(sid)
+        setActivity((previous) => {
+          if (!(sid in previous)) return previous
           const next = { ...previous }
-          delete next[sessionID]
+          delete next[sid]
           return next
         })
       }, INTENT_TTL_MS))
     }
     const toolEventDisposers: Array<() => void> = []
     toolEventDisposers.push(
-      context.data.on("session.tool.input.started", (event) => noteIntent(event.data.sessionID, resolveToolIntent(event.data.name))),
-      context.data.on("session.tool.failed", (event) => noteIntent(event.data.sessionID, "error")),
+      // The only event carrying a tool name: the family decides the glyph (read → reading, bash → running).
+      context.data.on("session.tool.input.started", (event) => noteSignal({ type: "tool-input", sessionID: event.data.sessionID, callID: event.data.id, name: event.data.name })),
+      // A progress beat means the tool is still working, even when its input started long ago.
+      context.data.on("session.tool.progress", (event) => noteSignal({ type: "tool-progress", sessionID: event.data.sessionID, callID: event.data.id })),
+      context.data.on("session.tool.success", (event) => noteSignal({ type: "tool-success", sessionID: event.data.sessionID, callID: event.data.id })),
+      context.data.on("session.tool.failed", (event) => noteSignal({ type: "tool-failed", sessionID: event.data.sessionID, callID: event.data.id })),
       // Permission prompts are the one approval-shaped intent: the agent is blocked on a human, not working.
-      context.data.on("permission.asked", (event) => noteIntent(event.data.sessionID, "waiting")),
-      context.data.on("session.execution.started", (event) => noteIntent(event.data.sessionID, "thinking")),
-      context.data.on("session.execution.succeeded", (event) => noteIntent(event.data.sessionID, "done")),
+      context.data.on("permission.asked", (event) => noteSignal({ type: "permission-asked", sessionID: event.data.sessionID })),
+      context.data.on("permission.replied", (event) => noteSignal({ type: "permission-replied", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.started", (event) => noteSignal({ type: "execution-started", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.succeeded", (event) => noteSignal({ type: "execution-succeeded", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.failed", (event) => noteSignal({ type: "execution-failed", sessionID: event.data.sessionID })),
+      context.data.on("session.execution.interrupted", (event) => noteSignal({ type: "execution-interrupted", sessionID: event.data.sessionID })),
     )
     const sessionLabel = (sessionID: string): string => {
       try {
@@ -1230,7 +1324,7 @@ export default Plugin.define({
         // their documented grammar — state outranks activity. The override is suppressed on anything but a
         // working, live goal: a paused/waiting/queued/stuck/terminal pill must never borrow a tool's icon.
         const activeIntent = (): AgentIntent | undefined => {
-          const intent = props.sessionID ? intents()[props.sessionID] : undefined
+          const intent = props.sessionID ? intentForActivity(activity()[props.sessionID]) : undefined
           if (!intent) return undefined
           const g = goal()
           if (!g || g.status !== "active" || isRetryStuck(g) || g.waiting === true || g.queued === true) return undefined

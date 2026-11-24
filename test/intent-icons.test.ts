@@ -5,7 +5,7 @@
  */
 import { describe, expect, test } from "bun:test"
 import stringWidth from "string-width"
-import { AGENT_ICONS, INTENT_TTL_MS, intentAccent, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent } from "../src/tui.tsx"
+import { AGENT_ICONS, INTENT_TTL_MS, NO_ACTIVITY, applyIntentSignal, intentAccent, intentForActivity, intentGlyph, resolveToolIntent, withIntentGlyph, type AgentIntent, type ActivityMap, type IntentSignal } from "../src/tui.tsx"
 import { pillModel } from "../src/core/hud.ts"
 import type { GoalSnapshot } from "../src/core/types.ts"
 
@@ -138,5 +138,67 @@ describe("intentAccent", () => {
   test("the expiry window is short enough to feel live but long enough to read the icon", () => {
     expect(INTENT_TTL_MS).toBeGreaterThan(0)
     expect(INTENT_TTL_MS).toBeLessThanOrEqual(10_000)
+  })
+})
+
+describe("live tool-use lifecycle", () => {
+  const SID = "ses_live"
+  const fold = (signals: readonly IntentSignal[]): ActivityMap =>
+    signals.reduce<ActivityMap>((state, signal) => applyIntentSignal(state, signal), {})
+  const input = (callID: string, name: string): IntentSignal => ({ type: "tool-input", sessionID: SID, callID, name })
+
+  test("a tool's name sets the icon when its input starts, not on a timer", () => {
+    const state = fold([input("c1", "read"), input("c2", "bash")])
+    expect(intentForActivity(state[SID])).toBe("executing") // newest call wins
+    expect(state[SID]?.calls).toEqual({ c1: "reading", c2: "executing" })
+  })
+
+  test("a progress beat keeps a long-running tool visible and marks an unknown in-flight call as executing", () => {
+    const started = fold([input("c1", "read")])
+    expect(applyIntentSignal(started, { type: "tool-progress", sessionID: SID, callID: "c1" })).toBe(started)
+    // Mounted mid-call: no name was ever seen, but progress is still live activity.
+    const resumed = fold([{ type: "tool-progress", sessionID: SID, callID: "c9" }])
+    expect(intentForActivity(resumed[SID])).toBe("executing")
+  })
+
+  test("a finished tool falls back to the next still-running tool, then to the breath", () => {
+    const two = fold([input("c1", "read"), input("c2", "bash")])
+    const afterBash = applyIntentSignal(two, { type: "tool-success", sessionID: SID, callID: "c2" })
+    expect(intentForActivity(afterBash[SID])).toBe("reading")
+    const afterRead = applyIntentSignal(afterBash, { type: "tool-success", sessionID: SID, callID: "c1" })
+    expect(intentForActivity(afterRead[SID])).toBeUndefined()
+  })
+
+  test("failure flips to the error face and removes the failed call", () => {
+    const failed = fold([input("c1", "bash"), { type: "tool-failed", sessionID: SID, callID: "c1" }])
+    expect(intentForActivity(failed[SID])).toBe("error")
+    expect(failed[SID]?.calls).toEqual({})
+  })
+
+  test("a permission prompt shows approval until the human replies", () => {
+    const asked = fold([input("c1", "read"), { type: "permission-asked", sessionID: SID }])
+    expect(intentForActivity(asked[SID])).toBe("waiting")
+    const replied = applyIntentSignal(asked, { type: "permission-replied", sessionID: SID })
+    expect(intentForActivity(replied[SID])).toBe("reading")
+  })
+
+  test("execution boundaries clear stale tools and report the turn's outcome", () => {
+    const started = fold([input("c1", "read"), { type: "execution-started", sessionID: SID }])
+    expect(started[SID]).toEqual({ calls: {}, notice: "thinking" })
+    expect(intentForActivity(applyIntentSignal(started, { type: "execution-succeeded", sessionID: SID })[SID])).toBe("done")
+    expect(intentForActivity(applyIntentSignal(started, { type: "execution-failed", sessionID: SID })[SID])).toBe("error")
+    expect(intentForActivity(applyIntentSignal(started, { type: "execution-interrupted", sessionID: SID })[SID])).toBeUndefined()
+  })
+
+  test("sessions stay isolated — another session's tool never steals this pill's icon", () => {
+    const state = applyIntentSignal({ [SID]: NO_ACTIVITY }, { type: "tool-input", sessionID: "ses_other", callID: "c1", name: "bash" })
+    expect(intentForActivity(state[SID])).toBeUndefined()
+    expect(intentForActivity(state["ses_other"])).toBe("executing")
+  })
+
+  test("irrelevant completion signals do not mutate the map", () => {
+    const state = fold([input("c1", "read")])
+    const staleSuccess = applyIntentSignal(state, { type: "tool-success", sessionID: SID, callID: "never-started" })
+    expect(staleSuccess).toBe(state)
   })
 })
