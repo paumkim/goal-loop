@@ -6551,6 +6551,17 @@
       "submittedAt": "2026-11-24T01:14:35Z",
       "mergedAt": "2026-11-24T01:16:51Z",
       "mergedInto": "dev"
+    },
+    "document-render-dialog-flags": {
+      "agent": "orchestrator",
+      "paths": "scripts/render-dialog.tsx",
+      "branch": "wt/document-render-dialog-flags",
+      "worktree": "worktree/wt-document-render-dialog-flags",
+      "status": "done",
+      "createdAt": "2026-11-24T01:17:11Z",
+      "submittedAt": "2026-11-24T01:18:58Z",
+      "mergedAt": "2026-11-24T01:21:13Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
