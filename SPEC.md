@@ -1828,6 +1828,13 @@ missing string is a loud error, not a silent success; an already-patched file is
 upstream update, run `goal-loop patch-host` (or `goal-loop patch-host --dry-run` to preview), then rebuild
 OpenCode to see the new label.
 
+Applied 2026-11-24: `goal-loop patch-host` renamed the divider in the live checkout
+`~/Projects/opencode/packages/tui/src/routes/session/index.tsx` (backup beside it), and the two UI
+strings embedded in the installed binary `~/.opencode/bin/opencode` were patched in place (backup
+`~/.opencode/bin/opencode.pre-context-cleared.bak`). The two error-message strings in the binary that
+also say "Provider compaction" were left alone — they describe the feature, not the divider. A running
+TUI keeps its old label until OpenCode restarts.
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in
