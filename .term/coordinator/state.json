@@ -6732,8 +6732,9 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-report-no-parent-turn",
       "worktree": "worktree/wt-evaluator-report-no-parent-turn",
-      "status": "claimed",
-      "createdAt": "2026-11-24T06:16:48Z"
+      "status": "submitted",
+      "createdAt": "2026-11-24T06:16:48Z",
+      "submittedAt": "2026-11-24T06:32:18Z"
     },
     "planner-parentless-completion": {
       "agent": "orchestrator",
@@ -6761,8 +6762,16 @@
       "paths": "SPEC.md,docs/changelog.html",
       "branch": "wt/spec-planner-parentless-supersede",
       "worktree": "worktree/wt-spec-planner-parentless-supersede",
-      "status": "claimed",
-      "createdAt": "2026-11-24T06:29:37Z"
+      "status": "done",
+      "createdAt": "2026-11-24T06:29:37Z",
+      "submittedAt": "2026-11-24T06:35:08Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T06:35:08Z",
+      "forcedScopeFiles": [
+        "SPEC-workstreams.md"
+      ],
+      "mergedAt": "2026-11-24T06:39:42Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
