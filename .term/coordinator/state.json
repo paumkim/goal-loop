@@ -7052,9 +7052,11 @@
       "paths": "src/tui.tsx,test/intent-icons.test.ts,dist/tui.js,dist/tui.d.ts",
       "branch": "wt/pill-icon-background-activity",
       "worktree": "worktree/wt-pill-icon-background-activity",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T14:03:11Z",
-      "submittedAt": "2026-11-24T14:12:16Z"
+      "submittedAt": "2026-11-24T14:12:16Z",
+      "mergedAt": "2026-11-24T17:15:14Z",
+      "mergedInto": "dev"
     },
     "compaction-label-verified": {
       "agent": "build",
