@@ -2,7 +2,7 @@ import { OpenCode } from "@opencode/client"
 import { spawn } from "node:child_process"
 import { appendFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { logPath, money, short, sleep } from "./util.ts"
+import { logPath, money, parseModel, short, sleep } from "./util.ts"
 import { SUCCESS_STATUS, TERMINAL_STATUSES } from "./defaults.ts"
 import { GoalRpc } from "./goal-rpc.ts"
 import type { Config, TaskResult } from "./types.ts"
@@ -149,7 +149,8 @@ export const runTask = async (input: RunTaskInput): Promise<TaskResult> => {
     if (!registered) throw new Error("/goal command not registered — is goal-loop installed in the global opencode config?")
     logBoth("goal command registered")
 
-    const model = config.model ? parseModelRef(config.model) : undefined
+    const modelRef = config.model ? parseModel(config.model) : undefined
+    const model = modelRef ? { providerID: modelRef.providerID, id: modelRef.modelID } : undefined
     const session = await client.session.create({
       location,
       title: `prompter ${path.basename(worktree)}`,
@@ -223,7 +224,3 @@ const readFileSafe = (file: string): string => {
   try { return readFileSync(file, "utf8") } catch { return "" }
 }
 
-const parseModelRef = (value: string): { providerID: string; id: string } => {
-  const slash = value.indexOf("/")
-  return { providerID: value.slice(0, slash), id: value.slice(slash + 1) }
-}
