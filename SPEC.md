@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=158 tests=2420 -->
+<!-- spec-check files=158 tests=2424 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1841,6 +1841,17 @@ semantics are unchanged.
 Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
+
+### Installed-binary divider rename (provider-compaction-running-label, 2026-11-24)
+
+The host source patch (`COMPACTION_DIVIDER_PATCH`) edits a build input only: the string a running TUI renders is
+compiled twice into the installed Bun executable. `src/core/opencode-labels.ts` now also owns
+`INSTALLED_BINARY_DIVIDER_PATCH`, a byte-length-preserving swap of the minified ternary and the standalone
+string-table entry so `goal-loop patch-host --binary` renames the divider in the binary that actually runs.
+Error messages that merely mention the feature keep their text; the install command still touches only config.
+
+Verification: `test/opencode-labels.test.ts` pins both patch fragments, their equal byte length, and that the
+error-message occurrences are left alone. Full `bun run check` green after artifact regeneration.
 
 ## Historical workstreams
 

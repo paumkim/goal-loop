@@ -5,7 +5,10 @@ import { join } from "node:path"
 import {
   COMPACTION_DIVIDER_PATCH,
   HOST_LABEL_PATCHES,
+  INSTALLED_BINARY_DIVIDER_PATCH,
+  INSTALLED_BINARY_LABEL_PATCH,
   applyHostLabelPatch,
+  applyInstalledBinaryLabelPatch,
   hostLabelFile,
 } from "../src/core/opencode-labels.ts"
 import { patchHost, runCli } from "../bin/goal-loop.mjs"
@@ -29,6 +32,21 @@ describe("host-label patch data", () => {
     })
     expect(HOST_LABEL_PATCHES.length).toBeGreaterThan(0)
     expect(HOST_LABEL_PATCHES[0]).toBe(COMPACTION_DIVIDER_PATCH)
+  })
+
+  test("the running binary's divider is a separate, exact-match rename", () => {
+    expect(INSTALLED_BINARY_DIVIDER_PATCH).toEqual({
+      file: "bin/opencode",
+      from: '?"Provider compaction":"Compaction"',
+      to: '?"Context Cleared    ":"Compaction"',
+    })
+    expect(HOST_LABEL_PATCHES).toContain(INSTALLED_BINARY_DIVIDER_PATCH)
+    // A Bun-compiled binary keeps string lengths in its metadata: a shorter replacement breaks it.
+    expect(Buffer.byteLength(INSTALLED_BINARY_DIVIDER_PATCH.to)).toBe(
+      Buffer.byteLength(INSTALLED_BINARY_DIVIDER_PATCH.from),
+    )
+    // The bare label also occurs in error messages; the patch must not match those.
+    expect("Provider compaction is not supported".includes(INSTALLED_BINARY_DIVIDER_PATCH.from)).toBe(false)
   })
 
   test("the durable patch file carries the same swap and the same host path", () => {
@@ -58,6 +76,19 @@ describe("applyHostLabelPatch (pure)", () => {
     expect(twice.changed).toBe(false)
     expect(twice.already).toBe(true)
     expect(twice.replacements).toBe(0)
+  })
+
+  test("binary patch renames the code literal and the string-table entry, not error messages", () => {
+    const source =
+      `?"Provider compaction":"Compaction"` +
+      `\x00Provider compaction\x00` +
+      `Provider compaction is not supported by x/y (z)`
+    const result = applyInstalledBinaryLabelPatch(source)
+    expect(result.replacements).toBe(2)
+    expect(result.text).toContain(INSTALLED_BINARY_DIVIDER_PATCH.to)
+    expect(result.text).toContain(`\x00${INSTALLED_BINARY_LABEL_PATCH.to}\x00`)
+    expect(result.text).toContain("Provider compaction is not supported by x/y (z)")
+    expect(Buffer.byteLength(result.text)).toBe(Buffer.byteLength(source))
   })
 
   test("does not report 'already' when the host string is absent for another reason", () => {
@@ -102,6 +133,10 @@ describe("standalone CLI patch-host", () => {
     expect(cli).toContain(`const LABEL_FROM = '${COMPACTION_DIVIDER_PATCH.from}';`)
     expect(cli).toContain(`const LABEL_TO = '${COMPACTION_DIVIDER_PATCH.to}';`)
     expect(cli).toContain(`const HOST_LABEL_FILE = "${COMPACTION_DIVIDER_PATCH.file}";`)
+    expect(cli).toContain(`const BINARY_LABEL_FROM = '${INSTALLED_BINARY_DIVIDER_PATCH.from}';`)
+    expect(cli).toContain(`const BINARY_LABEL_TO = '${INSTALLED_BINARY_DIVIDER_PATCH.to}';`)
+    expect(cli).toContain(`const BINARY_STANDALONE_FROM = "${INSTALLED_BINARY_LABEL_PATCH.from}";`)
+    expect(cli).toContain(`const BINARY_STANDALONE_TO = "${INSTALLED_BINARY_LABEL_PATCH.to}";`)
   })
 
   test("applies the rename, backs up first, and is idempotent", () => {
@@ -174,6 +209,75 @@ describe("standalone CLI patch-host", () => {
       expect(applied.code).toBe(0)
       expect(applied.stdout).toContain("Context Cleared")
       expect(readFileSync(file, "utf8")).toContain('? "Context Cleared"')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe("installed-binary divider patch", () => {
+  // latin1 keeps the fixture byte-exact the way patchHost handles a real binary.
+  const BINARY = Buffer.from(
+    `\x00\xff${INSTALLED_BINARY_DIVIDER_PATCH.from}\x01` +
+      `\x13\x00\x00\x80\x49\x37\xe6\x00${INSTALLED_BINARY_LABEL_PATCH.from}\x00\x0b\x00` +
+      `Provider compaction is not supported by x/y (z)\x00` +
+      `Provider compaction is not supported by a/b (c)\x00`,
+    "latin1",
+  )
+  const makeBinary = () => {
+    const dir = mkdtempSync(join(tmpdir(), "goal-loop-binary-"))
+    const file = join(dir, "opencode")
+    writeFileSync(file, BINARY)
+    return { dir, file }
+  }
+
+  test("renames only the divider, keeping error-message bytes intact", () => {
+    const { dir, file } = makeBinary()
+    try {
+      const first = patchHost([file, "--binary"])
+      expect(first.code).toBe(0)
+      const after = readFileSync(file)
+      expect(after.toString("latin1")).toContain(INSTALLED_BINARY_DIVIDER_PATCH.to)
+      expect(after.toString("latin1")).toContain(INSTALLED_BINARY_LABEL_PATCH.to)
+      expect(after.toString("latin1")).not.toContain(INSTALLED_BINARY_DIVIDER_PATCH.from)
+      expect(after.toString("latin1")).not.toContain(
+        `\x00${INSTALLED_BINARY_LABEL_PATCH.from}\x00`,
+      )
+      expect(after.toString("latin1")).toContain("Provider compaction is not supported by x/y (z)")
+      expect(after.toString("latin1")).toContain("Provider compaction is not supported by a/b (c)")
+      expect(after.length).toBe(BINARY.length) // byte-exact, length-preserving
+      expect(after[0]).toBe(0)
+      expect(after[1]).toBe(0xff)
+
+      const second = patchHost([file, "--binary"])
+      expect(second.code).toBe(0)
+      expect(second.stdout).toContain("already patched")
+      expect(readFileSync(file)).toEqual(after)
+      expect(readdirSync(dir).filter((n) => n.endsWith(".bak")).length).toBe(1)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("dry-run reports without writing; CLI honors the binary env override and flag", async () => {
+    const { dir, file } = makeBinary()
+    try {
+      const dry = await runCli(["patch-host", "--binary", "--dry-run"], {
+        env: { GOAL_LOOP_OPENCODE_BIN: file },
+        cwd: dir,
+      })
+      expect(dry.code).toBe(0)
+      expect(dry.stdout).toContain("dry-run")
+      expect(readFileSync(file)).toEqual(BINARY)
+
+      const applied = await runCli(["patch-host", "--binary"], {
+        env: { GOAL_LOOP_OPENCODE_BIN: file },
+        cwd: dir,
+      })
+      expect(applied.code).toBe(0)
+      expect(readFileSync(file).toString("latin1")).toContain(INSTALLED_BINARY_DIVIDER_PATCH.to)
+      const help = await runCli(["--help"])
+      expect(help.stdout).toContain("--binary")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
