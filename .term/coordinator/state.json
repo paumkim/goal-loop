@@ -6573,6 +6573,17 @@
       "submittedAt": "2026-11-24T01:24:35Z",
       "mergedAt": "2026-11-24T01:26:50Z",
       "mergedInto": "dev"
+    },
+    "align-install-env-var-list": {
+      "agent": "orchestrator",
+      "paths": "README.md,docs/install.html",
+      "branch": "wt/align-install-env-var-list",
+      "worktree": "worktree/wt-align-install-env-var-list",
+      "status": "done",
+      "createdAt": "2026-11-24T01:27:20Z",
+      "submittedAt": "2026-11-24T01:29:10Z",
+      "mergedAt": "2026-11-24T01:31:25Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
