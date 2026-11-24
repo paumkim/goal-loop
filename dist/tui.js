@@ -1074,20 +1074,8 @@ function exportLoopDossier(goal, nowMs, dir) {
 
 // src/core/verify-record.ts
 import { execFileSync } from "child_process";
-var GIT_TIMEOUT_MS = 1e4;
-function gitCatFileProbe(cwd) {
-  return (sha) => {
-    try {
-      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
-      return true;
-    } catch (error) {
-      const status = error?.status;
-      if (typeof status === "number")
-        return false;
-      return "unknown";
-    }
-  };
-}
+
+// src/core/record-attestation.ts
 function recordShaMentions(goal) {
   const mentions = [];
   const index = new Map;
@@ -1105,7 +1093,7 @@ function recordShaMentions(goal) {
   }
   return mentions;
 }
-function verifyRecord(goal, probe) {
+function sweepRecordMentions(goal, probe, positive, negative) {
   const checks = recordShaMentions(goal).map((m) => {
     let answer;
     try {
@@ -1113,67 +1101,139 @@ function verifyRecord(goal, probe) {
     } catch {
       answer = "unknown";
     }
-    const status = answer === true ? "present" : answer === false ? "missing" : "unknown";
+    const status = answer === true ? positive : answer === false ? negative : "unknown";
     return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
   });
-  let present = 0;
-  let missing = 0;
+  let positiveCount = 0;
+  let negativeCount = 0;
   let unknown = 0;
   let mentions = 0;
   for (const check of checks) {
-    if (check.status === "present")
-      present += 1;
-    else if (check.status === "missing")
-      missing += 1;
+    if (check.status === positive)
+      positiveCount += 1;
+    else if (check.status === negative)
+      negativeCount += 1;
     else
       unknown += 1;
     mentions += check.iterations.length;
   }
-  return { checks, unique: checks.length, mentions, present, missing, unknown };
+  return { checks, unique: checks.length, mentions, positive: positiveCount, negative: negativeCount, unknown };
 }
-var statusCell = (status) => recordStatusCell(status, "present", "missing");
-function verifyReportMarkdown(goal, verification, nowMs, directory) {
+function renderRecordReport(goal, input, format, nowMs, directory) {
   const stamp = stampOf(nowMs);
   const conditionCell = conditionCellOf(goal.condition);
+  const statusCell = (status) => recordStatusCell(status, format.positive, format.negative);
   const lines = [
-    "# /goal-loop record verification",
+    format.title,
     "",
     `- Generated: ${stamp}`,
     `- Repository: ${directory}`,
     `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${verification.unique} unique across ${verification.mentions} mention${verification.mentions === 1 ? "" : "s"}`,
+    `- Shas quoted by the record: ${input.unique} unique across ${input.mentions} mention${input.mentions === 1 ? "" : "s"}`,
     "",
-    "| sha | quoted at | resolves |",
+    `| sha | quoted at | ${format.columnHeader} |`,
     "| --- | --- | --- |"
   ];
-  for (const check of verification.checks) {
+  for (const check of input.checks) {
     lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell(check.status)} |`);
   }
-  if (verification.checks.length === 0)
+  if (input.checks.length === 0)
     lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`, "", "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.", "");
+  lines.push("", format.countsLine, "", format.footer, "");
   return lines.join(`
 `);
 }
-function verifySummaryLine(verification) {
-  if (verification.unique === 0)
-    return "record quotes no shas to verify";
-  if (verification.missing === 0 && verification.unknown === 0)
-    return `record verifies: ${verification.present} of ${verification.unique} shas resolve`;
-  if (verification.missing > 0)
-    return `record does not verify: ${verification.missing} of ${verification.unique} shas unresolvable`;
-  return `record unverifiable: ${verification.unknown} of ${verification.unique} shas could not be checked`;
+function recordSummaryLine(counts, format) {
+  if (counts.unique === 0)
+    return format.none;
+  if (counts.negative === 0 && counts.unknown === 0)
+    return format.success(counts);
+  if (counts.negative > 0)
+    return format.failure(counts);
+  return format.unknown(counts);
 }
-function verifyAckSegment(verification, ascii) {
+function recordAckSegment(counts, ascii, format) {
   const ok = ascii ? "+" : "\u2713";
   const bad = ascii ? "-" : "\u2717";
-  if (verification.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to verify)";
-  if (verification.missing > 0)
-    return ` (${bad} ${verification.missing} of ${verification.unique} unresolvable)`;
-  if (verification.unknown > 0)
-    return ` (! ${verification.unknown} of ${verification.unique} unknown)`;
-  return ` (${ok} ${verification.present}/${verification.unique} resolve)`;
+  if (counts.unique === 0)
+    return ascii ? format.noneAscii : format.noneUnicode;
+  if (counts.negative > 0)
+    return ` (${bad} ${counts.negative} of ${counts.unique} ${format.negative})`;
+  if (counts.unknown > 0)
+    return ` (! ${counts.unknown} of ${counts.unique} ${format.unknown})`;
+  return ` (${ok} ${counts.positive}/${counts.unique} ${format.positive})`;
+}
+function recordCellHelpers() {
+  const cell = (status, positive, negative) => recordStatusCell(status, positive, negative);
+  return {
+    verifyCell: (status) => cell(status, "present", "missing"),
+    reachCell: (status) => cell(status, "ancestor", "unreached"),
+    signCell: (status) => cell(status, "verified", "unverified")
+  };
+}
+
+// src/core/verify-record.ts
+var GIT_TIMEOUT_MS = 1e4;
+function gitCatFileProbe(cwd) {
+  return (sha) => {
+    try {
+      execFileSync("git", ["-C", cwd, "cat-file", "-e", sha], { stdio: "ignore", timeout: GIT_TIMEOUT_MS });
+      return true;
+    } catch (error) {
+      const status = error?.status;
+      if (typeof status === "number")
+        return false;
+      return "unknown";
+    }
+  };
+}
+function verifyRecord(goal, probe) {
+  const swept = sweepRecordMentions(goal, probe, "present", "missing");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    present: swept.positive,
+    missing: swept.negative,
+    unknown: swept.unknown
+  };
+}
+function verifyReportMarkdown(goal, verification, nowMs, directory) {
+  return renderRecordReport(goal, verification, {
+    title: "# /goal-loop record verification",
+    columnHeader: "resolves",
+    countsLine: `- Present: ${verification.present} \xB7 missing: ${verification.missing} \xB7 unknown: ${verification.unknown}`,
+    footer: "Existence is not ancestry: a sha that resolves here may still belong to a rewritten history elsewhere. A sha that does not resolve is an unresolvable receipt, not proof of misconduct \u2014 the record says what HEAD was, this report says what the repository still holds. Unknown means git could not answer (no binary, not a repository, timed out) \u2014 never counted as missing. Existence is checked at the directory named above, at generation time, and says nothing about the working tree's cleanliness.",
+    positive: "present",
+    negative: "missing"
+  }, nowMs, directory);
+}
+function verifySummaryLine(verification) {
+  return recordSummaryLine({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, {
+    none: "record quotes no shas to verify",
+    success: (v) => `record verifies: ${v.positive} of ${v.unique} shas resolve`,
+    failure: (v) => `record does not verify: ${v.negative} of ${v.unique} shas unresolvable`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be checked`
+  });
+}
+function verifyAckSegment(verification, ascii) {
+  return recordAckSegment({
+    unique: verification.unique,
+    positive: verification.present,
+    negative: verification.missing,
+    unknown: verification.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to verify)",
+    negative: "unresolvable",
+    unknown: "unknown",
+    positive: "resolve"
+  });
 }
 
 // src/core/reach-record.ts
@@ -1195,74 +1255,52 @@ function gitAncestorProbe(cwd) {
   };
 }
 function reachRecord(goal, probe) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? "ancestor" : answer === false ? "unreached" : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let ancestors = 0;
-  let unreached = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === "ancestor")
-      ancestors += 1;
-    else if (check.status === "unreached")
-      unreached += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, ancestors, unreached, unknown };
+  const swept = sweepRecordMentions(goal, probe, "ancestor", "unreached");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    ancestors: swept.positive,
+    unreached: swept.negative,
+    unknown: swept.unknown
+  };
 }
-var statusCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
 function reachReportMarkdown(goal, reach, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const conditionCell = conditionCellOf(goal.condition);
-  const lines = [
-    "# /goal-loop record ancestry",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${reach.unique} unique across ${reach.mentions} mention${reach.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | on this line |",
-    "| --- | --- | --- |"
-  ];
-  for (const check of reach.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell2(check.status)} |`);
-  }
-  if (reach.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`, "", "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.", "");
-  return lines.join(`
-`);
+  return renderRecordReport(goal, reach, {
+    title: "# /goal-loop record ancestry",
+    columnHeader: "on this line",
+    countsLine: `- On this line (ancestor of HEAD): ${reach.ancestors} \xB7 not on this line: ${reach.unreached} \xB7 unknown: ${reach.unknown}`,
+    footer: "Not on this line is not misconduct: the sha may live on another branch, may have been rebased away, or this record may predate the merge that carried it. Existence is not ancestry, and ancestry is not content \u2014 a sha that belongs to this history may still carry a tree you have not read, and a sha that resolves here may still belong elsewhere. This report asks one question, per sha, of the repository at the directory named above, at generation time, and says nothing about which ref the work landed on, signatures, the working tree's cleanliness, or the content of any commit. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D.",
+    positive: "ancestor",
+    negative: "unreached"
+  }, nowMs, directory);
 }
 function reachSummaryLine(reach) {
-  if (reach.unique === 0)
-    return "record quotes no shas to place on this line";
-  if (reach.unreached === 0 && reach.unknown === 0)
-    return `record reaches HEAD: ${reach.ancestors} of ${reach.unique} shas on this line`;
-  if (reach.unreached > 0)
-    return `record does not reach HEAD: ${reach.unreached} of ${reach.unique} shas not on this line`;
-  return `record unverifiable: ${reach.unknown} of ${reach.unique} shas could not be placed`;
+  return recordSummaryLine({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, {
+    none: "record quotes no shas to place on this line",
+    success: (v) => `record reaches HEAD: ${v.positive} of ${v.unique} shas on this line`,
+    failure: (v) => `record does not reach HEAD: ${v.negative} of ${v.unique} shas not on this line`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be placed`
+  });
 }
 function reachAckSegment(reach, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (reach.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to place)";
-  if (reach.unreached > 0)
-    return ` (${bad} ${reach.unreached} of ${reach.unique} not on this line)`;
-  if (reach.unknown > 0)
-    return ` (! ${reach.unknown} of ${reach.unique} unknown)`;
-  return ` (${ok} ${reach.ancestors}/${reach.unique} on this line)`;
+  return recordAckSegment({
+    unique: reach.unique,
+    positive: reach.ancestors,
+    negative: reach.unreached,
+    unknown: reach.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to place)",
+    negative: "not on this line",
+    unknown: "unknown",
+    positive: "on this line"
+  });
 }
 
 // src/core/sign-record.ts
@@ -1285,83 +1323,59 @@ function gitSignProbe(cwd) {
   };
 }
 function signRecord(goal, probe) {
-  const checks = recordShaMentions(goal).map((m) => {
-    let answer;
-    try {
-      answer = probe(m.sha);
-    } catch {
-      answer = "unknown";
-    }
-    const status = answer === true ? "verified" : answer === false ? "unverified" : "unknown";
-    return { sha: m.sha, shortSha: shortSha(m.sha), iterations: m.iterations, status };
-  });
-  let verified = 0;
-  let unverified = 0;
-  let unknown = 0;
-  let mentions = 0;
-  for (const check of checks) {
-    if (check.status === "verified")
-      verified += 1;
-    else if (check.status === "unverified")
-      unverified += 1;
-    else
-      unknown += 1;
-    mentions += check.iterations.length;
-  }
-  return { checks, unique: checks.length, mentions, verified, unverified, unknown };
+  const swept = sweepRecordMentions(goal, probe, "verified", "unverified");
+  return {
+    checks: swept.checks,
+    unique: swept.unique,
+    mentions: swept.mentions,
+    verified: swept.positive,
+    unverified: swept.negative,
+    unknown: swept.unknown
+  };
 }
-var statusCell3 = (status) => recordStatusCell(status, "verified", "unverified");
 function signReportMarkdown(goal, sign, nowMs, directory) {
-  const stamp = stampOf(nowMs);
-  const conditionCell = conditionCellOf(goal.condition);
-  const lines = [
-    "# /goal-loop record signatures",
-    "",
-    `- Generated: ${stamp}`,
-    `- Repository: ${directory}`,
-    `- Condition: ${conditionCell}`,
-    `- Shas quoted by the record: ${sign.unique} unique across ${sign.mentions} mention${sign.mentions === 1 ? "" : "s"}`,
-    "",
-    "| sha | quoted at | under seal |",
-    "| --- | --- | --- |"
-  ];
-  for (const check of sign.checks) {
-    lines.push(`| ${check.shortSha} | ${iterationList(check.iterations)} | ${statusCell3(check.status)} |`);
-  }
-  if (sign.checks.length === 0)
-    lines.push("| \u2014 | \u2014 | \u2014 |");
-  lines.push("", `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`, "", "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.", "");
-  return lines.join(`
-`);
+  return renderRecordReport(goal, sign, {
+    title: "# /goal-loop record signatures",
+    columnHeader: "under seal",
+    countsLine: `- Under seal (git verified): ${sign.verified} \xB7 not under seal: ${sign.unverified} \xB7 unknown: ${sign.unknown}`,
+    footer: "A signature attests integrity only as strongly as the key and the trust configured at the probed directory \u2014 git decides by its own rules. `verified` means git's configured rules accepted the commit's signature, nothing more, nothing less. Anything else \u2014 an unsigned commit, an expired or untrusted key, a bad signature \u2014 is `not under seal`, never proof of forgery; most commits are unsigned, and git's thresholds differ across machines and time. An unresolvable object has no signature to judge and reads `unknown`, never `not under seal`. Unknown means git could not answer (no binary, not a repository, unparseable sha, timed out) \u2014 never counted as \u201Cno\u201D. Existence is not ancestry, ancestry is not content, content is not intent \u2014 the EC and ED reports are the other halves, and none substitutes for another. This report asks one question, per sha, of the repository at the directory named above, at generation time \u2014 it says nothing about the key's origin, the author's intent, the commit's content, or the working tree's cleanliness.",
+    positive: "verified",
+    negative: "unverified"
+  }, nowMs, directory);
 }
 function signSummaryLine(sign) {
-  if (sign.unique === 0)
-    return "record quotes no shas to attest";
-  if (sign.unverified === 0 && sign.unknown === 0)
-    return `record under seal: ${sign.verified} of ${sign.unique} shas verify`;
-  if (sign.unverified > 0)
-    return `record not under seal: ${sign.unverified} of ${sign.unique} shas do not verify`;
-  return `record unverifiable: ${sign.unknown} of ${sign.unique} shas could not be attested`;
+  return recordSummaryLine({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, {
+    none: "record quotes no shas to attest",
+    success: (v) => `record under seal: ${v.positive} of ${v.unique} shas verify`,
+    failure: (v) => `record not under seal: ${v.negative} of ${v.unique} shas do not verify`,
+    unknown: (v) => `record unverifiable: ${v.unknown} of ${v.unique} shas could not be attested`
+  });
 }
 function signAckSegment(sign, ascii) {
-  const ok = ascii ? "+" : "\u2713";
-  const bad = ascii ? "-" : "\u2717";
-  if (sign.unique === 0)
-    return ascii ? " (no shas)" : " (no shas to attest)";
-  if (sign.unverified > 0)
-    return ` (${bad} ${sign.unverified} of ${sign.unique} unsigned)`;
-  if (sign.unknown > 0)
-    return ` (! ${sign.unknown} of ${sign.unique} unknown)`;
-  return ` (${ok} ${sign.verified}/${sign.unique} signed)`;
+  return recordAckSegment({
+    unique: sign.unique,
+    positive: sign.verified,
+    negative: sign.unverified,
+    unknown: sign.unknown
+  }, ascii, {
+    noneAscii: " (no shas)",
+    noneUnicode: " (no shas to attest)",
+    negative: "unsigned",
+    unknown: "unknown",
+    positive: "signed"
+  });
 }
 
 // src/core/dossier-seal.ts
 import { writeFileSync as writeFileSync2 } from "fs";
 import { join as join2, resolve as resolve2 } from "path";
 var sealedDossierName = (nowMs, attempt = 0) => artifactName("dossier-sealed", nowMs, attempt);
-var verifyCell2 = (status) => recordStatusCell(status, "present", "missing");
-var reachCell = (status) => recordStatusCell(status, "ancestor", "unreached");
-var signCell = (status) => recordStatusCell(status, "verified", "unverified");
+var { verifyCell: verifyCell2, reachCell, signCell } = recordCellHelpers();
 var cleanShaCount = (verification, reach, sign) => {
   const reachStatus = new Map(reach.checks.map((c) => [c.sha, c.status]));
   const signStatus = new Map(sign.checks.map((c) => [c.sha, c.status]));
@@ -1476,9 +1490,7 @@ function sealAckSegment(seal, ascii) {
 import { writeFileSync as writeFileSync3 } from "fs";
 import { join as join3, resolve as resolve3 } from "path";
 var reviewName = (nowMs, attempt = 0) => artifactName("dossier-review", nowMs, attempt);
-var verifyCell3 = (status) => recordStatusCell(status, "present", "missing");
-var reachCell2 = (status) => recordStatusCell(status, "ancestor", "unreached");
-var signCell2 = (status) => recordStatusCell(status, "verified", "unverified");
+var { verifyCell: verifyCell3, reachCell: reachCell2, signCell: signCell2 } = recordCellHelpers();
 var reviewVerdict = (exists, onThisLine, underSeal) => {
   if (exists === "no" || onThisLine === "no" || underSeal === "no")
     return "gaps";
@@ -1908,9 +1920,7 @@ function parseAttestationAppendix(markdown) {
     return { kind: "unparsable" };
   return { kind: "sealed", stamp, directory, rows, gap, malformed };
 }
-var verifyCell4 = (status) => recordStatusCell(status, "present", "missing");
-var reachCell3 = (status) => recordStatusCell(status, "ancestor", "unreached");
-var signCell3 = (status) => recordStatusCell(status, "verified", "unverified");
+var { verifyCell: verifyCell4, reachCell: reachCell3, signCell: signCell3 } = recordCellHelpers();
 var shasAsGoal = (rows) => ({
   loopHistory: rows.flatMap((row, index) => row.iterations.length > 0 ? row.iterations.map((version) => ({ version, sha: row.sha })) : [{ version: index + 1, sha: row.sha }])
 });
@@ -7924,16 +7934,19 @@ var tui_default = Plugin.define({
           const g = goal();
           return g !== undefined && g.status === "active" && g.waiting !== true && !isRetryStuck(g);
         };
-        const animated = () => {
+        const motionFlags = () => {
           const g = goal();
-          return pillMotionNeeded({
-            working: workingNow(),
+          return {
             evaluating: g?.evaluating === true,
             hot: g !== undefined && isCompactHot(g),
             flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
             landing: landingNow()
-          });
+          };
         };
+        const animated = () => pillMotionNeeded({
+          ...motionFlags(),
+          working: workingNow()
+        });
         createEffect2(() => {
           if (animated() && motionOk) {
             const timer = setInterval(() => setBreathPhase((phase) => (phase + 1) % 4), BREATH_PHASE_MS);
@@ -7942,15 +7955,7 @@ var tui_default = Plugin.define({
           }
           setBreathPhase(0);
         });
-        const transientNow = () => {
-          const g = goal();
-          return pillMotionNeeded({
-            evaluating: g?.evaluating === true,
-            hot: g !== undefined && isCompactHot(g),
-            flashing: props.sessionID !== undefined && flashing().has(props.sessionID),
-            landing: landingNow()
-          });
-        };
+        const transientNow = () => pillMotionNeeded(motionFlags());
         const pillAttrs = () => {
           const hoverBold = hovered() ? TextAttributes5.BOLD : 0;
           const g = goal();
@@ -8259,6 +8264,13 @@ var tui_default = Plugin.define({
           sessionID
         }, at(sessionID)).catch(() => {});
     };
+    const runDossierAction = (action) => {
+      try {
+        const sessionID = currentSession();
+        const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
+        action(sessionID, goal);
+      } catch {}
+    };
     context.keymap.layer(() => ({
       mode: "global",
       commands: [{
@@ -8371,65 +8383,35 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            exportDossier(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(exportDossier)
       }, {
         id: "goal.dossier.verify",
         title: "Goal: verify the record (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            verifyRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(verifyRecordAction)
       }, {
         id: "goal.dossier.reach",
         title: "Goal: verify the record reaches HEAD (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reachRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(reachRecordAction)
       }, {
         id: "goal.dossier.sign",
         title: "Goal: verify the record's signatures (shas + markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            signRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(signRecordAction)
       }, {
         id: "goal.dossier.seal",
         title: "Goal: seal the dossier with a fresh attestation (file)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            sealRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(sealRecordAction)
       }, {
         id: "goal.dossier.attest",
         title: "Goal: attest a sealed dossier against HEAD (drift report)",
@@ -8447,26 +8429,14 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            reviewRecordAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(reviewRecordAction)
       }, {
         id: "goal.dossier.spend",
         title: "Goal: export the spend ledger (markdown report)",
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          try {
-            const sessionID = currentSession();
-            const goal = live(sessionID) ?? entries()[sessionID ?? ""]?.goal;
-            spendLedgerAction(sessionID, goal);
-          } catch {}
-        }
+        run: () => runDossierAction(spendLedgerAction)
       }, {
         id: "goal.dossier.index",
         title: "Goal: index the exported dossier artifacts (markdown)",

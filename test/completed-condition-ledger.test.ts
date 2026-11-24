@@ -1,11 +1,11 @@
 /**
  * The completed-condition ledger: the bounded memory the loop's anti-repeat and near-duplicate gates scan.
- * Unit level here (the bounding helper and the count); the controller-level gate behavior — including
- * catching a planner re-offering a condition that completed before the retained 50-entry iteration window —
+ * Unit level here (the bounding helper); the controller-level gate behavior — including
+ * catching a planner re-offering a condition that completed before the retained iteration window —
  * is exercised end to end in test/loop.test.ts.
  */
 import { describe, expect, test } from "bun:test"
-import { boundCompletedConditions, completedConditionCount, MAX_COMPLETED_CONDITION_ENTRIES } from "../src/core/types.ts"
+import { boundCompletedConditions, MAX_COMPLETED_CONDITION_ENTRIES } from "../src/core/types.ts"
 
 describe("boundCompletedConditions", () => {
   test("keeps everything at or below the cap and reports zero drops", () => {
@@ -34,16 +34,5 @@ describe("boundCompletedConditions", () => {
   test("repeated non-consecutive entries are kept — they are genuinely separate completions", () => {
     const bound = boundCompletedConditions(["a", "b", "a"])
     expect(bound.retained).toEqual(["a", "b", "a"])
-  })
-})
-
-describe("completedConditionCount", () => {
-  test("is the retained length when nothing was dropped (and 0 when absent)", () => {
-    expect(completedConditionCount({})).toBe(0)
-    expect(completedConditionCount({ completedConditions: ["a", "b"] })).toBe(2)
-  })
-
-  test("adds the dropped count to the retained length", () => {
-    expect(completedConditionCount({ completedConditions: ["c", "d"], completedConditionsDropped: 5 })).toBe(7)
   })
 })

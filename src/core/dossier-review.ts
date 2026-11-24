@@ -23,7 +23,8 @@
  */
 import { writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { artifactName, buildLoopDossier, recordStatusCell, iterationList, shortSha, stampOf } from "./dossier.ts"
+import { artifactName, buildLoopDossier, iterationList, shortSha, stampOf } from "./dossier.ts"
+import { recordCellHelpers } from "./record-attestation.ts"
 import {
   gitCatFileProbe,
   verifyRecord,
@@ -91,9 +92,7 @@ interface ReviewedRecord {
  */
 export const reviewName = (nowMs: number, attempt = 0): string => artifactName("dossier-review", nowMs, attempt)
 
-const verifyCell = (status: string): ReviewAnswer => recordStatusCell(status, "present", "missing")
-const reachCell = (status: string): ReviewAnswer => recordStatusCell(status, "ancestor", "unreached")
-const signCell = (status: string): ReviewAnswer => recordStatusCell(status, "verified", "unverified")
+const { verifyCell, reachCell, signCell } = recordCellHelpers<ReviewAnswer>()
 
 /** yes on all three → clean; any no → gaps; else unknown. The one honest collapse of the three cells. */
 export const reviewVerdict = (exists: ReviewAnswer, onThisLine: ReviewAnswer, underSeal: ReviewAnswer): ReviewVerdict => {

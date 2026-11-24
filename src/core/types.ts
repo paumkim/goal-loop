@@ -252,10 +252,6 @@ export const boundVerdictHistory = (entries: readonly VerdictEntry[]): { retaine
  */
 export const MAX_COMPLETED_CONDITION_ENTRIES = 100
 
-/** Total completed conditions a consumer should count: retained plus dropped. */
-export const completedConditionCount = (goal: { readonly completedConditions?: readonly string[]; readonly completedConditionsDropped?: number }): number =>
-  (goal.completedConditionsDropped ?? 0) + (goal.completedConditions?.length ?? 0)
-
 /**
  * Bounds the completed-condition ledger to the newest `MAX_COMPLETED_CONDITION_ENTRIES` strings. Oldest entries
  * past the cap are dropped; exact consecutive duplicates (a re-entered advance for the same iteration) collapse to
@@ -449,7 +445,7 @@ export interface GoalRecord {
   completedConditions?: string[]
   /**
    * How many completed-condition strings the ledger cap dropped (oldest first). Additive; absent when the cap never
-   * engaged. Total completed conditions = (this ?? 0) + completedConditions.length — use `completedConditionCount`.
+   * engaged. Total completed conditions = (this ?? 0) + completedConditions.length.
    */
   completedConditionsDropped?: number
   /** Consecutive iterations with zero tool calls. Recorded and surfaced (TUI); armed loops never pause on it — an armed /goal-loop keeps arming, with at most one notice per stall event. */

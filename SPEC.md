@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=156 tests=2410 -->
+<!-- spec-check files=157 tests=2408 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1839,16 +1839,38 @@ Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as pare
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
 
-### Installed-binary divider rename (provider-compaction-running-label, 2026-11-24)
+### Clarity, consistency and performance cleanup (clarity-consistency-performance, 2026-11-24)
 
-The host source patch (`COMPACTION_DIVIDER_PATCH`) edits a build input only: the string a running TUI renders is
-compiled twice into the installed Bun executable. `src/core/opencode-labels.ts` now also owns
-`INSTALLED_BINARY_DIVIDER_PATCH`, a byte-length-preserving swap of the minified ternary and the standalone
-string-table entry so `goal-loop patch-host --binary` renames the divider in the binary that actually runs.
-Error messages that merely mention the feature keep their text; the install command still touches only config.
+A small, behavior-preserving cleanup pass driven by the persistent improvement backlog. Each unit is independently
+verified with `bun run check`; no rendered string, error posture or runtime decision changes.
 
-Verification: `test/opencode-labels.test.ts` pins both patch fragments, their equal byte length, and that the
-error-message occurrences are left alone. Full `bun run check` green after artifact regeneration.
+- Dead export: `completedConditionCount` (`src/core/types.ts`) had no production caller — the controller counts the
+  ledger with `boundCompletedConditions` plus `.length`. The export and its self-test are removed; the field comment
+  now states the sum inline. The stale "50-entry" prose in the ledger test header is corrected to the bounded window.
+- Stale spec: the "Installed-binary divider rename" section described `src/core/opencode-labels.ts` and the
+  `patch-host` CLI command, both removed by the provider-compaction plugin-only fix documented above. The section is
+  deleted so SPEC.md matches the tree instead of advertising a patch path that no longer exists.
+- Doc accuracy: `docs/config.html` and `README.md` said `evaluator.mode` governs the opt-in `consensus: 2` second
+  vote. In `src/runtime/evaluator.ts` that vote is gated only on `consensus` and uses `evaluator.model`; `mode` is
+  consulted only for the `/goal-loop` summarize and next-condition steps. The two descriptions now say so.
+- TUI duplication: `motionFlags()` now supplies the four shared transient pill flags to both the breath and crest
+  predicates (plain `working` stays local to the breath), and `runDossierAction()` owns the identical session/goal
+  lookup plus empty-catch posture of the seven dossier palette commands. Rendered output and error handling are
+  unchanged; `dist/tui.js` is regenerated from `src/tui.tsx`.
+- Redundant work: `verifyMet` used to canonicalize the same `checkReuseKey(item.def) + head` twice for every executed
+  command check — once to look up the cache, then again in `runOne`. The key is now carried on the queued task and
+  reused. Static evidence: `checkReuseKey(` call sites in `controller.ts` drop from 2 to 1, so canonicalizations per
+  verdict drop from 2N to N; a microbenchmark puts one canonicalization at ~0.0002 ms. Cache keys, coalescing,
+  reuse metadata and evidence bytes are unchanged (`test/verify.test.ts`: 29 pass / 0 fail).
+- Shared attestation core: `verify-record.ts`, `reach-record.ts` and `sign-record.ts` were function-for-function twins
+  in their sweep, `statusCell`, Markdown skeleton, summary branch and ack branch; each differed only in labels and
+  prose. Those parts now live in `src/core/record-attestation.ts`, parameterized by the caller's exact strings; the
+  three real git probes, all exported names/shapes and every rendered byte stay unchanged, and the three dossier
+  cell-helper trios share `recordCellHelpers()`. `recordShaMentions` moved into the shared module and is re-exported
+  from `verify-record.ts`, so no import path changes and the module graph stays acyclic. Byte-equivalence was checked
+  across 237 report/summary/ack/sweep outputs with 0 mismatches; focused attestation suites pass 133/133.
+
+Verification: full `bun run check` green per unit; SPEC marker re-counted after the self-test removal.
 
 ## Historical workstreams
 
