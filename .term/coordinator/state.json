@@ -6584,6 +6584,17 @@
       "submittedAt": "2026-11-24T01:29:10Z",
       "mergedAt": "2026-11-24T01:31:25Z",
       "mergedInto": "dev"
+    },
+    "share-prompter-model-parser": {
+      "agent": "orchestrator",
+      "paths": "src/prompter/driver.ts",
+      "branch": "wt/share-prompter-model-parser",
+      "worktree": "worktree/wt-share-prompter-model-parser",
+      "status": "done",
+      "createdAt": "2026-11-24T01:32:05Z",
+      "submittedAt": "2026-11-24T01:33:55Z",
+      "mergedAt": "2026-11-24T01:36:10Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
