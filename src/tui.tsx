@@ -1363,6 +1363,11 @@ export default Plugin.define({
       }),
     }))
 
+    const requestStatus = (): void => {
+      const sessionID = currentSession()
+      if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
+    }
+
     context.keymap.layer(() => ({
       mode: "global",
       commands: [
@@ -1372,10 +1377,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
-          },
+          run: () => requestStatus(),
         },
         {
           id: "goal.clear",
@@ -1391,10 +1393,7 @@ export default Plugin.define({
           group: "Goal",
           palette: true,
           enabled: () => Boolean(live(currentSession())?.loopEnabled),
-          run: () => {
-            const sessionID = currentSession()
-            if (sessionID) void rpc.status({ sessionID }, at(sessionID)).catch(() => {})
-          },
+          run: () => requestStatus(),
         },
         {
           id: "goal.hud.toggle",

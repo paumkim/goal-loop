@@ -7922,6 +7922,13 @@ var tui_default = Plugin.define({
         }
       })
     }));
+    const requestStatus = () => {
+      const sessionID = currentSession();
+      if (sessionID)
+        rpc.status({
+          sessionID
+        }, at(sessionID)).catch(() => {});
+    };
     context.keymap.layer(() => ({
       mode: "global",
       commands: [{
@@ -7930,13 +7937,7 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession()) ?? entries()[currentSession() ?? ""]?.goal),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.status({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
+        run: () => requestStatus()
       }, {
         id: "goal.clear",
         title: "Goal: clear",
@@ -7950,13 +7951,7 @@ var tui_default = Plugin.define({
         group: "Goal",
         palette: true,
         enabled: () => Boolean(live(currentSession())?.loopEnabled),
-        run: () => {
-          const sessionID = currentSession();
-          if (sessionID)
-            rpc.status({
-              sessionID
-            }, at(sessionID)).catch(() => {});
-        }
+        run: () => requestStatus()
       }, {
         id: "goal.hud.toggle",
         title: "Goal HUD: toggle card",
