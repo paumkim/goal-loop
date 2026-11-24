@@ -6894,6 +6894,17 @@
       "submittedAt": "2026-11-24T08:55:22Z",
       "mergedAt": "2026-11-24T09:04:52Z",
       "mergedInto": "dev"
+    },
+    "worktrees-to-worktree-singular": {
+      "agent": "build-primary",
+      "paths": "AGENTS.md,README.md,SPEC.md,docs/parallel-work.md,docs/changelog.html,.gitignore,packages/coordinator/bin/coordinator,packages/coordinator/README.md,prompts/coordinator/implement-coordinator.md,prompts/coordinator/single-agent-coordinator.md,prompts/docs/package-agent-docs.md,prompts/goal-loop/goal-repo-improvement-pass.md,prompts/maintenance/git-hygiene-sweep.md,prompts/release/review-and-promote-release.md,scripts/spec-check.ts,src/core/workflow.ts,src/prompter/cli.ts,src/prompter/types.ts,src/prompter/util.ts,test/package-integrity.test.ts,test/prompter-review.test.ts,test/worktree-dir-rename.test.ts",
+      "branch": "wt/worktrees-to-worktree-singular",
+      "worktree": "worktree/wt-worktrees-to-worktree-singular",
+      "status": "done",
+      "createdAt": "2026-11-24T09:13:26Z",
+      "submittedAt": "2026-11-24T09:13:31Z",
+      "mergedAt": "2026-11-24T09:16:14Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
