@@ -12,6 +12,7 @@ import { estimateContextTokens } from "./core/context-size.ts"
 import { Plugin } from "@opencode/plugin"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
 import { resolveConfig } from "./core/config.ts"
+import { ABSTENTION_REASON, evaluationAbstention } from "./core/evaluation-gate.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_AGENT_TITLE, EVALUATOR_SYSTEM_PROMPT, isEvaluatorReport, verdictFromNativeReport } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { CLEAR_ALIASES, parseBool, parseGoalCommand, parseGoalLoopDirective } from "./core/parse.ts"
@@ -460,7 +461,13 @@ export default Plugin.define({
       // injects their reports back into the parent instead). The parent's reply is the evidence; the bundled
       // Planner subagent's distilled condition and scope ride the request through `armedPlanScopes` below.
       const condition = controller.activeCondition(sessionID)
-      if (!condition) return undefined
+      if (!condition?.trim()) {
+        // Empty <condition> is the harness-owned empty-request trigger. Abstain before the judge child is
+        // spawned: no verdict text is generated and the controller settles no goal state (see the abstain
+        // branch in GoalController.evaluate). The old `return undefined` fell through to a not_met, which
+        // advanced the turn on a request with nothing to judge.
+        return { verdict: "not_met" as const, reason: ABSTENTION_REASON["empty-condition"], abstain: "empty-condition" as const }
+      }
       const model = await sessionModel(sessionID, signal)
       if (!model) throw new Error("judge child model unavailable: session has no active model")
       const digest = (ctx: readonly unknown[]) =>
@@ -472,6 +479,15 @@ export default Plugin.define({
         await settle(EVALUATION_SETTLE_MS, signal)
         summary = digest(await evaluatorContext(sessionID, signal))
       }
+      // The earliest point where the whole request is visible: condition, fresh evidence (the finished turn's
+      // digest) and active-session state. Abstain before spawning the judge child, so an incomplete request
+      // emits no verdict at all. Genuine requests keep the exact prompt and reason they always had.
+      const abstention = evaluationAbstention({
+        condition,
+        hasFreshEvidence: Boolean(summary.trim()),
+        activeSessions: await controller.isActive(sessionID),
+      })
+      if (abstention) return { verdict: "not_met" as const, reason: ABSTENTION_REASON[abstention], abstain: abstention }
       const parent = controller.live(sessionID)
       const planScope = planScopeFor(armedPlanScopes.get(sessionID), condition)
       const prompt = nativeEvaluationRequest({

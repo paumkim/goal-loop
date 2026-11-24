@@ -46,6 +46,12 @@ export interface EvaluationRequest {
 export interface EvaluationResult {
   readonly verdict: Verdict
   readonly reason: string
+  /**
+   * Set by the pre-verdict abstention gate (core/evaluation-gate.ts). Marks a defer, not a verdict: the judge
+   * child was never spawned and the controller must settle no turn state for it. Genuine met/not_met results
+   * omit this field and stay byte-for-byte unchanged.
+   */
+  readonly abstain?: import("../core/evaluation-gate.ts").EvaluationAbstention
 }
 
 export interface LoopSummaryRequest {
