@@ -6615,6 +6615,108 @@ var intentAccent = (intent) => {
       return "muted";
   }
 };
+var NO_ACTIVITY = {
+  calls: {},
+  notice: undefined
+};
+var applyIntentSignal = (map, signal) => {
+  const current = map[signal.sessionID] ?? NO_ACTIVITY;
+  let next;
+  switch (signal.type) {
+    case "tool-input":
+      next = {
+        calls: {
+          ...current.calls,
+          [signal.callID]: resolveToolIntent(signal.name)
+        },
+        notice: undefined
+      };
+      break;
+    case "tool-progress":
+      next = signal.callID in current.calls ? current : {
+        calls: {
+          ...current.calls,
+          [signal.callID]: "executing"
+        },
+        notice: current.notice
+      };
+      break;
+    case "tool-success": {
+      if (!(signal.callID in current.calls)) {
+        next = current;
+        break;
+      }
+      const calls = {
+        ...current.calls
+      };
+      delete calls[signal.callID];
+      next = {
+        calls,
+        notice: current.notice
+      };
+      break;
+    }
+    case "tool-failed": {
+      const calls = {
+        ...current.calls
+      };
+      delete calls[signal.callID];
+      next = {
+        calls,
+        notice: "error"
+      };
+      break;
+    }
+    case "permission-asked":
+      next = {
+        calls: current.calls,
+        notice: "waiting"
+      };
+      break;
+    case "permission-replied":
+      next = current.notice === "waiting" ? {
+        calls: current.calls,
+        notice: undefined
+      } : current;
+      break;
+    case "execution-started":
+      next = {
+        calls: {},
+        notice: "thinking"
+      };
+      break;
+    case "execution-succeeded":
+      next = {
+        calls: {},
+        notice: "done"
+      };
+      break;
+    case "execution-failed":
+      next = {
+        calls: {},
+        notice: "error"
+      };
+      break;
+    case "execution-interrupted":
+      next = NO_ACTIVITY;
+      break;
+  }
+  if (next === current)
+    return map;
+  return {
+    ...map,
+    [signal.sessionID]: next
+  };
+};
+var intentForActivity = (activity) => {
+  if (!activity)
+    return;
+  if (activity.notice)
+    return activity.notice;
+  const ids = Object.keys(activity.calls);
+  const newest = ids[ids.length - 1];
+  return newest === undefined ? undefined : activity.calls[newest];
+};
 var INTENT_TTL_MS = 4000;
 var tui_default = Plugin.define({
   id: "goal-loop.tui",
@@ -6624,33 +6726,66 @@ var tui_default = Plugin.define({
     const [now, setNow] = createSignal4(Date.now());
     const [statusDialogOpen, setStatusDialogOpen] = createSignal4(false);
     const [others, setOthers] = createSignal4([]);
-    const [intents, setIntents] = createSignal4({});
+    const [activity, setActivity] = createSignal4({});
     const intentTimers = new Map;
-    const noteIntent = (sessionID, intent) => {
-      if (!sessionID)
+    const noteSignal = (signal) => {
+      const sid = signal.sessionID;
+      if (!sid)
         return;
-      setIntents((previous) => previous[sessionID] === intent ? previous : {
-        ...previous,
-        [sessionID]: intent
-      });
-      const pending = intentTimers.get(sessionID);
+      setActivity((previous) => applyIntentSignal(previous, signal));
+      const pending = intentTimers.get(sid);
       if (pending !== undefined)
         clearTimeout(pending);
-      intentTimers.set(sessionID, setTimeout(() => {
-        intentTimers.delete(sessionID);
-        setIntents((previous) => {
-          if (!(sessionID in previous))
+      intentTimers.set(sid, setTimeout(() => {
+        intentTimers.delete(sid);
+        setActivity((previous) => {
+          if (!(sid in previous))
             return previous;
           const next = {
             ...previous
           };
-          delete next[sessionID];
+          delete next[sid];
           return next;
         });
       }, INTENT_TTL_MS));
     };
     const toolEventDisposers = [];
-    toolEventDisposers.push(context.data.on("session.tool.input.started", (event) => noteIntent(event.data.sessionID, resolveToolIntent(event.data.name))), context.data.on("session.tool.failed", (event) => noteIntent(event.data.sessionID, "error")), context.data.on("permission.asked", (event) => noteIntent(event.data.sessionID, "waiting")), context.data.on("session.execution.started", (event) => noteIntent(event.data.sessionID, "thinking")), context.data.on("session.execution.succeeded", (event) => noteIntent(event.data.sessionID, "done")));
+    toolEventDisposers.push(context.data.on("session.tool.input.started", (event) => noteSignal({
+      type: "tool-input",
+      sessionID: event.data.sessionID,
+      callID: event.data.id,
+      name: event.data.name
+    })), context.data.on("session.tool.progress", (event) => noteSignal({
+      type: "tool-progress",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("session.tool.success", (event) => noteSignal({
+      type: "tool-success",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("session.tool.failed", (event) => noteSignal({
+      type: "tool-failed",
+      sessionID: event.data.sessionID,
+      callID: event.data.id
+    })), context.data.on("permission.asked", (event) => noteSignal({
+      type: "permission-asked",
+      sessionID: event.data.sessionID
+    })), context.data.on("permission.replied", (event) => noteSignal({
+      type: "permission-replied",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.started", (event) => noteSignal({
+      type: "execution-started",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.succeeded", (event) => noteSignal({
+      type: "execution-succeeded",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.failed", (event) => noteSignal({
+      type: "execution-failed",
+      sessionID: event.data.sessionID
+    })), context.data.on("session.execution.interrupted", (event) => noteSignal({
+      type: "execution-interrupted",
+      sessionID: event.data.sessionID
+    })));
     const sessionLabel = (sessionID) => {
       try {
         return context.data.session.get(sessionID)?.title ?? sessionID;
@@ -7734,7 +7869,7 @@ var tui_default = Plugin.define({
           return g ? base + pinSuffix(g.condition, pinBudget(mountWidthOr(), base), motionDisabled(process.env)) : base;
         };
         const activeIntent = () => {
-          const intent = props.sessionID ? intents()[props.sessionID] : undefined;
+          const intent = props.sessionID ? intentForActivity(activity()[props.sessionID]) : undefined;
           if (!intent)
             return;
           const g = goal();
@@ -8360,8 +8495,11 @@ var tui_default = Plugin.define({
 export {
   AGENT_ICONS,
   INTENT_TTL_MS,
+  NO_ACTIVITY,
+  applyIntentSignal,
   tui_default as default,
   intentAccent,
+  intentForActivity,
   intentGlyph,
   resolveToolIntent,
   withIntentGlyph
