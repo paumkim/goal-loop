@@ -6606,6 +6606,17 @@
       "submittedAt": "2026-11-24T01:38:50Z",
       "mergedAt": "2026-11-24T01:41:06Z",
       "mergedInto": "dev"
+    },
+    "record-remaining-craft-gaps": {
+      "agent": "orchestrator",
+      "paths": "docs/improvement-backlog.json",
+      "branch": "wt/record-remaining-craft-gaps",
+      "worktree": "worktree/wt-record-remaining-craft-gaps",
+      "status": "done",
+      "createdAt": "2026-11-24T01:46:23Z",
+      "submittedAt": "2026-11-24T01:48:26Z",
+      "mergedAt": "2026-11-24T01:50:41Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
