@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2367 -->
+<!-- spec-check files=144 tests=2368 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1532,21 +1532,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCIX — non-finite guard for the coarse duration renderer (format-coarse-nonfinite-guard) (2026-11-23)
-
-`formatDuration` clamps non-finite input to zero (Workstream LXXV regression), but `formatDurationCoarse`
-still did `Math.max(0, ms)` directly, so a NaN/Infinity clock painted `NaNhNaNm`/`InfinityhNaNm` in
-always-on chrome (HUD, pill, history rail, status dialog). The one call site that could see such a
-value (`attestation.ts`) already wrapped its input in `nonNegative()`, a sign the fragility was known
-at the boundary. The renderer now routes through that same `nonNegative` helper (finite or zero,
-never negative), which is the identical `Math.max(0, ms)` clamp for every finite input — behavior
-preserving on the whole valid domain, garbage-free on the invalid one.
-
-Verification: new regression in `test/core.test.ts` pins NaN, `+Infinity`, and `-Infinity` to `<1m`
-(the coarse rendering of a zero duration), mirroring the existing `formatDuration` non-finite pin.
-Focused suite: 178 pass / 0 fail, 177329 expect() calls. Full `bun run check` green after artifact
-regeneration; marker re-counted, no shipped file added or removed.
-
 ## Workstream CC — non-finite guards in the token/cost formatters (format-finite-guards) (2026-11-23)
 
 Follow-up to CXCIX. `formatDuration` and the coarse renderer now treat a non-finite clock as zero,
@@ -1767,6 +1752,32 @@ Verification: `test/controller.test.ts` gates a judge verdict and advances the c
 due time — no synthetic wake and no check-in notice until the verdict lands; `test/loop.test.ts` gates the
 loop planner the same way. Focused controller/loop suites green; full `bun run check` green after the stale
 line reference above was re-pinned and the marker re-counted.
+
+## Workstream evaluator-goal-achieved-planner — report Goal Achieved. without waking the parent; plan loops in the evaluator child (2026-11-24)
+
+A verdict child was created with the working session as its `parentID`. The host treats that link as a delegated
+task: it delivers its own "↳ Evaluator finished" completion into the working transcript and wakes the parent
+unconditionally, wasting a turn after the harness had already read the verdict from the child's event stream.
+
+`spawnEvaluator` now creates verdict children without a parent link. The plugin emits the visible completion itself
+as one queued, non-waking `<subagent>` synthetic report (`resume: false`, metadata `source: "subagent"` /
+`childID` / `agent: "evaluator"` / `state: "completed"`), labelled `Goal Achieved.` when the child's text parses
+as `met` and `evaluator` otherwise. Delivery is best-effort: a host rejection is logged, never fatal. The report
+stays out of model context through the existing `isJudgeReport` strip, so the worker cannot narrate or re-judge
+its own verdict (SPEC-workstreams.md CXLI). This supersedes CCX's parent-link claim.
+
+Loop planning now continues inside the verdict child. `spawnEvaluator` records each parentless verdict child id
+per working session in a module-scoped map and returns `{ text, id }`; loop-step summarizer and next-goal
+generations pass that id as their parent, falling back to no parent when the map has no entry (first turn/tests).
+Controller, renderer and port contracts are unchanged: the map is keyed by the working session id already
+threaded through every loop call.
+
+Verification: plugin tests pin one non-waking synthetic report on finish (the `Goal Achieved.` chip for `met`, the
+evaluator label for an empty child), the parentless judge create and the new source shape; a new regression drives
+a met /goal-loop verdict through summarize and next-goal and asserts both planner children are parented to the
+verdict child (it fails when the parenting is removed). Focused plugin/core/controller suites 351 pass / 0 fail.
+Full `bun run check` green after artifact regeneration; marker re-counted for one added test, no shipped file
+added or removed.
 
 ## Historical workstreams
 
