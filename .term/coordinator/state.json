@@ -6845,9 +6845,11 @@
       "paths": "test/**",
       "branch": "wt/test-quality-audit",
       "worktree": "worktree/wt-test-quality-audit",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T07:55:53Z",
-      "submittedAt": "2026-11-24T08:03:03Z"
+      "submittedAt": "2026-11-24T08:03:03Z",
+      "mergedAt": "2026-11-24T08:54:47Z",
+      "mergedInto": "dev"
     },
     "pin-weak-assertions": {
       "agent": "hy4-flash-free",
