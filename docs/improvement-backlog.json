@@ -475,6 +475,30 @@
       ],
       "related": [],
       "updatedAt": "2026-11-24T22:20:00Z"
+    },
+    {
+      "id": "injected-bare-judge-request-echo-guard",
+      "title": "Reject a judge reply driven by a harness-injected bare <goal-evaluation> request",
+      "category": "correctness",
+      "priority": 3,
+      "impact": "medium",
+      "risk": "medium",
+      "status": "open",
+      "finding": "The pre-verdict gate in src/core/evaluation-gate.ts abstains before the judge child is spawned, so a request assembled by this repo can never be judged empty. The host still owns the judge child session and can inject a bare <goal-evaluation> (empty <condition>, no evidence) as a direct prompt to that child; verdictFromNativeReport (src/core/evaluator-agent.ts) tolerates a missing condition echo, so such a reply can be accepted as this turn's verdict. Unverified: whether the harness can do this without any event reaching events.ts — no live injection run was performed.",
+      "improvement": "Decide with the harness owner whether an injected bare request is a supported path. If so, require a non-empty echoed condition that matches the expected condition in verdictFromNativeReport (only when expectedCondition is non-empty) and fail closed otherwise; measure how many genuine small-model verdicts omit the echo first, since rejecting all echo-less verdicts previously stalled the loop. Add a regression in test/evaluator-agent-foreign.test.ts.",
+      "evidence": [
+        "Session-history audit 2026-11-24 (lease evaluator-empty-request-abstain): empty-request trigger classified as harness-owned; repo cannot arm an empty condition (core/parse.ts, GoalController.command).",
+        "src/core/evaluator-agent.ts:103-105,121-127 — missing condition echo is tolerated by design.",
+        "src/index.ts nativeVerdict + src/runtime/controller.ts evaluate — in-repo gate lands before spawnEvaluator; no downstream echo guard was added to keep genuine met/not_met paths byte-for-byte unchanged."
+      ],
+      "dedupeKeys": [
+        "injected-bare-judge-request",
+        "condition-echo-required",
+        "harness-empty-evaluation-request"
+      ],
+      "related": [
+        "evaluator-empty-request-abstain"
+      ]
     }
   ]
 }

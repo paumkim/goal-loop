@@ -219,6 +219,22 @@ describe("GoalController", () => {
     expect(h.calls.synthetic.some((synthetic) => String(synthetic.description ?? "").startsWith("Goal achieved"))).toBe(false)
     expect(h.notices.some((n) => n.kind === "achieved")).toBeTrue()
   })
+  test("an abstain result emits no verdict and mutates no goal state", async () => {
+    await h.set()
+    const before = h.controller.get(SID)!
+    expect(before.turns).toBe(0)
+    h.verdicts.push({ verdict: "not_met", reason: "evaluation deferred: no fresh evidence from a finished turn", abstain: "no-fresh-evidence" })
+    await h.turn()
+    const after = h.controller.get(SID)!
+    expect(after.turns).toBe(0)
+    expect(after.history).toHaveLength(0)
+    expect(after.verdict).toBeUndefined()
+    expect(after.status).toBe("active")
+    expect(after.pendingEvaluation).toBeUndefined()
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "achieved" || n.kind === "failed")).toBe(false)
+  })
+
   test("an impossible verdict is terminal: it does not re-arm the goal", async () => {
     await h.set()
     h.verdicts.push({ verdict: "impossible", reason: "the target cannot be built here" })

@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=157 tests=2410 -->
+<!-- spec-check files=157 tests=2420 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1896,6 +1896,28 @@ first-arm bar then disappeared until the real arm landed. The guard now also sup
 
 Verification: `test/entries.test.ts` pins both sides — a post-placeholder live snapshot is admitted, a
 pre-placeholder one is suppressed; the focused suite is green and `dist/tui.js` is regenerated.
+
+## Abstain on an incomplete verdict request (evaluator-empty-request-abstain, 2026-11-24)
+
+The empty-request trigger is **harness-owned**: the repo cannot arm an empty condition (`parse.ts`,
+`GoalController.command`), and the host assembles the judge child's model request (`src/index.ts` `spawnEvaluator`).
+A bare `<goal-evaluation>` with no `<condition>`, no fresh evidence or live sessions used to be judged anyway:
+`nativeVerdict` fell through to a fail-closed `not_met` on a missing condition, and an empty parent digest was
+replaced by a placeholder and still sent to the judge. Both moved goal state on a request with nothing to judge.
+
+`src/core/evaluation-gate.ts` is the single guard predicate, applied at the earliest in-repo point where all
+three signals coexist — `nativeVerdict` (`src/index.ts`), before the judge child is spawned, so no verdict text
+is generated at all. `evaluationAbstention({ condition, hasFreshEvidence, activeSessions })` returns
+`empty-condition`, `no-fresh-evidence` or `active-sessions`, in that order; any other input is judged normally.
+`GoalController.evaluate` repeats the cheap signals before writing its pending marker (`isActive` wraps
+`background.busy`, fail-closed on a failed check), and on a returned abstention deletes that marker and settles
+nothing: no turn, history, verdict, terminal state or continuation steer changes. `Evaluator.evaluate` passes
+the abstention straight through, so no consensus vote runs either.
+
+Genuine `met`/`not_met`/`impossible` paths are byte-for-byte unchanged: they carry no `abstain` field and keep
+their exact prompt, reason and state transitions. Regression tests: `test/evaluation-gate.test.ts` pins the
+predicate and its precedence; `test/evaluator.test.ts` pins pass-through with no generation or second vote;
+`test/controller.test.ts` pins zero goal-state mutation on an abstention.
 
 ## Historical workstreams
 

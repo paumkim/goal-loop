@@ -307,6 +307,25 @@ describe("Evaluator.evaluate — native delegated subagent report", () => {
   })
 })
 
+describe("Evaluator.evaluate — abstention is a defer, not a verdict", () => {
+  test("an abstain result passes through unchanged with no generation and no second vote", async () => {
+    const abstain = { verdict: "not_met" as const, reason: "evaluation deferred: request has no <condition> text", abstain: "empty-condition" as const }
+    const { fake, calls } = deps({ nativeVerdict: async () => abstain })
+    const evaluator = new Evaluator(fake, consensusPinned(), COMMIT, silentLog)
+    const result = await evaluator.evaluate(request())
+    expect(result).toEqual(abstain)
+    expect(calls.session).toHaveLength(0)
+    expect(calls.model).toHaveLength(0)
+    expect(calls.context).toBe(0)
+  })
+
+  test("a genuine verdict keeps its exact shape (no abstain field)", async () => {
+    const { fake } = deps({ nativeVerdict: nativeMet("fresh evidence in the child report") })
+    const evaluator = new Evaluator(fake, sessionConfig(), COMMIT, silentLog)
+    expect(await evaluator.evaluate(request())).toEqual({ verdict: "met", reason: "fresh evidence in the child report" })
+  })
+})
+
 describe("Evaluator.evaluate — a native report still passes through consensus: 2", () => {
   test("a native met needs the second judge before it can pass", async () => {
     const { fake, calls } = deps({

@@ -3,6 +3,7 @@ import type { GoalConfig } from "../core/config.ts"
 import { MAX_BUSY_RETRIES } from "../core/config.ts"
 import { classifyChangeRisk, collectChangeSetPaths, formatStrictGateNotice, STRICT_GATE_NOTICE_TITLE } from "../core/change-risk.ts"
 import { classifyFailure, errorMessage, isNotFoundError, isUsageLimitError } from "../core/errors.ts"
+import { ABSTENTION_REASON, evaluationAbstention } from "../core/evaluation-gate.ts"
 import { diffUsage, elideAtWordBoundary, formatDuration, formatStatus, normalizeConditionText as normalizeCondition, outcomeStory, statusLabel, stripControls, truncate } from "../core/format.ts"
 import { parseGoalCommand } from "../core/parse.ts"
 import { isAlreadySatisfiedLanding } from "../core/verdict.ts"
@@ -516,6 +517,16 @@ export class GoalController {
   /** True while a turn is executing for the session. Used to defer mid-work compaction. */
   isExecuting(sessionID: string): boolean {
     return this.running.has(sessionID)
+  }
+
+  /**
+   * True while subagent/shell sessions are still active for the goal owner, or when the busy check itself fails.
+   * This is the in-repo "active sessions visible" signal the verdict gate needs; a failed check counts as active
+   * so an incomplete request can never be judged on a guess (fail closed, like the compactor's busy guard).
+   */
+  async isActive(sessionID: string): Promise<boolean> {
+    const work = await this.deps.background.busy(sessionID).catch(() => undefined)
+    return work === undefined || work.subagents + work.shells > 0
   }
 
   /**
@@ -1417,6 +1428,15 @@ export class GoalController {
       return
     }
     if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
+    // Earliest in-repo guard. An incomplete request (empty condition, sessions still active) must not even
+    // write the pending marker, let alone settle a turn: this runs before the marker below. Fresh evidence
+    // is judged authoritatively later, in nativeVerdict, from the finished turn's digest — not available here.
+    const earlyAbstention = evaluationAbstention({ condition: record.condition, activeSessions: false })
+    if (earlyAbstention) {
+      this.deps.log.info("goal evaluation deferred", { sessionID, abstention: earlyAbstention, reason: ABSTENTION_REASON[earlyAbstention] })
+      this.emit(record)
+      return
+    }
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
     // Persist the owed step BEFORE any await or generation: a shutdown mid-evaluation aborts the in-memory
@@ -1477,6 +1497,18 @@ export class GoalController {
     }
     if (this.stale(record, runtime, epoch)) {
       this.logStaleDrop(record, runtime, epoch, "after evaluation verdict")
+      return
+    }
+
+    // The gate abstained: no judge child was spawned and no verdict text exists. Drop the marker written before
+    // the evaluator call so the goal's durable state is byte-for-byte unchanged, and wait for the next
+    // finished-turn boundary where condition + fresh evidence are present. No turn, history, verdict, terminal
+    // state or continuation steer is mutated on this path.
+    if (result.abstain) {
+      delete record.pendingEvaluation
+      void this.commit(record)
+      this.deps.log.info("goal evaluation deferred", { sessionID, abstention: result.abstain, reason: ABSTENTION_REASON[result.abstain] })
+      this.emit(record)
       return
     }
 

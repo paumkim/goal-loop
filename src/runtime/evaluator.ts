@@ -125,6 +125,10 @@ export class Evaluator implements EvaluatorPort {
     if (!result) {
       return { verdict: "not_met", reason: "no verdict for this turn; continuing" }
     }
+    // An abstention is a defer, not a verdict: the gate already decided no judge was spawned. Pass it through
+    // untouched so no consensus vote runs and the controller can settle no goal state. Genuine met/not_met
+    // results have no abstain field and take the exact paths below.
+    if (result.abstain) return result
     if (this.config.consensus !== 2 || result.verdict !== "met") return result
     // Opt-in second vote only — the default verdict path never generates. A separate evaluator model is required;
     // with the inherit sentinel both votes share the parent model (see docs/config.html).
