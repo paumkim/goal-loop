@@ -6812,9 +6812,11 @@
       "paths": ".term/coordinator/state.json",
       "branch": "wt/coord-state-bookkeeping",
       "worktree": "worktree/wt-coord-state-bookkeeping",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T06:50:53Z",
-      "submittedAt": "2026-11-24T06:51:04Z"
+      "submittedAt": "2026-11-24T06:51:04Z",
+      "mergedAt": "2026-11-24T08:16:25Z",
+      "mergedInto": "dev"
     },
     "planner-no-parent-report": {
       "agent": "orchestrator",
@@ -6855,6 +6857,14 @@
       "submittedAt": "2026-11-24T08:02:41Z",
       "mergedAt": "2026-11-24T08:07:18Z",
       "mergedInto": "dev"
+    },
+    "live-intent-icons": {
+      "agent": "hy4-flash-free",
+      "paths": "src/intent-icons.ts,src/tui.tsx,dist/tui.js,dist/tui.d.ts,test/intent-icons.test.ts",
+      "branch": "wt/live-intent-icons",
+      "worktree": "worktree/wt-live-intent-icons",
+      "status": "claimed",
+      "createdAt": "2026-11-24T08:14:40Z"
     }
   },
   "mergeLock": null,
