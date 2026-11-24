@@ -644,7 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2391 -->
+<!-- spec-check files=144 tests=2393 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1362,7 +1362,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   pending request whose ended-event path already counted it (mark the pending with the count time/flag), or drop the ended-event increment
   and let arms count alone. Decide in the fix workstream and pin with a test: one no-op ended event + one arm = misses exactly 1.
   Resolution: Workstream AC — single-source accounting via the `missesCountedAtEvent` one-shot flag; pin test added (fails pre-fix, passes post-fix).
-- **A-2 (medium) — `src/runtime/controller.ts:1965` — planner-armed conditions bypass the configured length limit.**
+- **A-2 (medium) — `src/runtime/controller.ts:1984` — planner-armed conditions bypass the configured length limit.**
   `Prompt.parseNextCondition(reply)` is called with the library default (2000 chars) while user-set conditions respect
   `config.maxConditionChars`. A `maxConditionChars: 100` configuration still arms 2000-char planner conditions.
   Proposed fix: pass `config.maxConditionChars` (clamped to the parser's accepted range) as `maxChars`.
@@ -1531,19 +1531,6 @@ where its contract is defined in the current tree:
   configured/legacy checks win over goal-declared repeats.
 
 ## Recent workstreams
-
-## Workstream CCI — non-finite guard on the usage delta (diff-usage-finite-guard) (2026-11-23)
-
-Host-reported usage reaches `diffUsage` through `toUsage()`, which fills only *missing* fields with
-zero — it does not validate finiteness (the wire `isUsageSnapshot` guard applies to records, not to
-this live host reading). A NaN/Infinity cost or token field therefore became a NaN delta in the record
-and the spend ledger. The clamp now returns zero when either side is non-finite; every finite input
-is byte-identical to the old `Math.max(0, a - b)`.
-
-Verification: new regression in `test/core.test.ts` pins NaN and both infinities on either side of the
-delta to zero, plus a finite-value oracle across all six fields. Focused suite 183 pass / 0 fail,
-177346 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
-shipped file added or removed.
 
 ## Workstream CCII — unique outline ids when a heading slug is a generated suffix (outline-id-collision-guard) (2026-11-23)
 
@@ -1797,6 +1784,27 @@ mechanism each subsystem already had.
 Regression tests: `test/coordinator-concurrency-audit.test.ts` pins all four coordinator interleavings (each
 fails before its fix), `test/controller.test.ts` pins the straggler drop, `test/plugin.test.ts` pins that no
 storage write lands after teardown. Full checks re-run green.
+
+## Workstream no-achieved-while-subagents-active — a met verdict cannot settle a goal while subagents run (2026-11-24)
+
+The worker ended its turn with two subagents still in flight. `resolveBackgroundAndEvaluate` saw zero background
+work (events landing late, a busy-check retry exhausting to its no-check fallback, or a restored pending
+evaluation), called `evaluate()`, and a candidate `met` went straight through the zero-tool and verifier gates to
+`settleTerminal(record, "achieved")` while the footer still showed `2 subagents`. The worker-facing contract
+(`DELEGATE_VERDICT`) promises that goal-loop detects active sessions and defers its verdict, so the terminal flip
+contradicted the guidance the worker had just followed.
+
+`evaluate()` now re-checks `background.busy()` at the acceptance boundary before persisting any owed step or
+spawning a judge. Active subagents or shells defer the turn through `defer()` — the same waiting paint, check-in
+schedule and `onBackgroundDrained` re-run as a turn-end deferral; a failed busy check retries with bounded
+backoff instead of evaluating blind. Turn tools are carried across the deferral, so nothing is lost and the
+eventual evaluation scores the complete work. Judge, planner and work-unit children are parentless or
+evidence-only, so they cannot self-defer.
+
+Verification: `test/controller.test.ts` pins that a `met` seen while two subagents are active does not spawn a
+judge or flip the pill, and that the drain re-evaluates the same turn to `achieved`; a second test exhausts the
+busy-check retries with work still active and asserts the fallback cannot settle the goal. Focused controller
+suite 113 pass / 0 fail.
 
 ## Historical workstreams
 

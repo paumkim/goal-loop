@@ -81,6 +81,7 @@ function harness(
   const notices: Notice[] = []
   const changes: Array<GoalSnapshot | null> = []
   let work: BackgroundWork = { subagents: 0, shells: 0 }
+  let busyFn: (() => Promise<BackgroundWork>) | undefined
   let ancestors: readonly string[] = []
   let busyError: Error | undefined
   let usage: UsageSnapshot | undefined = { cost: 1, input: 100, output: 10, reasoning: 0, cacheRead: 0, cacheWrite: 0 }
@@ -121,7 +122,7 @@ function harness(
         return typeof next === "function" ? next() : next
       },
     },
-    background: { busy: async () => { if (busyError) throw busyError; return work }, ancestorsOf: async () => ancestors },
+    background: { busy: async () => { if (busyFn) return busyFn(); if (busyError) throw busyError; return work }, ancestorsOf: async () => ancestors },
     emitter: { changed: (_, goal) => void changes.push(goal), notice: (n) => void notices.push(n) },
   })
   /** Simulates one complete agent turn. */
@@ -144,6 +145,7 @@ function harness(
     logs,
     turn,
     setWork: (w: BackgroundWork) => void (work = w),
+    setBusyFn: (fn: (() => Promise<BackgroundWork>) | undefined) => void (busyFn = fn),
     setAncestors: (ids: readonly string[]) => void (ancestors = ids),
     setBusyError: (e: Error | undefined) => void (busyError = e),
     setUsage: (u: UsageSnapshot | undefined) => void (usage = u),
@@ -559,6 +561,41 @@ describe("GoalController", () => {
     await h.clock.advance(15_000)
     expect(h.requests).toHaveLength(1)
     expect(h.controller.snapshot(SID)?.waiting).toBeFalse()
+  })
+
+  test("a met verdict defers while subagents are still running at evaluation time", async () => {
+    await h.set()
+    // The turn-end busy check sees no work; the two subagents become visible only when evaluation starts.
+    let checks = 0
+    h.setBusyFn(async () => (++checks === 1 ? { subagents: 0, shells: 0 } : { subagents: 2, shells: 0 }))
+    h.verdicts.push(met("reports are still in"))
+    await h.turn()
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.get(SID)?.status).toBe("active")
+    expect(h.controller.snapshot(SID)?.waiting).toBeTrue()
+    expect(h.notices.some((n) => n.kind === "achieved")).toBeFalse()
+
+    // Once they drain, the same turn is evaluated and the verdict can land.
+    h.setBusyFn(undefined)
+    h.setWork({ subagents: 0, shells: 0 })
+    await h.controller.onBackgroundDrained()
+    await flush()
+    expect(h.requests).toHaveLength(1)
+    expect(h.controller.get(SID)?.status).toBe("achieved")
+  })
+
+  test("an exhausted busy-check retry cannot settle a goal whose subagents are still running", async () => {
+    await h.set()
+    h.setWork({ subagents: 2, shells: 0 })
+    h.setBusyError(new Error("busy check failed"))
+    await h.turn()
+    expect(h.requests).toHaveLength(0)
+    for (const ms of [15_000, 60_000, 240_000, 300_000, 300_000]) await h.clock.advance(ms)
+    // The fallback evaluates without a busy check; make the check readable again while work is still active.
+    h.setBusyError(undefined)
+    await h.clock.advance(300_000)
+    expect(h.requests).toHaveLength(0)
+    expect(h.controller.get(SID)?.status).toBe("active")
   })
 
   test("idle check-ins stop after the cap until the user prompts", async () => {

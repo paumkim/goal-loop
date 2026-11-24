@@ -369,6 +369,7 @@ there.
 | evaluator-subagent-trigger-impl | `evaluator-subagent-trigger-impl` | judge descendant work units on completion |
 
 | CCX | `evaluator-child-session-parity` | evaluation spawns only parent-linked children (superseded) |
+| CCI | `diff-usage-finite-guard` | non-finite guard on the usage delta |
 
 ## Workstream AC — compaction misses are counted once (A-1)
 
@@ -10376,3 +10377,16 @@ Verification: a source-guard regression in `test/plugin.test.ts` pins that the o
 test still asserts exactly one judge child with the parent link. Focused `core`/`plugin` suites 243 pass / 0 fail.
 Full `bun run check` green after artifact regeneration; marker re-counted for four fewer tests, no shipped file
 added or removed.
+
+## Workstream CCI — non-finite guard on the usage delta (diff-usage-finite-guard) (2026-11-23)
+
+Host-reported usage reaches `diffUsage` through `toUsage()`, which fills only *missing* fields with
+zero — it does not validate finiteness (the wire `isUsageSnapshot` guard applies to records, not to
+this live host reading). A NaN/Infinity cost or token field therefore became a NaN delta in the record
+and the spend ledger. The clamp now returns zero when either side is non-finite; every finite input
+is byte-identical to the old `Math.max(0, a - b)`.
+
+Verification: new regression in `test/core.test.ts` pins NaN and both infinities on either side of the
+delta to zero, plus a finite-value oracle across all six fields. Focused suite 183 pass / 0 fail,
+177346 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
+shipped file added or removed.
