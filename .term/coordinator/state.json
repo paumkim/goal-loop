@@ -6732,9 +6732,11 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/evaluator-report-no-parent-turn",
       "worktree": "worktree/wt-evaluator-report-no-parent-turn",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T06:16:48Z",
-      "submittedAt": "2026-11-24T06:32:18Z"
+      "submittedAt": "2026-11-24T06:32:18Z",
+      "mergedAt": "2026-11-24T06:45:04Z",
+      "mergedInto": "dev"
     },
     "planner-parentless-completion": {
       "agent": "orchestrator",
@@ -6772,6 +6774,22 @@
       ],
       "mergedAt": "2026-11-24T06:39:42Z",
       "mergedInto": "dev"
+    },
+    "spec-rotate-ccx-archive": {
+      "agent": "hy4-flash-free",
+      "paths": "SPEC.md,SPEC-workstreams.md",
+      "branch": "wt/spec-rotate-ccx-archive",
+      "worktree": "worktree/wt-spec-rotate-ccx-archive",
+      "status": "claimed",
+      "createdAt": "2026-11-24T06:41:54Z"
+    },
+    "spec-ccx-archive-rotate2": {
+      "agent": "hy4-flash-free",
+      "paths": "SPEC.md,SPEC-workstreams.md",
+      "branch": "wt/spec-ccx-archive-rotate2",
+      "worktree": "worktree/wt-spec-ccx-archive-rotate2",
+      "status": "claimed",
+      "createdAt": "2026-11-24T06:44:13Z"
     }
   },
   "mergeLock": null,
