@@ -303,8 +303,8 @@ describe("steady null entries and the cap", () => {
     const out = pruneSnapshotEntries(bumped, undefined, ENTRY_CAP)
     expect(Object.keys(out)).toHaveLength(ENTRY_CAP)
     expect(out.ses_0?.receivedAt).toBe(99999) // the freshly checked entry survives the eviction
-    expect(out.live_a?.goal).not.toBeNull()
-    expect(out.live_b?.goal).not.toBeNull()
+    expect(out.live_a?.goal?.status).toBe("active")
+    expect(out.live_b?.goal?.status).toBe("paused")
     expect(out.ses_1).toBeUndefined() // oldest null evicted first
     expect(out.ses_2).toBeUndefined()
     expect(out.ses_3?.goal).toBeNull() // overflow is 2 (66 entries, cap 64); ses_3 is the newest survivor of the null tail
