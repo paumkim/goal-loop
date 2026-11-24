@@ -1301,7 +1301,7 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("in the default mode the harness judge child's text is the verdict (parentless child, queued report)", async () => {
+  test("in the default mode the harness judge subagent child's text is the verdict", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory) // no options: evaluator mode defaults to session
     const created: any[] = []
@@ -1340,11 +1340,11 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
       // The verdict is the judge child's text, parsed through the authoritative contract guard.
       expect(record.reason).toContain("harness judge verdict")
 
-      // The harness spawns exactly one judge child with no working-session parent: the host cannot deliver a
-      // completion that wakes the parent, and the plugin admits none either.
+      // The harness creates one evaluator subagent child under the goal session, not a new top-level session.
+      // The plugin never admits a completion report into the parent's transcript either.
       expect(created).toHaveLength(1)
       expect(created[0]).toMatchObject({ agent: EVALUATOR_AGENT_ID, model: { providerID: "provider", id: "model" } })
-      expect(created[0].parentID).toBeUndefined()
+      expect(created[0].parentID).toBe("ses_1")
       expect(judgePrompt).toContain("<goal-evaluation>")
       expect(judgePrompt).toContain("<condition>the parser is correct</condition>")
       expect(judgePrompt).toContain("<parent-summary>")
@@ -1358,19 +1358,22 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("evaluation spawns a parentless judge and reuses its child for loop planning", () => {
+  test("evaluator and planner are parent-linked subagent children, reused instead of respawned", () => {
     const root = join(import.meta.dir, "..")
     const read = (path: string) => readFileSync(join(root, path), "utf8")
     const host = read("src/index.ts")
     const code = host.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
-    // Only two session creators remain: the judge and the arm-time planner. Neither is parented to the working
-    // session — a parent link makes the host deliver a completion that wakes the parent while the child is still
-    // running (the planner bug) or just after it finished (the judge bug). Loop-step generations pass the recorded
-    // verdict child's id as the parent instead. No judge child is removed from the session list behind the worker.
+    // Only two session creators remain: the evaluator and the arm-time planner. Both are parent-linked subagent
+    // children of the goal session, so neither appears as a new top-level session in OpenCode's session list. Each
+    // is created once per working session and then reused for later verdicts, loop steps and arms.
     expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
-    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(0)
-    expect(code).toContain("verdictChildBySession.set(sessionID, id)")
-    expect(code).toContain("verdictChildBySession.get(sessionID)")
+    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(2)
+    expect(code).toContain("evaluatorChildBySession.set(sessionID, id)")
+    expect(code).toContain("evaluatorChildBySession.get(sessionID)")
+    expect(code).toContain("plannerChildBySession.set(sessionID, id)")
+    expect(code).toContain("plannerChildBySession.get(sessionID)")
+    expect(code).toContain("evaluatorChildBySession.clear()")
+    expect(code).toContain("plannerChildBySession.clear()")
     // The judge belongs to the goal-owning parent only: no descendant completion spawns a verdict, so no
     // child session needs owner routing and no verdict admits a `<subagent>` completion into the parent inbox.
     expect(code).not.toContain("ownerSessionID")
@@ -1391,24 +1394,19 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     expect(agent).not.toContain("parseSubagentReport")
   })
 
-  test("loop summarizer and next-goal planner are spawned under the verdict child", async () => {
+  test("loop summarizer and next-goal planner reuse the evaluator subagent child", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory)
     const created: any[] = []
-    const ids = ["ses_judge", "ses_loop_summary", "ses_loop_next"]
-    let judgePrompted = false
-    let summaryPrompted = false
-    let nextPrompted = false
+    let judgePrompts = 0
     ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
     ;(ctx.session as any).context = async () => [evidence("fresh evidence for the judge")]
     ;(ctx.session as any).create = async (input: any) => {
       created.push(input)
-      return { id: ids[created.length - 1] }
+      return { id: "ses_judge" }
     }
     ;(ctx.session as any).prompt = async (input: any) => {
-      if (input.sessionID === "ses_judge") judgePrompted = true
-      else if (input.sessionID === "ses_loop_summary") summaryPrompted = true
-      else if (input.sessionID === "ses_loop_next") nextPrompted = true
+      if (input.sessionID === "ses_judge") judgePrompts++
       else void calls.prompts.push(input)
     }
     const tick = () => new Promise((r) => setImmediate(r))
@@ -1420,15 +1418,15 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
         yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
         await tick()
         yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
-        while (!judgePrompted) await tick()
+        while (judgePrompts < 1) await tick()
         yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: judgeVerdict({ reason: "iteration done" }) } }
         yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
-        while (!summaryPrompted) await tick()
-        yield { type: "session.text.delta", data: { sessionID: "ses_loop_summary", delta: "iteration 1 summary" } }
-        yield { type: "session.execution.succeeded", data: { sessionID: "ses_loop_summary" } }
-        while (!nextPrompted) await tick()
-        yield { type: "session.text.delta", data: { sessionID: "ses_loop_next", delta: "LOOP_COMPLETE" } }
-        yield { type: "session.execution.succeeded", data: { sessionID: "ses_loop_next" } }
+        while (judgePrompts < 2) await tick()
+        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: "iteration 1 summary" } }
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
+        while (judgePrompts < 3) await tick()
+        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: "LOOP_COMPLETE" } }
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
         await new Promise(() => {}) // keep the stream open; the plugin aborts each subscription on dispose
       },
     }
@@ -1436,13 +1434,11 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     try {
       const loop = calls.commands.find((command: any) => command.name === "goal-loop")
       await loop.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
-      await waitFor(() => created.length >= 3, 3_000)
-      // The verdict child is parentless (no host wake); both loop-planning generations reuse it as their parent.
-      expect(created[0].parentID).toBeUndefined()
-      expect(created[1].parentID).toBe("ses_judge")
-      expect(created[2].parentID).toBe("ses_judge")
-      // No verdict completion report is admitted to the working session; loop advances carry the next iteration's
-      // steer. Loop-step children are parented to the evaluator session, whose host report belongs there.
+      await waitFor(() => judgePrompts >= 3, 3_000)
+      // One parent-linked subagent child serves the verdict, the summary and the next-goal generation.
+      expect(created).toHaveLength(1)
+      expect(created[0]).toMatchObject({ agent: EVALUATOR_AGENT_ID, parentID: "ses_1" })
+      // No completion report is admitted to the working session; loop advances carry the next iteration's steer.
       const completionReports = calls.prompts.filter((p: any) => p.metadata?.source === "subagent")
       expect(completionReports).toHaveLength(0)
       await waitFor(() => (storage.get("goal/v1/ses_1") as any)?.loopHistory?.length === 1, 3_000)
@@ -1744,11 +1740,11 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
         // Same P0 pin as the judge: no resume opt-out may suppress the planner child's execution.
         expect("resume" in plannerCall).toBe(false)
         expect(plannerCall.resume).toBeUndefined()
-        // The planner child is parentless: the host cannot deliver its completion into the working turn and
-        // wake the parent while planning is slow. The plan is consumed internally from the child's event stream.
+        // The planner is a parent-linked subagent child of the goal session, not a new top-level session. The plan
+        // is consumed internally from the child's event stream; no completion report reaches the worker.
         const plannerCreate = created.find((input: any) => input.agent === PLANNER_AGENT_ID)
         expect(plannerCreate).toBeDefined()
-        expect(plannerCreate.parentID).toBeUndefined()
+        expect(plannerCreate.parentID).toBe("ses_1")
         // No completion is admitted to the working session: not a host delivery, and not a queued synthetic
         // either (a queued synthetic is durable parent-inbox input even with `resume: false`).
         expect(calls.prompts.some((p: any) => p.metadata?.agent === PLANNER_AGENT_ID)).toBe(false)

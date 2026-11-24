@@ -22,6 +22,7 @@ there.
 
 | Workstream | Lease slug | Summary |
 | --- | --- | --- |
+| CCIII | `proactive-strategy-escalation` | proactive strategy escalation replaces the repeated-failure pause |
 | CXCV | `the-live-pill-counts-evaluated-turns` | the live pill counts evaluated turns |
 | CXCVI | `copy-free-steady-state-in-the-snapshot-cache` | copy-free steady state in the snapshot cache |
 | CXCVII | `a-bounded-objective-completion-condition-for-the-loop` | a bounded, objective completion condition for the loop |
@@ -10406,3 +10407,26 @@ Every non-colliding document is byte-identical (the existing `Custom ×3` → `c
 custom-3` pin still holds). Verification: new regression in `test/dossier-outline.test.ts`; focused
 suite 17 pass / 0 fail, 57 expect() calls. Full `bun run check` green after artifact regeneration;
 marker re-counted, no shipped file added or removed.
+
+## Workstream CCIII — proactive strategy escalation replaces the repeated-failure pause (proactive-strategy-escalation) (2026-11-23)
+
+A `not_met` verdict whose failure signature repeated three times in a row paused the goal and handed
+control back to the user ("rotate strategy ... then send a message to resume"). That stop was the one
+guard that still froze an otherwise-armed goal, and it applied to plain goals and loops alike. It is now
+a proactive continuation: the goal stays `active`, the worker gets a `<goal-strategy-escalation>` steer
+that names the streak, the signature summary, the persisted diagnostic artifact, and one concrete
+rotated strategy. Rotation is derived from the streak length (`count - threshold`, mod four), so it
+needs no extra persisted state, survives restarts, is different every time, and works for every goal and
+every signature kind (verification, legacy-verify, reason). The first escalation of a streak emits one
+non-pausing notice; the diagnostic artifact is still written under `.term/goal-loop/diagnostics/` and
+its path is cited in the steer. `pauseCause: "repeated_failure"` and its HUD remedy are kept only for
+records persisted before this change.
+
+Verification: new pure rotation regression in `test/failure-signature.test.ts` uses an independent
+index oracle, checks a full cycle is distinct, and checks verification/reason signatures at the same
+count rotate identically; new prompt regressions in `test/core.test.ts` pin the wrapper, facts,
+artifact, escaping, and optional omissions; `test/controller.test.ts` now pins an active goal, a
+self-resuming `resume: true` steer, strategy rotation across five repeats, the cited diagnostic path,
+and no `paused` notice. Focused suite: 315 pass / 0 fail, 178043 expect() calls. Full `bun run check`
+green after artifact regeneration; marker re-counted, no shipped file added or removed.
+

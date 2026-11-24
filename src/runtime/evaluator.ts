@@ -19,15 +19,13 @@ import { stripReasoningControl } from "../core/sanitize.ts"
 interface EvaluatorDeps {
   /**
    * The verdict from the harness's `evaluator` subagent child for this turn: it builds the rubric, runs the child
-   * and parses its text through the authoritative contract guard. The child has no working-session parent (the
-   * plugin emits its own non-waking completion), and loop planner children reuse it as their parent.
-   * No worker delegation.
+   * and parses its text through the authoritative contract guard. The child is parented to the working session and
+   * reused for every verdict and loop generation, so no new top-level session is created. No worker delegation.
    */
   nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
-  /** Generation on a specific model. The host runs one evaluator generation per call, parented to the last
-   * verdict child of `sessionID` when one exists. */
+  /** Generation on a specific model. The host runs it on the same reused evaluator subagent child of `sessionID`. */
   modelGenerate(sessionID: string, model: ModelRef, prompt: string, signal: AbortSignal): Promise<string>
   /** Current model-visible context of a session (post-compaction). */
   context(sessionID: string, signal: AbortSignal): Promise<readonly unknown[]>
@@ -173,9 +171,8 @@ export class Evaluator implements EvaluatorPort {
 
   /**
    * Generation closure for a resolved evaluator model. Both pinned and inherited models go through the single
-   * `modelGenerate` port; the host spawns one evaluator child per call (parented to the last verdict child for
-   * loop-step generations) and strips tools on that child. There is no stateless affinity-bearing generation path
-   * anymore.
+   * `modelGenerate` port; the host runs every call on the working session's reused evaluator subagent child and
+   * strips tools on that child. There is no stateless affinity-bearing generation path anymore.
    */
   private evaluatorGenerate(choice: ModelChoice, sessionID: string): (prompt: string, signal: AbortSignal) => Promise<string> {
     return (prompt, signal) => this.deps.modelGenerate(sessionID, choice.model, prompt, signal)
