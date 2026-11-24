@@ -23,7 +23,7 @@ interface EvaluatorDeps {
    * plugin emits its own non-waking completion), and loop planner children reuse it as their parent.
    * No worker delegation.
    */
-  nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number): Promise<EvaluationResult | undefined>
+  nativeVerdict?(sessionID: string, signal: AbortSignal, turn: number, ownerSessionID?: string): Promise<EvaluationResult | undefined>
   /** Transient generation over the live session transcript; never persisted. */
   sessionGenerate(sessionID: string, prompt: string, signal: AbortSignal): Promise<string>
   /** Generation on a specific model. The host runs one evaluator generation per call, parented to the last
@@ -119,7 +119,7 @@ export class Evaluator implements EvaluatorPort {
     }
     let result: EvaluationResult | undefined
     try {
-      result = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn), signal, "native verdict")
+      result = await this.underBudget((s) => this.deps.nativeVerdict!(request.sessionID, s, request.turn, request.ownerSessionID), signal, "native verdict")
     } catch (error) {
       if (signal.aborted || isUsageLimitError(error)) throw error
       throw new EvaluatorVerdictError(`no usable evaluator subagent verdict: ${truncate(errorMessage(error), 200)}`)

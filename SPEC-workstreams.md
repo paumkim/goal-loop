@@ -364,6 +364,7 @@ there.
 | CXCII | `entries-scalar-precheck` | scalar precheck in the snapshot equality gate |
 | CXCIII | `worktree-dir-physical-migrate` | physical worktree dir migration with live-lease compatibility |
 | CXCIV | `one-finite-or-zero-clamp-for-the-chrome-renderers` | one finite-or-zero clamp for the chrome renderers |
+| CC | `format-finite-guards` | non-finite guards in the token/cost formatters |
 
 ## Workstream AC — compaction misses are counted once (A-1)
 
@@ -10310,3 +10311,18 @@ Verification: new regression in `test/core.test.ts` pins NaN, `+Infinity`, and `
 (the coarse rendering of a zero duration), mirroring the existing `formatDuration` non-finite pin.
 Focused suite: 178 pass / 0 fail, 177329 expect() calls. Full `bun run check` green after artifact
 regeneration; marker re-counted, no shipped file added or removed.
+
+## Workstream CC — non-finite guards in the token/cost formatters (format-finite-guards) (2026-11-23)
+
+Follow-up to CXCIX. `formatDuration` and the coarse renderer now treat a non-finite clock as zero,
+and the dossier/attestation call sites already guard `Number.isFinite` before formatting spend and
+context metrics — but `formatTokens`/`formatCost` themselves did not, and the TUI passes raw snapshot
+values (`contextSize`, `compactAtTokens`, `estimatedTokens`, peak) without a guard. A NaN or Infinity
+metric therefore painted `NaNM`/`InfinityM`/`$NaN` in always-on chrome. Both formatters now guard
+non-finite once at the source, so every surface agrees; negative cost still maps to `$0` and every
+finite input is byte-identical to the old formatting.
+
+Verification: new regression in `test/core.test.ts` pins NaN and both infinities to `0`/`$0` for both
+formatters, plus a finite-value oracle across the token/cost ladders. Focused suite 180 pass / 0 fail,
+177343 expect() calls. Full `bun run check` green after artifact regeneration; marker re-counted, no
+shipped file added or removed.

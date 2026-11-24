@@ -12,6 +12,7 @@
 <p>The <code>Last updated</code> stamp in the footer of every docs page is regenerated from <code>git log</code> by <code>bun scripts/docs-watch.ts once</code>. Run it after committing, or keep <code>bun scripts/docs-watch.ts watch</code> running; it is event-driven (inotify via <code>fs.watch</code>), debounced, and idle when nothing changes.</p>
 <section><h2>Recent changes</h2><div class="tablewrap"><table><thead><tr><th>When (UTC)</th><th>What</th><th>Source</th></tr></thead><tbody>
 <!-- changes:start -->
+<tr><td><code>2026-11-23 23:59 UTC</code></td><td>fix(runtime): judge subagent work on completion, attributed to the goal owner</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 23:33 UTC</code></td><td>docs: add ordered plan for evaluator subagent trigger timing</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 23:26 UTC</code></td><td>fix(runtime): only verdict children emit the worker completion report</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 23:19 UTC</code></td><td>fix(runtime): report Goal Achieved. without waking parent; continue loop planning in evaluator child</td><td>commit</td></tr>
@@ -41,11 +42,10 @@
 <tr><td><code>2026-11-23 07:16 UTC</code></td><td>fix(evaluator): spawn the judge as a parent-linked child like the planner</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 06:49 UTC</code></td><td>fix(tui): stop showing raw stacks and system errors to users</td><td>commit</td></tr>
 <tr><td><code>2026-11-23 06:27 UTC</code></td><td>docs(prompt): clarify verdict-delegation wording in DELEGATE_VERDICT</td><td>commit</td></tr>
-<tr><td><code>2026-11-23 05:42 UTC</code></td><td>feat: cold context replay at goal-loop version boundaries</td><td>commit</td></tr>
 <!-- changes:end -->
 </tbody></table></div></section>
 </main><aside class="toc"><strong>On this page</strong><ul><li><a href="#main">Recent changes</a></li></ul></aside>
-</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-23 23:19 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
+</div><footer class="foot"><div class="foot-credits">goal-loop — <a href="https://github.com/paumkim/goal-loop">https://github.com/paumkim/goal-loop</a><br>Originally derived from <a href="https://github.com/EL4CTEO/opencode-goal">opencode-goal</a> by EL4CTEO, now an independent project<br>Maintained by paumkim · Released under the <a href="../LICENSE">MIT License</a><br>© 2026 EL4CTEO (original work) · © 2026 paumkim (modifications and maintenance)</div>Last updated: <span class="stamp">2026-11-23 23:59 UTC</span> · reflects the last commit that touched this page, not necessarily the latest code change.</footer>
 <script src="app.js"></script></body></html>
 
 <!-- behavior-change: XCIV loop indicator visible at every cap -->
@@ -107,3 +107,4 @@
 
 <!-- behavior-change: timer-wait-for-completion — a check-in timer armed during a background deferral can no longer fire mid-judge/mid-planner and wake the parent with a "still waiting" steer. evaluate() disarms any pending session timer on entry; checkin() drops obsolete deferrals and re-arms while a judge is in flight, so the wake waits for the verdict/loop arm to land. Verdict, retry and backoff behavior unchanged. -->
 <!-- behavior-change: evaluator-goal-achieved-planner — supersedes CCX: the verdict child no longer carries a working-session parentID, so the host cannot deliver "↳ Evaluator finished" or wake the parent; the plugin emits one queued, non-waking <subagent> report instead (Goal Achieved. chip for met, evaluator label otherwise, best-effort, stripped from model context). The verdict child id is recorded per working session and reused as the parent for loop summarizer/next-goal generations; no controller, renderer or port contract changed. -->
+<!-- behavior-change: evaluator-subagent-trigger-impl — a descendant session's completion is now a work unit of its nearest goal-bearing ancestor: BackgroundTracker.ancestorsOf + GoalController.goalOwnerFor resolve the owner and an abort-isolated sidecar judge scores the child's own transcript against the owner's condition. One verdict per (work unit, turn); a child met is evidence and a child not_met steers only the child, terminal state stays with the owner's turn evaluation. Subagent verdicts get the evaluator label (never the Goal Achieved. chip), the parent wake can no longer cancel them, and the existing background deferral, verifier gate and loop advance are unchanged. -->
