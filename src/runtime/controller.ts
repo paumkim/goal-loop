@@ -1807,7 +1807,7 @@ export class GoalController {
     this.emit(record)
     try {
       // First pass: resolve non-required and artifact/either satisfaction without command execution where possible.
-      const commandTasks: Array<{ idx: number; item: (typeof applicable)[number] }> = []
+      const commandTasks: Array<{ idx: number; item: (typeof applicable)[number]; key: string }> = []
       const pendingByKey = new Map<string, Promise<VerifyCheckEvidence>>()
       const pendingWaiters: Array<{ idx: number; item: (typeof applicable)[number]; key: string }> = []
       for (let idx = 0; idx < applicable.length; idx++) {
@@ -1934,7 +1934,7 @@ export class GoalController {
 
         // mark as pending now so identical checks later in this matrix reuse the in-flight result
         pendingByKey.set(key, Promise.resolve(undefined as unknown as VerifyCheckEvidence))
-        commandTasks.push({ idx, item })
+        commandTasks.push({ idx, item, key })
       }
 
       // Execute command checks concurrently with a cap; coalesce identical keys within this run.
@@ -1946,7 +1946,7 @@ export class GoalController {
           const task = commandTasks[my]!
           const item = task.item
           const def = item.def
-          const key = checkReuseKey(def) + "|head:" + (head ?? "none")
+          const key = task.key
           const timeoutMs = def.timeoutMs ?? config.evaluator.verifyTimeoutMs
           const started = this.deps.clock.now()
           const verification = new AbortController()
