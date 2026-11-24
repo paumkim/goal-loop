@@ -920,7 +920,9 @@ the current iteration.
     otherwise the now row is unchanged. The base text now wraps (`word`) instead of overflowing the
     rail's width, so the verdict suffix stays pinned after wrapping text.
 82. New pure helpers `localTime`, `currentIterationVerdict`, `turnsSinceVerdict` in
-    `src/core/history.ts`, unit-tested (`test/history.test.ts`).
+    `src/core/history.ts`, unit-tested (`test/history.test.ts`). `currentIterationVerdict` reads the newest verdict
+    directly instead of scanning backwards through a loop that always breaks after one iteration; empty history,
+    window edges and the non-finite `endedAt` fallback are unchanged.
 83. `scripts/render-history.tsx` frames (looped, paused, complete) show `at HH:MM` on rail rows and
     the `· last <glyph> … since` segment on the now row; the paused and complete frames verify both.
 
@@ -1837,17 +1839,6 @@ semantics are unchanged.
 Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as parent-linked, pins reuse across the
 verdict + summary + next-goal generations (one child created, three prompts), and keeps the no-report assertion for
 both agents; the planner test pins `parentID === "ses_1"`. Full `bun run check` green.
-
-## Workstream simplify-current-iteration-verdict — collapse the dead scan in currentIterationVerdict (2026-11-24)
-
-`currentIterationVerdict` (`src/core/history.ts`) scanned `history` backwards but broke unconditionally after its
-first iteration, so only the newest verdict was ever examined. The scan is now a direct read of that element plus
-one `at > from` comparison. Empty history still yields `undefined`, a verdict inside `(last endedAt | setAt, ∞)`
-still wins, and an out-of-window or malformed last element behaves exactly as before (including the property-access
-error). Signature, tests and callers are unchanged.
-
-Verification: `test/history.test.ts` covers the window edge, empty history, the non-finite `endedAt` fallback and
-the newer-verdict case; focused suite and full typecheck green.
 
 ## Historical workstreams
 
