@@ -7145,9 +7145,11 @@
       "paths": "src/index.ts,test/plugin.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/goal-loop-n-directive-fix",
       "worktree": "worktree/wt-goal-loop-n-directive-fix",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T16:27:43Z",
-      "submittedAt": "2026-11-24T16:37:42Z"
+      "submittedAt": "2026-11-24T16:37:42Z",
+      "mergedAt": "2026-11-24T16:53:48Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
