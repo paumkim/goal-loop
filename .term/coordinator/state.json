@@ -7081,9 +7081,11 @@
       "paths": "scripts/clear-caches.ts",
       "branch": "wt/clear-build-plugin-caches",
       "worktree": "worktree/wt-clear-build-plugin-caches",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T14:39:01Z",
-      "submittedAt": "2026-11-24T14:41:39Z"
+      "submittedAt": "2026-11-24T14:41:39Z",
+      "mergedAt": "2026-11-24T17:10:19Z",
+      "mergedInto": "dev"
     },
     "purge-stale-dist-artifacts": {
       "agent": "main",
