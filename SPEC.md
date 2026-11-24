@@ -1513,22 +1513,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream CXCVI — copy-free steady state in the snapshot cache (2026-11-23)
-
-Follow-up to CXCII. `pruneSnapshotEntries` copied all entries into a fresh object on every call, then
-returned the original reference whenever no eviction happened — wasted work on every `applySnapshot`
-in a normal session, where the live-session count sits far under the 64 cap. It now checks the key
-count first and returns the original map immediately when eviction is impossible. `dropSessions`
-replaced a linear `ids.includes(sessionID)` per entry with one `Set`, and tracks the drop directly
-instead of re-counting both key sets.
-
-Measured (64-entry map, best of 200 unless noted):
-`pruneSnapshotEntries 3.80 -> 0.01 ms`; `applySnapshot(unchanged) 3.84 -> 0.10 ms`;
-`dropSessions (32 ids) 13.09 -> 5.13 ms`. Harnesses: `/tmp/opencode/bench-snapshot.ts`,
-`/tmp/opencode/bench-drop.ts`. New regression tests pin reference identity at/under the cap and
-`dropSessions`' keep/duplicate-id semantics. Focused suite 43 pass / 0 fail, 153 expect() calls;
-`tsc --noEmit` clean. Marker +2 tests; no shipped-file change.
-
 ## Workstream CXCVII — a bounded, objective completion condition for the loop (2026-11-23)
 
 The loop never terminated: the planner's `LOOP_COMPLETE` clause asked whether "nothing meaningful remains to improve toward the objective" and "every meaningful improvement ... is already complete", and the evaluator's `next: none` clause asked whether the verdict was met "with no gap". None of those has a terminal definition — there is always another conceivable polish/speed/taste tweak — so a fully green build (all objective gates passing) still produced a `next:` action, which the planner carried forward as a fresh condition and re-armed the loop.
@@ -1740,6 +1724,18 @@ Verification: a source-guard regression in `test/plugin.test.ts` pins that the o
 test still asserts exactly one judge child with the parent link. Focused `core`/`plugin` suites 243 pass / 0 fail.
 Full `bun run check` green after artifact regeneration; marker re-counted for four fewer tests, no shipped file
 added or removed.
+
+## Workstream CCXI — one artifact-name builder for every dossier exporter (unify-exporter-artifact-name) (2026-11-23)
+
+Five dossier-family exporters each rebuilt the same `goal-<stem>-<compact UTC stamp>[-<attempt+1>].md` name
+from `fileStampOf`, duplicating the collision-suffix rule five times. `src/core/dossier.ts` now owns one
+`artifactName(stem, nowMs, attempt)`; the export, sealed, review, index and spend-ledger name helpers are
+thin wrappers that pass only their stem. The stamp's honest-epoch posture and the `-2`, `-3`, ... attempt
+suffix are unchanged, so every generated file name is byte-identical to before. No file was added or
+removed and no gate changed.
+
+Verification: typecheck clean; focused dossier/spend-ledger suites green (107 pass / 0 fail); full
+`bun run check` green after artifact regeneration; marker unchanged, no shipped file added or removed.
 
 ## Historical workstreams
 

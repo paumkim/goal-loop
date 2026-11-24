@@ -75,6 +75,15 @@ export const fileStampOf = (ms: number): string => {
   )
 }
 
+/**
+ * Shared dossier-family artifact name: `goal-<stem>-<stamp>[-<attempt+1>].md`. Every exporter builds its
+ * file name here so the compact stamp and the collision suffix cannot drift apart; only the stem varies.
+ */
+export const artifactName = (stem: string, nowMs: number, attempt = 0): string => {
+  const suffix = attempt > 0 ? `-${attempt + 1}` : ""
+  return `goal-${stem}-${fileStampOf(nowMs)}${suffix}.md`
+}
+
 /** First 7 chars of a hex sha; non-hex shas (legacy/odd writers) print whole rather than invented. */
 export const shortSha = (sha: string | undefined): string => {
   if (!sha) return GAP
