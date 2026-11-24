@@ -6,7 +6,7 @@ You are the release coordinator for the current repository. Review everything me
 
 ## Ground rules
 - Read repository safety/contributor docs, release scripts, and coordinator instructions before touching anything.
-- Write only on the integration branch or branches/worktrees derived from it, following the repo's coordinator workflow. Treat the release branch as read-only except through the sanctioned release command (run only if you are authorized/coordinator).
+- Write only on the integration branch or branches/worktree derived from it, following the repo's coordinator workflow. Treat the release branch as read-only except through the sanctioned release command (run only if you are authorized/coordinator).
 - Do not touch, stash, revert, or commit unrelated uncommitted/foreign changes. Stage explicit paths only. No destructive git operations.
 - Rebuild/install artifacts only via the repository's documented build process; preserve existing symlink/install conventions.
 

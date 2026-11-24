@@ -26,7 +26,7 @@ No regular agent should write directly to the integration branch.
 ### Filesystem protocol (CLI-independent)
 Use repository-local files/state, for example:
 - Claim leases: `.tmp/claims/<task-id>.json` (or repo-equivalent)
-- Worktrees: `worktree/wt-<slug>`
+- Worktree: `worktree/wt-<slug>`
 - Audit branches: `wt/<slug>`
 - Coordinator-owned tracked metadata: a tracked directory such as `.term/coordinator/` or repo-equivalent
 

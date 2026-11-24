@@ -439,7 +439,7 @@ repo state left by the merge.
 18. The coordinator lease bookkeeping (`.term/coordinator/state.json`) carries the merge-next entry for
     goal-loop-failure-modes and is committed to dev, so the coordination bus on dev is not left dirty.
 19. No stale state remains in the repo: `git worktree list` shows only the dev checkout, `git branch` shows
-    only `dev` and `main`, and `worktrees/` contains no `wt-*` directories.
+    only `dev` and `main`, and `worktree/` contains no `wt-*` directories.
 20. `bun run check` passes on dev (tsc, tests, compile) with this branch merged.
 
 Verification: `bun run compile` (byte-diff of dist/), `npm pack --dry-run`, `git worktree list`,
@@ -458,7 +458,7 @@ folds the TUI load check into `bun run check`, and regenerates the docs metadata
     the OpenCode host does; fails if the default export is not a TUI plugin). `AGENTS.md`, `README.md` and
     this file state the composition; superseded by Workstream E, which appends `docs:check`.
 23. `npm pack --dry-run` still lists exactly the `files` declared in `package.json` (32 files, ~65 kB as of 2026-11-15,
-    i.e. including `src/rpc-handlers.ts`) with no `.github/`, `worktrees/`, `.term/` or log debris in the tarball.
+    i.e. including `src/rpc-handlers.ts`) with no `.github/`, `worktree/`, `.term/` or log debris in the tarball.
 
 Verification: `bun install --frozen-lockfile`, `bun run check` (expect `ok: loaded TUI plugin "opencode-goal.tui"`),
 `npm pack --dry-run`, `git status --short`, then coordinator submit.

@@ -15,7 +15,7 @@ Write a documentation system for future agents so they can use, configure, and m
 3. **Configuration** — config files, env vars, and settings with concrete examples where relevant (e.g. changing models/providers/themes/keybinds, adding local/custom endpoints) using exact, verified paths/commands.
 4. **Setup & connection** — copy-paste runnable steps to install/start/connect/verify.
 5. **Common tasks** — plain-language tasks and the agent workflow to perform them (what to edit, where, how to verify).
-6. **Agent rules** — what agents must/must not do in this area (branches, worktrees, tests, commits).
+6. **Agent rules** — what agents must/must not do in this area (branches, worktree, tests, commits).
 7. **Troubleshooting** — common failures and fixes.
 8. **Code map** — key files/directories and ownership.
 9. **Verification** — commands that prove setup/changes work.
