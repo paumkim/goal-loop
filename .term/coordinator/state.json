@@ -6645,6 +6645,25 @@
       "submittedAt": "2026-11-24T02:52:54Z",
       "mergedAt": "2026-11-24T02:55:20Z",
       "mergedInto": "dev"
+    },
+    "audit-recent-commit-regressions": {
+      "agent": "build-primary",
+      "paths": "src/**,test/**,dist/**,SPEC.md,SPEC-workstreams.md,docs/improvement-backlog.json",
+      "branch": "wt/audit-recent-commit-regressions",
+      "worktree": "worktree/wt-audit-recent-commit-regressions",
+      "status": "done",
+      "createdAt": "2026-11-24T04:02:56Z",
+      "submittedAt": "2026-11-24T04:07:52Z",
+      "mergedAt": "2026-11-24T04:10:55Z",
+      "mergedInto": "dev"
+    },
+    "timer-wait-for-completion": {
+      "agent": "orchestrator",
+      "paths": "src/runtime/controller.ts",
+      "branch": "wt/timer-wait-for-completion",
+      "worktree": "worktree/wt-timer-wait-for-completion",
+      "status": "claimed",
+      "createdAt": "2026-11-24T04:00:27Z"
     }
   },
   "mergeLock": null,
