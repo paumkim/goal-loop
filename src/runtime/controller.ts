@@ -1481,6 +1481,25 @@ export class GoalController {
       runtime.timer = undefined
     }
     const sessionID = record.sessionID
+    // No verdict may settle a goal while its background work is still in flight. The turn-end gate can be
+    // bypassed (busy-check retries exhaust, events land late, a restore resumes a pending evaluation), so
+    // re-check at the acceptance boundary: a `met` waits here until every subagent/shell has drained.
+    const work = await this.deps.background.busy(sessionID).catch((error): BackgroundWork | undefined => {
+      this.deps.log.warn("goal busy check failed; will retry", { sessionID, error: errorMessage(error) })
+      return undefined
+    })
+    if (this.stale(record, runtime, epoch)) {
+      this.preserveToolsOnStaleDrop(record, runtime, tools, "before evaluation busy check")
+      return
+    }
+    if (!work) {
+      runtime.carriedToolCalls += tools
+      runtime.iterationDeferred = true
+      this.ensureDeferredState(record, runtime)
+      this.scheduleBusyRetry(record, runtime)
+      return
+    }
+    if (work.subagents + work.shells > 0) return this.defer(record, runtime, work, tools)
     const turn = record.turns + 1
     const stall = tools > 0 ? 0 : record.stall + 1
     // Persist the owed step BEFORE any await or generation: a shutdown mid-evaluation aborts the in-memory
