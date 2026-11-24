@@ -115,7 +115,11 @@ describe("failureSignatureOf", () => {
           },
         }),
       )
-    expect(make()?.key).toBe(make()?.key)
+    const sig = make()
+    expect(sig?.kind).toBe("verification")
+    // Pin the signature bytes, not just two identical calls: the check id/type/exit code/scoping and
+    // the missing list must all be encoded, or escalation could silently stop recognizing this failure.
+    expect(sig?.key).toBe("verify:build|build|2|f|r|s|x#missing:build#coverage:")
   })
 
   test("different failing verification checks yield different signatures", () => {

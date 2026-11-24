@@ -84,7 +84,7 @@ describe("package integrity", () => {
   })
 
   test("runtime-imported shipped code has its dependencies declared (string-width)", () => {
-    expect(pkg.dependencies?.["string-width"]).toBeDefined()
+    expect(pkg.dependencies?.["string-width"]).toBe("7.2.0")
     expect(pkg.devDependencies?.["string-width"]).toBeUndefined()
   })
 

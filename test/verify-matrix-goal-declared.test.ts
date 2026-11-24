@@ -130,7 +130,14 @@ describe("deterministic verification coverage policy", () => {
     const condition = 'improve the entire codebase\nverify: type=typecheck cmd="bunx tsc --noEmit" id=tc'
     const resolved = resolveVerifyChecks({ configured: [], condition })
     const opts = { condition, profile: "default", checks: resolved.checks }
-    expect(evaluateCoveragePolicy(opts, computeScopePolicy(opts))).toEqual(evaluateCoveragePolicy(opts))
+    const policy = computeScopePolicy(opts)
+    const explicit = evaluateCoveragePolicy(opts, policy)
+    expect(explicit).toEqual(evaluateCoveragePolicy(opts))
+    // Prove the precomputed policy is actually consumed: if the explicit-policy path silently
+    // recomputed its own policy, the two sides would still be equal but this identity check would fail.
+    expect(explicit.policy).toBe(policy)
+    expect(explicit.ok).toBe(true)
+    expect(policy.broadGoal).toBe(true)
   })
 })
 
