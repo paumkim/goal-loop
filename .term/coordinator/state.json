@@ -7063,9 +7063,11 @@
       "paths": "src/index.ts,bin/goal-loop.mjs,bin/goal-loop.d.mts,src/core/opencode-labels.ts,test/opencode-labels.test.ts,test/cold-replay.test.ts,test/plugin.test.ts,test/package-integrity.test.ts,patches/context-cleared.patch,SPEC.md,docs/changelog.html,package.json",
       "branch": "wt/compaction-label-verified",
       "worktree": "worktree/wt-compaction-label-verified",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T14:08:22Z",
-      "submittedAt": "2026-11-24T14:11:40Z"
+      "submittedAt": "2026-11-24T14:11:40Z",
+      "mergedAt": "2026-11-24T21:34:08Z",
+      "mergedInto": "dev"
     },
     "review-recent-changes-bugs": {
       "agent": "Hy4-flash-Free",
