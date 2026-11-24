@@ -6810,8 +6810,11 @@
       "paths": ".term/coordinator/state.json",
       "branch": "wt/coord-state-bookkeeping",
       "worktree": "worktree/wt-coord-state-bookkeeping",
-      "status": "claimed",
-      "createdAt": "2026-11-24T06:50:53Z"
+      "status": "done",
+      "createdAt": "2026-11-24T06:50:53Z",
+      "submittedAt": "2026-11-24T06:53:52Z",
+      "mergedAt": "2026-11-24T06:53:52Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
