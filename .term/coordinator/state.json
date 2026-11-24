@@ -7098,9 +7098,11 @@
       "paths": "dist/tui.js,dist/tui.d.ts",
       "branch": "wt/purge-stale-dist-artifacts",
       "worktree": "worktree/wt-purge-stale-dist-artifacts",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T14:43:56Z",
-      "submittedAt": "2026-11-24T14:44:03Z"
+      "submittedAt": "2026-11-24T14:44:03Z",
+      "mergedAt": "2026-11-24T21:39:53Z",
+      "mergedInto": "dev"
     },
     "evaluator-planner-subagent-child-reuse": {
       "agent": "build",
