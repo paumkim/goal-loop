@@ -7073,6 +7073,35 @@
       "submittedAt": "2026-11-24T14:30:37Z",
       "mergedAt": "2026-11-24T14:36:10Z",
       "mergedInto": "dev"
+    },
+    "clear-build-plugin-caches": {
+      "agent": "main",
+      "paths": "scripts/clear-caches.ts",
+      "branch": "wt/clear-build-plugin-caches",
+      "worktree": "worktree/wt-clear-build-plugin-caches",
+      "status": "submitted",
+      "createdAt": "2026-11-24T14:39:01Z",
+      "submittedAt": "2026-11-24T14:41:39Z"
+    },
+    "purge-stale-dist-artifacts": {
+      "agent": "main",
+      "paths": "dist/tui.js,dist/tui.d.ts",
+      "branch": "wt/purge-stale-dist-artifacts",
+      "worktree": "worktree/wt-purge-stale-dist-artifacts",
+      "status": "submitted",
+      "createdAt": "2026-11-24T14:43:56Z",
+      "submittedAt": "2026-11-24T14:44:03Z"
+    },
+    "evaluator-planner-subagent-child-reuse": {
+      "agent": "build",
+      "paths": "src/index.ts,src/core/evaluator-agent.ts,src/core/planner.ts,src/runtime/evaluator.ts,test/plugin.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/evaluator-planner-subagent-child-reuse",
+      "worktree": "worktree/wt-evaluator-planner-subagent-child-reuse",
+      "status": "done",
+      "createdAt": "2026-11-24T14:46:04Z",
+      "submittedAt": "2026-11-24T15:10:16Z",
+      "mergedAt": "2026-11-24T15:13:09Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
