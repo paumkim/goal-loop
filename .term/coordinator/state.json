@@ -6617,6 +6617,23 @@
       "submittedAt": "2026-11-24T01:48:26Z",
       "mergedAt": "2026-11-24T01:50:41Z",
       "mergedInto": "dev"
+    },
+    "hud-stays-visible": {
+      "agent": "build",
+      "paths": "src/tui.tsx,src/core/hud.ts,src/runtime/controller.ts,src/index.ts,dist/tui.js,test/,docs/,SPEC.md,SPEC-workstreams.md,README.md",
+      "branch": "wt/hud-stays-visible",
+      "worktree": "worktree/wt-hud-stays-visible",
+      "status": "done",
+      "createdAt": "2026-11-24T02:31:34Z",
+      "submittedAt": "2026-11-24T02:44:21Z",
+      "forcedScope": true,
+      "forcedScopeAt": "2026-11-24T02:44:21Z",
+      "forcedScopeFiles": [
+        "src/core/entries.ts",
+        "src/core/types.ts"
+      ],
+      "mergedAt": "2026-11-24T02:46:49Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
