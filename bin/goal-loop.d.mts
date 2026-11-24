@@ -81,5 +81,4 @@ export function resolveLatestRef(channel: "main" | "dev", opts?: CliOptions): Pr
 export function update(args: string[], opts?: CliOptions): Promise<CliResult>;
 export function setChannel(args: string[], opts?: CliOptions): Promise<CliResult>;
 export function setUpdates(args: string[], opts?: CliOptions): CliResult;
-export function patchHost(args: string[], opts?: CliOptions): CliResult;
 export function runCli(argv: string[], opts?: CliOptions): Promise<CliResult>;
