@@ -2193,6 +2193,35 @@ describe("background drain", () => {
     expect(h.controller.get(SID)!.turns).toBe(1)
   })
 
+  test("a stale check-in does not wake the parent while the loop planner is still running", async () => {
+    const h = harness()
+    await h.setLoop("objective")
+    h.verdicts.push(met("v1 done"))
+    h.summaries.push("v1 summary")
+    h.nextGoals.push("v2 condition")
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn(1) // defers evaluation; the check-in timer is armed
+    h.setWork({ subagents: 0, shells: 0 })
+
+    // The deferred met verdict starts the loop-advance planner, which is slow. The check-in armed by the
+    // deferral must not fire during planning: the parent must only wake when the next iteration is armed.
+    let releasePlan!: () => void
+    h.gate.nextGoal = new Promise<void>((resolve) => { releasePlan = resolve })
+    const drained = h.controller.onBackgroundDrained()
+    await flush()
+    expect(h.controller.get(SID)!.loopIteration).toBe(1)
+
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    releasePlan()
+    await drained
+    await flush()
+    expect(h.controller.get(SID)!.loopIteration).toBe(2)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
   test("onBackgroundDrained is a no-op when nothing deferred", async () => {
     const h = harness()
     await h.setGoal("all tests pass")

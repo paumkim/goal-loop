@@ -453,6 +453,35 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.stall).toBe(0)
   })
 
+  test("a check-in armed during a background deferral does not wake the parent while the judge is still running", async () => {
+    await h.set()
+    h.setWork({ subagents: 1, shells: 0 })
+    await h.turn() // deferred on the subagent; the first check-in is armed
+    expect(h.calls.synthetic).toHaveLength(0)
+
+    // Background work drains and a slow judge starts. The check-in from the deferral must be disarmed so it
+    // cannot fire mid-evaluation and wake the parent before the verdict (and any loop arm after it) lands.
+    h.setWork({ subagents: 0, shells: 0 })
+    let deliver!: (result: EvaluationResult) => void
+    const gated = new Promise<EvaluationResult>((resolve) => { deliver = resolve })
+    h.verdicts.push(() => gated)
+    const drained = h.controller.onBackgroundDrained()
+    await flush()
+    expect(h.controller.snapshot(SID)?.evaluating).toBeTrue()
+
+    // The old check-in's due time arrives while the judge has not delivered its verdict.
+    await h.clock.advance(30 * 60_000)
+    expect(h.calls.synthetic).toHaveLength(0)
+    expect(h.notices.some((n) => n.kind === "checkin")).toBeFalse()
+
+    // The verdict lands: its continuation is the one and only wake.
+    deliver(notMet("still failing"))
+    await drained
+    await flush()
+    expect(h.requests).toHaveLength(1)
+    expect(h.calls.synthetic).toHaveLength(1)
+  })
+
   test("a deferred goal flips to active on session heartbeats and back to waiting when the session goes quiet — instantly, with no clock tick", async () => {
     await h.set()
     h.setWork({ subagents: 1, shells: 0 })

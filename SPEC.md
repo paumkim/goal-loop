@@ -644,8 +644,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=144 tests=2365 -->
-
+<!-- spec-check files=144 tests=2367 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1475,7 +1474,7 @@ finding names the workstream that resolves it. Line numbers refer to the tree at
   Resolution: Workstream AR — parsing retained, docs flag inert on all surfaces; superseded mentions noted as design history.
   [SUPERSEDED 2026-11-23: `maxRetries` gates again — `src/runtime/controller.ts:2531,2554` settle the goal as
   `failed` when the cap is reached, `config.ts` and `docs/config.html` describe it as active, and
-  `test/controller.test.ts:530,627` pin that behavior. `docs/runtime.html` now matches.]
+  `test/controller.test.ts:559,656` pin that behavior. `docs/runtime.html` now matches.]
 - **A-28 (low) — `src/tui.tsx:goalsEqual` — JSON.stringify comparison of the whole snapshot on every `put`.** O(record size); fine at 20
   verdicts, quadratic in loop lifetime as history grows. Waive (folds into A-12 if history is ever capped; both caps landed — XXXV
   `loopHistory` 50, XXXVI verdict trail 20 — so the record size, and this comparison, is bounded).
@@ -1532,19 +1531,6 @@ where its contract is defined in the current tree:
   configured/legacy checks win over goal-declared repeats.
 
 ## Recent workstreams
-
-## Workstream CXCVIII — skip the width loop for unbounded spend lines (2026-11-23)
-
-`formatSpend` measured every rendered line with `cellWidth` inside the degradation loop even at its
-default `maxWidth = Infinity`, where `width > Infinity` can never be true. That path now returns the
-joined line directly, skipping one memoized width lookup and the extra array/string allocation the
-loop needed. Finite budgets are untouched.
-
-Measured on 20000 calls with a cost + cached usage line (best of 100, paired runs in the same harness):
-`6.13 ms -> 5.63 ms` (~8%); an earlier paired run gave `5.83 -> 5.18 ms`. Harness:
-`/tmp/opencode/bench-misc.ts`. New regression pins the default result against an explicit
-`Number.MAX_SAFE_INTEGER` width across four spend shapes. Focused suite (core) 176 pass / 0 fail,
-177308 expect() calls; `tsc --noEmit` clean. Marker +1 test; no shipped-file change.
 
 ## Workstream CXCIX — non-finite guard for the coarse duration renderer (format-coarse-nonfinite-guard) (2026-11-23)
 
@@ -1763,6 +1749,24 @@ Verification: a regression in `test/verify-matrix-goal-declared.test.ts` pins a 
 to id `"tc"` and a fenced `evidence=either artifacts=...` directive parsing with its patterns intact; the
 pre-fix code fails it (one corrupted id, one malformed). Full `bun run check` green after regeneration; marker
 re-counted for one added test, no shipped file added or removed.
+## Workstream timer-wait-for-completion — a deferred check-in cannot wake the parent mid-judge (2026-11-24)
+
+A background-work deferral armed an idle check-in timer (30m, then ×2 up to ×4). When the work drained,
+`clearDeferred()` dropped the `waiting` state but left that timer armed: if the judge/verifier — or the loop
+planner after a met verdict — was still running when it came due, `checkin()` dispatched a `resume: true`
+steer that woke the working session before the verdict (and its continuation) had landed. The parent then
+started a turn that raced its own verdict.
+
+`evaluate()` now disarms any pending session timer on entry, so every evaluation path (turn end, busy-check
+fallback, background drain, restore) starts with no stale wake timer. `checkin()` drops a check whose deferral
+is gone and, when a judge is still in flight, re-arms through the shared `armCheckin()` helper so the check
+waits for completion instead of firing prematurely on a long-running task. Verdict, retry and backoff
+semantics are unchanged.
+
+Verification: `test/controller.test.ts` gates a judge verdict and advances the clock past the old check-in
+due time — no synthetic wake and no check-in notice until the verdict lands; `test/loop.test.ts` gates the
+loop planner the same way. Focused controller/loop suites green; full `bun run check` green after the stale
+line reference above was re-pinned and the marker re-counted.
 
 ## Historical workstreams
 
