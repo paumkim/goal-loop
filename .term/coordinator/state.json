@@ -7006,9 +7006,11 @@
       "paths": "src/core/opencode-labels.ts,bin/goal-loop.mjs,bin/goal-loop.d.mts,test/opencode-labels.test.ts,SPEC.md,docs/changelog.html",
       "branch": "wt/provider-compaction-running-label",
       "worktree": "worktree/wt-provider-compaction-running-label",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T12:28:12Z",
-      "submittedAt": "2026-11-24T13:04:42Z"
+      "submittedAt": "2026-11-24T13:04:42Z",
+      "mergedAt": "2026-11-24T17:03:41Z",
+      "mergedInto": "dev"
     },
     "evaluator-parent-planner-target": {
       "agent": "Hy4-flash-Free",
