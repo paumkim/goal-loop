@@ -646,7 +646,7 @@ fallback `{"output":{"goal":null}}` is observed instead of a 500 (verified live 
 Interpretation of the armed condition: six systemic weaknesses of the `/goal-loop` machinery, each with a
 guard, tests, and documentation. Follow-ups bigger than one iteration are listed at the end, not smuggled in.
 
-<!-- spec-check files=156 tests=2408 -->
+<!-- spec-check files=157 tests=2408 -->
 44. Verifier, not transcriber: `evaluator.verifyCommand` (env `OPENCODE_GOAL_VERIFY_COMMAND`; whitespace-only
     disables; default `""`) and `evaluator.verifyTimeoutMs` (env `OPENCODE_GOAL_VERIFY_TIMEOUT_MS`; default
     600000, min 1000). When set, a `met` verdict is held at the verification gate in the controller
@@ -1857,6 +1857,18 @@ verified with `bun run check`; no rendered string, error posture or runtime deci
   predicates (plain `working` stays local to the breath), and `runDossierAction()` owns the identical session/goal
   lookup plus empty-catch posture of the seven dossier palette commands. Rendered output and error handling are
   unchanged; `dist/tui.js` is regenerated from `src/tui.tsx`.
+- Redundant work: `verifyMet` used to canonicalize the same `checkReuseKey(item.def) + head` twice for every executed
+  command check — once to look up the cache, then again in `runOne`. The key is now carried on the queued task and
+  reused. Static evidence: `checkReuseKey(` call sites in `controller.ts` drop from 2 to 1, so canonicalizations per
+  verdict drop from 2N to N; a microbenchmark puts one canonicalization at ~0.0002 ms. Cache keys, coalescing,
+  reuse metadata and evidence bytes are unchanged (`test/verify.test.ts`: 29 pass / 0 fail).
+- Shared attestation core: `verify-record.ts`, `reach-record.ts` and `sign-record.ts` were function-for-function twins
+  in their sweep, `statusCell`, Markdown skeleton, summary branch and ack branch; each differed only in labels and
+  prose. Those parts now live in `src/core/record-attestation.ts`, parameterized by the caller's exact strings; the
+  three real git probes, all exported names/shapes and every rendered byte stay unchanged, and the three dossier
+  cell-helper trios share `recordCellHelpers()`. `recordShaMentions` moved into the shared module and is re-exported
+  from `verify-record.ts`, so no import path changes and the module graph stays acyclic. Byte-equivalence was checked
+  across 237 report/summary/ack/sweep outputs with 0 mismatches; focused attestation suites pass 133/133.
 
 Verification: full `bun run check` green per unit; SPEC marker re-counted after the self-test removal.
 
