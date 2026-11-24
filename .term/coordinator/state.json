@@ -6916,6 +6916,17 @@
       "submittedAt": "2026-11-24T09:45:40Z",
       "mergedAt": "2026-11-24T09:48:26Z",
       "mergedInto": "dev"
+    },
+    "dedupe-effect": {
+      "agent": "build",
+      "paths": "package.json,bun.lock",
+      "branch": "wt/dedupe-effect",
+      "worktree": "worktree/wt-dedupe-effect",
+      "status": "done",
+      "createdAt": "2026-11-24T09:48:49Z",
+      "submittedAt": "2026-11-24T09:50:55Z",
+      "mergedAt": "2026-11-24T09:53:24Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
