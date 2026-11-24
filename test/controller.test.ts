@@ -430,6 +430,22 @@ describe("GoalController", () => {
     expect(h.controller.get(SID)?.turns).toBe(0)
   })
 
+  test("a duplicate succeeded event is dropped as a straggler while the first turn is evaluating", async () => {
+    const info: string[] = []
+    h = harness({ log: { info: (m: string) => void info.push(m), warn() {}, error() {} } })
+    await h.set()
+    h.verdicts.push(() => new Promise(() => {})) // first evaluation stays in flight
+    h.controller.onExecutionStarted(SID)
+    h.controller.onToolCalled(SID)
+    void h.controller.onExecutionSucceeded(SID)
+    await flush()
+    info.length = 0
+    await h.controller.onExecutionSucceeded(SID)
+    // Without a consumed-success marker the second success bumps the epoch and re-enters evaluation,
+    // superseding the first attempt for one logical turn.
+    expect(info.some((line) => line.includes("straggler dropped"))).toBe(true)
+  })
+
   test("background work defers evaluation and arms check-ins with backoff", async () => {
     await h.set()
     h.setWork({ subagents: 1, shells: 0 })
