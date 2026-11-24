@@ -1532,35 +1532,6 @@ where its contract is defined in the current tree:
 
 ## Recent workstreams
 
-## Workstream evaluator-subagent-trigger-impl — judge descendant work units on completion (2026-11-24)
-
-The verdict was owned by exactly one session: the one that armed the goal. Every event handler looks up
-`this.goals.get(sessionID)`, and `onExecutionSucceeded` returned early for a session with no goal record
-(`controller.ts:1002-1005`). A regular subagent's completion therefore never triggered an evaluation. It was only
-counted as background work by `BackgroundTracker.busy()` (`background.ts:60-67`), which made the controller defer
-the parent's verdict (`controller.ts:1043`) until `onBackgroundDrained()` (`:2654-2680`) saw every descendant finish.
-The judge child was created only inside that parent evaluation and its visible completion was attributed to the
-parent — the "General finished → Evaluator finished" order in the screenshot.
-
-Evaluation is now **goal-scoped and work-unit-triggered**. `BackgroundTracker.ancestorsOf()` walks the event-fed
-parent links (same `MAX_DEPTH` cap as `descendsFrom`), and `GoalController.goalOwnerFor()` resolves a session to its
-nearest ancestor with a live goal. When a descendant's `session.execution.succeeded` arrives with no goal of its own,
-`onExecutionSucceeded` calls `evaluateWorkUnit()` instead of returning. That sidecar judges the descendant's own
-transcript against the owner's immutable condition, using its **own abort controller** so the harness waking the
-parent with the injected subagent report (`onExecutionStarted` → `invalidate`) cannot cancel an in-flight verdict.
-One verdict per `(work unit, goal turn)` is enforced with a judged-key set. Terminal authority stays with the owner:
-a child `met` is recorded in the verdict trail with a `source` field as evidence, a child `not_met` steers only that
-work unit, and neither ends the goal. The verdict child remains parentless and its completion remains queued and
-non-waking; a work-unit report keeps the evaluator label instead of the "Goal Achieved." chip. The owner's drain path
-is unchanged, so a `met` still passes the verifier matrix and loop advance exactly as before.
-
-Verification: `test/controller.test.ts` pins ancestor resolution, child completion triggering a verdict attributed
-to the owner, child `met` not ending the goal, child `not_met` steering once per turn (a replayed completion is
-ignored), and a parent wake not aborting the in-flight verdict; `test/plugin.test.ts` pins the owner-keyed verdict
-affinity and the work-unit report label. Focused controller/plugin suites 169 pass / 0 fail; full suite 2,372 pass /
-0 fail across 105 files (29 snapshots), `tsc --noEmit` clean. `bun run check` green after artifact regeneration and
-marker re-count; no gate weakened and no shipped file added or removed.
-
 ## Workstream CCI — non-finite guard on the usage delta (diff-usage-finite-guard) (2026-11-23)
 
 Host-reported usage reaches `diffUsage` through `toUsage()`, which fills only *missing* fields with
@@ -1792,6 +1763,28 @@ a met /goal-loop verdict through summarize and next-goal and asserts both planne
 verdict child (it fails when the parenting is removed). Focused plugin/core/controller suites 351 pass / 0 fail.
 Full `bun run check` green after artifact regeneration; marker re-counted for one added test, no shipped file
 added or removed.
+
+## Workstream planner-parentless-completion — arm-time planner never wakes the working session (2026-11-24)
+
+The arm-time planner child was created with `parentID: sessionID`. The host treats that link as a delegated task:
+it delivers its own "↳ Goal planner finished" completion into the working transcript and wakes the parent while
+planning is still in flight, and again later when the planner is slow — whether or not a planned condition ever
+lands. This supersedes CCX's parent-link claim for both children: the judge became parentless in the
+evaluator-goal-achieved-planner workstream, and the planner is now parentless too.
+
+`planGoal` now creates the planner child with no parent link and consumes the planned condition from the child's
+own event stream. The plugin emits the visible completion itself as one queued, non-waking `<subagent>` synthetic
+report (`resume: false`, metadata `source: "subagent"` / `childID` / `agent: "planner"` / `state: "completed"`),
+best-effort and only when the child produced text. `isJudgeReport` is generalized to `isPluginReport` so both
+judge and planner reports are stripped from model-bound context and the evaluator's transcript digest — the
+planner's raw JSON must never become worker evidence or a verdict cue. No retry, timeout, arming or scope
+behavior changed.
+
+Verification: plugin tests pin the parentless planner create, the queued non-waking report, the source guard
+(`parentID: sessionID` count 0) and the runtime `plannerCreate.parentID === undefined` assertion; focused plugin
+suite 58 pass / 0 fail. Full `bun run check` green at dev HEAD `93b8310`: 2372 pass / 0 fail across 105 files,
+dist freshness, TUI load, docs freshness, invariant-sweep and spec-check all ok. Landed via `88bcbec` → merge
+`7c05365`.
 
 ## Historical workstreams
 
