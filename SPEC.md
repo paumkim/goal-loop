@@ -1744,12 +1744,14 @@ A verdict child was created with the working session as its `parentID`. The host
 task: it delivers its own "↳ Evaluator finished" completion into the working transcript and wakes the parent
 unconditionally, wasting a turn after the harness had already read the verdict from the child's event stream.
 
-`spawnEvaluator` now creates verdict children without a parent link. The plugin emits the visible completion itself
-as one queued, non-waking `<subagent>` synthetic report (`resume: false`, metadata `source: "subagent"` /
-`childID` / `agent: "evaluator"` / `state: "completed"`), labelled `Goal Achieved.` when the child's text parses
-as `met` and `evaluator` otherwise. Delivery is best-effort: a host rejection is logged, never fatal. The report
-stays out of model context through the existing `isJudgeReport` strip, so the worker cannot narrate or re-judge
-its own verdict (SPEC-workstreams.md CXLI). This supersedes CCX's parent-link claim.
+`spawnEvaluator` now creates verdict children without a parent link and leaves them navigable (hung) after the
+verdict. No `<subagent>` completion is admitted into the working session. An earlier revision emitted a queued,
+non-waking synthetic report with a `Goal Achieved.` chip for `met`; even with `resume: false` the host durably
+admits that synthetic to the parent's inbox, so the parent saw the judge's context and was pulled into a turn it
+did not need to take. The outcome now surfaces through the terminal `achieved` toast, the HUD pill and the durable
+record — visible and non-waking without entering the parent's turn. The `isJudgeReport` strip stays as a defensive
+guard so a stray report cannot teach the worker its own verdict (SPEC-workstreams.md CXLI). This supersedes CCX's
+parent-link claim and the earlier synthetic-report revision.
 
 Loop planning now continues inside the verdict child. `spawnEvaluator` records each parentless verdict child id
 per working session in a module-scoped map and returns `{ text, id }`; loop-step summarizer and next-goal
@@ -1757,10 +1759,10 @@ generations pass that id as their parent, falling back to no parent when the map
 Controller, renderer and port contracts are unchanged: the map is keyed by the working session id already
 threaded through every loop call.
 
-Verification: plugin tests pin one non-waking synthetic report on finish (the `Goal Achieved.` chip for `met`, the
-evaluator label for an empty child), the parentless judge create and the new source shape; a new regression drives
-a met /goal-loop verdict through summarize and next-goal and asserts both planner children are parented to the
-verdict child (it fails when the parenting is removed). Focused plugin/core/controller suites 351 pass / 0 fail.
+Verification: plugin tests pin that no synthetic report reaches the working session on finish, that the judge child
+stays present (no `session.remove`), that the visible `achieved` toast still fires, and that a met /goal-loop verdict
+drives summarize and next-goal with both planner children parented to the verdict child (it fails when the parenting
+is removed). Focused plugin suite 58 pass / 0 fail; full `bun run check` green.
 Full `bun run check` green after artifact regeneration; marker re-counted for one added test, no shipped file
 added or removed.
 
