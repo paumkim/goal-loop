@@ -6721,9 +6721,11 @@
       "paths": "src/index.ts,test/plugin.test.ts",
       "branch": "wt/evaluator-completion-no-context",
       "worktree": "worktree/wt-evaluator-completion-no-context",
-      "status": "submitted",
+      "status": "done",
       "createdAt": "2026-11-24T06:22:07Z",
-      "submittedAt": "2026-11-24T06:22:13Z"
+      "submittedAt": "2026-11-24T06:22:13Z",
+      "mergedAt": "2026-11-24T06:31:12Z",
+      "mergedInto": "dev"
     },
     "evaluator-report-no-parent-turn": {
       "agent": "worker",
@@ -6743,6 +6745,24 @@
       "submittedAt": "2026-11-24T06:22:08Z",
       "mergedAt": "2026-11-24T06:24:33Z",
       "mergedInto": "dev"
+    },
+    "arm-planner-parentless-verify": {
+      "agent": "hy4-flash-free",
+      "paths": "src/index.ts,test/plugin.test.ts",
+      "branch": "wt/arm-planner-parentless-verify",
+      "worktree": "worktree/wt-arm-planner-parentless-verify",
+      "status": "done",
+      "createdAt": "2026-11-24T06:25:23Z",
+      "releasedAt": "2026-11-24T06:25:41Z",
+      "releaseReason": "released"
+    },
+    "spec-planner-parentless-supersede": {
+      "agent": "hy4-flash-free",
+      "paths": "SPEC.md,docs/changelog.html",
+      "branch": "wt/spec-planner-parentless-supersede",
+      "worktree": "worktree/wt-spec-planner-parentless-supersede",
+      "status": "claimed",
+      "createdAt": "2026-11-24T06:29:37Z"
     }
   },
   "mergeLock": null,
