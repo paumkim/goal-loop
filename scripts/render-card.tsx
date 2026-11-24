@@ -18,8 +18,7 @@ import { testRender } from "@opentui/solid"
 import { HudCard, type HudCardTheme } from "../src/hud-card.tsx"
 import type { GoalSnapshot } from "../src/core/types.ts"
 import { PALETTE } from "./render-theme.ts"
-import { monoFlag } from "./render-fixtures.ts"
-import { verdicts } from "./render-fixtures.ts"
+import { monoFlag, verdicts } from "./render-fixtures.ts"
 
 const mono = monoFlag()
 const theme: HudCardTheme = {
@@ -80,7 +79,7 @@ const mount = async (name: string, goal: GoalSnapshot, terminal: number, width?:
     { width: terminal, height: 12 },
   )
   await setup.renderOnce()
-  console.log(mono ? name.replace("=== ", "=== ") + " · mono" : name)
+  console.log(mono ? name + " · mono" : name)
   console.log(setup.captureCharFrame())
   await setup.renderer.destroy()
 }
