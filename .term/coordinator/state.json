@@ -6960,6 +6960,26 @@
       "submittedAt": "2026-11-24T10:05:59Z",
       "mergedAt": "2026-11-24T10:08:29Z",
       "mergedInto": "dev"
+    },
+    "context-cleared-label": {
+      "agent": "orchestrator",
+      "paths": "src/core/opencode-labels.ts,test/opencode-labels.test.ts,patches/context-cleared.patch,bin/goal-loop.mjs,bin/goal-loop.d.mts,package.json,test/package-integrity.test.ts,SPEC.md",
+      "branch": "wt/context-cleared-label",
+      "worktree": "worktree/wt-context-cleared-label",
+      "status": "done",
+      "createdAt": "2026-11-24T11:01:41Z",
+      "submittedAt": "2026-11-24T11:01:41Z",
+      "mergedAt": "2026-11-24T11:14:13Z",
+      "mergedInto": "dev"
+    },
+    "pill-icon-live-activity": {
+      "agent": "hy4-flash-free",
+      "paths": "src/tui.tsx,test/intent-icons.test.ts,dist/tui.js,dist/tui.d.ts",
+      "branch": "wt/pill-icon-live-activity",
+      "worktree": "worktree/wt-pill-icon-live-activity",
+      "status": "submitted",
+      "createdAt": "2026-11-24T10:52:52Z",
+      "submittedAt": "2026-11-24T11:00:42Z"
     }
   },
   "mergeLock": null,
