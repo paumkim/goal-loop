@@ -13,7 +13,7 @@
  * empty-condition/active-session defer moves no goal state at all.
  */
 
-export type EvaluationAbstention = "empty-condition" | "no-fresh-evidence" | "active-sessions"
+export type EvaluationAbstention = "empty-condition" | "no-fresh-evidence" | "active-sessions" | "nested-headless"
 
 export interface EvaluationGateInput {
   /**
@@ -35,6 +35,7 @@ export const ABSTENTION_REASON: Readonly<Record<EvaluationAbstention, string>> =
   "empty-condition": "evaluation deferred: request has no <condition> text",
   "no-fresh-evidence": "evaluation deferred: no fresh evidence from a finished turn",
   "active-sessions": "evaluation deferred: sessions are still active",
+  "nested-headless": "evaluation deferred: nested headless worker leaves the verdict to the goal owner",
 }
 
 /**

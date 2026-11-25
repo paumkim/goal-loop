@@ -1970,14 +1970,6 @@ auto-rebase mean parallel SPEC.md commits land without a hand-resolved conflict.
 `scripts/spec-check.ts` derives them at gate time.
 
 <!-- per-slug-workstreams:start -->
-<!-- workstream:merge-churn-reduction-rebase-fifo-anchors-pending:start -->
-### merge-churn-reduction-rebase-fifo-anchors-pending
-
-`merge-next --wait` now auto-rebases a stale target onto the current dev and re-runs the gate before landing;
-FIFO is enforced (non-head leases need `--force`, or `--wait-for-turn` to wait for the turn). SPEC.md prose is
-append-only at per-slug anchors; changelog notes go to `.term/changelog-pending/<slug>.md` and are folded by
-merge-next. The spec gate computes counts at check time and the package test uses a relaxed band.
-<!-- workstream:merge-churn-reduction-rebase-fifo-anchors-pending:end -->
 <!-- workstream:evaluator-require-landing-evidence:start -->
 
 ### evaluator-require-landing-evidence
@@ -2046,6 +2038,12 @@ The arm-time planner's soft 30s budget cancels the child prompt but no longer en
 
 ### Follow-up (fix-over-engineering-findings) — all audit findings fixed: shared host-child lifecycle, slim server setup, split dossier/controller/TUI hot spots, factored coordinator merge phases. Rendered dossier output is byte-identical; full `bun run check` green.
 <!-- workstream:fix-over-engineering-findings:end -->
+<!-- workstream:remove-nested-headless-evaluator:start -->
+
+### remove-nested-headless-evaluator — one judge, owned by the live terminal (2026-11-25)
+
+A nested `opencode-headless` child can share its goal owner's working directory and plugin storage. Arming a goal there started a second evaluator on the same work: the judge ran with a different system prefix and a different digest, so the live TUI could rule `met` while the headless child ruled `not_met`, and each harness-child completion report woke the owner into another turn and another verdict. `isNestedHeadless` detects the driver's `OPENCODE_HEADLESS_DEPTH >= 1` marker. Nested workers no longer arm a goal from a `/goal` command or a raw `/goal-loop` directive — the directive becomes plain work text — and `nativeVerdict` abstains for an adopted record so no judge or planner child is spawned there. Top-level headless runs (prompter, e2e) are unchanged; their goals and evaluators still work as before. The `nested-headless` abstention settles no goal state.
+<!-- workstream:remove-nested-headless-evaluator:end -->
 <!-- per-slug-workstreams:end -->
 
 ## Historical workstreams

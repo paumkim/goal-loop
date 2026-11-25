@@ -13,7 +13,7 @@ import { Plugin, type Agent } from "@opencode/plugin"
 import { createHarness, evaluatorChildBySession, plannerChildBySession } from "./harness.ts"
 import { registerHooks } from "./hooks.ts"
 import { ensureStartupScaffold, hasJq, pluginRootFromMeta, resolveCoordinatorBin } from "./core/bootstrap.ts"
-import { resolveConfig } from "./core/config.ts"
+import { isNestedHeadless, resolveConfig } from "./core/config.ts"
 import { EVALUATOR_AGENT_ID, EVALUATOR_SYSTEM_PROMPT } from "./core/evaluator-agent.ts"
 import { findRepository, resolveCommitPolicy, resolveProjectRoot } from "./core/git.ts"
 import { parseBool, parseGoalCommand } from "./core/parse.ts"
@@ -247,6 +247,10 @@ export default Plugin.define({
     const log = withFileSink(createLogger(), process.env.OPENCODE_GOAL_LOG_FILE)
     const lifetime = new AbortController()
     const probe = probeFlag(process.env.OPENCODE_GOAL_PROBE)
+    // Nested headless children are workers of a live goal owner. They share its directory and plugin
+    // storage, so arming a goal there would start a second evaluator on the same work with a different
+    // judge prefix and digest. The owner's live TUI judge stays the only verdict authority.
+    const nestedHeadless = isNestedHeadless(process.env)
 
     // Ship the evaluator as a first-class agent type, not just a rubric sent to `general`. `AgentEditor.update`
     // creates the agent when absent (host agent.ts contract), so registering here is idempotent across reloads.
@@ -333,6 +337,7 @@ export default Plugin.define({
       log,
       lifetime,
       probe,
+      nestedHeadless,
       controller: () => controller,
       background: () => background,
       emit: () => emit,
@@ -566,6 +571,16 @@ export default Plugin.define({
             const raw = prompt.text ?? ""
             // Status / clear / invalid are commands, not goals — never send them to the planner.
             const shouldPlan = parseGoalCommand(raw, config.maxConditionChars).type === "set"
+            if (nestedHeadless && shouldPlan) {
+              emit.notice({
+                sessionID,
+                kind: "set",
+                level: "info",
+                title: "goal-loop",
+                message: "Nested headless worker: goal arming is disabled; the live terminal owner is the only judge.",
+              })
+              return
+            }
             const planned = shouldPlan ? await planGoal(sessionID, raw) : undefined
             if (planned) armedPlanScopes.set(sessionID, { condition: planned.condition, scope: planned.scope })
             else armedPlanScopes.delete(sessionID)
@@ -615,6 +630,7 @@ export default Plugin.define({
       config,
       controller,
       evaluator,
+      nestedHeadless,
       messaging,
       agentIdFor,
       handleBareLoop,

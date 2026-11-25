@@ -2316,3 +2316,52 @@ describe("agent-to-agent messaging (enabled with the plugin)", () => {
     }
   })
 })
+
+describe("nested headless workers leave the verdict to the live owner", () => {
+  const withDepth = async (depth: string | undefined, run: (env: { ctx: any; calls: any; hooks: any; storage: any }) => Promise<void>) => {
+    const previous = process.env.OPENCODE_HEADLESS_DEPTH
+    if (depth === undefined) delete process.env.OPENCODE_HEADLESS_DEPTH
+    else process.env.OPENCODE_HEADLESS_DEPTH = depth
+    try {
+      const directory = repository()
+      const env = context(directory)
+      const dispose = await (plugin as any).setup(env.ctx)
+      try {
+        await run(env)
+      } finally {
+        await dispose?.()
+      }
+    } finally {
+      if (previous === undefined) delete process.env.OPENCODE_HEADLESS_DEPTH
+      else process.env.OPENCODE_HEADLESS_DEPTH = previous
+    }
+  }
+
+  test("a raw /goal-loop directive becomes plain work text and arms nothing", async () => {
+    await withDepth("1", async ({ hooks, storage, calls }) => {
+      const event = { sessionID: "ses_1", messageID: "msg_1", prompt: { text: "/goal-loop inspect the parser" }, metadata: {}, delivery: "steer" }
+      await hooks.prompt!(event)
+      expect(event.prompt.text).toBe("inspect the parser")
+      expect(storage.has("goal/v1/ses_1")).toBe(false)
+      expect(calls.prompts).toHaveLength(0)
+    })
+  })
+
+  test("the /goal command reports the disabled arming instead of starting a goal", async () => {
+    await withDepth("2", async ({ calls, storage }) => {
+      const command = calls.commands.find((entry: any) => entry.name === "goal")
+      await command.execute({ sessionID: "ses_1", prompt: { text: "fix the parser" }, delivery: "steer" })
+      expect(storage.has("goal/v1/ses_1")).toBe(false)
+      expect(calls.prompts).toHaveLength(0)
+      expect(calls.notices.some((notice: any) => String(notice.message).includes("live terminal owner"))).toBe(true)
+    })
+  })
+
+  test("a top-level run still arms the goal normally", async () => {
+    await withDepth(undefined, async ({ hooks, storage }) => {
+      const event = { sessionID: "ses_1", messageID: "msg_1", prompt: { text: "/goal-loop inspect the parser" }, metadata: {}, delivery: "steer" }
+      await hooks.prompt!(event)
+      expect((storage.get("goal/v1/ses_1") as any).condition).toBe("inspect the parser")
+    })
+  })
+})

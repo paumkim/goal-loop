@@ -21,6 +21,8 @@ export interface HarnessDeps {
   readonly log: Logger
   readonly lifetime: AbortController
   readonly probe: boolean
+  /** Nested headless children are workers, not goal owners: they never spawn a judge or planner child. */
+  readonly nestedHeadless: boolean
   readonly controller: () => GoalController
   readonly background: () => { noteInternal(id: string, agentID: string): void; internalAgentOf(id: string): string | undefined }
   readonly emit: () => EmitterPort
@@ -40,7 +42,7 @@ export const evaluatorChildBySession = new Map<string, string>()
 export const plannerChildBySession = new Map<string, string>()
 
 export function createHarness(deps: HarnessDeps) {
-  const { ctx, config, log, lifetime, probe, controller, background, emit, noteInternal, asEvaluatorError, settle, planScopeFor, EVALUATION_SUMMARY_CHARS, EVALUATION_SETTLE_MS, sleep } = deps
+  const { ctx, config, log, lifetime, probe, nestedHeadless, controller, background, emit, noteInternal, asEvaluatorError, settle, planScopeFor, EVALUATION_SUMMARY_CHARS, EVALUATION_SETTLE_MS, sleep } = deps
     // The harness owns one evaluator subagent child per working session. It is created with the working session as
     // its parentID, so OpenCode shows it as a subagent instead of a new top-level session, and it is reused for every
     // verdict and loop generation. The verdict still comes from the child's own event stream and `Evaluator.evaluate`
@@ -174,6 +176,12 @@ export function createHarness(deps: HarnessDeps) {
     // text throws, so `Evaluator.evaluate` classifies it as an `EvaluatorVerdictError` instead of trusting a stale
     // verdict.
     const nativeVerdict = async (sessionID: string, signal: AbortSignal, _turn: number) => {
+      // A nested headless instance shares the owner's working directory and plugin storage, so it can adopt
+      // the owner's live record on restore. It still must not judge it: the live terminal's evaluator is
+      // the single verdict authority. Defer before any judge child is spawned or goal state is touched.
+      if (nestedHeadless) {
+        return { verdict: "not_met" as const, reason: ABSTENTION_REASON["nested-headless"], abstain: "nested-headless" as const }
+      }
       // `sessionID` is always the goal-owning parent: descendant sessions never spawn a verdict (the harness
       // injects their reports back into the parent instead). The parent's reply is the evidence; the bundled
       // Planner subagent's distilled condition and scope ride the request through `armedPlanScopes` below.
@@ -247,7 +255,7 @@ export function createHarness(deps: HarnessDeps) {
     const PLAN_WAIT_CEILING_MS = 5 * 60_000
     const planGoal = async (sessionID: string, raw: string): Promise<PlannedGoal | undefined> => {
       // Unit tests mock the host but cannot deliver a planner child's completion; planning is a host-only step.
-      if (probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
+      if (nestedHeadless || probe || process.env.NODE_ENV === "test" || lifetime.signal.aborted || !raw.trim()) return undefined
       // Show the goal bar during the planning window: the record is armed only after planning completes, so
       // without this transient snapshot the first arm offered nothing but the background toast (screenshot 165841).
       controller().showPlanning(sessionID, raw.trim())
