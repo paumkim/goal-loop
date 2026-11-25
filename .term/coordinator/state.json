@@ -7516,8 +7516,11 @@
       "paths": "src/runtime/controller.ts,src/index.ts,test,SPEC.md,docs/changelog.html",
       "branch": "wt/resume-pause-guard",
       "worktree": "worktree/wt-resume-pause-guard",
-      "status": "claimed",
-      "createdAt": "2026-11-25T10:37:34Z"
+      "status": "done",
+      "createdAt": "2026-11-25T10:37:34Z",
+      "submittedAt": "2026-11-25T11:05:03Z",
+      "mergedAt": "2026-11-25T11:12:44Z",
+      "mergedInto": "dev"
     }
   },
   "mergeLock": null,
