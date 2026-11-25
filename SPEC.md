@@ -1991,6 +1991,14 @@ completion condition agree. Agent-facing prompts now instruct the submitting age
 <!-- workstream:evaluator-require-landing-evidence:end -->
 <!-- per-slug-workstreams:end -->
 
+## Workstream planner-reuse-builtin-session — arm-time planner reuses the built-in subagent session family (2026-11-25)
+
+`planner-parentless-completion` removed `parentID` from the arm-time planner child to stop a host "Goal planner finished" completion from waking the working session mid-plan. That made each planner child a new top-level session: the session list filled with repeated `Goal planner` entries, and a fresh child paid a cold model prefix on every arm and every plugin reload. The earlier `evaluator-planner-subagent-child-reuse` design already had the right mechanism — one parent-linked, per-working-session subagent child reused on every arm via `plannerChildBySession`.
+
+The planner child is parent-linked again, so it lives in the goal session's built-in session family and is reused rather than spawned as a new parent session. The original wake risk is closed without parentlessness: both the `/goal` command and the prompt hook await `planGoal` before delivering the kickoff, and the context hook now drops every `<background-result kind="subagent">` whose `sessionID` is a harness-owned child id registered with the background tracker (`isInternalChildReport`) — even when its metadata does not name the agent. Real delegated workers' reports are still admitted once while a goal is live. Verdict parsing, scope replay, timeouts and loop semantics are unchanged. This supersedes the parentless section of `planner-parentless-completion`; the `isPluginReport` strip stays as a defense for agent-tagged reports.
+
+Verification: `test/plugin.test.ts` pins both `ctx.session.create` calls as `parentID: ses_1`, pins the planner create in the runtime path, and proves by id that a harness child's completion is stripped from a live session while a worker's completion is admitted. `bun run check` green (file/test counts computed at gate time by `scripts/spec-check.ts`).
+
 ## Historical workstreams
 
 Workstreams older than the "Recent workstreams" section above are archived verbatim in

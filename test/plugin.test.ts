@@ -1510,18 +1510,21 @@ describe("verdicts are delegated to a first-class evaluator agent (CXXX)", () =>
     }
   })
 
-  test("evaluator is parent-linked; the planner is parentless and reused instead of respawned", () => {
+  test("evaluator and planner are reused parent-linked subagent children", () => {
     const root = join(import.meta.dir, "..")
     const read = (path: string) => readFileSync(join(root, path), "utf8")
     const host = read("src/index.ts")
     const code = host.split("\n").filter((line) => !line.trim().startsWith("//")).join("\n")
-    // Two session creators remain: the evaluator is a parent-linked subagent child of the goal session (one reused
-    // child serves every verdict and loop step). The arm-time planner is deliberately parentless: a parent link
-    // makes the host deliver its "finished" completion into the working transcript and wake the parent while
-    // planning is still in flight — including when the planner is slow. Its result is consumed from its own stream.
+    // Two session creators remain, both built-in subagent children of the goal session: one reused evaluator child
+    // serves every verdict and loop step, one reused planner child serves every arm. Neither adds a top-level
+    // "Goal planner" / "evaluator" session to the session list. Their completions are consumed from their own
+    // event streams and stripped from the worker's context by child id, so a parent link cannot wake the worker.
     expect(code.match(/ctx\.session\.create\(/g) ?? []).toHaveLength(2)
-    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(1)
-    expect(code.slice(code.indexOf("const planGoal =")).includes("parentID: sessionID")).toBe(false)
+    expect(code.match(/parentID: sessionID/g) ?? []).toHaveLength(2)
+    expect(code.slice(code.indexOf("const planGoal =")).includes("parentID: sessionID")).toBe(true)
+    // A host report from either harness-owned child is dropped by id, not only by agent metadata.
+    expect(code).toContain("background.internalAgentOf(id) !== undefined")
+    expect(code).toContain("return live && fresh && !isInternalChildReport(message)")
     expect(code).toContain("evaluatorChildBySession.set(sessionID, id)")
     expect(code).toContain("evaluatorChildBySession.get(sessionID)")
     expect(code).toContain("plannerChildBySession.set(sessionID, id)")
@@ -1855,7 +1858,7 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
     }
   })
 
-  test("the planner is parentless, prompted without a resume opt-out, and never delivers early", async () => {
+  test("the planner is a parent-linked subagent child, prompted without a resume opt-out, and never delivers early", async () => {
     const directory = repository()
     const { ctx, calls, storage } = context(directory, { model: "provider/model" })
     const previous = process.env.NODE_ENV
@@ -1908,12 +1911,12 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
         // Same P0 pin as the judge: no resume opt-out may suppress the planner child's execution.
         expect("resume" in plannerCall).toBe(false)
         expect(plannerCall.resume).toBeUndefined()
-        // The planner is parentless: a parent link makes the host deliver its "finished" completion (and the
-        // user's original message) into the working turn while planning is in flight or slow. The plan is consumed
-        // from the child's own event stream; no completion report reaches the worker.
+        // The planner is a built-in parent-linked subagent child of the goal session, not a new top-level session.
+        // The plan is consumed from its own event stream; a host completion report from this child is stripped
+        // from the worker's context by child id, so the parent link cannot feed the raw plan to the worker.
         const plannerCreate = created.find((input: any) => input.agent === PLANNER_AGENT_ID)
         expect(plannerCreate).toBeDefined()
-        expect(plannerCreate.parentID).toBeUndefined()
+        expect(plannerCreate.parentID).toBe("ses_1")
         // No completion is admitted to the working session: not a host delivery, and not a queued synthetic
         // either (a queued synthetic is durable parent-inbox input even with `resume: false`).
         expect(calls.prompts.some((p: any) => p.metadata?.agent === PLANNER_AGENT_ID)).toBe(false)
@@ -1926,6 +1929,53 @@ describe("judge and planner child prompts must wake their own execution (CXLII P
     } finally {
       if (previous === undefined) delete process.env.NODE_ENV
       else process.env.NODE_ENV = previous
+    }
+  })
+})
+
+describe("harness-owned child reports never reach the worker", () => {
+  test("a live session drops a subagent report by internal child id even without agent metadata", async () => {
+    const directory = repository()
+    const { ctx, calls, hooks, storage } = context(directory)
+    ;(ctx.session as any).get = async () => ({ id: "ses_1", model: { providerID: "provider", id: "model" }, tokens: {} })
+    ;(ctx.session as any).context = async () => [evidence("fresh evidence: the file contains ok")]
+    ;(ctx.session as any).create = async (input: any) => ({ id: input.agent === EVALUATOR_AGENT_ID ? "ses_judge" : "ses_planner" })
+    let judged = false
+    ;(ctx.session as any).prompt = async (input: any) => {
+      if (input.sessionID === "ses_judge") judged = true
+      else void calls.prompts.push(input)
+    }
+    const tick = () => new Promise((r) => setImmediate(r))
+    ;(ctx as any).event = {
+      subscribe: async function* () {
+        for (let i = 0; i < 1000 && !storage.has("goal/v1/ses_1"); i++) await tick()
+        yield { type: "session.execution.started", data: { sessionID: "ses_1" } }
+        await tick()
+        yield { type: "session.tool.called", data: { sessionID: "ses_1" } }
+        await tick()
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_1" } }
+        for (let i = 0; i < 1000 && !judged; i++) await tick()
+        yield { type: "session.text.delta", data: { sessionID: "ses_judge", delta: judgeVerdict({ verdict: "not_met" }) } }
+        yield { type: "session.execution.succeeded", data: { sessionID: "ses_judge" } }
+        await new Promise(() => {}) // keep the stream open; the plugin aborts each subscription on dispose
+      },
+    }
+    const dispose = await (plugin as any).setup(ctx)
+    try {
+      const goal = calls.commands.find((command: any) => command.name === "goal")
+      await goal.execute({ sessionID: "ses_1", prompt: { text: "the parser is correct" }, delivery: "steer" })
+      await waitFor(() => judged && (storage.get("goal/v1/ses_1") as any)?.status === "active")
+      const line = (text: string) => ({ role: "user", content: [{ type: "text", text }] })
+      const own = line("the user's own line")
+      const internal = line('<background-result kind="subagent" sessionID="ses_judge" state="completed">verdict echo</background-result>')
+      const worker = line('<background-result kind="subagent" sessionID="ses_worker" state="completed">worker done</background-result>')
+      const event: any = { sessionID: "ses_1", agent: "build", model: {}, system: [], messages: [own, internal, worker], tools: {}, options: {} }
+      await hooks.context!(event)
+      // The judge child is harness machinery registered by id, so its completion is dropped even though its
+      // metadata does not name the agent. A real delegated worker's completion is still admitted on first sight.
+      expect(event.messages).toEqual([own, worker])
+    } finally {
+      await dispose?.()
     }
   })
 })

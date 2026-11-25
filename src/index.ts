@@ -69,10 +69,13 @@ const EVALUATION_SUMMARY_CHARS = 4_000
  */
 const evaluatorChildBySession = new Map<string, string>()
 
-/** The arm-time planner child: one parentless child per working session, reused on every arm. It has no `parentID`
- * so the host cannot deliver a "Goal planner finished" completion into the working transcript and wake the parent
- * while planning is still in flight — including when a slow planner runs past its budget. The plan is consumed
- * from this child's own event stream, and the kickoff is delivered only after that stream reaches a terminal event. */
+/**
+ * The arm-time planner child: one parent-linked subagent child per working session, reused on every arm. `parentID`
+ * puts it in the goal session's built-in session family instead of spawning a new top-level "Goal planner" session
+ * on every arm (and on every plugin reload). A host completion report from this child cannot wake the worker: the
+ * kickoff is delivered only after the child's own event stream reaches a terminal event, and the context hook drops
+ * every subagent report attributed to a harness-owned child id before it can become worker evidence.
+ */
 const plannerChildBySession = new Map<string, string>()
 
 /**
@@ -361,6 +364,13 @@ export default Plugin.define({
       const md = m.metadata as Record<string, unknown> | undefined
       return md?.source === "subagent" && typeof md.agent === "string" && md.agent.toLowerCase() === PLANNER_AGENT_ID
     }
+    /** A host completion from a harness-owned child is wake plumbing, never worker evidence. `isPluginReport` catches
+     * the agent-tagged shape; this catches a report whose metadata is absent or renamed by the child id registered
+     * with the background tracker — so restoring the planner's parent link cannot put its raw plan in the worker. */
+    const isInternalChildReport = (message: unknown) => {
+      const id = backgroundResultID(message)
+      return id !== undefined && background.internalAgentOf(id) !== undefined
+    }
 
     /**
      * One generation on the working session's evaluator subagent child. The child is created on first use with the
@@ -550,13 +560,14 @@ export default Plugin.define({
       let id = plannerChildBySession.get(sessionID)
       if (!id) {
         try {
-          // No parent link: a parent-linked child makes the host deliver its own "↳ Goal planner finished"
-          // completion into the working transcript and wake the parent while planning is still in flight, and
-          // again later when the planner is slow — even though the planned condition is consumed internally from
-          // the child's event stream below. That delivery can carry the user's original message into the parent
-          // before the planner has died or finished, so the child stays parentless. Reused across arms otherwise.
+          // The planner is a built-in subagent child of the goal session, like the evaluator: `parentID` keeps it
+          // inside the session family instead of adding a new top-level "Goal planner" parent session on each arm.
+          // The child is reused on later arms. Its host completion cannot wake the worker: both command and
+          // prompt-hook callers await this function before delivering the kickoff, and the context hook strips
+          // reports from harness-owned child ids (see isInternalChildReport).
           id = (await ctx.session.create({
             location: ctx.location,
+            parentID: sessionID,
             title: PLANNER_AGENT_TITLE,
             agent: PLANNER_AGENT_ID,
             model: model as any,
@@ -568,7 +579,8 @@ export default Plugin.define({
         }
       }
       // The planner is goal-loop machinery, not a worker the owner delegated. Exclude it from busy() so arming a
-      // goal cannot self-defer its first evaluation. The parentless child owes the working session no completion.
+      // goal cannot self-defer its first evaluation. Registered by id so its completion report is never admitted
+      // to the worker as evidence or as a wake signal, parent link or no parent link.
       background.noteInternal(id, PLANNER_AGENT_ID)
       plannerChildren.add(id)
       let childFailed = false
@@ -1051,7 +1063,7 @@ export default Plugin.define({
           // so re-arming a goal in the same session must not admit it as fresh (SPEC terminal-injection-dedupe).
           const fresh = !seenReports.has(id)
           seenReports.add(id)
-          return live && fresh
+          return live && fresh && !isInternalChildReport(message)
         })
         if (kept.length !== original.length) {
           // Never dispatch a request that does not end on a user turn: strict providers reject it ("The
