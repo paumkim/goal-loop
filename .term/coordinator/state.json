@@ -7714,6 +7714,25 @@
       "submittedAt": "2026-11-25T18:06:42Z",
       "mergedAt": "2026-11-25T18:09:07Z",
       "mergedInto": "dev"
+    },
+    "subagent-report-idle-delivery": {
+      "agent": "build",
+      "paths": "src/hooks.ts,src/harness.ts,src/core/prompts.ts,src/runtime/controller.ts,test/plugin.test.ts,test/notes.test.ts,SPEC.md,SPEC-workstreams.md,docs/changelog.html",
+      "branch": "wt/subagent-report-idle-delivery",
+      "worktree": "worktree/wt-subagent-report-idle-delivery",
+      "status": "done",
+      "createdAt": "2026-11-25T18:29:24Z",
+      "submittedAt": "2026-11-25T18:31:33Z",
+      "mergedAt": "2026-11-25T18:34:09Z",
+      "mergedInto": "dev"
+    },
+    "coordinator-wait-wake": {
+      "agent": "hy4-flash-free",
+      "paths": "src/core/coordinator-wait.ts,src/index.ts,src/core/prompts.ts,test/coordinator-wait.test.ts,SPEC.md,docs/changelog.html,packages/coordinator/README.md",
+      "branch": "wt/coordinator-wait-wake",
+      "worktree": "worktree/wt-coordinator-wait-wake",
+      "status": "claimed",
+      "createdAt": "2026-11-25T18:26:35Z"
     }
   },
   "mergeLock": null,
