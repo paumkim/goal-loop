@@ -7367,11 +7367,14 @@
     },
     "merge-churn-reduction-rebase-fifo-anchors-pending": {
       "agent": "build-primary",
-      "paths": "packages/coordinator/bin/coordinator,scripts/spec-check.ts,scripts/spec-anchors.ts,test/spec-check.test.ts,test/spec-anchors.test.ts,test/package-integrity.test.ts,test/coordinator.test.ts,test/coordinator-lease-races.test.ts,test/coordinator-merge-safety.test.ts,test/spec-role-split.test.ts,SPEC.md,docs/changelog.html,docs/parallel-work.md,docs/config.html,docs/runtime.html,.term/changelog-pending/**",
+      "paths": "packages/coordinator/bin/coordinator,scripts/spec-check.ts,scripts/spec-anchors.ts,test/spec-check.test.ts,test/spec-anchors.test.ts,test/package-integrity.test.ts,test/coordinator.test.ts,test/coordinator-lease-races.test.ts,test/coordinator-merge-safety.test.ts,test/spec-role-split.test.ts,SPEC.md,AGENTS.md,docs/changelog.html,docs/parallel-work.md,docs/config.html,docs/runtime.html,.term/changelog-pending/**",
       "branch": "wt/merge-churn-reduction-rebase-fifo-anchors-pending",
       "worktree": "worktree/wt-merge-churn-reduction-rebase-fifo-anchors-pending",
-      "status": "claimed",
-      "createdAt": "2026-11-25T06:51:40Z"
+      "status": "done",
+      "createdAt": "2026-11-25T07:17:31Z",
+      "submittedAt": "2026-11-25T07:19:36Z",
+      "mergedAt": "2026-11-25T07:32:55Z",
+      "mergedInto": "dev"
     },
     "wake-loop-flat-text-shape": {
       "agent": "build",
@@ -7394,6 +7397,23 @@
       "submittedAt": "2026-11-25T07:04:42Z",
       "mergedAt": "2026-11-25T07:07:28Z",
       "mergedInto": "dev"
+    },
+    "wire-wiring-audit-into-check": {
+      "agent": "build-primary",
+      "paths": "package.json,.github/workflows/check.yml",
+      "branch": "wt/wire-wiring-audit-into-check",
+      "worktree": "worktree/wt-wire-wiring-audit-into-check",
+      "status": "submitted",
+      "createdAt": "2026-11-25T07:14:56Z",
+      "submittedAt": "2026-11-25T07:19:33Z"
+    },
+    "planner-reuse-builtin-session": {
+      "agent": "orchestrator",
+      "paths": "src/index.ts,test/plugin.test.ts,SPEC.md",
+      "branch": "wt/planner-reuse-builtin-session",
+      "worktree": "worktree/wt-planner-reuse-builtin-session",
+      "status": "claimed",
+      "createdAt": "2026-11-25T07:31:45Z"
     }
   },
   "mergeLock": null,
